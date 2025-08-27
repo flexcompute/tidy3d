@@ -789,7 +789,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
         y = (np.arange(self.array_size[1]) - (self.array_size[1] - 1) / 2) * self.spacings[1]
         z = (np.arange(self.array_size[2]) - (self.array_size[2] - 1) / 2) * self.spacings[2]
 
-        X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
+        X, Y, Z = np.meshgrid(x, y, z)
 
         return np.transpose([X.ravel(), Y.ravel(), Z.ravel()])
 
@@ -810,7 +810,6 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
 
             else:
                 amps = self.taper.amp_multipliers(self.array_size)
-
             return np.ravel(amps)
 
         amps_per_dim = [
@@ -830,7 +829,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
             np.arange(self.array_size[dim]) * self.phase_shifts[dim] for dim in range(3)
         ]
 
-        phase_shifts_grid = np.meshgrid(*phase_shifts_per_dim, indexing="ij")
+        phase_shifts_grid = np.meshgrid(*phase_shifts_per_dim)
 
         return np.ravel(sum(p for p in phase_shifts_grid))
 

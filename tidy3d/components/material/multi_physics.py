@@ -158,7 +158,6 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
             "frequency_range": self.optical,
             "eps_model": self.optical,
             "n_cfl": self.optical,
-            "allow_gain": self.optical,
         }
 
         if name == "_has_incompatibilities":

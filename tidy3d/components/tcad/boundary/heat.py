@@ -2,21 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 import pydantic.v1 as pd
 
-from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.material.tcad.heat import FluidMedium
 from tidy3d.components.tcad.boundary.abstract import HeatChargeBC
-from tidy3d.constants import (
-    ACCELERATION,
-    GRAV_ACC,
-    HEAT_FLUX,
-    HEAT_TRANSFER_COEFF,
-    KELVIN,
-    MICROMETER,
-)
+from tidy3d.constants import HEAT_FLUX, HEAT_TRANSFER_COEFF, KELVIN
 
 
 class TemperatureBC(HeatChargeBC):
@@ -51,68 +40,6 @@ class HeatFluxBC(HeatChargeBC):
     )
 
 
-class VerticalNaturalConvectionCoeffModel(Tidy3dBaseModel):
-    """
-    Specification for natural convection from a vertical plate.
-
-    This class calculates the heat transfer coefficient (h) based on fluid
-    properties and an expected temperature difference, then provides these
-    values as 'base' and 'exponent' for a generalized heat flux equation
-    q = base * (T_surf - T_fluid)^exponent + base * (T_surf - T_fluid).
-    """
-
-    medium: FluidMedium = pd.Field(
-        default=None,
-        title="Interface medium",
-        description=(
-            "The `FluidMedium` used for the heat transfer coefficient calculation. "
-            "If `None`, the fluid is automatically deduced from the interface, which can be defined"
-            "by either a `MediumMediumInterface` or a `StructureStructureInterface`."
-        ),
-    )
-
-    plate_length: pd.NonNegativeFloat = pd.Field(
-        title="Plate Characteristic Length",
-        description="Characteristic length (L), defined as the height of the vertical plate.",
-        units=MICROMETER,
-    )
-
-    gravity: pd.NonNegativeFloat = pd.Field(
-        default=GRAV_ACC,
-        title="Gravitational Acceleration",
-        description="Gravitational acceleration (g).",
-        units=ACCELERATION,
-    )
-
-    def from_si_units(
-        plate_length: pd.NonNegativeFloat,
-        medium: FluidMedium = None,
-        gravity: pd.NonNegativeFloat = GRAV_ACC * 1e-6,
-    ):
-        """
-        Create an instance from standard SI units.
-
-        Args:
-            plate_length: Plate characteristic length in [m].
-            gravity: Gravitational acceleration in [m/s**2].
-
-        Returns:
-            An instance of VerticalNaturalConvectionCoeffModel with all values
-            converted to Tidy3D's internal unit system.
-        """
-
-        # --- Apply conversion factors ---
-        # value_tidy = value_si * factor
-        plate_length_tidy = plate_length * 1e6  # m -> um
-        g_tidy = gravity * 1e6  # m/s**2 -> um/s**2
-
-        return VerticalNaturalConvectionCoeffModel(
-            medium=medium,
-            plate_length=plate_length_tidy,
-            gravity=g_tidy,
-        )
-
-
 class ConvectionBC(HeatChargeBC):
     """Convective thermal boundary conditions.
 
@@ -120,33 +47,6 @@ class ConvectionBC(HeatChargeBC):
     -------
     >>> import tidy3d as td
     >>> bc = td.ConvectionBC(ambient_temperature=300, transfer_coeff=1)
-
-    >>> # Convection with a natural convection model.
-    >>> # First, define the fluid medium (e.g. air at 300 K).
-    >>> air = td.FluidMedium.from_si_units(
-    ...     thermal_conductivity=0.0257,  # Unit: W/(m*K)
-    ...     viscosity=1.81e-5,          # Unit: Pa*s
-    ...     specific_heat=1005,         # Unit: J/(kg*K)
-    ...     density=1.204,              # Unit: kg/m^3
-    ...     expansivity=1/293.15        # Unit: 1/K
-    ... )
-    >>>
-    >>> # Next, create the model, which requires the fluid and a characteristic length.
-    >>> natural_conv_model = td.VerticalNaturalConvectionCoeffModel.from_si_units(
-    ...     medium=air, plate_length=1e-5
-    ... )
-    >>>
-    >>> # Finally, create the boundary condition using this model.
-    >>> bc_natural = td.ConvectionBC(
-    ...     ambient_temperature=300, transfer_coeff=natural_conv_model
-    ... )
-
-    >>> # If the fluid medium is not provided to the coefficient model, it is automatically retrieved from
-    >>> # the interface.
-    >>> natural_conv_model = td.VerticalNaturalConvectionCoeffModel.from_si_units(plate_length=1e-5)
-    >>> bc_natural_nom = td.ConvectionBC(
-    ...     ambient_temperature=300, transfer_coeff=natural_conv_model
-    ... )
     """
 
     ambient_temperature: pd.PositiveFloat = pd.Field(
@@ -155,7 +55,7 @@ class ConvectionBC(HeatChargeBC):
         units=KELVIN,
     )
 
-    transfer_coeff: Union[pd.NonNegativeFloat, VerticalNaturalConvectionCoeffModel] = pd.Field(
+    transfer_coeff: pd.NonNegativeFloat = pd.Field(
         title="Heat Transfer Coefficient",
         description=f"Heat flux value in units of {HEAT_TRANSFER_COEFF}.",
         units=HEAT_TRANSFER_COEFF,

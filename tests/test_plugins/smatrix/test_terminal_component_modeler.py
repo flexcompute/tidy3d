@@ -12,7 +12,6 @@ import tidy3d.plugins.smatrix.analysis.terminal
 import tidy3d.plugins.smatrix.data.terminal
 import tidy3d.plugins.smatrix.utils
 from tidy3d import SimulationDataMap
-from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.microwave import (
@@ -1311,45 +1310,3 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     # Check power wave S matrix
     S_computed = modeler_data.smatrix(s_param_def="power").data.values
     check_S_matrix(S_computed, S_power)
-
-
-def test_wave_port_to_absorber(tmp_path):
-    """Test that wave port absorber can be specified as a boolean, ABCBoundary, or ModeABCBoundary."""
-
-    # test automatic absorber
-    modeler = make_coaxial_component_modeler(
-        path_dir=str(tmp_path), port_types=(WavePort, WavePort)
-    )
-    sim = list(modeler.sim_dict.values())[0]
-
-    absorber = sim.internal_absorbers[0]
-
-    assert absorber.boundary_spec.mode_spec == modeler.ports[0].mode_spec
-    assert absorber.boundary_spec.mode_index == modeler.ports[0].mode_index
-    assert absorber.boundary_spec.plane == modeler.ports[0].geometry
-    assert absorber.boundary_spec.freq_spec == BroadbandModeABCSpec(
-        frequency_range=(np.min(modeler.freqs), np.max(modeler.freqs))
-    )
-
-    # test to_absorber()
-    absorber = modeler.ports[0].to_absorber(freq_spec=1e9)
-    assert absorber.boundary_spec.freq_spec == 1e9
-
-    absorber = modeler.ports[0].to_absorber(
-        freq_spec=BroadbandModeABCSpec(frequency_range=(1e9, 2e9))
-    )
-    assert absorber.boundary_spec.freq_spec == BroadbandModeABCSpec(frequency_range=(1e9, 2e9))
-
-    # test no automatic absorber
-    modeler = modeler.updated_copy(ports=[modeler.ports[0].updated_copy(absorber=False)])
-    sim = list(modeler.sim_dict.values())[0]
-    assert len(sim.internal_absorbers) == 0
-
-    # test custom boundary spec
-    custom_boundary_spec = td.ModeABCBoundary(plane=td.Box(size=(0.1, 0.1, 0)), freq_spec=1e9)
-    modeler = modeler.updated_copy(
-        ports=[modeler.ports[0].updated_copy(absorber=custom_boundary_spec)]
-    )
-    sim = list(modeler.sim_dict.values())[0]
-    absorber = sim.internal_absorbers[0]
-    assert absorber.boundary_spec == custom_boundary_spec

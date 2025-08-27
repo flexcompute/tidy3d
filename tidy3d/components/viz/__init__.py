@@ -23,7 +23,7 @@ from .plot_params import (
     plot_params_structure,
     plot_params_symmetry,
 )
-from .plot_sim_3d import plot_scene_3d, plot_sim_3d
+from .plot_sim_3d import plot_sim_3d
 from .styles import (
     ARROW_ALPHA,
     ARROW_COLOR_ABSORBER,
@@ -81,7 +81,6 @@ __all__ = [
     "plot_params_source",
     "plot_params_structure",
     "plot_params_symmetry",
-    "plot_scene_3d",
     "plot_sim_3d",
     "polygon_patch",
     "polygon_path",

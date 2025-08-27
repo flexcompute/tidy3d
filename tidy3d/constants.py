@@ -53,11 +53,6 @@ K_B = 8.617333262e-5
 Boltzmann constant [eV/K]
 """
 
-GRAV_ACC = 9.80665 * 1e6
-"""
-Gravitational acceleration (g) [um/s^2].",
-"""
-
 # floating point precisions
 dp_eps = np.finfo(np.float64).eps
 """
@@ -224,26 +219,6 @@ Watts per (square micrometer Kelvin).
 CURRENT_DENSITY = "A/um^2"
 """
 Amperes per square micrometer
-"""
-
-DYNAMIC_VISCOSITY = "kg/(um*s)"
-"""
-Kilograms per (micrometer second)
-"""
-
-SPECIFIC_HEAT = "um^2/(s^2*K)"
-"""
-Square micrometers per (square second Kelvin).
-"""
-
-THERMAL_EXPANSIVITY = "1/K"
-"""
-Inverse Kelvin.
-"""
-
-ACCELERATION = "um/s^2"
-"""
-Acceleration unit.
 """
 
 LARGE_NUMBER = 1e10
