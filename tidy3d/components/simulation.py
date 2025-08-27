@@ -3104,7 +3104,7 @@ class Simulation(AbstractYeeGridSimulation):
         """Warn if ModeABCBoundary expects a frequency from a source, but there are multiple sources with different central frequencies."""
 
         def boundary_needs_freq(boundary):
-            return (isinstance(boundary, ModeABCBoundary) and boundary.frequency is None) or (
+            return (isinstance(boundary, ModeABCBoundary) and boundary.freq_spec is None) or (
                 isinstance(boundary, ABCBoundary)
                 and (
                     (boundary.conductivity is not None and boundary.conductivity != 0)

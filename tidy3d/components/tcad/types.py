@@ -6,7 +6,11 @@ from typing import Union
 
 from tidy3d.components.tcad.bandgap import SlotboomBandGapNarrowing
 from tidy3d.components.tcad.boundary.charge import CurrentBC, InsulatingBC, VoltageBC
-from tidy3d.components.tcad.boundary.heat import ConvectionBC, HeatFluxBC, TemperatureBC
+from tidy3d.components.tcad.boundary.heat import (
+    ConvectionBC,
+    HeatFluxBC,
+    TemperatureBC,
+)
 from tidy3d.components.tcad.generation_recombination import (
     AugerRecombination,
     RadiativeRecombination,
@@ -15,6 +19,7 @@ from tidy3d.components.tcad.generation_recombination import (
 from tidy3d.components.tcad.mobility import CaugheyThomasMobility, ConstantMobilityModel
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyCurrentDensityMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
@@ -38,6 +43,7 @@ HeatChargeMonitorType = Union[
     SteadyEnergyBandMonitor,
     SteadyElectricFieldMonitor,
     SteadyCapacitanceMonitor,
+    SteadyCurrentDensityMonitor,
 ]
 HeatChargeSourceType = Union[HeatSource, HeatFromElectricSource, UniformHeatSource]
 HeatChargeBCType = Union[

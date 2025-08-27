@@ -257,6 +257,10 @@ def monitors():
 
     electric_field_mnt = td.SteadyElectricFieldMonitor(size=(1.6, 2, 3), name="electric_field_test")
 
+    current_density_mnt = td.SteadyCurrentDensityMonitor(
+        size=(1.6, 2, 3), name="current_density_mnt"
+    )
+
     return [
         temp_mnt1,  # 0
         temp_mnt2,  # 1
@@ -271,6 +275,7 @@ def monitors():
         energy_band_mnt1,  # 10
         mesh_mnt,  # 11
         electric_field_mnt,  # 12
+        current_density_mnt,  # 13
     ]
 
 
@@ -757,6 +762,19 @@ def electric_field_monitor_data(monitors):
 
 
 @pytest.fixture(scope="module")
+def current_density_monitor_data(monitors, electric_field_monitor_data):
+    """Creates different current density monitor data."""
+    monitor = monitors[13]
+    e_data1, e_data2, e_data3 = electric_field_monitor_data
+
+    mnt_data1 = td.SteadyCurrentDensityData(monitor=monitor, J=e_data1.E)
+    mnt_data2 = td.SteadyCurrentDensityData(monitor=monitor, J=e_data2.E)
+    mnt_data3 = td.SteadyCurrentDensityData(monitor=monitor, J=e_data3.E)
+
+    return (mnt_data1, mnt_data2, mnt_data3)
+
+
+@pytest.fixture(scope="module")
 def simulation_data(
     heat_simulation,
     conduction_simulation,
@@ -878,6 +896,132 @@ def test_heat_charge_bcs_validation(boundary_conditions):
         td.VoltageBC(source=td.DCVoltageSource(voltage=np.array([td.inf, 0, 1])))
 
 
+def test_vertical_natural_convection():
+    solid_box_l = td.Box(center=(0, 0, 0), size=(2, 2, 2))
+    solid_box_r = td.Box(center=(1, 1, 1), size=(2, 2, 2))
+    fluid_box_r = td.Box(center=(1, 1, 1), size=(2, 2, 2))
+
+    solid_medium = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1), name="solid"
+    )
+    air = td.MultiPhysicsMedium(
+        heat=td.FluidMedium.from_si_units(
+            thermal_conductivity=0.026,
+            viscosity=1.8e-5,
+            specific_heat=1005,
+            density=1.2,
+            expansivity=1 / 300.0,
+        ),
+        name="air",
+    )
+    solid_structure_l = td.Structure(
+        geometry=solid_box_l,
+        medium=solid_medium,
+        name="solid_l",
+    )
+    solid_structure_r = td.Structure(
+        geometry=solid_box_r,
+        medium=solid_medium,
+        name="solid_r",
+    )
+    fluid_structure_r = td.Structure(
+        geometry=fluid_box_r,
+        medium=air,
+        name="fluid_r",
+    )
+
+    coeff_model = td.VerticalNaturalConvectionCoeffModel(plate_length=1)
+    sim = td.HeatChargeSimulation(
+        size=(2, 2, 2),
+        center=(0, 0, 0),
+        medium=td.MultiPhysicsMedium(heat=td.FluidMedium()),
+        structures=[solid_structure_l, fluid_structure_r],
+        boundary_spec=[
+            td.HeatBoundarySpec(
+                placement=td.MediumMediumInterface(mediums=["air", "solid"]),
+                condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+            )
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        monitors=[
+            td.TemperatureMonitor(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, td.inf),
+                name="test_monitor",
+                unstructured=True,
+            )
+        ],
+    )
+
+    # Test that the model can be placed on an interface defined by structures
+    sim.updated_copy(
+        boundary_spec=[
+            td.HeatBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["solid_l", "fluid_r"]),
+                condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+            )
+        ],
+    )
+
+    # Verify that placing the model on an interface between two solid media
+    # correctly raises a validation error.
+    with pytest.raises(pd.ValidationError):
+        sim.updated_copy(
+            structures=[solid_structure_l, solid_structure_r],
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.StructureStructureInterface(structures=["solid_l", "solid_r"]),
+                    condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+                )
+            ],
+        )
+
+    # Verify that using a fluid medium with incomplete physical properties
+    # for the natural convection calculation raises a validation error.
+    incomplete_air = td.MultiPhysicsMedium(
+        heat=td.FluidMedium(expansivity=1 / 300.0), name="incomplete_air"
+    )
+    with pytest.raises(pd.ValidationError):
+        new_fluid_structure_r = fluid_structure_r.updated_copy(medium=incomplete_air)
+        sim.updated_copy(
+            structures=[solid_structure_l, new_fluid_structure_r],
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.MediumMediumInterface(mediums=["incomplete_air", "solid"]),
+                    condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+                )
+            ],
+        )
+
+    # Test the case where the convection model has its own fluid medium explicitly defined.
+    # The simulation should use the properties from the model's medium and ignore the
+    # fluid present at the interface.
+    full_coeff_model = td.VerticalNaturalConvectionCoeffModel(medium=air.heat, plate_length=1)
+    sim.updated_copy(
+        boundary_spec=[
+            td.HeatBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["solid_l", "fluid_r"]),
+                condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=full_coeff_model),
+            )
+        ],
+    )
+
+    # Verify that a validation error is raised if the medium supplied directly to the
+    # coefficient model has incomplete properties for the natural convection calculation.
+    incomplete_coeff_model = coeff_model.updated_copy(medium=incomplete_air.heat)
+    with pytest.raises(pd.ValidationError):
+        sim.updated_copy(
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.MediumMediumInterface(mediums=["air", "solid"]),
+                    condition=td.ConvectionBC(
+                        ambient_temperature=300, transfer_coeff=incomplete_coeff_model
+                    ),
+                ),
+            ]
+        )
+
+
 def test_heat_charge_monitors_validation(monitors):
     """Checks for no name and negative size in monitors."""
     temp_mnt = monitors[0]
@@ -930,52 +1074,68 @@ def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction
 
 
 def test_heat_charge_mnt_data(
-    temperature_monitor_data, voltage_monitor_data, electric_field_monitor_data
+    temperature_monitor_data,
+    voltage_monitor_data,
+    electric_field_monitor_data,
+    current_density_monitor_data,
 ):
     """Tests whether different heat-charge monitor data can be created."""
     assert len(temperature_monitor_data) == 4, "Expected 4 temperature monitor data entries."
     assert len(voltage_monitor_data) == 4, "Expected 4 voltage monitor data entries."
     assert len(electric_field_monitor_data) == 3, "Expected 3 electric field monitor data entries."
+    assert len(current_density_monitor_data) == 3, (
+        "Expected 3 current density monitor data entries."
+    )
 
-    for mnt_data in electric_field_monitor_data:
-        assert "E" in mnt_data.field_components.keys()
+    for var, mnt_data_lists in [
+        ("E", electric_field_monitor_data),
+        ("J", current_density_monitor_data),
+    ]:
+        for mnt_data in mnt_data_lists:
+            assert var in mnt_data.field_components.keys()
 
-        symm_data = mnt_data.symmetry_expanded_copy
-        assert symm_data.E == mnt_data.E
+            symm_data = mnt_data.symmetry_expanded_copy
+            if var == "E":
+                assert symm_data.E == mnt_data.E
+            elif var == "J":
+                assert symm_data.J == mnt_data.J
 
-        names = mnt_data.field_name("abs^2")
-        assert names == "E²"
-        names = mnt_data.field_name()
-        assert names == "E"
+            names = mnt_data.field_name("abs^2")
+            assert names == var + "²"
+            names = mnt_data.field_name()
+            assert names == var
 
-        # make sure an error is raised if we don't use a field data array
-        # TriangularGridDataset
-        tri_grid_points = td.PointDataArray(
-            [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
-            dims=("index", "axis"),
-        )
+            # make sure an error is raised if we don't use a field data array
+            # TriangularGridDataset
+            tri_grid_points = td.PointDataArray(
+                [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+                dims=("index", "axis"),
+            )
 
-        tri_grid_cells = td.CellDataArray(
-            [[0, 1, 2], [1, 2, 3]],
-            dims=("cell_index", "vertex_index"),
-        )
+            tri_grid_cells = td.CellDataArray(
+                [[0, 1, 2], [1, 2, 3]],
+                dims=("cell_index", "vertex_index"),
+            )
 
-        tri_grid_values = td.IndexedDataArray(
-            [1.0, 2.0, 3.0, 4.0],
-            dims=("index",),
-            name="T",
-        )
+            tri_grid_values = td.IndexedDataArray(
+                [1.0, 2.0, 3.0, 4.0],
+                dims=("index",),
+                name="T",
+            )
 
-        tri_grid = td.TriangularGridDataset(
-            normal_axis=1,
-            normal_pos=0,
-            points=tri_grid_points,
-            cells=tri_grid_cells,
-            values=tri_grid_values,
-        )
+            tri_grid = td.TriangularGridDataset(
+                normal_axis=1,
+                normal_pos=0,
+                points=tri_grid_points,
+                cells=tri_grid_cells,
+                values=tri_grid_values,
+            )
 
-        with pytest.raises(pd.ValidationError):
-            _ = mnt_data.updated_copy(E=tri_grid)
+            with pytest.raises(pd.ValidationError):
+                if var == "E":
+                    _ = mnt_data.updated_copy(E=tri_grid)
+                elif var == "J":
+                    _ = mnt_data.updated_copy(J=tri_grid)
 
 
 def test_grid_spec_validation(grid_specs):
