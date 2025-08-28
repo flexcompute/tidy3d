@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from enum import Enum
 from functools import wraps
@@ -133,10 +134,54 @@ def http_interceptor(func):
         if resp.status_code != ResponseCodes.OK.value:
             if resp.status_code == ResponseCodes.NOT_FOUND.value:
                 raise WebNotFoundError("Resource not found (HTTP 404).")
-            json_resp = resp.json()
-            if "error" in json_resp.keys():
-                raise WebError(json_resp["error"])
-            resp.raise_for_status()
+            try:
+                json_resp = resp.json()
+            except Exception:
+                json_resp = None
+
+            # Build a helpful error message using available fields
+            err_msg = None
+            if isinstance(json_resp, dict):
+                parts = []
+                for key in ("error", "message", "msg", "detail", "code", "httpStatus", "warning"):
+                    val = json_resp.get(key)
+                    if not val:
+                        continue
+                    if key == "error":
+                        # Always include the raw 'error' payload for debugging. Also try to extract a nested message.
+                        if isinstance(val, str):
+                            try:
+                                nested = json.loads(val)
+                                if isinstance(nested, dict):
+                                    nested_msg = (
+                                        nested.get("message")
+                                        or nested.get("error")
+                                        or nested.get("msg")
+                                    )
+                                    if nested_msg:
+                                        parts.append(str(nested_msg))
+                            except Exception:
+                                pass
+                            parts.append(f"error={val}")
+                        else:
+                            parts.append(f"error={val!s}")
+                        continue
+                    parts.append(str(val))
+                if parts:
+                    err_msg = "; ".join(parts)
+            if not err_msg:
+                # Fallback to response text or status code
+                err_msg = resp.text or f"HTTP {resp.status_code}"
+
+            # Append request context to aid debugging
+            try:
+                method = getattr(resp.request, "method", "")
+                url = getattr(resp.request, "url", "")
+                err_msg = f"{err_msg} [HTTP {resp.status_code} {method} {url}]"
+            except Exception:
+                pass
+
+            raise WebError(err_msg)
 
         if not resp.text:
             return None

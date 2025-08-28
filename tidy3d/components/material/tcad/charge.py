@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Union
+
 import pydantic.v1 as pd
 
 from tidy3d.components.data.data_array import SpatialDataArray
@@ -12,7 +14,6 @@ from tidy3d.components.tcad.types import (
     MobilityModelType,
     RecombinationModelType,
 )
-from tidy3d.components.types import Union
 from tidy3d.constants import (
     CONDUCTIVITY,
     ELECTRON_VOLT,

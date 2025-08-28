@@ -55,6 +55,8 @@ class TaskType(str, Enum):
     EME = "EME"
     MODE = "MODE"
     VOLUME_MESH = "VOLUME_MESH"
+    COMPONENT_MODELER = "COMPONENT_MODELER"
+    TERMINAL_COMPONENT_MODELER = "TERMINAL_COMPONENT_MODELER"
 
 
 class PayType(str, Enum):

@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from typing import Literal, Optional, Union
 
+from tidy3d.components.types.workflow import WorkflowType
 from tidy3d.log import log
 from tidy3d.web.core.types import PayType
 
 from .container import DEFAULT_DATA_DIR, Batch, BatchData
-from .tidy3d_stub import SimulationType
 
 
 def run_async(
-    simulations: dict[str, SimulationType],
+    simulations: dict[str, WorkflowType],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: Optional[str] = None,
