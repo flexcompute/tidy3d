@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import tempfile
 from functools import partial
-from typing import Optional
+from typing import Literal, Optional
 
 import pydantic.v1 as pd
 from jax import custom_vjp
@@ -14,7 +14,6 @@ from jax.tree_util import register_pytree_node_class
 import tidy3d as td
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.simulation import Simulation
-from tidy3d.components.types import Literal
 from tidy3d.web.api.asynchronous import run_async as web_run_async
 from tidy3d.web.api.container import DEFAULT_DATA_DIR, Batch, BatchData, Job
 from tidy3d.web.api.webapi import run as web_run

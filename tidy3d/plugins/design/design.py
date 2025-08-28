@@ -7,9 +7,10 @@ from typing import Any, Callable, Optional, Union
 
 import pydantic.v1 as pd
 
-from tidy3d.components.base import TYPE_TAG_STR, Tidy3dBaseModel, cached_property
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.simulation import Simulation
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.log import Console, get_logging_console, log
 from tidy3d.web.api.container import Batch, BatchData, Job
 

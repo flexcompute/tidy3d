@@ -7,7 +7,7 @@ Scattering Matrix Calculator
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.smatrix.ComponentModeler
+   tidy3d.plugins.smatrix.ModalComponentModeler
    tidy3d.plugins.smatrix.Port
    tidy3d.plugins.smatrix.ModalPortDataArray
 

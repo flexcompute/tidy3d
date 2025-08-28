@@ -8,10 +8,9 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray, TimeDataArray
+from tidy3d.components.data.data_array import ImpedanceResultTypes, _make_impedance_data_array
 from tidy3d.components.data.monitor_data import FieldTimeData
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
-from tidy3d.constants import OHM
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
@@ -19,7 +18,6 @@ from .custom_path_integrals import CustomCurrentIntegral2D, CustomVoltageIntegra
 from .path_integrals import (
     AxisAlignedPathIntegral,
     CurrentIntegralAxisAligned,
-    IntegralResultTypes,
     MonitorDataTypes,
     VoltageIntegralAxisAligned,
 )
@@ -43,7 +41,7 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         description="Definition of contour integral for computing current.",
     )
 
-    def compute_impedance(self, em_field: MonitorDataTypes) -> IntegralResultTypes:
+    def compute_impedance(self, em_field: MonitorDataTypes) -> ImpedanceResultTypes:
         """Compute impedance for the supplied ``em_field`` using ``voltage_integral`` and
         ``current_integral``. If only a single integral has been defined, impedance is
         computed using the total flux in ``em_field``.
@@ -56,9 +54,10 @@ class ImpedanceCalculator(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:`.IntegralResultTypes`
+        :class:`.ImpedanceResultTypes`
             Result of impedance computation over remaining dimensions (frequency, time, mode indices).
         """
+
         AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
 
         # If both voltage and current integrals have been defined then impedance is computed directly
@@ -98,7 +97,7 @@ class ImpedanceCalculator(Tidy3dBaseModel):
                 impedance = np.real(voltage) / np.real(current)
             else:
                 impedance = voltage / current
-        impedance = ImpedanceCalculator._set_data_array_attributes(impedance)
+        impedance = _make_impedance_data_array(impedance)
         return impedance
 
     @pd.validator("current_integral", always=True)
@@ -110,19 +109,6 @@ class ImpedanceCalculator(Tidy3dBaseModel):
                 "At least one of 'voltage_integral' or 'current_integral' must be provided."
             )
         return val
-
-    @staticmethod
-    def _set_data_array_attributes(data_array: IntegralResultTypes) -> IntegralResultTypes:
-        """Helper to set additional metadata for ``IntegralResultTypes``."""
-        # Determine type based on coords present
-        if "mode_index" in data_array.coords:
-            data_array = FreqModeDataArray(data_array)
-        elif "f" in data_array.coords:
-            data_array = FreqDataArray(data_array)
-        else:
-            data_array = TimeDataArray(data_array)
-        data_array.name = "Z0"
-        return data_array.assign_attrs(units=OHM, long_name="characteristic impedance")
 
     @pd.root_validator(pre=False)
     def _warn_rf_license(cls, values):

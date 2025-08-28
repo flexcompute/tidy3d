@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from tidy3d.components.boundary import BroadbandModeABCFitterParam, BroadbandModeABCSpec
+from tidy3d.components.data.index import SimulationDataMap
+from tidy3d.components.index import SimulationMap
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
@@ -167,6 +169,7 @@ from .components.data.dataset import (
 )
 from .components.data.monitor_data import (
     AbstractFieldProjectionData,
+    AuxFieldTimeData,
     DiffractionData,
     DirectivityData,
     FieldData,
@@ -665,6 +668,8 @@ __all__ = [
     "Simulation",
     "SimulationBoundary",
     "SimulationData",
+    "SimulationDataMap",
+    "SimulationMap",
     "SlotboomBandGapNarrowing",
     "SolidMedium",
     "SolidSpec",

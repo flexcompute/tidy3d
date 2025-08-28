@@ -7,23 +7,25 @@ from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
-import xarray as xr
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import (
-    FreqDataArray,
-    FreqModeDataArray,
+    CurrentIntegralResultTypes,
+    IntegralResultTypes,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
     ScalarModeFieldDataArray,
-    TimeDataArray,
+    VoltageIntegralResultTypes,
+    _make_base_result_data_array,
+    _make_current_data_array,
+    _make_voltage_data_array,
 )
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.types import Ax, Axis, Coordinate2D, Direction
 from tidy3d.components.validators import assert_line, assert_plane
 from tidy3d.components.viz import add_ax_if_none
-from tidy3d.constants import AMP, VOLT, fp_eps
+from tidy3d.constants import fp_eps
 from tidy3d.exceptions import DataError, Tidy3dError
 from tidy3d.log import log
 
@@ -37,7 +39,6 @@ from .viz import (
 
 MonitorDataTypes = Union[FieldData, FieldTimeData, ModeData, ModeSolverData]
 EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
-IntegralResultTypes = Union[FreqDataArray, FreqModeDataArray, TimeDataArray]
 
 
 class AbstractAxesRH(Tidy3dBaseModel, ABC):
@@ -137,7 +138,7 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
             coords_interp, method=method, kwargs={"fill_value": "extrapolate"}
         )
         result = scalar_field.integrate(coord=coord)
-        return self._make_result_data_array(result)
+        return _make_base_result_data_array(result)
 
     def _get_field_along_path(self, scalar_field: EMScalarFieldType) -> EMScalarFieldType:
         """Returns a selection of the input ``scalar_field`` ready for integration."""
@@ -205,15 +206,6 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
                 f"{supported_types}"
             )
 
-    @staticmethod
-    def _make_result_data_array(result: xr.DataArray) -> IntegralResultTypes:
-        """Helper for creating the proper result type."""
-        if "t" in result.coords:
-            return TimeDataArray(data=result.data, coords=result.coords)
-        if "f" in result.coords and "mode_index" in result.coords:
-            return FreqModeDataArray(data=result.data, coords=result.coords)
-        return FreqDataArray(data=result.data, coords=result.coords)
-
 
 class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
     """Class for computing the voltage between two points defined by an axis-aligned line."""
@@ -224,8 +216,9 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
         description="Positive indicates V=Vb-Va where position b has a larger coordinate along the axis of integration.",
     )
 
-    def compute_voltage(self, em_field: MonitorDataTypes) -> IntegralResultTypes:
+    def compute_voltage(self, em_field: MonitorDataTypes) -> VoltageIntegralResultTypes:
         """Compute voltage along path defined by a line."""
+
         self._check_monitor_data_supported(em_field=em_field)
         e_component = "xyz"[self.main_axis]
         field_name = f"E{e_component}"
@@ -238,15 +231,7 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
         if self.sign == "+":
             voltage *= -1
 
-        voltage = VoltageIntegralAxisAligned._set_data_array_attributes(voltage)
-        # Return data array of voltage while keeping coordinates of frequency|time|mode index
-        return voltage
-
-    @staticmethod
-    def _set_data_array_attributes(data_array: IntegralResultTypes) -> IntegralResultTypes:
-        """Add explanatory attributes to the data array."""
-        data_array.name = "V"
-        return data_array.assign_attrs(units=VOLT, long_name="voltage")
+        return _make_voltage_data_array(voltage)
 
     @staticmethod
     def from_terminal_positions(
@@ -381,8 +366,9 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         description="This parameter is passed to :class:`AxisAlignedPathIntegral` objects when computing the contour integral.",
     )
 
-    def compute_current(self, em_field: MonitorDataTypes) -> IntegralResultTypes:
+    def compute_current(self, em_field: MonitorDataTypes) -> CurrentIntegralResultTypes:
         """Compute current flowing in loop defined by the outer edge of a rectangle."""
+
         AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
         ax1 = self.remaining_axes[0]
         ax2 = self.remaining_axes[1]
@@ -407,8 +393,7 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
 
         if self.sign == "-":
             current *= -1
-        current = CurrentIntegralAxisAligned._set_data_array_attributes(current)
-        return current
+        return _make_current_data_array(current)
 
     @cached_property
     def main_axis(self) -> Axis:
@@ -497,12 +482,6 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         )
 
         return (bottom, right, top, left)
-
-    @staticmethod
-    def _set_data_array_attributes(data_array: IntegralResultTypes) -> IntegralResultTypes:
-        """Add explanatory attributes to the data array."""
-        data_array.name = "I"
-        return data_array.assign_attrs(units=AMP, long_name="current")
 
     @add_ax_if_none
     def plot(

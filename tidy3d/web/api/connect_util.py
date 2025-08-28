@@ -12,11 +12,7 @@ from urllib3.exceptions import NewConnectionError
 
 from tidy3d.exceptions import WebError
 from tidy3d.log import log
-
-# number of seconds to keep re-trying connection before erroring
-CONNECTION_RETRY_TIME = 180
-# time between checking task status
-REFRESH_TIME = 2
+from tidy3d.web.common import CONNECTION_RETRY_TIME, REFRESH_TIME
 
 
 def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RETRY_TIME):

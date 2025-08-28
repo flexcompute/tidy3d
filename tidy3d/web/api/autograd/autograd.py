@@ -23,11 +23,11 @@ from tidy3d.components.autograd.constants import (
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
 from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, BatchData, Job
-from tidy3d.web.api.tidy3d_stub import SimulationDataType, SimulationType
 from tidy3d.web.api.webapi import run as run_webapi
 from tidy3d.web.core.s3utils import download_file, upload_file
 from tidy3d.web.core.types import PayType
@@ -97,7 +97,7 @@ def is_valid_for_autograd_async(simulations: dict[str, td.Simulation]) -> bool:
 
 
 def run(
-    simulation: SimulationType,
+    simulation: WorkflowType,
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
@@ -114,10 +114,10 @@ def run(
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
-) -> SimulationDataType:
+) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
-    and loads results as a :class:`.SimulationDataType` object.
+    and loads results as a :class:`.WorkflowDataType` object.
 
     Parameters
     ----------
@@ -240,7 +240,7 @@ def run(
 
 
 def run_async(
-    simulations: dict[str, SimulationType],
+    simulations: dict[str, WorkflowType],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: typing.Optional[str] = None,

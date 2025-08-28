@@ -43,16 +43,37 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const {owner, repo} = context.repo
-            const number = context.payload.pull_request.number
-            const reviews = await github.rest.pulls.listReviews({owner, repo, pull_number: number})
-
-            const latestByUser = {}
-            reviews.data.forEach(r => latestByUser[r.user.id] = r)
-
-            const approved = Object.values(latestByUser)
-                                   .some(r => r.state === 'APPROVED')
-            core.setOutput('approved', approved ? 'true' : 'false')
+            const {owner, repo} = context.repo;
+            const number = context.payload.pull_request.number;
+            
+            // Fetch all reviews across all pages
+            const allReviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner,
+              repo,
+              pull_number: number,
+              per_page: 100,
+            });
+            
+            core.info(`Found ${allReviews.length} total review events.`);
+            
+            // Process the array to get only the latest review per user
+            const latestByUser = {};
+            allReviews.forEach(review => {
+              if (review.state !== 'COMMENTED') {
+                latestByUser[review.user.id] = review;
+              }
+            });
+            
+            const latestStates = Object.values(latestByUser).map(review => review.state);
+            core.info(`Final review states from unique reviewers: [${latestStates.join(', ')}]`);
+            
+            // The rest of the logic remains the same
+            const isBlocked = latestStates.includes('CHANGES_REQUESTED');
+            const isApproved = latestStates.includes('APPROVED');
+            const finalStatus = isApproved && !isBlocked;
+            
+            core.info(`🏁 Final determined approval status is: ${finalStatus}`);
+            core.setOutput('approved', finalStatus ? 'true' : 'false');
       - name: determine-test-type
         id: determine-test-type
         env:

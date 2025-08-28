@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -29,7 +29,6 @@ from .types import (
     EMField,
     FreqArray,
     FreqBound,
-    Literal,
     ObsGridArray,
     Size,
 )
