@@ -752,7 +752,7 @@ jobs:
       uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a  # v1.4.1
       with:
         version: 2.1.1
-        virtualenvs-create: true
+        virtualenvs-create: false
         virtualenvs-in-project: true
 
     - name: set-python-${{ matrix.python-version }}
@@ -791,6 +791,9 @@ jobs:
     - name: install-project
       shell: bash
       run: |
+        which python
+        python -m venv .venv/
+        python --version
         poetry --version
         python --version
         python -m venv .venv
