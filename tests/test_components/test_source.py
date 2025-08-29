@@ -15,6 +15,7 @@ from ..utils import AssertLogLevel
 
 ST = td.GaussianPulse(freq0=2e14, fwidth=1e14)
 S = td.PointDipole(source_time=ST, polarization="Ex")
+FWIDTH_FRAC = 0.1
 
 
 ATOL = 1e-8
@@ -106,6 +107,18 @@ def test_gaussian_from_frequency_range():
     # error with fmin >= fmax
     with pytest.raises(ValueError):
         _ = td.GaussianPulse.from_frequency_range(fmin=1e10, fmax=0.9e10)
+    # error with minimum_source_bandwidth negative or 0
+    with pytest.raises(ValueError):
+        _ = td.GaussianPulse.from_frequency_range(
+            fmin=9e10, fmax=11e10, minimum_source_bandwidth=0.0
+        )
+        _ = td.GaussianPulse.from_frequency_range(
+            fmin=9e10, fmax=11e10, minimum_source_bandwidth=-1.0
+        )
+        # error with minimum_source_bandwidth greater than 1
+        _ = td.GaussianPulse.from_frequency_range(
+            fmin=9e10, fmax=11e10, minimum_source_bandwidth=1.0
+        )
 
     fmin = 1e9
     fmax = 20e9
@@ -135,6 +148,41 @@ def test_gaussian_from_frequency_range():
     g = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax)
     assert abs(g.fwidth - bandwidth) / bandwidth < 1e-4
     assert abs(g.freq0 - fmin) / fmin < 1e-4
+
+
+def test_frequency_source_width():
+    """Ensure the source bandwidth has a lower bound regardless of the input frequencies."""
+
+    middle_freq = 1e10
+    fmin_large_bw = middle_freq * (1 - 2 * FWIDTH_FRAC)
+    fmax_large_bw = middle_freq * (1 + 2 * FWIDTH_FRAC)
+    fmin, fmax = td.GaussianPulse._minimum_source_bandwidth(
+        fmin=fmin_large_bw, fmax=fmax_large_bw, minimum_source_bandwidth=FWIDTH_FRAC
+    )
+
+    assert np.isclose(fmin, fmin_large_bw), (
+        "Expected no change in bandwidth (fmin unexpectedly changed)."
+    )
+
+    assert np.isclose(fmax, fmax_large_bw), (
+        "Expected no change in bandwidth (fmax unexpectedly changed)."
+    )
+
+    fmin_small_bw = middle_freq * (1 - 0.1 * FWIDTH_FRAC)
+    fmax_small_bw = middle_freq * (1 + 0.1 * FWIDTH_FRAC)
+    fmin, fmax = td.GaussianPulse._minimum_source_bandwidth(
+        fmin=fmin_small_bw, fmax=fmax_small_bw, minimum_source_bandwidth=FWIDTH_FRAC
+    )
+    fmin_expected = middle_freq * (1 - 0.5 * FWIDTH_FRAC)
+    fmax_expected = middle_freq * (1 + 0.5 * FWIDTH_FRAC)
+
+    assert np.isclose(fmin, fmin_expected), (
+        "Expected increase in bandwidth (fmin unexpected value)."
+    )
+
+    assert np.isclose(fmax, fmax_expected), (
+        "Expected increase in bandwidth (fmax unexpected value)."
+    )
 
 
 def test_dipole():

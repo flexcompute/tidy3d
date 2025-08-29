@@ -342,8 +342,14 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
         if len(self.freqs) == 1:
             freq0 = self.freqs[0]
             return GaussianPulse(freq0=self.freqs[0], fwidth=freq0 * FWIDTH_FRAC)
+
+        # Using the minimum_source_bandwidth, ensure we don't create a pulse that is too narrowband
+        # when fmin and fmax are close together
         return GaussianPulse.from_frequency_range(
-            fmin=min(self.freqs), fmax=max(self.freqs), remove_dc_component=self.remove_dc_component
+            fmin=np.min(self.freqs),
+            fmax=np.max(self.freqs),
+            remove_dc_component=self.remove_dc_component,
+            minimum_source_bandwidth=FWIDTH_FRAC,
         )
 
     @pd.validator("simulation")

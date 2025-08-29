@@ -185,9 +185,34 @@ class GaussianPulse(Pulse):
         phase = np.angle(amp)
         return cls(amplitude=amplitude, phase=phase, **kwargs)
 
+    @staticmethod
+    def _minimum_source_bandwidth(
+        fmin: float, fmax: float, minimum_source_bandwidth: float
+    ) -> tuple[float, float]:
+        """Define a source bandwidth based on fmin and fmax, but enforce a minimum bandwidth."""
+        if minimum_source_bandwidth <= 0:
+            raise ValidationError("'minimum_source_bandwidth' must be positive")
+        if minimum_source_bandwidth >= 1:
+            raise ValidationError("'minimum_source_bandwidth' must less than or equal to 1")
+
+        f_difference = fmax - fmin
+        f_middle = 0.5 * (fmin + fmax)
+
+        full_width = minimum_source_bandwidth * f_middle
+        if f_difference < full_width:
+            half_width = 0.5 * full_width
+            fmin = f_middle - half_width
+            fmax = f_middle + half_width
+
+        return fmin, fmax
+
     @classmethod
     def from_frequency_range(
-        cls, fmin: pydantic.PositiveFloat, fmax: pydantic.PositiveFloat, **kwargs
+        cls,
+        fmin: pydantic.PositiveFloat,
+        fmax: pydantic.PositiveFloat,
+        minimum_source_bandwidth: pydantic.PositiveFloat = None,
+        **kwargs,
     ) -> GaussianPulse:
         """Create a ``GaussianPulse`` that maximizes its amplitude in the frequency range [fmin, fmax].
 
@@ -210,6 +235,9 @@ class GaussianPulse(Pulse):
             raise ValidationError("'fmin' must be positive.")
         if fmax <= fmin:
             raise ValidationError("'fmax' must be greater than 'fmin'.")
+
+        if minimum_source_bandwidth is not None:
+            fmin, fmax = cls._minimum_source_bandwidth(fmin, fmax, minimum_source_bandwidth)
 
         # frequency range and center
         freq_range = fmax - fmin
