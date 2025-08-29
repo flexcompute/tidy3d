@@ -309,6 +309,7 @@ class BatchDetail(TaskBase):
     postprocessSuccess: int = 0
     taskBlockInfo: BatchTaskBlockInfo = None
     estFlexUnit: float = None
+    realFlexUnit: float = None
     totalSeconds: int = None
     totalCheckMillis: int = None
     message: str = None

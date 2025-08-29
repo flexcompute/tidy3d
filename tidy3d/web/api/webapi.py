@@ -87,6 +87,22 @@ def _batch_detail(resource_id: str):
     return BatchTask(resource_id).detail(batch_type="RF_SWEEP")
 
 
+def _task_dict_to_url_bullet_list(data_dict: dict) -> str:
+    """
+    Converts a dictionary into a string formatted as a bullet point list.
+
+    Args:
+      data_dict: The dictionary to convert.
+
+    Returns:
+      A string with each key-url/value pair as a bullet point.
+    """
+    # Use a list comprehension to format each key-value pair
+    # and then join them together with newline characters.
+    return "\n".join([f"- {key}: {value}" for key, value in data_dict.items()])
+    # return "\n".join([f"- {key}: [link={_get_url(value)}]'{_get_url(value)}'[/link]" for key, value in data_dict.items()])
+
+
 @wait_for_connection
 def run(
     simulation: WorkflowType,
@@ -299,10 +315,29 @@ def upload(
         "Gz",
         port_name_list=port_name_list,
     )
+
+    if task_type == "RF":
+        # Prefer the group id if present in the creation response; avoid extra GET.
+        group_id = getattr(task, "groupId", None) or getattr(task, "group_id", None)
+        if not group_id:
+            try:
+                detail_task = SimulationTask.get(task.task_id, verbose=False)
+                group_id = getattr(detail_task, "groupId", None) or getattr(
+                    detail_task, "group_id", None
+                )
+            except Exception:
+                group_id = None
+        # Prefer returning batch/group id for downstream batch endpoints
+        batch_id = getattr(task, "batchId", None) or getattr(task, "batch_id", None)
+        resource_id = batch_id or task.task_id
+    else:
+        group_id = None
+        resource_id = task.task_id
+
     if verbose:
         console = get_logging_console()
         console.log(
-            f"Created task '{task_name}' with task_id '{task.task_id}' and task_type '{task_type}'."
+            f"Created task '{task_name}' with task_id '{resource_id}' and task_type '{task_type}'."
         )
         if task_type in BETA_TASK_TYPES:
             solver_name = SOLVER_NAME[task_type]
@@ -312,22 +347,12 @@ def upload(
             )
         if task_type in GUI_SUPPORTED_TASK_TYPES:
             if task_type == "RF":
-                # Prefer the group id if present in the creation response; avoid extra GET.
-                group_id = getattr(task, "groupId", None) or getattr(task, "group_id", None)
-                if not group_id:
-                    try:
-                        detail_task = SimulationTask.get(task.task_id, verbose=False)
-                        group_id = getattr(detail_task, "groupId", None) or getattr(
-                            detail_task, "group_id", None
-                        )
-                    except Exception:
-                        group_id = None
-                url = _get_url_rf(group_id or task.task_id)
+                url = _get_url_rf(group_id or resource_id)
                 folder_url = _get_folder_url(task.folder_id)
                 console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
                 console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
             else:
-                url = _get_url(task.task_id)
+                url = _get_url(resource_id)
                 folder_url = _get_folder_url(task.folder_id)
                 console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
                 console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
@@ -345,19 +370,34 @@ def upload(
         remote_sim_file=remote_sim_file,
     )
 
-    # TODO: cost estimation for RF task?
-    if task_type != "RF":
-        estimate_cost(task_id=task.task_id, solver_version=solver_version, verbose=verbose)
+    if task_type == "RF":
+        split_path = "tidy3d/projects/terminal-component-modeler-split"
+        payload = {
+            "batchType": "RF_SWEEP",
+            "batchId": resource_id,
+            "fileName": "modeler.hdf5.gz",
+            "protocolVersion": _get_protocol_version(),
+        }
+        resp = http.post(split_path, payload)
+        if verbose:
+            console = get_logging_console()
+            console.log(
+                f"Child simulation subtasks are being uploaded to \n{_task_dict_to_url_bullet_list(resp)}"
+            )
+        # split (modeler-specific)
+        batch = BatchTask(resource_id)
+        # Kick off server-side validation for the RF batch.
+        batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
+        # Validation phase
+        console.log("Validating RF batch...")
+    else:
+        task.validate_post_upload(parent_tasks=parent_tasks)
 
-    task.validate_post_upload(parent_tasks=parent_tasks)
+    estimate_cost(task_id=resource_id, solver_version=solver_version, verbose=verbose)
 
     # log the url for the task in the web UI
-    log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{task.task_id}")
-    if task_type == "RF":
-        # Prefer returning batch/group id for downstream batch endpoints
-        batch_id = getattr(task, "batchId", None) or getattr(task, "batch_id", None)
-        return batch_id or task.task_id
-    return task.task_id
+    log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{resource_id}")
+    return resource_id
 
 
 def get_reduced_simulation(simulation, reduce_simulation):
@@ -458,52 +498,17 @@ def start(
     To monitor progress, can call :meth:`monitor` after starting simulation.
     """
 
-    def dict_to_bullet_list(data_dict: dict) -> str:
-        """
-        Converts a dictionary into a string formatted as a bullet point list.
-
-        Args:
-          data_dict: The dictionary to convert.
-
-        Returns:
-          A string with each key-value pair as a bullet point.
-        """
-        # Use a list comprehension to format each key-value pair
-        # and then join them together with newline characters.
-        return "\n".join([f"- {key}: {value}" for key, value in data_dict.items()])
-
     console = get_logging_console()
 
     # Component modeler batch path: hide split/check/submit
     if _is_modeler_batch(task_id):
         # split (modeler-specific)
-        split_path = "tidy3d/projects/terminal-component-modeler-split"
-        payload = {
-            "batchType": "RF_SWEEP",
-            "batchId": task_id,
-            "fileName": "modeler.hdf5.gz",
-            "protocolVersion": _get_protocol_version(),
-        }
-        resp = http.post(split_path, payload)
-
-        console.log(
-            f"Child simulation subtasks are being uploaded to \n{dict_to_bullet_list(resp)}"
-        )
-
         batch = BatchTask(task_id)
-        # Kick off server-side validation for the RF batch.
-        batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
-        # Validation phase
-        console.log("Validating RF batch...")
         detail = batch.wait_for_validate(batch_type="RF_SWEEP")
         status = detail.totalStatus
         status_str = status.value
         if status_str in ("validate_success", "validate_warn"):
             console.log("Batch validation completed.")
-
-        # Show estimated FlexCredit cost from batch detail
-        est_fc = detail.estFlexUnit
-        console.log(f"Estimated FlexCredit cost: {est_fc:1.3f} for RF batch.")
         if status_str not in ("validate_success", "validate_warn"):
             raise WebError(f"Batch task {task_id} is blocked: {status_str}")
         # Submit batch to start runs after validation
@@ -1322,38 +1327,64 @@ def estimate_cost(
         print(f'The estimated maximum cost is {estimated_cost:.3f} Flex Credits.')
 
     """
-    task = SimulationTask.get(task_id)
-    if not task:
-        raise ValueError("Task not found.")
+    if not isinstance(task_id, str):
+        raise ValueError(
+            f"Task ID: {task_id} is not a string. You can get it using 'web.upload(<WorkflowType>)'."
+        )
 
-    task.estimate_cost(solver_version=solver_version)
-    task_info = get_info(task_id)
-    status = task_info.metadataStatus
+    if _is_modeler_batch(task_id):
+        status = _batch_detail(task_id).totalStatus
 
-    # Wait for a termination status
-    while status not in ["processed", "success", "error", "failed"]:
-        time.sleep(REFRESH_TIME)
+        # Wait for a termination status
+        while status not in ["validate_success", "success", "error", "failed"]:
+            time.sleep(REFRESH_TIME)
+            status = _batch_detail(task_id).totalStatus
+
+        if status in ["validate_success", "success"]:
+            est_flex_unit = _batch_detail(task_id).estFlexUnit
+            if verbose:
+                console = get_logging_console()
+                console.log(
+                    f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Minimum cost depends on "
+                    "task execution details. Use 'web.real_cost(task_id)' to get the billed FlexCredit "
+                    "cost after a simulation run."
+                )
+            return est_flex_unit
+    else:
+        task = SimulationTask.get(task_id)
+        if not task:
+            raise ValueError("Task not found.")
+
+        task.estimate_cost(solver_version=solver_version)
         task_info = get_info(task_id)
         status = task_info.metadataStatus
 
-    if status in ["processed", "success"]:
-        if verbose:
-            console = get_logging_console()
-            console.log(
-                f"Maximum FlexCredit cost: {task_info.estFlexUnit:1.3f}. Minimum cost depends on "
-                "task execution details. Use 'web.real_cost(task_id)' to get the billed FlexCredit "
-                "cost after a simulation run."
-            )
-            fc_mode = task_info.estFlexCreditMode
-            fc_post = task_info.estFlexCreditPostProcess
-            if fc_mode:
-                console.log(f"  {fc_mode:1.3f} FlexCredit of the total cost from mode solves.")
-            if fc_post:
-                console.log(f"  {fc_post:1.3f} FlexCredit of the total cost from post-processing.")
-        return task_info.estFlexUnit
+        # Wait for a termination status
+        while status not in ["processed", "success", "error", "failed"]:
+            time.sleep(REFRESH_TIME)
+            task_info = get_info(task_id)
+            status = task_info.metadataStatus
 
-    # Something went wrong
-    raise WebError("Could not get estimated cost!")
+        if status in ["processed", "success"]:
+            if verbose:
+                console = get_logging_console()
+                console.log(
+                    f"Maximum FlexCredit cost: {task_info.estFlexUnit:1.3f}. Minimum cost depends on "
+                    "task execution details. Use 'web.real_cost(task_id)' to get the billed FlexCredit "
+                    "cost after a simulation run."
+                )
+                fc_mode = task_info.estFlexCreditMode
+                fc_post = task_info.estFlexCreditPostProcess
+                if fc_mode:
+                    console.log(f"  {fc_mode:1.3f} FlexCredit of the total cost from mode solves.")
+                if fc_post:
+                    console.log(
+                        f"  {fc_post:1.3f} FlexCredit of the total cost from post-processing."
+                    )
+            return task_info.estFlexUnit
+
+        # Something went wrong
+        raise WebError("Could not get estimated cost!")
 
 
 @wait_for_connection
@@ -1403,24 +1434,48 @@ def real_cost(task_id: str, verbose=True) -> float:
         # Get the billed FlexCredit cost after a simulation run.
         cost = web.real_cost(job.task_id)
     """
-    task_info = get_info(task_id)
-    flex_unit = task_info.realFlexUnit
-    ori_flex_unit = task_info.oriRealFlexUnit
-    if not flex_unit:
-        log.warning(
-            f"Billed FlexCredit for task '{task_id}' is not available. If the task has been "
-            "successfully run, it should be available shortly."
+    if not isinstance(task_id, str):
+        raise ValueError(
+            f"Task ID: {task_id} is not a string. You can get it using 'web.upload(<WorkflowType>)'."
         )
-    else:
-        if verbose:
-            console = get_logging_console()
-            console.log(f"Billed flex credit cost: {flex_unit:1.3f}.")
-            if flex_unit != ori_flex_unit and task_info.taskType == "FDTD":
+
+    if _is_modeler_batch(task_id):
+        status = _batch_detail(task_id).totalStatus
+
+        if status in ["success"]:
+            flex_unit = _batch_detail(task_id).realFlexUnit
+            if verbose:
+                console = get_logging_console()
                 console.log(
-                    "Note: the task cost pro-rated due to early shutoff was below the minimum "
-                    "threshold, due to fast shutoff. Decreasing the simulation 'run_time' should "
-                    "decrease the estimated, and correspondingly the billed cost of such tasks."
+                    f"Maximum FlexCredit cost: {flex_unit:1.3f}. Minimum cost depends on "
+                    "task execution details. Use 'web.real_cost(task_id)' to get the billed FlexCredit "
+                    "cost after a simulation run."
                 )
+        else:
+            log.warning(
+                f"Billed FlexCredit for task '{task_id}' is not available. If the task has been "
+                "successfully run, it should be available shortly."
+            )
+            return flex_unit
+    else:
+        task_info = get_info(task_id)
+        flex_unit = task_info.realFlexUnit
+        ori_flex_unit = task_info.oriRealFlexUnit
+        if not flex_unit:
+            log.warning(
+                f"Billed FlexCredit for task '{task_id}' is not available. If the task has been "
+                "successfully run, it should be available shortly."
+            )
+        else:
+            if verbose:
+                console = get_logging_console()
+                console.log(f"Billed flex credit cost: {flex_unit:1.3f}.")
+                if flex_unit != ori_flex_unit and task_info.taskType == "FDTD":
+                    console.log(
+                        "Note: the task cost pro-rated due to early shutoff was below the minimum "
+                        "threshold, due to fast shutoff. Decreasing the simulation 'run_time' should "
+                        "decrease the estimated, and correspondingly the billed cost of such tasks."
+                    )
     return flex_unit
 
 
