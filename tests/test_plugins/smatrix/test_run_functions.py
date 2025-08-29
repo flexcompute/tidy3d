@@ -133,7 +133,7 @@ def test_compose_modeler_data_keys_mismatch():
         ),
     )
 
-    with pytest.raises(pd.ValidationError, match="do not match data keys"):
+    with pytest.raises(pd.ValidationError):
         TerminalComponentModelerData(
             modeler=make_terminal_component_modeler(planar_pec=True), data=dummy_sim_data_map
         )

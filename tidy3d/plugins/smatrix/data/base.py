@@ -46,9 +46,31 @@ class AbstractComponentModelerData(ABC, Tidy3dBaseModel):
 
     @pd.validator("data")
     def keys_match_modeler(cls, val, values):
+        """
+        Validates that the keys of the 'data' dictionary match the keys
+        of the 'modeler.sim_dict' dictionary, irrespective of order.
+        """
         modeler = values.get("modeler")
-        modeler_keys = tuple(modeler.sim_dict.keys())
-        data_keys = tuple(val.keys())
+
+        # It's good practice to handle cases where 'modeler' might not be present
+        if not modeler or not hasattr(modeler, "sim_dict"):
+            return val
+
+        # Use sets for an order-insensitive comparison
+        modeler_keys = set(modeler.sim_dict.keys())
+        data_keys = set(val.keys())
+
         if modeler_keys != data_keys:
-            raise ValueError(f"Modeler keys {modeler_keys} do not match data keys {data_keys}.")
+            # Provide a more helpful error by showing the exact differences
+            missing_keys = sorted(modeler_keys - data_keys)
+            extra_keys = sorted(data_keys - modeler_keys)
+
+            error_parts = []
+            if missing_keys:
+                error_parts.append(f"Data is missing keys: {missing_keys}")
+            if extra_keys:
+                error_parts.append(f"Data has extra keys: {extra_keys}")
+
+            raise ValueError(f"Key mismatch between modeler and data. {'; '.join(error_parts)}")
+
         return val
