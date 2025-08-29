@@ -14,6 +14,7 @@ from botocore.exceptions import ClientError
 from pydantic.v1 import Extra, Field, parse_obj_as
 
 import tidy3d as td
+from tidy3d.config import config
 from tidy3d.exceptions import ValidationError
 from tidy3d.web.common import REFRESH_TIME
 
@@ -772,7 +773,11 @@ class BatchTask:
         bool
             ``True`` if the resource is a valid batch task, ``False`` otherwise.
         """
+        previous_logging_level = config.logging_level
         try:
+            # TODO PROPERLY FIXME
+            # Disable non critical logs due to check for resourceId, until we have a dedicated API for this
+            config.logging_level = "CRITICAL"
             resp = http.get(
                 f"tidy3d/tasks/{resource_id}/batch-detail", params={"batchType": batch_type}
             )
@@ -780,6 +785,8 @@ class BatchTask:
             return status
         except Exception:
             return False
+        finally:
+            config.logging_level = previous_logging_level
 
     def detail(self, batch_type: str) -> BatchDetail:
         """Fetches the detailed information and status of the batch.
