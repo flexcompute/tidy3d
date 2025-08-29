@@ -99,8 +99,6 @@ def test_create_batch(monkeypatch, tmp_path):
     result_batch = create_batch(modeler=dummy_modeler, path_dir=str(tmp_path))
     mock_batch_class.assert_called_once_with(
         simulations=dummy_modeler.sim_dict,
-        parent_tasks=None,
-        group_ids=None,
     )
     mock_batch_instance.to_file.assert_called_once_with(os.path.join(str(tmp_path), "batch.hdf5"))
     assert result_batch == mock_batch_instance
@@ -110,25 +108,16 @@ def test_create_batch(monkeypatch, tmp_path):
     mock_batch_instance.to_file.reset_mock()
 
     # Test with parent_batch_id and group_id
-    parent_id = "parent123"
-    group_id = "groupABC"
     file_name = "custom_batch.hdf5"
     result_batch = create_batch(
         modeler=dummy_modeler,
         path_dir=str(tmp_path),
-        parent_batch_id=parent_id,
-        group_id=group_id,
         file_name=file_name,
         some_kwarg="value",
     )
 
-    expected_parent_tasks = dict.fromkeys(dummy_modeler.sim_dict.keys(), (parent_id,))
-    expected_group_ids = dict.fromkeys(dummy_modeler.sim_dict.keys(), (group_id,))
-
     mock_batch_class.assert_called_once_with(
         simulations=dummy_modeler.sim_dict,
-        parent_tasks=expected_parent_tasks,
-        group_ids=expected_group_ids,
         some_kwarg="value",
     )
     mock_batch_instance.to_file.assert_called_once_with(os.path.join(str(tmp_path), file_name))

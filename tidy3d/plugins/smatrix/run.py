@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Optional
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
@@ -250,8 +249,6 @@ def compose_modeler_data_from_batch_data(
 def create_batch(
     modeler: ComponentModelerType,
     path_dir: str = DEFAULT_DATA_DIR,
-    parent_batch_id: Optional[str] = None,
-    group_id: Optional[str] = None,
     file_name: str = "batch.hdf5",
     **kwargs,
 ) -> Batch:
@@ -279,24 +276,8 @@ def create_batch(
     """
     filepath = os.path.join(path_dir, file_name)
 
-    if parent_batch_id is not None:
-        parent_task_dict = {}
-        for key in modeler.sim_dict.keys():
-            parent_task_dict[key] = (parent_batch_id,)
-    else:
-        parent_task_dict = None
-
-    if group_id is not None:
-        group_id_dict = {}
-        for key in modeler.sim_dict.keys():
-            group_id_dict[key] = (group_id,)
-    else:
-        group_id_dict = None
-
     batch = Batch(
         simulations=modeler.sim_dict,
-        parent_tasks=parent_task_dict,
-        group_ids=group_id_dict,
         **kwargs,
     )
     batch.to_file(filepath)
@@ -304,8 +285,7 @@ def create_batch(
 
 
 def run(
-    modeler: ComponentModelerType,
-    path_dir: str = DEFAULT_DATA_DIR,
+    modeler: ComponentModelerType, path_dir: str = DEFAULT_DATA_DIR, **kwargs
 ) -> ComponentModelerDataType:
     """Execute the full simulation workflow for a given component modeler.
 
@@ -320,6 +300,8 @@ def run(
         The component modeler defining the simulations to be run.
     path_dir : str, optional
         The directory where the batch file will be saved. Defaults to ".".
+    **kwargs
+        Extra keyword arguments propagated to the Batch creation.
 
     Returns
     -------
@@ -327,7 +309,7 @@ def run(
         An object containing the processed simulation data, ready for
         S-parameter extraction and analysis.
     """
-    batch = create_batch(modeler=modeler, path_dir=path_dir)
+    batch = create_batch(modeler=modeler, path_dir=path_dir, **kwargs)
     batch_data = batch.run()
     modeler_data = compose_modeler_data_from_batch_data(modeler=modeler, batch_data=batch_data)
     return modeler_data
