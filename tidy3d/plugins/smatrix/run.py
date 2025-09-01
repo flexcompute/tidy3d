@@ -171,9 +171,15 @@ def compose_terminal_modeler_data_from_batch_data(
     TerminalComponentModelerData
         An object containing the results mapped to their respective ports.
     """
-    ports = [modeler.get_task_name(port=port_i) for port_i in modeler.ports]
-    data = [batch_data[modeler.get_task_name(port=port_i)] for port_i in modeler.ports]
-    port_simulation_data = SimulationDataMap(keys=tuple(ports), values=tuple(data))
+    # Build keys to match the actual task names used in sim_dict (may include mode_index for WavePort)
+    task_names: list[str] = []
+    data_list = []
+    for source_index in modeler.matrix_indices_run_sim:
+        port, mode_index = modeler.network_dict[source_index]
+        task_name = modeler.get_task_name(port=port, mode_index=mode_index)
+        task_names.append(task_name)
+        data_list.append(batch_data[task_name])
+    port_simulation_data = SimulationDataMap(keys=tuple(task_names), values=tuple(data_list))
     return TerminalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
@@ -198,9 +204,15 @@ def compose_modal_modeler_data_from_batch_data(
     ModalComponentModelerData
         An object containing the results mapped to their respective ports.
     """
-    ports = [modeler.get_task_name(port=port_i) for port_i in modeler.ports]
-    data = [batch_data[modeler.get_task_name(port=port_i)] for port_i in modeler.ports]
-    port_simulation_data = SimulationDataMap(keys=tuple(ports), values=tuple(data))
+    # Use exact task names for each (port, mode_index) that was run
+    task_names: list[str] = []
+    data_list = []
+    for port_name, mode_index in modeler.matrix_indices_run_sim:
+        port = modeler.get_port_by_name(port_name=port_name)
+        task_name = modeler.get_task_name(port=port, mode_index=mode_index)
+        task_names.append(task_name)
+        data_list.append(batch_data[task_name])
+    port_simulation_data = SimulationDataMap(keys=tuple(task_names), values=tuple(data_list))
     return ModalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
