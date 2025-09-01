@@ -32,6 +32,8 @@ Generation Recombination
    tidy3d.AugerRecombination
    tidy3d.RadiativeRecombination
    tidy3d.ShockleyReedHallRecombination
+   tidy3d.FossumCarrierLifetime
+   tidy3d.DistributedGeneration
 
 
 Doping

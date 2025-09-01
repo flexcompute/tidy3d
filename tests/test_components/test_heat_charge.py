@@ -2215,3 +2215,54 @@ def test_heat_conduction_simulations():
             medium=struct1.medium.updated_copy(charge=td.ChargeInsulatorMedium)
         )
         _ = sim.updated_copy(structures=[struct_error])
+
+
+def test_generation_recombination():
+    """Test that generation and recombination models are properly defined."""
+
+    # Create a spatial data array for generation rate
+    x = [1, 2]
+    y = [2, 3, 4]
+    z = [3, 4, 5, 6]
+    coords = {"x": x, "y": y, "z": z}
+    fd = td.SpatialDataArray(np.random.random((2, 3, 4)), coords=coords)
+
+    # make sure we can create a DistributedGeneration
+    _ = td.DistributedGeneration(rate=fd)
+
+    # check that unit conversion works
+    g_um3 = fd.sel(x=1, y=2, z=3).item()
+    new_g = td.DistributedGeneration.from_rate_um3(fd)
+    assert new_g.rate.sel(x=1, y=2, z=3).item() == g_um3 * 1e12
+
+    # make sure an error is raised if input array is 1D
+    with pytest.raises(ValueError):
+        rate1D = td.SpatialDataArray(
+            np.random.random((5, 1, 1)), coords={"x": [1, 2, 3, 4, 5], "y": [1], "z": [1]}
+        )
+        _ = td.DistributedGeneration(rate=rate1D)
+
+    # make sure we can build Fossum
+    tau_fossum = td.FossumCarrierLifetime(
+        tau_300=3.3e-6, alpha_T=-0.5, N0=7.1e15, A=1, B=0, C=1, alpha=1
+    )
+
+    # make sure we can build AugerRecombination
+    _ = td.AugerRecombination(
+        c_n=2.8e-31,
+        c_p=9.9e-32,
+    )
+
+    # make sure we can build RadiativeRecombination
+    _ = td.RadiativeRecombination(r_const=1.6e-14)
+
+    # make sure we can build ShockleyReedHallRecombination
+    _ = td.ShockleyReedHallRecombination(
+        tau_n=3.3e-6,
+        tau_p=4e-6,
+    )
+
+    _ = td.ShockleyReedHallRecombination(
+        tau_n=tau_fossum,
+        tau_p=tau_fossum,
+    )

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import Union
 
+import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.constants import PERCMCUBE, SECOND
 
 
@@ -156,7 +158,6 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
     ----
     Important considerations when using this model:
 
-    - Currently, lifetimes are considered constant (not dependent on temperature or doping).
     - This model represents mid-gap traps Shockley-Reed-Hall recombination.
     """
 
@@ -167,3 +168,46 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
     tau_p: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
         ..., title="Hole lifetime", description="Hole lifetime", units=SECOND
     )
+
+
+class DistributedGeneration(Tidy3dBaseModel):
+    """Class that allows to add a distributed generation model.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> import numpy as np
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> coords = dict(x=x, y=y, z=z)
+    >>> fd = td.SpatialDataArray(np.random.random((2,3,4)), coords=coords)
+    >>> dist_g = td.DistributedGeneration(rate=fd)
+    """
+
+    rate: SpatialDataArray = pd.Field(
+        ...,
+        title="Generation rate",
+        description="Spatially varying generation rate in cm^-3 s^-1",
+        units="cm^-3 s^-1",
+    )
+
+    @classmethod
+    def from_rate_um3(cls, gen_um3: SpatialDataArray) -> DistributedGeneration:
+        """Creates a DistributedGeneration from a SpatialDataArray in um^-3 s^-1."""
+        gen_cm3 = np.array(gen_um3.data) * 1e12  # Convert from um^-3 to cm^-3
+        new_gen = SpatialDataArray(gen_cm3, coords=gen_um3.coords)
+        return cls(rate=new_gen)
+
+    @pd.root_validator(skip_on_failure=True)
+    def check_spatialdataarray_dimensions(cls, values):
+        """Check that the SpatialDataArray is at least 2D:"""
+
+        rate = values.get("rate")
+
+        zero_dims = [d for d in ["x", "y", "z"] if len(rate.coords[d]) <= 1]
+
+        if len(zero_dims) >= 1:
+            raise ValueError("SpatialDataArray must be at least 2D.")
+
+        return values
