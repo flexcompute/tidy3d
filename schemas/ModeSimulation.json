@@ -3763,6 +3763,37 @@
       ],
       "type": "object"
     },
+    "DistributedGeneration": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "rate": {
+          "properties": {
+            "_dims": {
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ],
+          "type": "xr.DataArray"
+        },
+        "type": {
+          "default": "DistributedGeneration",
+          "enum": [
+            "DistributedGeneration"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "rate"
+      ],
+      "type": "object"
+    },
     "Drude": {
       "additionalProperties": false,
       "properties": {
@@ -8876,6 +8907,9 @@
             "anyOf": [
               {
                 "$ref": "#/definitions/AugerRecombination"
+              },
+              {
+                "$ref": "#/definitions/DistributedGeneration"
               },
               {
                 "$ref": "#/definitions/RadiativeRecombination"

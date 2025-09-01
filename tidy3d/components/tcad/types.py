@@ -13,6 +13,7 @@ from tidy3d.components.tcad.boundary.heat import (
 )
 from tidy3d.components.tcad.generation_recombination import (
     AugerRecombination,
+    DistributedGeneration,
     RadiativeRecombination,
     ShockleyReedHallRecombination,
 )
@@ -31,7 +32,7 @@ from tidy3d.components.tcad.source.heat import HeatSource, UniformHeatSource
 
 MobilityModelType = Union[CaugheyThomasMobility, ConstantMobilityModel]
 RecombinationModelType = Union[
-    AugerRecombination, RadiativeRecombination, ShockleyReedHallRecombination
+    AugerRecombination, DistributedGeneration, RadiativeRecombination, ShockleyReedHallRecombination
 ]
 BandGapNarrowingModelType = Union[SlotboomBandGapNarrowing]
 
