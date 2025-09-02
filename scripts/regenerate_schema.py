@@ -1,55 +1,119 @@
 """
-Generates and saves JSON schemas for key tidy3d data structures.
+Generate Tidy3D JSON Schemas (docs-free, deterministic).
 
-This script iterates through a predefined dictionary of Tidy3D classes,
-generates a Pydantic JSON schema for each, and saves it as a formatted
-JSON file in the 'schemas' directory. It's designed to be run as a
-standalone utility to update schema definitions.
+This utility exports JSON Schemas for key Tidy3D models and writes them into
+the repository `schemas/` directory, with two strict guarantees:
 
-All are GUI supported classes.
+- Documentation-free: remove all "title", "description", and "units" fields at every level.
+- Canonicalized: deterministically sort keys and certain lists for stable output
+  across Python versions.
+
+Note: The behavior is always docs-free and canonicalized.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import pathlib
 import sys
-
-# Attempt to import necessary classes from tidy3d.
-try:
-    from tidy3d import (
-        EMESimulation,
-        HeatChargeSimulation,
-        HeatSimulation,
-        ModeSimulation,
-        Simulation,
-    )
-    from tidy3d.plugins.smatrix import TerminalComponentModeler
-except ImportError as e:
-    print(
-        f"Error: Failed to import from 'tidy3d'. Ensure it's installed. Details: {e}",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
+from typing import Any
 
 # Define the output directory relative to this script's location.
 # Assumes the script is in a subdirectory like 'scripts' and 'schemas' is a sibling.
-SCHEMA_DIR = pathlib.Path(__file__).parent.parent / "schemas"
+DEFAULT_SCHEMA_DIR = pathlib.Path(__file__).parent.parent / "schemas"
 
 # Dictionary mapping a clean name to the Pydantic model class.
 # This is the single source of truth for which schemas to export.
-export_api_schema_dictionary = {
-    "Simulation": Simulation,
-    "ModeSimulation": ModeSimulation,
-    "EMESimulation": EMESimulation,
-    "HeatSimulation": HeatSimulation,
-    "HeatChargeSimulation": HeatChargeSimulation,
-    "TerminalComponentModeler": TerminalComponentModeler,
-}
+export_api_schema_dictionary = None  # populated lazily when generating
 
 
-def generate_schemas():
+def _stable_sort_key_for_schema_item(item: Any) -> str:
+    """Return a stable string key for sorting schema objects in anyOf/oneOf/allOf arrays.
+
+    Input is assumed to be already canonicalized and docs-free; we defensively drop
+    top-level doc fields in case of partially processed inputs.
+    """
+    try:
+        if isinstance(item, dict):
+            item = {k: v for k, v in item.items() if k not in {"title", "description", "units"}}
+        return json.dumps(item, sort_keys=True, separators=(",", ":"))
+    except Exception:
+        return str(item)
+
+
+def _canonicalize(obj: Any) -> Any:
+    """Recursively canonicalize a schema object for deterministic, docs-free output.
+
+    Rules:
+    - Drop all "description", "title", and "units" keys everywhere.
+    - Sort all dict keys recursively.
+    - Sort arrays that are order-insensitive: "required", "enum", and "type" (when list).
+    - For "anyOf"/"oneOf"/"allOf", sort entries by a stable key after canonicalization.
+    """
+    if isinstance(obj, dict):
+        # Canonicalize nested values and drop doc keys
+        canon: dict[str, Any] = {}
+        for k, v in obj.items():
+            if k in {"description", "title", "units"}:
+                continue  # drop docs
+            canon[k] = _canonicalize(v)
+
+        # Normalize known order-insensitive array fields
+        if isinstance(canon.get("required"), list):
+            canon["required"] = sorted(set(canon["required"]))
+        if isinstance(canon.get("enum"), list):
+            try:
+                canon["enum"] = sorted(canon["enum"], key=lambda x: json.dumps(x, sort_keys=True))
+            except Exception:
+                canon["enum"] = sorted(canon["enum"], key=str)
+        if isinstance(canon.get("type"), list):
+            canon["type"] = sorted(canon["type"], key=str)
+
+        # Combination keywords: ensure stable order using canonicalized entries
+        for key in ("anyOf", "oneOf", "allOf"):
+            if isinstance(canon.get(key), list):
+                canon[key] = sorted(canon[key], key=_stable_sort_key_for_schema_item)
+
+        # Return dict with sorted keys
+        return {k: canon[k] for k in sorted(canon.keys())}
+    elif isinstance(obj, list):
+        return [_canonicalize(x) for x in obj]
+    else:
+        return obj
+
+
+def _load_tidy3d_models():
+    """Import and return the mapping of schema names to Tidy3D model classes.
+
+    Import is done lazily to avoid importing tidy3d when the module is merely inspected.
+    """
+    try:
+        from tidy3d import (
+            EMESimulation,
+            HeatChargeSimulation,
+            HeatSimulation,
+            ModeSimulation,
+            Simulation,
+        )
+        from tidy3d.plugins.smatrix import TerminalComponentModeler
+    except Exception as e:
+        print(
+            f"Error: Failed to import from 'tidy3d'. Ensure it's installed. Details: {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return {
+        "Simulation": Simulation,
+        "ModeSimulation": ModeSimulation,
+        "EMESimulation": EMESimulation,
+        "HeatSimulation": HeatSimulation,
+        "HeatChargeSimulation": HeatChargeSimulation,
+        "TerminalComponentModeler": TerminalComponentModeler,
+    }
+
+
+def generate_schemas(output_dir: pathlib.Path = DEFAULT_SCHEMA_DIR):
     """
     Generates and saves a JSON schema for each class in the global dictionary.
 
@@ -64,19 +128,22 @@ def generate_schemas():
     """
     try:
         # Create the output directory if it doesn't exist.
-        SCHEMA_DIR.mkdir(parents=True, exist_ok=True)
-        print(f"Saving schemas to '{SCHEMA_DIR}/'")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Saving schemas to '{output_dir}/'")
 
-        for name, class_instance in export_api_schema_dictionary.items():
-            output_path = SCHEMA_DIR / f"{name}.json"
+        models = _load_tidy3d_models()
+        for name, class_instance in models.items():
+            output_path = output_dir / f"{name}.json"
             print(f"  -> Generating schema for '{name}'...")
 
             # Generate the schema dictionary from the class.
             schema_dict = class_instance.schema()
+            schema_dict = _canonicalize(schema_dict)
 
             # Write the schema to a file with pretty printing.
-            with open(output_path, "w") as f:
-                json.dump(schema_dict, f, indent=2)
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(schema_dict, f, indent=2, sort_keys=True, ensure_ascii=True)
+                f.write("\n")
 
     except OSError as e:
         print(
@@ -92,4 +159,21 @@ def generate_schemas():
 
 
 if __name__ == "__main__":
-    generate_schemas()
+    parser = argparse.ArgumentParser(description="Regenerate Tidy3D JSON Schemas")
+    parser.add_argument(
+        "--output-dir",
+        type=pathlib.Path,
+        default=DEFAULT_SCHEMA_DIR,
+        help="Directory to write schema JSON files (default: repo 'schemas').",
+    )
+    args = parser.parse_args()
+
+    # Encourage use of a pinned Python for stable output
+    if not (sys.version_info.major == 3 and sys.version_info.minor == 11):
+        print(
+            f"Warning: Running with Python {sys.version_info.major}.{sys.version_info.minor}. "
+            "For stable schema output, prefer Python 3.11 (matches CI).",
+            file=sys.stderr,
+        )
+
+    generate_schemas(args.output_dir)
