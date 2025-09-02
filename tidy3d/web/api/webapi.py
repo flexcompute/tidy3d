@@ -289,7 +289,7 @@ def upload(
         # Collect port names for modeler tasks if available
         try:
             sim_dict = getattr(simulation, "sim_dict", None)
-            port_name_list = sim_dict.keys()
+            port_name_list = sim_dict.keys() if sim_dict else None
         except Exception:
             port_name_list = None
 
