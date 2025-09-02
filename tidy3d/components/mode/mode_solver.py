@@ -170,6 +170,12 @@ class ModeSolver(Tidy3dBaseModel):
         "primal grid nodes). Default is ``True``.",
     )
 
+    conjugated_dot_product: bool = pydantic.Field(
+        True,
+        title="Conjugated Dot Product",
+        description="Use conjugated or non-conjugated dot product for mode decomposition.",
+    )
+
     fields: tuple[EMField, ...] = pydantic.Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
@@ -1949,6 +1955,7 @@ class ModeSolver(Tidy3dBaseModel):
             size=self.plane.size,
             freqs=freqs,
             mode_spec=self.mode_spec,
+            conjugated_dot_product=self.conjugated_dot_product,
             name=name,
         )
 
@@ -1981,6 +1988,7 @@ class ModeSolver(Tidy3dBaseModel):
             freqs=self.freqs,
             direction=self.direction,
             colocate=colocate,
+            conjugated_dot_product=self.conjugated_dot_product,
             name=name,
         )
 

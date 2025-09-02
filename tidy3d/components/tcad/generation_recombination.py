@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from typing import Union
+
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import Union
 from tidy3d.constants import PERCMCUBE, SECOND
 
 
@@ -160,7 +161,7 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
     """
 
     tau_n: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
-        ..., title="Electron lifetime", description="Electron lifetime", union=SECOND
+        ..., title="Electron lifetime", description="Electron lifetime", units=SECOND
     )
 
     tau_p: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(

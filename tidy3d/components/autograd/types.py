@@ -10,8 +10,7 @@ import pydantic.v1 as pd
 from autograd.builtins import dict as dict_ag
 from autograd.extend import Box, defvjp, primitive
 
-from tidy3d.components.type_util import _add_schema
-from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, Size1D
+from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, Size1D, _add_schema
 
 # add schema to the Box
 _add_schema(Box, title="AutogradBox", field_type_str="autograd.tracer.Box")

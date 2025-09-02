@@ -9,8 +9,6 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d import FluidMedium, VerticalNaturalConvectionCoeffModel
-
 try:
     from matplotlib import colormaps
 except ImportError:
@@ -31,6 +29,7 @@ from tidy3d.components.material.tcad.charge import (
     SemiconductorMedium,
 )
 from tidy3d.components.material.tcad.heat import (
+    FluidMedium,
     SolidMedium,
 )
 from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
@@ -40,6 +39,7 @@ from tidy3d.components.spice.sources.dc import DCVoltageSource
 from tidy3d.components.spice.types import ElectricalAnalysisType
 from tidy3d.components.structure import Structure
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis
+from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
 from tidy3d.components.tcad.boundary.specification import (
     HeatBoundarySpec,
     HeatChargeBoundarySpec,

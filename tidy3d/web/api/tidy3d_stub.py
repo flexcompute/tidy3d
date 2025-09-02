@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Callable, Optional, Union
+from typing import Callable, Optional
 
 import pydantic.v1 as pd
 from pydantic.v1 import BaseModel
@@ -25,7 +25,20 @@ from tidy3d.components.tcad.data.sim_data import (
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
+from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.plugins.mode.mode_solver import ModeSolver
+from tidy3d.plugins.smatrix.component_modelers.modal import (
+    ModalComponentModeler,
+)
+from tidy3d.plugins.smatrix.component_modelers.terminal import (
+    TerminalComponentModeler,
+)
+from tidy3d.plugins.smatrix.data.modal import (
+    ModalComponentModelerData,
+)
+from tidy3d.plugins.smatrix.data.terminal import (
+    TerminalComponentModelerData,
+)
 from tidy3d.web.core.file_util import (
     read_simulation_from_hdf5,
     read_simulation_from_hdf5_gz,
@@ -34,30 +47,12 @@ from tidy3d.web.core.file_util import (
 from tidy3d.web.core.stub import TaskStub, TaskStubData
 from tidy3d.web.core.types import TaskType
 
-SimulationType = Union[
-    Simulation,
-    HeatChargeSimulation,
-    HeatSimulation,
-    EMESimulation,
-    ModeSolver,
-    ModeSimulation,
-    VolumeMesher,
-]
-SimulationDataType = Union[
-    SimulationData,
-    HeatChargeSimulationData,
-    HeatSimulationData,
-    EMESimulationData,
-    ModeSolverData,
-    ModeSimulationData,
-]
-
 
 class Tidy3dStub(BaseModel, TaskStub):
-    simulation: SimulationType = pd.Field(discriminator="type")
+    simulation: WorkflowType = pd.Field(discriminator="type")
 
     @classmethod
-    def from_file(cls, file_path: str) -> SimulationType:
+    def from_file(cls, file_path: str) -> WorkflowType:
         """Loads a Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         from .yaml, .json, or .hdf5 file.
 
@@ -100,6 +95,10 @@ class Tidy3dStub(BaseModel, TaskStub):
             sim = ModeSimulation.from_file(file_path)
         elif type_ == "VolumeMesher":
             sim = VolumeMesher.from_file(file_path)
+        elif type_ == "ModalComponentModeler":
+            sim = ModalComponentModeler.from_file(file_path)
+        elif type_ == "TerminalComponentModeler":
+            sim = TerminalComponentModeler.from_file(file_path)
 
         return sim
 
@@ -162,6 +161,10 @@ class Tidy3dStub(BaseModel, TaskStub):
             return TaskType.MODE.name
         elif isinstance(self.simulation, VolumeMesher):
             return TaskType.VOLUME_MESH.name
+        elif isinstance(self.simulation, ModalComponentModeler):
+            return TaskType.COMPONENT_MODELER.name
+        elif isinstance(self.simulation, TerminalComponentModeler):
+            return TaskType.TERMINAL_COMPONENT_MODELER.name
 
     def validate_pre_upload(self, source_required) -> None:
         """Perform some pre-checks on instances of component"""
@@ -174,10 +177,10 @@ class Tidy3dStub(BaseModel, TaskStub):
 class Tidy3dStubData(BaseModel, TaskStubData):
     """"""
 
-    data: SimulationDataType
+    data: WorkflowDataType
 
     @classmethod
-    def from_file(cls, file_path: str) -> SimulationDataType:
+    def from_file(cls, file_path: str) -> WorkflowDataType:
         """Loads a Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         from .yaml, .json, or .hdf5 file.
 
@@ -216,6 +219,10 @@ class Tidy3dStubData(BaseModel, TaskStubData):
             sim_data = ModeSimulationData.from_file(file_path)
         elif type_ == "VolumeMesherData":
             sim_data = VolumeMesherData.from_file(file_path)
+        elif type_ == "ModalComponentModelerData":
+            sim_data = ModalComponentModelerData.from_file(file_path)
+        elif type_ == "TerminalComponentModelerData":
+            sim_data = TerminalComponentModelerData.from_file(file_path)
 
         return sim_data
 
@@ -236,7 +243,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         self.data.to_file(file_path)
 
     @classmethod
-    def postprocess(cls, file_path: str) -> SimulationDataType:
+    def postprocess(cls, file_path: str) -> WorkflowDataType:
         """Load .yaml, .json, or .hdf5 file to
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] instance.
 
@@ -271,7 +278,15 @@ class Tidy3dStubData(BaseModel, TaskStubData):
                 )
 
         if (
-            not isinstance(stub_data, (ModeSolverData, ModeSimulationData))
+            not isinstance(
+                stub_data,
+                (
+                    ModeSolverData,
+                    ModeSimulationData,
+                    TerminalComponentModelerData,
+                    ModalComponentModelerData,
+                ),
+            )
             and "WARNING" in stub_data.log
             and not warned_about_warnings
         ):

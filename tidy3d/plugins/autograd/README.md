@@ -217,7 +217,7 @@ We also support the following high-level features:
 - We automatically determine the number of adjoint simulations to run from a given forward simulation to maintain gradient accuracy.
   Adjoint sources are automatically grouped by either frequency or spatial port (whichever yields fewer adjoint simulations), and all adjoint simulations are run in a single batch (applies to both `run` and `run_async`).
   The parameter `max_num_adjoint_per_fwd` (default `10`) prevents launching unexpectedly large numbers of adjoint simulations automatically.
-- Differentiation of objective functions involving the scattering matrix produced by `tidy3d.plugins.smatrix.ComponentModeler.run()` and `tidy3d.plugins.smatrix.TerminalComponentModeler.run()`.
+- Differentiation of objective functions involving the scattering matrix produced by `tidy3d.plugins.smatrix.ModalComponentModeler.run()` and `tidy3d.plugins.smatrix.TerminalComponentModeler.run()`.
 
 We currently have the following restrictions:
 

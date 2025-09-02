@@ -9,29 +9,35 @@ import time
 from typing import Callable, Literal, Optional, Union
 
 from requests import HTTPError
-from rich.progress import Progress
+from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.mode.simulation import ModeSimulation
+from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.exceptions import WebError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.core.account import Account
 from tidy3d.web.core.constants import (
+    CM_DATA_HDF5_GZ,
     MODE_DATA_HDF5_GZ,
     MODE_FILE_HDF5_GZ,
+    MODELER_FILE_HDF5_GZ,
     SIM_FILE_HDF5,
     SIM_FILE_HDF5_GZ,
     SIMULATION_DATA_HDF5_GZ,
     TaskId,
 )
 from tidy3d.web.core.environment import Env
-from tidy3d.web.core.task_core import Folder, SimulationTask
+from tidy3d.web.core.exceptions import WebNotFoundError
+from tidy3d.web.core.http_util import get_version as _get_protocol_version
+from tidy3d.web.core.http_util import http
+from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask
 from tidy3d.web.core.task_info import ChargeType, TaskInfo
 from tidy3d.web.core.types import PayType
 
 from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
-from .tidy3d_stub import SimulationDataType, SimulationType, Tidy3dStub, Tidy3dStubData
+from .tidy3d_stub import Tidy3dStub, Tidy3dStubData
 
 # time between checking run status
 RUN_REFRESH_TIME = 1.0
@@ -40,7 +46,7 @@ RUN_REFRESH_TIME = 1.0
 SIM_FILE_JSON = "simulation.json"
 
 # not all solvers are supported yet in GUI
-GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT"]
+GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT", "RF"]
 
 # if a solver is in beta stage, cost is subject to change
 BETA_TASK_TYPES = ["HEAT", "EME", "HEAT_CHARGE", "VOLUME_MESH"]
@@ -67,9 +73,23 @@ def _get_folder_url(folder_id: str) -> str:
     return f"{Env.current.website_endpoint}/folders/{folder_id}"
 
 
+def _get_url_rf(resource_id: str) -> str:
+    """Get the RF GUI URL for a modeler/batch group."""
+    return f"{Env.current.website_endpoint}/rf?taskId={resource_id}"
+
+
+def _is_modeler_batch(resource_id: str) -> bool:
+    """Detect whether the given id corresponds to a modeler batch resource."""
+    return BatchTask.is_batch(resource_id, batch_type="RF_SWEEP")
+
+
+def _batch_detail(resource_id: str):
+    return BatchTask(resource_id).detail(batch_type="RF_SWEEP")
+
+
 @wait_for_connection
 def run(
-    simulation: SimulationType,
+    simulation: WorkflowType,
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
@@ -84,10 +104,10 @@ def run(
     reduce_simulation: Literal["auto", True, False] = "auto",
     pay_type: Union[PayType, str] = PayType.AUTO,
     priority: Optional[int] = None,
-) -> SimulationDataType:
+) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
-    and loads results as a :class:`.SimulationDataType` object.
+    and loads results as a :class:`.WorkflowDataType` object.
 
     Parameters
     ----------
@@ -194,7 +214,7 @@ def run(
 
 @wait_for_connection
 def upload(
-    simulation: SimulationType,
+    simulation: WorkflowType,
     task_name: str,
     folder_name: str = "default",
     callback_url: Optional[str] = None,
@@ -262,9 +282,29 @@ def upload(
     log.debug("Creating task.")
 
     task_type = stub.get_type()
+    # Component modeler compatibility: map to RF task type
+    port_name_list = None
+    if task_type in ("COMPONENT_MODELER", "TERMINAL_COMPONENT_MODELER"):
+        task_type = "RF"
+        # Collect port names for modeler tasks if available
+        try:
+            ports = getattr(simulation, "ports", None)
+            if ports is not None:
+                port_name_list = [
+                    getattr(p, "name", None) for p in ports if getattr(p, "name", None)
+                ]
+        except Exception:
+            port_name_list = None
 
     task = SimulationTask.create(
-        task_type, task_name, folder_name, callback_url, simulation_type, parent_tasks, "Gz"
+        task_type,
+        task_name,
+        folder_name,
+        callback_url,
+        simulation_type,
+        parent_tasks,
+        "Gz",
+        port_name_list=port_name_list,
     )
     if verbose:
         console = get_logging_console()
@@ -278,14 +318,32 @@ def upload(
                 f"Cost of {solver_name} simulations is subject to change in the future."
             )
         if task_type in GUI_SUPPORTED_TASK_TYPES:
-            url = _get_url(task.task_id)
-            folder_url = _get_folder_url(task.folder_id)
-            console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
-            console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
+            if task_type == "RF":
+                # Prefer the group id if present in the creation response; avoid extra GET.
+                group_id = getattr(task, "groupId", None) or getattr(task, "group_id", None)
+                if not group_id:
+                    try:
+                        detail_task = SimulationTask.get(task.task_id, verbose=False)
+                        group_id = getattr(detail_task, "groupId", None) or getattr(
+                            detail_task, "group_id", None
+                        )
+                    except Exception:
+                        group_id = None
+                url = _get_url_rf(group_id or task.task_id)
+                folder_url = _get_folder_url(task.folder_id)
+                console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+                console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
+            else:
+                url = _get_url(task.task_id)
+                folder_url = _get_folder_url(task.folder_id)
+                console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+                console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
 
     remote_sim_file = SIM_FILE_HDF5_GZ
     if task_type == "MODE_SOLVER":
         remote_sim_file = MODE_FILE_HDF5_GZ
+    elif task_type == "RF":
+        remote_sim_file = MODELER_FILE_HDF5_GZ
 
     task.upload_simulation(
         stub=stub,
@@ -293,12 +351,19 @@ def upload(
         progress_callback=progress_callback,
         remote_sim_file=remote_sim_file,
     )
-    estimate_cost(task_id=task.task_id, solver_version=solver_version, verbose=verbose)
+
+    # TODO: cost estimation for RF task?
+    if task_type != "RF":
+        estimate_cost(task_id=task.task_id, solver_version=solver_version, verbose=verbose)
 
     task.validate_post_upload(parent_tasks=parent_tasks)
 
     # log the url for the task in the web UI
     log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{task.task_id}")
+    if task_type == "RF":
+        # Prefer returning batch/group id for downstream batch endpoints
+        batch_id = getattr(task, "batchId", None) or getattr(task, "batch_id", None)
+        return batch_id or task.task_id
     return task.task_id
 
 
@@ -398,6 +463,61 @@ def start(
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
     """
+
+    def dict_to_bullet_list(data_dict: dict) -> str:
+        """
+        Converts a dictionary into a string formatted as a bullet point list.
+
+        Args:
+          data_dict: The dictionary to convert.
+
+        Returns:
+          A string with each key-value pair as a bullet point.
+        """
+        # Use a list comprehension to format each key-value pair
+        # and then join them together with newline characters.
+        return "\n".join([f"- {key}: {value}" for key, value in data_dict.items()])
+
+    console = get_logging_console()
+
+    # Component modeler batch path: hide split/check/submit
+    if _is_modeler_batch(task_id):
+        # split (modeler-specific)
+        split_path = "tidy3d/projects/terminal-component-modeler-split"
+        payload = {
+            "batchType": "RF_SWEEP",
+            "batchId": task_id,
+            "fileName": "modeler.hdf5.gz",
+            "protocolVersion": _get_protocol_version(),
+        }
+        resp = http.post(split_path, payload)
+
+        console.log(
+            f"Child simulation subtasks are being uploaded to \n{dict_to_bullet_list(resp)}"
+        )
+
+        batch = BatchTask(task_id)
+        # Kick off server-side validation for the RF batch.
+        batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
+        # Validation phase
+        console.log("Validating RF batch...")
+        detail = batch.wait_for_validate(batch_type="RF_SWEEP")
+        status = detail.totalStatus
+        status_str = status.value
+        if status_str in ("validate_success", "validate_warn"):
+            console.log("Batch validation completed.")
+
+        # Show estimated FlexCredit cost from batch detail
+        est_fc = detail.estFlexUnit
+        console.log(f"Estimated FlexCredit cost: {est_fc:1.3f} for RF batch.")
+        if status_str not in ("validate_success", "validate_warn"):
+            raise WebError(f"Batch task {task_id} is blocked: {status_str}")
+        # Submit batch to start runs after validation
+        batch.submit(
+            solver_version=solver_version, batch_type="RF_SWEEP", worker_group=worker_group
+        )
+        return
+
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
     task = SimulationTask.get(task_id)
@@ -462,7 +582,7 @@ def get_status(task_id) -> str:
     return status
 
 
-def monitor(task_id: TaskId, verbose: bool = True) -> None:
+def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] = None) -> None:
     """
     Print the real time task progress until completion.
 
@@ -486,6 +606,11 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     ----
     To load results when finished, may call :meth:`load`.
     """
+
+    # Batch/modeler monitoring path
+    if _is_modeler_batch(task_id):
+        _monitor_modeler_batch(task_id, verbose=verbose, worker_group=worker_group)
+        return
 
     console = get_logging_console() if verbose else None
 
@@ -632,6 +757,46 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
 
 @wait_for_connection
+def abort(task_id: TaskId):
+    """Abort server-side data associated with task.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+
+    Returns
+    -------
+    TaskInfo
+        Object containing information about status, size, credits of task.
+    """
+    console = get_logging_console()
+    try:
+        task = SimulationTask.get(task_id, verbose=False)
+        if task:
+            task.abort()
+            url = _get_url(task.task_id)
+            console.log(
+                f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
+            )
+            return TaskInfo(**{"taskId": task.task_id, **task.dict()})
+    except WebNotFoundError:
+        pass  # Task not found, might be a batch task
+
+    is_batch = BatchTask.is_batch(task_id, batch_type="RF_SWEEP")
+    if is_batch:
+        url = _get_url_rf(task_id)
+        console.log(
+            f"Batch task abortion is not yet supported, contact customer support."
+            f" View task using web UI at [link={url}]'{url}'[/link]."
+        )
+        return
+
+    console.log("Task ID cannot be found to be aborted.")
+    return
+
+
+@wait_for_connection
 def download(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
@@ -652,7 +817,47 @@ def download(
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
+    # Component modeler batch download path
+    if _is_modeler_batch(task_id):
+        # Use a more descriptive default filename for component modeler downloads.
+        # If the caller left the default as 'simulation_data.hdf5', prefer 'cm_data.hdf5'.
+        if os.path.basename(path) == "simulation_data.hdf5":
+            base_dir = os.path.dirname(path) or "."
+            path = os.path.join(base_dir, "cm_data.hdf5")
 
+        def _download_cm() -> bool:
+            try:
+                BatchTask(task_id).get_data_hdf5(
+                    remote_data_file_gz=CM_DATA_HDF5_GZ,
+                    to_file=path,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+                return True
+            except Exception:
+                return False
+
+        if not _download_cm():
+            BatchTask(task_id).postprocess(batch_type="RF_SWEEP")
+            # wait for postprocess to finish
+            while True:
+                resp = BatchTask(task_id).detail(batch_type="RF_SWEEP")
+                total = resp.totalTask or 0
+                post_succ = resp.postprocessSuccess or 0
+                status = resp.totalStatus
+                status_str = status.value
+                if status_str in {"error", "diverged", "blocked", "aborted", "aborting"}:
+                    raise WebError(
+                        f"Batch task {task_id} failed during postprocess: {status_str}"
+                    ) from None
+                if total > 0 and post_succ >= total:
+                    break
+                time.sleep(REFRESH_TIME)
+            if not _download_cm():
+                raise WebError("Failed to download 'cm_data' after postprocess completion.")
+        return
+
+    # Regular single-task download
     task_info = get_info(task_id)
     task_type = task_info.taskType
 
@@ -689,43 +894,16 @@ def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = Tr
 
 
 @wait_for_connection
-def download_hdf5(
-    task_id: TaskId,
-    path: str = SIM_FILE_HDF5,
-    verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
-) -> None:
-    """Download the ``.hdf5`` file associated with the :class:`.Simulation` of a given task.
-
-    Parameters
-    ----------
-    task_id : str
-        Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str = "simulation.hdf5"
-        Download path to .hdf5 file of simulation (including filename).
-    verbose : bool = True
-        If ``True``, will print progressbars and status, otherwise, will run silently.
-    progress_callback : Callable[[float], None] = None
-        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
-
-    """
-    task_info = get_info(task_id)
-    task_type = task_info.taskType
-
-    remote_sim_file = SIM_FILE_HDF5_GZ
-    if task_type == "MODE_SOLVER":
-        remote_sim_file = MODE_FILE_HDF5_GZ
-
-    task = SimulationTask(taskId=task_id)
-    task.get_simulation_hdf5(
-        path, verbose=verbose, progress_callback=progress_callback, remote_sim_file=remote_sim_file
-    )
+def delete_old(days_old: int, folder_name: str = "default") -> int:
+    """Remove folder contents older than ``days_old``."""
+    folder = Folder.get(folder_name, create=True)
+    return folder.delete_old(days_old)
 
 
 @wait_for_connection
 def load_simulation(
     task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True
-) -> SimulationType:
+) -> WorkflowType:
     """Download the ``.json`` file of a task and load the associated simulation.
 
     Parameters
@@ -783,7 +961,7 @@ def load(
     replace_existing: bool = True,
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
-) -> SimulationDataType:
+) -> WorkflowDataType:
     """
     Download and Load simulation results into :class:`.SimulationData` object.
 
@@ -818,15 +996,196 @@ def load(
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing simulation data.
     """
+    # For component modeler batches, default to a clearer filename if the default was used.
+    if _is_modeler_batch(task_id) and os.path.basename(path) == "simulation_data.hdf5":
+        base_dir = os.path.dirname(path) or "."
+        path = os.path.join(base_dir, "cm_data.hdf5")
+
     if not os.path.exists(path) or replace_existing:
         download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
 
     if verbose:
         console = get_logging_console()
-        console.log(f"loading simulation from {path}")
+        if _is_modeler_batch(task_id):
+            console.log(f"loading component modeler data from {path}")
+        else:
+            console.log(f"loading simulation from {path}")
 
     stub_data = Tidy3dStubData.postprocess(path)
     return stub_data
+
+
+def _monitor_modeler_batch(
+    batch_id: str,
+    verbose: bool = True,
+    max_detail_tasks: int = 20,
+    worker_group: Optional[str] = None,
+) -> None:
+    """Monitor modeler batch progress with aggregate and per-task views."""
+    console = get_logging_console() if verbose else None
+
+    def _status_to_stage(status: str) -> tuple[str, int]:
+        s = (status or "").lower()
+        # Map a broader set of statuses to monotonic stages for progress bars
+        if s in ("draft", "created"):
+            return ("draft", 0)
+        if s in ("queue", "queued"):
+            return ("queued", 1)
+        if s in ("preprocess",):
+            return ("preprocess", 1)
+        if s in ("validating",):
+            return ("validating", 2)
+        if s in ("validate_success", "validate_warn"):
+            return ("Validate", 3)
+        if s in ("running",):
+            return ("running", 4)
+        if s in ("postprocess",):
+            return ("postprocess", 5)
+        if s in ("run_success", "success"):
+            return ("Success", 6)
+        # Unknown statuses map to earliest stage to avoid showing 100% prematurely
+        return (s or "unknown", 0)
+
+    detail = _batch_detail(batch_id)
+    name = detail.name or "modeler_batch"
+    group_id = detail.groupId
+
+    header = f"Modeler Batch: {name}"
+    if group_id:
+        header += f" (group {group_id})"
+    if console is not None:
+        console.log(header)
+
+    # Non-verbose path: poll without progress bars then return
+    if not verbose:
+        terminal_errors = {
+            "validate_fail",
+            "error",
+            "diverged",
+            "blocked",
+            "aborting",
+            "aborted",
+        }
+        # Run phase
+        while True:
+            d = _batch_detail(batch_id)
+            s = d.totalStatus.value
+            total = d.totalTask or 0
+            r = d.runSuccess or 0
+            if s in terminal_errors:
+                raise WebError(f"Batch {batch_id} terminated: {s}")
+            if total and r >= total:
+                break
+            time.sleep(REFRESH_TIME)
+        # Postprocess phase
+        BatchTask(batch_id).postprocess(batch_type="RF_SWEEP", worker_group=worker_group)
+        while True:
+            d = _batch_detail(batch_id)
+            s = d.totalStatus.value
+            total = d.totalTask or 0
+            p = d.postprocessSuccess or 0
+            postprocess_status = d.postprocessStatus
+            if s in terminal_errors:
+                raise WebError(f"Batch {batch_id} terminated: {s}")
+            if postprocess_status == "success":
+                break
+            time.sleep(REFRESH_TIME)
+        return
+
+    progress_columns = (
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(bar_width=25),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+    )
+    with Progress(*progress_columns, console=console, transient=False) as progress:
+        terminal_errors = {"validate_fail", "error", "diverged", "blocked", "aborting", "aborted"}
+
+        # Phase: Run (aggregate + per-task)
+        p_run = progress.add_task("Run", total=1.0)
+        task_bars: dict[str, int] = {}
+        run_statuses = [
+            "draft",
+            "preprocess",
+            "validating",
+            "Validate",
+            "running",
+            "postprocess",
+            "Success",
+        ]
+
+        while True:
+            detail = _batch_detail(batch_id)
+            status = detail.totalStatus.value
+            total = detail.totalTask or 0
+            r = detail.runSuccess or 0
+
+            # Create per-task bars as soon as tasks appear
+            if total and total <= max_detail_tasks and detail.tasks:
+                name_to_task = {(t.taskName or t.taskId): t for t in (detail.tasks or [])}
+                for name, t in name_to_task.items():
+                    if name not in task_bars:
+                        tstatus = (t.status or "draft").lower()
+                        _, idx = _status_to_stage(tstatus)
+                        pbar = progress.add_task(
+                            f"  {name}",
+                            total=len(run_statuses) - 1,
+                            completed=min(idx, len(run_statuses) - 1),
+                        )
+                        task_bars[name] = pbar
+
+            # Aggregate run progress: average stage fraction across tasks
+            if detail.tasks:
+                acc = 0.0
+                n_members = 0
+                for t in detail.tasks or []:
+                    n_members += 1
+                    tstatus = (t.status or "draft").lower()
+                    _, idx = _status_to_stage(tstatus)
+                    acc += max(0.0, min(1.0, idx / 6.0))
+                run_frac = (acc / float(n_members)) if n_members else 0.0
+            else:
+                run_frac = (r / total) if total else 0.0
+            progress.update(p_run, completed=run_frac)
+
+            # Update per-task bars
+            if task_bars and detail.tasks:
+                name_to_task = {(t.taskName or t.taskId): t for t in (detail.tasks or [])}
+                for tname, pbar in task_bars.items():
+                    t = name_to_task.get(tname)
+                    if not t:
+                        continue
+                    tstatus = (t.status or "draft").lower()
+                    _, idx = _status_to_stage(tstatus)
+                    completed = min(idx, 6)
+                    desc = f"  {tname} [{tstatus or 'draft'}]"
+                    progress.update(pbar, completed=completed, description=desc, refresh=False)
+
+            if total and r >= total:
+                break
+            if status in terminal_errors:
+                raise WebError(f"Batch {batch_id} terminated: {status}")
+            progress.refresh()
+            time.sleep(REFRESH_TIME)
+
+        # Phase: Postprocess
+        BatchTask(batch_id).postprocess(batch_type="RF_SWEEP", worker_group=worker_group)
+        p_post = progress.add_task("Postprocess", total=1.0)
+        while True:
+            detail = _batch_detail(batch_id)
+            status = detail.totalStatus.value
+            postprocess_status = detail.postprocessStatus
+            total = detail.totalTask or 0
+            p = detail.postprocessSuccess or 0
+            progress.update(p_post, completed=(p / total) if total else 0.0)
+            if postprocess_status == "success":
+                break
+            if status in terminal_errors:
+                raise WebError(f"Batch {batch_id} terminated: {status}")
+            progress.refresh()
+            time.sleep(REFRESH_TIME)
+        if console is not None:
+            console.log("Postprocess completed.")
 
 
 @wait_for_connection
@@ -838,69 +1197,53 @@ def delete(task_id: TaskId, versions: bool = False) -> TaskInfo:
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
     versions : bool = False
-        If ``True``, delete all versions of the task in the task group. Otherwise, delete only the version associated with the task ID.
+        If ``True``, delete all versions of the task in the task group. Otherwise, delete only the version associated with the current task ID.
 
     Returns
     -------
-    TaskInfo
+    :class:`.TaskInfo`
         Object containing information about status, size, credits of task.
+
     """
-    task = SimulationTask(taskId=task_id)
-    task.delete(versions=versions)
+    if not task_id:
+        raise ValueError("Task id not found.")
+    task = SimulationTask.get(task_id, verbose=False)
+    task.delete(versions)
     return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
 @wait_for_connection
-def delete_old(
-    days_old: int = 100,
-    folder: str = "default",
-) -> int:
-    """Delete all tasks older than a given amount of days.
-
-    Parameters
-    ----------
-    folder : str
-        Only allowed to delete in one folder at a time.
-    days_old : int = 100
-        Minimum number of days since the task creation.
-
-    Returns
-    -------
-    int
-        Total number of tasks deleted.
-    """
-
-    folder = Folder.get(folder)
-    if not folder:
-        return 0
-    return folder.delete_old(days_old)
-
-
-@wait_for_connection
-def abort(task_id: TaskId) -> TaskInfo:
-    """Abort server-side data associated with task.
+def download_simulation(
+    task_id: TaskId,
+    path: str = SIM_FILE_HDF5,
+    verbose: bool = True,
+    progress_callback: Optional[Callable[[float], None]] = None,
+) -> None:
+    """Download the ``.hdf5`` file associated with the :class:`.Simulation` of a given task.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
+    path : str = "simulation.hdf5"
+        Download path to .hdf5 file of simulation (including filename).
+    verbose : bool = True
+        If ``True``, will print progressbars and status, otherwise, will run silently.
+    progress_callback : Callable[[float], None] = None
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
-    Returns
-    -------
-    TaskInfo
-        Object containing information about status, size, credits of task.
     """
+    task_info = get_info(task_id)
+    task_type = task_info.taskType
 
-    task = SimulationTask.get(task_id)
-    if not task:
-        raise ValueError("Task not found.")
-    task.abort()
-    console = get_logging_console()
-    url = _get_url(task.task_id)
-    console.log(
-        f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
+    remote_sim_file = SIM_FILE_HDF5_GZ
+    if task_type == "MODE_SOLVER":
+        remote_sim_file = MODE_FILE_HDF5_GZ
+
+    task = SimulationTask(taskId=task_id)
+    task.get_simulation_hdf5(
+        path, verbose=verbose, progress_callback=progress_callback, remote_sim_file=remote_sim_file
     )
-    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
 @wait_for_connection
@@ -1176,9 +1519,17 @@ def test() -> None:
         console.log("Authentication configured successfully!")
     except (WebError, HTTPError) as e:
         url = "https://docs.flexcompute.com/projects/tidy3d/en/latest/index.html"
-
-        raise WebError(
-            "Tidy3D not configured correctly. Please refer to our documentation for installation "
-            "instructions at "
-            f"[blue underline][link={url}]'{url}'[/link]."
-        ) from e
+        msg = (
+            str(e)
+            + "\n\n"
+            + "It looks like the Tidy3D Python interface is not configured with your "
+            "unique API key. "
+            "To get your API key, sign into 'https://tidy3d.simulation.cloud' and copy it "
+            "from your 'Account' page. Then you can configure tidy3d through command line "
+            "'tidy3d configure' (recommended). Alternatively, one can manually create the configuration "
+            "file by creating a file at your home directory '~/.tidy3d/config' (unix) or "
+            "'.tidy3d/config' (windows) with content like: \n\n"
+            "apikey = 'XXX' \n\nHere XXX is your API key copied from your account page within quotes.\n\n"
+            f"For details, check the instructions at {url}."
+        )
+        raise WebError(msg) from e

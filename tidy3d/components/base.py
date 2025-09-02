@@ -11,7 +11,7 @@ import pathlib
 import tempfile
 from functools import wraps
 from math import ceil
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 import h5py
 import numpy as np
@@ -30,7 +30,7 @@ from .autograd.types import AutogradFieldMap, Box
 from .autograd.utils import get_static
 from .data.data_array import DATA_ARRAY_MAP, DataArray
 from .file_util import compress_file_to_gzip, extract_gzip_file
-from .types import TYPE_TAG_STR, ComplexNumber, Literal
+from .types import TYPE_TAG_STR, ComplexNumber
 
 INDENT_JSON_FILE = 4  # default indentation of json string in json files
 INDENT = None  # default indentation of json string used internally

@@ -16,6 +16,7 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, T
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.types import annotate_type
+from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.exceptions import DataError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api import webapi as web
@@ -24,13 +25,13 @@ from tidy3d.web.core.task_core import Folder
 from tidy3d.web.core.task_info import RunInfo, TaskInfo
 from tidy3d.web.core.types import PayType
 
-from .tidy3d_stub import SimulationDataType, SimulationType
-
 # Max # of workers for parallel upload / download: above 10, performance is same but with warnings
 DEFAULT_NUM_WORKERS = 10
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
 BATCH_MONITOR_PROGRESS_REFRESH_TIME = 0.02
+
+BatchCategoryType = Literal["tidy3d", "microwave", "tidy3d_design"]
 
 
 class WebContainer(Tidy3dBaseModel, ABC):
@@ -44,9 +45,18 @@ class WebContainer(Tidy3dBaseModel, ABC):
         """Make sure local output directory exists and create it if not."""
 
     @staticmethod
-    def _check_folder(folder_name: str) -> None:
+    def _check_folder(
+        folder_name: str,
+        projects_endpoint: str = "tidy3d/projects",
+        project_endpoint: str = "tidy3d/project",
+    ) -> None:
         """Make sure ``folder_name`` exists on the web UI and create it if not."""
-        Folder.get(folder_name, create=True)
+        Folder.get(
+            folder_name,
+            create=True,
+            projects_endpoint=projects_endpoint,
+            project_endpoint=project_endpoint,
+        )
 
 
 class Job(WebContainer):
@@ -126,7 +136,7 @@ class Job(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulation: SimulationType = pd.Field(
+    simulation: WorkflowType = pd.Field(
         ...,
         title="simulation",
         description="Simulation to run as a 'task'.",
@@ -158,7 +168,7 @@ class Job(WebContainer):
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
-    simulation_type: str = pd.Field(
+    simulation_type: BatchCategoryType = pd.Field(
         "tidy3d",
         title="Simulation Type",
         description="Type of simulation, used internally only.",
@@ -217,7 +227,7 @@ class Job(WebContainer):
         self = self.updated_copy(task_id_cached=task_id_cached)
         super(Job, self).to_file(fname=fname)  # noqa: UP008
 
-    def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
+    def run(self, path: str = DEFAULT_DATA_PATH) -> WorkflowDataType:
         """Run :class:`Job` all the way through and return data.
 
         Parameters
@@ -314,7 +324,7 @@ class Job(WebContainer):
         self._check_path_dir(path=path)
         web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
-    def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
+    def load(self, path: str = DEFAULT_DATA_PATH) -> WorkflowDataType:
         """Download job results and load them into a data object.
 
         Parameters
@@ -425,7 +435,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
-    def load_sim_data(self, task_name: str) -> SimulationDataType:
+    def load_sim_data(self, task_name: str) -> WorkflowDataType:
         """Load a simulation data object from file by task name."""
         task_data_path = self.task_paths[task_name]
         task_id = self.task_ids[task_name]
@@ -433,7 +443,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
 
         return web.load(task_id=task_id, path=task_data_path, verbose=False)
 
-    def __getitem__(self, task_name: TaskName) -> SimulationDataType:
+    def __getitem__(self, task_name: TaskName) -> WorkflowDataType:
         """Get the simulation data object for a given ``task_name``."""
         return self.load_sim_data(task_name)
 
@@ -496,7 +506,7 @@ class Batch(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulations: dict[TaskName, annotate_type(SimulationType)] = pd.Field(
+    simulations: dict[TaskName, annotate_type(WorkflowType)] = pd.Field(
         ...,
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",
@@ -527,7 +537,7 @@ class Batch(WebContainer):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    simulation_type: str = pd.Field(
+    simulation_type: BatchCategoryType = pd.Field(
         "tidy3d",
         title="Simulation Type",
         description="Type of each simulation in the batch, used internally only.",

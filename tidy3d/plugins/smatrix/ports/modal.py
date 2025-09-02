@@ -37,7 +37,11 @@ class ModalPortDataArray(DataArray):
 
 
 class Port(Box):
-    """Specifies a port in the scattering matrix."""
+    """Specifies a port for S-matrix calculation.
+
+    A port defines a location and a set of modes for which the S-matrix
+    is calculated.
+    """
 
     direction: Direction = pd.Field(
         ...,
