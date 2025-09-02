@@ -1606,6 +1606,9 @@ class LayerRefinementSpec(Box):
         cells_ij = []
         # relative displacements of intersection from the bottom of the cell along y axis
         cells_dy = []
+        # whether intersections are valid: if polygon segment is almost parallel to
+        # a grid line, we mark those intersection as invalid
+        cells_valid = []
 
         # for each polygon vertex find the index of the first grid line on the right
         grid_lines_on_right = np.argmax(grid_x_coords[:, None] >= poly_vertices[None, :, 0], axis=0)
@@ -1631,12 +1634,15 @@ class LayerRefinementSpec(Box):
                 continue
 
             # intersects one grid line but almost parallel to it
-            if np.abs(ind_end - ind_beg) == 1 and np.abs(
-                v_beg[0] - v_end[0]
-            ) < 2 * GAP_MESHING_TOL * np.abs(
-                grid_x_coords[ind_beg - 1] - grid_x_coords[ind_end - 1]
-            ):
-                continue
+            not_nearly_parallel = True
+            if np.abs(ind_end - ind_beg) == 1:
+                delta_x = np.abs(v_beg[0] - v_end[0])
+                delta_y = np.abs(v_beg[1] - v_end[1])
+                grid_size_x = np.abs(grid_x_coords[ind_beg - 1] - grid_x_coords[ind_end - 1])
+                # we discard segments that are substantially vertical with respect to both grid step size
+                # and its own vertical size (so that we don't discard tiny pieces of curved boundaries)
+                if delta_x < 2 * GAP_MESHING_TOL * min(grid_size_x, delta_y):
+                    not_nearly_parallel = False
 
             # sort vertices in ascending order to make treatmeant unifrom
             reverse = False
@@ -1686,10 +1692,12 @@ class LayerRefinementSpec(Box):
             # record info
             cells_ij.append(np.transpose([cell_is, cell_js]))
             cells_dy.append(dy)
+            cells_valid.append(not_nearly_parallel * np.ones_like(dy))
 
         if len(cells_ij) > 0:
             cells_ij = np.concatenate(cells_ij)
             cells_dy = np.concatenate(cells_dy)
+            cells_valid = np.concatenate(cells_valid)
 
             # Filter from re-entering subcell features. That is, we discard any consecutive
             # intersections if they are crossing the same edge. This happens, for example,
@@ -1709,6 +1717,7 @@ class LayerRefinementSpec(Box):
             # an intersection point is not a part of a "re-entering subcell feature"
             # if it doesn't cross the same edges as its neighbors
             valid = np.logical_and(fwd_diff != 0, bwd_diff != 0)
+            valid = np.logical_and(valid, cells_valid)
 
             cells_dy = cells_dy[valid]
             cells_ij = cells_ij[valid]

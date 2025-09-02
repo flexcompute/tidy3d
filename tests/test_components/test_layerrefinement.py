@@ -870,3 +870,55 @@ def test_gap_meshing_skip_small_gap():
         run_time=1e-9,
     )
     assert sim.grid_info["min_grid_size"] > 20
+
+
+def test_gap_meshing_tiny_nearly_parallel():
+    """Test that tiny and nearly parallel features are handled properly. That is,
+    even though they are ignored, they are still taken into account when removing
+    reentry features."""
+
+    sim_size = (1, 1, 1)
+
+    diff = td.Structure(
+        geometry=td.PolySlab(
+            slab_bounds=[-0.2, 0.2],
+            axis=1,
+            vertices=[
+                (-0.43, -0.43),
+                (0.4, -0.35),
+                (0 - 1e-14, 0.05 - 1e-4),
+                (0 + 1e-14, 0.05 + 1e-4),
+                (-0.35, 0.4),
+            ],
+        ),
+        medium=td.PECMedium(),
+    )
+
+    sim = td.Simulation(
+        size=sim_size,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.periodic(),
+        ),
+        structures=[diff],
+        grid_spec=td.GridSpec.auto(
+            layer_refinement_specs=[
+                td.LayerRefinementSpec(
+                    axis=1,
+                    size=(td.inf, 0.2, td.inf),
+                    corner_finder=None,
+                    gap_meshing_iters=1,
+                    dl_min_from_gap_width=True,
+                )
+            ],
+            min_steps_per_wvl=7,
+            wavelength=1,
+        ),
+        run_time=1e-15,
+    )
+    # _, ax = plt.subplots(1, 1, figsize=(10, 10))
+    # sim.plot(y=0, ax=ax)
+    # sim.plot_grid(y=0, ax=ax)
+    # plt.show()
+    assert sim.grid_info["min_grid_size"] > 0.05
