@@ -34,7 +34,10 @@ from tidy3d.components.medium import (
     IsotropicUniformMediumType,
     LossyMetalMedium,
 )
-from tidy3d.components.microwave.path_integrals.path_integral_factory import make_path_integrals
+from tidy3d.components.microwave.path_integrals.path_integral_factory import (
+    make_current_integral,
+    make_path_integrals,
+)
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
@@ -68,7 +71,7 @@ from tidy3d.constants import C_0
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
-from tidy3d.plugins.microwave.impedance_calculator import ImpedanceCalculator
+from tidy3d.plugins.microwave.impedance_calculator import CurrentIntegralTypes, ImpedanceCalculator
 
 # Importing the local solver may not work if e.g. scipy is not installed
 IMPORT_ERROR_MSG = """Could not import local solver, 'ModeSolver' objects can still be constructed
@@ -1365,6 +1368,113 @@ class ModeSolver(Tidy3dBaseModel):
             ]:
                 data.values[..., ifreq, :] = data.values[..., ifreq, sort_inds]
 
+    def _orthogonalize_degenerate_modes(
+        self,
+        degenerate_groups: list[tuple[int]],
+        mode_solver_data: ModeSolverData,
+    ) -> ModeSolverData:
+        """Calculates overlap matrix and orthogonalizes modes."""
+        transform_matrices = []
+        for degenerate_group in degenerate_groups:
+            mode_group_data: ModeSolverData = mode_solver_data._isel(mode_index=degenerate_group)
+            overlap_matrix = mode_group_data.outer_dot(
+                mode_group_data, conjugate=self.conjugated_dot_product
+            )
+            # Eigenvectors could be used when the conjugated dot product is chosen
+            # _, Q = np.linalg.eig(overlap_matrix.values)
+            W, s, Vh = np.linalg.svd(overlap_matrix.values)
+            Q = Vh.conj().transpose([0, 2, 1])
+            transform_matrices.append(Q.transpose([0, 2, 1]))
+
+        # Apply the transforms to the original degenerate modes to create the new basis vectors
+        ortho_mode_data = mode_solver_data._make_linear_combination_degenerate_modes(
+            degenerate_groups, transform_matrices
+        )
+        self._normalize_modes(ortho_mode_data)
+        return ortho_mode_data
+
+    def _recombine_degenerate_modes_with_measurement_matrices(
+        self,
+        mode_solver_data: ModeSolverData,
+        measurement_matrices: list[np.ndarray],
+        degenerate_groups: list[tuple[int]],
+        singular_value_tol: float = 1e-12,
+    ) -> ModeSolverData:
+        transform_matrices = []
+        for degenerate_group, measurement_matrix in zip(degenerate_groups, measurement_matrices):
+            required_independent_vectors = len(degenerate_group)
+            # We use the svd and skip the singular values so that the new basis will still be normalized.
+            U, s, Vt = np.linalg.svd(measurement_matrix, full_matrices=False)
+            threshold = singular_value_tol * s[:, 0]
+            mask = s >= threshold[:, np.newaxis]
+            count = np.sum(mask, axis=1)
+            if np.any(count < required_independent_vectors):
+                raise SetupError(
+                    f"measurement matrix is singular with tolerance {singular_value_tol}"
+                )
+
+            # If there are more measurements than degenerate modes, then some of the measurements
+            # will be not be needed. We keep the the measurements associated with the largest singular values.
+            U_trimmed = U[:, :required_independent_vectors, :required_independent_vectors]
+            Vt_trimmed = Vt[:, :required_independent_vectors, :required_independent_vectors]
+            # To find this basis, we throw away the singular values. In addition, we take the transpose of the "inverse"
+            # so that the rows of the transform matrix correspond with each new basis vector.
+            # s_trim = s[:, :required_independent_vectors]
+            # S_inv = 1.0 / s_trim
+            # transform_matrix = U_trimmed.conj() * S_inv[:, None, :] @ Vt_trimmed.conj()
+            # Benefit of skipping the singular values is that the transformation will be unitary
+            # which should guarantee that existing orthongality of modes will be unchanged.
+            transform_matrix = U_trimmed.conj() @ Vt_trimmed.conj()
+            transform_matrices.append(transform_matrix)
+
+        # Apply the transforms to the original degenerate modes to create the new basis vectors
+        mode_solver_data = mode_solver_data._make_linear_combination_degenerate_modes(
+            degenerate_groups, transform_matrices
+        )
+        # Although we did our best to not change the normalization, the flux can be slightly off
+        # so we normalize again.
+        self._normalize_modes(mode_solver_data)
+
+        return mode_solver_data
+
+    def _discriminate_degenerate_transmission_line_mode_data(
+        self, mode_solver_data: ModeSolverData, path_integrals
+    ) -> ModeSolverData:
+        # Need to operate on the full symmetry expanded fields
+        mode_solver_data_expanded: ModeSolverData = mode_solver_data.symmetry_expanded_copy
+        degenerate_groups = mode_solver_data_expanded._identify_degenerate_modes(
+            tol=self.mode_spec.microwave_mode_spec.degenerate_mode_tolerance
+        )
+
+        mode_solver_data_expanded = self._orthogonalize_degenerate_modes(
+            degenerate_groups, mode_solver_data_expanded
+        )
+
+        measurement_matrices = []
+        measurement_type = "voltage"
+        if isinstance(path_integrals[0], CurrentIntegralTypes):
+            measurement_type = "current"
+        for degenerate_group in degenerate_groups:
+            # Find the matrix relating the jth mode index to the current flowing in the ith conductor
+            mode_group_data = mode_solver_data_expanded._isel(mode_index=degenerate_group)
+            terminal_measurements = np.zeros(
+                (len(self.freqs), len(path_integrals), len(degenerate_group)), dtype=complex
+            )
+            for p in range(len(path_integrals)):
+                if measurement_type == "voltage":
+                    terminal_measurements[:, p, :] = (
+                        path_integrals[p].compute_voltage(mode_group_data).values
+                    )
+                else:
+                    terminal_measurements[:, p, :] = (
+                        path_integrals[p].compute_current(mode_group_data).values
+                    )
+            measurement_matrices.append(terminal_measurements)
+
+        return self._recombine_degenerate_modes_with_measurement_matrices(
+            mode_solver_data_expanded, measurement_matrices, degenerate_groups
+        )
+
     def _add_microwave_data(self, mode_solver_data: ModeSolverData) -> ModeSolverData:
         """Calculate and add microwave data to ``mode_solver_data`` which uses the path specifications.
         If they were not supplied by the user, then create a specification automatically.
@@ -1374,8 +1484,34 @@ class ModeSolver(Tidy3dBaseModel):
             self.to_monitor(name=MODE_MONITOR_NAME),
             self.simulation,
         )
-        # Need to operate on the full symmetry expanded fields
-        mode_solver_data_expanded = mode_solver_data.symmetry_expanded_copy
+
+        if self.mode_spec.microwave_mode_spec.process_degenerate_modes:
+            # By default we use user supplied current integrals to recombine TEM modes
+            degenerate_mode_discrimination_integrals = current_integrals
+            if self.mode_spec.microwave_mode_spec.use_automatic_setup:
+                auto_current_integrals = current_integrals[0]
+                degenerate_mode_discrimination_integrals = [
+                    make_current_integral(path_spec)
+                    for path_spec in auto_current_integrals.path_specs
+                ]
+            # If only voltage integrals are supplied, we use those
+            elif current_integrals[0] is None:
+                degenerate_mode_discrimination_integrals = voltage_integrals
+            try:
+                mode_solver_data_expanded = (
+                    self._discriminate_degenerate_transmission_line_mode_data(
+                        mode_solver_data, degenerate_mode_discrimination_integrals
+                    )
+                )
+            except SetupError:
+                log.warning(
+                    "Mode solver failed to discriminate degenerate transmission line modes. "
+                    "The provided path integral specifications resulted in a close to singular matrix. "
+                )
+                mode_solver_data_expanded = mode_solver_data.symmetry_expanded_copy
+        else:
+            mode_solver_data_expanded = mode_solver_data.symmetry_expanded_copy
+
         Z0_list = []
         V_list = []
         I_list = []
@@ -1397,7 +1533,7 @@ class ModeSolver(Tidy3dBaseModel):
         all_mode_V = _make_voltage_data_array(all_mode_V)
         all_mode_I = xr.concat(I_list, dim="mode_index")
         all_mode_I = _make_current_data_array(all_mode_I)
-        return mode_solver_data.updated_copy(
+        return mode_solver_data_expanded.updated_copy(
             Z0=all_mode_Z0, voltage_coeffs=all_mode_V, current_coeffs=all_mode_I
         )
 

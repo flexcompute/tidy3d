@@ -155,6 +155,14 @@ class ModeSpec(Tidy3dBaseModel):
         "If ``None`` no mode tracking is performed.",
     )
 
+    track_polarization_degenerate_modes: bool = pd.Field(
+        False,
+        title="Track Polarization Degenerate Modes",
+        description="Parameter that turns on/off mode tracking of degenerate modes that only "
+        "differ in their polarization state. "
+        "If ``False`` no mode tracking is performed.",
+    )
+
     group_index_step: Union[pd.PositiveFloat, bool] = pd.Field(
         False,
         title="Frequency step for group index computation",

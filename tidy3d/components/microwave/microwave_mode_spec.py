@@ -43,6 +43,24 @@ class MicrowaveModeSpec(Tidy3dBaseModel):
         "in the 'ModeSpec'.",
     )
 
+    degenerate_mode_tolerance: float = pd.Field(
+        1e-6,
+        title="",
+        description="",
+    )
+
+    quasiTEM_range: tuple[float, float] = pd.Field(
+        (0.95, 0.99),
+        title="",
+        description="",
+    )
+
+    process_degenerate_modes: bool = pd.Field(
+        True,
+        title="",
+        description="",
+    )
+
     @property
     def use_automatic_setup(self) -> bool:
         """Whether to setup the :class:`.MicrowaveModeSpec` automatically or use the supplied
