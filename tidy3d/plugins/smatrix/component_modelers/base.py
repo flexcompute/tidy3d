@@ -144,7 +144,7 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
     def get_task_name(port: Port, mode_index: Optional[int] = None) -> str:
         """The name of a task, determined by the port of the source and mode index, if given."""
         if mode_index is not None:
-            return f"{port.name}_{mode_index}"
+            return f"{port.name}@{mode_index}"
         return f"{port.name}"
 
     def get_port_by_name(self, port_name: str) -> Port:
