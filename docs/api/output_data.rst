@@ -3,8 +3,23 @@
 Output Data
 ===========
 
-All Data for a Simulation
--------------------------
+Overview
+--------
+
+This page contains information on simulation and monitor data containers. 
+
+.. TODO
+   - Expand overview
+   - Working with monitor data
+     - Distinction between MonitorData and Dataset
+     - Dataset structure: attributes, coordinates and slicing
+     - Saving/reading from file
+     - Plotting and Visualization
+
+~~~~
+
+The ``SimulationData`` Object
+-----------------------------
 
 .. autosummary::
    :toctree: _autosummary/
@@ -12,8 +27,22 @@ All Data for a Simulation
 
    tidy3d.SimulationData
 
-Collections of Data from single monitor
----------------------------------------
+~~~~
+
+The ``BatchData`` Object
+------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.web.api.container.BatchData
+
+
+~~~~
+
+List of Monitor Data Types
+--------------------------
 
 .. autosummary::
    :toctree: _autosummary/
@@ -33,8 +62,11 @@ Collections of Data from single monitor
    tidy3d.DirectivityData
    tidy3d.AuxFieldTimeData
 
-Individual Datasets
--------------------
+
+~~~~
+
+List of Dataset Types
+---------------------
 
 .. autosummary::
    :toctree: _autosummary/

@@ -3,65 +3,31 @@ API |:computer:|
 ***************
 
 .. toctree::
-    :hidden:
+    :maxdepth: 1
 
     simulation
-    boundary_conditions
+    submit_simulations
     geometry
+    structure_and_scene
     mediums
     material_library
     rf_material_library
-    structures
-    sources
-    analytic_beams
-    monitors
-    mode
-    field_projector
-    lumped_elements
+    boundary_conditions
     discretization
-    subpixel_averaging
+    sources
+    monitors
     output_data
-    scene
-    logging
+    analytic_beams
     utilities
-    submit_simulations
     mesh/index
     heat/index
     charge/index
     eme/index
     microwave/index
+    lumped_elements
     plugins/index
     spice
     constants
     abstract_base
     abstract_models
     viz
-
-.. include:: /api/simulation.rst
-.. include:: /api/utilities.rst
-.. include:: /api/boundary_conditions.rst
-.. include:: /api/geometry.rst
-.. include:: /api/mediums.rst
-.. include:: /api/structures.rst
-.. include:: /api/sources.rst
-.. include:: /api/analytic_beams.rst
-.. include:: /api/monitors.rst
-.. include:: /api/mode.rst
-.. include:: /api/field_projector.rst
-.. include:: /api/lumped_elements.rst
-.. include:: /api/discretization.rst
-.. include:: /api/subpixel_averaging.rst
-.. include:: /api/output_data.rst
-.. include:: /api/scene.rst
-.. include:: /api/logging.rst
-.. include:: /api/submit_simulations.rst
-.. include:: /api/mesh/index.rst
-.. include:: /api/heat/index.rst
-.. include:: /api/charge/index.rst
-.. include:: /api/eme/index.rst
-.. include:: /api/microwave/index.rst
-.. include:: /api/plugins/index.rst
-.. include:: /api/constants.rst
-.. include:: /api/abstract_base.rst
-.. include:: /api/abstract_models.rst
-.. include:: /api/viz.rst
