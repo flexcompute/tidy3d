@@ -18,12 +18,21 @@ from tidy3d.plugins.klayout.util import check_installation
 filepath = Path(os.path.dirname(os.path.abspath(__file__)))
 
 
-def test_check_klayout_not_installed():
-    """Test that _check_klayout_on_path raises RuntimeError if klayout is not in the system path.
-    Assumes this is the case on the CI machine.
+def test_check_klayout_not_installed(monkeypatch):
+    """check_installation raises when KLayout is not on PATH.
+
+    Use monkeypatch to simulate absence, avoiding reliance on CI environment.
     """
+    monkeypatch.setattr("tidy3d.plugins.klayout.util.which", lambda _cmd: None)
     with pytest.raises(RuntimeError):
         check_installation(raise_error=True)
+
+
+def test_check_klayout_installed(monkeypatch):
+    """check_installation returns a path and does not raise when present."""
+    fake_path = "/usr/local/bin/klayout"
+    monkeypatch.setattr("tidy3d.plugins.klayout.util.which", lambda _cmd: fake_path)
+    assert check_installation(raise_error=True) == fake_path
 
 
 class TestDRCRunner:

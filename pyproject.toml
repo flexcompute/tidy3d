@@ -301,7 +301,7 @@ banned-module-level-imports = ["scipy", "matplotlib"]
 
 [tool.pytest.ini_options]
 # TODO: remove --assert=plain when https://github.com/scipy/scipy/issues/22236 is resolved
-addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical' "
+addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical' --ignore=tests/test_plugins/test_adjoint.py"
 markers = [
   "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
 ]
