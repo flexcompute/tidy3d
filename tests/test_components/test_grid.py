@@ -341,3 +341,64 @@ def test_grid_auto_uniform():
 
     for b_uniform, b_auto in zip(bounds_uniform, bounds_auto):
         assert np.allclose(b_uniform, b_auto)
+
+
+def test_get_geo_inds_no_span():
+    g = make_grid()
+    # Full-domain box: spans all cells along each axis
+    geo_full = td.Box(center=(0, 0, 0), size=(2, 4, 6))
+
+    # Expected: expand discretize_inds by 2 and clip to Yee E-grid sizes
+    raw_inds = g.discretize_inds(geo_full.bounding_box, extend=False)
+    lengths = [len(arr) for arr in g.yee.E.x.to_list]  # [Nx, Ny, Nz] on E.x grid
+    expand = 2
+    expected = np.array(
+        [
+            [
+                max(raw_inds[i][0] - expand, 0),
+                min(raw_inds[i][1] + expand, lengths[i]),
+            ]
+            for i in range(3)
+        ]
+    )
+
+    inds = g._get_geo_inds(geo_full)
+    assert np.array_equal(inds, expected)
+
+
+def test_get_geo_inds_with_span():
+    g = make_grid()
+    geo_full = td.Box(center=(0, 0, 0), size=(2, 4, 6))
+
+    # span_inds are in the same index space as discretize_inds (boundaries index space)
+    # Choose a restricted span to intersect with the full-geometry indices
+    span_inds = np.array(
+        [
+            [1, 2],  # x boundaries indices (restrict to right cell)
+            [1, 3],  # y boundaries indices
+            [2, 5],  # z boundaries indices
+        ]
+    )
+
+    # Expected: intersect raw inds with span, then expand and clip
+    raw_inds = g.discretize_inds(geo_full.bounding_box, extend=False)
+    intersect = np.array(
+        [
+            [max(raw_inds[i][0], span_inds[i][0]), min(raw_inds[i][1], span_inds[i][1])]
+            for i in range(3)
+        ]
+    )
+    lengths = [len(arr) for arr in g.yee.E.x.to_list]
+    expand = 2
+    expected = np.array(
+        [
+            [
+                max(intersect[i][0] - expand, 0),
+                min(intersect[i][1] + expand, lengths[i]),
+            ]
+            for i in range(3)
+        ]
+    )
+
+    inds = g._get_geo_inds(geo_full, span_inds=span_inds)
+    assert np.array_equal(inds, expected)

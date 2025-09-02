@@ -10,8 +10,8 @@ import pydantic.v1 as pd
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
 from tidy3d.components.data.utils import UnstructuredGridDataset, UnstructuredGridDatasetType
-from tidy3d.components.geometry.base import Box
-from tidy3d.components.types import ArrayFloat1D, Axis, Coordinate, InterpMethod
+from tidy3d.components.geometry.base import Box, Geometry
+from tidy3d.components.types import ArrayFloat1D, ArrayLike, Axis, Coordinate, InterpMethod
 from tidy3d.exceptions import SetupError
 
 # data type of one dimensional coordinate array.
@@ -711,3 +711,48 @@ class Grid(Tidy3dBaseModel):
             z=self.boundaries.z + vector[2],
         )
         return self.updated_copy(boundaries=boundaries)
+
+    def _get_geo_inds(self, geo: Geometry, span_inds: ArrayLike = None, expand_inds: int = 2):
+        """
+        Get ``geo_inds`` based on a geometry's bounding box, enlarged by ``expand_inds``.
+        If ``span_inds`` is supplied, take the intersection of ``span_inds`` and ``geo``'s bounding
+        box before the enlargement.
+
+        Parameters
+        ----------
+        geo : Geometry
+            The geometry whose bounding box is used to determine grid indices.
+        span_inds : ArrayLike, optional
+            Optional indices to restrict the region; the union with the geometry's bounding box is taken.
+        expand_inds : int, default=2
+            Number of grid cells to expand the region on each side.
+
+        Returns
+        -------
+        List[Tuple[int, int]]
+            The (start, stop) indexes of the cells for interpolation.
+        """
+        # only interpolate inside the bounding box
+        geo_inds = self.discretize_inds(geo.bounding_box, extend=False)
+        if span_inds is not None:
+            geo_inds = np.array(
+                [
+                    [lower, upper]
+                    for lower, upper in zip(
+                        [max(geo_inds[i][0], span_inds[i][0]) for i in range(3)],
+                        [min(geo_inds[i][1], span_inds[i][1]) for i in range(3)],
+                    )
+                ]
+            )
+
+        # expand `geo_inds` if requested
+        num_xyz = [len(xyz) for xyz in self.yee.E.x.to_list]
+        return np.array(
+            [
+                [lower, upper]
+                for lower, upper in zip(
+                    [max(geo_inds[i][0] - expand_inds, 0) for i in range(3)],
+                    [min(geo_inds[i][1] + expand_inds, num_xyz[i]) for i in range(3)],
+                )
+            ]
+        )
