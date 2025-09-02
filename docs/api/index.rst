@@ -3,7 +3,7 @@ API |:computer:|
 ***************
 
 .. toctree::
-    :hidden:
+   :maxdepth: 2    
 
     simulation
     geometry
