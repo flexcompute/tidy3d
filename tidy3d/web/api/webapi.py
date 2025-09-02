@@ -288,11 +288,8 @@ def upload(
         task_type = "RF"
         # Collect port names for modeler tasks if available
         try:
-            ports = getattr(simulation, "ports", None)
-            if ports is not None:
-                port_name_list = [
-                    getattr(p, "name", None) for p in ports if getattr(p, "name", None)
-                ]
+            sim_dict = getattr(simulation, "sim_dict", None)
+            port_name_list = sim_dict.keys()
         except Exception:
             port_name_list = None
 
