@@ -2169,6 +2169,7 @@ def test_tfsf_structures_grid():
 @pytest.mark.parametrize(
     "size, num_struct, log_level", [(1, 1, None), (50, 1, "WARNING"), (1, 11, "WARNING")]
 )
+@td.packaging.disable_local_subpixel
 def test_warn_large_epsilon(monkeypatch, size, num_struct, log_level):
     """Make sure we get a warning if the epsilon grid is too large."""
 

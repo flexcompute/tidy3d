@@ -191,6 +191,7 @@ def test_rectangular_dielectric_coupled():
     assert np.allclose(wg.n_eff.values, [2.4453077, 2.2707212, 1.8694501, 1.5907708], atol=1e-1)
 
 
+@td.packaging.disable_local_subpixel
 def test_layered_clad():
     wg = waveguide.RectangularDielectric(
         wavelength=1.55,

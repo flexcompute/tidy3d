@@ -123,6 +123,7 @@ sphinxemoji = { version = "*", optional = true }
 devsim = { version = "*", optional = true }
 cma = { version = "*", optional = true }
 openpyxl = { version = "*", optional = true }
+# tidy3d-extras = { version = "2.10.0rc1", optional = true }
 
 [tool.poetry.extras]
 dev = [
@@ -178,7 +179,7 @@ dev = [
   'devsim',
   'cma',
   'diff-cover',
-  "openpyxl"
+  "openpyxl",
 ]
 docs = [
   "jupyter",
@@ -220,6 +221,7 @@ heatcharge = ["trimesh", "vtk", "devsim"]
 adjoint = ["jaxlib", "jax"]
 pytorch = ["torch"]
 design = ["bayesian-optimization", "pygad", "pyswarms"]
+# extras = ["tidy3d-extras"]
 
 [tool.poetry.scripts]
 tidy3d = "tidy3d.web.cli:tidy3d_cli"
@@ -228,15 +230,18 @@ tidy3d = "tidy3d.web.cli:tidy3d_cli"
 name = "pypi"
 priority = "primary"
 
+
 [[tool.poetry.source]]
 name = "jaxsource"
 url = "https://storage.googleapis.com/jax-releases/jax_releases.html"
 priority = "supplemental"
 
+
 [[tool.poetry.source]]
 name = "torch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 priority = "explicit"
+
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

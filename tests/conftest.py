@@ -13,7 +13,6 @@ from autograd.test_util import check_grads
 from autograd.wrap_util import unary_to_nary
 
 import tidy3d as td
-from tidy3d.config import config
 from tidy3d.log import DEFAULT_LEVEL, set_logging_console, set_logging_level
 
 
@@ -96,15 +95,6 @@ def mpl_config_interactive():
     mpl.use("TkAgg")
     yield
     mpl.use(original_backend)
-
-
-@pytest.fixture(autouse=True)
-def disable_local_subpixel():
-    """Disable local subpixel for the unit tests."""
-    use_local_subpixel = config.use_local_subpixel
-    config.use_local_subpixel = False
-    yield
-    config.use_local_subpixel = use_local_subpixel
 
 
 @pytest.fixture

@@ -29,6 +29,7 @@ from tidy3d.components.types import TYPE_TAG_STR, Ax, Direction, EMField, FreqAr
 from tidy3d.constants import C_0
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
+from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
 
 from .mode_solver import ModeSolver
 
@@ -249,8 +250,27 @@ class ModeSimulation(AbstractYeeGridSimulation):
         kwargs = {key: getattr(self, key) for key in MODE_SIM_MODE_SOLVER_SHARED_ATTRS}
         return ModeSolver(simulation=self._as_fdtd_sim, **kwargs)
 
+    @supports_local_subpixel
     def run_local(self):
         """Run locally."""
+
+        if tidy3d_extras["use_local_subpixel"]:
+            subpixel_sim = tidy3d_extras["mod"].SubpixelModeSimulation.from_mode_simulation(self)
+            return subpixel_sim.run_local()
+
+        for mnt in self.monitors:
+            if isinstance(mnt, PermittivityMonitor):
+                raise SetupError(
+                    "The package 'tidy3d-extras' is required "
+                    "for accurate local 'PermittivityMonitor' handling. "
+                    "Please install this package using, for example, "
+                    "'pip install tidy3d[extras]', and ensure "
+                    "'config.use_local_subpixel' is not 'False'. "
+                    "Alternatively, 'ModeSimulation.epsilon' may be "
+                    "used to obtain the non-subpixel-averaged "
+                    "permittivity."
+                )
+
         from .data.sim_data import ModeSimulationData
 
         # repeat the calculation every time, in case use_local_subpixel changed
