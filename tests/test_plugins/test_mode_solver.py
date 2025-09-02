@@ -592,6 +592,7 @@ def test_mode_solver_unstructured_custom_medium(nx, cond_factor, interp, tol, tm
     assert error_up < tol
 
 
+@td.packaging.disable_local_subpixel
 def test_mode_solver_straight_vs_angled():
     """Compare results for a straight and angled nominally identical waveguides.
     Note: results do not match perfectly because of the numerical grid.
@@ -826,6 +827,7 @@ def test_mode_solver_2D():
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
+@td.packaging.disable_local_subpixel
 def test_group_index(mock_remote_api, local, tmp_path):
     """Test group index and dispersion calculation"""
 
@@ -920,6 +922,7 @@ def test_pml_params():
     assert np.allclose(sf_f[N - n_pml :] / sf_f[N - n_pml], target_profile)
 
 
+@td.packaging.disable_local_subpixel
 def test_mode_solver_nan_pol_fraction():
     """Test mode solver when eigensolver returns 0 for some modes."""
     wg = td.Structure(geometry=td.Box(size=(0.5, 100, 0.22)), medium=td.Medium(permittivity=12))

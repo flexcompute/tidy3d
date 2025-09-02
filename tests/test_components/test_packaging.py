@@ -79,8 +79,13 @@ def test_tidy3d_extras():
 
     @supports_local_subpixel
     def get_eps():
-        assert tidy3d_extras["use_local_subpixel"] is False
-        assert tidy3d_extras["mod"] is None
+        if has_tidy3d_extras:
+            assert tidy3d_extras["mod"] is not None
+            features = tidy3d_extras["mod"].extension._features()
+            assert tidy3d_extras["use_local_subpixel"] == ("local_subpixel" in features)
+        else:
+            assert tidy3d_extras["use_local_subpixel"] is False
+            assert tidy3d_extras["mod"] is None
 
     get_eps()
 

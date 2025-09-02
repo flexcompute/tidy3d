@@ -22,7 +22,7 @@ import xarray as xr
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
-from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
+from tidy3d.packaging import disable_local_subpixel, supports_local_subpixel, tidy3d_extras
 from tidy3d.updater import Updater
 
 from .base import cached_property, skip_if_fields_missing
@@ -4533,6 +4533,7 @@ class Simulation(AbstractYeeGridSimulation):
                 "data, use hdf5 format instead."
             )
 
+    @disable_local_subpixel
     def _validate_tfsf_structure_intersections(self) -> None:
         """Error if the 4 sidewalls of a TFSF box don't all intersect the same structures.
         This validator may need to compute permittivities on the grid, so it is called

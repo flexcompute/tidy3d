@@ -185,7 +185,12 @@ def test_mode_sim():
         _ = sim.plot_grid_mode_plane(ax=AX)
         _ = sim.plot_pml_mode_plane(ax=AX)
         _ = sim.reduced_simulation_copy
-    _ = sim.run_local()
+    if td.packaging.tidy3d_extras["use_local_subpixel"]:
+        _ = sim.run_local()
+    else:
+        with pytest.raises(SetupError):
+            _ = sim.run_local()
+        _ = sim.updated_copy(monitors=[]).run_local()
     _ = sim._mode_solver.sim_data
 
     assert sim.plane == sim.geometry

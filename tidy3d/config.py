@@ -38,10 +38,9 @@ class Tidy3dConfig(pd.BaseModel):
     )
 
     use_local_subpixel: Optional[bool] = pd.Field(
-        False,
+        None,
         title="Whether to use local subpixel averaging. If 'None', local subpixel "
-        "averaging will be used if 'tidy3d-extras' is installed and not used otherwise. "
-        "NOTE: This feature is not yet supported.",
+        "averaging will be used if 'tidy3d-extras' is installed and not used otherwise.",
     )
 
     @pd.validator("logging_level", pre=True, always=True)

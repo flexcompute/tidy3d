@@ -219,6 +219,24 @@ Multiple dependency groups can be installed simultaneously:
 
     pip install "tidy3d[design,trimesh]"
 
+Extras Plugin
+----------------------
+
+An optional plugin providing additional local functionality,
+including a more accurate local mode solver:
+
+.. code-block:: bash
+
+    pip install "tidy3d[extras]"
+
+An API key is needed to use the extras plugin.
+For more information on the extras plugin, see `Extras Plugin <./extras/index.html>`_.
+
+.. important::
+
+   ``tidy3d-extras`` is **not compatible with Conda environments**.
+   Please use a standard Python virtual environment (e.g., ``venv`` or ``virtualenv``) for installation.
+
 Developer Installation
 ----------------------
 

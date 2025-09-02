@@ -255,6 +255,7 @@ Contents
   api/index
   GUI <https://tidy3d.simulation.cloud/>
   Photonforge <https://docs.flexcompute.com/projects/photonforge/en/latest/>
+  extras/index
   development/index
   changelog
   About our Solver <https://www.flexcompute.com/tidy3d/solver/>
