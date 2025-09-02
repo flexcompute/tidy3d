@@ -161,7 +161,7 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
     """
 
     tau_n: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
-        ..., title="Electron lifetime", description="Electron lifetime", union=SECOND
+        ..., title="Electron lifetime", description="Electron lifetime", units=SECOND
     )
 
     tau_p: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
