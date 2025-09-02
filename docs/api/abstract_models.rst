@@ -1,9 +1,9 @@
 .. currentmodule:: tidy3d
 
-Base Models
-===============
+Base Classes
+============
 
-These are some classes that are used to organize the tidy3d components, but aren't to be used directly in the code.  Documented here mainly for reference of inherited components.
+These are some of the classes that are used to organize Tidy3D components, but aren't to be used directly by the user. They are documented here mainly for user reference of inherited components.
 
 
 .. autosummary::
