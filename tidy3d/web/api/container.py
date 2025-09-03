@@ -605,7 +605,7 @@ class Batch(WebContainer):
         >>> for task_name, sim_data in batch_data.items(): # doctest: +SKIP
         ...     # do something with data. # doctest: +SKIP
 
-        ``bach_data`` does not store all of the data objects in memory,
+        ``batch_data`` does not store all of the data objects in memory,
         rather it iterates over the task names and loads the corresponding
         data from file one by one. If no file exists for that task, it downloads it.
         """
