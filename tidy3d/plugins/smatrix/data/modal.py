@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import pydantic.v1 as pd
 
-from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.data.index import SimulationDataMap
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
+from tidy3d.plugins.smatrix.data.base import AbstractComponentModelerData
 from tidy3d.plugins.smatrix.data.data_array import ModalPortDataArray
 
 
-class ModalComponentModelerData(Tidy3dBaseModel):
+class ModalComponentModelerData(AbstractComponentModelerData):
     """A data container for the results of a :class:`.ModalComponentModeler` run.
 
     This class stores the original modeler and the simulation data obtained
@@ -23,18 +22,6 @@ class ModalComponentModelerData(Tidy3dBaseModel):
         title="ModalComponentModeler",
         description="The original :class:`ModalComponentModeler` object that defines the simulation setup "
         "and from which this data was generated.",
-    )
-
-    data: SimulationDataMap = pd.Field(
-        ...,
-        title="SimulationDataMap",
-        description="A mapping from task names to :class:`.SimulationData` objects, containing the results of each simulation run.",
-    )
-
-    log: str = pd.Field(
-        None,
-        title="Modeler Post-process Log",
-        description="A string containing the log information from the modeler post-processing run.",
     )
 
     def smatrix(self) -> ModalPortDataArray:
