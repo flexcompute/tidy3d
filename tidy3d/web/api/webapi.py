@@ -17,6 +17,7 @@ from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.exceptions import WebError
 from tidy3d.log import get_logging_console, log
+from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.web.core.account import Account
 from tidy3d.web.core.constants import (
     CM_DATA_HDF5_GZ,
@@ -346,7 +347,7 @@ def upload(
                 f"Cost of {solver_name} simulations is subject to change in the future."
             )
         if task_type in GUI_SUPPORTED_TASK_TYPES:
-            if task_type == "RF":
+            if (task_type == "RF") and (isinstance(simulation, TerminalComponentModeler)):
                 url = _get_url_rf(group_id or resource_id)
                 folder_url = _get_folder_url(task.folder_id)
                 console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
