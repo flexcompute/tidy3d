@@ -24,7 +24,6 @@ API |:computer:|
     charge/index
     eme/index
     microwave/index
-    lumped_elements
     plugins/index
     spice
     constants

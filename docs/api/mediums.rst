@@ -201,7 +201,7 @@ At lower frequencies, the EM field typically does not penetrate very far into th
    # lossless metal
    my_pec = PECMedium()
 
-   # lossy metal
+   # lossy metal (conductivity in S/um)
    my_lossy_metal = LossyMetalMedium(conductivity=58, freq_range=(1e9, 10e9))
 
 The ``LossyMetalMedium`` class implements the surface impedance boundary condition (SIBC). It can also accept surface roughness specifications using the Hammerstad or Huray models. Please refer to its documentation page for details.
