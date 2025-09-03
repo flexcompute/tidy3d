@@ -14,8 +14,8 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
+from tidy3d.plugins.smatrix.data.base import AbstractComponentModelerData
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
-from tidy3d.plugins.smatrix.data.modal import SimulationDataMap
 from tidy3d.plugins.smatrix.network import SParamDef
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.utils import (
@@ -51,7 +51,7 @@ class MicrowaveSMatrixData(Tidy3dBaseModel):
     )
 
 
-class TerminalComponentModelerData(Tidy3dBaseModel):
+class TerminalComponentModelerData(AbstractComponentModelerData):
     """
     Data associated with a :class:`TerminalComponentModeler` simulation run.
 
@@ -85,18 +85,6 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
         title="TerminalComponentModeler",
         description="The original :class:`TerminalComponentModeler` object that defines the simulation setup "
         "and from which this data was generated.",
-    )
-
-    data: SimulationDataMap = pd.Field(
-        ...,
-        title="Port-Simulation Data Map",
-        description="A read-only dictionary that maps simulation data to each microwave port name",
-    )
-
-    log: str = pd.Field(
-        None,
-        title="Solver Log",
-        description="A string containing the log information from the simulation run.",
     )
 
     def smatrix(
