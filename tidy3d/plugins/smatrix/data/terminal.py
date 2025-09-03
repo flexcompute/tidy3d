@@ -101,8 +101,8 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
 
     def smatrix(
         self,
-        assume_ideal_excitation: bool = False,
-        s_param_def: SParamDef = "pseudo",
+        assume_ideal_excitation: Optional[bool] = None,
+        s_param_def: Optional[SParamDef] = None,
     ) -> MicrowaveSMatrixData:
         """Computes and returns the S-matrix and port reference impedances.
 
@@ -110,9 +110,11 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
         ----------
         assume_ideal_excitation: If ``True``, assumes that exciting one port
             does not produce incident waves at other ports. This simplifies the
-            S-matrix calculation and is required if not all ports are excited.
+            S-matrix calculation and is required if not all ports are excited. If not
+            provided, ``modeler.assume_ideal_excitation`` is used.
         s_param_def: The definition of S-parameters to use, determining whether
-            "pseudo waves" or "power waves" are calculated.
+            "pseudo waves" or "power waves" are calculated. If not provided,
+            ``modeler.s_param_def`` is used.
 
         Returns
         -------
@@ -123,13 +125,15 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
 
         terminal_port_data = terminal_construct_smatrix(
             modeler_data=self,
-            assume_ideal_excitation=assume_ideal_excitation,
-            s_param_def=s_param_def,
+            assume_ideal_excitation=assume_ideal_excitation
+            if (assume_ideal_excitation is not None)
+            else self.modeler.assume_ideal_excitation,
+            s_param_def=s_param_def if (s_param_def is not None) else self.modeler.s_param_def,
         )
         smatrix_data = MicrowaveSMatrixData(
             data=terminal_port_data,
             port_reference_impedances=self.port_reference_impedances,
-            s_param_def=s_param_def,
+            s_param_def=s_param_def if (s_param_def is not None) else self.modeler.s_param_def,
         )
         return smatrix_data
 
