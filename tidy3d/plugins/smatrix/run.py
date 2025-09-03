@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.index import SimulationDataMap
@@ -127,24 +126,14 @@ def compose_modeler_data_from_batch_data(
 
 def create_batch(
     modeler: ComponentModelerType,
-    path_dir: str = DEFAULT_DATA_DIR,
-    file_name: str = "batch.hdf5",
     **kwargs,
 ) -> Batch:
-    """Create a simulation Batch from a component modeler and save it to a file.
+    """Create a simulation Batch from a component modeler.
 
     Parameters
     ----------
     modeler : ComponentModelerType
         The component modeler that defines the set of simulations.
-    path_dir : str, optional
-        Directory where the batch file will be saved. Defaults to ".".
-    parent_batch_id : str, optional
-        Identifier for a parent batch, if this is a child batch.
-    group_id : str, optional
-        Identifier for grouping tasks within the batch.
-    file_name : str, optional
-        Name for the HDF5 file where the batch is stored. Defaults to "batch.hdf5".
     **kwargs
         Additional keyword arguments passed to the `Batch` constructor.
 
@@ -153,13 +142,11 @@ def create_batch(
     Batch
         The configured `Batch` object ready for execution.
     """
-    filepath = os.path.join(path_dir, file_name)
 
     batch = Batch(
         simulations=modeler.sim_dict,
         **kwargs,
     )
-    batch.to_file(filepath)
     return batch
 
 
@@ -188,7 +175,7 @@ def run(
         An object containing the processed simulation data, ready for
         S-parameter extraction and analysis.
     """
-    batch = create_batch(modeler=modeler, path_dir=path_dir, **kwargs)
-    batch_data = batch.run()
+    batch = create_batch(modeler=modeler, **kwargs)
+    batch_data = batch.run(path_dir=path_dir)
     modeler_data = compose_modeler_data_from_batch_data(modeler=modeler, batch_data=batch_data)
     return modeler_data
