@@ -122,14 +122,7 @@ def compose_modeler_data_from_batch_data(
     port_simulation_data = SimulationDataMap(
         keys=tuple(batch_data.keys()), values=tuple(batch_data.values())
     )
-    if isinstance(modeler, ModalComponentModeler):
-        modeler_data = ModalComponentModelerData(modeler=modeler, data=port_simulation_data)
-    elif isinstance(modeler, TerminalComponentModeler):
-        modeler_data = TerminalComponentModelerData(modeler=modeler, data=port_simulation_data)
-    else:
-        raise TypeError(f"Unsupported modeler type: {type(modeler)}")
-
-    return modeler_data
+    return compose_modeler_data(modeler=modeler, indexed_sim_data=port_simulation_data)
 
 
 def create_batch(

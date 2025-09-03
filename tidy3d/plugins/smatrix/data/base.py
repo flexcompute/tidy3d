@@ -49,7 +49,6 @@ class AbstractComponentModelerData(ABC, Tidy3dBaseModel):
         modeler = values.get("modeler")
         modeler_keys = tuple(modeler.sim_dict.keys())
         data_keys = tuple(val.keys())
-        print(modeler_keys, data_keys)
         if modeler_keys != data_keys:
             raise ValueError(f"Modeler keys {modeler_keys} do not match data keys {data_keys}.")
         return val

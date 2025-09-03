@@ -21,7 +21,6 @@ from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.plugins.smatrix.run import (
     compose_modeler,
     compose_modeler_data,
-    compose_simulation_data_index,
     create_batch,
     run,
 )
@@ -46,14 +45,6 @@ def test_compose_modeler_unsupported_type(tmp_path, monkeypatch):
     # Expect a TypeError when calling compose_modeler with the unsupported type
     with pytest.raises(TypeError, match="Unsupported modeler type: str"):
         compose_modeler(modeler_file=str(modeler_file))
-
-
-def test_compose_simulation_data_index_empty_map():
-    port_task_map = {}
-    result = compose_simulation_data_index(port_task_map)
-    assert isinstance(result, SimulationDataMap)
-    assert len(result.keys()) == 0
-    assert len(result.values()) == 0
 
 
 def test_create_batch(monkeypatch, tmp_path):
