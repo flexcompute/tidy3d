@@ -371,7 +371,7 @@ def upload(
     )
 
     if task_type == "RF":
-        split_path = "tidy3d/projects/terminal-component-modeler-split"
+        split_path = "tidy3d/projects/component-modeler-split"
         payload = {
             "batchType": "RF_SWEEP",
             "batchId": resource_id,
