@@ -18,66 +18,6 @@ from tidy3d.web import Batch, BatchData
 DEFAULT_DATA_DIR = "."
 
 
-def compose_simulation_data_index(port_task_map: dict[str, str]) -> SimulationDataMap:
-    port_data_dict = {}
-    for _, _ in port_task_map.items():
-        pass
-        # FIXME: get simulationdata for each port
-        # port_data_dict[port] = sim_data_i
-
-    return SimulationDataMap(
-        keys=tuple(port_data_dict.keys()), values=tuple(port_data_dict.values())
-    )
-
-
-def compose_terminal_component_modeler_data(
-    modeler: TerminalComponentModeler, port_task_map: dict[str, str]
-) -> TerminalComponentModelerData:
-    """Assemble `TerminalComponentModelerData` from simulation results.
-
-    This function maps the simulation data from a completed batch run back to the
-    ports of the terminal component modeler.
-
-    Parameters
-    ----------
-    modeler : TerminalComponentModeler
-        The `TerminalComponentModeler` used to generate the simulations.
-    port_task_map : dict[str, str]
-        A dictionary mapping port names to their corresponding task identifiers.
-
-    Returns
-    -------
-    TerminalComponentModelerData
-        An object containing the results mapped to their respective ports.
-    """
-    port_simulation_data = compose_simulation_data_index(port_task_map)
-    return TerminalComponentModelerData(modeler=modeler, data=port_simulation_data)
-
-
-def compose_modal_component_modeler_data(
-    modeler: ModalComponentModeler, port_task_map: dict[str, str]
-) -> ModalComponentModelerData:
-    """Assemble `ModalComponentModelerData` from simulation results.
-
-    This function maps the simulation data from a completed batch run back to the
-    ports of the component modeler.
-
-    Parameters
-    ----------
-    modeler : ModalComponentModeler
-        The `ModalComponentModeler` used to generate the simulations.
-    port_task_map : dict[str, str]
-        A dictionary mapping port names to their corresponding task identifiers.
-
-    Returns
-    -------
-    ModalComponentModelerData
-        An object containing the results mapped to their respective ports.
-    """
-    port_simulation_data = compose_simulation_data_index(port_task_map)
-    return ModalComponentModelerData(modeler=modeler, data=port_simulation_data)
-
-
 def compose_modeler(
     modeler_file: str,
 ) -> ComponentModelerType:

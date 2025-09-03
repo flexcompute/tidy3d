@@ -47,8 +47,9 @@ class AbstractComponentModelerData(ABC, Tidy3dBaseModel):
     @pd.validator("data")
     def keys_match_modeler(cls, val, values):
         modeler = values.get("modeler")
-        if modeler.sim_dict.keys() != val.keys():
-            raise ValueError(
-                f"Modeler keys {modeler.sim_dict.keys()} do not match data keys {val.keys()}."
-            )
+        modeler_keys = tuple(modeler.sim_dict.keys())
+        data_keys = tuple(val.keys())
+        print(modeler_keys, data_keys)
+        if modeler_keys != data_keys:
+            raise ValueError(f"Modeler keys {modeler_keys} do not match data keys {data_keys}.")
         return val
