@@ -12,20 +12,6 @@ Scattering Matrix Calculator
    tidy3d.plugins.smatrix.Port
    tidy3d.plugins.smatrix.ModalPortDataArray
 
-
-.. warning::
-
-    RF simulations are subject to new license requirements in the future.
-    The components below are within the RF scope.
-
-
-.. autosummary::
-   :toctree: ../_autosummary/
-   :template: module.rst
-
-   tidy3d.plugins.smatrix.TerminalComponentModeler
-   tidy3d.plugins.smatrix.PortDataArray
-   tidy3d.plugins.smatrix.TerminalPortDataArray
-   tidy3d.plugins.smatrix.LumpedPort
-   tidy3d.plugins.smatrix.CoaxialLumpedPort
-   tidy3d.plugins.smatrix.WavePort
+.. seealso::
+   
+   For classes related to microwave/RF modeling, please refer to the main `Microwave and RF <../microwave/index.html>`_ page. 

@@ -15,7 +15,7 @@ The following sections discuss:
 * `TerminalComponentModeler and Data`_: The core simulation object in microwave/RF models
 * `RF Materials`_: Typical material types in microwave/RF simulation
 * `Layer-based Grid Refinement`_: Automated grid refinement strategy for planar structures (e.g. printed circuit boards)
-* `Lumped Port and Elements`_: Lumped excitations and terminations
+* `Lumped Port and Elements`_: Lumped excitations and circuit elements
 * `Wave Port`_: Port excitation based on modal fields
 * `Radiation and Scattering`_: Useful features for antenna and scattering problems
 
@@ -51,13 +51,13 @@ The ``TerminalComponentModeler`` is the core simulation object for 3D RF/microwa
        ...
    )
 
-The key parts of a ``TerminalComponentModeler`` are as follows:
+The key parts of a ``TerminalComponentModeler`` are:
 
-* The ``simulation`` parameter defines the underlying Tidy3D `Simulation object <../simulation.html>`_. This base ``Simulation`` object contains information about the simulation domain such as structures, boundary conditions, grid specifications, monitors and so on. Note that sources are not defined in the base simulation.
-* The ``ports`` parameter defines a list of all the possible system excitations. These are commonly of type ``LumpedPort`` or ``WavePort``. The number of ports determines the number of batch jobs in the ``TerminalComponentModeler`` and the dimensionality of the S-parameter matrix.
-* The ``freqs`` parameter defines the list of frequency points for the simulation.
+* The ``simulation`` field defines the underlying Tidy3D `Simulation object <../simulation.html>`_. This base ``Simulation`` object contains information about the simulation domain such as structures, boundary conditions, grid specifications, and monitors. Note that sources should not be included in the base simulation, but rather in the ``ports`` field instead.
+* The ``ports`` field defines the list of source excitations. These are commonly of type ``LumpedPort`` or ``WavePort``. The number of ports determines the number of batch jobs in the ``TerminalComponentModeler`` and the dimensionality of the S-parameter matrix.
+* The ``freqs`` field defines the list of frequency points for the simulation.
 
-More information and explanation for additional parameters can be found in the documentation page for the ``TerminalComponentModeler``.
+More information and explanation for additional fields can be found in the documentation page for the ``TerminalComponentModeler``.
 
 .. seealso::
 
@@ -93,7 +93,7 @@ The ``PECMedium`` and ``LossyMetalMedium`` classes can be used to model metallic
    # lossy metal (conductivity in S/um)
    my_lossy_metal = LossyMetalMedium(conductivity=58, freq_range=(1e9, 10e9))
 
-Note that the unit of ``conductivity`` is ``S/um`` and ``freq_range`` is ``Hz``. The ``LossyMetalMedium`` class implements the surface impedance boundary condition (SIBC). It can also accept surface roughness specifications using the Hammerstad or Huray models. Please refer to their respective documentation pages for details.
+Note that the unit of ``conductivity`` is ``S/um`` and the unit of ``freq_range`` is ``Hz``. The ``LossyMetalMedium`` class implements the surface impedance boundary condition (SIBC). It can also accept surface roughness specifications using the Hammerstad or Huray models. Please refer to their respective documentation pages for details.
 
 .. note::
    
@@ -125,7 +125,7 @@ To model a lossy dielectric with constant loss tangent, use the ``constant_loss_
        frequency_range=(1e9, 5e9)
    )
 
-More advanced material models, including frequency dependence and anisotropy, are available in Tidy3D. For more details, please refer to the `EM Mediums <../mediums.html>`_ documentation page. 
+More advanced material models, including frequency dependence and anisotropy, are also available in Tidy3D. 
 
 
 .. seealso::
@@ -219,7 +219,7 @@ The ``LumpedPort`` can be 1D (line) or 2D (plane). For 2D, only axis-aligned pla
 
 .. note::
 
-   Lumped ports and elements are fundamentally approximations and thus should only be used when the port/element size is much smaller than the wavelength of interest (typically ``lambda/10``). For more accurate results, especially when the port is adjacent to an intentional waveguide, consider using the ``WavePort`` excitation instead. 
+   Lumped ports and elements are fundamentally approximations and thus should only be used when the port/element size is much smaller than the wavelength of interest (typically ``lambda/10``). For more accurate results, especially when the port is adjacent to an intentional waveguide or transmission line, consider using the ``WavePort`` excitation instead. 
 
 The ``CoaxialLumpedPort`` represents an analytical coaxial field source.
 
@@ -274,7 +274,7 @@ For more complicated RLC networks, use the general ``LinearLumpedElement`` class
        network=RLCNetwork(resistance=50, inductance=1e-9)  # RLC network
    )
 
-All lumped elements should be added to the ``lumped_elements`` parameter of the base ``Simulation`` instance.
+All lumped elements should be added to the ``lumped_elements`` field of the base ``Simulation`` instance.
 
 .. code-block:: python
 
@@ -321,7 +321,7 @@ The ``WavePort`` represents a modal source port. The port mode is first calculat
        current_integral=my_current_integral,  # current integration curve for port impedance calculation
    )
 
-Most parameters are self explanatory. Some additional notes:
+Most fields are self explanatory. Some additional notes:
 
 * ``mode_spec`` is used to specify the effective index search value for the mode solver
 * ``current_integral`` and/or ``voltage_integral`` are used to specify the integration paths for port impedance calculation. If only one of the two is specified, then the port power is also used (automatically determined). 
@@ -370,7 +370,7 @@ The classes above are used to define the voltage/current integration paths for i
        sign='+', # sign of integral (should match wave port direction)
    )
 
-In addition to being used in the ``WavePort`` definition, the current/voltage integration objects can also be manually performed on arbitrary EM field data (2D and 3D). This is most commonly used in conjunction with the ``ImpedanceCalculator`` to calculate the line impedance of a 2D mode.
+In addition to being used in the ``WavePort`` definition, the current/voltage integration objects can also be applied to arbitrary EM field data (2D and 3D). This is most commonly used in conjunction with the ``ImpedanceCalculator`` to calculate the line impedance of a 2D mode.
 
 .. code-block:: python
 
@@ -410,7 +410,7 @@ Radiation and Scattering
    tidy3d.plugins.microwave.LobeMeasurer
    tidy3d.AntennaMetricsData
 
-For radiation and scattering type problems, it is frequently desired to calculate the radiation/scattering pattern. One should use the ``DirectivityMonitor``.
+When modeling antennas or scattering problems, it is vital to analyze the radiated far-field. For such applications, the ``DirectivityMonitor`` should be used.
 
 .. code-block:: python
 
@@ -465,7 +465,7 @@ Once the simulation is completed, the ``get_antenna_metrics_data()`` method of t
 
 Each metric is in the form of an ``xarray.DataArray`` object that can be used for plotting, export, and further analysis. For examples of how these datasets can be manipulated, please refer to the notebooks in the "See also" section below.
 
-The ``LobeMeasurer`` utility class can be used to calculate radiation lobe statistics.
+The ``LobeMeasurer`` utility class can be used to analyze radiation pattern lobes.
 
 .. code-block:: python
 
@@ -479,6 +479,8 @@ The ``LobeMeasurer`` utility class can be used to calculate radiation lobe stati
    my_lobe_measures = my_lobes.lobe_measures
    my_main_lobe = my_lobes.main_lobe
    my_side_lobes = my_lobes.side_lobe
+
+Lobe characteristics such as direction, magnitude, and -3 dB beamwidth can be obtained for the main and side lobes. Additionally, the ``LobeMeasurer.plot()`` utility function adds main lobe beam direction and width markers to polar radiation plots. 
 
 
 .. seealso::
