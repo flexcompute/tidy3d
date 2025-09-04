@@ -33,7 +33,10 @@ from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.utils import s_to_z, validate_square_matrix
 
 from ...utils import run_emulated
-from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
+from .terminal_component_modeler_def import (
+    make_coaxial_component_modeler,
+    make_component_modeler,
+)
 
 mm = 1e3
 
@@ -1412,3 +1415,56 @@ def test_wave_port_to_absorber(tmp_path):
     sim = list(modeler.sim_dict.values())[0]
     absorber = sim.internal_absorbers[0]
     assert absorber.boundary_spec == custom_boundary_spec
+
+
+def test_wave_port_extrusion_coaxial():
+    """Test extrusion of structures wave port absorber."""
+
+    # define a terminal component modeler
+    tcm = make_coaxial_component_modeler(
+        length=100000,
+        port_types=(WavePort, WavePort),
+    )
+
+    # update ports and set flag to extrude structures
+    ports = tcm.ports
+    port_1 = ports[0]
+    port_2 = ports[1]
+    port_1 = port_1.updated_copy(center=(0, 0, -50000), extrude_structures=True)
+    port_2 = port_2.updated_copy(center=(0, 0, 50000), extrude_structures=True)
+
+    # update component modeler
+    tcm = tcm.updated_copy(ports=[port_1, port_2])
+
+    # generate simulations from component modeler
+    sims = list(tcm.sim_dict.values())
+
+    # loop over simulations
+    for sim in sims:
+        # get injection axis that would be used to extrude structure
+        inj_axis = sim.sources[0].injection_axis
+
+        # get grid boundaries
+        bnd_coords = sim.grid.boundaries.to_list[inj_axis]
+
+        # get size of structures along injection axis directions
+        str_bnds = [
+            np.min(sim.structures[0].geometry.geometries[0].slab_bounds),
+            np.max(sim.structures[2].geometry.geometries[0].slab_bounds),
+        ]
+
+        pec_bnds = []
+
+        # infer placement of PEC plates beyond internal absorber
+        for absorber in sim.internal_absorbers:
+            absorber_cntr = absorber.center[inj_axis]
+            right_ind = np.searchsorted(bnd_coords, absorber_cntr, side="right")
+            left_ind = np.searchsorted(bnd_coords, absorber_cntr, side="left") - 1
+            pec_bnds.append(bnd_coords[right_ind + 1])
+            pec_bnds.append(bnd_coords[left_ind - 1])
+
+        # get range of coordinates along injection axis for PEC plates
+        pec_bnds = [np.min(pec_bnds), np.max(pec_bnds)]
+
+        # ensure that structures were extruded up to PEC plates
+        assert all(np.isclose(str_bnd, pec_bnd) for str_bnd, pec_bnd in zip(str_bnds, pec_bnds))

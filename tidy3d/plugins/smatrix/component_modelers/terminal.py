@@ -7,6 +7,7 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
+from tidy3d import Box, ClipOperation, GeometryGroup, GridSpec, PolySlab, Structure
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
@@ -260,7 +261,9 @@ class TerminalComponentModeler(AbstractComponentModeler):
         # Now, create simulations with wave port sources and mode solver monitors for computing port modes
         for network_index in self.matrix_indices_run_sim:
             task_name, sim_with_src = self._add_source_to_sim(network_index)
-            sim_dict[task_name] = sim_with_src
+
+            # extrude structures if necessary and update simulation
+            sim_dict[task_name] = self._extrude_port_structures(sim_with_src)
 
         # Check final simulations for grid size at ports
         for _, sim in sim_dict.items():
@@ -472,5 +475,239 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 return monitor
         raise Tidy3dKeyError(f"No radiation monitor named '{monitor_name}'.")
 
+    def get_antenna_metrics_data(
+        self,
+        port_amplitudes: Optional[dict[str, complex]] = None,
+        monitor_name: Optional[str] = None,
+    ) -> AntennaMetricsData:
+        """Calculate antenna parameters using superposition of fields from multiple port excitations.
+
+        The method computes the radiated far fields and port excitation power wave amplitudes
+        for a superposition of port excitations, which can be used to analyze antenna radiation
+        characteristics.
+
+        Parameters
+        ----------
+        port_amplitudes : dict[str, complex] = None
+            Dictionary mapping port names to their desired excitation amplitudes, ``a``. For each port,
+            :math:`\\frac{1}{2}|a|^2` represents the incident power from that port into the system.
+            If ``None``, uses only the first port without any scaling of the raw simulation data.
+            When ``None`` is passed as a port amplitude, the raw simulation data is used for that port.
+            Note that in this method ``a`` represents the incident wave amplitude
+            using the power wave definition in [2].
+        monitor_name : str = None
+            Name of the :class:`.DirectivityMonitor` to use for calculating far fields.
+            If None, uses the first monitor in `radiation_monitors`.
+
+        Returns
+        -------
+        :class:`.AntennaMetricsData`
+            Container with antenna parameters including directivity, gain, and radiation efficiency,
+            computed from the superposition of fields from all excited ports.
+        """
+        # Use the first port as default if none specified
+        if port_amplitudes is None:
+            port_amplitudes = {self.ports[0].name: None}
+
+        # Check port names, and create map from port to amplitude
+        port_dict = {}
+        for key in port_amplitudes.keys():
+            port, _ = self.network_dict[key]
+            port_dict[port] = port_amplitudes[key]
+        # Get the radiation monitor, use first as default
+        # if none specified
+        if monitor_name is None:
+            rad_mon = self.radiation_monitors[0]
+        else:
+            rad_mon = self.get_radiation_monitor_by_name(monitor_name)
+
+        # Create data arrays for holding the superposition of all port power wave amplitudes
+        f = list(rad_mon.freqs)
+        coords = {"f": f, "port": list(self.matrix_indices_monitor)}
+        a_sum = PortDataArray(
+            np.zeros((len(f), len(self.matrix_indices_monitor)), dtype=complex), coords=coords
+        )
+        b_sum = a_sum.copy()
+        # Retrieve associated simulation data
+        combined_directivity_data = None
+        for port, amplitude in port_dict.items():
+            if amplitude == 0.0:
+                continue
+            sim_data_port = self.batch_data[self._task_name(port=port)]
+            radiation_data = sim_data_port[rad_mon.name]
+
+            a, b = self.compute_wave_amplitudes_at_each_port(
+                self.port_reference_impedances, sim_data_port, s_param_def="power"
+            )
+            # Select a possible subset of frequencies
+            a = a.sel(f=f)
+            b = b.sel(f=f)
+            a_raw = a.sel(port=self.network_index(port))
+
+            if amplitude is None:
+                # No scaling performed when amplitude is None
+                scaled_directivity_data = sim_data_port[rad_mon.name]
+                scale_factor = 1.0
+            else:
+                scaled_directivity_data = self._monitor_data_at_port_amplitude(
+                    port, sim_data_port, radiation_data, amplitude
+                )
+                scale_factor = amplitude / a_raw
+            a = scale_factor * a
+            b = scale_factor * b
+
+            # Combine the possibly scaled directivity data and the power wave amplitudes
+            if combined_directivity_data is None:
+                combined_directivity_data = scaled_directivity_data
+            else:
+                combined_directivity_data = combined_directivity_data + scaled_directivity_data
+            a_sum += a
+            b_sum += b
+
+        # Compute and add power measures to results
+        power_incident = np.real(0.5 * a_sum * np.conj(a_sum)).sum(dim="port")
+        power_reflected = np.real(0.5 * b_sum * np.conj(b_sum)).sum(dim="port")
+        return AntennaMetricsData.from_directivity_data(
+            combined_directivity_data, power_incident, power_reflected
+        )
+
+    def _extrude_port_structures(self, sim: Simulation) -> Simulation:
+        """
+        Extrude structures intersecting a port plane when a wave port lies on a structure boundary.
+
+        This method checks wave ports with ``extrude_structures==True`` and automatically extends the boundary structures
+        to PEC plates associated with internal absorbers in the direction opposite to the mode source.
+        This ensures that mode sources and internal absorbers are fully contained within the extrusion.
+
+        Parameters
+        ----------
+        sim : Simulation
+            Simulation object containing mode sources, internal absorbers, and monitors,
+            after mesh overrides and snapping points are applied.
+
+        Returns
+        -------
+        Simulation
+            Updated simulation with extruded structures added to ``simulation.structures``.
+        """
+
+        # get coordinated of the simulation grid
+        coords = sim.grid.boundaries.to_list
+
+        mode_sources = []
+
+        # get all mode sources from TerminalComponentModeler that correspond to ports with ``extrude_structures`` flag set to ``True``.
+        for port in self.ports:
+            if isinstance(port, WavePort) and port.extrude_structures:
+                # update center here (example)
+                inj_axis = port.injection_axis
+
+                port_center = list(port.center)
+
+                idx = np.abs(port_center[inj_axis] - coords[inj_axis]).argmin()
+                port_center[inj_axis] = coords[inj_axis][idx]
+
+                port = port.updated_copy(center=tuple(port_center))
+
+                mode_src_pos = port.center[port.injection_axis] + self._shift_value_signed(port)
+
+                # then convert to source
+                mode_sources.append(port.to_source(self._source_time, snap_center=mode_src_pos))
+
+        # clip indices to a valid range
+        def _clip(i, lo, hi):
+            return int(max(lo, min(hi, i)))
+
+        new_structures = []
+
+        # loop over individual mode sources associated with waveports
+        for mode in mode_sources:
+            direction = mode.direction
+            inj_axis = mode.injection_axis
+            span_indx = np.array(sim.grid.discretize_inds(mode))
+
+            target_val = mode.center[inj_axis]
+
+            bnd_coords = coords[inj_axis]
+
+            offset = mode.frame.length + sim.internal_absorbers[0].grid_shift + 1
+
+            # get total number of boundaries along injection direction
+            n_axis = len(bnd_coords) - 1
+
+            # define indicies of cells to be used for extrusion
+            if direction == "+":
+                idx = np.searchsorted(bnd_coords, target_val, side="left") - 1
+                left = _clip(idx - 1, 0, n_axis)
+                right = _clip(idx + offset, 0, n_axis)
+            else:
+                idx = np.searchsorted(bnd_coords, target_val, side="right")
+                left = _clip(idx - offset, 0, n_axis)
+                right = _clip(idx + 1, 0, n_axis)
+
+            # get indices for extrusion box boundaries
+            span_indx[inj_axis][0] = left
+            span_indx[inj_axis][1] = right
+
+            # get bounding box bounds
+            box_bounds = [[c[beg], c[end]] for c, (beg, end) in zip(coords, span_indx)]
+
+            # construct extrusion bounding box from bounds
+            box = Box.from_bounds(*np.transpose(box_bounds))
+
+            # get bounding box faces orthogonal to extrusion direction
+            slices = box.surfaces(box.size, box.center)
+            slice_plane_left = slices[2 * inj_axis]
+            slice_plane_right = slices[2 * inj_axis + 1]
+
+            # loop over structures and extrude those that intersect a waveport plane
+            for structure in sim.structures:
+                # get geometries that intersect the plane on which the waveport is defined
+                left_geom = slice_plane_left.intersections_with(structure.geometry)
+                right_geom = slice_plane_right.intersections_with(structure.geometry)
+                shapely_geom = left_geom or right_geom or []
+
+                new_geoms = []
+
+                # loop over identified geometries and extrude them
+                for polygon in shapely_geom:
+                    # construct outer shell of an extruded geometry first
+                    exterior_vertices = np.array(polygon.exterior.coords)
+                    outer_shell = PolySlab(
+                        axis=inj_axis, slab_bounds=box_bounds[inj_axis], vertices=exterior_vertices
+                    )
+
+                    # construct innner shells that represent holes
+                    hole_polyslabs = [
+                        PolySlab(
+                            axis=inj_axis,
+                            slab_bounds=box_bounds[inj_axis],
+                            vertices=np.array(hole.coords),
+                        )
+                        for hole in polygon.interiors
+                    ]
+
+                    # construct final geometry by removing inner holes from outer shell
+                    if hole_polyslabs:
+                        holes = GeometryGroup(geometries=hole_polyslabs)
+                        extruded_slab_new = ClipOperation(
+                            operation="difference", geometry_a=outer_shell, geometry_b=holes
+                        )
+                    else:
+                        extruded_slab_new = outer_shell
+
+                    new_geoms.append(extruded_slab_new)
+
+                new_geoms.append(structure.geometry)
+
+                new_struct = Structure(
+                    geometry=GeometryGroup(geometries=new_geoms), medium=structure.medium
+                )
+                new_structures.append(new_struct)
+
+        # return simulation with added extruded structures
+        return sim.updated_copy(grid_spec=GridSpec.from_grid(sim.grid), structures=new_structures)
+    
 
 TerminalComponentModeler.update_forward_refs()
+

@@ -98,6 +98,10 @@ class WavePort(AbstractTerminalPort, Box):
         "If :class:`.ABCBoundary` or :class:`.ModeABCBoundary`, a mode absorber is placed in the port with the specified boundary conditions.",
     )
 
+    extrude_structures: bool = pd.Field(
+        False, title="Extrusion flag", description="Extrude structures attached to wave port."
+    )
+
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
         """Calculates scaling coefficients to convert mode amplitudes
         to the total port voltage.

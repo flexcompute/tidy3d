@@ -47,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [v2.10.0rc1] - 2025-09-11
 
 ### Added
+- Add automatic structure extrusion for waveports defined on boundaries, controlled by the `extrude_structures` field in `WavePort`.
+- The extrusion method, implemented in `TerminalComponentModeler`, ensures that mode sources, absorbers, and PEC frames are fully contained within the extruded structures; extrusion occurs only when `extrude_structures` is set to `True`.
 - Added rectangular and radial taper support to `RectangularAntennaArrayCalculator` for phased array amplitude weighting; refactored array factor calculation for improved clarity and performance. 
 - Selective simulation capabilities to `TerminalComponentModeler` via `run_only` and `element_mappings` fields, allowing users to run fewer simulations and extract only needed scattering matrix elements.
 - Added KLayout plugin, with DRC functionality for running design rule checks in `plugins.klayout.drc`. Supports running DRC on GDS files as well as `Geometry`, `Structure`, and `Simulation` objects.
