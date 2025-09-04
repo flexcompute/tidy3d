@@ -775,11 +775,10 @@ class BatchTask:
         try:
             # TODO PROPERLY FIXME
             # Disable non critical logs due to check for resourceId, until we have a dedicated API for this
-            from copy import copy
 
             from tidy3d.config import config
 
-            previous_logging_level = copy(config.logging_level)
+            previous_logging_level = config.logging_level
             config.logging_level = "CRITICAL"
             resp = http.get(
                 f"tidy3d/tasks/{resource_id}/batch-detail", params={"batchType": batch_type}
