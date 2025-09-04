@@ -1684,8 +1684,15 @@
           "type": "string"
         },
         "sidewall_angle": {
-          "default": 0.0,
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "autograd.tracer.Box"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "default": 0.0
         },
         "slab_bounds": {
           "items": [
@@ -3542,8 +3549,15 @@
           "type": "string"
         },
         "sidewall_angle": {
-          "default": 0.0,
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "autograd.tracer.Box"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "default": 0.0
         },
         "type": {
           "default": "Cylinder",
@@ -8886,8 +8900,15 @@
           "type": "string"
         },
         "sidewall_angle": {
-          "default": 0.0,
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "autograd.tracer.Box"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "default": 0.0
         },
         "slab_bounds": {
           "items": [

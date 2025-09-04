@@ -2834,3 +2834,35 @@ def test_vjp_nan(use_emulated_run, structure_key, monitor_key):
 
     with pytest.raises(AdjointError, match="aN values detected for data field"):
         grad = ag.grad(objective)(params0)
+
+
+@pytest.mark.parametrize("monitor_key", ("mode",))
+def test_autograd_polyslab_sidewall(use_emulated_run, monitor_key):
+    """Sidewall-angle gradient propagates via autograd."""
+    monitor, _ = make_monitors()[monitor_key]
+
+    def make_polyslab(theta):
+        verts = anp.array([[-0.4, -0.3], [0.4, -0.3], [0.4, 0.3], [-0.4, 0.3]])
+        return td.PolySlab(
+            vertices=verts,
+            slab_bounds=(-0.5, 0.5),
+            axis=POLYSLAB_AXIS,
+            sidewall_angle=theta,
+            dilation=0.0,
+        )
+
+    def make_sim(theta):
+        geom = make_polyslab(theta)
+        struct = td.Structure(geometry=geom, medium=td.Medium(permittivity=2.5))
+        return SIM_BASE.updated_copy(structures=[struct], monitors=[monitor])
+
+    def objective(theta_raw):
+        theta = 0.30 * anp.tanh(theta_raw)
+        sim = make_sim(theta)
+        data = run(sim, task_name="autograd_sidewall_e2e", verbose=False)
+        return anp.sum(anp.abs(data[monitor.name].amps)).item()
+
+    val, grad = ag.value_and_grad(objective)(0.2)
+
+    assert np.isfinite(val)
+    assert grad != 0.0

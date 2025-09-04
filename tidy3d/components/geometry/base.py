@@ -18,7 +18,13 @@ except ImportError:
     pass
 
 from tidy3d.compat import _shapely_is_older_than
-from tidy3d.components.autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
+from tidy3d.components.autograd import (
+    AutogradFieldMap,
+    TracedCoordinate,
+    TracedFloat,
+    TracedSize,
+    get_static,
+)
 from tidy3d.components.autograd.constants import GRADIENT_DTYPE_FLOAT
 from tidy3d.components.autograd.derivative_utils import (
     DerivativeInfo,
@@ -1623,7 +1629,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         2, title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
     )
 
-    sidewall_angle: float = pydantic.Field(
+    sidewall_angle: TracedFloat = pydantic.Field(
         0.0,
         title="Sidewall angle",
         description="Angle of the sidewall. "
@@ -1672,6 +1678,23 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         If the length is td.inf, return ``LARGE_NUMBER``
         """
         return min(self.length_axis, LARGE_NUMBER)
+
+    @property
+    def reference_axis_pos(self) -> float:
+        """Coordinate along the slab axis at the reference plane.
+
+        Returns the axis coordinate corresponding to the selected
+        reference_plane:
+        - "bottom": lower bound of slab_bounds
+        - "middle": center_axis
+        - "top": upper bound of slab_bounds
+        """
+        if self.reference_plane == "bottom":
+            return self.slab_bounds[0]
+        if self.reference_plane == "top":
+            return self.slab_bounds[1]
+        # default to middle
+        return self.center_axis
 
     def intersections_plane(
         self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
