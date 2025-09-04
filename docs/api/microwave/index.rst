@@ -1,4 +1,4 @@
-Microwave and RF |:satellite:|
+Microwave & RF |:satellite:|
 ==============================
 
 Overview
@@ -40,7 +40,7 @@ TerminalComponentModeler and Data
    tidy3d.plugins.smatrix.TerminalComponentModelerData
    tidy3d.plugins.smatrix.TerminalPortDataArray
 
-The ``TerminalComponentModeler`` is the core simulation object for 3D RF/microwave simulations in Tidy3D. Its primary function is to simulate the system over ``N`` number of ports and ``M`` number of frequencie points, with the end result being a ``MxNxN`` S-parameter matrix.
+The ``TerminalComponentModeler`` is the core simulation object for 3D RF/microwave simulations in Tidy3D. Its primary function is to simulate the system over ``N`` number of ports and ``M`` number of frequency points, with the end result being a ``MxNxN`` S-parameter matrix.
 
 .. code-block:: python
 
@@ -53,7 +53,7 @@ The ``TerminalComponentModeler`` is the core simulation object for 3D RF/microwa
 
 The key parts of a ``TerminalComponentModeler`` are as follows:
 
-* The ``simulation`` parameter defines the underlying Tidy3D ``Simulation`` object. This base ``Simulation`` object contains information about the simulation domain such as structures, boundary conditions, grid specifications, monitors and so on. Note that sources are not defined in the base simulation.
+* The ``simulation`` parameter defines the underlying Tidy3D `Simulation object <../simulation.html>`_. This base ``Simulation`` object contains information about the simulation domain such as structures, boundary conditions, grid specifications, monitors and so on. Note that sources are not defined in the base simulation.
 * The ``ports`` parameter defines a list of all the possible system excitations. These are commonly of type ``LumpedPort`` or ``WavePort``. The number of ports determines the number of batch jobs in the ``TerminalComponentModeler`` and the dimensionality of the S-parameter matrix.
 * The ``freqs`` parameter defines the list of frequency points for the simulation.
 
@@ -462,6 +462,8 @@ Once the simulation is completed, the ``get_antenna_metrics_data()`` method of t
    my_axial_ratio = my_antenna_metrics.axial_ratio
    my_left_pol = my_antenna_metrics.left_polarization
    my_right_pol = my_antenna_metrics.right_polarization
+
+Each metric is in the form of an ``xarray.DataArray`` object that can be used for plotting, export, and further analysis. For examples of how these datasets can be manipulated, please refer to the notebooks in the "See also" section below.
 
 The ``LobeMeasurer`` utility class can be used to calculate radiation lobe statistics.
 
