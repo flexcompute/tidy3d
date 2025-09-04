@@ -9,6 +9,7 @@ from typing import Any, Optional, Union
 import numpy as np
 import pydantic
 
+from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Grid
@@ -306,8 +307,9 @@ def validate_no_transformed_polyslabs(geometry: GeometryType, transform: MatrixR
     if transform is None:
         transform = np.eye(4)
     if isinstance(geometry, polyslab.PolySlab):
+        # sidewall_angle may be autograd-traced; unbox for the check only
         if not (
-            isclose(geometry.sidewall_angle, 0)
+            isclose(get_static(geometry.sidewall_angle), 0)
             or base.Transformed.preserves_axis(transform, geometry.axis)
         ):
             raise Tidy3dError(

@@ -317,9 +317,26 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         # construct equivalent polyslab and compute the derivatives
         polyslab = self.to_polyslab(num_pts_circumference=num_pts_circumference)
 
+        # build PolySlab derivative paths based on requested Cylinder paths
+        ps_paths = set()
+        for path in derivative_info.paths:
+            if path == ("length",):
+                ps_paths.update({("slab_bounds", 0), ("slab_bounds", 1)})
+            elif path == ("radius",):
+                ps_paths.add(("vertices",))
+            elif "center" in path:
+                _, center_index = path
+                _, (index_x, index_y) = self.pop_axis((0, 1, 2), axis=self.axis)
+                if center_index in (index_x, index_y):
+                    ps_paths.add(("vertices",))
+                else:
+                    ps_paths.update({("slab_bounds", 0), ("slab_bounds", 1)})
+            elif path == ("sidewall_angle",):
+                ps_paths.add(("sidewall_angle",))
+
         # pass interpolators to PolySlab if available to avoid redundant conversions
         update_kwargs = {
-            "paths": [("vertices",), ("slab_bounds", 0), ("slab_bounds", 1)],
+            "paths": list(ps_paths),
             "deep": False,
         }
         if derivative_info.interpolators is not None:
@@ -328,32 +345,47 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         derivative_info_polyslab = derivative_info.updated_copy(**update_kwargs)
         vjps_polyslab = polyslab._compute_derivatives(derivative_info_polyslab)
 
-        vjps_vertices_xs, vjps_vertices_ys = vjps_polyslab[("vertices",)].T
-        vjp_top = vjps_polyslab[("slab_bounds", 0)]
-        vjp_bot = vjps_polyslab[("slab_bounds", 1)]
-
-        # transform polyslab vertices derivatives into Cylinder parameter derivatives
-        xs_, ys_ = self._points_unit_circle(num_pts_circumference=num_pts_circumference)
-        vjp_xs = np.sum(xs_ * vjps_vertices_xs)
-        vjp_ys = np.sum(ys_ * vjps_vertices_ys)
-
         vjps = {}
         for path in derivative_info.paths:
             if path == ("length",):
+                vjp_top = vjps_polyslab.get(("slab_bounds", 0), 0.0)
+                vjp_bot = vjps_polyslab.get(("slab_bounds", 1), 0.0)
                 vjps[path] = vjp_top - vjp_bot
 
             elif path == ("radius",):
-                vjps[path] = vjp_xs + vjp_ys
+                # transform polyslab vertices derivatives into radius derivative
+                xs_, ys_ = self._points_unit_circle(num_pts_circumference=num_pts_circumference)
+                if ("vertices",) not in vjps_polyslab:
+                    vjps[path] = 0.0
+                else:
+                    vjps_vertices_xs, vjps_vertices_ys = vjps_polyslab[("vertices",)].T
+                    vjp_xs = np.sum(xs_ * vjps_vertices_xs)
+                    vjp_ys = np.sum(ys_ * vjps_vertices_ys)
+                    vjps[path] = vjp_xs + vjp_ys
 
             elif "center" in path:
                 _, center_index = path
                 _, (index_x, index_y) = self.pop_axis((0, 1, 2), axis=self.axis)
                 if center_index == index_x:
-                    vjps[path] = np.sum(vjps_vertices_xs)
+                    if ("vertices",) not in vjps_polyslab:
+                        vjps[path] = 0.0
+                    else:
+                        vjps_vertices_xs = vjps_polyslab[("vertices",)][:, 0]
+                        vjps[path] = np.sum(vjps_vertices_xs)
                 elif center_index == index_y:
-                    vjps[path] = np.sum(vjps_vertices_ys)
+                    if ("vertices",) not in vjps_polyslab:
+                        vjps[path] = 0.0
+                    else:
+                        vjps_vertices_ys = vjps_polyslab[("vertices",)][:, 1]
+                        vjps[path] = np.sum(vjps_vertices_ys)
                 else:
+                    vjp_top = vjps_polyslab.get(("slab_bounds", 0), 0.0)
+                    vjp_bot = vjps_polyslab.get(("slab_bounds", 1), 0.0)
                     vjps[path] = vjp_top + vjp_bot
+
+            elif path == ("sidewall_angle",):
+                # direct mapping: cylinder angle equals polyslab angle
+                vjps[path] = vjps_polyslab.get(("sidewall_angle",), 0.0)
 
             else:
                 raise NotImplementedError(
