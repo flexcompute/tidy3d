@@ -36,6 +36,7 @@ from ...utils import run_emulated
 from .terminal_component_modeler_def import (
     make_coaxial_component_modeler,
     make_component_modeler,
+    make_differential_stripline_modeler,
 )
 
 mm = 1e3
@@ -1431,40 +1432,102 @@ def test_wave_port_extrusion_coaxial():
     port_1 = ports[0]
     port_2 = ports[1]
     port_1 = port_1.updated_copy(center=(0, 0, -50000), extrude_structures=True)
+
+    # test that structure extrusion requires an internal absorber (should raise ValidationError)
+    with pytest.raises(pd.ValidationError):
+        _ = port_2.updated_copy(center=(0, 0, 50000), extrude_structures=True, absorber=False)
+
+    # define a valid waveport
     port_2 = port_2.updated_copy(center=(0, 0, 50000), extrude_structures=True)
 
     # update component modeler
     tcm = tcm.updated_copy(ports=[port_1, port_2])
 
     # generate simulations from component modeler
-    sims = list(tcm.sim_dict.values())
+    sim = tcm.base_sim
 
-    # loop over simulations
-    for sim in sims:
-        # get injection axis that would be used to extrude structure
-        inj_axis = sim.sources[0].injection_axis
+    # get injection axis that would be used to extrude structure
+    inj_axis = sim.internal_absorbers[0].size.index(0.0)
 
-        # get grid boundaries
-        bnd_coords = sim.grid.boundaries.to_list[inj_axis]
+    # get grid boundaries
+    bnd_coords = sim.grid.boundaries.to_list[inj_axis]
 
-        # get size of structures along injection axis directions
-        str_bnds = [
-            np.min(sim.structures[0].geometry.geometries[0].slab_bounds),
-            np.max(sim.structures[2].geometry.geometries[0].slab_bounds),
-        ]
+    # get size of structures along injection axis directions
+    str_bnds = [
+        np.min(sim.structures[0].geometry.geometries[1].geometries[0].slab_bounds),
+        np.max(sim.structures[0].geometry.geometries[0].slab_bounds),
+    ]
 
-        pec_bnds = []
+    pec_bnds = []
 
-        # infer placement of PEC plates beyond internal absorber
-        for absorber in sim.internal_absorbers:
-            absorber_cntr = absorber.center[inj_axis]
-            right_ind = np.searchsorted(bnd_coords, absorber_cntr, side="right")
-            left_ind = np.searchsorted(bnd_coords, absorber_cntr, side="left") - 1
-            pec_bnds.append(bnd_coords[right_ind + 1])
-            pec_bnds.append(bnd_coords[left_ind - 1])
+    # infer placement of PEC plates beyond internal absorber
+    for absorber in sim.internal_absorbers:
+        absorber_cntr = absorber.center[inj_axis]
+        right_ind = np.searchsorted(bnd_coords, absorber_cntr, side="right")
+        left_ind = np.searchsorted(bnd_coords, absorber_cntr, side="left") - 1
+        pec_bnds.append(bnd_coords[right_ind + 1])
+        pec_bnds.append(bnd_coords[left_ind - 1])
 
-        # get range of coordinates along injection axis for PEC plates
-        pec_bnds = [np.min(pec_bnds), np.max(pec_bnds)]
+    # get range of coordinates along injection axis for PEC plates
+    pec_bnds = [np.min(pec_bnds), np.max(pec_bnds)]
 
-        # ensure that structures were extruded up to PEC plates
-        assert all(np.isclose(str_bnd, pec_bnd) for str_bnd, pec_bnd in zip(str_bnds, pec_bnds))
+    # ensure that structures were extruded up to PEC plates
+    assert all(np.isclose(str_bnd, pec_bnd) for str_bnd, pec_bnd in zip(str_bnds, pec_bnds))
+
+
+def test_wave_port_extrusion_differential_stripline():
+    """Test extrusion of structures wave port absorber for differential stripline."""
+
+    tcm = make_differential_stripline_modeler()
+
+    # update ports and set flag to extrude structures
+    ports = tcm.ports
+    port_1 = ports[0]
+    port_2 = ports[1]
+    port_1 = port_1.updated_copy(extrude_structures=True)
+
+    # test that structure extrusion requires an internal absorber (should raise ValidationError)
+    with pytest.raises(pd.ValidationError):
+        _ = port_2.updated_copy(extrude_structures=True, absorber=False)
+
+    # define a valid waveport
+    port_2 = port_2.updated_copy(extrude_structures=True)
+
+    # update component modeler
+    tcm = tcm.updated_copy(ports=[port_1, port_2])
+
+    # generate simulations from component modeler
+    sim = tcm.base_sim
+
+    # get injection axis that would be used to extrude structure
+    inj_axis = sim.internal_absorbers[0].size.index(0.0)
+
+    # get grid boundaries
+    bnd_coords = sim.grid.boundaries.to_list[inj_axis]
+
+    # get size of structures along injection axis directions
+    str_bnds = [
+        np.min(sim.structures[0].geometry.geometries[1].geometries[0].slab_bounds),
+        np.max(sim.structures[0].geometry.geometries[0].slab_bounds),
+    ]
+
+    pec_bnds = []
+
+    # infer placement of PEC plates beyond internal absorber
+    for absorber in sim._shifted_internal_absorbers:
+        # get the PEC box with its face surfaces
+        (box, inj_axis, direction) = sim._pec_frame_box(absorber)
+        surfaces = box.surfaces(box.size, box.center)
+
+        # get extrusion coordinates and a cutting plane for inference of intersecting structures.
+        sign = 1 if direction == "+" else -1
+        cutting_plane = surfaces[2 * inj_axis + (1 if direction == "+" else 0)]
+
+        # get extrusion extent along injection axis
+        pec_bnds.append(cutting_plane.center[inj_axis])
+
+    # get range of coordinates along injection axis for PEC plates
+    pec_bnds = [np.min(pec_bnds), np.max(pec_bnds)]
+
+    # ensure that structures were extruded up to PEC plates
+    assert all(np.isclose(str_bnd, pec_bnd) for str_bnd, pec_bnd in zip(str_bnds, pec_bnds))

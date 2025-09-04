@@ -16716,6 +16716,10 @@
           ],
           "type": "string"
         },
+        "extrude_structures": {
+          "default": false,
+          "type": "boolean"
+        },
         "frame": {
           "allOf": [
             {

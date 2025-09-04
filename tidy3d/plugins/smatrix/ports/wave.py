@@ -87,19 +87,21 @@ class WavePort(AbstractTerminalPort, Box):
 
     frame: Optional[PECFrame] = pd.Field(
         DEFAULT_WAVE_PORT_FRAME,
-        title="Source Frame.",
+        title="Source Frame",
         description="Add a thin frame around the source during FDTD run for an improved injection.",
     )
 
     absorber: Union[bool, ABCBoundary, ModeABCBoundary] = pd.Field(
         True,
-        title="Absorber.",
+        title="Absorber",
         description="Place a mode absorber in the port. If ``True``, an automatically generated mode absorber is placed in the port. "
         "If :class:`.ABCBoundary` or :class:`.ModeABCBoundary`, a mode absorber is placed in the port with the specified boundary conditions.",
     )
 
     extrude_structures: bool = pd.Field(
-        False, title="Extrusion flag", description="Extrude structures attached to wave port."
+        False,
+        title="Extrude Structures",
+        description="Extrudes structures that intersect the wave port plane by a few grid cells when ``True``, improving mode injection accuracy.",
     )
 
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
@@ -321,3 +323,15 @@ class WavePort(AbstractTerminalPort, Box):
                 f"'current_integral' sign must match the '{name}' direction '{direction}'."
             )
         return val
+
+    @pd.root_validator(pre=False)
+    def _check_absorber_if_extruding_structures(cls, values):
+        """Raise validation error when ``extrude_structures`` is set to ``True``
+        while ``absorber`` is set to ``False``."""
+
+        if values.get("extrude_structures") and not values.get("absorber"):
+            raise ValidationError(
+                "Structure extrusion for a waveport requires an internal absorber. Set `absorber=True` to enable it."
+            )
+
+        return values
