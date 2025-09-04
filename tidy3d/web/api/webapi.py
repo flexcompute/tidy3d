@@ -390,7 +390,7 @@ def upload(
         # Kick off server-side validation for the RF batch.
         batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
         # Validation phase
-        console.log("Validating RF batch...")
+        console.log("Validating batch...")
     else:
         task.validate_post_upload(parent_tasks=parent_tasks)
 
