@@ -7,12 +7,14 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
+from tidy3d import ClipOperation, GeometryGroup, GridSpec, PolySlab
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.frequency_extrapolation import (
     AbstractLowFrequencySmoothingSpec,
     LowFrequencySmoothingSpec,
 )
+from tidy3d.components.geometry.utils import _shift_object
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.microwave.base import MicrowaveBaseModel
@@ -21,7 +23,7 @@ from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Ax, Complex
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.constants import C_0, OHM
+from tidy3d.constants import C_0, OHM, fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.base import (
@@ -284,6 +286,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         # Now, create simulations with wave port sources and mode solver monitors for computing port modes
         for network_index in self.matrix_indices_run_sim:
             task_name, sim_with_src = self._add_source_to_sim(network_index)
+            # update simulation
             sim_dict[task_name] = sim_with_src
 
         # Check final simulations for grid size at ports
@@ -379,8 +382,14 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                 max_deviation=self.low_freq_smoothing.max_deviation,
             )
 
-        # This is the new default simulation will all shared components added
-        return sim_wo_source.copy(update=update_dict)
+        # update base simulation with updated set of shared components
+        sim_wo_source = sim_wo_source.copy(update=update_dict)
+
+        # extrude port structures
+        sim_wo_source = self._extrude_port_structures(sim=sim_wo_source)
+
+        # This is the new default simulation with all shared components added
+        return sim_wo_source
 
     def _add_source_to_sim(self, source_index: NetworkIndex) -> tuple[str, Simulation]:
         """Adds the source corresponding to the ``source_index`` to the base simulation."""
@@ -398,6 +407,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                 self._source_time, snap_center=new_port_center, grid=self.base_sim.grid
             )
         task_name = self.get_task_name(port=port, mode_index=mode_index)
+
         return (task_name, self.base_sim.updated_copy(sources=[port_source]))
 
     @cached_property
@@ -506,6 +516,130 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             if monitor.name == monitor_name:
                 return monitor
         raise Tidy3dKeyError(f"No radiation monitor named '{monitor_name}'.")
+
+    def _extrude_port_structures(self, sim: Simulation) -> Simulation:
+        """
+        Extrude structures intersecting a port plane when a wave port lies on a structure boundary.
+
+        This method checks wave ports with ``extrude_structures==True`` and automatically extends the boundary structures
+        to PEC plates associated with internal absorbers in the direction opposite to the mode source.
+        This ensures that mode sources and internal absorbers are fully contained within the extrusion.
+
+        Parameters
+        ----------
+        sim : Simulation
+            Simulation object containing mode sources, internal absorbers, and monitors,
+            after mesh overrides and snapping points are applied.
+
+        Returns
+        -------
+        Simulation
+            Updated simulation with extruded structures added to ``simulation.structures``.
+        """
+
+        # create list with extruded structures
+        new_structures = []
+        all_new_structures = []
+
+        # get all mode sources from TerminalComponentModeler that correspond to ports with ``extrude_structures`` flag set to ``True``.
+        for port in self.ports:
+            if isinstance(port, WavePort) and port.extrude_structures:
+                # compute snap_center and shift the internal absorber associated with the current port
+                snap_center = port.center[port.injection_axis] + self._shift_value_signed(port)
+                absorber = port.to_absorber(snap_center=snap_center)
+                shifted_absorber = _shift_object(
+                    obj=absorber,
+                    grid=sim.grid,
+                    bounds=sim.bounds,
+                    direction=absorber.direction,
+                    shift=absorber.grid_shift,
+                )
+
+                # get the PEC box with its face surfaces
+                (box, inj_axis, direction) = sim._pec_frame_box(shifted_absorber, expand=True)
+                surfaces = box.surfaces(box.size, box.center)
+
+                # get extrusion coordinates and a cutting plane for inference of intersecting structures.
+                sign = 1 if direction == "+" else -1
+                back_pec_plane = surfaces[2 * inj_axis + (1 if direction == "+" else 0)]
+
+                # get extrusion extent along injection axis
+                extrude_to = back_pec_plane.center[inj_axis]
+
+                # move cutting plane beyond the waveport plane along the `ModeSource` injection direction.
+                center = list(back_pec_plane.center)
+                center[inj_axis] = port.center[inj_axis] - sign * fp_eps * box.size[inj_axis]
+                cutting_plane = back_pec_plane.updated_copy(center=center)
+
+                # define extrusion bounds
+                extrusion_bounds = [cutting_plane.center[inj_axis], extrude_to][::sign]
+
+                # loop over structures and extrude those that intersect a waveport plane
+                for structure in sim.structures:
+                    # get geometries that intersect the plane on which the waveport is defined
+
+                    shapely_geom = cutting_plane.intersections_with(structure.geometry)
+
+                    polygon_list = []
+                    for geom in shapely_geom:
+                        polygon_list = polygon_list + ClipOperation.to_polygon_list(geom)
+
+                    new_geoms = []
+                    # loop over identified geometries and extrude them
+                    for polygon in polygon_list:
+                        # construct outer shell of an extruded geometry first
+                        exterior_vertices = np.array(polygon.exterior.coords)
+                        outer_shell = PolySlab(
+                            axis=inj_axis, slab_bounds=extrusion_bounds, vertices=exterior_vertices
+                        )
+
+                        # construct innner shells that represent holes
+                        hole_polyslabs = [
+                            PolySlab(
+                                axis=inj_axis,
+                                slab_bounds=extrusion_bounds,
+                                vertices=np.array(hole.coords),
+                            )
+                            for hole in polygon.interiors
+                        ]
+
+                        # construct final geometry by removing inner holes from outer shell
+                        if hole_polyslabs:
+                            holes = GeometryGroup(geometries=hole_polyslabs)
+                            extruded_slab_new = ClipOperation(
+                                operation="difference", geometry_a=outer_shell, geometry_b=holes
+                            )
+                        else:
+                            extruded_slab_new = outer_shell
+
+                        # append extruded geometry
+                        new_geoms.append(extruded_slab_new)
+                    if len(polygon_list) != 0:
+                        # update structure and add it to the list
+                        new_struct = structure.updated_copy(
+                            geometry=GeometryGroup(geometries=new_geoms)
+                        )
+                        new_structures.append(new_struct)
+
+                        # if current port does not intersect any structures raise error
+                if not new_structures:
+                    raise SetupError(
+                        f"The 'WavePort' '{port.name}' does not intersect any structures."
+                        f"Please ensure that it is located within or at the boundary of a structure."
+                    )
+
+                all_new_structures = all_new_structures + new_structures
+                new_structures = []
+
+        # if new structures are extruded (Lumped Port extrusion is ignored)
+        if all_new_structures:
+            # update structures in simulation while keeping the same grid
+            sim = sim.updated_copy(
+                grid_spec=GridSpec.from_grid(sim.grid),
+                structures=[*sim.structures, *all_new_structures],
+            )
+
+        return sim
 
 
 TerminalComponentModeler.update_forward_refs()

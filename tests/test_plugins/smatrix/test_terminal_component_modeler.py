@@ -29,7 +29,11 @@ from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.utils import s_to_z, validate_square_matrix
 
 from ...utils import run_emulated
-from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
+from .terminal_component_modeler_def import (
+    make_coaxial_component_modeler,
+    make_component_modeler,
+    make_differential_stripline_modeler,
+)
 
 mm = 1e3
 
@@ -1595,3 +1599,182 @@ def test_S_parameter_deembedding(monkeypatch, tmp_path):
     S_dmb_shortcut = modeler_data_LP.smatrix_deembedded(port_shifts=port_shifts_LP)
     assert not np.allclose(S_dmb.data.values, s_matrix_LP.data.values)
     assert np.allclose(S_dmb_shortcut.data.values, S_dmb.data.values)
+
+
+def test_wave_port_extrusion_coaxial():
+    """Test extrusion of structures wave port absorber."""
+
+    # define a terminal component modeler
+    tcm = make_coaxial_component_modeler(
+        length=100000,
+        port_types=(WavePort, WavePort),
+    )
+
+    # update ports and set flag to extrude structures
+    ports = tcm.ports
+    port_1 = ports[0]
+    port_2 = ports[1]
+    port_1 = port_1.updated_copy(center=(0, 0, -50000), extrude_structures=True)
+
+    # test that structure extrusion requires an internal absorber (should raise ValidationError)
+    with pytest.raises(pd.ValidationError):
+        _ = port_2.updated_copy(center=(0, 0, 50000), extrude_structures=True, absorber=False)
+
+    # define a valid waveport
+    port_2 = port_2.updated_copy(center=(0, 0, 50000), extrude_structures=True)
+
+    # update component modeler
+    tcm = tcm.updated_copy(ports=[port_1, port_2])
+
+    # generate simulations from component modeler
+    sim = tcm.base_sim
+
+    # get injection axis that would be used to extrude structure
+    inj_axis = sim.internal_absorbers[0].size.index(0.0)
+
+    # get grid boundaries
+    bnd_coords = sim.grid.boundaries.to_list[inj_axis]
+
+    # get size of structures along injection axis directions
+    str_bnds = [
+        np.min(sim.structures[-4].geometry.geometries[0].slab_bounds),
+        np.max(sim.structures[-2].geometry.geometries[0].slab_bounds),
+    ]
+
+    pec_bnds = []
+
+    # infer placement of PEC plates beyond internal absorber
+    for absorber in sim.internal_absorbers:
+        absorber_cntr = absorber.center[inj_axis]
+        right_ind = np.searchsorted(bnd_coords, absorber_cntr, side="right")
+        left_ind = np.searchsorted(bnd_coords, absorber_cntr, side="left") - 1
+        pec_bnds.append(bnd_coords[right_ind + 1])
+        pec_bnds.append(bnd_coords[left_ind - 1])
+
+    # get range of coordinates along injection axis for PEC plates
+    pec_bnds = [np.min(pec_bnds), np.max(pec_bnds)]
+
+    # ensure that structures were extruded up to PEC plates
+    assert all(np.isclose(str_bnd, pec_bnd) for str_bnd, pec_bnd in zip(str_bnds, pec_bnds))
+
+    # generate a new TCM simulation to test edge case when wave port plane does not intersect any structures
+    tcm = make_coaxial_component_modeler(
+        length=100000, port_types=(WavePort, WavePort), use_current=False
+    )
+
+    # update ports and set flag to extrude structures
+    ports = tcm.ports
+    port_1 = ports[0]
+    port_2 = ports[1]
+    port_1 = port_1.updated_copy(center=(0, 0, -50000), extrude_structures=True)
+    port_2 = port_2.updated_copy(center=(0, 0, 50000), extrude_structures=True)
+
+    # move wave port plane so that is does not intersect any structures
+    port_1_center_new = (638.4, 0.0, -51000)
+
+    # update voltage integral
+    voltage_int = port_1.voltage_integral.updated_copy(center=port_1_center_new)
+    # update WavePort
+    port_1 = port_1.updated_copy(center=port_1_center_new, voltage_integral=voltage_int)
+
+    # update component modeler
+    tcm = tcm.updated_copy(ports=[port_1, port_2])
+
+    # make sure that
+    with pytest.raises(SetupError):
+        sim = tcm.base_sim
+
+
+def test_wave_port_extrusion_differential_stripline():
+    """Test extrusion of structures wave port absorber for differential stripline."""
+
+    tcm = make_differential_stripline_modeler()
+
+    # update ports and set flag to extrude structures
+    ports = tcm.ports
+    port_1 = ports[0]
+    port_2 = ports[1]
+    port_1 = port_1.updated_copy(extrude_structures=True)
+
+    # test that structure extrusion requires an internal absorber (should raise ValidationError)
+    with pytest.raises(pd.ValidationError):
+        _ = port_2.updated_copy(extrude_structures=True, absorber=False)
+
+    # define a valid waveport
+    port_2 = port_2.updated_copy(extrude_structures=True)
+
+    # update component modeler
+    tcm = tcm.updated_copy(ports=[port_1, port_2])
+
+    # generate simulations from component modeler
+    sim = tcm.base_sim
+
+    # get injection axis that would be used to extrude structure
+    inj_axis = sim.internal_absorbers[0].size.index(0.0)
+
+    # get grid boundaries
+    bnd_coords = sim.grid.boundaries.to_list[inj_axis]
+
+    # get size of structures along injection axis directions
+    str_bnds = [
+        np.min(sim.structures[-6].geometry.geometries[0].slab_bounds),
+        np.max(sim.structures[-1].geometry.geometries[0].slab_bounds),
+    ]
+
+    pec_bnds = []
+
+    # infer placement of PEC plates beyond internal absorber
+    for absorber in sim._shifted_internal_absorbers:
+        # get the PEC box with its face surfaces
+        (box, inj_axis, direction) = sim._pec_frame_box(absorber)
+        surfaces = box.surfaces(box.size, box.center)
+
+        # get extrusion coordinates and a cutting plane for inference of intersecting structures.
+        sign = 1 if direction == "+" else -1
+        cutting_plane = surfaces[2 * inj_axis + (1 if direction == "+" else 0)]
+
+        # get extrusion extent along injection axis
+        pec_bnds.append(cutting_plane.center[inj_axis])
+
+    # get range of coordinates along injection axis for PEC plates
+    pec_bnds = [np.min(pec_bnds), np.max(pec_bnds)]
+
+    # ensure that structures were extruded up to PEC plates
+    assert all(np.isclose(str_bnd, pec_bnd) for str_bnd, pec_bnd in zip(str_bnds, pec_bnds))
+
+    # test scenario when wave port extrusion is requested, but port plane does not intersect any structures
+    mil = 25.4
+    port_1_center_new = (0, 0, -2010 * mil)
+
+    # re-assemble a new component modeler
+    tcm = make_differential_stripline_modeler()
+
+    # update ports and set flag to extrude structures
+    ports = tcm.ports
+    port_1 = ports[0]
+    port_2 = ports[1]
+    port_1 = port_1.updated_copy(extrude_structures=True)
+    port_2 = port_2.updated_copy(extrude_structures=True)
+
+    # update current and voltage integrals
+    current_int = port_1.current_integral.updated_copy(center=port_1_center_new)
+    voltage_int = port_1.voltage_integral.updated_copy(center=port_1_center_new)
+
+    # update WavePort
+    port_1 = port_1.updated_copy(
+        center=port_1_center_new, current_integral=current_int, voltage_integral=voltage_int
+    )
+
+    # update component modeler
+    tcm = tcm.updated_copy(ports=[port_1, port_2])
+
+    # make sure that the error is triggered
+    with pytest.raises(SetupError):
+        sim = tcm.base_sim
+
+    # update component modeler
+    tcm = tcm.updated_copy(ports=[port_2, port_1])
+
+    # make sure that the error is triggered even when ports are reshuffled
+    with pytest.raises(SetupError):
+        sim = tcm.base_sim

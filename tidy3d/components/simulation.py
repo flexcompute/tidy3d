@@ -2151,29 +2151,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         the frame is added around the injection plane. For internal absorbers, a backing pec
         plate is also added on the non-absorbing side.
         """
-        span_inds = np.array(self.grid.discretize_inds(obj))
 
-        coords = self.grid.boundaries.to_list
-        direction = obj.direction
-        if isinstance(obj, ModeSource):
-            axis = obj.injection_axis
-            length = obj.frame.length
-            if direction == "+":
-                span_inds[axis][1] += length - 1
-            else:
-                span_inds[axis][0] -= length - 1
-        else:
-            axis = obj.size.index(0.0)
-
-        box_bounds = [
-            [
-                c[beg],
-                c[end],
-            ]
-            for c, (beg, end) in zip(coords, span_inds)
-        ]
-
-        box = Box.from_bounds(*np.transpose(box_bounds))
+        # get pec frame bounding box, object's axis and direction
+        (box, axis, direction) = self._pec_frame_box(obj)
 
         surfaces = Box.surfaces(box.size, box.center)
         if isinstance(obj, ModeSource):
@@ -2192,6 +2172,42 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         )
 
         return structure
+
+    def _pec_frame_box(
+        self, obj: Union[ModeSource, InternalAbsorber], expand: bool = False
+    ) -> tuple[Box, int, str]:
+        """Return pec bounding box, frame axis and object's direction"""
+
+        span_inds = np.array(self.grid.discretize_inds(obj))
+        coords = self.grid.boundaries.to_list
+        direction = obj.direction
+        if isinstance(obj, ModeSource):
+            axis = obj.injection_axis
+            length = obj.frame.length
+            if direction == "+":
+                span_inds[axis][1] += length - 1
+            else:
+                span_inds[axis][0] -= length - 1
+        else:
+            axis = obj.size.index(0.0)
+
+        # ensure that the pec frame is at least one cell larger than wave port plane
+        if expand:
+            for dim in range(3):
+                if dim != axis:
+                    grid_size = len(coords[dim])
+                    (beg, end) = span_inds[dim]
+                    span_inds[dim] = [np.maximum(0, beg - 1), np.minimum(grid_size - 1, end + 1)]
+
+        box_bounds = [
+            [
+                c[beg],
+                c[end],
+            ]
+            for c, (beg, end) in zip(coords, span_inds)
+        ]
+
+        return (Box.from_bounds(*np.transpose(box_bounds)), axis, direction)
 
     @cached_property
     def _modal_plane_frames(self) -> list[Structure]:
