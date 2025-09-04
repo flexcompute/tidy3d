@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added S-parameter de-embedding to `TerminalComponentModelerData`, enabling recalculation with shifted reference planes.
+- Added optional automatic extrusion of structures intersecting with a `WavePort` via the new `extrude_structures` field, ensuring mode sources, absorbers, and PEC frames are fully contained.
 - Added support for `tidy3d-extras`, an optional plugin that enables more accurate local mode solving via subpixel averaging.
 - Added support for `symlog` and `log` scale plotting in `Scene.plot_eps()` and `Scene.plot_structures_property()` methods. The `symlog` scale provides linear behavior near zero and logarithmic behavior elsewhere, while 'log' is a base 10 logarithmic scale.
 - Added `LowFrequencySmoothingSpec` and `ModelerLowFrequencySmoothingSpec` for automatic smoothing of mode monitor data at low frequencies where DFT sampling is insufficient.

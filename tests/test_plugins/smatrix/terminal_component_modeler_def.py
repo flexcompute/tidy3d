@@ -5,6 +5,7 @@ from typing import Optional, Union
 import numpy as np
 
 import tidy3d as td
+import tidy3d.plugins.microwave as mw
 from tidy3d.plugins.smatrix import (
     CoaxialLumpedPort,
     LumpedPort,
@@ -331,3 +332,145 @@ def make_coaxial_component_modeler(
     )
 
     return modeler
+
+
+def make_differential_stripline_modeler():
+    # Frequency range (Hz)
+    f_min, f_max = (1e9, 70e9)
+
+    # Frequency sample points
+    freqs = np.linspace(f_min, f_max, 101)
+
+    # Geometry
+    mil = 25.4  # conversion to mils to microns (default unit)
+    w = 3.2 * mil  # Signal strip width
+    t = 0.7 * mil  # Conductor thickness
+    h = 10.7 * mil  # Substrate thickness
+    se = 7 * mil  # gap between edge-coupled pair
+    L = 4000 * mil  # Line length
+    len_inf = 1e6  # Effective infinity
+
+    left_end = -L / 2
+    right_end = len_inf
+
+    len_z = right_end - left_end
+    cent_z = (left_end + right_end) / 2
+    waveport_z = L
+
+    # Material properties
+    eps = 4.4  # Relative permittivity, substrate
+
+    # define media
+    med_sub = td.Medium(permittivity=eps)
+    med_metal = td.PEC
+
+    left_strip_geometry = td.Box(center=(-(se + w) / 2, 0, 0), size=(w, t, L))
+    right_strip_geometry = td.Box(center=((se + w) / 2, 0, 0), size=(w, t, L))
+
+    # Substrate
+    str_sub = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(len_inf, h, L)), medium=med_sub)
+
+    # disjoint signal strips
+    str_signal_strips = td.Structure(
+        geometry=td.GeometryGroup(geometries=[left_strip_geometry, right_strip_geometry]),
+        medium=med_metal,
+    )
+
+    # Top ground plane
+    str_gnd_top = td.Structure(
+        geometry=td.Box(center=(0, h / 2 + t / 2, 0), size=(len_inf, t, L)), medium=med_metal
+    )
+
+    # Bottom ground plane
+    str_gnd_bot = td.Structure(
+        geometry=td.Box(center=(0, -h / 2 - t / 2, 0), size=(len_inf, t, L)), medium=med_metal
+    )
+
+    # Create a LayerRefinementSpec from signal trace structures
+    lr_spec = td.LayerRefinementSpec.from_structures(
+        structures=[str_signal_strips],
+        axis=1,  # Layer normal is in y-direction
+        min_steps_along_axis=10,  # Min 10 grid cells along normal direction
+        refinement_inside_sim_only=False,  # Metal structures extend outside sim domain. Set 'False' to snap to corners outside sim.
+        bounds_snapping="bounds",  # snap grid to metal boundaries
+        corner_refinement=td.GridRefinement(
+            dl=t / 10, num_cells=2
+        ),  # snap to corners and apply added refinement
+    )
+
+    # Layer refinement for top and bottom ground planes
+    lr_spec2 = lr_spec.updated_copy(center=(0, h / 2 + t / 2, cent_z), size=(len_inf, t, len_z))
+    lr_spec3 = lr_spec.updated_copy(center=(0, -h / 2 - t / 2, cent_z), size=(len_inf, t, len_z))
+
+    # Define overall grid specification
+    grid_spec = td.GridSpec.auto(
+        wavelength=td.C_0 / f_max,
+        min_steps_per_wvl=30,
+        layer_refinement_specs=[lr_spec, lr_spec2, lr_spec3],
+    )
+
+    # boundary specs
+    boundary_spec = td.BoundarySpec(
+        x=td.Boundary.pml(),
+        y=td.Boundary.pec(),
+        z=td.Boundary.pml(),
+    )
+
+    # Define port specification
+    wave_port_mode_spec = td.ModeSpec(num_modes=1, target_neff=np.sqrt(eps))
+
+    # Define current and voltage integrals
+    current_integral = mw.AxisAlignedCurrentIntegral(
+        center=((se + w) / 2, 0, -waveport_z / 2), size=(2 * w, 3 * t, 0), sign="+"
+    )
+    voltage_integral = mw.AxisAlignedVoltageIntegral(
+        center=(0, 0, -waveport_z / 2),
+        size=(se, 0, 0),
+        extrapolate_to_endpoints=True,
+        snap_path_to_grid=True,
+        sign="+",
+    )
+
+    # Define wave ports
+    WP1 = WavePort(
+        center=(0, 0, -waveport_z / 2),
+        size=(len_inf, len_inf, 0),
+        mode_spec=wave_port_mode_spec,
+        direction="+",
+        name="WP1",
+        mode_index=0,
+        current_integral=current_integral,
+        voltage_integral=voltage_integral,
+    )
+    WP2 = WP1.updated_copy(
+        name="WP2",
+        center=(0, 0, waveport_z / 2),
+        direction="-",
+        current_integral=current_integral.updated_copy(
+            center=((se + w) / 2, 0, waveport_z / 2), sign="-"
+        ),
+        voltage_integral=voltage_integral.updated_copy(center=(0, 0, waveport_z / 2)),
+    )
+
+    # define fimulation
+    sim = td.Simulation(
+        size=(50 * mil, h + 2 * t, 1.05 * L),
+        center=(0, 0, 0),
+        grid_spec=grid_spec,
+        boundary_spec=boundary_spec,
+        structures=[str_sub, str_signal_strips, str_gnd_top, str_gnd_bot],
+        monitors=[],
+        run_time=2e-9,  # simulation run time in seconds
+        shutoff=1e-7,  # lower shutoff threshold for more accurate low frequency
+        plot_length_units="mm",
+        symmetry=(-1, 0, 0),  # odd symmetry in x-direction
+    )
+
+    # set up component modeler
+    tcm = TerminalComponentModeler(
+        simulation=sim,  # simulation, previously defined
+        ports=[WP1, WP2],  # wave ports, previously defined
+        freqs=freqs,  # S-parameter frequency points
+    )
+
+    return tcm
