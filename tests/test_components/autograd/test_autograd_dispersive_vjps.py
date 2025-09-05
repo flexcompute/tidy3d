@@ -36,7 +36,7 @@ class _DI:
 def _monkey_derivative_eps_complex_volume(inst, dJ, freqs):
     """Monkey-patch instance method without changing production code."""
 
-    def _fake(self, E_der_map=None, bounds=None):
+    def _fake(self, der_map=None, bounds=None):
         return _DummyDA(dJ, freqs)
 
     # make a validated deep copy to avoid adding extra attributes to the original instance

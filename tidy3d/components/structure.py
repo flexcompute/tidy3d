@@ -322,7 +322,8 @@ class Structure(AbstractStructure):
             interval_space = AUTOGRAD_MONITOR_INTERVAL_SPACE_POLY
 
         field_components_for_adjoint = [f"E{dim}" for dim in "xyz"]
-        if self.medium.is_pec:
+
+        if self.medium.is_pec or self.medium.is_lossy_metal:
             field_components_for_adjoint += [f"H{dim}" for dim in "xyz"]
 
         mnt_fld = FieldMonitor(

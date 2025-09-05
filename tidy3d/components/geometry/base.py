@@ -2521,8 +2521,8 @@ class Box(SimplePlaneIntersection, Centered):
         eps_in_normal, eps_in_perps = self.pop_axis(eps_xyz_inside, axis=axis_normal)
         eps_out_normal, eps_out_perps = self.pop_axis(eps_xyz_outside, axis=axis_normal)
 
-        if derivative_info.is_medium_pec:
-            return self._derivative_face_pec(
+        if derivative_info.is_medium_pec or derivative_info.is_medium_lossy_metal:
+            return self._derivative_face_metal(
                 dim_normal=dim_normal,
                 axis_normal=axis_normal,
                 min_max_index=min_max_index,
@@ -2530,12 +2530,18 @@ class Box(SimplePlaneIntersection, Centered):
                 dims_perp=dims_perp,
                 bounds_perp=bounds_perp,
                 D_normal=D_normal,
+                Es_perp=Es_perp,
                 H_der_map=derivative_info.H_der_map,
                 eps_out_normal=eps_out_normal,
+                eps_out_perps=eps_out_perps,
+                integrate_tangential_E=derivative_info.is_medium_lossy_metal,
             )
+
         else:
             return self._derivative_face_dielectric(
                 dim_normal=dim_normal,
+                axis_normal=axis_normal,
+                min_max_index=min_max_index,
                 coord_normal_face=coord_normal_face,
                 dims_perp=dims_perp,
                 bounds_perp=bounds_perp,
@@ -2608,7 +2614,7 @@ class Box(SimplePlaneIntersection, Centered):
         return snapped_point
 
     @staticmethod
-    def _check_singularity_correction_pec(
+    def _check_singularity_correction(
         size: TracedSize, axis_normal: Axis
     ) -> tuple[bool, str, bool]:
         """Checks if the box is 2D (i.e. - one of the dimensions is zero) and
@@ -2670,6 +2676,8 @@ class Box(SimplePlaneIntersection, Centered):
     def _derivative_face_dielectric(
         self,
         dim_normal: str,
+        axis_normal: Axis,
+        min_max_index: int,
         coord_normal_face: float,
         dims_perp: tuple[str, str],
         bounds_perp: tuple[Coordinate2D, Coordinate2D],
@@ -2684,9 +2692,6 @@ class Box(SimplePlaneIntersection, Centered):
 
         Parameters
         ----------
-        dtype : np.dtype = GRADIENT_DTYPE_FLOAT
-            Data type for interpolation coordinates and values.
-
         dim_normal : str
             Surface normal of the face
         coord_normal_face : float
@@ -2741,7 +2746,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         return np.real(vjp_value)
 
-    def _derivative_face_pec(
+    def _derivative_face_metal(
         self,
         dim_normal: str,
         axis_normal: Axis,
@@ -2750,16 +2755,16 @@ class Box(SimplePlaneIntersection, Centered):
         dims_perp: tuple[str, str],
         bounds_perp: tuple[Coordinate2D, Coordinate2D],
         D_normal: ScalarFieldDataArray,
+        Es_perp: tuple[ScalarFieldDataArray, ScalarFieldDataArray],
         H_der_map: FieldData,
         eps_out_normal: ScalarFieldDataArray,
+        eps_out_perps: tuple[ScalarFieldDataArray, ScalarFieldDataArray],
+        integrate_tangential_E: bool,
     ) -> float:
         """Compute derivative with respect to the face using the PEC form of the gradient.
 
         Parameters
         ----------
-        dtype : np.dtype = GRADIENT_DTYPE_FLOAT
-            Data type for interpolation coordinates and values.
-
         dim_normal : str
             Surface normal of the face
         axis_normal : Axis
@@ -2774,10 +2779,17 @@ class Box(SimplePlaneIntersection, Centered):
             Bounds of integration along the face
         D_normal : ScalarFieldDataArray
             D-field component normal to the surface
+        Es_perp : tuple[ScalarFieldDataArray, ScalarFieldDataArray]
+            E-field components tangential to the surface
         H_der_map : FieldData
             Multiplication of H-field components in the Box region
         eps_out_normal : ScalarFieldDataArray
             Normal component of permittivity outside the surface
+        eps_out_perps : tuple[ScalarFieldDataArray, ScalarFieldDataArray]
+            Tangential components of permittivity outside the surface
+        integrate_tangential_E : bool
+            Whether or not to integrate the tangential E component, which is relevant for lossy metal
+            integration but not PEC.
 
         Returns
         -------
@@ -2788,7 +2800,7 @@ class Box(SimplePlaneIntersection, Centered):
         fld_H_normal, flds_H_perp = self.pop_axis(("Hx", "Hy", "Hz"), axis=axis_normal)
         Hs_perp = tuple(H_der_map[key] for key in flds_H_perp)
 
-        is_2d, zero_dimension, do_singularity_correction = self._check_singularity_correction_pec(
+        is_2d, zero_dimension, do_singularity_correction = self._check_singularity_correction(
             self.size, axis_normal
         )
 
@@ -2815,8 +2827,21 @@ class Box(SimplePlaneIntersection, Centered):
             integration_dims=integration_dims,
             integration_bounds=integration_bounds,
         )
-
         vjp_value = _apply_singularity_correction(snap_E_coord) * integral_E
+
+        if integrate_tangential_E:
+            for E_perp, eps_out_perp in zip(Es_perp, eps_out_perps):
+                integrand_E = -E_perp * eps_out_perp
+                snap_E_coord = self._snap_coords_outside(
+                    min_max_index, integrand_E.coords[dim_normal].values, coord_normal_face
+                )
+                integral_E += self._integrate_face(
+                    self._arr_at_face(integrand_E, snap_E_coord, dim_normal),
+                    integration_dims=integration_dims,
+                    integration_bounds=integration_bounds,
+                )
+
+                vjp_value += _apply_singularity_correction(snap_E_coord) * integral_E
 
         for H_perp_idx, H_perp in enumerate(Hs_perp):
             integrand_H = MU_0 * H_perp / EPSILON_0

@@ -1367,6 +1367,11 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         """Whether the medium is a PMC."""
         return False
 
+    @cached_property
+    def is_lossy_metal(self):
+        """Whether the medium is a LossyMetal."""
+        return False
+
     def sel_inside(self, bounds: Bound) -> AbstractMedium:
         """Return a new medium that contains the minimal amount data necessary to cover
         a spatial region defined by ``bounds``.
@@ -1400,7 +1405,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     ) -> dict[str, xr.DataArray]:
         """Get the derivative w.r.t permittivity and conductivity in the volume."""
 
-        vjp_eps_complex = self._derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+        vjp_eps_complex = self._derivative_eps_complex_volume(der_map=E_der_map, bounds=bounds)
 
         values = vjp_eps_complex.values
 
@@ -1416,12 +1421,17 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return {"permittivity": eps_vjp, "conductivity": sigma_vjp}
 
     def _derivative_eps_complex_volume(
-        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
+        self,
+        der_map: ElectromagneticFieldDataset,
+        bounds: Bound,
+        field_names: tuple[str] = ("Ex", "Ey", "Ez"),
     ) -> xr.DataArray:
         """Get the derivative w.r.t complex-valued permittivity in the volume."""
+
         vjp_value = None
-        for field_name in ("Ex", "Ey", "Ez"):
-            fld = E_der_map[field_name]
+        for field_name in field_names:
+            fld = der_map[field_name]
+
             vjp_value_fld = integrate_within_bounds(
                 arr=fld,
                 dims=("x", "y", "z"),
@@ -2003,7 +2013,7 @@ class Medium(AbstractMedium):
     ) -> dict[str, xr.DataArray]:
         """Get the derivative w.r.t permittivity and conductivity in the volume."""
 
-        vjp_eps_complex = self._derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+        vjp_eps_complex = self._derivative_eps_complex_volume(der_map=E_der_map, bounds=bounds)
 
         values = vjp_eps_complex.values
 
@@ -2016,26 +2026,6 @@ class Medium(AbstractMedium):
         sigma_vjp = np.sum(sigma_vjp)
 
         return {"permittivity": eps_vjp, "conductivity": sigma_vjp}
-
-    def _derivative_eps_complex_volume(
-        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
-    ) -> xr.DataArray:
-        """Get the derivative w.r.t complex-valued permittivity in the volume."""
-
-        vjp_value = None
-        for field_name in ("Ex", "Ey", "Ez"):
-            fld = E_der_map[field_name]
-            vjp_value_fld = integrate_within_bounds(
-                arr=fld,
-                dims=("x", "y", "z"),
-                bounds=bounds,
-            )
-            if vjp_value is None:
-                vjp_value = vjp_value_fld
-            else:
-                vjp_value += vjp_value_fld
-
-        return vjp_value
 
 
 class CustomIsotropicMedium(AbstractCustomMedium, Medium):
@@ -3161,7 +3151,7 @@ class DispersiveMedium(AbstractMedium, ABC):
     def _tjp_inputs(self, derivative_info):
         """Prepare shared inputs for TJP: frequencies and packed adjoint vector."""
         dJ = self._derivative_eps_complex_volume(
-            E_der_map=derivative_info.E_der_map, bounds=derivative_info.bounds
+            der_map=derivative_info.E_der_map, bounds=derivative_info.bounds
         )
         freqs = np.asarray(derivative_info.frequencies, float)
         dJv = np.asarray(getattr(dJ, "values", dJ))
@@ -3649,7 +3639,7 @@ class PoleResidue(DispersiveMedium):
         """Compute adjoint derivatives by preparing scalar data and calling the static helper."""
 
         dJ_deps_complex = self._derivative_eps_complex_volume(
-            E_der_map=derivative_info.E_der_map,
+            der_map=derivative_info.E_der_map,
             bounds=derivative_info.bounds,
         )
 
@@ -6179,6 +6169,62 @@ class LossyMetalMedium(Medium):
     def num_poles(self) -> int:
         """Number of poles in the fitted model."""
         return len(self.scaled_surface_impedance_model.poles)
+
+    @cached_property
+    def is_lossy_metal(self):
+        """Whether the medium is a LossyMetal."""
+        return True
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object."""
+
+        # get vjps w.r.t. permittivity and conductivity of the bulk
+        vjps_volume = self._derivative_eps_sigma_volume(
+            E_der_map=derivative_info.E_der_map,
+            H_der_map=derivative_info.H_der_map,
+            bounds=derivative_info.bounds,
+        )
+
+        # store the fields asked for by ``field_paths``
+        derivative_map = {}
+        for field_path in derivative_info.paths:
+            field_name, *_ = field_path
+            if field_name in vjps_volume:
+                derivative_map[field_path] = vjps_volume[field_name]
+
+        return derivative_map
+
+    def _derivative_eps_sigma_volume(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        H_der_map: ElectromagneticFieldDataset,
+        bounds: Bound,
+    ) -> dict[str, xr.DataArray]:
+        """Get the derivative w.r.t permittivity and conductivity in the volume."""
+
+        vjp_eps_complex_E = self._derivative_eps_complex_volume(
+            der_map=E_der_map, bounds=bounds, field_names=("Ex", "Ey", "Ez")
+        )
+        vjp_eps_complex_H = self._derivative_eps_complex_volume(
+            der_map=H_der_map, bounds=bounds, field_names=("Hx", "Hy", "Hz")
+        )
+
+        values = vjp_eps_complex_E.values
+
+        eps_vjp = np.real(values)
+        sigma_vjp = (
+            -MU_0
+            * np.imag(
+                vjp_eps_complex_H.values
+                * self.surface_impedance(E_der_map["Ex"].coords["f"].values)
+            )
+            / (EPSILON_0 * self.conductivity)
+        )
+
+        eps_vjp = np.sum(eps_vjp)
+        sigma_vjp = np.sum(sigma_vjp)
+
+        return {"permittivity": eps_vjp, "conductivity": sigma_vjp}
 
     def surface_impedance(self, frequencies: ArrayFloat1D):
         """Computing surface impedance including surface roughness effects."""

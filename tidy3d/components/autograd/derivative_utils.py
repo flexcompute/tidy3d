@@ -167,6 +167,13 @@ class DerivativeInfo:
     If True, the structure contains a PEC material which changes the gradient
     formulation at the boundary compared to the dielectric case."""
 
+    is_medium_lossy_metal: bool = False
+    """Indicates if structure material is LossyMetalMedium.
+    If True, the structure contains a LossyMetal material which changes the gradient
+    formulation at the boundary compared to the dielectric case. This is treated
+    similarly to PEC with the addition of integrating the tangential E field components
+    when computing geometry gradients."""
+
     interpolators: Optional[dict] = None
     """Pre-computed interpolators.
     Optional pre-computed interpolators for field components and permittivity data.
@@ -282,7 +289,11 @@ class DerivativeInfo:
                     # with field values inside the PEC (which are 0). Instead, we make sure to
                     # choose interplation points such that their nearest location is outside of
                     # the PEC surface.
-                    method = "nearest" if self.is_medium_pec else "linear"
+                    method = (
+                        "nearest"
+                        if (self.is_medium_pec or self.is_medium_lossy_metal)
+                        else "linear"
+                    )
                     interpolator_obj = RegularGridInterpolator(
                         points_with_freq, data, method=method, bounds_error=False, fill_value=None
                     )
@@ -314,7 +325,7 @@ class DerivativeInfo:
             ("D_fwd", self.D_fwd),
             ("D_adj", self.D_adj),
         ]
-        if self.is_medium_pec:
+        if self.is_medium_pec or self.is_medium_lossy_metal:
             interpolator_groups += [("H_fwd", self.H_fwd), ("H_adj", self.H_adj)]
         for group_key, data_dict in interpolator_groups:
             _make_lazy_interpolator_group(data_dict, group_key, is_field_group=True)
@@ -378,8 +389,8 @@ class DerivativeInfo:
             )
             eps_out = self._prepare_epsilon(eps_to_prepare)
 
-        if self.is_medium_pec:
-            vjps = self._evaluate_pec_gradient_at_points(
+        if self.is_medium_pec or self.is_medium_lossy_metal:
+            vjps = self._evaluate_metal_gradient_at_points(
                 spatial_coords, normals, perps1, perps2, interpolators, eps_out
             )
         else:
@@ -399,8 +410,7 @@ class DerivativeInfo:
         perps1: np.ndarray,
         perps2: np.ndarray,
         interpolators: dict,
-        # todo: type
-        eps_out,
+        eps_out: np.ndarray,
     ) -> np.ndarray:
         # evaluate all field components at surface points
         E_fwd_at_coords = {
@@ -442,26 +452,25 @@ class DerivativeInfo:
 
         return vjps
 
-    def _evaluate_pec_gradient_at_points(
+    def _evaluate_metal_gradient_at_points(
         self,
         spatial_coords: np.ndarray,
         normals: np.ndarray,
         perps1: np.ndarray,
         perps2: np.ndarray,
         interpolators: dict,
-        # todo: type
-        eps_out,
+        eps_out: np.ndarray,
     ) -> np.ndarray:
-        def _adjust_spatial_coords_pec(grid_centers: dict[str, np.ndarray]):
+        def _adjust_spatial_coords_metal(grid_centers: dict[str, np.ndarray]):
             """Assuming a nearest interpolation, adjust the interpolation points given the grid
             defined by `grid_centers` and using `spatial_coords` as a starting point such that we
-            select a point outside of the PEC boundary.
+            select a point outside of the metal boundary.
 
                  *** (nearest point outside boundary)
                   ^
                   | n (normal direction)
                   |
-            _.-~'`-._.-~'`-._ (PEC surface)
+            _.-~'`-._.-~'`-._ (metal surface)
                   * (nearest point)
 
             Parameters
@@ -469,13 +478,13 @@ class DerivativeInfo:
             grid_centers: dict[str, np.ndarray]
                 The grid points for a given field component indexed by dimension. These grid points
                 are used to find the nearest snapping point and adjust the inerpolation coordinates
-                to ensure we fall outside of the PEC surface.
+                to ensure we fall outside of the metal surface.
 
             Returns
             -------
             (np.ndarray, np.ndarray)
                 (N, 3) array of coordinate centers at which to interpolate such that they line up
-                with a grid center and are outside the PEC surface
+                with a grid center and are outside the metal surface
                 (N,) array of distances from the nearest interpolation points to the desired surface
                 edge points specified by `spatial_coords`
 
@@ -523,8 +532,8 @@ class DerivativeInfo:
                     np.abs(spatial_coords[:, idx] - grid_centers_select[nearest_grid]) ** 2
                 )
 
-            # this edge distance is useful when correcting for edge singularities from the PEC material
-            # and is used when the PEC PolySlab structure has zero thickness
+            # this edge distance is useful when correcting for edge singularities from the metal material
+            # and is used when the metal PolySlab structure has zero thickness
             edge_distance = np.sqrt(edge_distance)
 
             return adjust_spatial_coords, edge_distance
@@ -537,7 +546,7 @@ class DerivativeInfo:
             ----------
             field_components: FieldData
                 The field components (i.e - Ex, Ey, Ez, Hx, Hy, Hz) that we would like to sample just
-                outside the PEC surface using nearest interpolation.
+                outside the metal surface using nearest interpolation.
 
             Returns
             -------
@@ -550,7 +559,7 @@ class DerivativeInfo:
                 field_component = field_components[name]
                 field_component_coords = field_component.coords
 
-                adjusted_coords, edge_distance = _adjust_spatial_coords_pec(
+                adjusted_coords, edge_distance = _adjust_spatial_coords_metal(
                     {
                         key: np.array(field_component_coords[key].values)
                         for key in field_component_coords
@@ -566,7 +575,7 @@ class DerivativeInfo:
                 for name, interp in interpolators[field_name].items()
             }
 
-        # adjust coordinates for PEC to be outside structure bounds and get edge distance for singularity correction.
+        # adjust coordinates for metal to be outside structure bounds and get edge distance for singularity correction.
         E_fwd_coords_adjusted = _snap_coordinate_outside(self.E_fwd)
         E_adj_coords_adjusted = _snap_coordinate_outside(self.E_adj)
 
@@ -589,21 +598,21 @@ class DerivativeInfo:
 
         # check if this integration is happening along an edge in which case we will eliminate
         # on of the H field integration components and apply singularity correction
-        pec_line_integration = is_flat_perp_dim1 or is_flat_perp_dim2
+        metal_line_integration = is_flat_perp_dim1 or is_flat_perp_dim2
 
         def _compute_singularity_correction(adjustment_: dict[str, dict[str, np.ndarray]]):
             """
-            Given the `adjustment_` which contains the distance from the PEC edge each field
+            Given the `adjustment_` which contains the distance from the metal edge each field
             component is nearest interpolated at, computes the singularity correction when
-            working with 2D PEC using the average edge_distance for each component. In the case
-            of 3D PEC gradients, no singularity correction is applied so an array of ones is returned.
+            working with 2D metal using the average edge_distance for each component. In the case
+            of 3D metal gradients, no singularity correction is applied so an array of ones is returned.
 
             Parameters
             ----------
             adjustment_: dict[str, dict[str, np.ndarray]]
                 Dictionary that maps field component name to a dictionary containing the coordinate
-                adjustment and the distance to the PEC edge for those coordinates. The edge distance
-                is used for 2D PEC singularity correction.
+                adjustment and the distance to the metal edge for those coordinates. The edge distance
+                is used for 2D metal singularity correction.
 
             Returns
             -------
@@ -617,7 +626,7 @@ class DerivativeInfo:
                     * np.pi
                     * np.mean([adjustment_[name]["edge_distance"] for name in adjustment_], axis=0)
                 )
-                if pec_line_integration
+                if metal_line_integration
                 else np.ones_like(spatial_coords, shape=spatial_coords.shape[0])
             )
 
@@ -637,8 +646,22 @@ class DerivativeInfo:
         contrib_E = E_norm_singularity_correction * eps_out * E_fwd_norm * E_adj_norm
         vjps = contrib_E
 
+        # for lossy metals, compute the tangential E contribution to the gradient
+        if self.is_medium_lossy_metal:
+            E_fwd_perp1 = self._project_in_basis(E_fwd_at_coords, basis_vector=perps1)
+            E_adj_perp1 = self._project_in_basis(E_adj_at_coords, basis_vector=perps1)
+
+            E_fwd_perp2 = self._project_in_basis(E_fwd_at_coords, basis_vector=perps2)
+            E_adj_perp2 = self._project_in_basis(E_adj_at_coords, basis_vector=perps2)
+
+            E_der_perp1 = E_norm_singularity_correction * E_fwd_perp1 * E_adj_perp1
+            E_der_perp2 = E_norm_singularity_correction * E_fwd_perp2 * E_adj_perp2
+
+            contrib_E = -eps_out * (E_der_perp1 + E_der_perp2)
+            vjps += contrib_E
+
         # compute the tangential H contribution to the gradient (the normal H contribution
-        # is 0 for PEC)
+        # is 0 for PEC and lossy metal)
         H_fwd_perp1 = self._project_in_basis(H_fwd_at_coords, basis_vector=perps1)
         H_adj_perp1 = self._project_in_basis(H_adj_at_coords, basis_vector=perps1)
 
@@ -649,7 +672,7 @@ class DerivativeInfo:
         H_der_perp2 = H_perp_singularity_correction * H_fwd_perp2 * H_adj_perp2
 
         H_integration_components = (H_der_perp1, H_der_perp2)
-        if pec_line_integration:
+        if metal_line_integration:
             # if we are integrating along the line, we choose the H component normal to
             # the edge which corresponds to a surface current along the edge whereas the other
             # tangential component corresponds to a surface current along the flat dimension.

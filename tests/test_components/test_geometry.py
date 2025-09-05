@@ -1343,7 +1343,7 @@ def test_singularity_correction_pec():
     check_3d_size = (1.0, 2.0, 3.0)
 
     for axis in range(3):
-        is_2d, zero_dimension, do_singularity_correction = td.Box._check_singularity_correction_pec(
+        is_2d, zero_dimension, do_singularity_correction = td.Box._check_singularity_correction(
             size=check_3d_size, axis_normal=axis
         )
         assert not is_2d, "Unexpectedly found 2D geometry"
@@ -1358,8 +1358,8 @@ def test_singularity_correction_pec():
         with AssertLogLevel(
             "ERROR", contains_str="Derivative of PEC material with less than 2 dimensions"
         ):
-            is_2d, zero_dimension, do_singularity_correction = (
-                td.Box._check_singularity_correction_pec(size=check_1d_error_size, axis_normal=axis)
+            is_2d, zero_dimension, do_singularity_correction = td.Box._check_singularity_correction(
+                size=check_1d_error_size, axis_normal=axis
             )
 
     check_2d_size = 1.0
@@ -1370,8 +1370,8 @@ def test_singularity_correction_pec():
         for axis in range(3):
             print(f"check 2d size = {check_2d_size}")
 
-            is_2d, zero_dimension, do_singularity_correction = (
-                td.Box._check_singularity_correction_pec(size=check_2d_size, axis_normal=axis)
+            is_2d, zero_dimension, do_singularity_correction = td.Box._check_singularity_correction(
+                size=check_2d_size, axis_normal=axis
             )
 
             print(f"is 2d = {is_2d}")

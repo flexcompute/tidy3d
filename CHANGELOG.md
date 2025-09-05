@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added autograd support for `TerminalComponentModeler` and `ModalComponentModeler`.
 - Added `initialize_params_from_simulation` to `tidy3d.plugins.autograd.invdes` to initialize topology design regions from an underlying simulation geometry.
 - Added autograd support for sidewall angles in `td.Cylinder` and `td.PolySlab`.
+- Added autograd support for `td.Box` and `td.PolySlab` shape gradients when the structure medium is `td.LossyMetalMedium`.
 
 ### Changed
 - Adaptive minimum spacing for `PolySlab` integration is now wavelength relative and a minimum discretization is set for computing gradients for cylinders.
@@ -57,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added missing `solver_version` keyword argument to `run_async`.
 - Fixed `interpn` data array method to be compatible with extrapolation outside of data array coordinates.
 - Fixed `overlap_sort` to use the same value of the `conjugated_dot_product` field in `ModeMonitor`, and added the `conjugated_dot_product` field to `ModeSolver` and `ModeSimulation`.
+- Fixed `conductivity` gradients for `td.LossyMetalMedium`.
 
 
 

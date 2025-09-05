@@ -1268,6 +1268,7 @@ def postprocess_adj(
                 bounds_intersect=bounds_intersect,
                 simulation_bounds=sim_data_orig.simulation.bounds,
                 is_medium_pec=structure.medium.is_pec,
+                is_medium_lossy_metal=structure.medium.is_lossy_metal,
             )
 
             # compute derivatives for chunk
