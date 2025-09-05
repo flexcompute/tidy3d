@@ -5645,16 +5645,12 @@ class Simulation(AbstractYeeGridSimulation):
         if isinstance(obj, ModeSource):
             axis = obj.injection_axis
             length = obj.frame.length
+            if direction == "+":
+                span_inds[axis][1] += length - 1
+            else:
+                span_inds[axis][0] -= length - 1
         else:
             axis = obj.size.index(0.0)
-            length = 1
-
-        if direction == "+":
-            span_inds[axis][1] += length - 1
-            span_inds[axis][0] -= 1
-        else:
-            span_inds[axis][1] += 1
-            span_inds[axis][0] -= length - 1
 
         box_bounds = [
             [
