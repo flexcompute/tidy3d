@@ -64,7 +64,7 @@ dp_eps = np.finfo(np.float64).eps
 Double floating point precision.
 """
 
-fp_eps = np.finfo(np.float32).eps
+fp_eps = np.float64(np.finfo(np.float32).eps)
 """
 Floating point precision.
 """
