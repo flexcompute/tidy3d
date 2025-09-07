@@ -127,12 +127,15 @@ def http_interceptor(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         """The wrapper function."""
+        suppress_404 = kwargs.pop("suppress_404", False)
 
         # Extend some capabilities of func
         resp = func(*args, **kwargs)
 
         if resp.status_code != ResponseCodes.OK.value:
             if resp.status_code == ResponseCodes.NOT_FOUND.value:
+                if suppress_404:
+                    return None
                 raise WebNotFoundError("Resource not found (HTTP 404).")
             try:
                 json_resp = resp.json()

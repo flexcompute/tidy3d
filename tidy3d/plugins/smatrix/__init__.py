@@ -30,10 +30,13 @@ warnings.filterwarnings(
     category=FutureWarning,
 )
 
+# Legacy type to support previous flows
+ComponentModeler = ModalComponentModeler
 
 __all__ = [
     "AbstractComponentModeler",
     "CoaxialLumpedPort",
+    "ComponentModeler",
     "ComponentModelerDataType",
     "ComponentModelerType",
     "LumpedPort",
