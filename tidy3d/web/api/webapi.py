@@ -100,7 +100,7 @@ def _task_dict_to_url_bullet_list(data_dict: dict) -> str:
     """
     # Use a list comprehension to format each key-value pair
     # and then join them together with newline characters.
-    return "\n".join([f"- {key}: {value}" for key, value in data_dict.items()])
+    return "\n".join([f"- {key}: '{value}'" for key, value in data_dict.items()])
 
 
 @wait_for_connection
@@ -390,7 +390,7 @@ def upload(
         batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
         if verbose:
             # Validation phase
-            console.log("Validating batch...")
+            console.log("Validating component modeler and subtask simulations...")
     else:
         task.validate_post_upload(parent_tasks=parent_tasks)
 
@@ -509,7 +509,7 @@ def start(
         status = detail.totalStatus
         status_str = status.value
         if status_str in ("validate_success", "validate_warn"):
-            console.log("Batch validation completed.")
+            console.log("Component modeler batch validation has been successful.")
         if status_str not in ("validate_success", "validate_warn"):
             raise WebError(f"Batch task {task_id} is blocked: {status_str}")
         # Submit batch to start runs after validation
@@ -1036,13 +1036,13 @@ def _monitor_modeler_batch(
         if s in ("validating",):
             return ("validating", 2)
         if s in ("validate_success", "validate_warn"):
-            return ("Validate", 3)
+            return ("validate", 3)
         if s in ("running",):
             return ("running", 4)
         if s in ("postprocess",):
             return ("postprocess", 5)
         if s in ("run_success", "success"):
-            return ("Success", 6)
+            return ("success", 6)
         # Unknown statuses map to earliest stage to avoid showing 100% prematurely
         return (s or "unknown", 0)
 
@@ -1050,9 +1050,9 @@ def _monitor_modeler_batch(
     name = detail.name or "modeler_batch"
     group_id = detail.groupId
 
-    header = f"Modeler Batch: {name}"
+    header = f"Subtasks status - {name}"
     if group_id:
-        header += f" (group {group_id})"
+        header += f"\nGroup ID: '{group_id}'"
     if console is not None:
         console.log(header)
 
@@ -1081,14 +1081,13 @@ def _monitor_modeler_batch(
         BatchTask(batch_id).postprocess(batch_type="RF_SWEEP", worker_group=worker_group)
         while True:
             d = _batch_detail(batch_id)
-            s = d.totalStatus.value
-            total = d.totalTask or 0
-            p = d.postprocessSuccess or 0
             postprocess_status = d.postprocessStatus
-            if s in terminal_errors:
-                raise WebError(f"Batch {batch_id} terminated: {s}")
             if postprocess_status == "success":
                 break
+            elif postprocess_status in terminal_errors:
+                raise WebError(
+                    f"Batch {batch_id} terminated. Please contact customer support and provide this Component Modeler batch ID: '{batch_id}'"
+                )
             time.sleep(REFRESH_TIME)
         return
 
@@ -1108,10 +1107,10 @@ def _monitor_modeler_batch(
             "draft",
             "preprocess",
             "validating",
-            "Validate",
+            "validate",
             "running",
             "postprocess",
-            "Success",
+            "success",
         ]
 
         while True:
@@ -1173,19 +1172,26 @@ def _monitor_modeler_batch(
         p_post = progress.add_task("Postprocess", total=1.0)
         while True:
             detail = _batch_detail(batch_id)
-            status = detail.totalStatus.value
             postprocess_status = detail.postprocessStatus
-            total = detail.totalTask or 0
-            p = detail.postprocessSuccess or 0
-            progress.update(p_post, completed=(p / total) if total else 0.0)
             if postprocess_status == "success":
+                progress.update(p_post, completed=1.0)
+                progress.refresh()
                 break
-            if status in terminal_errors:
-                raise WebError(f"Batch {batch_id} terminated: {status}")
+            elif postprocess_status == "queued":
+                progress.update(p_post, completed=0.1)
+            elif postprocess_status == "preprocess":
+                progress.update(p_post, completed=0.3)
+            elif postprocess_status == "running":
+                progress.update(p_post, completed=0.55)
+            elif postprocess_status in terminal_errors:
+                raise WebError(
+                    f"Batch {batch_id} terminated. Please contact customer support and provide this Component Modeler batch ID: '{batch_id}'"
+                )
             progress.refresh()
             time.sleep(REFRESH_TIME)
+
         if console is not None:
-            console.log("Postprocess completed.")
+            console.log("Modeler has finished running successfully.")
 
 
 @wait_for_connection
