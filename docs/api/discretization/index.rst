@@ -223,5 +223,4 @@ These classes contain information of the grid and related quantities. Advanced u
 
 ~~~~
 
-
-
+.. include:: /api/discretization/layer.rst

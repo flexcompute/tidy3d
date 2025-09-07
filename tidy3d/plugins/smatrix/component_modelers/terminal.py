@@ -90,9 +90,9 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
         return values
 
     @pd.root_validator(pre=False)
-    def _warn_deprecation_2_10(cls, values):
+    def _warn_refactor_2_10(cls, values):
         log.warning(
-            "ℹ️ ⚠️ Backwards compatibility will be broken for the TerminalComponentModeler class in tidy3d version 2.10. Migration documentation will be provided, and existing functionality can be accessed in a different way.",
+            f"ℹ️ ⚠️ The {cls.__name__} class was refactored in tidy3d version 2.10. Migration documentation will be provided, and existing functionality can be accessed in a different way.",
             log_once=True,
         )
         return values
