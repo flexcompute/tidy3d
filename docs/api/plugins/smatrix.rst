@@ -15,3 +15,8 @@ Scattering Matrix Calculator
 .. seealso::
    
    For classes related to microwave/RF modeling, please refer to the main `Microwave and RF <../microwave/index.html>`_ page. 
+
+.. include:: /api/microwave/component_modeler.rst
+.. include:: /api/microwave/material.rst
+.. include:: /api/microwave/ports/lumped.rst
+.. include:: /api/microwave/ports/wave.rst
