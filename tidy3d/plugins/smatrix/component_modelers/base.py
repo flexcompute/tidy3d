@@ -116,6 +116,14 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
             )
         return val
 
+    @pd.root_validator(pre=False)
+    def _warn_refactor_2_10(cls, values):
+        log.warning(
+            f"ℹ️ ⚠️ The '{type(cls)}' class was refactored in tidy3d version 2.10. Migration documentation will be provided, and existing functionality can be accessed in a different way.",
+            log_once=True,
+        )
+        return values
+
     @pd.validator("element_mappings", always=True)
     def _validate_element_mappings(cls, element_mappings, values):
         """
