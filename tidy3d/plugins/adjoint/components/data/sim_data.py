@@ -272,7 +272,7 @@ class JaxSimulationData(SimulationData, JaxObject):
                 for i, freq in enumerate(freqs):
                     freq = float(freq)
                     for source_index, source in enumerate(self.simulation.sources):
-                        if source.source_time.freq0 == freq and source.source_time.amplitude > 0:
+                        if source.source_time._freq0 == freq and source.source_time.amplitude > 0:
                             spectrum_fn = self.source_spectrum(source_index)
                             norm_factor_f[i] = complex(spectrum_fn([freq])[0])
 

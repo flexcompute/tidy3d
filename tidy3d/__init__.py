@@ -359,6 +359,7 @@ from .components.source.time import (
     ContinuousWave,
     CustomSourceTime,
     GaussianPulse,
+    MultiGaussianPulse,
     SourceTime,
 )
 
@@ -624,6 +625,7 @@ __all__ = [
     "ModeSpec",
     "ModulationSpec",
     "Monitor",
+    "MultiGaussianPulse",
     "MultiPhysicsMedium",
     "NedeljkovicSorefMashanovich",
     "NonlinearModel",

@@ -104,7 +104,7 @@ class BroadbandSource(Source, ABC):
     @cached_property
     def frequency_grid(self) -> np.ndarray:
         """A Chebyshev grid used to approximate frequency dependence."""
-        freq_min, freq_max = self.source_time.frequency_range(num_fwidth=CHEB_GRID_WIDTH)
+        freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
         return self._chebyshev_freq_grid(freq_min, freq_max)
 
     def _chebyshev_freq_grid(self, freq_min, freq_max):
@@ -514,11 +514,11 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
     @cached_property
     def frequency_grid(self) -> np.ndarray:
         """A Chebyshev grid used to approximate frequency dependence."""
-        freq_min, freq_max = self.source_time.frequency_range(num_fwidth=CHEB_GRID_WIDTH)
+        freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
         if not self._is_fixed_angle:
             # For frequency-dependent angles (constat in-plane k), truncate minimum frequency at
             # the critical frequency of glancing incidence
-            f_crit = self.source_time.freq0 * np.sin(self.angle_theta)
+            f_crit = self.source_time._freq0 * np.sin(self.angle_theta)
             freq_min = max(freq_min, f_crit * CRITICAL_FREQUENCY_FACTOR)
         return self._chebyshev_freq_grid(freq_min, freq_max)
 
@@ -527,8 +527,8 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         the source frequency range is entirely below ``f_crit * CRITICAL_FREQUENCY_FACTOR."""
         if self._is_fixed_angle or self.num_freqs == 1:
             return
-        freq_min, freq_max = self.source_time.frequency_range(num_fwidth=CHEB_GRID_WIDTH)
-        f_crit = self.source_time.freq0 * np.sin(self.angle_theta)
+        freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
+        f_crit = self.source_time._freq0 * np.sin(self.angle_theta)
         if f_crit * CRITICAL_FREQUENCY_FACTOR > freq_max:
             raise SetupError(
                 "Broadband plane wave source defined with a bandwidth too close to the critical "

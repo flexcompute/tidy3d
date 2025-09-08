@@ -7,7 +7,9 @@ from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
+from pyroots import Brentq
 
+from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import TimeDataArray
 from tidy3d.components.data.dataset import TimeDataset
 from tidy3d.components.data.validators import validate_no_nans
@@ -17,9 +19,24 @@ from tidy3d.components.validators import warn_if_dataset_none
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import ValidationError
+from tidy3d.log import log
 
 # how many units of ``twidth`` from the ``offset`` until a gaussian pulse is considered "off"
 END_TIME_FACTOR_GAUSSIAN = 10
+
+# warn if source amplitude is too small at the endpoints of frequency range
+WARN_SOURCE_AMPLITUDE = 0.1
+# used in Brentq
+_ROOTS_TOL = 1e-10
+# threshold for applying actual central frequency if the approximate central frequency
+# differ by this threshold value.
+THRESHOLD_FOR_MESHER_ACTUAL_FREQ0 = 10
+# default min_rel_amp value
+DEFAULT_MIN_REL_AMP = 0.3
+# min_rel_amp tolerance
+TOLERANCE_REL_AMP = 0.2
+# maximal number of pulses in auto multiGaussian generation
+MAX_NUM_PULSES_AUTO_MULTIGAUSSIAN = 20
 
 
 class SourceTime(AbstractTimeDependence):
@@ -54,7 +71,7 @@ class SourceTime(AbstractTimeDependence):
             The supplied or created matplotlib axes.
         """
 
-        fmin, fmax = self.frequency_range()
+        fmin, fmax = self.frequency_range_sigma()
         return self.plot_spectrum_in_frequency_range(
             times, fmin, fmax, num_freqs=num_freqs, val=val, ax=ax
         )
@@ -63,15 +80,60 @@ class SourceTime(AbstractTimeDependence):
     def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
         """Frequency range within plus/minus ``num_fwidth * fwidth`` of the central frequency."""
 
+    def frequency_range_sigma(self, sigma: float = 4.0) -> FreqBound:
+        """Frequency range where the source amplitude is within ``exp(-sigma**2/2)`` of the peak amplitude."""
+        return self.frequency_range(num_fwidth=sigma)
+
+    def frequency_range_loose(self, sigma: float = 4.0) -> FreqBound:
+        """A loose frequency range that is union of ``frequency_range`` and ``frequency_range_sigma``."""
+        f_range = self.frequency_range(num_fwidth=sigma)
+        f_sigma_range = self.frequency_range_sigma(sigma=sigma)
+        return min(f_range[0], f_sigma_range[0]), max(f_range[1], f_sigma_range[1])
+
     @abstractmethod
     def end_time(self) -> Optional[float]:
         """Time after which the source is effectively turned off / close to zero amplitude."""
+
+    @cached_property
+    @abstractmethod
+    def _freq0(self) -> float:
+        """Central frequency from input parameters such as Gaussian parameters, which might not be the
+        actual central frequency, e.g. when DC removal is applied.
+        """
+
+    @cached_property
+    def _freq0_from_sigma(self) -> float:
+        """Central of frequency range where the source amplitude is within ``exp(-1/2)`` of the peak amplitude."""
+        return np.mean(self.frequency_range_sigma(sigma=1))
+
+    @cached_property
+    def _freq0_for_mesher(self) -> float:
+        """For mesh generation, apply `_freq0` in most cases, unless it deviates from the actual central frequency
+        signficantly.
+        """
+        if (
+            np.isclose(self._freq0, 0)
+            or self._freq0 >= THRESHOLD_FOR_MESHER_ACTUAL_FREQ0 * self._freq0_from_sigma
+            or self._freq0_from_sigma >= THRESHOLD_FOR_MESHER_ACTUAL_FREQ0 * self._freq0
+        ):
+            return self._freq0_from_sigma
+        return self._freq0
+
+    @property
+    @abstractmethod
+    def _fwidth(self) -> float:
+        """Standard deviation of the frequency content of the pulse."""
+
+    @property
+    def twidth(self) -> float:
+        """Width of pulse in seconds."""
+        return 1.0 / (2 * np.pi * self._fwidth)
 
 
 class Pulse(SourceTime, ABC):
     """A source time that ramps up with some ``fwidth`` and oscillates at ``freq0``."""
 
-    freq0: pydantic.PositiveFloat = pydantic.Field(
+    freq0: pydantic.NonNegativeFloat = pydantic.Field(
         ..., title="Central Frequency", description="Central frequency of the pulse.", units=HERTZ
     )
     fwidth: pydantic.PositiveFloat = pydantic.Field(
@@ -89,10 +151,22 @@ class Pulse(SourceTime, ABC):
         ge=2.5,
     )
 
+    @cached_property
+    def _freq0(self) -> float:
+        """Central frequency from Gaussian parameters, which might not be the actual central frequency, e.g. when
+        DC removal is applied.
+        """
+        return self.freq0
+
     @property
-    def twidth(self) -> float:
-        """Width of pulse in seconds."""
-        return 1.0 / (2 * np.pi * self.fwidth)
+    def _fwidth(self) -> float:
+        """Standard deviation of the frequency content of the pulse."""
+        return self.fwidth
+
+    @property
+    def offset_time(self) -> float:
+        """Offset time in seconds."""
+        return self.offset * self.twidth
 
     def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
         """Frequency range within 5 standard deviations of the central frequency.
@@ -130,15 +204,31 @@ class GaussianPulse(Pulse):
         "If ``True``, the Gaussian pulse is modified at low frequencies to zero out the "
         "DC component, which is usually desirable so that the fields will decay. However, "
         "for broadband simulations, it may be better to have non-vanishing source power "
-        "near zero frequency. Setting this to ``False`` results in an unmodified Gaussian "
-        "pulse spectrum which can have a nonzero DC component.",
+        "near zero frequency by setting this to ``False``, or apply a ``MultiGaussianPulse``.",
     )
+
+    @property
+    def peak_time(self) -> float:
+        """Peak time in seconds, defined by ``offset``."""
+        return self.offset * self.twidth
+
+    @property
+    def _peak_time_shift(self) -> float:
+        """In the case of DC removal, the time shift of the pulse peak position can be different from ``offset``."""
+        if self.remove_dc_component and self.fwidth > self.freq0:
+            return self.twidth * np.sqrt(1 - self.freq0**2 / self.fwidth**2)
+        return 0
+
+    @property
+    def offset_time(self) -> float:
+        """Offset time in seconds. Note that in the case of DC removal, the maximal value of pulse can be shifted."""
+        return self.peak_time + self._peak_time_shift
 
     def amp_time(self, time: float) -> complex:
         """Complex-valued source amplitude as a function of time."""
 
         omega0 = 2 * np.pi * self.freq0
-        time_shifted = time - self.offset * self.twidth
+        time_shifted = time - self.offset_time
 
         offset = np.exp(1j * self.phase)
         oscillation = np.exp(-1j * omega0 * time)
@@ -148,7 +238,9 @@ class GaussianPulse(Pulse):
 
         # subtract out DC component
         if self.remove_dc_component:
-            pulse_amp = pulse_amp * (1j + time_shifted / self.twidth**2 / omega0)
+            pulse_amp = pulse_amp * (1j * omega0 + time_shifted / self.twidth**2)
+            # normalize by peak frequency instead of omega0, as omega0 can be 0
+            pulse_amp /= 2 * np.pi * self.peak_frequency
         else:
             # 1j to make it agree in large omega0 limit
             pulse_amp = pulse_amp * 1j
@@ -162,7 +254,71 @@ class GaussianPulse(Pulse):
         # if not self.remove_dc_component:
         #     return None
 
-        return self.offset * self.twidth + END_TIME_FACTOR_GAUSSIAN * self.twidth
+        end_time = self.offset_time + END_TIME_FACTOR_GAUSSIAN * self.twidth
+
+        # for derivative Gaussian that contains two peaks, add time interval between them
+        if self.remove_dc_component and self.fwidth > self.freq0:
+            end_time += 2 * self._peak_time_shift
+        return end_time
+
+    def amp_freq(self, freq: float) -> complex:
+        """Complex-valued source spectrum in frequency domain."""
+        phase = np.exp(1j * self.phase + 1j * 2 * np.pi * (freq - self.freq0) * self.offset_time)
+        envelope = np.exp(-((freq - self.freq0) ** 2) / 2 / self.fwidth**2)
+        amp = 1j * self.amplitude / self.fwidth * phase * envelope
+        if not self.remove_dc_component:
+            return amp
+
+        # derivative of Gaussian when DC is removed
+        return freq * amp / (2 * np.pi * self.peak_frequency)
+
+    def _rel_amp_freq(self, freq: float) -> complex:
+        """Complex-valued source spectrum in frequency domain normalized by peak amplitude."""
+        return self.amp_freq(freq) / self._peak_freq_amp
+
+    @property
+    def peak_frequency(self) -> float:
+        """Frequency at which the source time dependence has its peak amplitude in the frequency domain."""
+        if not self.remove_dc_component:
+            return self.freq0
+        return 0.5 * (self.freq0 + np.sqrt(self.freq0**2 + 4 * self.fwidth**2))
+
+    @property
+    def _peak_freq_amp(self) -> complex:
+        """Peak amplitude in frequency domain"""
+        return self.amp_freq(self.peak_frequency)
+
+    @property
+    def _peak_time_amp(self) -> complex:
+        """Peak amplitude in time domain"""
+        return self.amp_time(self.peak_time)
+
+    def frequency_range_sigma(self, sigma: float = 4.0) -> FreqBound:
+        """Frequency range where the source amplitude is within ``exp(-sigma**2/2)`` of the peak amplitude."""
+        if not self.remove_dc_component:
+            return self.frequency_range(num_fwidth=sigma)
+
+        # With dc removed, we'll need to solve for the nonlinear equation to find the frequency range
+        def equation_for_sigma_frequency(freq):
+            """computes I / I_p - exp(-sigma)"""
+            return np.abs(self._rel_amp_freq(freq)) - np.exp(-(sigma**2) / 2)
+
+        root_scalar = Brentq(raise_on_fail=False, epsilon=_ROOTS_TOL)
+        fmin_data = root_scalar(equation_for_sigma_frequency, 0, self.peak_frequency)
+        fmax_data = root_scalar(
+            equation_for_sigma_frequency,
+            self.peak_frequency,
+            self.peak_frequency
+            + self.fwidth * (100 + 2 * sigma**2),  # "100" to make sure that it flips sign
+        )
+        fmin, fmax = fmin_data.x0, fmax_data.x0
+
+        # if unconverged, fall back to fwidth
+        if not (fmin_data.converged and fmax_data.converged and fmax > fmin):
+            return self.frequency_range(num_fwidth=sigma)
+
+        # converged
+        return fmin, fmax
 
     @property
     def amp_complex(self) -> complex:
@@ -206,12 +362,75 @@ class GaussianPulse(Pulse):
 
         return fmin, fmax
 
+    @staticmethod
+    def _validate_min_rel_amp(min_rel_amp: pydantic.PositiveFloat):
+        """Validate the range of lower bound for amplitude in the frequency range normalized by the peak amplitude."""
+        if min_rel_amp <= 0.05 or min_rel_amp >= 0.5:
+            raise ValidationError("'min_rel_amp' must be in the range (0.05, 0.5).")
+
+    @staticmethod
+    def _unmodulated_gaussian_fwidth_from_rel_amp(min_rel_amp) -> pydantic.PositiveFloat:
+        """Compute ``fwidth`` for an DC-removed unmodulated``GaussianPulse`` whose amplitude at ``freq=fmin``
+        relative to peak amplitude is `min_rel_amp`. Also returns upper frequency range ``fmax``. The returned
+        ``fwidth`` and ``fmax`` are normalized by ``fmin``.
+        """
+
+        def equation_for_fwidth(fwidth):
+            pulse = GaussianPulse(freq0=0, fwidth=fwidth, remove_dc_component=True)
+            return abs(pulse._rel_amp_freq(1)) - min_rel_amp
+
+        # solve for dimensionless fwidth
+        root_scalar = Brentq(raise_on_fail=True, epsilon=_ROOTS_TOL)
+        fwidth_data = root_scalar(equation_for_fwidth, 1, 100 / min_rel_amp)
+        # compute frequency range
+        fwidth = fwidth_data.x0
+        pulse = GaussianPulse(freq0=0, fwidth=fwidth, remove_dc_component=True)
+        sigma = np.sqrt(-2 * np.log(min_rel_amp))
+        return fwidth, pulse.frequency_range_sigma(sigma=sigma)[1]
+
+    @classmethod
+    def _from_min_frequency(
+        cls, fmin: pydantic.PositiveFloat, min_rel_amp: pydantic.PositiveFloat = 0.3
+    ) -> tuple[GaussianPulse, float]:
+        """Create a ``GaussianPulse`` with DC removed that maximizes frequency range starting from ``fmin`` where the minimal
+        amplitude in the frequency range normalized by the peak amplitude is ``min_rel_amp``.
+
+        Parameters
+        ----------
+        fmin : float
+            Lower bound of frequency of interest.
+        min_rel_amp : float
+            Lower bound of amplitude relative to the peak amplitude in the frequency range.
+
+        Returns
+        -------
+        tuple[GaussianPulse, float]
+            A ``GaussianPulse`` that maximizes the frequency range [fmin, fmax] where the minimal relative
+            amplitude is ``min_rel_amp``, and fmax.
+        """
+        cls._validate_min_rel_amp(min_rel_amp)
+
+        def equation_for_min_amp(fmax):
+            """computes |amp_freq(fmin)/peak_amp| - min_rel_amp"""
+            gaussian = cls.from_frequency_range(
+                fmin, fmax, disable_warning=True, remove_dc_component=True
+            )
+            return np.abs(gaussian._rel_amp_freq(fmin)) - min_rel_amp
+
+        root_scalar = Brentq(raise_on_fail=True, epsilon=_ROOTS_TOL)
+        # Heuristic bracketing interval that works for min_rel_amp in the range of (0.05, 0.5)
+        bracketing_interval_a = fmin * (1 + 1e-5)
+        bracketing_interval_b = fmin * 100 / min_rel_amp
+        fmax_data = root_scalar(equation_for_min_amp, bracketing_interval_a, bracketing_interval_b)
+        return cls.from_frequency_range(fmin, fmax_data.x0, remove_dc_component=True), fmax_data.x0
+
     @classmethod
     def from_frequency_range(
         cls,
         fmin: pydantic.PositiveFloat,
         fmax: pydantic.PositiveFloat,
         minimum_source_bandwidth: pydantic.PositiveFloat = None,
+        disable_warning: bool = False,
         **kwargs,
     ) -> GaussianPulse:
         """Create a ``GaussianPulse`` that maximizes its amplitude in the frequency range [fmin, fmax].
@@ -253,7 +472,148 @@ class GaussianPulse(Pulse):
         coeff = ((1 + log_ratio**2) ** 0.5 - 1) / 2.0
         freq0 = freq_center - coeff / log_ratio * freq_range
         fwidth = freq_range / log_ratio * coeff**0.5
-        return cls(freq0=freq0, fwidth=fwidth, **kwargs)
+        pulse = cls(freq0=freq0, fwidth=fwidth, **kwargs)
+        if not disable_warning and np.abs(pulse._rel_amp_freq(fmin)) < WARN_SOURCE_AMPLITUDE:
+            log.warning(
+                "Source amplitude is not sufficiently large throughout the specified frequency range, "
+                "which can result in inaccurate simulation results. Please either "
+                "decrease the frequency range, or apply 'MultiGaussianPulse.from_frequency_range' "
+                "for generating broadband source time profiles.",
+            )
+        return pulse
+
+
+class MultiGaussianPulse(SourceTime):
+    """Source time dependence that describes a sum of Gaussian pulses.
+
+    Example
+    -------
+    >>> pulse = MultiGaussianPulse(pulses=[GaussianPulse(freq0=200e12, fwidth=20e12)])
+    """
+
+    pulses: tuple[GaussianPulse, ...] = pydantic.Field(
+        ...,
+        title="Gaussian Pulses",
+        description="Source time response that is the sum of those Gaussian pulses.",
+    )
+
+    @property
+    def _fwidth(self) -> float:
+        """Standard deviation of the frequency content of the pulse."""
+        frequency_range = self.frequency_range_sigma(sigma=1.0)
+        return 0.5 * (frequency_range[1] - frequency_range[0])
+
+    def end_time(self) -> Optional[float]:
+        """Time after which the source is effectively turned off / close to zero amplitude."""
+        return max(s.end_time() for s in self.pulses)
+
+    def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
+        """The union of `frequency_range` of each pulse."""
+        all_ranges = [s.frequency_range(num_fwidth) for s in self.pulses]
+        f_mins, f_maxs = zip(*all_ranges)
+        return min(f_mins), max(f_maxs)
+
+    def frequency_range_sigma(self, sigma: float = 4.0) -> FreqBound:
+        """Frequency range where the source amplitude is within ``exp(-sigma**2/2)`` of the peak amplitude."""
+        all_ranges = [s.frequency_range_sigma(sigma) for s in self.pulses]
+        f_mins, f_maxs = zip(*all_ranges)
+        return min(f_mins), max(f_maxs)
+
+    def amp_time(self, time: float) -> complex:
+        """Complex-valued source amplitude as a function of time."""
+        stacked_amp = np.stack([pulse.amp_time(time) for pulse in self.pulses])
+        return np.sum(stacked_amp, axis=0)
+
+    def amp_freq(self, freq: float) -> complex:
+        """Complex-valued source spectrum in frequency domain."""
+        stacked_amp = np.stack([pulse.amp_freq(freq) for pulse in self.pulses])
+        return np.sum(stacked_amp, axis=0)
+
+    @cached_property
+    def _freq0(self) -> float:
+        """Central frequency. Since it's missing from input parameters, let's apply the actual central frequency."""
+        return self._freq0_from_sigma
+
+    @staticmethod
+    def _pulses_adjustment(pulses: tuple[GaussianPulse, ...]) -> tuple[GaussianPulse, ...]:
+        """Adjust amplitude, phase, and offset time, so that all pulses roughly have equal amplitude and phase."""
+        # scale amplitude to the largest one
+        highest_amp = max(abs(p._peak_freq_amp) for p in pulses)
+        # scale offset time to the longest one
+        offset_time_longest = max(p.offset_time for p in pulses)
+        return (
+            p.updated_copy(
+                amplitude=highest_amp / abs(p._peak_freq_amp),
+                offset=(offset_time_longest - p._peak_time_shift) / p.twidth,
+                phase=2 * np.pi * p.freq0 * offset_time_longest,
+            )
+            for p in pulses
+        )
+
+    @classmethod
+    def from_frequency_range(
+        cls,
+        fmin: pydantic.PositiveFloat,
+        fmax: pydantic.PositiveFloat,
+        min_rel_amp: pydantic.PositiveFloat = 0.3,
+    ) -> MultiGaussianPulse:
+        """Create a :class:`.MultiGaussianPulse` that maximizes its amplitude in the frequency range [fmin, fmax],
+        whose minimal amplitude in the frequency range relative to the peak amplitude is roughly bounded
+        by ``min_rel_amp``. DC components are removed in those Gaussian pulses.
+
+        Parameters
+        ----------
+        fmin : float
+            Lower bound of frequency of interest.
+        fmax : float
+            Upper bound of frequency of interest.
+        min_rel_amp : float
+            A soft lower bound of amplitude relative to the peak amplitude in the frequency range [fmin, fmax].
+
+        Returns
+        -------
+        :class:`.MultiGaussianPulse`
+            A :class:`.MultiGaussianPulse` that maximizes its amplitude in the frequency range [fmin, fmax].
+        """
+        # validate that fmin and fmax must positive, and fmax > fmin
+        if fmin <= 0:
+            raise ValidationError("'fmin' must be positive.")
+        if fmax <= fmin:
+            raise ValidationError("'fmax' must be greater than 'fmin'.")
+        GaussianPulse._validate_min_rel_amp(min_rel_amp)
+
+        # fwidth, and frequency range to be applied to the pulse of lowest frequency for maximing
+        # fwidth
+        fwidth_rel, fmax_rel = GaussianPulse._unmodulated_gaussian_fwidth_from_rel_amp(min_rel_amp)
+        # iteration
+        pulses = []
+        fmax_compute = fmin
+        ind_pulse = 0
+        while fmax_compute < fmax:
+            # 1st pulse is most broadband
+            if ind_pulse == 0:
+                fmax_iter = fmax_compute * fmax_rel
+                pulse = GaussianPulse(freq0=0, fwidth=fmax_compute * fwidth_rel)
+            else:
+                pulse, fmax_iter = GaussianPulse._from_min_frequency(fmax_compute, min_rel_amp)
+
+            # reaching fmax
+            if fmax_iter > fmax or np.isclose(fmax_iter, fmax):
+                pulse = GaussianPulse.from_frequency_range(fmax_compute, fmax, disable_warning=True)
+                fmax_compute = fmax
+            else:
+                fmax_compute = fmax_iter
+            pulses.append(pulse)
+            ind_pulse += 1
+
+            # a few more stopping criteria: 1) amplitude at fmax is close to the threshold
+            if np.isclose(abs(pulse._rel_amp_freq(fmax)), min_rel_amp, rtol=TOLERANCE_REL_AMP):
+                break
+            # 2) number of pulses reaching the maximal
+            if ind_pulse > MAX_NUM_PULSES_AUTO_MULTIGAUSSIAN:
+                break
+
+        return cls(pulses=cls._pulses_adjustment(pulses))
 
 
 class ContinuousWave(Pulse):
@@ -275,7 +635,7 @@ class ContinuousWave(Pulse):
 
         twidth = 1.0 / (2 * np.pi * self.fwidth)
         omega0 = 2 * np.pi * self.freq0
-        time_shifted = time - self.offset * twidth
+        time_shifted = time - self.offset_time
 
         const = 1.0
         offset = np.exp(1j * self.phase)
@@ -404,9 +764,8 @@ class CustomSourceTime(Pulse):
         data_times = self.data_times
 
         # shift time
-        twidth = 1.0 / (2 * np.pi * self.fwidth)
-        max_time_shifted = run_time - self.offset * twidth
-        min_time_shifted = -self.offset * twidth
+        max_time_shifted = run_time - self.offset_time
+        min_time_shifted = -self.offset_time
 
         return (max_time_shifted < min(data_times)) | (min_time_shifted > max(data_times))
 
@@ -468,4 +827,4 @@ class CustomSourceTime(Pulse):
         return np.max(t_non_zero)
 
 
-SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]
+SourceTimeType = Union[GaussianPulse, MultiGaussianPulse, ContinuousWave, CustomSourceTime]

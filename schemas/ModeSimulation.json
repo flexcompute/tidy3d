@@ -1903,7 +1903,7 @@
           "type": "object"
         },
         "freq0": {
-          "exclusiveMinimum": 0,
+          "minimum": 0,
           "type": "number"
         },
         "fwidth": {
@@ -3508,7 +3508,7 @@
           "type": "object"
         },
         "freq0": {
-          "exclusiveMinimum": 0,
+          "minimum": 0,
           "type": "number"
         },
         "fwidth": {
@@ -4322,7 +4322,7 @@
           "type": "object"
         },
         "freq0": {
-          "exclusiveMinimum": 0,
+          "minimum": 0,
           "type": "number"
         },
         "fwidth": {
@@ -6959,7 +6959,8 @@
             "mapping": {
               "ContinuousWave": "#/definitions/ContinuousWave",
               "CustomSourceTime": "#/definitions/CustomSourceTime",
-              "GaussianPulse": "#/definitions/GaussianPulse"
+              "GaussianPulse": "#/definitions/GaussianPulse",
+              "MultiGaussianPulse": "#/definitions/MultiGaussianPulse"
             },
             "propertyName": "type"
           },
@@ -6972,6 +6973,9 @@
             },
             {
               "$ref": "#/definitions/GaussianPulse"
+            },
+            {
+              "$ref": "#/definitions/MultiGaussianPulse"
             }
           ]
         },
@@ -7123,6 +7127,41 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "MultiGaussianPulse": {
+      "additionalProperties": false,
+      "properties": {
+        "amplitude": {
+          "default": 1.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "phase": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "pulses": {
+          "items": {
+            "$ref": "#/definitions/GaussianPulse"
+          },
+          "type": "array"
+        },
+        "type": {
+          "default": "MultiGaussianPulse",
+          "enum": [
+            "MultiGaussianPulse"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "pulses"
+      ],
       "type": "object"
     },
     "MultiPhysicsMedium": {

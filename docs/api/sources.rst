@@ -33,6 +33,7 @@ Source Time Dependence
    :template: module.rst
 
    tidy3d.GaussianPulse
+   tidy3d.MultiGaussianPulse
    tidy3d.ContinuousWave
    tidy3d.SourceTime
    tidy3d.CustomSourceTime

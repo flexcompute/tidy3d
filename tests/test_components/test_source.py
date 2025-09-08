@@ -133,6 +133,11 @@ def test_gaussian_from_frequency_range():
     g2 = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax)
     assert g2.remove_dc_component
 
+    with AssertLogLevel("WARNING", contains_str="not sufficiently large"):
+        g_small = td.GaussianPulse.from_frequency_range(
+            fmin=fmin, fmax=60e9, remove_dc_component=True
+        )
+
     # 1) broadband: assert enough amplitude at fmin and fmax
     time = np.linspace(0, 5 / fmin, 10001)
     freqs = np.linspace(fmin, fmax, 101)
@@ -148,6 +153,36 @@ def test_gaussian_from_frequency_range():
     g = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax)
     assert abs(g.fwidth - bandwidth) / bandwidth < 1e-4
     assert abs(g.freq0 - fmin) / fmin < 1e-4
+
+
+def test_gaussian_frequency_sigma_range():
+    sigma = 4
+    # derivative Gaussian
+    g = td.GaussianPulse.from_frequency_range(fmin=1e9, fmax=10e9, remove_dc_component=True)
+    f_range = g.frequency_range_sigma(sigma=sigma)
+    peak_amp = np.abs(g.amp_freq(g.peak_frequency))
+    amp = np.array([np.abs(g.amp_freq(f)) for f in f_range])
+    assert f_range[1] > f_range[0]
+    assert np.allclose(amp / peak_amp, np.exp(-(sigma**2) / 2))
+
+    # pure Gaussian
+    g = td.GaussianPulse.from_frequency_range(fmin=1e9, fmax=10e9, remove_dc_component=False)
+    assert np.allclose(g.frequency_range(num_fwidth=sigma), g.frequency_range_sigma(sigma=sigma))
+
+
+def test_multigaussian_from_frequency_range():
+    min_amp = 0.3
+    fmin = 0.1e9
+    fmax = 160e9
+    g = td.MultiGaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax, min_rel_amp=min_amp)
+
+    # sample a few frequency grids to check
+    freqs = np.linspace(fmin, fmax, 1001)
+    amps = np.abs(g.amp_freq(freqs))
+    rel_amp = amps / np.max(amps)
+    assert np.all(rel_amp > min_amp * 0.5)  # it's a soft bound
+    # fwidth is merged, so should be quite large
+    assert g._fwidth > 0.1 * (fmax - fmin)
 
 
 def test_frequency_source_width():
@@ -357,7 +392,7 @@ def test_pol_arrow():
 def test_broadband_source():
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
     mode_spec = td.ModeSpec(num_modes=2)
-    fmin, fmax = g.frequency_range(num_fwidth=CHEB_GRID_WIDTH)
+    fmin, fmax = g.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
     fdiff = (fmax - fmin) / 2
     fmean = (fmax + fmin) / 2
 

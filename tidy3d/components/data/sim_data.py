@@ -1144,7 +1144,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         adj_srcs_process_fwidth = []
         for adj_src in adj_srcs:
             source_time = adj_src.source_time
-            freq0 = source_time.freq0
+            freq0 = source_time._freq0
 
             fwidth = np.minimum(freq0 / NUM_ADJOINT_FWIDTH_TO_ZERO, source_time.fwidth)
 
@@ -1171,16 +1171,16 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         # Group sources by frequency or port, whichever gives fewer groups
         num_ports = len(hashes_to_src_times)
-        num_unique_freqs = len({src.source_time.freq0 for src in adj_srcs_process_fwidth})
+        num_unique_freqs = len({src.source_time._freq0 for src in adj_srcs_process_fwidth})
 
         log.info(f"Found {num_ports} spatial ports and {num_unique_freqs} unique frequencies.")
 
         adjoint_infos = []
         if num_unique_freqs <= num_ports:
             log.info("Grouping adjoint sources by frequency.")
-            unique_freqs = {src.source_time.freq0 for src in adj_srcs_process_fwidth}
+            unique_freqs = {src.source_time._freq0 for src in adj_srcs_process_fwidth}
             for freq0 in unique_freqs:
-                group = [src for src in adj_srcs_process_fwidth if src.source_time.freq0 == freq0]
+                group = [src for src in adj_srcs_process_fwidth if src.source_time._freq0 == freq0]
                 post_norm = xr.DataArray(data=np.array([1 + 0j]), coords={"f": [freq0]})
                 adjoint_infos.append(
                     AdjointSourceInfo(sources=group, post_norm=post_norm, normalize_sim=True)
@@ -1234,7 +1234,7 @@ class SimulationData(AbstractYeeGridSimulationData):
     def _adjoint_src_width_broadband(adj_srcs: list[SourceType]) -> float:
         """Find the adjoint source fwidth that sufficiently covers all adjoint frequencies."""
 
-        adj_srcs_f0 = [adj_src.source_time.freq0 for adj_src in adj_srcs]
+        adj_srcs_f0 = [adj_src.source_time._freq0 for adj_src in adj_srcs]
         middle_f0 = 0.5 * (np.max(adj_srcs_f0) + np.min(adj_srcs_f0))
         min_f0 = np.min(adj_srcs_f0)
 
@@ -1281,7 +1281,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         amps_complex = []
         for src in adj_srcs:
             src_time = src.source_time
-            freqs.append(src_time.freq0)
+            freqs.append(src_time._freq0)
             amp_complex = src_time.amplitude * np.exp(1j * src_time.phase)
             amps_complex.append(amp_complex)
 

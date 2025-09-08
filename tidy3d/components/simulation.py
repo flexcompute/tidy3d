@@ -814,7 +814,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
         if freq is None:
-            freq0s = [source.source_time.freq0 for source in self.sources]
+            freq0s = [source.source_time._freq0 for source in self.sources]
             if freq0s and all(math.isclose(freq0, freq0s[0]) for freq0 in freq0s):
                 freq = freq0s[0]
             else:
@@ -1982,7 +1982,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         # some nonlinear materials depend on the central frequency
         # we update them with hardcoded freq0
-        freqs = np.array([source.source_time.freq0 for source in self.sources])
+        freqs = np.array([source.source_time._freq0 for source in self.sources])
         for i, structure in enumerate(new_structures):
             medium = structure.medium
             nonlinear_spec = medium.nonlinear_spec
@@ -3131,7 +3131,7 @@ class Simulation(AbstractYeeGridSimulation):
                     "Add at least one source or use parameter 'frequency' for 'ModeABCBoundary'.",
                 )
 
-            freq0s = [source.source_time.freq0 for source in sources]
+            freq0s = [source.source_time._freq0 for source in sources]
             if not all(math.isclose(freq0, freq0s[0]) for freq0 in freq0s):
                 log.warning(
                     "At least one 'ModeABCBoundary' does not specify frequency at which the absorbed mode must be evaluated. "
@@ -3261,7 +3261,7 @@ class Simulation(AbstractYeeGridSimulation):
                 struct_bound_min, struct_bound_max = structure.geometry.bounds
 
                 for source in sources:
-                    lambda0 = C_0 / source.source_time.freq0
+                    lambda0 = C_0 / source.source_time._freq0
 
                     zipped = zip(["x", "y", "z"], sim_bound_min, struct_bound_min, boundaries)
                     for axis, sim_val, struct_val, boundary in zipped:
@@ -3352,7 +3352,7 @@ class Simulation(AbstractYeeGridSimulation):
         if val is None:
             return val
 
-        source_ranges = [source.source_time.frequency_range() for source in values["sources"]]
+        source_ranges = [source.source_time.frequency_range_loose() for source in values["sources"]]
         if not source_ranges:
             # Commented out to eliminate this message from Mode real time log in GUI
             # TODO: Bring it back when it doesn't interfere with mode solver
@@ -3823,7 +3823,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         with log as consolidated_logger:
             for source_index, source in enumerate(values.get("sources")):
-                freq0 = source.source_time.freq0
+                freq0 = source.source_time._freq0_for_mesher
 
                 for medium_index, medium in enumerate(mediums):
                     # min wavelength in PEC/PMC is meaningless and we'll get divide by inf errors
@@ -4260,7 +4260,7 @@ class Simulation(AbstractYeeGridSimulation):
     def _validate_nonlinear_specs(self) -> None:
         """Run :class:`.NonlinearSpec` validators that depend on knowing the central
         frequencies of the sources. Also print some warnings only once per unique medium."""
-        freqs = np.array([source.source_time.freq0 for source in self.sources])
+        freqs = np.array([source.source_time._freq0 for source in self.sources])
         for medium in self.scene.mediums:
             if medium.nonlinear_spec is not None:
                 for model in medium._nonlinear_models:
@@ -4423,7 +4423,7 @@ class Simulation(AbstractYeeGridSimulation):
                         center=source.center,
                         size=source.size,
                         name="tmp",
-                        freqs=[source.source_time.freq0],
+                        freqs=[source.source_time._freq0],
                         colocate=False,
                     )
                     msg_header = f"Mode source at sources[{src_ind}] "
@@ -4487,7 +4487,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     def _validate_freq_monitors_freq_range(self) -> None:
         """Rise the error if any DFT monitors have frequencies outside of the simulation frequency range."""
-        source_ranges = [source.source_time.frequency_range() for source in self.sources]
+        source_ranges = [source.source_time.frequency_range_loose() for source in self.sources]
         if not source_ranges:
             return
 
@@ -4597,7 +4597,7 @@ class Simulation(AbstractYeeGridSimulation):
                 # side wall - the profiles must be the same along the injection axis, so we take
                 # a single "stripe" of epsilon as the reference and subtract it from all other
                 # stripes, which should result in zero if all the epsilon profiles are the same
-                freq0 = source.source_time.freq0
+                freq0 = source.source_time._freq0
                 _, plane_axs = source.pop_axis("xyz", axis=source.injection_axis)
                 ref_eps = self.epsilon(box=sidewall_surfaces[0], coord_key="centers", freq=freq0)
                 kwargs = {plane_axs[0]: 0, plane_axs[1]: 0}
@@ -4703,7 +4703,7 @@ class Simulation(AbstractYeeGridSimulation):
 
             # get the maximum refractive index evaluated over each of all the source central frequencies
             all_ref_inds = [
-                self.get_refractive_indices(src.source_time.freq0) for src in self.sources
+                self.get_refractive_indices(src.source_time._freq0) for src in self.sources
             ]
             avg_ref_inds = [np.mean(np.array(n)) for n in all_ref_inds]
             max_ref_ind = np.max(avg_ref_inds, initial=1)
@@ -5101,7 +5101,7 @@ class Simulation(AbstractYeeGridSimulation):
         Tuple[float, float]
             Minimum and maximum frequencies of the power spectrum of the sources.
         """
-        source_ranges = [source.source_time.frequency_range() for source in self.sources]
+        source_ranges = [source.source_time.frequency_range_sigma() for source in self.sources]
         freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
         freq_max = max((freq_range[1] for freq_range in source_ranges), default=0.0)
 
@@ -5334,7 +5334,7 @@ class Simulation(AbstractYeeGridSimulation):
                 "add sources before querying for the minimum material "
                 "wavelength."
             )
-        freq_max = max(source.source_time.freq0 for source in self.sources)
+        freq_max = max(source.source_time._freq0_from_sigma for source in self.sources)
         wvl_min = C_0 / freq_max
 
         n_values = self.get_refractive_indices(freq_max)
