@@ -14,7 +14,7 @@ from tidy3d.components.index import SimulationMap
 from tidy3d.components.monitor import DirectivityMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Ax
+from tidy3d.components.types import Ax, Complex
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, OHM
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
@@ -24,15 +24,15 @@ from tidy3d.plugins.smatrix.component_modelers.base import (
     AbstractComponentModeler,
 )
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray
-from tidy3d.plugins.smatrix.network import NetworkElement, NetworkIndex, SParamDef
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.plugins.smatrix.types import NetworkElement, NetworkIndex, SParamDef
 
 
-class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkElement]):
+class TerminalComponentModeler(AbstractComponentModeler):
     """
     Tool for modeling two-terminal multiport devices and computing port parameters
     with lumped and wave ports.
@@ -55,6 +55,24 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
         title="Terminal Ports",
         description="Collection of lumped and wave ports associated with the network. "
         "For each port, one simulation will be run with a source that is associated with the port.",
+    )
+
+    run_only: Optional[tuple[NetworkIndex, ...]] = pd.Field(
+        None,
+        title="Run Only",
+        description="Set of matrix indices that define the simulations to run. "
+        "If ``None``, simulations will be run for all indices in the scattering matrix. "
+        "If a tuple is given, simulations will be run only for the given matrix indices.",
+    )
+
+    element_mappings: tuple[tuple[NetworkElement, NetworkElement, Complex], ...] = pd.Field(
+        (),
+        title="Element Mappings",
+        description="Tuple of S matrix element mappings, each described by a tuple of "
+        "(input_element, output_element, coefficient), where the coefficient is the "
+        "element_mapping coefficient describing the relationship between the input and output "
+        "matrix element. If all elements of a given column of the scattering matrix are defined "
+        "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
     )
 
     radiation_monitors: tuple[DirectivityMonitor, ...] = pd.Field(
@@ -222,6 +240,17 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
             else:
                 matrix_indices.append(self.network_index(port))
         return tuple(matrix_indices)
+
+    @cached_property
+    def matrix_indices_source(self) -> tuple[NetworkIndex, ...]:
+        """Tuple of all the source matrix indices, which may be less than the total number of
+        ports."""
+        return super().matrix_indices_source
+
+    @cached_property
+    def matrix_indices_run_sim(self) -> tuple[NetworkIndex, ...]:
+        """Tuple of all the matrix indices that will be used to run simulations."""
+        return super().matrix_indices_run_sim
 
     @cached_property
     def sim_dict(self) -> SimulationMap:

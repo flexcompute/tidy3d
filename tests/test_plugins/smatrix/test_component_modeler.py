@@ -315,6 +315,11 @@ def test_component_modeler_run_only(monkeypatch):
     s_matrix.loc[coords_in_run_only] = 0
     assert np.all(s_matrix.values == 0.0)
 
+    # make sure lists are correctly converted into tuples
+    run_only = [list(ONLY_SOURCE)]
+    modeler = modeler.updated_copy(run_only=run_only)
+    assert ONLY_SOURCE in modeler.matrix_indices_run_sim
+
 
 def _test_mappings(element_mappings, s_matrix):
     """Makes sure the mappings are reflected in a given S matrix."""
@@ -390,13 +395,14 @@ def test_mapping_with_run_only():
     element_mappings are provided."""
     ports = make_ports()
 
-    EXCLUDE_INDEX = ("right_bot", 0)
+    EXCLUDE_INDEX = ["right_bot", 0]
     element_mappings = []
     run_only = []
     # add a mapping to each element in the row of EXCLUDE_INDEX
     for port in ports:
         for mode_index in range(port.mode_spec.num_modes):
-            row_index = (port.name, mode_index)
+            # Test that providing a list is properly handled
+            row_index = [port.name, mode_index]
             run_only.append(row_index)
             if row_index != EXCLUDE_INDEX:
                 mapping = ((row_index, row_index), (row_index, EXCLUDE_INDEX), +1)

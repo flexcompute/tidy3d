@@ -16246,8 +16246,32 @@
       "default": [],
       "items": {
         "items": [
-          {},
-          {},
+          {
+            "items": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          {
+            "items": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
           {
             "anyOf": [
               {
@@ -16323,7 +16347,9 @@
       "type": "boolean"
     },
     "run_only": {
-      "items": {},
+      "items": {
+        "type": "string"
+      },
       "type": "array"
     },
     "s_param_def": {

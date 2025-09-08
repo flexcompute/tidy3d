@@ -13,17 +13,15 @@ from tidy3d.components.index import SimulationMap
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Ax
+from tidy3d.components.types import Ax, Complex
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.plugins.smatrix.ports.modal import Port
+from tidy3d.plugins.smatrix.types import Element, MatrixIndex
 
 from .base import FWIDTH_FRAC, AbstractComponentModeler
 
-MatrixIndex = tuple[str, pd.NonNegativeInt]  # the 'i' in S_ij
-Element = tuple[MatrixIndex, MatrixIndex]  # the 'ij' in S_ij
 
-
-class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
+class ModalComponentModeler(AbstractComponentModeler):
     """A tool for modeling devices and computing scattering matrix elements.
 
     This class orchestrates the process of running multiple simulations to
@@ -41,6 +39,24 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
         "For each input mode, one simulation will be run with a modal source.",
+    )
+
+    run_only: Optional[tuple[MatrixIndex, ...]] = pd.Field(
+        None,
+        title="Run Only",
+        description="Set of matrix indices that define the simulations to run. "
+        "If ``None``, simulations will be run for all indices in the scattering matrix. "
+        "If a tuple is given, simulations will be run only for the given matrix indices.",
+    )
+
+    element_mappings: tuple[tuple[Element, Element, Complex], ...] = pd.Field(
+        (),
+        title="Element Mappings",
+        description="Tuple of S matrix element mappings, each described by a tuple of "
+        "(input_element, output_element, coefficient), where the coefficient is the "
+        "element_mapping coefficient describing the relationship between the input and output "
+        "matrix element. If all elements of a given column of the scattering matrix are defined "
+        "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
     )
 
     @cached_property
@@ -87,6 +103,17 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
             for mode_index in range(port.mode_spec.num_modes):
                 matrix_indices.append((port.name, mode_index))
         return tuple(matrix_indices)
+
+    @cached_property
+    def matrix_indices_source(self) -> tuple[MatrixIndex, ...]:
+        """Tuple of all the source matrix indices, which may be less than the total number of
+        ports."""
+        return super().matrix_indices_source
+
+    @cached_property
+    def matrix_indices_run_sim(self) -> tuple[MatrixIndex, ...]:
+        """Tuple of all the matrix indices that will be used to run simulations."""
+        return super().matrix_indices_run_sim
 
     @cached_property
     def port_names(self) -> tuple[list[str], list[str]]:
