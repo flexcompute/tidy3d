@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic, Optional, TypeVar, Union, get_args
+from typing import TYPE_CHECKING, Optional, Union, get_args
 
 import pydantic.v1 as pd
 
@@ -24,6 +24,7 @@ from tidy3d.log import log
 from tidy3d.plugins.smatrix.ports.modal import Port
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.plugins.smatrix.types import Element, MatrixIndex, NetworkElement, NetworkIndex
 
 if TYPE_CHECKING:
     from tidy3d.web.core.types import PayType
@@ -32,18 +33,18 @@ if TYPE_CHECKING:
 FWIDTH_FRAC = 1.0 / 10
 DEFAULT_DATA_DIR = "."
 
-# Generic type variables for matrix indices and elements
-IndexType = TypeVar("IndexType")
-ElementType = TypeVar("ElementType")
+IndexType = Union[MatrixIndex, NetworkIndex]
+ElementType = Union[Element, NetworkElement]
 
 
-class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseModel):
+class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     """Tool for modeling devices and computing port parameters."""
 
     name: str = pd.Field(
         "",
         title="Name",
     )
+
     simulation: Simulation = pd.Field(
         ...,
         title="Simulation",

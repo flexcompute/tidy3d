@@ -19,13 +19,13 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.types import ArrayFloat1D
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
-from tidy3d.plugins.smatrix.network import SParamDef
 from tidy3d.plugins.smatrix.ports.types import (
     LumpedPortType,
     PortCurrentType,
     PortVoltageType,
     TerminalPortType,
 )
+from tidy3d.plugins.smatrix.types import SParamDef
 
 
 def port_array_inv(matrix: DataArray):
