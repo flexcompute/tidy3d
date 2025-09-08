@@ -125,14 +125,24 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
         if run_only is None:
             return element_mappings
 
-        valid_set = set(run_only)
+        def list2tuple(item):
+            if isinstance(item, list):
+                return tuple(item)
+            return item
+
+        run_only_cleaned = []
+        for item in run_only:
+            run_only_cleaned.append(list2tuple(item))
+
+        valid_set = set(run_only_cleaned)
         invalid_indices = set()
         for mapping in element_mappings:
             input_element = mapping[0]
             output_element = mapping[1]
             for source_index in [input_element[1], output_element[1]]:
-                if source_index not in valid_set:
-                    invalid_indices.add(source_index)
+                source_index_cleaned = list2tuple(source_index)
+                if source_index_cleaned not in valid_set:
+                    invalid_indices.add(source_index_cleaned)
         if invalid_indices:
             raise SetupError(
                 f"'element_mappings' references source index(es) {invalid_indices} "

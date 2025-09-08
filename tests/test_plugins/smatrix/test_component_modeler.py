@@ -390,13 +390,13 @@ def test_mapping_with_run_only():
     element_mappings are provided."""
     ports = make_ports()
 
-    EXCLUDE_INDEX = ("right_bot", 0)
+    EXCLUDE_INDEX = ["right_bot", 0]
     element_mappings = []
     run_only = []
     # add a mapping to each element in the row of EXCLUDE_INDEX
     for port in ports:
         for mode_index in range(port.mode_spec.num_modes):
-            row_index = (port.name, mode_index)
+            row_index = [port.name, mode_index]
             run_only.append(row_index)
             if row_index != EXCLUDE_INDEX:
                 mapping = ((row_index, row_index), (row_index, EXCLUDE_INDEX), +1)
@@ -408,7 +408,7 @@ def test_mapping_with_run_only():
 
     # Will pass, since run_only covers all source indices in element_mapping
     _ = make_component_modeler(element_mappings=element_mappings, run_only=run_only)
-
     run_only.remove(EXCLUDE_INDEX)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pydantic.ValidationError) as exc_info:
         _ = make_component_modeler(element_mappings=element_mappings, run_only=run_only)
+    assert "not present" in str(exc_info.value)
