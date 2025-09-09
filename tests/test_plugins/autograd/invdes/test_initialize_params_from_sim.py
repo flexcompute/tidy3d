@@ -253,3 +253,34 @@ def test_3d_param_grid_supported_and_converges_to_zero():
     assert params.shape == params0.shape
     assert np.all(params >= 0.0) and np.all(params <= 1.0)
     assert np.allclose(params, 0.0, atol=1e-3)
+
+
+def test_param_to_structure_kwargs_forwarded():
+    """Extra kwargs (e.g., beta) are forwarded into param_to_structure."""
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 0.0),
+        grid_spec=td.GridSpec.uniform(dl=1.0),
+        boundary_spec=td.BoundarySpec.pml(x=True, y=True),
+        run_time=1e-12,
+        medium=td.Medium(permittivity=1.0),
+    )
+    box = td.Box(center=(0, 0, 0), size=(1.0, 1.0, 0.0))
+
+    def param_to_structure(p: np.ndarray, beta: float = 1.0) -> td.Structure:
+        # Include beta to verify kwargs are accepted and used.
+        eps = 1.0 + 3.0 * beta * p
+        eps3d = eps.reshape((*p.shape, 1))
+        return td.Structure.from_permittivity_array(geometry=box, eps_data=eps3d)
+
+    params0 = np.full((4, 3), 0.6)
+    # Pass beta via kwargs without functools.partial
+    params = initialize_params_from_simulation(
+        sim=sim,
+        param_to_structure=param_to_structure,
+        params0=params0,
+        maxiter=10,
+        beta=2.0,
+    )
+    assert params.shape == params0.shape
+    assert np.all(params >= 0.0) and np.all(params <= 1.0)
