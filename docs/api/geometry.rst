@@ -10,7 +10,7 @@ Geometry objects are used in Tidy3D to build EM structures. A variety of built-i
 
 .. note::
 
-   The default length unit in Tidy3D is the micrometer (:math:`\mu`m).
+   The default length unit in Tidy3D is the micrometer (:math:`\mu`\m).
 
 Tidy3D also has built-in interoperability with GDSII and STL file formats. See the sections below for details:
 

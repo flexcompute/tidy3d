@@ -1,5 +1,3 @@
-
-
 Lumped Port and Elements
 ------------------------
 
@@ -96,12 +94,12 @@ All lumped elements should be added to the ``lumped_elements`` field of the base
 
    For more in-depth discussion and examples, please see the following learning center article:
 
-   + `Using lumped elements in Tidy3D simulations <../notebooks/LinearLumpedElements.html>`_
+   + `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
 
    Example applications:
 
-   + `Hybrid microstrip/co-planar waveguide bandpass filter <../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
-   + `Designing a power divider (part 3) <../notebooks/WPDHarmonicSuppression3.html>`_
+   + `Hybrid microstrip/co-planar waveguide bandpass filter <../../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
+   + `Designing a power divider (part 3) <../../notebooks/WPDHarmonicSuppression3.html>`_
 
 
 ~~~~

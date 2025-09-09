@@ -1,6 +1,3 @@
-
-
-
 Wave Port
 ---------
 
@@ -92,11 +89,11 @@ As before, only one of the two integration paths (voltage or current) are strict
 
    For more information, please see the following articles:
 
-   + `Computing the characteristic impedance of transmission lines <../notebooks/CharacteristicImpedanceCalculator.html>`_
+   + `Computing the characteristic impedance of transmission lines <../../notebooks/CharacteristicImpedanceCalculator.html>`_
 
    Example applications:
 
-   + `Differential stripline benchmark <../notebooks/DifferentialStripline.html>`_
+   + `Differential stripline benchmark <../../notebooks/DifferentialStripline.html>`_
 
 
 ~~~~

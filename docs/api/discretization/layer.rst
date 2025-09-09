@@ -1,5 +1,3 @@
-~~~~
-
 Layer-based Grid Refinement
 ---------------------------
 
@@ -47,12 +45,12 @@ Note that different ``LayerRefinementSpec`` instances are recommended for struct
    For more explanation and examples, please refer to the following pages:
 
    + `Grid Discretization <../discretization.html>`_
-   + `Automatic mesh refinement in layered structures <../notebooks/LayerRefinement.html>`_
+   + `Automatic mesh refinement in layered structures <../../notebooks/LayerRefinement.html>`_
 
    Example applications:
 
-   + `Edge feed patch antenna benchmark <../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
-   + `Hybrid microstrip/co-planar waveguide bandpass filter <../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
+   + `Edge feed patch antenna benchmark <../../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
+   + `Hybrid microstrip/co-planar waveguide bandpass filter <../../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
 
 
 ~~~~
