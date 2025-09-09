@@ -20,8 +20,8 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
-from tidy3d.plugins.smatrix.network import SParamDef
 from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.plugins.smatrix.types import SParamDef
 from tidy3d.plugins.smatrix.utils import (
     ab_to_s,
     check_port_impedance_sign,
