@@ -23,6 +23,7 @@ from tidy3d.components.autograd.constants import (
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
@@ -94,7 +95,7 @@ def is_valid_for_autograd_async(simulations: dict[str, td.Simulation]) -> bool:
 
 
 def run(
-    simulation: typing.Any,
+    simulation: WorkflowType,
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
@@ -111,14 +112,14 @@ def run(
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
-) -> td.SimulationData:
+) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.WorkflowDataType` object.
 
     Parameters
     ----------
-    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModalComponentModeler`, :class:`.TerminalComponentModeler`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -154,8 +155,8 @@ def run(
         Task priority for vGPU queue (1=lowest, 10=highest).
     Returns
     -------
-    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
-        Object containing solver results for the supplied simulation.
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`, :class:`.ModalComponentModelerData`, :class:`.TerminalComponentModelerData`]
+        Object containing solver results for the supplied input.
 
     Notes
     -----
@@ -203,10 +204,7 @@ def run(
     from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
 
     if isinstance(simulation, typing.get_args(ComponentModelerType)):
-        sims = getattr(simulation, "sim_dict", None)
-        if local_gradient or (
-            isinstance(sims, dict) and any(is_valid_for_autograd(s) for s in sims.values())
-        ):
+        if any(is_valid_for_autograd(s) for s in simulation.sim_dict.values()):
             from tidy3d.plugins.smatrix import run as smatrix_run
 
             path_dir = dirname(path) or "."
