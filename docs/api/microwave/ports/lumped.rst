@@ -14,7 +14,7 @@ The ``LumpedPort`` feature represents a planar, uniform current excitation with 
 
    # Define a lumped port
    my_port_1 = LumpedPort(
-       name='My Port 1',
+       name="My Port 1",
        center=(0,0,0),
        size=(0, port_width, port_height),
        voltage_axis=2,   # z-axis aligned excitation
@@ -33,12 +33,12 @@ The ``CoaxialLumpedPort`` represents an analytical coaxial field source.
 
    # Define coaxial lumped port
    my_coaxial_port_1 = CoaxialLumpedPort(
-       name='My Coaxial Port 1',
+       name="My Coaxial Port 1",
        center=(0,0,0),
        inner_diameter=1000,   # inner diameter in um
        outer_diameter=2000,   # outer diameter in um
        normal_axis=0,   # normal axis to port plane
-       direction='+',   # direction of signal along normal axis
+       direction="+",   # direction of signal along normal axis
        impedance=50,   # port impedance
    )
 
@@ -61,7 +61,7 @@ For a simple resistive lumped element, use ``LumpedResistor``.
 .. code-block:: python
 
    my_resistor = LumpedResistor(
-       name='My resistor',
+       name="My resistor",
        center=(0,0,0),
        size=(0, element_width, element_height),
        voltage_axis=2,   # z-axis aligned
@@ -73,7 +73,7 @@ For more complicated RLC networks, use the general ``LinearLumpedElement`` class
 .. code-block:: python
 
    my_lumped_element = LinearLumpedElement(
-       name='My lumped element',
+       name="My lumped element",
        center=(0,0,0),
        size=(0, element_width, element_height),
        voltage_axis=2,   # z-axis aligned

@@ -63,4 +63,8 @@ More advanced material models, including frequency dependence and anisotropy, ar
 
    + `EM Mediums <../mediums.html>`_
 
+   For the built-in RF material library, please refer to this page:
+
+   + `RF Material Library <rf_material_library.html>`_
+
 ~~~~
