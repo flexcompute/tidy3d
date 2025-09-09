@@ -232,6 +232,35 @@ def test_component_modeler_autograd_tracing(patch_web_autograd_emulator, tmp_pat
     assert not np.isclose(g, 0.0)
 
 
+def test_component_modeler_autograd_error_with_element_mappings(
+    patch_web_autograd_emulator, tmp_path
+):
+    """Verify that we get the expected error when running a component modeler with `element_mappings` in autograd."""
+    td.config.logging_level = "ERROR"
+    td.config.log_suppression = True
+
+    def objective(scale: float) -> float:
+        modeler = build_modal_modeler(scale)
+        # set up symmetry (port names only; directions are handled internally)
+        left = ("p1", 0)
+        right = ("p2", 0)
+
+        element_mappings = [
+            ((left, right), (right, left), 1.0),
+        ]
+
+        modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
+        s = modeler_with_mappings.run(
+            path_dir=str(tmp_path),
+            verbose=False,
+            local_gradient=True,
+        )
+        return anp.real(anp.sum(s.data))
+
+    g = ag.grad(objective)(1.0)
+    assert np.isfinite(g)
+
+
 def test_component_modeler_autograd_tracing_modeler_run(patch_web_autograd_emulator, tmp_path):
     td.config.logging_level = "ERROR"
     td.config.log_suppression = True

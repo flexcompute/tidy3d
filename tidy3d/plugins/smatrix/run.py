@@ -4,6 +4,7 @@ import json
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.index import SimulationDataMap
+from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
@@ -179,15 +180,24 @@ def _run_local(
     # autograd path if any sim is valid for autograd
     from tidy3d.web.api.autograd import autograd as web_ag
 
-    sims = getattr(modeler, "sim_dict", None) or {}
+    sims = modeler.sim_dict
     if any(web_ag.is_valid_for_autograd(sim) for sim in sims.values()):
+        if len(modeler.element_mappings) > 0:
+            log.warning(
+                "Element mappings are used to populate S-matrix values, but autograd gradients "
+                "are computed only for simulated elements. Gradients for mapped elements are not "
+                "included. For optimization with autograd, prefer enforcing symmetry in geometry/"
+                "objective functions and use 'run_only' to select unique sources.",
+                log_once=True,
+            )
+
         from tidy3d.web.api.autograd.autograd import _run_async
 
         kwargs.setdefault("folder_name", "default")
         kwargs.setdefault("simulation_type", "tidy3d_autograd_async")
         kwargs.setdefault("path_dir", path_dir)
 
-        sim_data_map = _run_async(simulations=modeler.sim_dict, **kwargs)
+        sim_data_map = _run_async(simulations=sims, **kwargs)
 
         return compose_modeler_data_from_batch_data(modeler=modeler, batch_data=sim_data_map)
 

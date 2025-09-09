@@ -227,7 +227,8 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     ):
         log.warning(
             "'ComponentModeler.run()' is deprecated and will be removed in a future release. "
-            "Use 'web.run(modeler)' instead.",
+            "Use web.run(modeler) instead. 'web.run' returns a 'ComponentModelerData' object; "
+            "get the scattering matrix via 'data.smatrix()'.",
             log_once=True,
         )
         from tidy3d.plugins.smatrix.run import _run_local
