@@ -106,7 +106,7 @@ def make_filter_and_project(
 
 def initialize_params_from_simulation(
     sim: td.Simulation,
-    param_to_structure: Callable[[np.ndarray], td.Structure],
+    param_to_structure: Callable[..., td.Structure],
     params0: np.ndarray,
     *,
     freq: Optional[float] = None,
@@ -115,6 +115,7 @@ def initialize_params_from_simulation(
     bounds: tuple[Optional[float], Optional[float]] = (0.0, 1.0),
     rel_improve_tol: float = 1e-3,
     verbose: bool = False,
+    **param_kwargs,
 ) -> np.ndarray:
     """Initialize design parameters to match base simulation permittivity in a region.
 
@@ -143,9 +144,10 @@ def initialize_params_from_simulation(
     ----------
     sim : :class:`.Simulation`
         Base simulation without the design structure.
-    param_to_structure : Callable[[np.ndarray], :class:`.Structure`]
+    param_to_structure : Callable[..., :class:`.Structure`]
         Function mapping parameters to a :class:`.Structure` whose medium permittivity is used
-        for comparison.
+        for comparison. Any extra keyword arguments passed to this initializer are forwarded to
+        ``param_to_structure``.
     params0 : :class:`numpy.ndarray`
         Initial parameter array (2D or 3D). Values may take any range, consistent with ``bounds``
         and the expectations of ``param_to_structure``.
@@ -203,7 +205,7 @@ def initialize_params_from_simulation(
     >>> params.shape
     (3, 3)
     """
-    structure_init = param_to_structure(params0)
+    structure_init = param_to_structure(params0, **param_kwargs)
 
     if outside_handling not in ("extrapolate", "mask", "nan"):
         raise ValueError("'outside_handling' must be one of {'extrapolate', 'mask', 'nan'}.")
@@ -260,7 +262,7 @@ def initialize_params_from_simulation(
 
     def loss_fn(params_vec: np.ndarray) -> float:
         params = params_vec.reshape(params0.shape)
-        structure = param_to_structure(params)
+        structure = param_to_structure(params, **param_kwargs)
         eps_design = structure.medium.permittivity.data
         if mask is None:
             res = eps_base_interp - eps_design
