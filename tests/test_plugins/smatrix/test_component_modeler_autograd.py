@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 import tidy3d as td
+from tidy3d.exceptions import AdjointError
 from tidy3d.plugins.smatrix.analysis import terminal as terminal_analysis
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
@@ -230,6 +231,37 @@ def test_component_modeler_autograd_tracing(patch_web_autograd_emulator, tmp_pat
     g = ag.grad(objective)(1.0)
     assert np.isfinite(g)
     assert not np.isclose(g, 0.0)
+
+
+def test_component_modeler_autograd_error_with_element_mappings(
+    patch_web_autograd_emulator, tmp_path
+):
+    """Verify that we get the expected error when running a component modeler with `element_mappings` in autograd."""
+    td.config.logging_level = "ERROR"
+    td.config.log_suppression = True
+
+    def objective(scale: float) -> float:
+        modeler = build_modal_modeler(scale)
+        # set up symmetry
+        left = ("p1_-", 0)
+        right = ("p2_+", 0)
+
+        element_mappings = [
+            ((left, right), (right, left), 1.0),
+        ]
+
+        modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
+        modeler_data = modeler_with_mappings.run(
+            path_dir=str(tmp_path),
+            verbose=False,
+            local_gradient=True,
+        )
+        s = modeler_data.smatrix()
+        return anp.real(anp.sum(s.data))
+
+    # verify that we get an exception for autograd with element_mappings
+    with pytest.raises(AdjointError, match="Element mappings are not supported with autograd."):
+        g = ag.grad(objective)(1.0)
 
 
 def test_component_modeler_autograd_tracing_modeler_run(patch_web_autograd_emulator, tmp_path):

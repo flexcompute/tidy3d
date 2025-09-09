@@ -4,6 +4,7 @@ import json
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.index import SimulationDataMap
+from tidy3d.exceptions import AdjointError
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
@@ -181,6 +182,14 @@ def _run_local(
 
     sims = getattr(modeler, "sim_dict", None) or {}
     if any(web_ag.is_valid_for_autograd(sim) for sim in sims.values()):
+        if len(modeler.element_mappings) > 0:
+            raise AdjointError(
+                "Element mappings are not supported with autograd. We recommend "
+                "enforcing S-Matrix symmetry in the geometry creation and objective function and "
+                "running the unique simulations via the `run_only` specification in the component "
+                "modeler."
+            )
+
         from tidy3d.web.api.autograd.autograd import _run_async
 
         kwargs.setdefault("folder_name", "default")
