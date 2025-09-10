@@ -133,15 +133,6 @@ To ease the transition, we provide utilities that mimic the old workflow.
           modeler=my_modeler, batch_data=batch_data
       )
 
-- **Legacy run command**:
-  The `run` command from the old API is available as a legacy helper.
-
-  .. code-block:: python
-
-     from tidy3d.plugins.smatrix.run import run
-
-     modeler_data = run(my_modeler)
-
 
 API Reference
 ~~~~~~~~~~~~~
@@ -158,7 +149,6 @@ For more details, see the API documentation for the new classes and functions:
    tidy3d.plugins.smatrix.TerminalComponentModelerData
    tidy3d.SimulationMap
    tidy3d.SimulationDataMap
-   tidy3d.plugins.smatrix.run.run
    tidy3d.plugins.smatrix.run.create_batch
    tidy3d.plugins.smatrix.run.compose_modeler_data_from_batch_data
    tidy3d.plugins.smatrix.run.compose_modeler_data
