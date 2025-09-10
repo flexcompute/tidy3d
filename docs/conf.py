@@ -69,6 +69,7 @@ autodoc_default_options = {
     "members": True,
     "member-order": "bysource",
     "undoc-members": True,
+    "exclude-members": "__hash__",
 }
 autodoc_typehints = "none"
 ## TODO DEBATE KEEP

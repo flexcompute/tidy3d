@@ -282,13 +282,13 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     See Also
     --------
 
-    :class:`GridSpec`
+    :class:`.GridSpec`
         Collective grid specification for all three dimensions.
 
-    :class:`UniformGrid`
+    :class:`.UniformGrid`
         Uniform 1D grid.
 
-    :class:`AutoGrid`
+    :class:`.AutoGrid`
         Specification for non-uniform grid along a given dimension.
 
     **Notebooks:**
@@ -299,14 +299,14 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         SubpixelSpec(),
         title="Subpixel Averaging",
         description="Apply subpixel averaging methods of the permittivity on structure interfaces "
-        "to result in much higher accuracy for a given grid size. Supply a :class:`SubpixelSpec` "
+        "to result in much higher accuracy for a given grid size. Supply a :class:`.SubpixelSpec` "
         "to this field to select subpixel averaging methods separately on dielectric, metal, and "
         "PEC material interfaces. Alternatively, user may supply a boolean value: "
         "``True`` to apply the default subpixel averaging methods corresponding to ``SubpixelSpec()`` "
         ", or ``False`` to apply staircasing.",
     )
     """
-    Supply :class:`SubpixelSpec` to select subpixel averaging methods separately for dielectric, metal, and
+    Supply :class:`.SubpixelSpec` to select subpixel averaging methods separately for dielectric, metal, and
     PEC material interfaces. Alternatively, supply ``True`` to use default subpixel averaging methods,
     or ``False`` to staircase all structure interfaces.
 
@@ -2204,7 +2204,7 @@ class Simulation(AbstractYeeGridSimulation):
     **Notebooks:**
         * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
         * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
-        * See nearly all notebooks for :class:`Simulation` applications.
+        * See nearly all notebooks for :class:`.Simulation` applications.
 
     **Lectures:**
         * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
@@ -2526,13 +2526,13 @@ class Simulation(AbstractYeeGridSimulation):
     :attr:`courant`
         The Courant-Friedrichs-Lewy (CFL) stability factor
 
-    :class:`GridSpec`
+    :class:`.GridSpec`
         Collective grid specification for all three dimensions.
 
-    :class:`UniformGrid`
+    :class:`.UniformGrid`
         Uniform 1D grid.
 
-    :class:`AutoGrid`
+    :class:`.AutoGrid`
         Specification for non-uniform grid along a given dimension.
 
     **Notebooks:**
@@ -2685,7 +2685,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     **Usage Caveats**
 
-    It is very important to understand the way the dielectric permittivity of the :class:`Structure` list is resolved
+    It is very important to understand the way the dielectric permittivity of the :class:`.Structure` list is resolved
     by the simulation grid. Without :attr:`subpixel` averaging, the structure geometry in relation to the
     grid points can lead to its features permittivity not being fully resolved by the
     simulation.
@@ -2699,7 +2699,7 @@ class Simulation(AbstractYeeGridSimulation):
     See Also
     --------
 
-    :class:`Structure`:
+    :class:`.Structure`:
         Defines a physical object that interacts with the electromagnetic fields.
 
     :attr:`subpixel`
@@ -2732,7 +2732,7 @@ class Simulation(AbstractYeeGridSimulation):
         "determine the symmetry value.",
     )
     """
-    You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
+    You should set the ``symmetry`` parameter in your :class:`.Simulation` object using a tuple of integers
     defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
     Each element can be 0 (no symmetry), 1 (even, i.e. :class:`PMC` symmetry) or -1 (odd, i.e. :class:`PEC`
     symmetry). Note that the vectorial nature of the fields must be considered to determine the symmetry value
@@ -5036,7 +5036,7 @@ class Simulation(AbstractYeeGridSimulation):
         Parameters
         ----------
         fname : str
-            Full path to the .gds file to save the :class:`Simulation` slice to.
+            Full path to the .gds file to save the :class:`.Simulation` slice to.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
         y : float = None
@@ -5284,7 +5284,7 @@ class Simulation(AbstractYeeGridSimulation):
     def num_computational_grid_points(self):
         """Number of cells in the computational domain for this simulation. This is usually
         different from ``num_cells`` due to the boundary conditions. Specifically, all boundary
-        conditions apart from ``Periodic`` require an extra pixel at the end of the simulation
+        conditions apart from :class:`Periodic` require an extra pixel at the end of the simulation
         domain. On the other hand, if a symmetry is present along a given dimension, only half of
         the grid cells along that dimension will be in the computational domain.
 

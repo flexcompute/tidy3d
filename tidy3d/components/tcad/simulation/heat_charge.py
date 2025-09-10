@@ -269,12 +269,12 @@ class HeatChargeSimulation(AbstractSimulation):
     medium: StructureMediumType = pd.Field(
         Medium(),
         title="Background Medium",
-        description="Background medium of simulation, defaults to a standard dispersion-less :class:`Medium` if not "
+        description="Background medium of simulation, defaults to a standard dispersion-less :class:`.Medium` if not "
         "specified.",
         discriminator=TYPE_TAG_STR,
     )
     """
-    Background medium of simulation, defaults to a standard dispersion-less :class:`Medium` if not specified.
+    Background medium of simulation, defaults to a standard dispersion-less :class:`.Medium` if not specified.
     """
 
     sources: tuple[annotate_type(HeatChargeSourceType), ...] = pd.Field(

@@ -30,7 +30,7 @@ from tidy3d.plugins.smatrix import (
     WavePort,
 )
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
-from tidy3d.plugins.smatrix.utils import validate_square_matrix
+from tidy3d.plugins.smatrix.utils import s_to_z, validate_square_matrix
 
 from ...utils import run_emulated
 from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
@@ -382,7 +382,7 @@ def test_s_to_z_component_modeler():
     }
 
     s_matrix = TerminalPortDataArray(data=values, coords=coords)
-    z_matrix = TerminalComponentModelerData.s_to_z(s_matrix, reference=Z0)
+    z_matrix = s_to_z(s_matrix, reference=Z0)
     z_matrix_at_f = z_matrix.sel(f=1e8)
     assert np.isclose(z_matrix_at_f[0, 0], Z11)
     assert np.isclose(z_matrix_at_f[0, 1], Z12)
@@ -396,7 +396,7 @@ def test_s_to_z_component_modeler():
         "port": port_names,
     }
     z_port_matrix = PortDataArray(data=values, coords=coords)
-    z_matrix = TerminalComponentModelerData.s_to_z(s_matrix, reference=z_port_matrix)
+    z_matrix = s_to_z(s_matrix, reference=z_port_matrix)
     z_matrix_at_f = z_matrix.sel(f=1e8)
     assert np.isclose(z_matrix_at_f[0, 0], Z11)
     assert np.isclose(z_matrix_at_f[0, 1], Z12)
@@ -435,24 +435,67 @@ def test_complex_reference_s_to_z_component_modeler():
         skrf_S_50ohm.s, coords={"f": freqs, "port_out": ports, "port_in": ports}
     )
     # Test real reference impedance calculations
-    z_tidy3d = TerminalComponentModelerData.s_to_z(smatrix, reference=50, s_param_def="power")
+    z_tidy3d = s_to_z(smatrix, reference=50, s_param_def="power")
     assert np.all(np.isclose(z_tidy3d.values, Z))
-    z_tidy3d = TerminalComponentModelerData.s_to_z(smatrix, reference=50, s_param_def="pseudo")
+    z_tidy3d = s_to_z(smatrix, reference=50, s_param_def="pseudo")
     assert np.all(np.isclose(z_tidy3d.values, Z))
 
     # Test complex reference impedance calculations
     z0_tidy3d = PortDataArray(data=z0, coords={"f": freqs, "port": ports})
     smatrix.values = skrf_S_power.s
-    z_tidy3d = TerminalComponentModelerData.s_to_z(
-        smatrix, reference=z0_tidy3d, s_param_def="power"
-    )
+    z_tidy3d = s_to_z(smatrix, reference=z0_tidy3d, s_param_def="power")
     assert np.all(np.isclose(z_tidy3d.values, Z))
 
     smatrix.values = skrf_S_pseudo.s
-    z_tidy3d = TerminalComponentModelerData.s_to_z(
-        smatrix, reference=z0_tidy3d, s_param_def="pseudo"
-    )
+    z_tidy3d = s_to_z(smatrix, reference=z0_tidy3d, s_param_def="pseudo")
     assert np.all(np.isclose(z_tidy3d.values, Z))
+
+
+def test_data_s_to_z(monkeypatch):
+    """Test 's_to_z' method of 'TerminalComponentModelerData'."""
+    modeler = make_component_modeler(planar_pec=True)
+    modeler_data = run_component_modeler(monkeypatch, modeler)
+
+    port_names = [p.name for p in modeler.ports]
+    freqs = modeler.freqs
+
+    s11 = 0.1
+    s12 = 0.8
+    s21 = 0.8
+    s22 = 0.1
+
+    values = np.array(
+        len(freqs) * [[[s11, s12], [s21, s22]]],
+        dtype=complex,
+    )
+    coords = {
+        "f": freqs,
+        "port_out": port_names,
+        "port_in": port_names,
+    }
+    s_matrix_data = TerminalPortDataArray(data=values, coords=coords)
+
+    from tidy3d.plugins.smatrix.data.terminal import MicrowaveSMatrixData
+
+    s_matrix_container = MicrowaveSMatrixData(data=s_matrix_data)
+
+    monkeypatch.setattr(
+        TerminalComponentModelerData, "smatrix", lambda self, **kwargs: s_matrix_container
+    )
+
+    z0 = 50.0
+    z_matrix = modeler_data.s_to_z(reference=z0)
+
+    delta_s = (1 - s11) * (1 - s22) - s12 * s21
+    z11 = z0 * ((1 + s11) * (1 - s22) + s12 * s21) / delta_s
+    z12 = z0 * (2 * s12) / delta_s
+    z21 = z0 * (2 * s21) / delta_s
+    z22 = z0 * ((1 - s11) * (1 + s22) + s12 * s21) / delta_s
+
+    assert np.allclose(z_matrix.sel(port_in=port_names[0], port_out=port_names[0]).values, z11)
+    assert np.allclose(z_matrix.sel(port_in=port_names[1], port_out=port_names[0]).values, z12)
+    assert np.allclose(z_matrix.sel(port_in=port_names[0], port_out=port_names[1]).values, z21)
+    assert np.allclose(z_matrix.sel(port_in=port_names[1], port_out=port_names[1]).values, z22)
 
 
 def test_ab_to_s_component_modeler():
@@ -972,7 +1015,7 @@ def test_wave_port_validate_current_integral(tmp_path):
 
 
 def test_port_impedance_check():
-    """ "Tests the impedance consistency check."""
+    """Tests the impedance consistency check."""
     Z_numpy = np.ones((50, 3))
     Z_numpy[:, 1] = -1.0
     # All ok if same sign for every frequency
@@ -1029,9 +1072,7 @@ def test_antenna_helpers(monkeypatch, tmp_path):
     assert isinstance(combined_data, td.DirectivityData)
 
     # Test power wave amplitude computation
-    a, b = modeler_data.compute_power_wave_amplitudes_at_each_port(
-        modeler_data.port_reference_impedances, sim_data
-    )
+    a, b = modeler_data.compute_power_wave_amplitudes_at_each_port(sim_data=sim_data)
     assert isinstance(a, PortDataArray)
     assert isinstance(b, PortDataArray)
 

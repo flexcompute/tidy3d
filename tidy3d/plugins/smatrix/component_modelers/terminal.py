@@ -435,12 +435,12 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
     @cached_property
     def _lumped_ports(self) -> list[AbstractLumpedPort]:
-        """A list of all lumped ports in the ``TerminalComponentModeler``"""
+        """A list of all lumped ports in the :class:`.TerminalComponentModeler`"""
         return [port for port in self.ports if isinstance(port, AbstractLumpedPort)]
 
     @cached_property
     def _wave_ports(self) -> list[WavePort]:
-        """A list of all wave ports in the ``TerminalComponentModeler``"""
+        """A list of all wave ports in the :class:`.TerminalComponentModeler`"""
         return [port for port in self.ports if isinstance(port, WavePort)]
 
     @staticmethod

@@ -111,7 +111,11 @@ def compute_F(Z_numpy: ArrayFloat1D, s_param_def: SParamDef = "pseudo"):
 
     The matrix F is used when converting between S and Z parameters for circuits
     with differing port impedances. Its diagonal elements are defined as
-    :math:`F_{kk} = 1 / (2 * \sqrt{Re(Z_k)})`.
+
+    .. math::
+
+        F_{kk} = 1 / (2 * \sqrt{Re(Z_k)})
+
 
     Parameters
     ----------
@@ -157,12 +161,13 @@ def compute_port_VI(
 def compute_power_wave_amplitudes(
     port: LumpedPortType, sim_data: SimulationData
 ) -> tuple[FreqDataArray, FreqDataArray]:
-    """Calculates the unnormalized power wave amplitudes from port voltage (V),
+    r"""Calculates the unnormalized power wave amplitudes from port voltage (V),
     current (I), and impedance (Z0) using:
 
     .. math::
-        a = (V + Z0*I) / (2 * sqrt(Re(Z0)))
-        b = (V - Z0*I) / (2 * sqrt(Re(Z0)))
+
+        a = (V + Z0*I) / (2 * \sqrt(Re(Z0)))
+        b = (V - Z0*I) / (2 * \sqrt(Re(Z0)))
 
     Parameters
     ----------
@@ -187,9 +192,10 @@ def compute_power_delivered_by_port(
     port: LumpedPortType, sim_data: SimulationData
 ) -> FreqDataArray:
     """Compute the power delivered to the network by a lumped port.
-
     The power is calculated as the incident power minus the reflected power:
-    P = 0.5 * (|a|^2 - |b|^2).
+
+    .. math::
+        P = 0.5 * (|a|^2 - |b|^2)
 
     Parameters
     ----------
@@ -233,6 +239,15 @@ def s_to_z(
     -------
     DataArray
         The computed impedance (Z) matrix.
+
+    Examples
+    --------
+    The `s_to_z` function is a standalone utility that requires an S-matrix as input.
+    This is useful if you have S-matrix data generated
+    externally from a :class:`.TerminalComponentModelerData` and want to compare them.
+
+    >>> z_matrix = s_to_z(s_matrix=s_matrix, reference=50, s_param_def="power") # doctest: +SKIP
+    >>> z_11 = z_matrix.sel(port_out="port_1", port_in="port_1") # doctest: +SKIP
     """
     validate_square_matrix(s_matrix, "s_to_z")
     # Ensure dimensions are ordered properly

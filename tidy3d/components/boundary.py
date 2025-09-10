@@ -299,7 +299,7 @@ class ModeABCBoundary(AbstractABCBoundary):
 
         Returns
         -------
-        :class:`ModeABCBoundary`
+        :class:`.ModeABCBoundary`
             Boundary conditions for absorbing the desired mode.
 
         Example
@@ -340,7 +340,7 @@ class ModeABCBoundary(AbstractABCBoundary):
 
         Returns
         -------
-        :class:`ModeABCBoundary`
+        :class:`.ModeABCBoundary`
             Boundary conditions for absorbing the desired mode.
 
         Example

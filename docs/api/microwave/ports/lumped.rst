@@ -1,5 +1,7 @@
-Lumped Port and Elements
-------------------------
+.. _lumped_port:
+
+Lumped Port & Elements
+----------------------
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -8,7 +10,7 @@ Lumped Port and Elements
    tidy3d.plugins.smatrix.LumpedPort
    tidy3d.plugins.smatrix.CoaxialLumpedPort
 
-The ``LumpedPort`` feature represents a planar, uniform current excitation with a fixed impedance termination.
+The :class:`LumpedPort` feature represents a planar, uniform current excitation with a fixed impedance termination.
 
 .. code-block:: python
 
@@ -21,11 +23,11 @@ The ``LumpedPort`` feature represents a planar, uniform current excitation with 
        impedance=50,   # port impedance
    )
 
-The ``LumpedPort`` can be 1D (line) or 2D (plane). For 2D, only axis-aligned planes are supported at this time. The port ``impedance`` value can be complex.
+The :class:`LumpedPort` can be 1D (line) or 2D (plane). For 2D, only axis-aligned planes are supported at this time. Only real ``impedance`` values are supported at this time. 
 
 .. note::
 
-   Lumped ports and elements are fundamentally approximations and thus should only be used when the port/element size is much smaller than the wavelength of interest (typically ``lambda/10``). For more accurate results, especially when the port is adjacent to an intentional waveguide or transmission line, consider using the ``WavePort`` excitation instead.
+   Lumped ports and elements are fundamentally approximations and thus should only be used when the port/element size is much smaller than the wavelength of interest (typically ``lambda/10``). For more accurate results, especially when the port is adjacent to an intentional waveguide or transmission line, consider using the :class:`.WavePort` excitation instead.
 
 The ``CoaxialLumpedPort`` represents an analytical coaxial field source.
 
@@ -80,7 +82,7 @@ For more complicated RLC networks, use the general ``LinearLumpedElement`` class
        network=RLCNetwork(resistance=50, inductance=1e-9)  # RLC network
    )
 
-All lumped elements should be added to the ``lumped_elements`` field of the base ``Simulation`` instance.
+All lumped elements should be added to the ``lumped_elements`` field of the base :class:`.Simulation` instance.
 
 .. code-block:: python
 

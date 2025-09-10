@@ -1,5 +1,7 @@
-RF Materials
-------------
+.. _rf_material_models:
+
+RF Materials Models
+-------------------
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -12,7 +14,7 @@ RF Materials
    tidy3d.HammerstadSurfaceRoughness
    tidy3d.HuraySurfaceRoughness
 
-The ``PECMedium`` and ``LossyMetalMedium`` classes can be used to model metallic materials.
+The :class:`.PECMedium` and :class:`.LossyMetalMedium` classes can be used to model metallic materials.
 
 .. code-block:: python
 
@@ -22,11 +24,11 @@ The ``PECMedium`` and ``LossyMetalMedium`` classes can be used to model metallic
    # lossy metal (conductivity in S/um)
    my_lossy_metal = LossyMetalMedium(conductivity=58, freq_range=(1e9, 10e9))
 
-Note that the unit of ``conductivity`` is ``S/um`` and the unit of ``freq_range`` is ``Hz``. The ``LossyMetalMedium`` class implements the surface impedance boundary condition (SIBC). It can accept surface roughness specifications using the Hammerstad or Huray models. Please refer to their respective documentation pages for details. Edge singularity correction is also available but turned off by default at this time.
+Note that the unit of ``conductivity`` is ``S/um`` and the unit of ``freq_range`` is ``Hz``. The :class:`.LossyMetalMedium` class implements the surface impedance boundary condition (SIBC). It can accept surface roughness specifications using the Hammerstad or Huray models. Please refer to their respective documentation pages for details. Edge singularity correction is also available but turned off by default at this time.
 
 .. note::
 
-   When modeling lossy metals, always be sure to check the skin depth --- if the skin depth is significant compared to the geometry size, then ``LossyMetalMedium`` may be not accurate. In that case, use a regular dispersive medium instead.
+   When modeling lossy metals, always be sure to check the skin depth --- if the skin depth is significant compared to the geometry size, then :class:`.LossyMetalMedium` may be not accurate. In that case, use a regular dispersive medium instead.
 
 
 .. autosummary::
@@ -36,14 +38,14 @@ Note that the unit of ``conductivity`` is ``S/um`` and the unit of ``freq_range`
    tidy3d.Medium
    tidy3d.plugins.dispersion.FastDispersionFitter
 
-To model lossless dielectrics, use the regular ``Medium``.
+To model lossless dielectrics, use the regular :class:`.Medium`.
 
 .. code-block:: python
 
    # lossless dielectric
    my_lossless_dielectric = Medium(permittivity=2.2)
 
-To model a lossy dielectric with constant loss tangent, use the ``constant_loss_tangent_model()`` method of the ``FastDispersionFitter`` utility class.
+To model a lossy dielectric with constant loss tangent, use the ``constant_loss_tangent_model()`` method of the :class:`tidy3d.plugins.dispersion.FastDispersionFitter` utility class.
 
 .. code-block:: python
 
@@ -62,9 +64,5 @@ More advanced material models, including frequency dependence and anisotropy, ar
    For a more comprehensive discussion of the different EM mediums available in Tidy3D, please refer to the EM Mediums page:
 
    + `EM Mediums <../mediums.html>`_
-
-   For the built-in RF material library, please refer to this page:
-
-   + `RF Material Library <rf_material_library.html>`_
 
 ~~~~

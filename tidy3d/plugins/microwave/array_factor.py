@@ -715,6 +715,9 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
     for rectangular phased antenna arrays. It handles arrays with arbitrary size, spacing,
     phase shifts, and amplitude tapering in x, y, and z directions.
 
+    Notes
+    -----
+
     The array factor is calculated using the standard array factor formula for rectangular arrays,
     which accounts for the spatial distribution of antennas and their relative phases and amplitudes.
     This can be used to analyze beam steering, sidelobe levels, and other array characteristics.
@@ -722,10 +725,8 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
     In addition, this class provides a convenience method to create an antenna array simulation
     from a single antenna simulation. This can be used to compute the behavior (near-field and/or
     far-field) of the full antenna array directly without any approximations. Such a simulation setup
-    can be obtained:
-    - by directly calling the `make_antenna_array` function, or
-    - by accessing the field `.simulation` of the `SimulationData` object returned by the
-      `simulation_data_from_array_factor` method.
+    can be obtained by directly calling the `make_antenna_array` function, or by accessing the field `.simulation`
+    of the :class:`SimulationData` object returned by the `simulation_data_from_array_factor` method.
 
     Example:
     --------

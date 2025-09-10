@@ -1088,7 +1088,7 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
         **Server-side field projection Application**
 
         Provide the :class:`FieldProjectionAngleMonitor` monitor as an input to the
-        :class:`Simulation` object as one of its monitors. Now, we no longer need to provide a separate near-field
+        :class:`.Simulation` object as one of its monitors. Now, we no longer need to provide a separate near-field
         :class:`FieldMonitor` - the near fields will automatically be recorded based on the size and location of the
         ``FieldProjectionAngleMonitor``. Note also that in some cases, the server-side computations may be slightly
         more accurate than client-side ones, because on the server, the near fields are not downsampled at all.

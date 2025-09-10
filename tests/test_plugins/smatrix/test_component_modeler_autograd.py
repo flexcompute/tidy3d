@@ -298,7 +298,7 @@ def test_terminal_component_modeler_autograd_tracing_stubbed(
     def _fake_terminal_construct_smatrix(
         modeler_data, assume_ideal_excitation=False, s_param_def="pseudo"
     ):
-        ports = list(modeler_data.modeler.network_dict.keys())
+        ports = list(modeler_data.modeler.sim_dict.keys())
         freqs = list(modeler_data.modeler.freqs)
         f_len = len(freqs)
         n = len(ports)
@@ -361,7 +361,7 @@ def test_terminal_component_modeler_autograd_tracing_modeler_run_stubbed(
     def _fake_terminal_construct_smatrix(
         modeler_data, assume_ideal_excitation=False, s_param_def="pseudo"
     ):
-        ports = list(modeler_data.modeler.network_dict.keys())
+        ports = list(modeler_data.modeler.sim_dict.keys())
         freqs = list(modeler_data.modeler.freqs)
         f_len = len(freqs)
         n = len(ports)

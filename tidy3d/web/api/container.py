@@ -136,7 +136,7 @@ class Job(WebContainer):
         downloads, and loads results as a :class:`.BatchData` object.
 
     :class:`Batch`
-         Interface for submitting several :class:`Simulation` objects to sever.
+         Interface for submitting several :class:`.Simulation` objects to sever.
 
     **Notebooks**
         *  `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
@@ -507,12 +507,12 @@ class BatchData(Tidy3dBaseModel, Mapping):
 
 class Batch(WebContainer):
     """
-    Interface for submitting several :class:`Simulation` objects to sever.
+    Interface for submitting several :class:`.Simulation` objects to sever.
 
     Notes
     -----
 
-        Commonly one needs to submit a batch of :class:`Simulation`. The built-in :class:`Batch` object is the best way to upload,
+        Commonly one needs to submit a batch of :class:`.Simulation`. The built-in :class:`Batch` object is the best way to upload,
         start, monitor, and load a series of tasks. The batch object is like a :class:`Job`, but stores task metadata
         for a series of simulations.
 

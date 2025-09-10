@@ -1,4 +1,6 @@
-Radiation and Scattering
+.. _radiation_scattering:
+
+Radiation & Scattering
 ------------------------
 
 .. autosummary::
@@ -10,7 +12,7 @@ Radiation and Scattering
    tidy3d.plugins.microwave.LobeMeasurer
    tidy3d.AntennaMetricsData
 
-When modeling antennas or scattering problems, it is vital to analyze the radiated far-field. For such applications, the ``DirectivityMonitor`` should be used.
+When modeling antennas or scattering problems, it is vital to analyze the radiated far-field. For such applications, the :class:`.DirectivityMonitor` should be used.
 
 .. code-block:: python
 
@@ -31,9 +33,9 @@ When modeling antennas or scattering problems, it is vital to analyze the radiat
        far_field_approx=True,
    )
 
-The ``DirectivityMonitor`` should completely surround the structure of interest. The ``far_field_approx`` flag can be used to set whether the far-field approximation is used (default ``True``).
+The :class:`.DirectivityMonitor` should completely surround the structure of interest. The ``far_field_approx`` flag can be used to set whether the far-field approximation is used (default ``True``).
 
-Once the monitor is defined, it should be added to the ``radiation_monitors`` option of the ``TerminalComponentModeler``.
+Once the monitor is defined, it should be added to the ``radiation_monitors`` option of the :class:`.TerminalComponentModeler`.
 
 .. code-block:: python
 
@@ -43,7 +45,7 @@ Once the monitor is defined, it should be added to the ``radiation_monitors`` op
        radiation_monitors=[my_directivity_monitor],
    )
 
-Once the simulation is completed, the ``get_antenna_metrics_data()`` method of the ``TerminalComponentModelerData`` object is used to obtain the radiation metrics.
+Once the simulation is completed, the ``get_antenna_metrics_data()`` method of the :class:`.TerminalComponentModelerData` object is used to obtain the radiation metrics.
 
 .. code-block:: python
 
@@ -65,7 +67,7 @@ Once the simulation is completed, the ``get_antenna_metrics_data()`` method of t
 
 Each metric is in the form of an ``xarray.DataArray`` object that can be used for plotting, export, and further analysis. For examples of how these datasets can be manipulated, please refer to the notebooks in the "See also" section below.
 
-The ``LobeMeasurer`` utility class can be used to analyze radiation pattern lobes.
+The :class:`.LobeMeasurer` utility class can be used to analyze radiation pattern lobes.
 
 .. code-block:: python
 

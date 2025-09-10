@@ -24,7 +24,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
     medium: Literal["metal", "dielectric", "all"] = pd.Field(
         "metal",
         title="Material Type For Corner Identification",
-        description="Find corners of structures made of ``medium``, "
+        description="Find corners of structures made of :class:`.Medium`, "
         "which can take value ``metal`` for PEC and lossy metal, ``dielectric`` "
         "for non-metallic materials, and ``all`` for all materials.",
     )

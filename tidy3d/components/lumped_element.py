@@ -311,8 +311,8 @@ class LumpedResistor(RectangularLumpedElement):
         return self._admittance_transfer_function_scaling(box) / self.resistance
 
     def to_structure(self, grid: Grid = None) -> Structure:
-        """Converts the :class:`LumpedResistor` object to a :class:`Structure`
-        ready to be added to the :class:`Simulation`"""
+        """Converts the :class:`LumpedResistor` object to a :class:`.Structure`
+        ready to be added to the :class:`.Simulation`"""
         box = self.to_geometry(grid=grid)
         conductivity = self._sheet_conductance(box)
         components_2d = ["ss", "tt"]
@@ -430,8 +430,8 @@ class CoaxialLumpedResistor(LumpedElement):
         return 1 / (2 * np.pi * self.resistance) * (np.log(rout / rin))
 
     def to_structure(self, grid: Grid = None) -> Structure:
-        """Converts the :class:`CoaxialLumpedResistor` object to a :class:`Structure`
-        ready to be added to the :class:`Simulation`"""
+        """Converts the :class:`CoaxialLumpedResistor` object to a :class:`.Structure`
+        ready to be added to the :class:`.Simulation`"""
         conductivity = self._sheet_conductance
         medium_dict = {
             "tt": Medium(conductivity=conductivity),
@@ -1035,7 +1035,7 @@ class LinearLumpedElement(RectangularLumpedElement):
         return (bottom_box, top_box)
 
     def to_structure(self, grid) -> Structure:
-        """Converts the :class:`LinearLumpedElement` object to a :class:`Structure`,
+        """Converts the :class:`LinearLumpedElement` object to a :class:`.Structure`,
         which enforces the desired voltage-current relationship across one or more grid cells."""
 
         cell_box = self._create_box_for_network(grid)
@@ -1054,7 +1054,7 @@ class LinearLumpedElement(RectangularLumpedElement):
         )
 
     def to_PEC_connection(self, grid) -> Optional[Structure]:
-        """Converts the :class:`LinearLumpedElement` object to a :class:`Structure`,
+        """Converts the :class:`LinearLumpedElement` object to a :class:`.Structure`,
         representing any PEC connections.
         """
 

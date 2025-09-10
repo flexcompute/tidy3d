@@ -1119,7 +1119,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:
-        """Plot n, k of a :class:`Medium` as a function of frequency.
+        """Plot n, k of a :class:`.Medium` as a function of frequency.
 
         Parameters
         ----------
@@ -1954,7 +1954,7 @@ class Medium(AbstractMedium):
 
     @classmethod
     def from_nk(cls, n: float, k: float, freq: float, **kwargs):
-        """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`Medium`.
+        """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`.Medium`.
 
         Parameters
         ----------
@@ -1969,7 +1969,7 @@ class Medium(AbstractMedium):
 
         Returns
         -------
-        :class:`Medium`
+        :class:`.Medium`
             medium containing the corresponding ``permittivity`` and ``conductivity``.
         """
         eps, sigma = AbstractMedium.nk_to_eps_sigma(n, k, freq)
@@ -8035,7 +8035,7 @@ MediumType = Union[MediumType3D, Medium2D, AnisotropicMediumFromMedium2D]
 
 # Utility function
 def medium_from_nk(n: float, k: float, freq: float, **kwargs) -> Union[Medium, Lorentz]:
-    """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`Medium` if ``Re[epsilon]>=1``,
+    """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`.Medium` if ``Re[epsilon]>=1``,
     or :class:`Lorentz` if if ``Re[epsilon]<1``.
 
     Parameters
@@ -8051,7 +8051,7 @@ def medium_from_nk(n: float, k: float, freq: float, **kwargs) -> Union[Medium, L
 
     Returns
     -------
-    Union[:class:`Medium`, :class:`Lorentz`]
+    Union[:class:`.Medium`, :class:`Lorentz`]
         Dispersionless medium or Lorentz medium having refractive index n+ik at frequency ``freq``.
     """
     eps_complex = AbstractMedium.nk_to_eps_complex(n, k)

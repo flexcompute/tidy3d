@@ -418,3 +418,30 @@ def test_mapping_with_run_only():
     run_only.remove(EXCLUDE_INDEX)
     with pytest.raises(pydantic.ValidationError):
         _ = make_component_modeler(element_mappings=element_mappings, run_only=run_only)
+
+
+def test_get_task_name():
+    """Test the 'get_task_name' method."""
+    port = Port(
+        center=[0, 0, 0],
+        size=[0, 4, 2],
+        mode_spec=td.ModeSpec(num_modes=2),
+        direction="-",
+        name="port1",
+    )
+
+    # Test with mode_index specified
+    task_name = ModalComponentModeler.get_task_name(port=port, mode_index=1)
+    assert task_name == "port1@1"
+
+    # Test with format="PF"
+    task_name = ModalComponentModeler.get_task_name(port=port, format="PF")
+    assert task_name == "port1@0"
+
+    # Test with format="RF"
+    task_name = ModalComponentModeler.get_task_name(port=port, format="RF")
+    assert task_name == "port1"
+
+    # Test with invalid format
+    with pytest.raises(ValueError):
+        ModalComponentModeler.get_task_name(port=port, format="invalid")

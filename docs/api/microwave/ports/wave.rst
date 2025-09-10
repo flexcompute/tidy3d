@@ -1,3 +1,5 @@
+.. _wave_port:
+
 Wave Port
 ---------
 
@@ -8,7 +10,7 @@ Wave Port
    tidy3d.plugins.smatrix.WavePort
    tidy3d.ModeSpec
 
-The ``WavePort`` represents a modal source port. The port mode is first calculated in the 2D mode solver, then injected into the 3D simulation. The ``WavePort`` is also automatically terminated with a modal absorbing boundary ``ModeABCBoundary`` that perfectly absorbs the outgoing mode. Any non-matching modes are subject to PEC reflection.
+The :class:`.WavePort` represents a modal source port. The port mode is first calculated in the 2D mode solver, then injected into the 3D simulation. The :class:`.WavePort` is also automatically terminated with a modal absorbing boundary :class:`.ModeABCBoundary` that perfectly absorbs the outgoing mode. Any non-matching modes are subject to PEC reflection.
 
 .. code-block:: python
 
@@ -26,7 +28,7 @@ Most fields are self explanatory. Some additional notes:
 * ``mode_spec`` is used to specify the effective index search value for the mode solver
 * ``current_integral`` and/or ``voltage_integral`` are used to specify the integration paths for port impedance calculation. If only one of the two is specified, then the port power is also used (automatically determined).
 
-If it is desired to only solve for the 2D port mode, one can use the ``to_mode_solver()`` convenience method to generate a ``ModeSolver`` simulation object.
+If it is desired to only solve for the 2D port mode, one can use the ``to_mode_solver()`` convenience method to generate a :class:`.ModeSolver` simulation object.
 
 .. code-block:: python
 
@@ -70,7 +72,7 @@ The classes above are used to define the voltage/current integration paths for i
        sign='+', # sign of integral (should match wave port direction)
    )
 
-In addition to being used in the ``WavePort`` definition, the current/voltage integration objects can also be applied to arbitrary EM field data (2D and 3D). This is most commonly used in conjunction with the ``ImpedanceCalculator`` to calculate the line impedance of a 2D mode.
+In addition to being used in the :class:`.WavePort` definition, the current/voltage integration objects can also be applied to arbitrary EM field data (2D and 3D). This is most commonly used in conjunction with the ``ImpedanceCalculator`` to calculate the line impedance of a 2D mode.
 
 .. code-block:: python
 

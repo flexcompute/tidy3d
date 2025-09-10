@@ -1851,7 +1851,7 @@ class Circular(Geometry):
 
 class Box(SimplePlaneIntersection, Centered):
     """Rectangular prism.
-       Also base class for :class:`Simulation`, :class:`Monitor`, and :class:`Source`.
+       Also base class for :class:`.Simulation`, :class:`Monitor`, and :class:`Source`.
 
     Example
     -------

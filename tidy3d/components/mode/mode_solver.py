@@ -1886,7 +1886,7 @@ class ModeSolver(Tidy3dBaseModel):
         num_freqs: pydantic.PositiveInt = 1,
         **kwargs,
     ) -> ModeSource:
-        """Creates :class:`.ModeSource` from a :class:`ModeSolver` instance plus additional
+        """Creates :class:`.ModeSource` from a :class:`.ModeSolver` instance plus additional
         specifications.
 
         Parameters
@@ -1923,7 +1923,7 @@ class ModeSolver(Tidy3dBaseModel):
     def to_monitor(
         self, freqs: Optional[list[float]] = None, name: Optional[str] = None
     ) -> ModeMonitor:
-        """Creates :class:`ModeMonitor` from a :class:`ModeSolver` instance plus additional
+        """Creates :class:`ModeMonitor` from a :class:`.ModeSolver` instance plus additional
         specifications.
 
         Parameters
@@ -1962,7 +1962,7 @@ class ModeSolver(Tidy3dBaseModel):
     def to_mode_solver_monitor(
         self, name: str, colocate: Optional[bool] = None
     ) -> ModeSolverMonitor:
-        """Creates :class:`ModeSolverMonitor` from a :class:`ModeSolver` instance.
+        """Creates :class:`ModeSolverMonitor` from a :class:`.ModeSolver` instance.
 
         Parameters
         ----------
@@ -1970,7 +1970,7 @@ class ModeSolver(Tidy3dBaseModel):
             Name of the monitor.
         colocate : bool
             Whether to colocate fields or compute on the Yee grid. If not provided, the value
-            set in the :class:`ModeSolver` instance is used.
+            set in the :class:`.ModeSolver` instance is used.
 
         Returns
         -------
@@ -1999,7 +1999,7 @@ class ModeSolver(Tidy3dBaseModel):
         direction: Direction = None,
         mode_index: pydantic.NonNegativeInt = 0,
     ) -> Simulation:
-        """Creates :class:`Simulation` from a :class:`ModeSolver`. Creates a copy of
+        """Creates :class:`.Simulation` from a :class:`.ModeSolver`. Creates a copy of
         the ModeSolver's original simulation with a ModeSource added corresponding to
         the ModeSolver parameters.
 
@@ -2033,7 +2033,7 @@ class ModeSolver(Tidy3dBaseModel):
         freqs: Optional[list[float]] = None,
         name: Optional[str] = None,
     ) -> Simulation:
-        """Creates :class:`.Simulation` from a :class:`ModeSolver`. Creates a copy of
+        """Creates :class:`.Simulation` from a :class:`.ModeSolver`. Creates a copy of
         the ModeSolver's original simulation with a mode monitor added corresponding to
         the ModeSolver parameters.
 
@@ -2061,7 +2061,7 @@ class ModeSolver(Tidy3dBaseModel):
         self,
         name: str,
     ) -> Simulation:
-        """Creates :class:`Simulation` from a :class:`ModeSolver`. Creates a
+        """Creates :class:`.Simulation` from a :class:`.ModeSolver`. Creates a
         copy of the ModeSolver's original simulation with a mode solver monitor
         added corresponding to the ModeSolver parameters.
 

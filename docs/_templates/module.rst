@@ -6,6 +6,7 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+   :exclude-members: __hash__
 
    {% block attributes %}
    {% if attributes %}

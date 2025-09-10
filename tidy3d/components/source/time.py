@@ -41,7 +41,7 @@ class SourceTime(AbstractTimeDependence):
         times : np.ndarray
             Array of evenly-spaced times (seconds) to evaluate source time-dependence at.
             The spectrum is computed from this value and the source time frequency content.
-            To see source spectrum for a specific :class:`Simulation`,
+            To see source spectrum for a specific :class:`.Simulation`,
             pass ``simulation.tmesh``.
         num_freqs : int = 101
             Number of frequencies to plot within the SourceTime.frequency_range.

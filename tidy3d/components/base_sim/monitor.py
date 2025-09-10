@@ -50,9 +50,9 @@ class AbstractMonitor(Box, ABC):
         Parameters
         ----------
         num_cells : int
-            Number of grid cells within the monitor after discretization by a :class:`Simulation`.
+            Number of grid cells within the monitor after discretization by a :class:`.Simulation`.
         tmesh : Array
-            The discretized time mesh of a :class:`Simulation`.
+            The discretized time mesh of a :class:`.Simulation`.
 
         Returns
         -------

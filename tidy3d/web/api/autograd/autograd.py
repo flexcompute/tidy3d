@@ -323,7 +323,7 @@ def run_async(
         Interface for managing the running of a Simulation on server.
 
     :class:`Batch`
-        Interface for submitting several :class:`Simulation` objects to sever.
+        Interface for submitting several :class:`.Simulation` objects to sever.
     """
     # validate priority if specified
     if priority is not None and (priority < 1 or priority > 10):

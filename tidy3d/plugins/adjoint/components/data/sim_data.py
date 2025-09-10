@@ -67,7 +67,7 @@ class JaxSimulationData(SimulationData, JaxObject):
         Parameters
         ----------
         field_monitor_name : str
-            Name of field monitor used in the original :class:`Simulation`.
+            Name of field monitor used in the original :class:`.Simulation`.
 
         Returns
         -------
