@@ -94,7 +94,7 @@ def is_valid_for_autograd_async(simulations: dict[str, td.Simulation]) -> bool:
 
 
 def run(
-    simulation: td.Simulation,
+    simulation: typing.Any,
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
@@ -198,6 +198,30 @@ def run(
     """
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
+
+    # component modeler path: route autograd-valid modelers to local run
+    from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
+
+    if isinstance(simulation, typing.get_args(ComponentModelerType)):
+        sims = getattr(simulation, "sim_dict", None)
+        if local_gradient or (
+            isinstance(sims, dict) and any(is_valid_for_autograd(s) for s in sims.values())
+        ):
+            from tidy3d.plugins.smatrix import run as smatrix_run
+
+            path_dir = dirname(path) or "."
+            return smatrix_run._run_local(
+                simulation,
+                path_dir=path_dir,
+                folder_name=folder_name,
+                callback_url=callback_url,
+                verbose=verbose,
+                solver_version=solver_version,
+                pay_type=pay_type,
+                priority=priority,
+                local_gradient=local_gradient,
+                max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+            )
 
     if isinstance(simulation, td.Simulation) and is_valid_for_autograd(simulation):
         return _run(

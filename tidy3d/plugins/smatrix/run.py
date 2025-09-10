@@ -148,25 +148,10 @@ def create_batch(
     return batch
 
 
-def _is_autograd_valid(modeler: ComponentModelerType) -> bool:
-    """Return True if any underlying simulation is valid for autograd."""
-    from tidy3d.web.api.autograd import autograd as web_ag
-
-    try:
-        sims = modeler.sim_dict
-    except AttributeError:
-        return False
-    if not sims:
-        return False
-
-    for sim in sims.values():
-        if web_ag.is_valid_for_autograd(sim):
-            return True
-    return False
-
-
-def run(
-    modeler: ComponentModelerType, path_dir: str = DEFAULT_DATA_DIR, **kwargs
+def _run_local(
+    modeler: ComponentModelerType,
+    path_dir: str = DEFAULT_DATA_DIR,
+    **kwargs,
 ) -> ComponentModelerDataType:
     """Execute the full simulation workflow for a given component modeler.
 
@@ -191,7 +176,11 @@ def run(
         S-parameter extraction and analysis.
     """
 
-    if _is_autograd_valid(modeler):
+    # autograd path if any sim is valid for autograd
+    from tidy3d.web.api.autograd import autograd as web_ag
+
+    sims = getattr(modeler, "sim_dict", None) or {}
+    if any(web_ag.is_valid_for_autograd(sim) for sim in sims.values()):
         from tidy3d.web.api.autograd.autograd import _run_async
 
         kwargs.setdefault("folder_name", "default")

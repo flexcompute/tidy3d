@@ -225,14 +225,14 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         local_gradient: bool = False,
         max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
     ):
-        """Run the component modeler and return modeler data.
+        log.warning(
+            "'ComponentModeler.run()' is deprecated and will be removed in a future release. "
+            "Use 'web.run(modeler)' instead.",
+            log_once=True,
+        )
+        from tidy3d.plugins.smatrix.run import _run_local
 
-        Delegates to `tidy3d.plugins.smatrix.run.run`, which selects between
-        an autograd-compatible path and the standard Batch path.
-        """
-        from tidy3d.plugins.smatrix.run import run
-
-        return run(
+        data = _run_local(
             self,
             path_dir=path_dir,
             folder_name=folder_name,
@@ -244,6 +244,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
         )
+        return data.smatrix()
 
 
 AbstractComponentModeler.update_forward_refs()

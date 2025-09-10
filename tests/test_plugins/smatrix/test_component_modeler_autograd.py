@@ -12,7 +12,7 @@ from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponent
 from tidy3d.plugins.smatrix.data.data_array import TerminalPortDataArray
 from tidy3d.plugins.smatrix.ports.modal import Port as ModalPort
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort as RectLumpedPort
-from tidy3d.plugins.smatrix.run import run as smatrix_run
+from tidy3d.web import run
 from tidy3d.web.api.autograd import autograd as web_ag
 
 
@@ -216,9 +216,10 @@ def test_component_modeler_autograd_tracing(patch_web_autograd_emulator, tmp_pat
 
     def objective(scale: float) -> float:
         modeler = build_modal_modeler(scale)
-        modeler_data = smatrix_run(
+        modeler_data = run(
             modeler,
-            path_dir=str(tmp_path),
+            task_name="cm_modal_autograd",
+            path=str(tmp_path / "cm_data.hdf5"),
             verbose=False,
             local_gradient=True,
         )
@@ -237,12 +238,11 @@ def test_component_modeler_autograd_tracing_modeler_run(patch_web_autograd_emula
 
     def objective(scale: float) -> float:
         modeler = build_modal_modeler(scale)
-        modeler_data = modeler.run(
+        s = modeler.run(
             path_dir=str(tmp_path),
             verbose=False,
             local_gradient=True,
         )
-        s = modeler_data.smatrix()
         return anp.real(anp.sum(s.data))
 
     g = ag.grad(objective)(1.0)
@@ -306,9 +306,10 @@ def test_terminal_component_modeler_autograd_tracing_stubbed(
 
     def objective(scale: float) -> float:
         modeler = build_terminal_modeler(scale)
-        modeler_data = smatrix_run(
+        modeler_data = run(
             modeler,
-            path_dir=str(tmp_path),
+            task_name="cm_terminal_autograd",
+            path=str(tmp_path / "cm_data.hdf5"),
             verbose=False,
             local_gradient=True,
         )
@@ -368,12 +369,12 @@ def test_terminal_component_modeler_autograd_tracing_modeler_run_stubbed(
 
     def objective(scale: float) -> float:
         modeler = build_terminal_modeler(scale)
-        modeler_data = modeler.run(
+        s = modeler.run(
             path_dir=str(tmp_path),
             verbose=False,
             local_gradient=True,
         )
-        s_vals = modeler_data.smatrix().data.data
+        s_vals = s.data.data
         return anp.real(anp.sum(s_vals))
 
     g = ag.grad(objective)(1.0)
