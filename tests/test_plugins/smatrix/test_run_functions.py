@@ -18,10 +18,10 @@ from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.plugins.smatrix.run import (
+    _run_local,
     compose_modeler,
     compose_modeler_data,
     create_batch,
-    run,
 )
 
 
@@ -98,7 +98,7 @@ def test_run_function(monkeypatch):
     dummy_modeler = make_modal_component_modeler()
 
     # Call the function under test
-    result = run(modeler=dummy_modeler, path_dir="./temp_dir")
+    result = _run_local(modeler=dummy_modeler, path_dir="./temp_dir")
 
     # Assertions
     tidy3d.plugins.smatrix.run.create_batch.assert_called_once_with(modeler=dummy_modeler)
