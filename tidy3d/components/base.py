@@ -887,7 +887,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     return False
 
                 # convert tuple to dict to use this recursive function
-                if isinstance(val1, tuple) or isinstance(val2, tuple):
+                if isinstance(val1, tuple) and isinstance(val2, tuple):
                     val1 = dict(zip(range(len(val1)), val1))
                     val2 = dict(zip(range(len(val2)), val2))
 
