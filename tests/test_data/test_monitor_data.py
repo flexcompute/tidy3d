@@ -232,7 +232,7 @@ def make_directivity_data(planar_monitor: bool = False):
 def make_field_dataset_using_power_density(
     values: np.ndarray, theta: np.ndarray, phi: np.ndarray, freqs: np.ndarray, r_proj: np.ndarray
 ):
-    """Helper function to create ``DirectivityMonitor`` and field dataset with a desired power density."""
+    """Helper function to create :class:`.DirectivityMonitor` and field dataset with a desired power density."""
     monitor = td.DirectivityMonitor(
         size=(2, 2, 2),
         center=(0, 0, 0),

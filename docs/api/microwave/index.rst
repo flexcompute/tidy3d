@@ -13,11 +13,12 @@ This page consolidates Tidy3D features related to microwave and RF simulation. W
 The following sections discuss:
 
 * `TerminalComponentModeler`_: The core simulation object in microwave/RF models
-* `RF Materials`_: Typical material types in microwave/RF simulation
+* `RF Materials Models`_: Typical material types in microwave/RF simulation
+* `RF Materials Library`_: The RF material library contains various dispersive models for real-world RF materials.
 * `Layer-based Grid Refinement`_: Automated grid refinement strategy for planar structures (e.g. printed circuit boards)
-* `Lumped Port and Elements`_: Lumped excitations and circuit elements
+* `Lumped Port & Elements`_: Lumped excitations and circuit elements
 * `Wave Port`_: Port excitation based on modal fields
-* `Radiation and Scattering`_: Useful features for antenna and scattering problems
+* `Radiation & Scattering`_: Useful features for antenna and scattering problems
 
 .. seealso::
 
@@ -29,6 +30,7 @@ The following sections discuss:
 
 .. include:: /api/microwave/component_modeler.rst
 .. include:: /api/microwave/material.rst
+.. include:: /api/microwave/rf_material_library.rst
 .. include:: /api/discretization/layer.rst
 .. include:: /api/microwave/ports/lumped.rst
 .. include:: /api/microwave/ports/wave.rst

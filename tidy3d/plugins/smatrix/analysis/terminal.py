@@ -64,7 +64,7 @@ def terminal_construct_smatrix(
     Returns
     -------
     TerminalPortDataArray
-        The computed S-matrix as a ``TerminalPortDataArray`` with dimensions
+        The computed S-matrix as a :class:`.TerminalPortDataArray` with dimensions
         for frequency, output port, and input port.
     """
     monitor_indices = list(modeler_data.modeler.matrix_indices_monitor)
@@ -92,7 +92,7 @@ def terminal_construct_smatrix(
             modeler_data.modeler.get_task_name(port=port, mode_index=mode_index)
         ]
         a, b = modeler_data.compute_wave_amplitudes_at_each_port(
-            port_impedances, sim_data, s_param_def=s_param_def
+            port_reference_impedances=port_impedances, sim_data=sim_data, s_param_def=s_param_def
         )
 
         indexer = {"port_in": source_index}

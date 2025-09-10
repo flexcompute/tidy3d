@@ -43,7 +43,7 @@ Grid Specification
    tidy3d.CustomGrid
    tidy3d.CustomGridBoundaries
 
-The ``GridSpec`` object in Tidy3D contains grid definition along all three spatial axes. Each spatial axis accepts one of the basic grid types, ``AutoGrid``, ``UniformGrid``, ``QuasiUniformGrid``, or ``CustomGrid``. A typical Tidy3D ``Simulation`` object contains one instance of ``GridSpec``, which in turn contains three instances of the grid types, which specify the grid along that particular axis:
+The :class:`.GridSpec` object in Tidy3D contains grid definition along all three spatial axes. Each spatial axis accepts one of the basic grid types, :class:`.AutoGrid`, :class:`.UniformGrid`, :class:`.QuasiUniformGrid`, or :class:`.CustomGrid`. A typical Tidy3D :class:`.Simulation` object contains one instance of :class:`.GridSpec`, which in turn contains three instances of the grid types, which specify the grid along that particular axis:
 
 .. code-block:: python
 
@@ -54,7 +54,7 @@ The ``GridSpec`` object in Tidy3D contains grid definition along all three spati
        wavelength=1.55
    )
 
-Notice in the above example that we also defined the free-space wavelength, which is necessary for the ``AutoGrid`` grid type.
+Notice in the above example that we also defined the free-space wavelength, which is necessary for the :class:`.AutoGrid` grid type.
 
 .. note::
 
@@ -75,13 +75,13 @@ If the grid specification is the same along all three spatial axes, the user can
 
 Please find short descriptions of each grid type below. For more information, please refer to their respective documentation page.
 
-* The ``AutoGrid`` grid type automatically sets the grid size based on the EM wavelength in the local medium and user-specified minimum steps per wavelength. This is the default option if no grid specification is provided.
+* The :class:`.AutoGrid` grid type automatically sets the grid size based on the EM wavelength in the local medium and user-specified minimum steps per wavelength. This is the default option if no grid specification is provided.
 
-* The ``UniformGrid`` grid type creates a uniform grid with fixed spacing ``dl``.
+* The :class:`.UniformGrid` grid type creates a uniform grid with fixed spacing ``dl``.
 
-* The ``QuasiUniformGrid`` grid type behaves similarly to the ``UniformGrid``, but respects snapping for structure boundaries.
+* The :class:`.QuasiUniformGrid` grid type behaves similarly to the :class:`.UniformGrid`, but respects snapping for structure boundaries.
 
-* The ``CustomGrid`` grid type allows the user to manually specify grid point positions. 
+* The :class:`.CustomGrid` grid type allows the user to manually specify grid point positions. 
 
 .. seealso::
 
@@ -103,13 +103,13 @@ Refinement
    tidy3d.GridRefinement
    tidy3d.CornerFinderSpec
 
-For certain applications, the user may wish to apply additional grid refinement in specific regions, layers, or points in the simulation domain. The ``GridSpec`` class accepts the following optional parameters:
+For certain applications, the user may wish to apply additional grid refinement in specific regions, layers, or points in the simulation domain. The :class:`.GridSpec` class accepts the following optional parameters:
 
 * ``override_structures``: The user provides a list of mesh override structures to apply additional refinement to a specific region
 * ``snapping_points``: The user specifies a list of points that enforce grid boundaries to pass through them
 * ``layer_refinement_specs``: The user specifies additional refinement within a layered region (e.g. a metallic trace plane)
 
-For the ``override_structures`` option, the user may provide a list consisting of  ``Structure`` instances and/or ``MeshOverrideStructure`` instances. In the former case, the provided ``Structure`` is used as a fictitious material with artificially higher refractive index to enforce higher grid resolution:
+For the ``override_structures`` option, the user may provide a list consisting of  :class:`.Structure` instances and/or :class:`.MeshOverrideStructure` instances. In the former case, the provided :class:`.Structure` is used as a fictitious material with artificially higher refractive index to enforce higher grid resolution:
 
 .. code-block:: python
 
@@ -126,9 +126,9 @@ For the ``override_structures`` option, the user may provide a list consisting o
        override_structures=[my_refinement_box]
    )
 
-In the example above, the ``AutoGrid`` would generate a grid as though the region within ``my_refinement_box`` had ``permittivity=16``, when it could be much lower in the actual structure. Note that ``my_refinement_box`` is not actually present in the simulation and is only taken into account for grid generation purposes.
+In the example above, the :class:`.AutoGrid` would generate a grid as though the region within ``my_refinement_box`` had ``permittivity=16``, when it could be much lower in the actual structure. Note that ``my_refinement_box`` is not actually present in the simulation and is only taken into account for grid generation purposes.
 
-The second method is to define a ``MeshOverrideStructure``. This allows the user to specify step sizes along each direction:
+The second method is to define a :class:`.MeshOverrideStructure`. This allows the user to specify step sizes along each direction:
 
 .. code-block:: python
 
@@ -138,7 +138,7 @@ The second method is to define a ``MeshOverrideStructure``. This allows the user
        dl=(0.1, None, 0.2),
    )
 
-The ``LayerRefinementSpec`` class allows the user to specify added refinement to a layered region (e.g. a metallic trace plane). Within the layer, the grid can be snapped to structure corners. Along the layer normal axis, the grid can also be snapped to the layer bounds.
+The :class:`.LayerRefinementSpec` class allows the user to specify added refinement to a layered region (e.g. a metallic trace plane). Within the layer, the grid can be snapped to structure corners. Along the layer normal axis, the grid can also be snapped to the layer bounds.
 
 .. code-block:: python
 
@@ -151,7 +151,7 @@ The ``LayerRefinementSpec`` class allows the user to specify added refinement to
        corner_snapping=True,  # snap grid points to structure corners
    )
 
-For more detailed usage examples of ``LayerRefinementSpec``, please refer to the learning center article linked below.       
+For more detailed usage examples of :class:`.LayerRefinementSpec`, please refer to the learning center article linked below.       
 
 .. seealso::
 
@@ -171,9 +171,9 @@ Subpixel Averaging
 
    tidy3d.SubpixelSpec
 
-Subpixel averaging is used to accurately resolve material boundaries which do not line up with the grid boundaries. Under normal circumstances, the default settings are appropriate and the user does not need to provide a custom ``SubpixelSpec``.
+Subpixel averaging is used to accurately resolve material boundaries which do not line up with the grid boundaries. Under normal circumstances, the default settings are appropriate and the user does not need to provide a custom :class:`.SubpixelSpec`.
 
-More advanced users may opt to define a custom ``SubpixelSpec``. The custom ``SubpixelSpec`` instance is then passed into the ``Simulation`` object as a parameter.
+More advanced users may opt to define a custom :class:`.SubpixelSpec`. The custom :class:`.SubpixelSpec` instance is then passed into the :class:`.Simulation` object as a parameter.
 
 .. code-block:: python
 

@@ -22,7 +22,7 @@ Structure
    tidy3d.Structure
 
 
-A ``Structure`` in Tidy3D consists of a geometry and a medium. It represents a physical object to be included in the simulation domain. 
+A :class:`.Structure` in Tidy3D consists of a geometry and a medium. It represents a physical object to be included in the simulation domain. 
 
 .. code-block:: python
 
@@ -36,7 +36,7 @@ For more information on defining geometries and mediums, please refer to their r
 * `Geometry <geometry.html>`_
 * `EM Mediums <mediums.html>`_
 
-Once a list of structures have been defined, they can be added to the ``Simulation`` object:
+Once a list of structures have been defined, they can be added to the :class:`.Simulation` object:
 
 .. code-block:: python
 

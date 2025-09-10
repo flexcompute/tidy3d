@@ -29,9 +29,9 @@ Boundary Specification
    tidy3d.Boundary
    tidy3d.BoundaryEdge
 
-The ``BoundarySpec`` object contains information on the boundary conditions on all six sides of the simulation domain. The ``Boundary`` object specifies the boundary conditions along a single axis, i.e. x, y, or z. Typically, the ``Simulation`` object contains a ``BoundarySpec`` instance, which in turn contains three ``Boundary`` instances.
+The :class:`BoundarySpec` object contains information on the boundary conditions on all six sides of the simulation domain. The :class:`Boundary` object specifies the boundary conditions along a single axis, i.e. x, y, or z. Typically, the :class:`.Simulation` object contains a :class:`BoundarySpec` instance, which in turn contains three :class:`Boundary` instances.
 
-There are several ways to specify boundaries with ``BoundarySpec``. To quickly specify a single boundary type for all six sides, use the ``BoundarySpec.all_sides()`` method.
+There are several ways to specify boundaries with :class:`BoundarySpec`. To quickly specify a single boundary type for all six sides, use the ``BoundarySpec.all_sides()`` method.
 
 .. code-block:: python
 
@@ -47,7 +47,7 @@ To specify boundaries along each of the three axes:
        z = Boundary.pml(),
    )
 
-In the above example, built-in convenience methods such as ``pec()``, ``pml()``, and ``periodic()`` in the ``Boundary`` object were used to specify boundaries for both sides of each axis.
+In the above example, built-in convenience methods such as ``pec()``, ``pml()``, and ``periodic()`` in the :class:`Boundary` object were used to specify boundaries for both sides of each axis.
 
 Finally, for full control of each of the six sides:
 
@@ -59,7 +59,7 @@ Finally, for full control of each of the six sides:
        z = Boundary(plus=PML(), minus=PECBoundary()),
    )
 
-In the above example, individual boundary instances were created and passed into the ``plus`` and ``minus`` attributes of each ``Boundary`` instance.
+In the above example, individual boundary instances were created and passed into the ``plus`` and ``minus`` attributes of each :class:`Boundary` instance.
 
 .. seealso::
 
@@ -92,7 +92,7 @@ where :math:`\mathbf{n}` is the boundary normal vector.
 
 .. note::
 
-   To simulate a PEC structure, use the ``PECMedium`` class instead. Please refer to the `EM Mediums page <mediums.html#metallic>`_ for details.
+   To simulate a PEC structure, use the :class:`.PECMedium` class instead. Please refer to the `EM Mediums page <mediums.html#metallic>`_ for details.
 
 
 ~~~~
@@ -110,7 +110,7 @@ Periodic
    tidy3d.Boundary.bloch
    tidy3d.Boundary.bloch_from_source
 
-Periodic boundary conditions are commonly used in unit cell simulations. The ``Periodic`` boundary type enforces field continuity, i.e.
+Periodic boundary conditions are commonly used in unit cell simulations. The :class:`Periodic` boundary type enforces field continuity, i.e.
 
 .. math::
 
@@ -118,13 +118,13 @@ Periodic boundary conditions are commonly used in unit cell simulations. The ``P
 
 where :math:`\mathbf{r}_a` and :math:`\mathbf{r}_b` are matching positions on the respective pair of periodic boundaries. This is commonly used in conjunction with a normal incidence plane wave excitation.
 
-The ``BlochBoundary`` boundary type implements Bloch periodicity, i.e.
+The :class:`BlochBoundary` boundary type implements Bloch periodicity, i.e.
 
 .. math::
 
    \mathbf{E}(\mathbf{r}_a) = e^{i \mathbf{k}_b \cdot (\mathbf{r}_a - \mathbf{r}_b)} \mathbf{E}(\mathbf{r}_b)
 
-where :math:`\mathbf{k}_b` is the Bloch periodicity vector. This is typically used together with an off-normal incidence plane wave excitation, where the Bloch vector corresponds to the lateral phase difference due to the off-normal plane wave. For user convenience, the ``Boundary.bloch_from_source()`` method automatically creates a ``BlochBoundary`` object from a given excitation. 
+where :math:`\mathbf{k}_b` is the Bloch periodicity vector. This is typically used together with an off-normal incidence plane wave excitation, where the Bloch vector corresponds to the lateral phase difference due to the off-normal plane wave. For user convenience, the ``Boundary.bloch_from_source()`` method automatically creates a :class:`BlochBoundary` object from a given excitation. 
 
 .. seealso::
 
@@ -156,11 +156,11 @@ Absorbing
    tidy3d.BroadbandModeABCSpec
    tidy3d.BroadbandModeABCFitterParam
 
-For simulations with radiative modes, it is recommended to surround the simulation domain with absorbing boundary conditions, i.e. either the Perfectly Matched Layer ``PML`` type, or the ``Absorber`` type.
+For simulations with radiative modes, it is recommended to surround the simulation domain with absorbing boundary conditions, i.e. either the Perfectly Matched Layer :class:`PML` type, or the :class:`Absorber` type.
 
-The ``PML`` boundary type uses coordinate stretching to rapidly attenuate any outgoing radiation, and is the default boundary condition for all simulations in Tidy3D.
+The :class:`PML` boundary type uses coordinate stretching to rapidly attenuate any outgoing radiation, and is the default boundary condition for all simulations in Tidy3D.
 
-The ``Absorber`` boundary type uses a fictitious lossy medium with ramped conductivity to attenuate outgoing waves. In comparison to the ``PML``, there can be greater reflection at the boundary. The ``Absorber`` boundary is more numerically stable when structures with dispersive mediums extend into the boundary. 
+The :class:`Absorber` boundary type uses a fictitious lossy medium with ramped conductivity to attenuate outgoing waves. In comparison to the :class:`PML`, there can be greater reflection at the boundary. The :class:`Absorber` boundary is more numerically stable when structures with dispersive mediums extend into the boundary. 
 
 .. seealso::
 

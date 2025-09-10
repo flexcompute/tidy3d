@@ -81,7 +81,7 @@ Data Handling
 
 The new API introduces immutable data containers for simulation results, ensuring that your data is more predictable and easier to manage.
 
-*   ``TerminalComponentModeler`` returns a ``TerminalComponentModelerData`` object.
+*   :class:`.TerminalComponentModeler` returns a :class:`.TerminalComponentModelerData` object.
 *   ``ModalComponentModeler`` returns a ``ModalComponentModelerData`` object.
 
 These data objects contain the S-matrix, port impedance, and other relevant results.

@@ -102,7 +102,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         Parameters
         ----------
         field_monitor_name : str
-            Name of field monitor used in the original :class:`Simulation`.
+            Name of field monitor used in the original :class:`.Simulation`.
 
         Returns
         -------
@@ -146,7 +146,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         Parameters
         ----------
         field_monitor_name : str
-            Name of field monitor used in the original :class:`Simulation`.
+            Name of field monitor used in the original :class:`.Simulation`.
 
         Returns
         -------
@@ -225,7 +225,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         Parameters
         ----------
         field_monitor_name : str
-            Name of field monitor used in the original :class:`Simulation`.
+            Name of field monitor used in the original :class:`.Simulation`.
 
         Returns
         -------
@@ -248,7 +248,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         Parameters
         ----------
         field_monitor_name : str
-            Name of field monitor used in the original :class:`Simulation`.
+            Name of field monitor used in the original :class:`.Simulation`.
         field_name : str
             Name of the derived field component: one of `('E', 'H', 'S', 'Sx', 'Sy', 'Sz')`.
         val : Literal['real', 'imag', 'abs', 'abs^2', 'phase'] = 'real'
@@ -358,7 +358,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         Parameters
         ----------
         field_monitor_name : str
-            Name of field monitor used in the original :class:`Simulation`.
+            Name of field monitor used in the original :class:`.Simulation`.
 
         Returns
         -------

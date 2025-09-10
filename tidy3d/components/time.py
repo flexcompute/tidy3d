@@ -123,7 +123,7 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
         times : np.ndarray
             Array of evenly-spaced times (seconds) to evaluate time-dependence at.
             The spectrum is computed from this value and the time frequency content.
-            To see spectrum for a specific :class:`Simulation`,
+            To see spectrum for a specific :class:`.Simulation`,
             pass ``simulation.tmesh``.
         fmin : float
             Lower bound of frequency for the spectrum plot.
@@ -172,7 +172,7 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
         ----------
         times : np.ndarray
             Array of times (seconds) to plot source at.
-            To see source time amplitude for a specific :class:`Simulation`,
+            To see source time amplitude for a specific :class:`.Simulation`,
             pass ``simulation.tmesh``.
         val : Literal['real', 'imag', 'abs'] = 'real'
             Which part of the spectrum to plot.

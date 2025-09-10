@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional, Union, get_args
+from typing import TYPE_CHECKING, Literal, Optional, Union, get_args
 
 import pydantic.v1 as pd
 
@@ -35,6 +35,7 @@ DEFAULT_DATA_DIR = "."
 
 IndexType = Union[MatrixIndex, NetworkIndex]
 ElementType = Union[Element, NetworkElement]
+TaskNameFormat = Literal["RF", "PF"]
 
 
 class AbstractComponentModeler(ABC, Tidy3dBaseModel):
@@ -146,11 +147,49 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     _freqs_unique = validate_freqs_unique()
 
     @staticmethod
-    def get_task_name(port: Port, mode_index: Optional[int] = None) -> str:
-        """The name of a task, determined by the port of the source and mode index, if given."""
+    def get_task_name(
+        port: Port, mode_index: Optional[int] = None, format: Optional[TaskNameFormat] = "RF"
+    ) -> str:
+        """Generates a standardized task name from a port object.
+
+        This method creates a unique string identifier for a simulation task based on
+        a port. The naming convention can be controlled by specifying a mode index
+        directly, which takes precedence, or by selecting a predefined format.
+
+        Parameters
+        ----------
+        port : Port
+            The port object from which to derive the base name.
+        mode_index : Optional[int], optional
+            If provided, this index is appended to the port name (e.g., 'port_1@1'),
+            overriding the `format` argument. Defaults to None.
+        format : TaskNameFormat, optional
+            Specifies the naming convention to use when `mode_index` is not provided.
+            - "RF": Returns the plain port name (e.g., "port_1").
+            - "PF": Appends a zero index to the name (e.g., "port_1@0").
+            Defaults to "RF".
+
+        Returns
+        -------
+        str
+            The formatted task name string.
+
+        Raises
+        ------
+        ValueError
+            If an invalid `format` string is provided.
+        """
         if mode_index is not None:
             return f"{port.name}@{mode_index}"
-        return f"{port.name}"
+        if format == "PF":
+            port_name = f"{port.name}@0"
+        elif format == "RF":
+            port_name = f"{port.name}"
+        else:
+            raise ValueError(
+                f"Format '{format}' invalid for port-name task creation. Must be defined in {TaskNameFormat}"
+            )
+        return port_name
 
     def get_port_by_name(self, port_name: str) -> Port:
         """Get the port from the name."""

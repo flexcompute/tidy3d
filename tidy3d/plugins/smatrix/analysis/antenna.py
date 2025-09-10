@@ -26,7 +26,7 @@ def get_antenna_metrics_data(
     Parameters
     ----------
     terminal_component_modeler_data: TerminalComponentModelerData
-        Data associated with a :class:`TerminalComponentModeler` simulation run.
+        Data associated with a :class:`.TerminalComponentModeler` simulation run.
     port_amplitudes : dict[str, complex] = None
         Dictionary mapping port names to their desired excitation amplitudes. For each port,
         :math:`\\frac{1}{2}|a|^2` represents the incident power from that port into the system.

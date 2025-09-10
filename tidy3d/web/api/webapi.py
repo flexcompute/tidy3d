@@ -391,10 +391,10 @@ def upload(
         if verbose:
             # Validation phase
             console.log("Validating component modeler and subtask simulations...")
-    else:
-        task.validate_post_upload(parent_tasks=parent_tasks)
 
     estimate_cost(task_id=resource_id, solver_version=solver_version, verbose=verbose)
+
+    task.validate_post_upload(parent_tasks=parent_tasks)
 
     # log the url for the task in the web UI
     log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{resource_id}")

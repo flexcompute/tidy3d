@@ -69,7 +69,7 @@ def run_async(
         Interface for managing the running of a Simulation on server.
 
     :class:`Batch`
-        Interface for submitting several :class:`Simulation` objects to sever.
+        Interface for submitting several :class:`.Simulation` objects to sever.
     """
     if simulation_type is None:
         simulation_type = "tidy3d"

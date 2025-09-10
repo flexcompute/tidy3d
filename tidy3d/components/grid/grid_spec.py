@@ -267,10 +267,10 @@ class UniformGrid(GridSpec1d):
     See Also
     --------
 
-    :class:`QuasiUniformGrid`
+    :class:`.QuasiUniformGrid`
         Specification for quasi-uniform grid along a given dimension.
 
-    :class:`AutoGrid`
+    :class:`.AutoGrid`
         Specification for non-uniform grid along a given dimension.
 
     **Notebooks:**
@@ -693,9 +693,9 @@ class AbstractAutoGrid(GridSpec1d):
 
 
 class QuasiUniformGrid(AbstractAutoGrid):
-    """Similar to :class:`UniformGrid` that generates uniform 1D grid, but grid positions
+    """Similar to :class:`.UniformGrid` that generates uniform 1D grid, but grid positions
     are locally fine tuned to be snaped to snapping points and the edges of structure bounding boxes.
-    Internally, it is using the same meshing method as :class:`AutoGrid`, but it ignores material information in
+    Internally, it is using the same meshing method as :class:`.AutoGrid`, but it ignores material information in
     favor for a user-defined grid size.
 
     Example
@@ -705,10 +705,10 @@ class QuasiUniformGrid(AbstractAutoGrid):
     See Also
     --------
 
-    :class:`UniformGrid`
+    :class:`.UniformGrid`
         Uniform 1D grid.
 
-    :class:`AutoGrid`
+    :class:`.AutoGrid`
         Specification for non-uniform grid along a given dimension.
 
     **Notebooks:**
@@ -792,10 +792,10 @@ class AutoGrid(AbstractAutoGrid):
     See Also
     --------
 
-    :class:`UniformGrid`
+    :class:`.UniformGrid`
         Uniform 1D grid.
 
-    :class:`GridSpec`
+    :class:`.GridSpec`
         Collective grid specification for all three dimensions.
 
     **Notebooks:**
@@ -998,7 +998,7 @@ class LayerRefinementSpec(Box):
     Note
     ----
 
-    This class only takes effect when :class:`AutoGrid` is applied.
+    This class only takes effect when :class:`.AutoGrid` is applied.
 
     Example
     -------
@@ -1101,7 +1101,7 @@ class LayerRefinementSpec(Box):
         gap_meshing_iters: pd.NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
     ):
-        """Constructs a :class:`LayerRefiementSpec` that is unbounded in inplane dimensions from bounds along
+        """Constructs a :class:`LayerRefinementSpec` that is unbounded in inplane dimensions from bounds along
         layer thickness dimension.
 
         Parameters
@@ -1175,7 +1175,7 @@ class LayerRefinementSpec(Box):
         gap_meshing_iters: pd.NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
     ):
-        """Constructs a :class:`LayerRefiementSpec` from minimum and maximum coordinate bounds.
+        """Constructs a :class:`LayerRefinementSpec` from minimum and maximum coordinate bounds.
 
         Parameters
         ----------
@@ -1250,7 +1250,7 @@ class LayerRefinementSpec(Box):
         gap_meshing_iters: pd.NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
     ):
-        """Constructs a :class:`LayerRefiementSpec` from the bounding box of a list of structures.
+        """Constructs a :class:`LayerRefinementSpec` from the bounding box of a list of structures.
 
         Parameters
         ----------
@@ -2070,10 +2070,10 @@ class GridSpec(Tidy3dBaseModel):
     See Also
     --------
 
-    :class:`UniformGrid`
+    :class:`.UniformGrid`
         Uniform 1D grid.
 
-    :class:`AutoGrid`
+    :class:`.AutoGrid`
         Specification for non-uniform grid along a given dimension.
 
     **Notebooks:**
@@ -2796,7 +2796,7 @@ class GridSpec(Tidy3dBaseModel):
         min_steps_per_sim_size: pd.PositiveFloat = 10.0,
         mesher: MesherType = Undefined,
     ) -> GridSpec:
-        """Use the same :class:`AutoGrid` along each of the three directions.
+        """Use the same :class:`.AutoGrid` along each of the three directions.
 
         Parameters
         ----------
@@ -2826,7 +2826,7 @@ class GridSpec(Tidy3dBaseModel):
         Returns
         -------
         GridSpec
-            :class:`GridSpec` with the same automatic nonuniform grid settings in each direction.
+            :class:`.GridSpec` with the same automatic nonuniform grid settings in each direction.
         """
         if mesher is Undefined:
             mesher = GradedMesher()
@@ -2850,7 +2850,7 @@ class GridSpec(Tidy3dBaseModel):
 
     @classmethod
     def uniform(cls, dl: float) -> GridSpec:
-        """Use the same :class:`UniformGrid` along each of the three directions.
+        """Use the same :class:`.UniformGrid` along each of the three directions.
 
         Parameters
         ----------
@@ -2860,7 +2860,7 @@ class GridSpec(Tidy3dBaseModel):
         Returns
         -------
         GridSpec
-            :class:`GridSpec` with the same uniform grid size in each direction.
+            :class:`.GridSpec` with the same uniform grid size in each direction.
         """
 
         grid_1d = UniformGrid(dl=dl)
@@ -2875,7 +2875,7 @@ class GridSpec(Tidy3dBaseModel):
         snapping_points: tuple[CoordinateOptional, ...] = (),
         mesher: MesherType = Undefined,
     ) -> GridSpec:
-        """Use the same :class:`QuasiUniformGrid` along each of the three directions.
+        """Use the same :class:`.QuasiUniformGrid` along each of the three directions.
 
         Parameters
         ----------
@@ -2895,7 +2895,7 @@ class GridSpec(Tidy3dBaseModel):
         Returns
         -------
         GridSpec
-            :class:`GridSpec` with the same uniform grid size in each direction.
+            :class:`.GridSpec` with the same uniform grid size in each direction.
         """
         if mesher is Undefined:
             mesher = GradedMesher()

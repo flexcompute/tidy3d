@@ -83,7 +83,7 @@ There are many different models that can be used to describe dispersive mediums.
 
    tidy3d.plugins.dispersion.FastDispersionFitter
 
-Alternatively, the ``FastDispersionFitter`` plugin can be used to generate a dispersive medium from external data. The data can be provided as a local text file or a web URL from the materials database `refractiveindex.info <https://refractiveindex.info>`_.
+Alternatively, the :class:`FastDispersionFitter` plugin can be used to generate a dispersive medium from external data. The data can be provided as a local text file or a web URL from the materials database `refractiveindex.info <https://refractiveindex.info>`_.
 
 .. code-block:: python
 
@@ -204,11 +204,11 @@ At lower frequencies, the EM field typically does not penetrate very far into th
    # lossy metal (conductivity in S/um)
    my_lossy_metal = LossyMetalMedium(conductivity=58, freq_range=(1e9, 10e9))
 
-The ``LossyMetalMedium`` class implements the surface impedance boundary condition (SIBC). It can also accept surface roughness specifications using the Hammerstad or Huray models. Please refer to its documentation page for details.
+The :class:`.LossyMetalMedium` class implements the surface impedance boundary condition (SIBC). It can also accept surface roughness specifications using the Hammerstad or Huray models. Please refer to its documentation page for details.
 
 .. note::
    
-   For lossy metallic mediums, always be sure to check the skin depth --- if the skin depth is not negligible compared to the structure size, then ``LossyMetalMedium`` may be not accurate. In that case, use a regular dispersive medium instead.
+   For lossy metallic mediums, always be sure to check the skin depth --- if the skin depth is not negligible compared to the structure size, then :class:`.LossyMetalMedium` may be not accurate. In that case, use a regular dispersive medium instead.
 
 ~~~~
 

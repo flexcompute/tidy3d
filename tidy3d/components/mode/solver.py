@@ -1059,5 +1059,5 @@ class EigSolver(Tidy3dBaseModel):
 
 
 def compute_modes(*args, **kwargs) -> tuple[Numpy, Numpy, str]:
-    """A wrapper around ``EigSolver.compute_modes``, which is used in ``ModeSolver``."""
+    """A wrapper around ``EigSolver.compute_modes``, which is used in :class:`.ModeSolver`."""
     return EigSolver.compute_modes(*args, **kwargs)

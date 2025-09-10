@@ -734,7 +734,7 @@ class RectangularDielectric(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:`ModeSolver`
+        :class:`.ModeSolver`
 
         Example
         -------

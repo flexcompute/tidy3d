@@ -215,7 +215,7 @@ The far-field monitor records the near-field within the simulation domain in ord
 
 The ``far_field_approx`` parameter should be set to ``True`` (default) when the projection plane is far from the simulation domain. For intermediate distances, the user can set it to ``False`` for increased accuracy at the expense of slightly greater computational cost. 
 
-When including far-field projection monitors in the ``Simulation`` object, the far-field calculation is performed server-side. The computation is much faster and slightly more accurate than if performed locally. However, it will slightly increase the cost of the simulation.
+When including far-field projection monitors in the :class:`.Simulation` object, the far-field calculation is performed server-side. The computation is much faster and slightly more accurate than if performed locally. However, it will slightly increase the cost of the simulation.
 
 .. autosummary::
    :toctree: _autosummary/

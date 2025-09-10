@@ -517,8 +517,8 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
         Returns
         -------
-        :class:`ModeSolver`
-            :class:`ModeSolver` object associated with this task.
+        :class:`.ModeSolver`
+            :class:`.ModeSolver` object associated with this task.
         """
         if self.file_type == "Gz":
             file, file_path = tempfile.mkstemp(".hdf5.gz")

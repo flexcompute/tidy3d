@@ -95,7 +95,7 @@ class WavePort(AbstractTerminalPort, Box):
         True,
         title="Absorber.",
         description="Place a mode absorber in the port. If ``True``, an automatically generated mode absorber is placed in the port. "
-        "If ``ABCBoundary`` or ``ModeABCBoundary``, a mode absorber is placed in the port with the specified boundary conditions.",
+        "If :class:`.ABCBoundary` or :class:`.ModeABCBoundary`, a mode absorber is placed in the port with the specified boundary conditions.",
     )
 
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:

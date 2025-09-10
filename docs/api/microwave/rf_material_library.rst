@@ -1,6 +1,7 @@
-****************
-RF Material Library
-****************
+.. _rf_materials_library:
+
+RF Materials Library
+--------------------
 
 .. currentmodule:: tidy3d
 
@@ -34,16 +35,16 @@ To access the details of a variant, including material model and references, use
 
 
 ArlonAD255C ("AD255C")
-======================
+^^^^^^^^^^^^^^^^^^^^^^
 
 .. table::
    :widths: auto
 
    ====================== ============== ============= ===========
-   Variant                Valid for      Model Info    Reference  
+   Variant                Valid for      Model Info    Reference
    ====================== ============== ============= ===========
-   ``'design'`` (default) 1.0 - 30.0 GHz 5-pole, lossy [1]        
-   ``'process'``          1.0 - 30.0 GHz 5-pole, lossy [1]        
+   ``'design'`` (default) 1.0 - 30.0 GHz 5-pole, lossy [1]
+   ``'process'``          1.0 - 30.0 GHz 5-pole, lossy [1]
    ====================== ============== ============= ===========
 
 Examples:
@@ -57,16 +58,16 @@ References:
 #. \AD255C High Performance Polyimide Laminates `[url] <https://www.rogerscorp.com/advanced-electronics-solutions/ad-series-laminates/ad255c-laminates>`__
 
 FR4 ("FR4")
-===========
+^^^^^^^^^^^
 
 .. table::
    :widths: auto
 
    ======================== ============= ============= ===========
-   Variant                  Valid for     Model Info    Reference  
+   Variant                  Valid for     Model Info    Reference
    ======================== ============= ============= ===========
-   ``'lowloss'``            1.0 - 3.0 GHz 5-pole, lossy [1]        
-   ``'standard'`` (default) 1.0 - 3.0 GHz 5-pole, lossy [2]        
+   ``'lowloss'``            1.0 - 3.0 GHz 5-pole, lossy [1]
+   ``'standard'`` (default) 1.0 - 3.0 GHz 5-pole, lossy [2]
    ======================== ============= ============= ===========
 
 Examples:
@@ -81,16 +82,16 @@ References:
 #. \Standard FR-4 Epoxy Glass Cloth Laminate `[url] <https://www.isola-group.com/pcb-laminates-prepreg/is410-fr-4-epoxy-laminate-and-prepreg/>`__
 
 Rogers3003 ("RO3003")
-=====================
+^^^^^^^^^^^^^^^^^^^^^
 
 .. table::
    :widths: auto
 
    ====================== ============== ============= ===========
-   Variant                Valid for      Model Info    Reference  
+   Variant                Valid for      Model Info    Reference
    ====================== ============== ============= ===========
-   ``'design'`` (default) 1.0 - 30.0 GHz 5-pole, lossy [1]        
-   ``'process'``          1.0 - 30.0 GHz 5-pole, lossy [1]        
+   ``'design'`` (default) 1.0 - 30.0 GHz 5-pole, lossy [1]
+   ``'process'``          1.0 - 30.0 GHz 5-pole, lossy [1]
    ====================== ============== ============= ===========
 
 Examples:
@@ -104,16 +105,16 @@ References:
 #. \RO3003™ Laminates `[url] <https://www.rogerscorp.com/advanced-electronics-solutions/ro3000-series-laminates/ro3003-laminates>`__
 
 Rogers3010 ("RO3010")
-=====================
+^^^^^^^^^^^^^^^^^^^^^
 
 .. table::
    :widths: auto
 
    ====================== ============== ============= ===========
-   Variant                Valid for      Model Info    Reference  
+   Variant                Valid for      Model Info    Reference
    ====================== ============== ============= ===========
-   ``'design'`` (default) 1.0 - 30.0 GHz 5-pole, lossy [1]        
-   ``'process'``          1.0 - 30.0 GHz 5-pole, lossy [1]        
+   ``'design'`` (default) 1.0 - 30.0 GHz 5-pole, lossy [1]
+   ``'process'``          1.0 - 30.0 GHz 5-pole, lossy [1]
    ====================== ============== ============= ===========
 
 Examples:
@@ -127,16 +128,16 @@ References:
 #. \RO3010™ Laminates `[url] <https://www.rogerscorp.com/advanced-electronics-solutions/ro3000-series-laminates/ro3010-laminates>`__
 
 Rogers4003C ("RO4003C")
-=======================
+^^^^^^^^^^^^^^^^^^^^^^^
 
 .. table::
    :widths: auto
 
    ====================== ============== ============= ===========
-   Variant                Valid for      Model Info    Reference  
+   Variant                Valid for      Model Info    Reference
    ====================== ============== ============= ===========
-   ``'design'`` (default) 8.0 - 40.0 GHz 5-pole, lossy [1]        
-   ``'process'``          8.0 - 40.0 GHz 5-pole, lossy [1]        
+   ``'design'`` (default) 8.0 - 40.0 GHz 5-pole, lossy [1]
+   ``'process'``          8.0 - 40.0 GHz 5-pole, lossy [1]
    ====================== ============== ============= ===========
 
 Examples:
@@ -150,16 +151,16 @@ References:
 #. \RO4003C™ Laminates `[url] <https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4350b-laminates>`__
 
 Rogers4350B ("RO4350B")
-=======================
+^^^^^^^^^^^^^^^^^^^^^^^
 
 .. table::
    :widths: auto
 
    ====================== ============== ============= ===========
-   Variant                Valid for      Model Info    Reference  
+   Variant                Valid for      Model Info    Reference
    ====================== ============== ============= ===========
-   ``'design'`` (default) 8.0 - 40.0 GHz 5-pole, lossy [1]        
-   ``'process'``          8.0 - 40.0 GHz 5-pole, lossy [1]        
+   ``'design'`` (default) 8.0 - 40.0 GHz 5-pole, lossy [1]
+   ``'process'``          8.0 - 40.0 GHz 5-pole, lossy [1]
    ====================== ============== ============= ===========
 
 Examples:

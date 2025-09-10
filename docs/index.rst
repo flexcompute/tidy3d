@@ -187,7 +187,7 @@ Our Ecosystem
  
       Online Learning Center
       +++
-      **Tidy3D GUI**
+      **Tidy3D Learning Center**
 
    .. grid-item-card::
       :img-top: _static/img/photonforge_overview.png
@@ -205,9 +205,9 @@ Our Ecosystem
       :text-align: center
       :padding: 1
       
-      Access your GUI & account management.
+      Access the graphical user interface & account management.
       +++
-      **SimCloud**
+      **Tidy3D GUI**
 
 
 Further Information
@@ -253,7 +253,7 @@ Contents
   notebooks/docs/index
   faq/docs/index
   api/index
-  GUI <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/>
+  GUI <https://tidy3d.simulation.cloud/>
   Photonforge <https://docs.flexcompute.com/projects/photonforge/en/latest/>
   development/index
   changelog

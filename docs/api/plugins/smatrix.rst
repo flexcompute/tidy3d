@@ -1,7 +1,7 @@
 .. currentmodule:: tidy3d
 
-Scattering Matrix Calculator
-----------------------------
+S-Matrix Component Modelers Plugin
+----------------------------------
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -26,3 +26,15 @@ Scattering Matrix Calculator
 .. include:: /api/microwave/ports/lumped.rst
 .. include:: /api/microwave/ports/wave.rst
 .. include:: /api/plugins/smatrix_migration.rst
+
+Further Details
+^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+   tidy3d.plugins.smatrix.AbstractComponentModeler
+   tidy3d.plugins.smatrix.AbstractComponentModelerData
+   tidy3d.SimulationMap
+   tidy3d.SimulationDataMap

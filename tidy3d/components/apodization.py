@@ -75,7 +75,7 @@ class ApodizationSpec(Tidy3dBaseModel):
         ----------
         times : np.ndarray
             Array of times (seconds) to plot source at.
-            To see source time amplitude for a specific :class:`Simulation`,
+            To see source time amplitude for a specific :class:`.Simulation`,
             pass ``simulation.tmesh``.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.

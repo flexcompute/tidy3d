@@ -1,3 +1,5 @@
+.. _layer_grid_refinement:
+
 Layer-based Grid Refinement
 ---------------------------
 
@@ -9,7 +11,7 @@ Layer-based Grid Refinement
    tidy3d.CornerFinderSpec
    tidy3d.GridRefinement
 
-The ``LayerRefinementSpec`` class allows the user to specify automated refinement within a layered region, for instance, the metallic trace plane of a printed circuit board. The grid will be automatically refined near any metallic corners and edges in that layer.
+The :class:`.LayerRefinementSpec` class allows the user to specify automated refinement within a layered region, for instance, the metallic trace plane of a printed circuit board. The grid will be automatically refined near any metallic corners and edges in that layer.
 
 .. code-block:: python
 
@@ -29,7 +31,7 @@ The ``LayerRefinementSpec`` class allows the user to specify automated refinemen
        layer_refinement_specs = [my_layer_refinement_spec]
    )
 
-More than one ``LayerRefinementSpec`` is permitted. In addition to manually defining the ``center`` and ``size`` of the ``LayerRefinementSpec``, one can alternatively use the ``from_bounds()``, ``from_layer_bounds()``, or ``from_structures()`` convenience methods.
+More than one :class:`.LayerRefinementSpec` is permitted. In addition to manually defining the ``center`` and ``size`` of the :class:`.LayerRefinementSpec`, one can alternatively use the ``from_bounds()``, ``from_layer_bounds()``, or ``from_structures()`` convenience methods.
 
 .. code-block:: python
 
@@ -38,7 +40,7 @@ More than one ``LayerRefinementSpec`` is permitted. In addition to manually defi
        ...
    )
 
-Note that different ``LayerRefinementSpec`` instances are recommended for structures on different physical layers.
+Note that different :class:`.LayerRefinementSpec` instances are recommended for structures on different physical layers.
 
 .. seealso::
 
