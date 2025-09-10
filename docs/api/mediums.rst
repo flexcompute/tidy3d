@@ -26,7 +26,7 @@ Combinations are possible, e.g. a spatially-varying, dispersive, anisotropic med
 The material library also provides a growing list of commonly used material models.
 
 + `Material Library <material_library.html>`_
-+ `RF Material Library <rf_material_library.html>`_
++ `RF Material Library <microwave/rf_material_library.html>`_
 
 ~~~~
 

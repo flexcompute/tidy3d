@@ -1,5 +1,3 @@
-~~~~
-
 RF Materials
 ------------
 
@@ -64,5 +62,9 @@ More advanced material models, including frequency dependence and anisotropy, ar
    For a more comprehensive discussion of the different EM mediums available in Tidy3D, please refer to the EM Mediums page:
 
    + `EM Mediums <../mediums.html>`_
+
+   For the built-in RF material library, please refer to this page:
+
+   + `RF Material Library <rf_material_library.html>`_
 
 ~~~~

@@ -1,5 +1,3 @@
-
-
 Radiation and Scattering
 ------------------------
 
@@ -89,10 +87,10 @@ Lobe characteristics such as direction, magnitude, and -3 dB beamwidth can be ob
 
    For more in-depth discussion and examples, please see the following learning center article:
 
-   + `Introduction to Antenna Simulation <../notebooks/AntennaCharacteristics.html>`_
+   + `Introduction to Antenna Simulation <../../notebooks/AntennaCharacteristics.html>`_
 
    Example applications:
 
-   + `Edge feed patch antenna benchmark <../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
+   + `Edge feed patch antenna benchmark <../../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
 
 ~~~~

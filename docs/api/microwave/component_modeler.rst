@@ -1,5 +1,7 @@
-``TerminalComponentModeler`` & Data
-------------------------------------
+.. _TerminalComponentModeler:
+
+``TerminalComponentModeler``
+----------------------------
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -43,7 +45,9 @@ More information and explanation for additional fields can be found in the docum
    # Load results after completion
    my_tcm_data = tidy3d.web.load(my_task_id)
 
- Alternatively, use the ``tidy3d.web.run()`` method to perform all of the above in one single step.
+   
+Alternatively, use the ``tidy3d.web.run()`` method to perform all of the above in one single step.
+
 
 .. code-block:: python
 
@@ -84,18 +88,18 @@ The ``data`` attribute holds the simulation data in a dictionary with the respec
 
    To learn more about the web API workflow in Tidy3D, please refer to the following pages:
 
-   + `Running simulations through the cloud <../notebooks/WebAPI.html>`_
+   + `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
    + `Web API documentation <../submit_simulations.html>`_
 
    To learn more about data post-processing and visualization, please refer to the following pages:
 
-   + `Performing visualization of simulation data <../notebooks/VizData.html>`_
-   + `Advanced monitor data manipulation and visualization <../XarrayTutorial.html>`_
+   + `Performing visualization of simulation data <../../notebooks/VizData.html>`_
+   + `Advanced monitor data manipulation and visualization <../../notebooks/XarrayTutorial.html>`_
 
    Please refer to the following example models to see the ``TerminalComponentModeler`` in action:
 
-   + `Differential stripline benchmark <../notebooks/DifferentialStripline.html>`_
-   + `Edge feed patch antenna benchmark <../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
-   + `Hybrid microstrip/co-planar waveguide bandpass filter <../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
+   + `Differential stripline benchmark <../../notebooks/DifferentialStripline.html>`_
+   + `Edge feed patch antenna benchmark <../../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_
+   + `Hybrid microstrip/co-planar waveguide bandpass filter <../../notebooks/HybridMicrostripCPWBandpassFilter.html>`_
 
 ~~~~

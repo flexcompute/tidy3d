@@ -10,8 +10,6 @@ API |:computer:|
     geometry
     structure_and_scene
     mediums
-    material_library
-    rf_material_library
     boundary_conditions
     discretization
     sources
