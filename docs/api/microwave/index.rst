@@ -12,7 +12,7 @@ This page consolidates Tidy3D features related to microwave and RF simulation. W
 
 The following sections discuss:
 
-* `TerminalComponentModeler and Data`_: The core simulation object in microwave/RF models
+* `TerminalComponentModeler`_: The core simulation object in microwave/RF models
 * `RF Materials`_: Typical material types in microwave/RF simulation
 * `Layer-based Grid Refinement`_: Automated grid refinement strategy for planar structures (e.g. printed circuit boards)
 * `Lumped Port and Elements`_: Lumped excitations and circuit elements
@@ -23,9 +23,9 @@ The following sections discuss:
 
    If you are completely new to Tidy3D, we recommend first checking out the following beginner resources:
 
-   + `Quickstart <../notebooks/StartHere.html>`_
-   + `Tidy3D first walkthrough <../notebooks/Simulation.html>`_
-   + `Introduction to Tidy3D working principles <../notebooks/Primer.html>`_
+   + `Quickstart <../../notebooks/StartHere.html>`_
+   + `Tidy3D first walkthrough <../../notebooks/Simulation.html>`_
+   + `Introduction to Tidy3D working principles <../../notebooks/Primer.html>`_
 
 .. include:: /api/microwave/component_modeler.rst
 .. include:: /api/microwave/material.rst
