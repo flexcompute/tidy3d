@@ -5,7 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
 ## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed
+
+
+## [v2.10.0rc1] - 2025-09-11
 
 ### Added
 - Added rectangular and radial taper support to `RectangularAntennaArrayCalculator` for phased array amplitude weighting; refactored array factor calculation for improved clarity and performance. 
@@ -33,11 +43,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added autograd support for sidewall angles in `td.Cylinder` and `td.PolySlab`.
 
 ### Changed
-- Validate mode solver object for large number of grid points on the modal plane.
 - Adaptive minimum spacing for `PolySlab` integration is now wavelength relative and a minimum discretization is set for computing gradients for cylinders.
 - The `TerminalComponentModeler` defaults to the pseudo wave definition of scattering parameters. The new field `s_param_def` can be used to switch between either pseudo or power wave definitions.
 - Restructured the smatrix plugin with backwards-incompatible changes for a more robust architecture. Notably, `ComponentModeler` has been renamed to `ModalComponentModeler` and internal web API methods have been removed. Please see our migration guide for details on updating your workflows.
 - Prevent small bandwidth sources from being created in `TerminalComponentModeler` when modeler frequencies are close together.
+
+### Fixed
+- Bug in `TerminalComponentModeler.get_antenna_metrics_data` when port amplitudes are set to zero.
+- Added missing `solver_version` keyword argument to `run_async`.
+- Fixed `interpn` data array method to be compatible with extrapolation outside of data array coordinates.
+- Fixed `overlap_sort` to use the same value of the `conjugated_dot_product` field in `ModeMonitor`, and added the `conjugated_dot_product` field to `ModeSolver` and `ModeSimulation`.
+
+
+
+## [v2.9.1] - 2025-08-13
+
+### Changed
+- Validate mode solver object for large number of grid points on the modal plane.
 
 ### Fixed
 - Fixed missing amplitude factor and handling of negative normal direction case when making adjoint sources from `DiffractionMonitor`.
@@ -50,10 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed sources from `sim_inf_structure` simulation object in `postprocess_adj` to avoid source and background medium validation errors.
 - Revert overly restrictive validation of `freqs` in the `ComponentModeler` and `TerminalComponentModeler`.
 - Fixed `ElectromagneticFieldData.to_zbf()` to support single frequency monitors and apply the correct flattening order.
-- Bug in `TerminalComponentModeler.get_antenna_metrics_data` when port amplitudes are set to zero.
-- Added missing `solver_version` keyword argument to `run_async`.
-- Fixed `interpn` data array method to be compatible with extrapolation outside of data array coordinates.
-- Fixed `overlap_sort` to use the same value of the `conjugated_dot_product` field in `ModeMonitor`, and added the `conjugated_dot_product` field to `ModeSolver` and `ModeSimulation`.
+
 
 ## [2.9.0] - 2025-08-04
 

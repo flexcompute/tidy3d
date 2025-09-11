@@ -2071,7 +2071,8 @@
                 "group_index_step": false,
                 "type": "ModeSpec"
             },
-            "mode_index": 0
+            "mode_index": 0,
+            "frame": null
         },
         {
             "attrs": {},
@@ -2619,7 +2620,8 @@
                 "group_index_step": false,
                 "type": "ModeSpec"
             },
-            "store_fields_direction": null
+            "store_fields_direction": null,
+            "conjugated_dot_product": true
         },
         {
             "attrs": {},
@@ -3394,7 +3396,7 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.9.0",
+    "version": "2.10.0rc1",
     "plot_length_units": "\u03bcm",
     "structure_priority_mode": "equal",
     "lumped_elements": [
@@ -3466,6 +3468,7 @@
     "subpixel": false,
     "simulation_type": "tidy3d",
     "post_norm": 1.0,
+    "internal_absorbers": [],
     "courant": 0.8,
     "precision": "hybrid",
     "normalize_index": 0,
