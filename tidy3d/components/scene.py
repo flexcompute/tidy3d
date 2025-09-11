@@ -138,8 +138,8 @@ class Scene(Tidy3dBaseModel):
     _unique_structure_names = assert_unique_names("structures")
 
     @pd.validator("structures", always=True)
-    def _validate_num_mediums(cls, val):
-        """Error if too many mediums present."""
+    def _validate_mediums(cls, val):
+        """Error if too many mediums present. Warn if different mediums have the same name."""
 
         if val is None:
             return val
@@ -149,6 +149,14 @@ class Scene(Tidy3dBaseModel):
             raise SetupError(
                 f"Tidy3D only supports {MAX_NUM_MEDIUMS} distinct mediums."
                 f"{len(mediums)} were supplied."
+            )
+
+        medium_names = [medium.name for medium in mediums if medium.name is not None]
+        if len(medium_names) != len(set(medium_names)):
+            log.warning(
+                "Different mediums with the same name were detected. "
+                "This may error in future Tidy3D versions, and using unique names for distinct "
+                "media is recommended."
             )
 
         return val
