@@ -207,7 +207,7 @@ class DistributedGeneration(Tidy3dBaseModel):
 
         zero_dims = [d for d in ["x", "y", "z"] if len(rate.coords[d]) <= 1]
 
-        if len(zero_dims) >= 1:
+        if len(zero_dims) > 1:
             raise ValueError("SpatialDataArray must be at least 2D.")
 
         return values
