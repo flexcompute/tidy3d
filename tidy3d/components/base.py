@@ -212,7 +212,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         "operation of Tidy3D as it is not used internally. "
         "Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. "
         "For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. "
-        "Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects "
+        "Also note that Tidy3D will raise a ``TypeError`` if ``attrs`` contain objects "
         "that can not be serialized. One can check if ``attrs`` are serializable "
         "by calling ``obj.json()``.",
     )

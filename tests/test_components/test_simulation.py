@@ -2146,19 +2146,19 @@ def test_tfsf_structures_grid():
 
 
 @pytest.mark.parametrize(
-    "size, num_struct, log_level", [(1, 1, None), (50, 1, "WARNING"), (1, 11000, "WARNING")]
+    "size, num_struct, log_level", [(1, 1, None), (50, 1, "WARNING"), (1, 11, "WARNING")]
 )
-def test_warn_large_epsilon(size, num_struct, log_level):
+def test_warn_large_epsilon(monkeypatch, size, num_struct, log_level):
     """Make sure we get a warning if the epsilon grid is too large."""
 
+    monkeypatch.setattr(simulation, "NUM_STRUCTURES_WARN_EPSILON", 10)
     structures = [
         td.Structure(
             geometry=td.Box(center=(0, 0, 0), size=(0.1, 0.1, 0.1)),
-            medium=td.Medium(permittivity=1.0),
+            medium=td.Medium(permittivity=eps),
         )
-        for _ in range(num_struct)
+        for eps in np.linspace(1, 2, num_struct)
     ]
-
     sim = td.Simulation(
         size=(size, size, size),
         grid_spec=td.GridSpec.uniform(dl=0.1),
@@ -3715,3 +3715,44 @@ def test_messages_contain_object_names():
     monitor = td.FieldMonitor(name=name, center=(-1.0, 0, 0), size=(0.5, 0, 1), freqs=[100e14])
     with pytest.raises(pydantic.ValidationError, match=name) as e:
         _ = sim.updated_copy(monitors=[monitor])
+
+
+def test_structures_per_medium(monkeypatch):
+    """Test if structures that share the same medium warn or error appropriately."""
+    import tidy3d.components.scene as scene
+
+    # Set low thresholds to keep the test fast; ensure len(structures) > MAX to avoid early return
+    monkeypatch.setattr(scene, "WARN_STRUCTURES_PER_MEDIUM", 2)
+    monkeypatch.setattr(scene, "MAX_STRUCTURES_PER_MEDIUM", 4)
+
+    shared_med = td.Medium(permittivity=2.0)
+    # 3 share the same medium -> triggers warning (> WARN), but <= MAX per-medium
+    same_medium_structs = [
+        td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=shared_med) for _ in range(3)
+    ]
+    # Add two with different mediums so total structures > MAX but error should not be triggered
+    other_structs = [
+        td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=3.0)),
+        td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=4.0)),
+    ]
+    structs = same_medium_structs + other_structs  # total = 5 > MAX = 4
+
+    with AssertLogLevel("WARNING", contains_str="use the same medium"):
+        _ = td.Simulation(
+            size=(10, 10, 10),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.02),
+            structures=structs,
+        )
+
+    # Now test error
+    monkeypatch.setattr(scene, "MAX_STRUCTURES_PER_MEDIUM", 3, raising=False)
+    structs = [td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=shared_med) for _ in range(4)]
+
+    with pytest.raises(pydantic.ValidationError, match="use the same medium"):
+        _ = td.Simulation(
+            size=(10, 10, 10),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.02),
+            structures=structs,
+        )
