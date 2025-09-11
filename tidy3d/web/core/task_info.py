@@ -203,6 +203,8 @@ class BatchStatus(str, Enum):
     """The simulation in the batch diverged."""
     aborted = "aborted"
     """The batch was successfully aborted."""
+    error = "error"
+    """An error occurred during the solver run."""
 
 
 class BatchTaskBlockInfo(TaskBlockInfo):
