@@ -1715,6 +1715,27 @@ def test_num_mediums(monkeypatch):
         )
 
 
+def test_unique_medium_names():
+    """Warn if non-unique medium names supplied."""
+
+    with AssertLogLevel("WARNING", contains_str="unique names"):
+        _ = td.Simulation(
+            size=(5, 5, 5),
+            structures=[
+                td.Structure(
+                    geometry=td.Box(size=(1, 1, 1)),
+                    medium=td.Medium(permittivity=2, name="medium1"),
+                ),
+                td.Structure(
+                    geometry=td.Box(size=(1, 1, 1), center=(1, 0, 0)),
+                    medium=td.Medium(permittivity=3, name="medium1"),
+                ),
+            ],
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.02),
+        )
+
+
 def test_num_sources():
     """Make sure we error if too many sources supplied."""
 

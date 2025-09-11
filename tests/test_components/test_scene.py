@@ -47,7 +47,7 @@ def test_scene_init():
 
 
 def test_validate_components_none():
-    assert SCENE._validate_num_mediums(val=None) is None
+    assert SCENE._validate_mediums(val=None) is None
 
 
 def test_plot_eps():
