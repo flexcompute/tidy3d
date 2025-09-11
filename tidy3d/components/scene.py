@@ -79,6 +79,10 @@ MAX_NUM_MEDIUMS = 65530
 # maximum geometry count in a single structure
 MAX_GEOMETRY_COUNT = 100
 
+# warn and error out if the same medium is present in too many structures
+WARN_STRUCTURES_PER_MEDIUM = 200
+MAX_STRUCTURES_PER_MEDIUM = 1_000
+
 
 class Scene(Tidy3dBaseModel):
     """Contains generic information about the geometry and medium properties common to all types of
@@ -173,6 +177,43 @@ class Scene(Tidy3dBaseModel):
                         f"flattened. A maximum of {MAX_GEOMETRY_COUNT} is supported due to "
                         f"preprocessing performance."
                     )
+
+        return val
+
+    @pd.validator("structures", always=True)
+    def _validate_structures_per_medium(cls, val):
+        """Error if too many structures share the same medium; suggest using GeometryGroup."""
+        if val is None:
+            return val
+
+        # if total structures are <= warn limit, the constraint cannot be violated.
+        if len(val) <= WARN_STRUCTURES_PER_MEDIUM:
+            return val
+
+        # Count structures per medium
+        counts = {}
+        get = counts.get
+        for structure in val:
+            key = structure.medium
+            new_count = get(key, 0) + 1
+            # Exit early to avoid slow counting if many structures present
+            if new_count > MAX_STRUCTURES_PER_MEDIUM:
+                raise SetupError(
+                    f"More than {MAX_STRUCTURES_PER_MEDIUM} structures use the same medium. "
+                    "For performance, use a 'GeometryGroup' or boolean operations to combine "
+                    "geometries that share a medium."
+                )
+            counts[key] = new_count
+
+        # Now check if we should warn
+        for count in counts.values():
+            if count > WARN_STRUCTURES_PER_MEDIUM:
+                log.warning(
+                    f"More than {WARN_STRUCTURES_PER_MEDIUM} structures use the same medium. "
+                    "For performance, use a 'GeometryGroup' or boolean operations to combine "
+                    "geometries that share a medium."
+                )
+                break
 
         return val
 
