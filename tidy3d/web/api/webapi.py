@@ -1192,6 +1192,7 @@ def _monitor_modeler_batch(
 
         if console is not None:
             console.log("Modeler has finished running successfully.")
+            real_cost(batch_id, verbose=verbose)
 
 
 @wait_for_connection
@@ -1342,12 +1343,12 @@ def estimate_cost(
     console = get_logging_console() if verbose else None
 
     if _is_modeler_batch(task_id):
-        status = _batch_detail(task_id).totalStatus
+        status = _batch_detail(task_id).totalStatus.value
 
         # Wait for a termination status
         while status not in ["validate_success", "success", "error", "failed"]:
             time.sleep(REFRESH_TIME)
-            status = _batch_detail(task_id).totalStatus
+            status = _batch_detail(task_id).totalStatus.value
 
         if status in ["validate_success", "success"]:
             est_flex_unit = _batch_detail(task_id).estFlexUnit
@@ -1448,11 +1449,10 @@ def real_cost(task_id: str, verbose=True) -> float | None:
         )
 
     console = get_logging_console() if verbose else None
-
     if _is_modeler_batch(task_id):
-        status = _batch_detail(task_id).totalStatus
+        status = _batch_detail(task_id).totalStatus.value
         flex_unit = _batch_detail(task_id).realFlexUnit or None
-        if status not in ["success"]:
+        if status not in ["success", "run_success"]:
             log.warning(
                 f"Billed FlexCredit for task '{task_id}' is not available. If the task has been "
                 "successfully run, it should be available shortly."
