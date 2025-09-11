@@ -11,6 +11,7 @@ on:
 jobs:
   test-latest-submodules:
     runs-on: ubuntu-latest
+    if: contains(github.ref, 'rc') == false
     steps:
       - name: Checkout repository with submodules
         uses: actions/checkout@v4
