@@ -380,10 +380,11 @@ def test_monitor():
     )
     m10 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
     m11 = td.AuxFieldTimeMonitor(size=size, center=center, name="aux_field_time", fields=("Nfx",))
+    m12 = td.MediumMonitor(size=size, center=center, freqs=FREQS, name="mat")
 
     tmesh = np.linspace(0, 1, 10)
 
-    for m in [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10]:
+    for m in [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m12]:
         m.storage_size(num_cells=100, tmesh=tmesh)
 
     for m in [m2, m4]:

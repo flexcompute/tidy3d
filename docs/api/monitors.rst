@@ -16,7 +16,8 @@ The types of monitors in Tidy3D include:
 * `Mode`_: Records mode coefficient(s) of the field across a 2D plane
 * `Diffraction`_: Records diffraction coefficient(s) in a periodic simulation
 * `Far-field`_: Various monitors for calculating far-field projection and radiation characteristics
-* `Permittivity`_: Records material properties within a given region
+* `Permittivity`_: Records material permittivity properties within a given region
+* `Medium`_: Records material permittivity and permeability properties within a given region
 
 .. seealso::
 
@@ -255,16 +256,17 @@ Please see the learning center article below for detailed explanations on additi
 
 ~~~~
 
-Permittivity
-------------
+Permittivity and Permeability
+-----------------------------
 
 .. autosummary::
    :toctree: _autosummary/
    :template: module.rst
 
    tidy3d.PermittivityMonitor
+   tidy3d.MediumMonitor
 
-The ``PermittivityMonitor`` is used to record local relative permittivity data in the region of interest. This data can be useful for post-simulation calculations that require permittivity values, such as mode volume and absorption density.
+The ``PermittivityMonitor`` is used to record local relative permittivity data in the region of interest, and the ``MediumMonitor`` can additionally record permeability data. Those data can be useful for post-simulation calculations that require permittivity or permeability values, such as mode volume and absorption density.
 
 .. code-block:: python
 

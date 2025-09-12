@@ -812,6 +812,7 @@ SIM_FULL = td.Simulation(
         td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="flux"),
         td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), name="flux_time"),
         td.PermittivityMonitor(size=(1, 1, 0.1), name="eps", freqs=[1e14]),
+        td.MediumMonitor(size=(1, 1, 0.1), name="mat", freqs=[1e14]),
         td.ModeMonitor(
             size=(1, 1, 0),
             center=(0, 0, 0),
@@ -1241,6 +1242,21 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
             grid_expanded=simulation.discretize_monitor(monitor),
         )
 
+    def make_medium_data(monitor: td.MediumMonitor) -> td.MediumData:
+        """make a random PermittivityData from a PermittivityMonitor."""
+        field_mnt = td.FieldMonitor(**monitor.dict(exclude={"type", "fields"}))
+        field_data = make_field_data(monitor=field_mnt)
+        return td.MediumData(
+            monitor=monitor,
+            eps_xx=field_data.Ex,
+            eps_yy=field_data.Ey,
+            eps_zz=field_data.Ez,
+            mu_xx=field_data.Hx,
+            mu_yy=field_data.Hy,
+            mu_zz=field_data.Hz,
+            grid_expanded=simulation.discretize_monitor(monitor),
+        )
+
     def make_diff_data(monitor: td.DiffractionMonitor) -> td.DiffractionData:
         """make a random DiffractionData from a DiffractionMonitor."""
         f = list(monitor.freqs)
@@ -1455,6 +1471,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         td.ModeSolverMonitor: make_mode_solver_data,
         td.ModeMonitor: make_mode_data,
         td.PermittivityMonitor: make_eps_data,
+        td.MediumMonitor: make_medium_data,
         td.DiffractionMonitor: make_diff_data,
         td.FluxMonitor: make_flux_data,
         td.DirectivityMonitor: make_directivity_data,

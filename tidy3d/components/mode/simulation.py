@@ -13,7 +13,12 @@ from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Grid
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.mode_spec import ModeSpec
-from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
+from tidy3d.components.monitor import (
+    MediumMonitor,
+    ModeMonitor,
+    ModeSolverMonitor,
+    PermittivityMonitor,
+)
 from tidy3d.components.simulation import (
     AbstractYeeGridSimulation,
     Simulation,
@@ -27,7 +32,7 @@ from tidy3d.log import log
 
 from .mode_solver import ModeSolver
 
-ModeSimulationMonitorType = PermittivityMonitor
+ModeSimulationMonitorType = Union[PermittivityMonitor, MediumMonitor]
 
 # dummy run time for conversion to FDTD sim
 # should be very small -- otherwise, generating tmesh will fail or take a long time

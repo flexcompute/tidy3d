@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.monitor_data import ModeSolverData, PermittivityData
+from tidy3d.components.data.monitor_data import MediumData, ModeSolverData, PermittivityData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.components.types import Ax, PlotScale
 
-ModeSimulationMonitorDataType = PermittivityData
+ModeSimulationMonitorDataType = Union[PermittivityData, MediumData]
 
 
 class ModeSimulationData(AbstractYeeGridSimulationData):

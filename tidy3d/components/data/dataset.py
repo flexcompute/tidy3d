@@ -618,7 +618,27 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
         )
 
 
-class PermittivityDataset(AbstractFieldDataset):
+class AbstractMediumPropertyDataset(AbstractFieldDataset, ABC):
+    """Dataset storing medium property."""
+
+    eps_xx: ScalarFieldDataArray = pd.Field(
+        ...,
+        title="Epsilon xx",
+        description="Spatial distribution of the xx-component of the relative permittivity.",
+    )
+    eps_yy: ScalarFieldDataArray = pd.Field(
+        ...,
+        title="Epsilon yy",
+        description="Spatial distribution of the yy-component of the relative permittivity.",
+    )
+    eps_zz: ScalarFieldDataArray = pd.Field(
+        ...,
+        title="Epsilon zz",
+        description="Spatial distribution of the zz-component of the relative permittivity.",
+    )
+
+
+class PermittivityDataset(AbstractMediumPropertyDataset):
     """Dataset storing the diagonal components of the permittivity tensor.
 
     Example
@@ -647,21 +667,72 @@ class PermittivityDataset(AbstractFieldDataset):
         """Maps field components to their (positive) symmetry eigenvalues."""
         return {"eps_xx": None, "eps_yy": None, "eps_zz": None}
 
-    eps_xx: ScalarFieldDataArray = pd.Field(
+
+class MediumDataset(AbstractMediumPropertyDataset):
+    """Dataset storing the diagonal components of the permittivity and permeability tensor.
+
+    Example
+    -------
+    >>> x = [-1,1]
+    >>> y = [-2,0,2]
+    >>> z = [-3,-1,1,3]
+    >>> f = [2e14, 3e14]
+    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> sclr_fld = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    >>> data = MediumDataset(eps_xx=sclr_fld, eps_yy=sclr_fld, eps_zz=sclr_fld, mu_xx=sclr_fld, mu_yy=sclr_fld, mu_zz=sclr_fld)
+    """
+
+    mu_xx: ScalarFieldDataArray = pd.Field(
         ...,
-        title="Epsilon xx",
-        description="Spatial distribution of the xx-component of the relative permittivity.",
+        title="Mu xx",
+        description="Spatial distribution of the xx-component of the relative permeability.",
     )
-    eps_yy: ScalarFieldDataArray = pd.Field(
+    mu_yy: ScalarFieldDataArray = pd.Field(
         ...,
-        title="Epsilon yy",
-        description="Spatial distribution of the yy-component of the relative permittivity.",
+        title="Mu yy",
+        description="Spatial distribution of the yy-component of the relative permeability.",
     )
-    eps_zz: ScalarFieldDataArray = pd.Field(
+    mu_zz: ScalarFieldDataArray = pd.Field(
         ...,
-        title="Epsilon zz",
-        description="Spatial distribution of the zz-component of the relative permittivity.",
+        title="Mu zz",
+        description="Spatial distribution of the zz-component of the relative permeability.",
     )
+
+    @property
+    def field_components(self) -> dict[str, ScalarFieldDataArray]:
+        """Maps the field components to their associated data."""
+        return {
+            "eps_xx": self.eps_xx,
+            "eps_yy": self.eps_yy,
+            "eps_zz": self.eps_zz,
+            "mu_xx": self.mu_xx,
+            "mu_yy": self.mu_yy,
+            "mu_zz": self.mu_zz,
+        }
+
+    @property
+    def grid_locations(self) -> dict[str, str]:
+        """Maps field components to the string key of their grid locations on the yee lattice."""
+        return {
+            "eps_xx": "Ex",
+            "eps_yy": "Ey",
+            "eps_zz": "Ez",
+            "mu_xx": "Hx",
+            "mu_yy": "Hy",
+            "mu_zz": "Hz",
+        }
+
+    @property
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
+        """Maps field components to their (positive) symmetry eigenvalues."""
+        return {
+            "eps_xx": None,
+            "eps_yy": None,
+            "eps_zz": None,
+            "mu_xx": None,
+            "mu_yy": None,
+            "mu_zz": None,
+        }
 
 
 class TriangleMeshDataset(Dataset):

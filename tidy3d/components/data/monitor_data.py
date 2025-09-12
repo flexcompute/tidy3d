@@ -30,6 +30,7 @@ from tidy3d.components.monitor import (
     FieldTimeMonitor,
     FluxMonitor,
     FluxTimeMonitor,
+    MediumMonitor,
     ModeMonitor,
     ModeSolverMonitor,
     MonitorType,
@@ -87,6 +88,7 @@ from .dataset import (
     ElectromagneticFieldDataset,
     FieldDataset,
     FieldTimeDataset,
+    MediumDataset,
     ModeSolverDataset,
     PermittivityDataset,
 )
@@ -195,7 +197,12 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
     """Collection of scalar fields with some symmetry properties."""
 
     monitor: Union[
-        FieldMonitor, FieldTimeMonitor, AuxFieldTimeMonitor, PermittivityMonitor, ModeMonitor
+        FieldMonitor,
+        FieldTimeMonitor,
+        AuxFieldTimeMonitor,
+        PermittivityMonitor,
+        ModeMonitor,
+        MediumMonitor,
     ]
 
     symmetry: tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
@@ -1556,6 +1563,36 @@ class PermittivityData(PermittivityDataset, AbstractFieldData):
 
     monitor: PermittivityMonitor = pd.Field(
         ..., title="Monitor", description="Permittivity monitor associated with the data."
+    )
+
+
+class MediumData(MediumDataset, AbstractFieldData):
+    """Data for a :class:`.MediumMonitor`: diagonal components of the permittivity and permeability tensor.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
+
+    Example
+    -------
+    >>> from tidy3d import ScalarFieldDataArray
+    >>> x = [-1,1,3]
+    >>> y = [-2,0,2,4]
+    >>> z = [-3,-1,1,3,5]
+    >>> f = [2e14, 3e14]
+    >>> coords = dict(x=x[:-1], y=y[:-1], z=z[:-1], f=f)
+    >>> grid = Grid(boundaries=Coords(x=x, y=y, z=z))
+    >>> sclr_fld = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    >>> monitor = MediumMonitor(size=(2,4,6), freqs=[2e14, 3e14], name='medium')
+    >>> data = MediumData(
+    ...     monitor=monitor, eps_xx=sclr_fld, eps_yy=sclr_fld, eps_zz=sclr_fld, mu_xx=sclr_fld, mu_yy=sclr_fld, mu_zz=sclr_fld, grid_expanded=grid
+    ... )
+    """
+
+    monitor: MediumMonitor = pd.Field(
+        ..., title="Monitor", description="Medium property monitor associated with the data."
     )
 
 
@@ -3911,6 +3948,7 @@ MonitorDataTypes = (
     FieldData,
     FieldTimeData,
     PermittivityData,
+    MediumData,
     ModeSolverData,
     ModeData,
     FluxData,
