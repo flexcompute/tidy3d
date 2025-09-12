@@ -66,6 +66,7 @@ FIELD_TIME_MONITOR_2D = td.FieldTimeMonitor(
     size=SIZE_2D, fields=FIELDS, name="field_time_2d", interval=INTERVAL
 )
 PERMITTIVITY_MONITOR = td.PermittivityMonitor(size=SIZE_3D, name="permittivity", freqs=FREQS)
+MEDIUM_MONITOR = td.MediumMonitor(size=SIZE_3D, name="medium", freqs=FREQS)
 MODE_MONITOR = td.ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs=FREQS)
 MODE_MONITOR_WITH_FIELDS = td.ModeMonitor(
     size=SIZE_2D, name="mode_solver", mode_spec=MODE_SPEC, freqs=FS, store_fields_direction="+"

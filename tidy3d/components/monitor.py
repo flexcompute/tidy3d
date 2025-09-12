@@ -543,7 +543,63 @@ class AuxFieldTimeMonitor(AbstractAuxFieldMonitor, TimeMonitor):
         return BYTES_REAL * num_steps * num_cells * len(self.fields)
 
 
-class PermittivityMonitor(FreqMonitor):
+class AbstractMediumPropertyMonitor(FreqMonitor, ABC):
+    """:class:`Monitor` that records material properties in the frequency domain."""
+
+    colocate: Literal[False] = pydantic.Field(
+        False,
+        title="Colocate Fields",
+        description="Colocation turned off, since colocated medium property values do not have a "
+        "physical meaning - they do not correspond to the subpixel-averaged ones.",
+    )
+
+    interval_space: tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+        pydantic.Field(
+            (1, 1, 1),
+            title="Spatial Interval",
+            description="Number of grid step intervals between monitor recordings. If equal to 1, "
+            "there will be no downsampling. If greater than 1, the step will be applied, but the "
+            "first and last point of the monitor grid are always included.",
+        )
+    )
+
+    apodization: ApodizationSpec = pydantic.Field(
+        ApodizationSpec(),
+        title="Apodization Specification",
+        description="This field is ignored in this monitor.",
+    )
+
+
+class MediumMonitor(AbstractMediumPropertyMonitor):
+    """:class:`Monitor` that records the diagonal components of the complex-valued relative
+    permittivity and permeability tensor in the frequency domain. The recorded data has the same shape as a
+    :class:`.FieldMonitor` of the same geometry: the permittivity and permeability values are saved at the
+    Yee grid locations, and can be interpolated to any point inside the monitor.
+
+    Notes
+    -----
+
+        If 2D materials are present, then the permittivity values correspond to the
+        volumetric equivalent of the 2D materials.
+
+        .. TODO add links to relevant areas
+
+    Example
+    -------
+    >>> monitor = MediumMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[250e12, 300e12],
+    ...     name='medium_monitor')
+    """
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization."""
+        # stores 6 complex number per grid cell, per frequency
+        return BYTES_COMPLEX * num_cells * len(self.freqs) * 6
+
+
+class PermittivityMonitor(AbstractMediumPropertyMonitor):
     """:class:`Monitor` that records the diagonal components of the complex-valued relative
     permittivity tensor in the frequency domain. The recorded data has the same shape as a
     :class:`.FieldMonitor` of the same geometry: the permittivity values are saved at the
@@ -565,29 +621,6 @@ class PermittivityMonitor(FreqMonitor):
     ...     freqs=[250e12, 300e12],
     ...     name='eps_monitor')
     """
-
-    colocate: Literal[False] = pydantic.Field(
-        False,
-        title="Colocate Fields",
-        description="Colocation turned off, since colocated permittivity values do not have a "
-        "physical meaning - they do not correspond to the subpixel-averaged ones.",
-    )
-
-    interval_space: tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
-        pydantic.Field(
-            (1, 1, 1),
-            title="Spatial Interval",
-            description="Number of grid step intervals between monitor recordings. If equal to 1, "
-            "there will be no downsampling. If greater than 1, the step will be applied, but the "
-            "first and last point of the monitor grid are always included.",
-        )
-    )
-
-    apodization: ApodizationSpec = pydantic.Field(
-        ApodizationSpec(),
-        title="Apodization Specification",
-        description="This field is ignored in this monitor.",
-    )
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
@@ -1548,6 +1581,7 @@ MonitorType = Union[
     FieldMonitor,
     FieldTimeMonitor,
     AuxFieldTimeMonitor,
+    MediumMonitor,
     PermittivityMonitor,
     FluxMonitor,
     FluxTimeMonitor,

@@ -21,6 +21,7 @@ from tidy3d.components.data.monitor_data import (
     FieldTimeData,
     FluxData,
     FluxTimeData,
+    MediumData,
     ModeData,
     PermittivityData,
 )
@@ -39,6 +40,7 @@ from .test_data_arrays import (
     FIELD_TIME_MONITOR_2D,
     FLUX_MONITOR,
     FLUX_TIME_MONITOR,
+    MEDIUM_MONITOR,
     MODE_MONITOR,
     MODE_MONITOR_WITH_FIELDS,
     PERMITTIVITY_MONITOR,
@@ -198,6 +200,22 @@ def make_permittivity_data(symmetry: bool = True):
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
         grid_expanded=sim.discretize_monitor(PERMITTIVITY_MONITOR),
+    )
+
+
+def make_medium_data(symmetry: bool = True):
+    sim = SIM_SYM if symmetry else SIM
+    return MediumData(
+        monitor=MEDIUM_MONITOR,
+        eps_xx=make_scalar_field_data_array("Ex", symmetry, colocate=False),
+        eps_yy=make_scalar_field_data_array("Ey", symmetry, colocate=False),
+        eps_zz=make_scalar_field_data_array("Ez", symmetry, colocate=False),
+        mu_xx=make_scalar_field_data_array("Hx", symmetry, colocate=False),
+        mu_yy=make_scalar_field_data_array("Hy", symmetry, colocate=False),
+        mu_zz=make_scalar_field_data_array("Hz", symmetry, colocate=False),
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=sim.discretize_monitor(MEDIUM_MONITOR),
     )
 
 
@@ -377,6 +395,13 @@ def test_permittivity_data():
     data = make_permittivity_data()
     for comp in "xyz":
         _ = getattr(data, "eps_" + comp + comp)
+
+
+def test_medium_data():
+    data = make_medium_data()
+    for comp in "xyz":
+        _ = getattr(data, "eps_" + comp + comp)
+        _ = getattr(data, "mu_" + comp + comp)
 
 
 def test_mode_data():

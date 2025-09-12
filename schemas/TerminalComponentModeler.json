@@ -10020,6 +10020,186 @@
       ],
       "type": "object"
     },
+    "MediumMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "apodization": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ApodizationSpec"
+            }
+          ],
+          "default": {
+            "attrs": {},
+            "end": null,
+            "start": null,
+            "type": "ApodizationSpec",
+            "width": null
+          }
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ],
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "colocate": {
+          "default": false,
+          "enum": [
+            false
+          ],
+          "type": "boolean"
+        },
+        "freqs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "ArrayLike"
+            }
+          ]
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "items": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ]
+        },
+        "type": {
+          "default": "MediumMonitor",
+          "enum": [
+            "MediumMonitor"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "freqs",
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
     "MeshOverrideStructure": {
       "additionalProperties": false,
       "properties": {
@@ -13877,6 +14057,7 @@
                 "FieldTimeMonitor": "#/definitions/FieldTimeMonitor",
                 "FluxMonitor": "#/definitions/FluxMonitor",
                 "FluxTimeMonitor": "#/definitions/FluxTimeMonitor",
+                "MediumMonitor": "#/definitions/MediumMonitor",
                 "ModeMonitor": "#/definitions/ModeMonitor",
                 "ModeSolverMonitor": "#/definitions/ModeSolverMonitor",
                 "PermittivityMonitor": "#/definitions/PermittivityMonitor"
@@ -13913,6 +14094,9 @@
               },
               {
                 "$ref": "#/definitions/FluxTimeMonitor"
+              },
+              {
+                "$ref": "#/definitions/MediumMonitor"
               },
               {
                 "$ref": "#/definitions/ModeMonitor"

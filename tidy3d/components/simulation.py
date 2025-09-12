@@ -83,6 +83,7 @@ from .monitor import (
     FieldTimeMonitor,
     FluxMonitor,
     FreqMonitor,
+    MediumMonitor,
     ModeMonitor,
     Monitor,
     MonitorType,
@@ -5376,7 +5377,8 @@ class Simulation(AbstractYeeGridSimulation):
             (
                 monitor.frequency_range[1]
                 for monitor in self.monitors
-                if isinstance(monitor, FreqMonitor) and not isinstance(monitor, PermittivityMonitor)
+                if isinstance(monitor, FreqMonitor)
+                and not isinstance(monitor, (PermittivityMonitor, MediumMonitor))
             ),
             default=0.0,
         )
