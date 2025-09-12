@@ -70,12 +70,6 @@ diff-cover = { version = "*", optional = true }
 # gdstk
 gdstk = { version = ">=0.9.49", optional = true }
 
-# jax
-jaxlib = { version = ">=0.4.26", source = "jaxsource", optional = true }
-jax = { version = ">=0.4.26", extras = [
-  "cpu",
-], source = "jaxsource", optional = true }
-
 # design
 bayesian-optimization = { version = "<2", optional = true }
 pygad = { version = "3.3.1", optional = true }
@@ -135,8 +129,6 @@ dev = [
   'grcwa',
   'ipython',
   'ipython',
-  'jax',
-  'jaxlib',
   'torch',
   'jinja2',
   'jupyter',
@@ -218,7 +210,6 @@ vtk = ["vtk"]
 ruff = ["ruff"]
 heatcharge = ["trimesh", "vtk", "devsim"]
 # plugins with extra deps
-adjoint = ["jaxlib", "jax"]
 pytorch = ["torch"]
 design = ["bayesian-optimization", "pygad", "pyswarms"]
 # extras = ["tidy3d-extras"]
@@ -229,12 +220,6 @@ tidy3d = "tidy3d.web.cli:tidy3d_cli"
 [[tool.poetry.source]]
 name = "pypi"
 priority = "primary"
-
-
-[[tool.poetry.source]]
-name = "jaxsource"
-url = "https://storage.googleapis.com/jax-releases/jax_releases.html"
-priority = "supplemental"
 
 
 [[tool.poetry.source]]
@@ -306,7 +291,7 @@ banned-module-level-imports = ["scipy", "matplotlib"]
 
 [tool.pytest.ini_options]
 # TODO: remove --assert=plain when https://github.com/scipy/scipy/issues/22236 is resolved
-addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical' --ignore=tests/test_plugins/test_adjoint.py"
+addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical'"
 markers = [
   "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
 ]

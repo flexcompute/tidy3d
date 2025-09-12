@@ -10,7 +10,6 @@ Plugins
    smatrix
    resonance
    autograd
-   adjoint
    invdes
    design
    waveguide
