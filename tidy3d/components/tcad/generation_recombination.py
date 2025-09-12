@@ -173,6 +173,11 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
 class DistributedGeneration(Tidy3dBaseModel):
     """Class that allows to add a distributed generation model.
 
+    Notes
+    -----
+    The generation rate will be interpolated to the simulation mesh during the setup phase.
+    In places where the generation rate is not defined, it will be filled with zeros.
+
     Example
     -------
     >>> import tidy3d as td

@@ -21,8 +21,10 @@ Monitor Data
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.SteadyVoltageData
    tidy3d.SteadyPotentialData
    tidy3d.SteadyFreeCarrierData
+   tidy3d.SteadyEnergyBandData
    tidy3d.SteadyCapacitanceData
+   tidy3d.SteadyElectricFieldData
+   tidy3d.SteadyCurrentDensityData
 
