@@ -63,7 +63,9 @@ class IsothermalSteadyChargeDCAnalysis(Tidy3dBaseModel):
     )
 
     tolerance_settings: ChargeToleranceSpec = pd.Field(
-        default=ChargeToleranceSpec(), title="Tolerance settings"
+        default=ChargeToleranceSpec(),
+        title="Tolerance settings",
+        description="Charge tolerance parameters relevant to multiple simulation analysis types.",
     )
 
     convergence_dv: pd.PositiveFloat = pd.Field(

@@ -22,3 +22,4 @@ Analysis
    :template: module.rst
 
    tidy3d.IsothermalSteadyChargeDCAnalysis
+   tidy3d.ChargeToleranceSpec
