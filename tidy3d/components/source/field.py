@@ -259,39 +259,92 @@ class CustomFieldSource(FieldSource, PlanarSource):
             Dictionary mapping parameter paths to their gradients.
         """
         # Import here to avoid circular imports
-        from tidy3d.components.autograd.derivative_utils import integrate_within_bounds
 
         # Get the source bounds for integration
-        source_bounds = derivative_info.bounds
 
         # Compute derivatives with respect to each field component in field_dataset
+        # Strategy: VJP equals adjoint field sampled on the source dataset coordinates
+        # (identity map), with zeros where adjoint is missing.
         derivative_map = {}
 
-        # For CustomFieldSource, we compute derivatives with respect to the field components
-        # in field_dataset (Ex, Ey, Ez, Hx, Hy, Hz)
         for field_path in derivative_info.paths:
-            field_name = field_path[-1]  # e.g., 'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'
+            field_name = field_path[-1]
 
-            # Get the corresponding adjoint field component
-            if field_name in derivative_info.E_adj:
-                adjoint_field = derivative_info.E_adj[field_name]
-
-                # Integrate the adjoint field within the source bounds
-                # This gives us the gradient with respect to the field_dataset field component
-                vjp_value = integrate_within_bounds(
-                    arr=adjoint_field,
-                    dims=("x", "y", "z"),
-                    bounds=source_bounds,
-                )
-
-                # Sum over frequency dimension to get scalar gradient
-                vjp_scalar = vjp_value.sum(dim="f").values
-
-                # Store the gradient for this field component
-                derivative_map[tuple(field_path)] = vjp_scalar
-            else:
-                # If the field component is not in E_adj, set gradient to 0
+            # Component in the user's dataset (defines coordinates to sample at)
+            dataset_component = getattr(self.field_dataset, field_name, None)
+            if dataset_component is None:
                 derivative_map[tuple(field_path)] = 0.0
+                continue
+
+            # Corresponding adjoint component
+            adjoint_field = derivative_info.E_adj.get(field_name)
+
+            # If the adjoint component is missing or None, return zeros of matching shape
+            if adjoint_field is None:
+                derivative_map[tuple(field_path)] = np.zeros_like(dataset_component.values)
+                continue
+
+            # Sample adjoint onto dataset grid:
+            # - use nearest selection on singleton dims to avoid divide-by-zero in SciPy
+            # - interpolate only along dims with multiple points
+            adj_on_dataset = adjoint_field
+            for dim in ("x", "y", "z"):
+                if dim not in dataset_component.dims:
+                    continue
+                coord = dataset_component.coords[dim]
+                if coord.size <= 1:
+                    # nearest selection for single-point dimensions (keep dim)
+                    adj_on_dataset = adj_on_dataset.sel(
+                        {dim: coord.values}, method="nearest", drop=False
+                    )
+                else:
+                    adj_on_dataset = adj_on_dataset.interp(
+                        {dim: coord}, kwargs={"bounds_error": False}
+                    )
+
+            # Handle frequency axis similarly (usually single point)
+            if "f" in dataset_component.dims:
+                fcoord = dataset_component.coords["f"]
+                if fcoord.size <= 1:
+                    adj_on_dataset = adj_on_dataset.sel(
+                        {"f": fcoord.values}, method="nearest", drop=False
+                    )
+                else:
+                    adj_on_dataset = adj_on_dataset.interp(
+                        {"f": fcoord}, kwargs={"bounds_error": False}
+                    )
+
+            # Reduce any extra dims not present in dataset_component
+            for dim in list(adj_on_dataset.dims):
+                if dim in dataset_component.dims:
+                    continue
+                if dim == "f":
+                    # sum over frequency if present but not in parameter
+                    adj_on_dataset = adj_on_dataset.sum(dim="f")
+                    continue
+                # pick nearest to 0.0 if possible, else first index
+                try:
+                    adj_on_dataset = adj_on_dataset.sel({dim: 0.0}, method="nearest")
+                except Exception:
+                    adj_on_dataset = adj_on_dataset.isel({dim: 0})
+
+            # Ensure all parameter dims exist (re-add singleton dims if dropped during selection)
+            for dim in dataset_component.dims:
+                if dim not in adj_on_dataset.dims:
+                    adj_on_dataset = adj_on_dataset.expand_dims(
+                        {dim: dataset_component.coords[dim]}
+                    )
+
+            # Reorder to match parameter dims exactly
+            try:
+                adj_on_dataset = adj_on_dataset.transpose(*dataset_component.dims)
+            except Exception:
+                # best effort: leave as-is if transpose not applicable
+                pass
+
+            adj_on_dataset = adj_on_dataset.fillna(0)
+
+            derivative_map[tuple(field_path)] = adj_on_dataset.values
 
         # For now, return placeholder gradients with expected structure
         # This is a placeholder for future implementation
