@@ -77,7 +77,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     electrons: UnstructuredFieldType = pd.Field(
         None,
         title="Electrons series",
-        description=r"Contains the computed electrons concentration $n$.",
+        description=r"Contains the computed electrons concentration :math:`n`.",
         discriminator=TYPE_TAG_STR,
     )
     # n = electrons
@@ -85,7 +85,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     holes: UnstructuredFieldType = pd.Field(
         None,
         title="Holes series",
-        description=r"Contains the computed holes concentration $p$.",
+        description=r"Contains the computed holes concentration :math:`p`.",
         discriminator=TYPE_TAG_STR,
     )
     # p = holes
