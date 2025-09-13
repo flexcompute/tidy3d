@@ -32,7 +32,7 @@ from tidy3d.plugins.smatrix import (
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.utils import s_to_z, validate_square_matrix
 
-from ...utils import run_emulated
+from ...utils import AssertLogLevel, run_emulated
 from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
 
 mm = 1e3
@@ -1392,3 +1392,390 @@ def test_wave_port_to_absorber(tmp_path):
     sim = list(modeler.sim_dict.values())[0]
     absorber = sim.internal_absorbers[0]
     assert absorber.boundary_spec == custom_boundary_spec
+
+
+def test_low_freq_smoothing_spec_initialization_default_values():
+    """Test that LowFrequencySmoothingSpec initializes with correct default values."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    spec = LowFrequencySmoothingSpec()
+    assert spec.trusted_range == (1, 5)
+    assert spec.order == 1
+    assert spec.max_deviation == 0.5
+
+
+def test_low_freq_smoothing_spec_initialization_custom_values():
+    """Test that LowFrequencySmoothingSpec initializes with custom values."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    spec = LowFrequencySmoothingSpec(trusted_range=(2, 8), order=2, max_deviation=0.3)
+    assert spec.trusted_range == (2, 8)
+    assert spec.order == 2
+    assert spec.max_deviation == 0.3
+
+
+def test_low_freq_smoothing_spec_validation_trusted_range_invalid():
+    """Test validation of trusted_range parameter."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    # Test invalid range where first value >= second value
+    with pytest.raises(
+        ValueError, match="The trusted range must be a tuple of two positive numbers"
+    ):
+        LowFrequencySmoothingSpec(trusted_range=(5, 3))
+
+    with pytest.raises(
+        ValueError, match="The trusted range must be a tuple of two positive numbers"
+    ):
+        LowFrequencySmoothingSpec(trusted_range=(3, 3))
+
+
+def test_low_freq_smoothing_spec_validation_order_bounds():
+    """Test validation of order parameter bounds."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    # Test valid orders
+    LowFrequencySmoothingSpec(order=0)
+    LowFrequencySmoothingSpec(order=3)
+
+    # Test invalid orders
+    with pytest.raises(pd.ValidationError):
+        LowFrequencySmoothingSpec(order=-1)
+
+    with pytest.raises(pd.ValidationError):
+        LowFrequencySmoothingSpec(order=4)
+
+
+def test_low_freq_smoothing_spec_validation_max_deviation_bounds():
+    """Test validation of max_deviation parameter bounds."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    # Test valid max_deviation
+    LowFrequencySmoothingSpec(max_deviation=0.0)
+    LowFrequencySmoothingSpec(max_deviation=1.0)
+
+    # Test invalid max_deviation
+    with pytest.raises(pd.ValidationError):
+        LowFrequencySmoothingSpec(max_deviation=-0.1)
+
+
+def test_low_freq_smoothing_spec_smoothstep_function():
+    """Test the _smoothstep function."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    spec = LowFrequencySmoothingSpec()
+
+    # Test basic functionality
+    x = np.linspace(0, 10, 100)
+    result = spec._smoothstep(x, 2, 8)
+
+    # Check that values are in [0, 1] range
+    assert np.all(result >= 0)
+    assert np.all(result <= 1)
+
+    # Check that values below a are 0
+    assert np.allclose(result[x <= 2], 0, atol=1e-10)
+
+    # Check that values above b are 1
+    assert np.allclose(result[x >= 8], 1, atol=1e-10)
+
+    # Check smooth transition
+    transition_mask = (x > 2) & (x < 8)
+    assert np.all(np.diff(result[transition_mask]) >= 0)  # Monotonic increase
+
+
+def test_low_freq_smoothing_spec_smooth_constraint_function():
+    """Test the _smooth_constraint function."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    spec = LowFrequencySmoothingSpec()
+
+    # Test with values within trusted range
+    values = np.array([3, 4, 5, 6, 7])
+    trusted_min, trusted_max = 4, 6
+    constraint_min, constraint_max = 2, 8
+
+    result = spec._smooth_constraint(
+        values, trusted_min, trusted_max, constraint_min, constraint_max
+    )
+
+    # Values within trusted range should be unchanged
+    within_mask = (values >= trusted_min) & (values <= trusted_max)
+    assert np.allclose(result[within_mask], values[within_mask])
+
+    # Values below trusted range should be smoothly constrained
+    below_mask = values < trusted_min
+    if np.any(below_mask):
+        assert np.all(result[below_mask] >= constraint_min)
+        assert np.all(result[below_mask] <= trusted_min)
+
+    # Values above trusted range should be smoothly constrained
+    above_mask = values > trusted_max
+    if np.any(above_mask):
+        assert np.all(result[above_mask] >= trusted_max)
+        assert np.all(result[above_mask] <= constraint_max)
+
+
+def test_low_freq_smoothing_spec_trusted_selection_function():
+    """Test the _trusted_selection function."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    spec = LowFrequencySmoothingSpec(trusted_range=(2, 6))
+
+    # Test with frequencies and run time
+    freqs = np.array([1e9, 2e9, 3e9, 4e9, 5e9, 6e9, 7e9])
+    run_time_actual = 1e-9  # 1 ns
+
+    selection = spec._trusted_selection(freqs, run_time_actual)
+
+    # Calculate periods for verification
+    periods = freqs * run_time_actual
+
+    # Check that selection matches expected range
+    expected = (periods >= 2) & (periods <= 6)
+    assert np.array_equal(selection, expected)
+
+
+def test_low_freq_smoothing_spec_smooth_freq_data_with_mock_data():
+    """Test _smooth_freq_data with mock ModeAmpsDataArray."""
+    from tidy3d.components.data.data_array import ModeAmpsDataArray
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    spec = LowFrequencySmoothingSpec(trusted_range=(2, 6), order=1)
+
+    # Create mock frequency data
+    freqs = np.linspace(1e9, 10e9, 20)
+    run_time_actual = 1e-9  # 1 ns
+
+    # Create mock complex amplitude data
+    # Use a simple exponential decay with some noise
+    amps_data = np.exp(-freqs / 5e9) * np.exp(1j * 2 * np.pi * freqs / 1e9)
+
+    # Create ModeAmpsDataArray
+    data = ModeAmpsDataArray(data=amps_data, coords={"f": freqs}, dims=["f"])
+
+    # Test smoothing
+    smoothed_data = spec._smooth_freq_data(data, run_time_actual)
+
+    # Check that output is still a ModeAmpsDataArray
+    assert isinstance(smoothed_data, ModeAmpsDataArray)
+
+    # Check that dimensions are preserved
+    assert smoothed_data.shape == data.shape
+    assert np.array_equal(smoothed_data.f, data.f)
+
+    # Check that data is complex
+    assert np.iscomplexobj(smoothed_data.data)
+
+
+@pytest.mark.parametrize(
+    "order,amp_coeffs,phase_coeffs,description",
+    [
+        (0, [1.0], [0.5], "constant"),
+        (1, [0.1, 0.5], [0.2, 0.3], "linear"),
+        (2, [0.01, 0.1, 0.5], [0.02, 0.2, 0.3], "quadratic"),
+        (3, [0.001, 0.01, 0.1, 0.5], [0.002, 0.02, 0.2, 0.3], "cubic"),
+    ],
+)
+def test_low_freq_smoothing_spec_polynomial_fitting(order, amp_coeffs, phase_coeffs, description):
+    """Test polynomial fitting with various polynomial orders - should produce exact match."""
+    from tidy3d.components.data.data_array import ModeAmpsDataArray
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    spec = LowFrequencySmoothingSpec(trusted_range=(2, 6), order=order, max_deviation=None)
+
+    # Create mock frequency data
+    freqs = np.linspace(1, 10, 100)
+    run_time_actual = 1  # 1 ns
+
+    # Create polynomial amplitude and phase data
+    amplitude = np.zeros_like(freqs)
+    phase = np.zeros_like(freqs)
+
+    # Build polynomial amplitude: a0 + a1*f + a2*f^2 + ...
+    for i, coeff in enumerate(amp_coeffs):
+        amplitude += coeff * (freqs**i)
+
+    # Build polynomial phase: p0 + p1*f + p2*f^2 + ...
+    for i, coeff in enumerate(phase_coeffs):
+        phase += coeff * (freqs**i)
+
+    # Combine amplitude and phase into complex data
+    amps_data = amplitude * np.exp(1j * phase * 0.25)
+
+    # Create ModeAmpsDataArray
+    data = ModeAmpsDataArray(data=amps_data, coords={"f": freqs}, dims=["f"])
+
+    # Test smoothing
+    smoothed_data = spec._smooth_freq_data(data, run_time_actual)
+    # import matplotlib.pyplot as plt
+    # plt.plot(data.f, np.abs(data.data), label="Original")
+    # plt.plot(smoothed_data.f, np.abs(smoothed_data.data), label="Smoothed")
+    # plt.plot(data.f, amplitude, label="Original")
+    # plt.legend()
+    # plt.savefig(f"test_low_freq_smoothing_spec_polynomial_fitting_{description}.png")
+    # plt.close()
+
+    # For polynomial data with matching order, should get exact match
+    assert np.allclose(smoothed_data.data, data.data, atol=1e-10), (
+        f"Polynomial fitting failed for {description} data with order {order}"
+    )
+
+
+def test_low_freq_smoothing_spec_smooth_mode_data_with_mock_data():
+    """Test _smooth_mode_data with mock ModeData."""
+    from tidy3d.components.data.data_array import ModeAmpsDataArray
+    from tidy3d.components.data.monitor_data import ModeData
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    spec = LowFrequencySmoothingSpec(trusted_range=(2, 6), order=1)
+
+    # Create mock frequency data
+    freqs = np.linspace(1e9, 10e9, 20)
+    run_time_actual = 1e-9  # 1 ns
+
+    # Create mock amplitude data for both directions and modes
+    directions = ["+", "-"]
+    mode_indices = [0, 1]
+
+    amps_data = {}
+    for direction in directions:
+        for mode_idx in mode_indices:
+            # Create mock complex amplitude data
+            amps = np.exp(-freqs / 5e9) * np.exp(1j * 2 * np.pi * freqs / 1e9)
+            amps_data[(direction, mode_idx)] = amps
+
+    # Create ModeAmpsDataArray with proper structure
+    # Shape should be (freqs, direction, mode_index) = (20, 2, 2)
+    data_3d = np.zeros((len(freqs), len(directions), len(mode_indices)), dtype=complex)
+    for i, direction in enumerate(directions):
+        for j, mode_idx in enumerate(mode_indices):
+            data_3d[:, i, j] = amps_data[(direction, mode_idx)]
+
+    amps_array = ModeAmpsDataArray(
+        data=data_3d,
+        coords={"f": freqs, "direction": directions, "mode_index": mode_indices},
+        dims=["f", "direction", "mode_index"],
+    )
+
+    # Create mock ModeData
+    mode_data = ModeData(
+        amps=amps_array,
+        n_complex=td.ModeIndexDataArray(
+            data=1.5 * np.ones((len(freqs), len(mode_indices))),
+            coords={"f": freqs, "mode_index": mode_indices},
+            dims=["f", "mode_index"],
+        ),
+        monitor=td.ModeMonitor(
+            size=(0.1, 0.1, 0),
+            name="mode_monitor",
+            freqs=freqs,
+        ),
+    )
+
+    # Test smoothing
+    smoothed_mode_data = spec._smooth_mode_data(mode_data, run_time_actual)
+
+    # Check that output is still a ModeData
+    assert isinstance(smoothed_mode_data, ModeData)
+
+    # Check that structure is preserved
+    assert smoothed_mode_data.amps.shape == mode_data.amps.shape
+
+
+def test_low_freq_smoothing_spec_smooth_tcm_data_no_wave_ports(monkeypatch, tmp_path):
+    """Test _smooth_tcm_data when there are no WavePorts."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    spec = LowFrequencySmoothingSpec()
+
+    # Create mock modeler with only LumpedPorts (no WavePorts)
+    modeler = make_coaxial_component_modeler()
+    tcm_data = run_component_modeler(monkeypatch, modeler)
+
+    # Test smoothing - should return original data unchanged
+    result = spec._smooth_tcm_data(tcm_data)
+    assert result is tcm_data  # Should return the same object
+
+
+def test_low_freq_smoothing_spec_smooth_tcm_data_insufficient_trusted_points(monkeypatch, tmp_path):
+    """Test _smooth_tcm_data when there are insufficient trusted frequency points."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    spec = LowFrequencySmoothingSpec()
+
+    modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort))
+    tcm_data = run_component_modeler(monkeypatch, modeler)
+    new_sim_data_list = []
+    for sim_data in tcm_data.data.values():
+        num_steps_total = len(sim_data.simulation.tmesh)
+        num_steps_done = num_steps_total // 2
+        log = f"\n- Time step   {num_steps_done} / time {sim_data.simulation.run_time}s ( {num_steps_done / num_steps_total * 100} % done), field decay: 6.58e-11"
+        sim_data = sim_data.copy(update={"log": log})
+        actual_run_time = spec._get_actual_run_time(sim_data)
+        assert actual_run_time == sim_data.simulation.tmesh[num_steps_done]
+        new_sim_data_list.append(sim_data)
+        print(f"Periods: {np.array(tcm_data.modeler.freqs) * actual_run_time}")
+    tcm_data = tcm_data.updated_copy(
+        data=tcm_data.data.updated_copy(values_tuple=new_sim_data_list)
+    )
+
+    # sufficient trusted points
+    smatrix_data = tcm_data.smatrix()
+
+    # insufficient trusted points (too little points in between)
+    spec = LowFrequencySmoothingSpec(trusted_range=(2, 2.1))
+    with AssertLogLevel(
+        "WARNING", contains_str="Not enough data to fit a polynomial for low frequency"
+    ):
+        result = spec._smooth_tcm_data(tcm_data)
+    assert result.data.values_tuple == tcm_data.data.values_tuple  # Should return the same object
+
+
+def test_low_freq_smoothing_spec_edge_cases():
+    """Test edge cases and boundary conditions."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    # Test with order 0 (constant fit)
+    spec = LowFrequencySmoothingSpec(order=0)
+    assert spec.order == 0
+
+    # Test with maximum order
+    spec = LowFrequencySmoothingSpec(order=3)
+    assert spec.order == 3
+
+    # Test with zero max_deviation
+    spec = LowFrequencySmoothingSpec(max_deviation=0.0)
+    assert spec.max_deviation == 0.0
+
+    # Test with maximum max_deviation
+    spec = LowFrequencySmoothingSpec(max_deviation=1.0)
+    assert spec.max_deviation == 1.0
+
+
+def test_low_freq_smoothing_spec_smoothstep_edge_cases():
+    """Test _smoothstep function with edge cases."""
+    from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
+
+    spec = LowFrequencySmoothingSpec()
+
+    # Test with equal bounds - this should handle division by zero gracefully
+    x = np.array([1, 2, 3, 4, 5])
+    result = spec._smoothstep(x, 3, 3)
+    # When a == b, all values should be 0.5 (the midpoint of the smoothstep)
+    assert np.allclose(result, 0.5, atol=1e-10)
+
+    # Test with single point
+    x = np.array([3])
+    result = spec._smoothstep(x, 2, 4)
+    assert np.isclose(result[0], 0.5)
+
+    # Test with all points below range
+    x = np.array([0, 1, 2])
+    result = spec._smoothstep(x, 3, 5)
+    assert np.allclose(result, 0)
+
+    # Test with all points above range
+    x = np.array([6, 7, 8])
+    result = spec._smoothstep(x, 3, 5)
+    assert np.allclose(result, 1)

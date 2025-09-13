@@ -8,15 +8,18 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
-from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.components.data.monitor_data import MonitorData
+from tidy3d.components.data.data_array import FreqDataArray, ModeAmpsDataArray
+from tidy3d.components.data.monitor_data import ModeData, MonitorData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
+from tidy3d.constants import fp_eps
+from tidy3d.exceptions import DataError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.data.base import AbstractComponentModelerData
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
+from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import SParamDef
 from tidy3d.plugins.smatrix.utils import (
     ab_to_s,
@@ -27,6 +30,9 @@ from tidy3d.plugins.smatrix.utils import (
     compute_power_wave_amplitudes,
     s_to_z,
 )
+
+# Minimum number of trusted frequency points required for polynomial fitting
+MIN_NUM_TRUSTED_FREQUENCY_POINTS = 5
 
 
 class MicrowaveSMatrixData(Tidy3dBaseModel):
@@ -49,6 +55,319 @@ class MicrowaveSMatrixData(Tidy3dBaseModel):
         title="Scattering Parameter Definition",
         description="Whether scattering parameters are defined using the 'pseudo' or 'power' wave definitions.",
     )
+
+
+class LowFrequencySmoothingSpec(Tidy3dBaseModel):
+    """Specifies the low frequency smoothing parameters for the terminal component simulation.
+    The low frequency smoothing is performed by fitting a polynomial to the data in the trusted frequency range
+    and then using the polynomial to extrapolate the data outside of the trusted frequency range into lower frequencies.
+
+    Example
+    -------
+    >>> low_freq_smoothing = LowFrequencySmoothingSpec(
+    ...     trusted_range=(3, 6),
+    ...     order=1,
+    ...     max_deviation=0.5,
+    ... )
+    """
+
+    trusted_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+        (1, 5),
+        title="Trusted Sampling Time Range (periods)",
+        description="Frequency domain results for which the simulation time in periods of the corresponding frequency is within this range "
+        "will be used to fit the polynomial for the low frequency extrapolation.",
+    )
+
+    order: int = pd.Field(
+        1,
+        title="Extrapolation Order",
+        description="The order of the polynomial to use for the low frequency extrapolation.",
+        ge=0,
+        le=3,
+    )
+
+    max_deviation: Optional[float] = pd.Field(
+        0.5,
+        title="Maximum Deviation",
+        description="The maximum deviation (in percent) from the trusted values to allow for the low frequency smoothing.",
+        ge=0,
+    )
+
+    @pd.validator("trusted_range")
+    def _validate_trusted_range(cls, v, values):
+        if v[0] >= v[1]:
+            raise ValueError(
+                "The trusted range must be a tuple of two positive numbers with the first number being less than the second number."
+            )
+        return v
+
+    def _smoothstep(self, x: np.ndarray, a: float, b: float) -> np.ndarray:
+        """
+        NumPy vectorized smoothstep function using sine. Returns 0 for x <= a, 1 for x >= b, and a smooth sinusoidal transition in between.
+
+        Parameters
+        ----------
+        x: np.ndarray
+            The values to smooth.
+        a: float
+            The lower bound of the smoothstep.
+        b: float
+            The upper bound of the smoothstep.
+
+        Returns
+        -------
+        np.ndarray
+            The smoothed values.
+        """
+        if a == b:
+            return 0.5 * np.ones_like(x)
+        t = np.clip((x - a) / (b - a), 0, 1)
+        return 0.5 * (1 - np.cos(np.pi * t))
+
+    def _smooth_constraint(
+        self,
+        values: np.ndarray,
+        trusted_min: float,
+        trusted_max: float,
+        constraint_min: float,
+        constraint_max: float,
+    ) -> np.ndarray:
+        """Smoothly constrain values using arctan for smooth clipping while preserving convexity.
+
+        Parameters
+        ----------
+        values: np.ndarray
+            The values to smooth.
+        trusted_min: float
+            The minimum value of the trusted range. Values below this will be smoothly clipped to the constraint_min.
+        trusted_max: float
+            The maximum value of the trusted range. Values above this will be smoothly clipped to the constraint_max.
+        constraint_min: float
+            The minimum value of the constraint range. This is the hard lower bound for the values.
+        constraint_max: float
+            The maximum value of the constraint range. This is the hard upper bound for the values.
+
+        Returns
+        -------
+        np.ndarray
+            The smoothed values.
+        """
+        if self.max_deviation is None:
+            return values
+
+        result = values.copy()
+
+        # Handle values below trusted range
+        below_mask = values < trusted_min
+        if np.any(below_mask):
+            below_values = values[below_mask]
+
+            # Use arctan for smooth transition from constraint_min to trusted_min
+            # Scale the arctan to map [constraint_min, trusted_min] smoothly
+            # The arctan provides smooth asymptotic approach to the limits
+            x = (below_values - trusted_min) / (trusted_min - constraint_min)
+            # Arctan maps [0, inf] to [0, π/2], scale to [0, 1]
+            smooth_factor = 2 * np.arctan(x * np.pi / 2) / np.pi
+            result[below_mask] = trusted_min + smooth_factor * (trusted_min - constraint_min)
+
+        # Handle values above trusted range
+        above_mask = values > trusted_max
+        if np.any(above_mask):
+            above_values = values[above_mask]
+
+            # Use arctan for smooth transition from trusted_max to constraint_max
+            # Scale the arctan to map [trusted_max, constraint_max] smoothly
+            x = (above_values - trusted_max) / (constraint_max - trusted_max)
+            # Arctan maps [0, inf] to [0, π/2], scale to [0, 1]
+            smooth_factor = 2 * np.arctan(x * np.pi / 2) / np.pi
+            result[above_mask] = trusted_max + smooth_factor * (constraint_max - trusted_max)
+
+        return result
+
+    def _smooth_freq_data(
+        self, data: ModeAmpsDataArray, run_time_actual: float
+    ) -> ModeAmpsDataArray:
+        """
+        Smooth low frequency results in a ``ModeAmpsDataArray`` object.
+
+        Parameters
+        ----------
+        data: :class:`.ModeAmpsDataArray`
+            The mode amps data to smooth.
+        run_time_actual: float
+            The actual run time of the simulation.
+
+        Returns
+        -------
+        :class:`.ModeAmpsDataArray`
+            The smoothed mode amps data.
+        """
+
+        # get the indices of the data that are within the range from which we extrapolate the data
+        selection = self._trusted_selection(data.f, run_time_actual)
+
+        f_sel = data.f[selection]
+        amps_sel = data.sel(f=f_sel).data
+
+        # fit the data - handle complex y_data
+        # Option 2: Fit magnitude and phase separately (often better for RF data)
+        coeffs_mag = np.polyfit(f_sel, np.abs(amps_sel), self.order)
+
+        # Unwrap phase to avoid jumps near ±π
+        phase_data = np.angle(amps_sel)
+        phase_unwrapped = np.unwrap(phase_data)
+        coeffs_phase = np.polyfit(f_sel, phase_unwrapped, self.order)
+
+        # evaluate the fit at all frequency points
+        extrapolated_mag = np.polyval(coeffs_mag, data.f)
+        extrapolated_phase_unwrapped = np.polyval(coeffs_phase, data.f)
+        # Wrap phase back to [-π, π] range
+        extrapolated_phase = np.angle(np.exp(1j * extrapolated_phase_unwrapped))
+
+        # Smoothly constrain extrapolated magnitude to not deviate more than max_deviation from trusted region
+        if self.max_deviation is not None:
+            trusted_mag = np.abs(amps_sel)
+            trusted_min = np.min(trusted_mag)
+            trusted_max = np.max(trusted_mag)
+            mag_min = trusted_min * max(1 - self.max_deviation, 0)
+            mag_max = trusted_max * max(1 + self.max_deviation, 0)
+
+            extrapolated_mag = self._smooth_constraint(
+                extrapolated_mag, trusted_min, trusted_max, mag_min, mag_max
+            )
+
+        extrapolated = extrapolated_mag * np.exp(1j * extrapolated_phase)
+
+        # blend the data with the extrapolated data
+        # such that the original data is completely discarded for frequencies below min_periods
+        # and is kept without any changes for frequencies above max_periods
+        blending = self._smoothstep(
+            data.f * run_time_actual, self.trusted_range[0], self.trusted_range[1]
+        )
+        blended = data * blending + extrapolated * (1 - blending)
+
+        return blended
+
+    def _smooth_mode_data(self, mode_data: ModeData, run_time_actual: float) -> ModeData:
+        """
+        Smooth undersampled low frequency results in a ``ModeData`` object.
+
+        Parameters
+        ----------
+        mode_data: :class:`.ModeData`
+            The mode data to smooth.
+        run_time_actual: float
+            The actual run time of the simulation.
+
+        Returns
+        -------
+        :class:`.ModeData`
+            The smoothed mode data.
+        """
+        amps = mode_data.amps.copy()
+
+        for direction in ["+", "-"]:
+            for mode_index in amps.mode_index:
+                amps_one = amps.sel(direction=direction, mode_index=mode_index, drop=True)
+                amps_one = self._smooth_freq_data(amps_one, run_time_actual)
+                amps.loc[{"direction": direction, "mode_index": mode_index}] = amps_one
+
+        return mode_data.updated_copy(amps=amps)
+
+    def _smooth_sim_data(
+        self, sim_data: SimulationData, mode_monitors_to_smooth: list[str]
+    ) -> SimulationData:
+        """Smooth undersampled low frequency results in a ``SimulationData`` object.
+
+        Parameters
+        ----------
+        sim_data: :class:`.SimulationData`
+            The simulation data to smooth.
+        mode_monitors_to_smooth: list[str]
+            The names of the mode monitors to smooth.
+
+        Returns
+        -------
+        :class:`.SimulationData`
+            The smoothed simulation data.
+        """
+        run_time_actual = self._get_actual_run_time(sim_data)
+        mnt_data_dict = sim_data.monitor_data
+        for mode_monitor_name in mode_monitors_to_smooth:
+            mnt_data_dict[mode_monitor_name] = self._smooth_mode_data(
+                mnt_data_dict[mode_monitor_name], run_time_actual
+            )
+        return sim_data.updated_copy(data=list(mnt_data_dict.values()))
+
+    @classmethod
+    def _get_actual_run_time(cls, sim_data: SimulationData) -> float:
+        """Get the actual run time of the simulation."""
+        total_time_steps = sim_data.field_decay.t[-1]
+        run_time_actual = sim_data.simulation.tmesh[total_time_steps]
+        return run_time_actual
+
+    def _trusted_selection(self, freqs: np.ndarray, run_time_actual: float) -> np.ndarray:
+        """Get the indices of the data that are within the trusted sampling time range."""
+        num_periods_passed = np.array(freqs) * run_time_actual
+        return np.logical_and(
+            num_periods_passed >= self.trusted_range[0] - fp_eps,
+            num_periods_passed <= self.trusted_range[1] + fp_eps,
+        )
+
+    def _smooth_tcm_data(
+        self, tcm_data: TerminalComponentModelerData
+    ) -> TerminalComponentModelerData:
+        """Smooth undersampled low frequency results in a ``TerminalComponentModelerData`` object.
+
+        Parameters
+        ----------
+        tcm_data: :class:`.TerminalComponentModelerData`
+            The terminal component modeler data to smooth.
+
+        Returns
+        -------
+        :class:`.TerminalComponentModelerData`
+            The smoothed terminal component modeler data.
+        """
+        new_sim_data = []
+        mode_monitors_to_smooth = [
+            port._mode_monitor_name for port in tcm_data.modeler.ports if isinstance(port, WavePort)
+        ]
+
+        if len(mode_monitors_to_smooth) == 0:
+            return tcm_data
+
+        for key, sim_data in tcm_data.data.items():
+            skip_smoothing = False
+            try:
+                run_time_actual = self._get_actual_run_time(sim_data)
+            except DataError:
+                log.warning(
+                    f"Could not get actual run time for simulation data '{key}'. Skipping smoothing."
+                )
+                skip_smoothing = True
+
+            if not skip_smoothing:
+                trusted_freq_indices = self._trusted_selection(
+                    tcm_data.modeler.freqs, run_time_actual
+                )
+
+                if (
+                    sum(trusted_freq_indices) <= MIN_NUM_TRUSTED_FREQUENCY_POINTS
+                    and np.min(tcm_data.modeler.freqs) * run_time_actual < self.trusted_range[0]
+                ):
+                    log.warning(
+                        "Not enough data to fit a polynomial for low frequency extrapolation. Returning original data."
+                    )
+                else:
+                    sim_data = self._smooth_sim_data(sim_data, mode_monitors_to_smooth)
+
+            new_sim_data.append(sim_data)
+
+        return tcm_data.updated_copy(data=tcm_data.data.updated_copy(values_tuple=new_sim_data))
+
+
+DEFAULT_LOW_FREQUENCY_SMOOTHING_SPEC = LowFrequencySmoothingSpec()
 
 
 class TerminalComponentModelerData(AbstractComponentModelerData):
@@ -83,6 +402,9 @@ class TerminalComponentModelerData(AbstractComponentModelerData):
         self,
         assume_ideal_excitation: Optional[bool] = None,
         s_param_def: Optional[SParamDef] = None,
+        low_freq_smoothing: Optional[
+            LowFrequencySmoothingSpec
+        ] = DEFAULT_LOW_FREQUENCY_SMOOTHING_SPEC,
     ) -> MicrowaveSMatrixData:
         """Computes and returns the S-matrix and port reference impedances.
 
@@ -95,6 +417,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData):
         s_param_def: The definition of S-parameters to use, determining whether
             "pseudo waves" or "power waves" are calculated. If not provided,
             ``modeler.s_param_def`` is used.
+        low_freq_smoothing: The specification for low frequency smoothing.
 
         Returns
         -------
@@ -103,8 +426,15 @@ class TerminalComponentModelerData(AbstractComponentModelerData):
         """
         from tidy3d.plugins.smatrix.analysis.terminal import terminal_construct_smatrix
 
+        if low_freq_smoothing is not None and any(
+            isinstance(port, WavePort) for port in self.modeler.ports
+        ):
+            modeler_data = low_freq_smoothing._smooth_tcm_data(self)
+        else:
+            modeler_data = self
+
         terminal_port_data = terminal_construct_smatrix(
-            modeler_data=self,
+            modeler_data=modeler_data,
             assume_ideal_excitation=assume_ideal_excitation
             if (assume_ideal_excitation is not None)
             else self.modeler.assume_ideal_excitation,
@@ -112,7 +442,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData):
         )
         smatrix_data = MicrowaveSMatrixData(
             data=terminal_port_data,
-            port_reference_impedances=self.port_reference_impedances,
+            port_reference_impedances=modeler_data.port_reference_impedances,
             s_param_def=s_param_def if (s_param_def is not None) else self.modeler.s_param_def,
         )
         return smatrix_data

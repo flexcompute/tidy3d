@@ -16,7 +16,11 @@ from tidy3d.plugins.smatrix.data.data_array import (
     TerminalPortDataArray,
 )
 from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
-from tidy3d.plugins.smatrix.data.terminal import MicrowaveSMatrixData, TerminalComponentModelerData
+from tidy3d.plugins.smatrix.data.terminal import (
+    LowFrequencySmoothingSpec,
+    MicrowaveSMatrixData,
+    TerminalComponentModelerData,
+)
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.modal import Port
@@ -39,6 +43,7 @@ __all__ = [
     "ComponentModeler",
     "ComponentModelerDataType",
     "ComponentModelerType",
+    "LowFrequencySmoothingSpec",
     "LumpedPort",
     "MicrowaveSMatrixData",
     "ModalComponentModeler",
