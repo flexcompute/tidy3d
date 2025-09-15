@@ -33,7 +33,6 @@ FREQ0 = 200e12
 FWIDTH = 20e12
 DL = 0.05
 LY = 0.0  # 2D simulation along y (suppressed)
-LZ = 4.0
 BAR_WIDTH = 0.5
 BAR_HEIGHT = 0.2
 EPS_SI = 12.11  # ~ (n=3.48)^2 constant-permittivity silicon
@@ -43,6 +42,13 @@ LX = (BAR_SPACING + BAR_WIDTH) * NUM_BARS + BAR_SPACING
 SILICON = td.Medium(permittivity=EPS_SI)
 RUN_TIME = 5e-12
 MNT_SIZE_Z = 2 * DL
+SPC_ABOVE_GRATING = 1.0
+LZ = SPC_ABOVE_GRATING + BAR_HEIGHT + 4 * SPC_ABOVE_GRATING
+FLD1_CENTER_Z = SPC_ABOVE_GRATING + BAR_HEIGHT / 2
+SRC2_CENTER_Z = -FLD1_CENTER_Z
+PML_X = True
+
+PLOT_SIMS = False
 
 
 def build_grating_structures_from_params(
@@ -83,15 +89,17 @@ def make_sim1(p: anp.ndarray) -> td.Simulation:
         size=(LX, td.inf, 0.0),
         source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FWIDTH),
         direction="+",
+        pol_angle=np.pi / 2,
     )
 
     # Monitor just past the grating
     fld1 = td.FieldMonitor(
-        center=(0.0, 0.0, +0.5 * BAR_HEIGHT + 0.2),
+        center=(0.0, 0.0, FLD1_CENTER_Z),
         size=(LX, 0.0, MNT_SIZE_Z),
         freqs=[FREQ0],
         name="fld1",
         colocate=False,
+        fields=["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
     )
 
     sim = td.Simulation(
@@ -101,7 +109,7 @@ def make_sim1(p: anp.ndarray) -> td.Simulation:
         sources=[src],
         monitors=[fld1],
         run_time=RUN_TIME,
-        boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=True),  # No PML in y (periodic)
+        boundary_spec=td.BoundarySpec.pml(x=PML_X, y=False, z=True),
     )
     return sim
 
@@ -118,16 +126,18 @@ def make_sim2(fld1_dataset: td.FieldDataset, p: anp.ndarray) -> td.Simulation:
     # Ensure dataset coords are relative to source center
     cfs = fld1_dataset.to_source(
         source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FWIDTH),
-        center=(0.0, 0.0, +0.5 * BAR_HEIGHT + 0.2),
-        size=(LX, td.inf, 0),
+        center=(0, 0, SRC2_CENTER_Z),
+        size=tuple(fld1_dataset.monitor.size),
     )
 
-    # Downstream monitor after grating 2
+    # Downstream planar xz monitor after grating 2 (for objective)
     fld2 = td.FieldMonitor(
-        center=(0.0, 0.0, +0.5 * BAR_HEIGHT + 0.4),
+        center=(0.0, 0.0, FLD1_CENTER_Z),
         size=(0.0, 0.0, 0.0),
         freqs=[FREQ0],
         name="fld2",
+        colocate=True,
+        fields=["Ex", "Ey", "Ez"],
     )
 
     sim = td.Simulation(
@@ -137,15 +147,13 @@ def make_sim2(fld1_dataset: td.FieldDataset, p: anp.ndarray) -> td.Simulation:
         sources=[cfs],
         monitors=[fld2],
         run_time=RUN_TIME,
-        boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=True),  # No PML in y (periodic)
+        boundary_spec=td.BoundarySpec.pml(x=PML_X, y=False, z=True),
     )
     return sim
 
 
 def figure_of_merit_from_field(sim_data: td.SimulationData) -> anp.ndarray:
-    """Compute |Ex|^2 at (x0,y0)≈center for freq index 0. Autograd-friendly."""
-    # Indices at center of each axis
-
+    """Compute planar intensity on fld2: sum(|Ex|^2 + |Ez|^2)."""
     intensity = sim_data.get_intensity("fld2")
     return anp.sum(intensity.values)
 
@@ -153,14 +161,23 @@ def figure_of_merit_from_field(sim_data: td.SimulationData) -> anp.ndarray:
 def objective(p: anp.ndarray) -> anp.ndarray:
     """Objective wiring sim1 → CustomFieldSource in sim2 → FOM."""
     # Ensure array type for autograd
+    import matplotlib.pyplot as plt
 
     # Sim 1
     sim1 = make_sim1(p)
+    if PLOT_SIMS:
+        sim1.plot(y=0)
+        plt.show()
+
     data1 = run(sim1, task_name="autograd27_sim1", local_gradient=True)
-    fld1 = data1.load_field_monitor("fld1")
+    fld1 = data1["fld1"]
 
     # Sim 2
     sim2 = make_sim2(fld1_dataset=fld1, p=p)
+    if PLOT_SIMS:
+        sim2.plot(y=0)
+        plt.show()
+
     data2 = run(sim2, task_name="autograd27_sim2", local_gradient=True)
 
     # FOM
@@ -204,14 +221,49 @@ def main() -> None:
     # Parameters: N bars with zero initial offsets
     import matplotlib.pyplot as plt
 
-    p0 = anp.zeros((NUM_BARS,)) + np.random.randn(NUM_BARS) * 0.1
+    p0 = anp.zeros((NUM_BARS,))
     demo_plots(p0)
     plt.show()
 
 
 if __name__ == "__main__":
-    p0 = anp.zeros((NUM_BARS,)) + np.random.randn(NUM_BARS) * 0.1
-    J = objective(p0)
-    print(J)
-    grad = ag.grad(objective)(p0)
-    print(grad)
+    p0 = anp.zeros((NUM_BARS,))
+    J, grad = ag.value_and_grad(objective)(p0)
+    print(J, grad)
+
+    # assert False
+
+    # Numerical finite-difference gradient (forward difference)
+    delta = 1e-4
+    f0 = float(J)
+    grad_fd = np.zeros_like(np.asarray(p0), dtype=float)
+    base = np.asarray(p0, dtype=float)
+    for i in range(grad_fd.size):
+        p_pert = base.copy()
+        p_pert[i] += delta
+        J_plus = objective(p_pert)
+        grad_fd[i] = (float(J_plus) - f0) / delta
+
+    print(grad_fd)
+    # Report relative error
+    grad_auto_np = np.asarray(grad, dtype=float)
+    rel_err = np.linalg.norm(grad_auto_np - grad_fd) / (np.linalg.norm(grad_fd) + 1e-12)
+    print(f"FD vs autograd relative error: {rel_err:.3e}")
+
+    import matplotlib.pyplot as plt
+
+    plt.plot(grad_fd / np.linalg.norm(grad_fd))
+    plt.plot(grad_auto_np / np.linalg.norm(grad_auto_np))
+    plt.show()
+
+
+"""
+Adjoint gradient:
+[-33.86037943,  15.75518254,  16.47161767, -12.1026643, -1.94251531, -5.80539923, -21.05272119, 7.48395687]
+[-6.15052789, 2.68140578, -5.99104248, -3.37864877,  7.94693111, -0.25750337, -3.26601009,  1.38588731]
+
+Finite-difference gradient:
+[-850.95214844  605.45349121 1184.17358398  271.27075195   54.67224121 -234.40551758 -685.66894531  260.52856445]
+[-368.19458008,  -45.47119141,  608.06274414, 1076.81274414, -557.86132812, -675.20141602, -140.22827148,  223.23608398]
+
+"""

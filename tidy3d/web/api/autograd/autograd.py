@@ -49,8 +49,8 @@ LOCAL_GRADIENT = False
 LOCAL_ADJOINT_DIR = "adjoint_data"
 
 # if True, will plot the adjoint fields on the plane provided. used for debugging only
-_INSPECT_ADJOINT_FIELDS = False
-_INSPECT_ADJOINT_PLANE = td.Box(center=(0, 0, 0), size=(td.inf, td.inf, 0))
+_INSPECT_ADJOINT_FIELDS = True
+_INSPECT_ADJOINT_PLANE = td.Box(center=(0, 0, 0), size=(td.inf, 0, td.inf))
 
 
 def is_valid_for_autograd(simulation: td.Simulation) -> bool:
@@ -947,8 +947,12 @@ def setup_adj(
 
         import tidy3d.web as web
 
+        sim_adj_plot = sims_adj[0].updated_copy(monitors=[adj_fld_mnt])
+        sim_adj_plot.plot(y=0)
+        plt.show()
+
         sim_data_new = web.run(
-            sims_adj[0].updated_copy(monitors=[adj_fld_mnt]),
+            sim_adj_plot,
             task_name="adjoint_field_viz",
             verbose=False,
         )
