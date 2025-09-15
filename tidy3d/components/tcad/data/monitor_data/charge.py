@@ -120,13 +120,32 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
     Notes
     -----
 
-        This data contains the energy bands data:
-        Ec -> Energy of the bottom of the conduction band, [eV]
-        Ev -> Energy of the top of the valence band, [eV]
-        Ei -> Intrinsic Fermi level, [eV]
-        Efn -> Quasi-Fermi level for electrons, [eV]
-        Efp -> Quasi-Fermi level for holes, [eV]
-        as defined in the  ``monitor``.
+    This data contains the energy bands data [eV]:
+
+     .. list-table::
+       :widths: 25 25 75
+       :header-rows: 1
+
+       * - Symbol
+         - Parameter Name
+         - Description
+       * - :math:`E_c`
+         - ``Ec``
+         - Energy of the bottom of the conduction band
+       * - :math:`E_v`
+         - ``Ev``
+         - Energy of the top of the valence band
+       * - :math:`E_i`
+         - ``Ei``
+         - Intrinsic Fermi level
+       * - :math:`E_{fn}`
+         - ``Efn``
+         - Quasi-Fermi level for electrons
+       * - :math:`E_{fp}`
+         - ``Efp``
+         - Quasi-Fermi level for holes
+
+    as defined in the  ``monitor``.
     """
 
     monitor: SteadyEnergyBandMonitor = pd.Field(
@@ -138,35 +157,35 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
     Ec: UnstructuredFieldType = pd.Field(
         None,
         title="Conduction band series",
-        description=r"Contains the computed energy of the bottom of the conduction band $Ec$.",
+        description="Contains the computed energy of the bottom of the conduction band :math:`E_c`.",
         discriminator=TYPE_TAG_STR,
     )
 
     Ev: UnstructuredFieldType = pd.Field(
         None,
         title="Valence band series",
-        description=r"Contains the computed energy of the top of the valence band $Ec$.",
+        description="Contains the computed energy of the top of the valence band :math:`E_c`.",
         discriminator=TYPE_TAG_STR,
     )
 
     Ei: UnstructuredFieldType = pd.Field(
         None,
         title="Intrinsic Fermi level series",
-        description=r"Contains the computed intrinsic Fermi level for the material $Ei$.",
+        description="Contains the computed intrinsic Fermi level for the material :math:`E_i`.",
         discriminator=TYPE_TAG_STR,
     )
 
     Efn: UnstructuredFieldType = pd.Field(
         None,
         title="Electron's quasi-Fermi level series",
-        description=r"Contains the computed quasi-Fermi level for electrons $Efn$.",
+        description="Contains the computed quasi-Fermi level for electrons :math:`E_{fn}`.",
         discriminator=TYPE_TAG_STR,
     )
 
     Efp: UnstructuredFieldType = pd.Field(
         None,
         title="Hole's quasi-Fermi level series",
-        description=r"Contains the computed quasi-Fermi level for holes $Efp$.",
+        description="Contains the computed quasi-Fermi level for holes :math:`E_{fp}`.",
         discriminator=TYPE_TAG_STR,
     )
 
@@ -276,7 +295,7 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
 
     Notes
     -----
-        The small signal-capacitance of electrons :math:`C_n` and holes  :math:`C_p`  is computed from the charge due to
+        The small signal-capacitance of electrons  :math:`C_n`  and holes  :math:`C_p`  is computed from the charge due to
          electrons :math:`Q_n` and holes :math:`Q_p` at an applied voltage :math:`V` at a voltage difference
         :math:`\\Delta V` between two simulations.
 
@@ -297,14 +316,14 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     hole_capacitance: SteadyVoltageDataArray = pd.Field(
         None,
         title="Hole capacitance",
-        description=r"Small signal capacitance ($\frac{dQ_p}{dV}$) associated to the monitor.",
+        description="Small signal capacitance :math:`(\\frac{dQ_p}{dV})` associated to the monitor.",
     )
     # C_p = hole_capacitance
 
     electron_capacitance: SteadyVoltageDataArray = pd.Field(
         None,
         title="Electron capacitance",
-        description=r"Small signal capacitance ($\frac{dQn}{dV}$) associated to the monitor.",
+        description="Small signal capacitance :math:`(\\frac{dQn}{dV})` associated to the monitor.",
     )
     # C_n = electron_capacitance
 

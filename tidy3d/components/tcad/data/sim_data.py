@@ -255,8 +255,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
     device_characteristics: Optional[DeviceCharacteristics] = pd.Field(
         None,
         title="Device characteristics",
-        description="Data characterizing the device :class:`DeviceCharacteristics`. Current characteristics include: "
-        "'steady_dc_hole_capacitance', 'steady_dc_electron_capacitance', and 'steady_dc_current_voltage'.",
+        description="Data characterizing the device :class:`DeviceCharacteristics`.",
     )
 
     @equal_aspect
@@ -464,7 +463,7 @@ class HeatSimulationData(HeatChargeSimulationData):
 
     Warning
     -------
-        :class`HeatSimulationData` is DEPRECATED.
+        :class:`HeatSimulationData` is DEPRECATED.
         Consider using :class:`HeatChargeSimulationData` instead.
     """
 

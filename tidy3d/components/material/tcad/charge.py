@@ -33,7 +33,7 @@ class AbstractChargeMedium(AbstractMedium):
     def charge(self):
         """
         This means that a charge medium has been defined inherently within this solver medium.
-        This provides interconnection with the `MultiPhysicsMedium` higher-dimensional classes.
+        This provides interconnection with the :class:`MultiPhysicsMedium` higher-dimensional classes.
         """
         return self
 
@@ -296,7 +296,7 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     delta_E_g: BandGapNarrowingModelType = pd.Field(
         None,
-        title=r"$\Delta E_g$ Bandgap narrowing model.",
+        title=":math:'\\Delta E_g' Bandgap narrowing model.",
         description="Bandgap narrowing model.",
     )
 

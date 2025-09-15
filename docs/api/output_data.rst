@@ -87,3 +87,4 @@ List of Dataset Types
    tidy3d.DiffractionDataArray
    tidy3d.DirectivityDataArray
    tidy3d.AxialRatioDataArray
+   tidy3d.SteadyVoltageDataArray

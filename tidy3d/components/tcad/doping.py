@@ -98,9 +98,7 @@ class AbstractDopingBox(Box):
 
 class ConstantDoping(AbstractDopingBox):
     """
-    Sets constant doping :math:`N` in the specified box with a :py:attr:`~.Box.size` and :py:attr:`concentration`.
-
-    For translationally invariant behavior in one dimension, the box must have infinite size in the
+    Sets constant doping :math:`N` in the specified box with a :py:attr:`~.Box.size` and :py:attr:`concentration`. For translationally invariant behavior in one dimension, the box must have infinite size in the
     homogenous (invariant) direction.
 
     Example
@@ -139,9 +137,7 @@ class ConstantDoping(AbstractDopingBox):
 
 
 class GaussianDoping(AbstractDopingBox):
-    """Sets a gaussian doping in the specified box.
-
-    For translationally invariant behavior in one dimension, the box must have infinite size in the
+    """Sets a gaussian doping in the specified box. For translationally invariant behavior in one dimension, the box must have infinite size in the
     homogenous (invariant) direction.
 
     Notes
@@ -203,7 +199,7 @@ class GaussianDoping(AbstractDopingBox):
     width: pd.PositiveFloat = pd.Field(
         title="Width of the gaussian.",
         description="Width of the gaussian. The concentration will transition from "
-        "'concentration' at the center of the box to 'ref_con' at the edge/face "
+        "``concentration`` at the center of the box to ``ref_con`` at the edge/face "
         "of the box in a distance equal to 'width'. ",
     )
 

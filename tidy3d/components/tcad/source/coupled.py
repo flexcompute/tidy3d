@@ -11,7 +11,7 @@ class HeatFromElectricSource(GlobalHeatChargeSource):
     Notes
     -----
 
-        If a :class`HeatFromElectricSource` is specified as a source, appropriate boundary
+        If a :class:`HeatFromElectricSource` is specified as a source, appropriate boundary
         conditions for an electric simulation must be provided, since such a simulation
         will be executed before the heat simulation can run.
 

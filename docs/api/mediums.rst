@@ -404,7 +404,7 @@ Multiphysics Medium
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.components.material.multi_physics.MultiPhysicsMedium
+   tidy3d.MultiPhysicsMedium
 
 This section is still under construction. 
 
