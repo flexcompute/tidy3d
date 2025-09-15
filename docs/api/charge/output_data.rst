@@ -28,7 +28,7 @@ Monitor Data
    tidy3d.SteadyElectricFieldData
    tidy3d.SteadyCurrentDensityData
 
-Monitor Data
+Device Data
 ^^^^^^^^^^^^
 
 .. autosummary::
