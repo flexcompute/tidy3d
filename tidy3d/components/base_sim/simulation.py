@@ -128,8 +128,8 @@ class AbstractSimulation(Box, ABC):
         title="Structure Priority Setting",
         description="This field only affects structures of `priority=None`. "
         "If `equal`, the priority of those structures is set to 0; if `conductor`, "
-        "the priority of structures made of :class:`~tidy3d.LossyMetalMedium` is set to 90, "
-        ":class:`~tidy3d.PECMedium` to 100, and others to 0.",
+        "the priority of structures made of :class:`LossyMetalMedium` is set to 90, "
+        ":class:`PECMedium` to 100, and others to 0.",
     )
 
     """ Validating setup """

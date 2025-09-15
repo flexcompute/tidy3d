@@ -200,7 +200,7 @@ class GaussianDoping(AbstractDopingBox):
         title="Width of the gaussian.",
         description="Width of the gaussian. The concentration will transition from "
         "``concentration`` at the center of the box to ``ref_con`` at the edge/face "
-        "of the box in a distance equal to 'width'. ",
+        "of the box in a distance equal to ``width``. ",
     )
 
     source: str = pd.Field(

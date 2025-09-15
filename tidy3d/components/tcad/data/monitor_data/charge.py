@@ -295,13 +295,13 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
 
     Notes
     -----
-        The small signal-capacitance of electrons  :math:`C_n`  and holes  :math:`C_p`  is computed from the charge due to
-         electrons :math:`Q_n` and holes :math:`Q_p` at an applied voltage :math:`V` at a voltage difference
-        :math:`\\Delta V` between two simulations.
 
-        .. math::
+    The small signal-capacitance of electrons  :math:`C_n`  and holes  :math:`C_p`  is computed from the charge due to electrons :math:`Q_n` and holes :math:`Q_p` at an applied voltage :math:`V` at a voltage difference
+    :math:`\\Delta V` between two simulations.
 
-            C_{n,p} = \\frac{Q_{n,p}(V + \\Delta V) - Q_{n,p}(V)}{\\Delta V}
+    .. math::
+
+        C_{n,p} = \\frac{Q_{n,p}(V + \\Delta V) - Q_{n,p}(V)}{\\Delta V}
 
 
     This is only computed when a voltage source with more than two sources is included within the simulation and determines the :math:`\\Delta V`.
