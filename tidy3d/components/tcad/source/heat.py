@@ -23,8 +23,7 @@ class HeatSource(StructureBasedHeatChargeSource):
 
     rate: Union[float, SpatialDataArray] = pd.Field(
         title="Volumetric Heat Rate",
-        description="Volumetric rate of heating or cooling (if negative) in units of "
-        f"{VOLUMETRIC_HEAT_RATE}.",
+        description="Volumetric rate of heating or cooling (if negative)",
         units=VOLUMETRIC_HEAT_RATE,
     )
 

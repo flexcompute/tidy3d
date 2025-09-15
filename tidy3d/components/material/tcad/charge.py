@@ -77,7 +77,7 @@ class ChargeConductorMedium(AbstractChargeMedium):
     conductivity: pd.PositiveFloat = pd.Field(
         ...,
         title="Electric conductivity",
-        description=f"Electric conductivity of material in units of {CONDUCTIVITY}.",
+        description="Electric conductivity of material.",
         units=CONDUCTIVITY,
     )
 
@@ -296,20 +296,24 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     delta_E_g: BandGapNarrowingModelType = pd.Field(
         None,
-        title=":math:'\\Delta E_g' Bandgap narrowing model.",
+        title=":math:`\\Delta E_g` Bandgap narrowing model.",
         description="Bandgap narrowing model.",
     )
 
     N_a: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
         0,
         title="Doping: Acceptor concentration",
-        description="Units of 1/cm^3",
+        description="Concentration of acceptor atoms, which create mobile holes, resulting in p-type material. "
+        "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
+        "or a tuple of geometric shapes to define specific doped regions.",
         units="1/cm^3",
     )
 
     N_d: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
         0,
         title="Doping: Donor concentration",
-        description="Units of 1/cm^3",
+        description="Concentration of donor atoms, which create mobile electrons, resulting in n-type material. "
+        "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
+        "or a tuple of geometric shapes to define specific doped regions.",
         units="1/cm^3",
     )

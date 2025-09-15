@@ -164,7 +164,7 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
     Ev: UnstructuredFieldType = pd.Field(
         None,
         title="Valence band series",
-        description="Contains the computed energy of the top of the valence band :math:`E_c`.",
+        description="Contains the computed energy of the top of the valence band :math:`E_v`.",
         discriminator=TYPE_TAG_STR,
     )
 

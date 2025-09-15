@@ -46,7 +46,7 @@ class HeatFluxBC(HeatChargeBC):
 
     flux: float = pd.Field(
         title="Heat Flux",
-        description=f"Heat flux value in units of {HEAT_FLUX}.",
+        description="Heat flux value.",
         units=HEAT_FLUX,
     )
 
@@ -158,12 +158,12 @@ class ConvectionBC(HeatChargeBC):
 
     ambient_temperature: pd.PositiveFloat = pd.Field(
         title="Ambient Temperature",
-        description=f"Ambient temperature value in units of {KELVIN}.",
+        description="Ambient temperature.",
         units=KELVIN,
     )
 
     transfer_coeff: Union[pd.NonNegativeFloat, VerticalNaturalConvectionCoeffModel] = pd.Field(
         title="Heat Transfer Coefficient",
-        description=f"Heat flux value in units of {HEAT_TRANSFER_COEFF}.",
+        description="Heat transfer coefficient value.",
         units=HEAT_TRANSFER_COEFF,
     )
