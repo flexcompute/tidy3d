@@ -139,6 +139,7 @@ Anisotropic
    :template: module.rst
 
    tidy3d.AnisotropicMedium
+   tidy3d.AnisotropicMediumFromMedium2D
    tidy3d.FullyAnisotropicMedium
    tidy3d.Medium2D
 
