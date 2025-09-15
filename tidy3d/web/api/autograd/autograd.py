@@ -49,7 +49,7 @@ LOCAL_GRADIENT = False
 LOCAL_ADJOINT_DIR = "adjoint_data"
 
 # if True, will plot the adjoint fields on the plane provided. used for debugging only
-_INSPECT_ADJOINT_FIELDS = True
+_INSPECT_ADJOINT_FIELDS = False
 _INSPECT_ADJOINT_PLANE = td.Box(center=(0, 0, 0), size=(td.inf, 0, td.inf))
 
 
@@ -948,15 +948,14 @@ def setup_adj(
         import tidy3d.web as web
 
         sim_adj_plot = sims_adj[0].updated_copy(monitors=[adj_fld_mnt])
-        sim_adj_plot.plot(y=0)
-        plt.show()
 
         sim_data_new = web.run(
             sim_adj_plot,
             task_name="adjoint_field_viz",
             verbose=False,
         )
-        _, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True, figsize=(10, 4))
+        _, (ax0, ax1, ax2, ax3) = plt.subplots(1, 4, tight_layout=True, figsize=(10, 4))
+        sim_adj_plot.plot(y=0, ax=ax0)
         sim_data_new.plot_field("adjoint_fields", "Ex", "re", ax=ax1)
         sim_data_new.plot_field("adjoint_fields", "Ey", "re", ax=ax2)
         sim_data_new.plot_field("adjoint_fields", "Ez", "re", ax=ax3)

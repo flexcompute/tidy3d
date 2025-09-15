@@ -1,4 +1,3 @@
-#
 # # #!/usr/bin/env python3
 """
 Autograd27Source: Two-simulation demo wiring FieldMonitor → CustomFieldSource.
@@ -29,24 +28,26 @@ from tidy3d.web import run
 # ---------------------------
 # Configuration (feel free to tweak)
 # ---------------------------
-FREQ0 = 200e12
-FWIDTH = 20e12
-DL = 0.05
+
+LAMBDA0 = 1.55
+FREQ0 = td.C_0 / LAMBDA0
+FWIDTH = FREQ0 / 10.0
+DL = 0.03
 LY = 0.0  # 2D simulation along y (suppressed)
 BAR_WIDTH = 0.5
 BAR_HEIGHT = 0.2
-EPS_SI = 12.11  # ~ (n=3.48)^2 constant-permittivity silicon
+EPS_SI = 4.0  # ~ (n=3.48)^2 constant-permittivity silicon
 NUM_BARS = 8
 BAR_SPACING = 0.6
 LX = (BAR_SPACING + BAR_WIDTH) * NUM_BARS + BAR_SPACING
 SILICON = td.Medium(permittivity=EPS_SI)
-RUN_TIME = 5e-12
+RUN_TIME = 100 / FWIDTH
 MNT_SIZE_Z = 2 * DL
 SPC_ABOVE_GRATING = 1.0
 LZ = SPC_ABOVE_GRATING + BAR_HEIGHT + 4 * SPC_ABOVE_GRATING
 FLD1_CENTER_Z = SPC_ABOVE_GRATING + BAR_HEIGHT / 2
 SRC2_CENTER_Z = -FLD1_CENTER_Z
-PML_X = True
+PML_X = False
 
 PLOT_SIMS = False
 
@@ -104,6 +105,7 @@ def make_sim1(p: anp.ndarray) -> td.Simulation:
 
     sim = td.Simulation(
         size=(LX, LY, LZ),
+        # grid_spec=td.GridSpec.auto(min_steps_per_wvl=20),
         grid_spec=td.GridSpec.uniform(dl=DL),
         structures=structures,
         sources=[src],
@@ -155,7 +157,7 @@ def make_sim2(fld1_dataset: td.FieldDataset, p: anp.ndarray) -> td.Simulation:
 def figure_of_merit_from_field(sim_data: td.SimulationData) -> anp.ndarray:
     """Compute planar intensity on fld2: sum(|Ex|^2 + |Ez|^2)."""
     intensity = sim_data.get_intensity("fld2")
-    return anp.sum(intensity.values)
+    return intensity.values.item() * 1e5
 
 
 def objective(p: anp.ndarray) -> anp.ndarray:
@@ -228,32 +230,36 @@ def main() -> None:
 
 if __name__ == "__main__":
     p0 = anp.zeros((NUM_BARS,))
-    J, grad = ag.value_and_grad(objective)(p0)
-    print(J, grad)
+    J, grad_adj = ag.value_and_grad(objective)(p0)
+    print(J, grad_adj)
 
-    # assert False
-
-    # Numerical finite-difference gradient (forward difference)
-    delta = 1e-4
-    f0 = float(J)
+    # Numerical finite-difference gradient (centered difference)
+    delta = 1e-3
     grad_fd = np.zeros_like(np.asarray(p0), dtype=float)
     base = np.asarray(p0, dtype=float)
     for i in range(grad_fd.size):
-        p_pert = base.copy()
-        p_pert[i] += delta
-        J_plus = objective(p_pert)
-        grad_fd[i] = (float(J_plus) - f0) / delta
+        p_plus = base.copy()
+        p_minus = base.copy()
+        p_plus[i] += delta
+        p_minus[i] -= delta
+        J_plus = objective(p_plus)
+        J_minus = objective(p_minus)
+        grad_fd[i] = (float(J_plus) - float(J_minus)) / (2.0 * delta)
 
     print(grad_fd)
-    # Report relative error
-    grad_auto_np = np.asarray(grad, dtype=float)
-    rel_err = np.linalg.norm(grad_auto_np - grad_fd) / (np.linalg.norm(grad_fd) + 1e-12)
-    print(f"FD vs autograd relative error: {rel_err:.3e}")
+    print(grad_adj)
+
+    _grad_fd = grad_fd / np.linalg.norm(grad_fd)
+    _grad_adj = grad_adj / np.linalg.norm(grad_adj)
+
+    rms_error = np.linalg.norm(_grad_fd - _grad_adj)
+    print(f"RMS error: {rms_error:.3e}")
 
     import matplotlib.pyplot as plt
 
-    plt.plot(grad_fd / np.linalg.norm(grad_fd))
-    plt.plot(grad_auto_np / np.linalg.norm(grad_auto_np))
+    plt.plot(_grad_fd, label="finite-difference")
+    plt.plot(_grad_adj, label="adjoint")
+    plt.legend()
     plt.show()
 
 
@@ -261,6 +267,7 @@ if __name__ == "__main__":
 Adjoint gradient:
 [-33.86037943,  15.75518254,  16.47161767, -12.1026643, -1.94251531, -5.80539923, -21.05272119, 7.48395687]
 [-6.15052789, 2.68140578, -5.99104248, -3.37864877,  7.94693111, -0.25750337, -3.26601009,  1.38588731]
+[7491.82491336, -5183.32123377,  2763.5461682,   3608.17932507, -3608.18056444, -2763.54612709,  5183.32494262, -7491.82452151]
 
 Finite-difference gradient:
 [-850.95214844  605.45349121 1184.17358398  271.27075195   54.67224121 -234.40551758 -685.66894531  260.52856445]

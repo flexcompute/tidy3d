@@ -267,95 +267,33 @@ class CustomFieldSource(FieldSource, PlanarSource):
         # (identity map), with zeros where adjoint is missing.
         derivative_map = {}
 
-        component_names = {"Ex", "Ey", "Ez", "Hx", "Hy", "Hz"}
         for field_path in derivative_info.paths:
-            # Identify which component this path refers to (not always the last token)
-            comp_in_path = next((c for c in field_path if c in component_names), None)
-            if comp_in_path is None:
-                derivative_map[tuple(field_path)] = 0.0
-                continue
+            field_name = field_path[-1]
 
-            # Component in the user's dataset (defines coordinates to sample at)
-            dataset_component = getattr(self.field_dataset, comp_in_path, None)
-            if dataset_component is None:
-                derivative_map[tuple(field_path)] = 0.0
-                continue
+            fld_cmp = self.field_dataset.field_components.get(field_name)
+            if fld_cmp is None:
+                raise ValueError(f"Field component {field_name} not found in field_dataset.")
 
-            # Corresponding adjoint component
-            adjoint_field = derivative_info.E_adj.get(comp_in_path)
+            field_values = fld_cmp.values
 
-            # If the adjoint component is missing or None, return zeros of matching shape
-            if adjoint_field is None:
-                derivative_map[tuple(field_path)] = np.zeros_like(dataset_component.values)
-                continue
+            freqs = fld_cmp.coords["f"].values
+            if len(freqs) > 1:
+                raise ValueError("Multiple frequencies found in field_dataset. Can't compute VJP.")
 
-            # Sample adjoint onto dataset grid:
-            # - use nearest selection on singleton dims to avoid divide-by-zero in SciPy
-            # - interpolate only along dims with multiple points
-            adj_on_dataset = adjoint_field
-            for dim in ("x", "y", "z"):
-                if dim not in dataset_component.dims:
-                    continue
-                coord = dataset_component.coords[dim]
-                # Convert dataset-relative coordinates to absolute by shifting with source center
-                dim_idx = "xyz".index(dim)
-                coord_abs = np.asarray(coord.values, dtype=float) + float(self.center[dim_idx])
-                if coord.size <= 1:
-                    # nearest selection for single-point dimensions (keep dim)
-                    adj_on_dataset = adj_on_dataset.sel(
-                        {dim: coord_abs}, method="nearest", drop=False
-                    )
-                else:
-                    adj_on_dataset = adj_on_dataset.interp(
-                        {dim: coord_abs}, kwargs={"bounds_error": False}
-                    )
+            DL = fld_cmp.coords["x"].values[1] - fld_cmp.coords["x"].values[0]
+            field_values = field_values / DL**3
 
-            # Handle frequency axis similarly (usually single point)
-            if "f" in dataset_component.dims:
-                fcoord = dataset_component.coords["f"]
-                if fcoord.size <= 1:
-                    adj_on_dataset = adj_on_dataset.sel(
-                        {"f": fcoord.values}, method="nearest", drop=False
-                    )
-                else:
-                    adj_on_dataset = adj_on_dataset.interp(
-                        {"f": fcoord}, kwargs={"bounds_error": False}
-                    )
+            # field_values = field_values # RMS error: 1.813e+00
+            field_values = -1j * field_values  # RMS error: 7.940e-01
 
-            # Reduce any extra dims not present in dataset_component
-            for dim in list(adj_on_dataset.dims):
-                if dim in dataset_component.dims:
-                    continue
-                if dim == "f":
-                    # sum over frequency if present but not in parameter
-                    adj_on_dataset = adj_on_dataset.sum(dim="f")
-                    continue
-                adj_on_dataset = adj_on_dataset.sel({dim: 0.0}, method="nearest")
+            # field_values = np.conj(field_values) # RMS error: 1.091e+00
+            # field_values = 1j * np.conj(field_values) # RMS error: 1.480e+00
 
-            # Ensure all parameter dims exist (re-add singleton dims if dropped during selection)
-            for dim in dataset_component.dims:
-                if dim not in adj_on_dataset.dims:
-                    adj_on_dataset = adj_on_dataset.expand_dims(
-                        {dim: dataset_component.coords[dim]}
-                    )
+            if field_name[0] == "H":
+                field_values = -1 * field_values
 
-            # Reorder to match parameter dims exactly
-            adj_on_dataset = adj_on_dataset.transpose(*dataset_component.dims)
+            derivative_map[tuple(field_path)] = field_values
 
-            adj_on_dataset = adj_on_dataset.fillna(0)
-
-            # Minimal adjoint mapping tweaks:
-            # - Use complex conjugate of adjoint fields
-            # - Flip sign for magnetic components to align with equivalence relations
-            vals = np.conj(adj_on_dataset.values)
-            if comp_in_path.startswith("H"):
-                vals = -vals
-
-            derivative_map[tuple(field_path)] = vals
-
-        # For now, return placeholder gradients with expected structure
-        # This is a placeholder for future implementation
-        log.debug("CustomFieldSource gradient computation not yet implemented")
         return derivative_map
 
 
