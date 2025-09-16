@@ -288,6 +288,62 @@ def test_grid_spec_with_layers():
     )
 
 
+def test_grid_spec_with_layers_interior_disjoint():
+    """Test the application of layer_specs with interior_disjoint assumption to GridSpec."""
+
+    thickness = 1e-3
+    lumped_elements = []
+    # a PEC thin layer structure
+    box1 = td.Box(size=(thickness, 2, 2))
+    box2 = td.Box(center=(0, -1, 0), size=(thickness, 1, 1))
+    pec_str = td.Structure(geometry=box1 - box2, medium=td.PEC)
+    # a dielectric that overlaps with PEC structure, hence breaking interior-disjoint assumption
+    die_str = td.Structure(
+        geometry=td.Box(size=(thickness, 0.5, 0.5)),
+        medium=td.Medium(),
+    )
+    # layer spec assuming interior disjoint geometries
+    layer_disjoint = LayerRefinementSpec.from_structures(
+        [
+            pec_str,
+        ],
+        interior_disjoint_geometries=True,
+    )
+    # layer spec for general geometries
+    layer_general = layer_disjoint.updated_copy(interior_disjoint_geometries=False)
+
+    sim = td.Simulation(
+        size=(4, 4, 4),
+        grid_spec=td.GridSpec.auto(
+            min_steps_per_wvl=11, wavelength=1, layer_refinement_specs=[layer_disjoint]
+        ),
+        boundary_spec=td.BoundarySpec.pml(),
+        structures=[pec_str],
+        run_time=1e-12,
+    )
+    sim_general = sim.updated_copy(
+        grid_spec=sim.grid_spec.updated_copy(layer_refinement_specs=[layer_general])
+    )
+
+    # for simulations with interior-disjoint geometries, same corner finder results for both layer settings
+    def is_equal_snapping_points(plist1, plist2):
+        if len(plist1) != len(plist2):
+            return False
+        for p1, p2 in zip(plist1, plist2):
+            if p1 != p2:
+                return False
+        return True
+
+    assert is_equal_snapping_points(
+        sim.internal_snapping_points, sim_general.internal_snapping_points
+    )
+
+    # for simulations with overlapping geometries, assuming interior-disjoint misses some corners in this simulation
+    sim = sim.updated_copy(structures=[pec_str, die_str])
+    sim_general = sim_general.updated_copy(structures=[pec_str, die_str])
+    assert len(sim_general.internal_snapping_points) > len(sim.internal_snapping_points)
+
+
 @pytest.mark.parametrize("gap_meshing_iters", [0, 1])
 def test_corner_refinement_outside_domain(gap_meshing_iters):
     """Test the behavior of corner refinement if corners are outside the simulation domain."""
@@ -573,6 +629,7 @@ def test_gap_meshing():
                     corner_finder=None,
                     gap_meshing_iters=2,
                     dl_min_from_gap_width=True,
+                    interior_disjoint_geometries=False,
                 )
             ],
             min_steps_per_wvl=10,

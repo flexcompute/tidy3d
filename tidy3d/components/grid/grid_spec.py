@@ -16,6 +16,7 @@ from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import MeshOverrideStructure, Structure, StructureType
 from tidy3d.components.types import (
     TYPE_TAG_STR,
+    ArrayFloat1D,
     ArrayFloat2D,
     Axis,
     Coordinate,
@@ -1078,6 +1079,14 @@ class LayerRefinementSpec(Box):
         "This only applies if ``dl_min`` in ``AutoGrid`` specification is not set.",
     )
 
+    interior_disjoint_geometries: bool = pd.Field(
+        True,
+        title="Geometries Are Interior-Disjoint",
+        description="If ``True``, geometries made of different materials on the plane must not be overlapping. "
+        "This can speed up the performance "
+        "of corner finder when there are many structures crossing the plane.",
+    )
+
     @pd.validator("axis", always=True)
     @skip_if_fields_missing(["size"])
     def _finite_size_along_axis(cls, val, values):
@@ -1100,6 +1109,7 @@ class LayerRefinementSpec(Box):
         refinement_inside_sim_only: bool = True,
         gap_meshing_iters: pd.NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
+        **kwargs,
     ):
         """Constructs a :class:`LayerRefinementSpec` that is unbounded in inplane dimensions from bounds along
         layer thickness dimension.
@@ -1157,6 +1167,7 @@ class LayerRefinementSpec(Box):
             refinement_inside_sim_only=refinement_inside_sim_only,
             gap_meshing_iters=gap_meshing_iters,
             dl_min_from_gap_width=dl_min_from_gap_width,
+            **kwargs,
         )
 
     @classmethod
@@ -1174,6 +1185,7 @@ class LayerRefinementSpec(Box):
         refinement_inside_sim_only: bool = True,
         gap_meshing_iters: pd.NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
+        **kwargs,
     ):
         """Constructs a :class:`LayerRefinementSpec` from minimum and maximum coordinate bounds.
 
@@ -1233,6 +1245,7 @@ class LayerRefinementSpec(Box):
             refinement_inside_sim_only=refinement_inside_sim_only,
             gap_meshing_iters=gap_meshing_iters,
             dl_min_from_gap_width=dl_min_from_gap_width,
+            **kwargs,
         )
 
     @classmethod
@@ -1249,6 +1262,7 @@ class LayerRefinementSpec(Box):
         refinement_inside_sim_only: bool = True,
         gap_meshing_iters: pd.NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
+        **kwargs,
     ):
         """Constructs a :class:`LayerRefinementSpec` from the bounding box of a list of structures.
 
@@ -1305,6 +1319,7 @@ class LayerRefinementSpec(Box):
             refinement_inside_sim_only=refinement_inside_sim_only,
             gap_meshing_iters=gap_meshing_iters,
             dl_min_from_gap_width=dl_min_from_gap_width,
+            **kwargs,
         )
 
     @cached_property
@@ -1387,20 +1402,27 @@ class LayerRefinementSpec(Box):
 
         return dl_min
 
-    def generate_snapping_points(self, structure_list: list[Structure]) -> list[CoordinateOptional]:
+    def generate_snapping_points(
+        self, structure_list: list[Structure], cached_corners_and_convexity=None
+    ) -> list[CoordinateOptional]:
         """generate snapping points for mesh refinement."""
         snapping_points = self._snapping_points_along_axis
         if self.corner_snapping:
-            snapping_points += self._corners(structure_list)
+            snapping_points += self._corners(structure_list, cached_corners_and_convexity)
         return snapping_points
 
     def generate_override_structures(
-        self, grid_size_in_vacuum: float, structure_list: list[Structure]
+        self,
+        grid_size_in_vacuum: float,
+        structure_list: list[Structure],
+        cached_corners_and_convexity=None,
     ) -> list[MeshOverrideStructure]:
         """Generate mesh override structures for mesh refinement."""
         return self._override_structures_along_axis(
             grid_size_in_vacuum
-        ) + self._override_structures_inplane(structure_list, grid_size_in_vacuum)
+        ) + self._override_structures_inplane(
+            structure_list, grid_size_in_vacuum, cached_corners_and_convexity
+        )
 
     def _inplane_inside(self, point: ArrayFloat2D) -> bool:
         """On the inplane cross section, whether the point is inside the layer.
@@ -1423,7 +1445,7 @@ class LayerRefinementSpec(Box):
 
     def _corners_and_convexity_2d(
         self, structure_list: list[Structure], ravel: bool
-    ) -> list[CoordinateOptional]:
+    ) -> tuple[list[ArrayFloat2D], list[ArrayFloat1D]]:
         """Raw inplane corners and their convexity."""
         if self.corner_finder is None:
             return [], []
@@ -1433,7 +1455,11 @@ class LayerRefinementSpec(Box):
         if self._is_inplane_bounded:
             structures_intersect = [s for s in structure_list if self.intersects(s.geometry)]
         inplane_points, convexity = self.corner_finder._corners_and_convexity(
-            self.axis, self.center_axis, structures_intersect, ravel
+            self.axis,
+            self.center_axis,
+            structures_intersect,
+            ravel,
+            self.interior_disjoint_geometries,
         )
 
         # filter corners outside the inplane bounds
@@ -1490,11 +1516,21 @@ class LayerRefinementSpec(Box):
 
         return dl_min
 
-    def _corners(self, structure_list: list[Structure]) -> list[CoordinateOptional]:
+    def _corners(
+        self, structure_list: list[Structure], cached_corners_and_convexity=None
+    ) -> list[CoordinateOptional]:
         """Inplane corners in 3D coordinate."""
-        inplane_points, _ = self._corners_and_convexity_2d(
-            structure_list=structure_list, ravel=True
-        )
+        if self.corner_finder is None:
+            return []
+        if cached_corners_and_convexity is None:
+            inplane_points, _ = self._corners_and_convexity_2d(
+                structure_list=structure_list, ravel=True
+            )
+        else:
+            inplane_points, convexity = cached_corners_and_convexity
+            inplane_points, _ = self.corner_finder._ravel_corners_and_convexity(
+                ravel=True, corner_list=inplane_points, convexity_list=convexity
+            )
 
         # convert 2d points to 3d
         return [
@@ -1528,7 +1564,10 @@ class LayerRefinementSpec(Box):
         ]
 
     def _override_structures_inplane(
-        self, structure_list: list[Structure], grid_size_in_vacuum: float
+        self,
+        structure_list: list[Structure],
+        grid_size_in_vacuum: float,
+        cached_corners_and_convexity=None,
     ) -> list[MeshOverrideStructure]:
         """Inplane mesh override structures for refining mesh around corners."""
         if self.corner_refinement is None:
@@ -1538,7 +1577,7 @@ class LayerRefinementSpec(Box):
             self.corner_refinement.override_structure(
                 corner, grid_size_in_vacuum, self.refinement_inside_sim_only
             )
-            for corner in self._corners(structure_list)
+            for corner in self._corners(structure_list, cached_corners_and_convexity)
         ]
 
     def _override_structures_along_axis(
@@ -2018,6 +2057,7 @@ class LayerRefinementSpec(Box):
             structure_list=structures,
             center=center,
             size=restricted_size,
+            interior_disjoint_geometries=self.interior_disjoint_geometries,
         )
 
         # find intersections of pec polygons with grid lines
@@ -2236,7 +2276,10 @@ class GridSpec(Tidy3dBaseModel):
         return override_used
 
     def internal_snapping_points(
-        self, structures: list[Structure], lumped_elements: list[LumpedElementType]
+        self,
+        structures: list[Structure],
+        lumped_elements: list[LumpedElementType],
+        cached_corners_and_convexity=None,
     ) -> list[CoordinateOptional]:
         """Internal snapping points. So far, internal snapping points are generated by
         `layer_refinement_specs` and lumped element.
@@ -2247,6 +2290,8 @@ class GridSpec(Tidy3dBaseModel):
             List of physical structures.
         lumped_elements : List[LumpedElementType]
             List of lumped elements.
+        cached_corners_and_convexity : Optional[list[CachedCornersAndConvexity]]
+            Cached corners and convexity data.
 
         Returns
         -------
@@ -2261,8 +2306,14 @@ class GridSpec(Tidy3dBaseModel):
         snapping_points = []
         # 1) from layer refinement spec
         if self.layer_refinement_used:
-            for layer_spec in self.layer_refinement_specs:
-                snapping_points += layer_spec.generate_snapping_points(list(structures))
+            for ind, layer_spec in enumerate(self.layer_refinement_specs):
+                if cached_corners_and_convexity is not None:
+                    cached_data = cached_corners_and_convexity[ind]
+                else:
+                    cached_data = None
+                snapping_points += layer_spec.generate_snapping_points(
+                    list(structures), cached_data
+                )
         # ) from lumped_elements
         for lumped_element in lumped_elements:
             snapping_points += lumped_element.to_snapping_points()
@@ -2309,6 +2360,7 @@ class GridSpec(Tidy3dBaseModel):
         wavelength: pd.PositiveFloat,
         sim_size: tuple[float, 3],
         lumped_elements: list[LumpedElementType],
+        cached_corners_and_convexity=None,
     ) -> list[StructureType]:
         """Internal mesh override structures. So far, internal override structures are generated by
         `layer_refinement_specs` and lumped element.
@@ -2323,6 +2375,8 @@ class GridSpec(Tidy3dBaseModel):
             Simulation domain size.
         lumped_elements : List[LumpedElementType]
             List of lumped elements.
+        cached_corners_and_convexity : Optional[list[CachedCornersAndConvexity]]
+            Cached corners and convexity data.
 
         Returns
         -------
@@ -2337,9 +2391,15 @@ class GridSpec(Tidy3dBaseModel):
         override_structures = []
         # 1) from layer refinement spec
         if self.layer_refinement_used:
-            for layer_spec in self.layer_refinement_specs:
+            for ind, layer_spec in enumerate(self.layer_refinement_specs):
+                if cached_corners_and_convexity is not None:
+                    cached_data = cached_corners_and_convexity[ind]
+                else:
+                    cached_data = None
                 override_structures += layer_spec.generate_override_structures(
-                    self._min_vacuum_dl_in_autogrid(wavelength, sim_size), list(structures)
+                    self._min_vacuum_dl_in_autogrid(wavelength, sim_size),
+                    list(structures),
+                    cached_data,
                 )
         # 2) from lumped element
         for lumped_element in lumped_elements:

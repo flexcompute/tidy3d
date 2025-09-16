@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added support for `tidy3d-extras`, an optional plugin that enables more accurate local mode solving via subpixel averaging.
 
 ### Changed
+- `LayerRefinementSpec` defaults to assuming structures made of different materials are interior-disjoint for more efficient mesh generation.
 
 ### Fixed
 - Stricter validation for `bend_radius` in mode simulations, preventing the bend center from coinciding with the simulation boundary.

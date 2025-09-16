@@ -85,6 +85,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         structure_list: list[Structure],
         center: tuple[float, float] = [0, 0, 0],
         size: tuple[float, float, float] = [inf, inf, inf],
+        interior_disjoint_geometries: bool = False,
     ) -> list[tuple[Any, Shapely]]:
         """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, merge geometries made of PEC.
 
@@ -100,6 +101,8 @@ class CornerFinderSpec(Tidy3dBaseModel):
             Center of the 2D plane (coordinate along ``axis`` is ignored)
         size : Tuple[float, float, float] = [inf, inf, inf]
             Size of the 2D plane (size along ``axis`` is ignored)
+        interior_disjoint_geometries: bool = False
+            If ``True``, geometries on the plane must not be overlapping.
 
         Returns
         -------
@@ -123,7 +126,9 @@ class CornerFinderSpec(Tidy3dBaseModel):
             PEC if (mat.is_pec or isinstance(mat, LossyMetalMedium)) else mat for mat in medium_list
         ]
         # merge geometries
-        merged_geos = merging_geometries_on_plane(geometry_list, plane, medium_list)
+        merged_geos = merging_geometries_on_plane(
+            geometry_list, plane, medium_list, interior_disjoint_geometries
+        )
 
         return merged_geos
 
@@ -133,6 +138,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         coord: float,
         structure_list: list[Structure],
         ravel: bool,
+        interior_disjoint_geometries: bool = False,
     ) -> tuple[ArrayFloat2D, ArrayFloat1D]:
         """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, find out corners of merged
         geometries made of PEC.
@@ -148,6 +154,8 @@ class CornerFinderSpec(Tidy3dBaseModel):
             List of structures present in simulation.
         ravel : bool
             Whether to put the resulting corners in a single list or per polygon.
+        interior_disjoint_geometries: bool = False
+            If ``True``, geometries made of different materials on the plane must not be overlapping.
 
         Returns
         -------
@@ -157,7 +165,10 @@ class CornerFinderSpec(Tidy3dBaseModel):
 
         # merge geometries
         merged_geos = self._merged_pec_on_plane(
-            normal_axis=normal_axis, coord=coord, structure_list=structure_list
+            normal_axis=normal_axis,
+            coord=coord,
+            structure_list=structure_list,
+            interior_disjoint_geometries=interior_disjoint_geometries,
         )
 
         # corner finder
@@ -183,11 +194,14 @@ class CornerFinderSpec(Tidy3dBaseModel):
                     )
                     corner_list.append(corners_xy)
                     convexity_list.append(corners_convexity)
+        return self._ravel_corners_and_convexity(ravel, corner_list, convexity_list)
 
+    def _ravel_corners_and_convexity(
+        self, ravel: bool, corner_list, convexity_list
+    ) -> tuple[ArrayFloat2D, ArrayFloat1D]:
+        """Whether to put the resulting corners in a single list or per polygon."""
         if ravel and len(corner_list) > 0:
-            corner_list = np.concatenate(corner_list)
-            convexity_list = np.concatenate(convexity_list)
-
+            return np.concatenate(corner_list), np.concatenate(convexity_list)
         return corner_list, convexity_list
 
     def corners(
@@ -195,6 +209,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         normal_axis: Axis,
         coord: float,
         structure_list: list[Structure],
+        interior_disjoint_geometries: bool = False,
     ) -> ArrayFloat2D:
         """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, find out corners of merged
         geometries made of `medium`.
@@ -208,7 +223,8 @@ class CornerFinderSpec(Tidy3dBaseModel):
             Position of plane along the normal axis.
         structure_list : List[Structure]
             List of structures present in simulation.
-
+        interior_disjoint_geometries: bool = False
+            If ``True``, geometries made of different materials on the plane must not be overlapping.
         Returns
         -------
         ArrayFloat2D
@@ -216,7 +232,11 @@ class CornerFinderSpec(Tidy3dBaseModel):
         """
 
         corner_list, _ = self._corners_and_convexity(
-            normal_axis=normal_axis, coord=coord, structure_list=structure_list, ravel=True
+            normal_axis=normal_axis,
+            coord=coord,
+            structure_list=structure_list,
+            ravel=True,
+            interior_disjoint_geometries=interior_disjoint_geometries,
         )
         return corner_list
 
