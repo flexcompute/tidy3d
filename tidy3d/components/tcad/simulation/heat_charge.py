@@ -166,7 +166,7 @@ class HeatChargeSimulation(AbstractSimulation):
                with defined heat properties.
            * - ``Conduction``
              - The electrical conduction equation is solved with
-               specified boundary conditions such as ``SteadyVoltageBC``, ``SteadyCurrentBC``, ...
+               specified boundary conditions such as :class:`VoltageBC`, :class:`CurrentBC`, ...
            * - ``Charge``
              - Drift-diffusion equations are solved for structures containing
                a defined :class:`SemiconductorMedium`. Insulators with a

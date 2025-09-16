@@ -28,3 +28,11 @@ Monitor Data
    tidy3d.SteadyElectricFieldData
    tidy3d.SteadyCurrentDensityData
 
+Device Data
+^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+   tidy3d.DeviceCharacteristics

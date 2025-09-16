@@ -38,3 +38,12 @@ Placement
    tidy3d.MediumMediumInterface
    tidy3d.StructureSimulationBoundary
    tidy3d.SimulationBoundary
+
+Coefficient Models
+^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+   tidy3d.VerticalNaturalConvectionCoeffModel

@@ -98,9 +98,7 @@ class AbstractDopingBox(Box):
 
 class ConstantDoping(AbstractDopingBox):
     """
-    Sets constant doping :math:`N` in the specified box with a :parameter`size` and :parameter:`concentration`.
-
-    For translationally invariant behavior in one dimension, the box must have infinite size in the
+    Sets constant doping :math:`N` in the specified box with a :py:attr:`~.Box.size` and :py:attr:`concentration`. For translationally invariant behavior in one dimension, the box must have infinite size in the
     homogenous (invariant) direction.
 
     Example
@@ -139,22 +137,20 @@ class ConstantDoping(AbstractDopingBox):
 
 
 class GaussianDoping(AbstractDopingBox):
-    """Sets a gaussian doping in the specified box.
-
-    For translationally invariant behavior in one dimension, the box must have infinite size in the
+    """Sets a gaussian doping in the specified box. For translationally invariant behavior in one dimension, the box must have infinite size in the
     homogenous (invariant) direction.
 
     Notes
     -----
     The Gaussian doping concentration :math:`N` is defined in the following manner:
 
-    - :math:`N=N_{\\text{max}}` at locations more than :math:``width`` um away from the sides of the box.
+    - :math:`N=N_{\\text{max}}` at locations more than :math:`\\text{width}` um away from the sides of the box.
     - :math:`N=N_{\\text{ref}}` at location on the box sides.
-    - a Gaussian variation between :math:`N_{\\text{max}}` and  :math:`N_{\\text{ref}}`  at locations less than ``width``
+    - a Gaussian variation between :math:`N_{\\text{max}}` and  :math:`N_{\\text{ref}}`  at locations less than :math:`\\text{width}`
     um away from the sides.
 
     By definition, all sides of the box will have concentration :math:`N_{\\text{ref}}` (except the side specified
-    as source) and the center of the box (``width`` away from the box sides) will have a concentration
+    as source) and the center of the box (:math:`\\text{width}` away from the box sides) will have a concentration
     :math:`N_{\\text{max}}`.
 
     .. math::
@@ -203,8 +199,8 @@ class GaussianDoping(AbstractDopingBox):
     width: pd.PositiveFloat = pd.Field(
         title="Width of the gaussian.",
         description="Width of the gaussian. The concentration will transition from "
-        "'concentration' at the center of the box to 'ref_con' at the edge/face "
-        "of the box in a distance equal to 'width'. ",
+        "``concentration`` at the center of the box to ``ref_con`` at the edge/face "
+        "of the box in a distance equal to ``width``. ",
     )
 
     source: str = pd.Field(

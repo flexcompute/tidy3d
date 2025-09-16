@@ -605,8 +605,8 @@ class LinearChargePerturbation(ChargePerturbation):
 
         .. math::
 
-            \\Delta X (T) = \\text{electron\\_coeff} \\times (N_e - \\text{electron\\_ref})
-            + \\text{hole\\_coeff} \\times (N_h - \\text{hole\\_ref}),
+            \\Delta X (T) = \\text{electron_coeff} \\times (N_e - \\text{electron_ref})
+            + \\text{hole_coeff} \\times (N_h - \\text{hole_ref}),
 
         where ``electron_coeff`` and ``hole_coeff`` are the parameter's sensitivities to electron and
         hole densities, while ``electron_ref`` and ``hole_ref`` are reference electron and hole density
