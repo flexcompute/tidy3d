@@ -303,7 +303,7 @@ class SemiconductorMedium(AbstractChargeMedium):
     N_a: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
         0,
         title="Doping: Acceptor concentration",
-        description="Concentration of acceptor atoms, which create mobile holes, resulting in p-type material. "
+        description="Concentration of acceptor impurities, which create mobile holes, resulting in p-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
         "or a tuple of geometric shapes to define specific doped regions.",
         units="1/cm^3",
@@ -312,7 +312,7 @@ class SemiconductorMedium(AbstractChargeMedium):
     N_d: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
         0,
         title="Doping: Donor concentration",
-        description="Concentration of donor atoms, which create mobile electrons, resulting in n-type material. "
+        description="Concentration of donor impurities, which create mobile electrons, resulting in n-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
         "or a tuple of geometric shapes to define specific doped regions.",
         units="1/cm^3",
