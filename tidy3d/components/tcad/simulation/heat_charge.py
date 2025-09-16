@@ -320,6 +320,12 @@ class HeatChargeSimulation(AbstractSimulation):
         "specify Charge simulations or transient Heat simulations.",
     )
 
+    def _post_init_validators(self):
+        """Call validators taking ``self`` that get run after init."""
+
+        # Charge mesh size validator
+        self._estimate_charge_mesh_size()
+
     @pd.validator("structures", always=True)
     def check_unsupported_geometries(cls, val):
         """Error if structures contain unsupported yet geometries."""
@@ -930,23 +936,25 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return values
 
-    @pd.root_validator(skip_on_failure=True)
-    def estimate_charge_mesh_size(cls, values):
+    def _estimate_charge_mesh_size(self):
         """Make an estimate of the mesh size and raise a warning if too big.
         NOTE: this is a very rough estimate. The back-end will actually stop
         execution based on actual node-count."""
 
-        if TCADAnalysisTypes.CHARGE not in cls._check_simulation_types(values=values):
-            return values
+        if TCADAnalysisTypes.CHARGE not in self._get_simulation_types():
+            return
 
         # let's raise a warning if the estimate is larger than 2M nodes
         max_nodes = 2e6
         nodes_estimate = 0
 
-        structures = values["structures"]
-        grid_spec = values["grid_spec"]
+        structures = self.structures
+        grid_spec = self.grid_spec
 
         non_refined_structures = grid_spec.non_refined_structures
+
+        sim_center = self.center
+        sim_size = self.size
 
         if isinstance(grid_spec, UniformUnstructuredGrid):
             dl_min = grid_spec.dl
@@ -957,7 +965,11 @@ class HeatChargeSimulation(AbstractSimulation):
 
         for struct in structures:
             name = struct.name
-            bounds = struct.geometry.bounds
+            bounds = np.array(struct.geometry.bounds)
+            for dim in range(3):
+                bounds[0, dim] = max(bounds[0, dim], sim_center[dim] - sim_size[dim] / 2)
+                bounds[1, dim] = min(bounds[1, dim], sim_center[dim] + sim_size[dim] / 2)
+
             dl = dl_min
             if name in non_refined_structures:
                 dl = dl_max
@@ -980,7 +992,6 @@ class HeatChargeSimulation(AbstractSimulation):
                 "the pipeline will be stopped. If this happens the grid specification "
                 "may need to be modified."
             )
-        return values
 
     @pd.root_validator(skip_on_failure=True)
     def check_transient_heat(cls, values):
