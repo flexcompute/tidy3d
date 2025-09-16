@@ -18,6 +18,8 @@ from .transforms import angled_transform, radial_transform
 TOL_COMPLEX = 1e-10
 # Tolerance for eigs
 TOL_EIGS = fp_eps / 10
+# Tolerance for to consider modes as degenerate
+TOL_DEGENERATE = fp_eps * 10
 # Tolerance for deciding on the matrix to be diagonal or tensorial
 TOL_TENSORIAL = 1e-6
 # shift target neff by this value, both rel and abs, whichever results in larger shift
@@ -27,6 +29,9 @@ PRECONDITIONER = "Material"
 # Good conductor permittivity cut-off value. Let it be as large as possible so long as not causing overflow in
 # double precision. This value is very heuristic.
 GOOD_CONDUCTOR_CUT_OFF = 1e70
+# Whether to apply additional post-processing to degenerate modes
+# in order to ensure that they are orthogonal with respect to the EM dot definition
+ORTHOGONALIZE_DEGENERATE_MODES = True
 
 if TYPE_CHECKING:
     from scipy import sparse as sp
@@ -54,6 +59,7 @@ class EigSolver(Tidy3dBaseModel):
         direction="+",
         solver_basis_fields=None,
         plane_center: Optional[tuple[float, float]] = None,
+        conjugated_dot_product: bool = True,
     ) -> tuple[Numpy, Numpy, EpsSpecType]:
         """
         Solve for the modes of a waveguide cross-section.
@@ -93,6 +99,9 @@ class EigSolver(Tidy3dBaseModel):
             The center of the mode plane along the tangential axes of the global simulation. Used
             in case of bend modes to offset the coordinates correctly w.r.t. the bend radius, which
             is assumed to refer to the distance from the bend center to the mode plane center.
+        conjugated_dot_product : bool
+            Definition used for the dot product of electromagnetic modes. Currently, only used when
+            building an orthogonal basis from any identified degenerate mode groups.
 
         Returns
         -------
@@ -285,6 +294,17 @@ class EigSolver(Tidy3dBaseModel):
         E = E.reshape((3, Nx, Ny, 1, num_modes))
         H = np.sum(jac_h[..., None] * H[:, None, ...], axis=0)
         H = H.reshape((3, Nx, Ny, 1, num_modes))
+
+        if ORTHOGONALIZE_DEGENERATE_MODES:
+            # Identify and post-process degenerate modes
+            degenerate_groups = cls.identify_degenerate_eigenvalues(
+                neff + keff * 1j, TOL_DEGENERATE
+            )
+            print(degenerate_groups)
+            E, H = cls.make_orthogonal_basis_for_degenerate_modes(
+                degenerate_groups, E, H, dl_f, dl_b, conjugated_dot_product=True
+            )
+
         fields = np.stack((E, H), axis=0)
 
         neff = neff * np.linalg.norm(kp_to_k)
@@ -628,6 +648,7 @@ class EigSolver(Tidy3dBaseModel):
                 M=generalized_M,
                 basis_vecs=basis_vecs,
             )
+
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
 
         # Sort by descending neff
@@ -1088,6 +1109,91 @@ class EigSolver(Tidy3dBaseModel):
         if material_response is None:
             return False
         return np.any(np.abs(material_response) > GOOD_CONDUCTOR_THRESHOLD * np.abs(pec_val))
+
+    @staticmethod
+    def identify_degenerate_eigenvalues(
+        mode_indexes: np.ndarray,
+        tol: float,
+    ) -> list[tuple[int]]:
+        """Inspects mode indices to find groups of degenerate modes."""
+        num_modes = len(mode_indexes)
+        ungrouped = set(range(num_modes))
+        degenerate_groups = []
+
+        while ungrouped:
+            # Start a new group with an ungrouped column
+            seed = ungrouped.pop()
+            current_group = [seed]
+            # Find all columns similar to the seed of the current group
+            for col in list(ungrouped):
+                if np.isclose(mode_indexes[col], mode_indexes[seed], rtol=tol, atol=tol):
+                    current_group.append(col)
+                    ungrouped.remove(col)
+
+            # Only keep groups with more than one mode
+            if len(current_group) >= 2:
+                degenerate_groups.append(sorted(current_group))
+
+        return degenerate_groups
+
+    @staticmethod
+    def make_orthogonal_basis_for_degenerate_modes(
+        degenerate_groups: list[tuple[int]],
+        E_vec: np.ndarray,
+        H_vec: np.ndarray,
+        dl_primal: np.ndarray,
+        dl_dual: np.ndarray,
+        conjugated_dot_product: bool = True,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Ensures that groups of degenerate modes are orthogonal, which is not guaranteed for the eigenvectors
+        returned by scipy or the parallel versions of mode solvers."""
+        Ex = E_vec[0, ...]
+        Ey = E_vec[1, ...]
+        # Ez = E_vec[2, ...]
+
+        Hx = H_vec[0, ...]
+        Hy = H_vec[1, ...]
+        # Hz = H_vec[2, ...]
+
+        # Make the differential area elements, which are different for Ex(Hy) and Ey(Hx) on the Yee grid
+        Ex_Hy_dS = np.outer(dl_primal[0], dl_dual[1])
+        Ey_Hx_dS = np.outer(dl_dual[0], dl_primal[1])
+
+        def orthogonal_dot(mode_1: int, mode_2: int) -> complex:
+            """Discrete version of the modal overlap calculation."""
+            Ex_1 = Ex[..., mode_1]
+            Ey_1 = Ey[..., mode_1]
+            Hx_1 = Hx[..., mode_1]
+            Hy_1 = Hy[..., mode_1]
+            if conjugated_dot_product:
+                Ex_1 = Ex[..., mode_1].conj()
+                Ey_1 = Ey[..., mode_1].conj()
+                Hx_1 = Hx[..., mode_1].conj()
+                Hy_1 = Hy[..., mode_1].conj()
+
+            term1 = Ex_1 * Hy[..., mode_2] + Ex[..., mode_2] * Hy_1
+            term1 *= Ex_Hy_dS[..., np.newaxis]
+            term2 = Ey_1 * Hx[..., mode_2] + Ey[..., mode_2] * Hx_1
+            term2 *= Ey_Hx_dS[..., np.newaxis]
+            return np.sum(term1 - term2)
+
+        for degenerate_group in degenerate_groups:
+            num_degenerate_modes = len(degenerate_group)
+            # W is an overlap matrix of the degenerate modes, which should be normal
+            # where the left and right eigenvectors are the same.
+            W = np.zeros((num_degenerate_modes, num_degenerate_modes), dtype=E_vec.dtype)
+            for i in range(num_degenerate_modes):
+                for j in range(num_degenerate_modes):
+                    W[i, j] = orthogonal_dot(i, j)
+
+            # Eigenvectors of the overlap matrix correspond with an orthogonal basis composed of the
+            # raw modes
+            _, Q = np.linalg.eig(W)
+
+            E_vec[..., degenerate_group] = E_vec[..., degenerate_group] @ Q
+            H_vec[..., degenerate_group] = H_vec[..., degenerate_group] @ Q
+
+        return E_vec, H_vec
 
 
 def compute_modes(*args, **kwargs) -> tuple[Numpy, Numpy, str]:

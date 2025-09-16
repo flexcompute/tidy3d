@@ -709,6 +709,27 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return self.complex_flux.real
 
     @cached_property
+    def flux_yee(self) -> FluxDataArray:
+        """Flux for data corresponding to a 2D monitor."""
+
+        # Tangential fields are ordered as E1, E2, H1, H2
+        tan_fields = self._tangential_fields
+        dim1, dim2 = self._tangential_dims
+        e_x_h_pos1 = tan_fields["E" + dim1] * tan_fields["H" + dim2].conj()
+        e_x_h_pos2 = tan_fields["E" + dim2] * tan_fields["H" + dim1].conj()
+        cell_sizes = self.grid_expanded._primal_steps.to_dict
+        dual_cell_sizes = self.grid_expanded._dual_steps.to_dict
+        E1_H2_darea = np.outer(cell_sizes[dim1], dual_cell_sizes[dim2])
+        E2_H1_darea = np.outer(dual_cell_sizes[dim1], cell_sizes[dim2])
+
+        term1 = (e_x_h_pos1 * E1_H2_darea[:, :, np.newaxis, np.newaxis]).sum(dim=dim1).sum(dim=dim2)
+        term2 = (
+            -(e_x_h_pos2 * E2_H1_darea[:, :, np.newaxis, np.newaxis]).sum(dim=dim1).sum(dim=dim2)
+        )
+
+        return FluxDataArray((term1 + term2).real / 2)
+
+    @cached_property
     def mode_area(self) -> FreqModeDataArray:
         r"""Effective mode area corresponding to a 2D monitor.
 
@@ -788,6 +809,85 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
 
         return ModeAmpsDataArray(0.25 * integrand.sum(dim=d_area.dims))
+
+    def dot_yee(
+        self, field_data: Union[FieldData, ModeData, ModeSolverData], conjugate: bool = True
+    ) -> ModeAmpsDataArray:
+        r"""Dot product (modal overlap) with another :class:`.FieldData` object. Both datasets have
+        to be frequency-domain data associated with a 2D monitor. Along the tangential directions,
+        the datasets have to have the same discretization. Along the normal direction, the monitor
+        position may differ and is ignored. Other coordinates (``frequency``, ``mode_index``) have
+        to be either identical or broadcastable. Broadcasting is also supported in the case in
+        which the other ``field_data`` has a dimension of size 1 whose coordinate is not in the list
+        of coordinates in the ``self`` dataset along the corresponding dimension. In that case, the
+        coordinates of the ``self`` dataset are used in the output.
+
+        The dot product is defined as:
+
+        .. math:
+
+           \frac{1}{4} \int \left( E_0 \times H_1^* + H_0^* \times E_1 \) \, {\rm d}S
+
+        Parameters
+        ----------
+        field_data : :class:`ElectromagneticFieldData`
+            A data instance to compute the dot product with.
+        conjugate : bool, optional
+            If ``True`` (default), the dot product is defined as above. If ``False``, the definition
+            is similar, but without the complex conjugation of the $H$ fields.
+
+        Note
+        ----
+            The dot product with and without conjugation is equivalent (up to a phase) for
+            modes in lossless waveguides but differs for modes in lossy materials. In that case,
+            the conjugated dot product can be interpreted as the fraction of the power of the first
+            mode carried by the second, but modes are not orthogonal with respect to that product
+            and the sum of carried power fractions may be different from the total flux.
+            In the non-conjugated definition, modes are orthogonal, but the interpretation of the
+            dot product power carried by a given mode is no longer valid.
+        """
+
+        # Tangential fields for current and other field data
+        # fields_self = self._colocated_tangential_fields
+        fields_self = self._tangential_fields
+        # fields_self = {key: field.isel(z=0, drop=True) for key, field in self.field_components.items()}
+
+        if conjugate:
+            fields_self = {key: field.conj() for key, field in fields_self.items()}
+
+        # fields_other = field_data._interpolated_tangential_fields(self._plane_grid_boundaries)
+        fields_other = field_data._tangential_fields
+
+        # Drop size-1 dimensions in the other data
+        fields_other = {key: field.squeeze(drop=True) for key, field in fields_other.items()}
+
+        # Cross products of fields
+        dim1, dim2 = self._tangential_dims
+
+        E1xH2 = (
+            fields_self["E" + dim1] * fields_other["H" + dim2]
+            + fields_self["H" + dim2] * fields_other["E" + dim1]
+        )
+        E2xH1 = (
+            fields_self["E" + dim2] * fields_other["H" + dim1]
+            + fields_self["H" + dim1] * fields_other["E" + dim2]
+        )
+
+        cell_sizes = self.grid_expanded._primal_steps.to_dict
+        dual_cell_sizes = self.grid_expanded._dual_steps.to_dict
+
+        E1_H2_dS = np.outer(cell_sizes[dim1], dual_cell_sizes[dim2])
+        E2_H1_dS = np.outer(dual_cell_sizes[dim1], cell_sizes[dim2])
+
+        term1 = (
+            (E1xH2[:, :, ...] * E1_H2_dS[:, :, np.newaxis, np.newaxis]).sum(dim=dim1).sum(dim=dim2)
+        )
+        term2 = (
+            -(E2xH1[:, :, ...] * E2_H1_dS[:, :, np.newaxis, np.newaxis]).sum(dim=dim1).sum(dim=dim2)
+        )
+
+        # return (term1 + term2) / 4
+        return ModeAmpsDataArray(0.25 * (term1 + term2))
 
     def _interpolated_tangential_fields(self, coords: ArrayFloat2D) -> dict[str, DataArray]:
         """For 2D monitors, interpolate this fields to given coords in the tangential plane.
