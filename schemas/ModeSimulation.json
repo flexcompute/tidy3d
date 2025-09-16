@@ -7133,7 +7133,15 @@
           "type": "object"
         },
         "charge": {
-          "anyOf": [
+          "discriminator": {
+            "mapping": {
+              "ChargeConductorMedium": "#/definitions/ChargeConductorMedium",
+              "ChargeInsulatorMedium": "#/definitions/ChargeInsulatorMedium",
+              "SemiconductorMedium": "#/definitions/SemiconductorMedium"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
             {
               "$ref": "#/definitions/ChargeConductorMedium"
             },
@@ -7146,7 +7154,16 @@
           ]
         },
         "heat": {
-          "anyOf": [
+          "discriminator": {
+            "mapping": {
+              "FluidMedium": "#/definitions/FluidMedium",
+              "FluidSpec": "#/definitions/FluidSpec",
+              "SolidMedium": "#/definitions/SolidMedium",
+              "SolidSpec": "#/definitions/SolidSpec"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
             {
               "$ref": "#/definitions/FluidMedium"
             },
@@ -7165,7 +7182,34 @@
           "type": "string"
         },
         "optical": {
-          "anyOf": [
+          "discriminator": {
+            "mapping": {
+              "AnisotropicMedium": "#/definitions/AnisotropicMedium",
+              "AnisotropicMediumFromMedium2D": "#/definitions/AnisotropicMediumFromMedium2D",
+              "CustomAnisotropicMedium": "#/definitions/CustomAnisotropicMedium",
+              "CustomDebye": "#/definitions/CustomDebye",
+              "CustomDrude": "#/definitions/CustomDrude",
+              "CustomLorentz": "#/definitions/CustomLorentz",
+              "CustomMedium": "#/definitions/CustomMedium",
+              "CustomPoleResidue": "#/definitions/CustomPoleResidue",
+              "CustomSellmeier": "#/definitions/CustomSellmeier",
+              "Debye": "#/definitions/Debye",
+              "Drude": "#/definitions/Drude",
+              "FullyAnisotropicMedium": "#/definitions/FullyAnisotropicMedium",
+              "Lorentz": "#/definitions/Lorentz",
+              "LossyMetalMedium": "#/definitions/LossyMetalMedium",
+              "Medium": "#/definitions/Medium",
+              "Medium2D": "#/definitions/Medium2D",
+              "PECMedium": "#/definitions/PECMedium",
+              "PMCMedium": "#/definitions/PMCMedium",
+              "PerturbationMedium": "#/definitions/PerturbationMedium",
+              "PerturbationPoleResidue": "#/definitions/PerturbationPoleResidue",
+              "PoleResidue": "#/definitions/PoleResidue",
+              "Sellmeier": "#/definitions/Sellmeier"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
             {
               "$ref": "#/definitions/AnisotropicMedium"
             },

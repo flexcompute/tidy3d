@@ -10,6 +10,7 @@ from tidy3d.components.material.solver_types import (
     HeatMediumType,
     OpticalMediumType,
 )
+from tidy3d.components.types.base import TYPE_TAG_STR
 
 
 class MultiPhysicsMedium(Tidy3dBaseModel):
@@ -83,7 +84,10 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
     name: Optional[str] = pd.Field(None, title="Name", description="Medium name")
 
     optical: Optional[OpticalMediumType] = pd.Field(
-        None, title="Optical properties", description="Specifies optical properties."
+        None,
+        title="Optical properties",
+        description="Specifies optical properties.",
+        discriminator=TYPE_TAG_STR,
     )
 
     # electrical: Optional[ElectricalMediumType] = pd.Field(
@@ -93,11 +97,17 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
     # )
 
     heat: Optional[HeatMediumType] = pd.Field(
-        None, title="Heat properties", description="Specifies properties for Heat simulations."
+        None,
+        title="Heat properties",
+        description="Specifies properties for Heat simulations.",
+        discriminator=TYPE_TAG_STR,
     )
 
     charge: Optional[ChargeMediumType] = pd.Field(
-        None, title="Charge properties", description="Specifies properties for Charge simulations."
+        None,
+        title="Charge properties",
+        description="Specifies properties for Charge simulations.",
+        discriminator=TYPE_TAG_STR,
     )
 
     def __getattr__(self, name: str):
