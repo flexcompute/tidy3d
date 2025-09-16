@@ -68,8 +68,8 @@ class EMEMonitor(AbstractMonitor, ABC):
         "Not all monitors support values different from 1.",
     )
 
-    colocate: Literal[True] = Field(
-        True,
+    colocate: Literal[False] = pd.Field(
+        False,
         title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
         "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
@@ -161,8 +161,8 @@ class EMEModeSolverMonitor(EMEMonitor):
         "Not all monitors support values different from 1.",
     )
 
-    colocate: bool = Field(
-        True,
+    colocate: bool = pd.Field(
+        False,
         title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default (False) is used internally in EME propagation.",
@@ -239,8 +239,8 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
         "EME field monitor.",
     )
 
-    colocate: bool = Field(
-        True,
+    colocate: bool = pd.Field(
+        False,
         title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default (False) is used internally in EME propagation.",

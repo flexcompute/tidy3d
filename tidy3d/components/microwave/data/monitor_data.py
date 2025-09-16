@@ -380,15 +380,36 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
         """
         self._check_fields_stored(["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"])
 
-        tan_fields = self._colocated_tangential_fields
         dim1, dim2 = self._tangential_dims
-        e1 = tan_fields["E" + dim1]
-        e2 = tan_fields["E" + dim2]
-        diff_area = self._diff_area
-        field_int = [np.abs(e_field) ** 2 for e_field in [e1, e2]]
-        tangential_intensity = (diff_area * (field_int[0] + field_int[1])).sum(
-            dim=self._tangential_dims
+
+        # Get fields based on colocate setting
+        if self.monitor.colocate:
+            fields = self._colocated_tangential_fields
+        else:
+            fields = self._tangential_fields
+
+        # Get differential area elements (handles both colocated and non-colocated)
+        dS_E1H2, dS_E2H1, _, _ = self._diff_area
+        # Add coordinates from field arrays for proper xarray broadcasting
+        e1_coords = fields["E" + dim1].coords
+        e2_coords = fields["E" + dim2].coords
+        dS_E1 = xr.DataArray(
+            dS_E1H2.values,
+            coords={dim1: e1_coords[dim1], dim2: e1_coords[dim2]},
         )
+        dS_E2 = xr.DataArray(
+            dS_E2H1.values,
+            coords={dim1: e2_coords[dim1], dim2: e2_coords[dim2]},
+        )
+
+        e1 = fields["E" + dim1]
+        e2 = fields["E" + dim2]
+
+        # Integrate |E|² with proper area elements at each Yee location
+        intensity_E1 = (np.abs(e1) ** 2 * dS_E1).sum(dim=self._tangential_dims)
+        intensity_E2 = (np.abs(e2) ** 2 * dS_E2).sum(dim=self._tangential_dims)
+        tangential_intensity = intensity_E1 + intensity_E2
+
         direction = self.monitor.store_fields_direction
         P = self.complex_flux if direction == "+" else -self.complex_flux
         Z_wave = tangential_intensity / P / 2

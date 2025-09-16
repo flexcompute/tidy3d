@@ -136,16 +136,18 @@ class ImpedanceCalculator(MicrowaveBaseModel):
             flux_sign = 1 if em_field.monitor.store_fields_direction == "+" else -1
 
         if self.voltage_integral is None:
-            flux = flux_sign * em_field.complex_flux
             if isinstance(em_field, FieldTimeData):
+                flux = flux_sign * em_field.flux
                 impedance = flux / np.real(current) ** 2
             else:
+                flux = flux_sign * em_field.complex_flux
                 impedance = 2 * flux / (current * np.conj(current))
         elif self.current_integral is None:
-            flux = flux_sign * em_field.complex_flux
             if isinstance(em_field, FieldTimeData):
+                flux = flux_sign * em_field.flux
                 impedance = np.real(voltage) ** 2 / flux
             else:
+                flux = flux_sign * em_field.complex_flux
                 impedance = (voltage * np.conj(voltage)) / (2 * np.conj(flux))
         else:
             if isinstance(em_field, FieldTimeData):

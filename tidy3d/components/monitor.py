@@ -877,6 +877,14 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
         description="Surfaces to exclude in the integration, if a volume monitor.",
     )
 
+    colocate: bool = pydantic.Field(
+        True,
+        title="Colocate Fields",
+        description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
+        "primal grid). Can be toggled for field recording monitors and is hard-coded for other "
+        "monitors depending on their specific function.",
+    )
+
     @property
     def integration_surfaces(self) -> list[SurfaceIntegrationMonitor]:
         """Surfaces of the monitor where fields will be recorded for subsequent integration."""

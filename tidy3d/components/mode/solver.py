@@ -8,6 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.data.utils import _dot_numpy, _outer_dot_numpy
 from tidy3d.constants import C_0, ETA_0, fp_eps, pec_val
 
 from .derivatives import create_d_matrices as d_mats
@@ -1248,27 +1249,22 @@ class EigSolver(Tidy3dBaseModel):
     def _dot(
         E: np.ndarray,
         H: np.ndarray,
-        dl_primal: np.ndarray,
-        dl_dual: np.ndarray,
+        dl_primal: list[np.ndarray],
+        dl_dual: list[np.ndarray],
         mode_1: int,
         mode_2: int,
     ) -> complex:
         """Dot product based on the bi-orthogonality relationship between E and H."""
-        # Extract field components
-        Ex = E[0, ...]
-        Ey = E[1, ...]
-        Hx = H[0, ...]
-        Hy = H[1, ...]
-
         # Make the differential area elements
-        Ex_Hy_dS = np.outer(dl_primal[0], dl_dual[1])
-        Ey_Hx_dS = np.outer(dl_dual[0], dl_primal[1])
+        dS = (np.outer(dl_primal[0], dl_dual[1]), np.outer(dl_dual[0], dl_primal[1]))
 
-        term1 = Ex[..., mode_1] * Hy[..., mode_2] + Ex[..., mode_2] * Hy[..., mode_1]
-        term1 *= Ex_Hy_dS
-        term2 = Ey[..., mode_1] * Hx[..., mode_2] + Ey[..., mode_2] * Hx[..., mode_1]
-        term2 *= Ey_Hx_dS
-        return (1 / 4) * np.sum(term1 - term2)
+        # Extract tangential field components for the two modes as tuples
+        E1 = (E[0, ..., mode_1], E[1, ..., mode_1])
+        H1 = (H[0, ..., mode_1], H[1, ..., mode_1])
+        E2 = (E[0, ..., mode_2], E[1, ..., mode_2])
+        H2 = (H[0, ..., mode_2], H[1, ..., mode_2])
+
+        return _dot_numpy(E1, H1, E2, H2, dS, conjugate=False)
 
     @staticmethod
     def _cauchy_schwarz_dot_bound(
@@ -1320,8 +1316,8 @@ class EigSolver(Tidy3dBaseModel):
     def _outer_dot(
         E: np.ndarray,
         H: np.ndarray,
-        dl_primal: np.ndarray,
-        dl_dual: np.ndarray,
+        dl_primal: list[np.ndarray],
+        dl_dual: list[np.ndarray],
         mode_indices: set[int],
     ) -> np.ndarray:
         """Vectorized modal overlap matrix calculation for a set of modes.
@@ -1334,52 +1330,16 @@ class EigSolver(Tidy3dBaseModel):
         """
         # Convert set to sorted list for consistent indexing
         mode_list = sorted(mode_indices)
-        n_modes = len(mode_list)
 
-        # Extract field components
-        Ex_sel = E[0][..., mode_list]  # (Nx, Ny, 1, n)
-        Ey_sel = E[1][..., mode_list]
-        Hx_sel = H[0][..., mode_list]
-        Hy_sel = H[1][..., mode_list]
+        # Extract tangential field components as tuples
+        # Fancy indexing with mode_list moves mode dimension to front: (n_modes, Nx, Ny)
+        E_tan = (E[0, ..., mode_list], E[1, ..., mode_list])
+        H_tan = (H[0, ..., mode_list], H[1, ..., mode_list])
 
         # Make the differential area elements
-        Ex_Hy_dS = np.outer(dl_primal[0], dl_dual[1])
-        Ey_Hx_dS = np.outer(dl_dual[0], dl_primal[1])
+        dS = (np.outer(dl_primal[0], dl_dual[1]), np.outer(dl_dual[0], dl_primal[1]))
 
-        # Initialize output matrix
-        dtype = Ex_sel.dtype
-        S = np.zeros((n_modes, n_modes), dtype=dtype)
-
-        # Only compute upper triangle (including diagonal)
-        for i in range(n_modes):
-            # Vectorize over j >= i
-            j_indices = np.arange(i, n_modes)
-
-            # Extract mode i fields
-            Ex_i = Ex_sel[..., i : i + 1]  # (Nx, Ny, 1, 1)
-            Ey_i = Ey_sel[..., i : i + 1]
-            Hy_i = Hy_sel[..., i : i + 1]
-            Hx_i = Hx_sel[..., i : i + 1]
-
-            # Extract mode j fields (vectorized for j >= i)
-            Ex_j = Ex_sel[..., j_indices]  # (Nx, Ny, 1, n_j)
-            Ey_j = Ey_sel[..., j_indices]
-            Hy_j = Hy_sel[..., j_indices]
-            Hx_j = Hx_sel[..., j_indices]
-
-            # Compute term1: (Ex[i] * Hy[j] + Ex[j] * Hy[i]) * dS
-            term1 = (Ex_i * Hy_j + Ex_j * Hy_i) * Ex_Hy_dS[..., np.newaxis]
-
-            # Compute term2: (Ey[i] * Hx[j] + Ey[j] * Hx[i]) * dS
-            term2 = (Ey_i * Hx_j + Ey_j * Hx_i) * Ey_Hx_dS[..., np.newaxis]
-
-            # Sum over spatial dimensions to get S[i, j] for j >= i
-            S[i, j_indices] = (1 / 4) * np.sum(term1 - term2, axis=(0, 1))
-
-        # Fill lower triangle by symmetry
-        S = S + S.T - np.diag(np.diag(S))
-
-        return S
+        return _outer_dot_numpy(E_tan, H_tan, E_tan, H_tan, dS, conjugate=False)
 
     @staticmethod
     def _normalize_modes(

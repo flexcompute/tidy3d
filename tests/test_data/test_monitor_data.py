@@ -1256,3 +1256,182 @@ def test_symmetry_expansion_no_interpolation_warning():
 
     with AssertLogLevel(None):
         _ = field_data.symmetry_expanded_copy
+
+
+@pytest.mark.parametrize("colocate", [True, False])
+@pytest.mark.parametrize("sim_2d", [False, True])
+def test_diff_area_elements(colocate, sim_2d):
+    """Test differential area elements for different colocate and simulation dimension settings.
+
+    Tests that:
+    1. All 4 area elements are returned with correct shapes
+    2. For colocate=True, all 4 elements are identical
+    3. Total integrated area is consistent between methods
+    4. For 2D simulations (1 grid point in y), the unit handling (size=1.0) works correctly
+    5. Non-uniform mesh produces different primal/dual cell sizes (for non-colocated)
+    """
+    # Set up simulation and monitor sizes
+    if sim_2d:
+        # 2D simulation: y=0 means only 1 grid point in y direction
+        # Monitor is in x=0 plane with tangential dims y and z
+        # The y dimension will have only 1 grid point, triggering the 2D handling
+        sim_size = (4.0, 0, 3.0)
+        monitor_size = (0, td.inf, 3.0)  # inf in y to cover full sim
+    else:
+        # 3D simulation: both y and z dimensions are nonzero
+        sim_size = (4.0, 2.0, 3.0)
+        monitor_size = (0, 2.0 - np.pi / 10, 3.0 - np.pi / 10)
+    monitor_center = (0, 0, 0)
+
+    # Create a structure to induce non-uniform meshing
+    # A small box near the edge will cause mesh refinement in that region
+    structure = td.Structure(
+        geometry=td.Box(center=(0, 0.3, 0.5), size=(0.5, 0.3, 0.3)),
+        medium=td.Medium(permittivity=4.0),
+    )
+
+    # Use GridSpec.auto with override to create non-uniform mesh
+    # The structure will cause finer mesh near it, coarser elsewhere
+    grid_spec = td.GridSpec.auto(
+        wavelength=3.0,  # Large wavelength for coarse base mesh
+        min_steps_per_wvl=6,
+        override_structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0.3, 0.5), size=(0.6, 0.4, 0.4)),
+                medium=td.Medium(permittivity=4.0),
+            )
+        ],
+    )
+
+    # Create simulation with non-uniform grid
+    sim = td.Simulation(
+        size=sim_size,
+        run_time=1e-12,
+        grid_spec=grid_spec,
+        structures=[structure],
+        sources=[
+            td.PointDipole(
+                source_time=td.GaussianPulse(freq0=1e14, fwidth=1e13),
+                polarization="Ez",
+                center=(0.1, 0, 0),
+            )
+        ],
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+
+    # Create field monitor
+    monitor = td.FieldMonitor(
+        size=monitor_size,
+        center=monitor_center,
+        freqs=[1e14],
+        name="field_monitor",
+        colocate=colocate,
+    )
+
+    # Get grid for monitor
+    grid = sim.discretize_monitor(monitor)
+
+    # Create field data arrays with appropriate coordinates
+    def make_field_array(field_name):
+        x, y, z = grid[field_name].to_list
+        shape = (len(x), len(y), len(z), 1)
+        data = np.random.rand(*shape) + 1j * np.random.rand(*shape)
+        return td.ScalarFieldDataArray(data, coords={"x": x, "y": y, "z": z, "f": [1e14]})
+
+    field_data = FieldData(
+        monitor=monitor,
+        Ex=make_field_array("Ex"),
+        Ey=make_field_array("Ey"),
+        Ez=make_field_array("Ez"),
+        Hx=make_field_array("Hx"),
+        Hy=make_field_array("Hy"),
+        Hz=make_field_array("Hz"),
+        symmetry=(0, 0, 0),
+        symmetry_center=(0, 0, 0),
+        grid_expanded=grid,
+    )
+
+    # Get differential areas
+    diff_area = field_data._diff_area
+    assert len(diff_area) == 4, "Should return 4 area elements"
+    dS_EuHv, dS_EvHu, dS_Ez, dS_Hz = diff_area
+
+    # Get tangential dimensions
+    tan_dims = field_data._tangential_dims
+    assert len(tan_dims) == 2
+
+    # Check that all areas have correct dimensions
+    for dS in diff_area:
+        assert set(dS.dims) == set(tan_dims), f"Area dimensions should be {tan_dims}"
+    # Additional check: all area values should be non-negative
+    for dS in diff_area:
+        assert np.all(dS.values >= 0), "All area elements should be non-negative"
+
+    # For colocated monitors, all 4 elements should be identical
+    if colocate:
+        np.testing.assert_allclose(dS_EuHv.values, dS_EvHu.values, rtol=1e-10)
+        np.testing.assert_allclose(dS_EuHv.values, dS_Ez.values, rtol=1e-10)
+        np.testing.assert_allclose(dS_EuHv.values, dS_Hz.values, rtol=1e-10)
+
+    # Test that _diff_area_at_boundaries returns all identical elements
+    dS_boundaries = field_data._diff_area_at_boundaries()
+
+    for i in range(1, 4):
+        np.testing.assert_allclose(dS_boundaries[0].values, dS_boundaries[i].values, rtol=1e-10)
+
+    # Test total integrated area consistency
+    # For a rectangular monitor, the total area should be approximately monitor_size[1] * monitor_size[2]
+    # (allowing for grid discretization effects)
+    # For 2D sims (y=0), the y dimension has size 1.0 for unit handling (W/um instead of W)
+    if sim_2d:
+        # 2D sim: y dim uses 1.0 multiplier for unit handling
+        expected_area = 1.0 * monitor_size[2]  # y=1.0, z=monitor_size[2]
+    else:
+        expected_area = monitor_size[1] * monitor_size[2]
+
+    # Total area from boundaries method
+    total_area_boundaries = float(dS_boundaries[0].sum())
+
+    # Total area from yee positions method
+    dS_yee = field_data._diff_area_at_yee_positions(truncate_to_monitor_bounds=True)
+    # For Yee grid, sum of cell×dual and dual×cell should both give consistent total areas
+    # when summed over the integration domain
+    total_area_EuHv = float(dS_yee[0].sum())
+    total_area_EvHu = float(dS_yee[1].sum())
+    total_area_Ez = float(dS_yee[2].sum())
+    total_area_Hz = float(dS_yee[3].sum())
+
+    # All total areas be the expected monitor area
+    rtol = 1e-12  # Allow 15% tolerance for discretization effects
+    np.testing.assert_allclose(total_area_boundaries, expected_area, rtol=rtol)
+    np.testing.assert_allclose(total_area_EuHv, expected_area, rtol=rtol)
+    np.testing.assert_allclose(total_area_EvHu, expected_area, rtol=rtol)
+    np.testing.assert_allclose(total_area_Ez, expected_area, rtol=rtol)
+    np.testing.assert_allclose(total_area_Hz, expected_area, rtol=rtol)
+
+    np.testing.assert_allclose(total_area_EuHv, total_area_boundaries, rtol=rtol)
+    np.testing.assert_allclose(total_area_EvHu, total_area_boundaries, rtol=rtol)
+    np.testing.assert_allclose(total_area_Ez, total_area_boundaries, rtol=rtol)
+    np.testing.assert_allclose(total_area_Hz, total_area_boundaries, rtol=rtol)
+
+    # For non-colocated monitors, the _diff_area should return the Yee grid areas
+    if not colocate:
+        np.testing.assert_allclose(dS_EuHv.values, dS_yee[0].values, rtol=rtol)
+        np.testing.assert_allclose(dS_EvHu.values, dS_yee[1].values, rtol=rtol)
+        np.testing.assert_allclose(dS_Ez.values, dS_yee[2].values, rtol=rtol)
+        np.testing.assert_allclose(dS_Hz.values, dS_yee[3].values, rtol=rtol)
+
+        # For non-colocated 3D monitors with non-uniform mesh, the 4 differential areas
+        # should be different from each other (cell×dual ≠ dual×cell ≠ cell×cell ≠ dual×dual)
+        if not sim_2d:
+            # Verify the mesh is actually non-uniform by checking areas differ
+            assert not np.allclose(dS_EuHv.values, dS_EvHu.values), (
+                "Non-uniform mesh should produce different areas for EuHv vs EvHu"
+            )
+            assert not np.allclose(dS_Ez.values, dS_Hz.values), (
+                "Non-uniform mesh should produce different areas for Ez vs Hz"
+            )
+
+    # For colocated monitors, _diff_area should return boundary areas
+    if colocate:
+        np.testing.assert_allclose(dS_EuHv.values, dS_boundaries[0].values, rtol=rtol)
