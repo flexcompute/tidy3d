@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from enum import Enum
 from math import isclose
 from typing import Any, Optional, Union
 
 import numpy as np
 import pydantic
+import shapely
 
 from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.base import Tidy3dBaseModel
@@ -45,6 +47,7 @@ def merging_geometries_on_plane(
     geometries: list[GeometryType],
     plane: Box,
     property_list: list[Any],
+    interior_disjoint_geometries: bool = False,
 ) -> list[tuple[Any, Shapely]]:
     """Compute list of shapes on plane. Overlaps are removed or merged depending on
     provided property_list.
@@ -57,6 +60,8 @@ def merging_geometries_on_plane(
         Plane specification.
     property_list : List = None
         Property value for each structure.
+    interior_disjoint_geometries: bool = False
+        If ``True``, geometries of different properties on the plane must not be overlapping.
 
     Returns
     -------
@@ -77,6 +82,20 @@ def merging_geometries_on_plane(
         # Append each of them and their property information to the list of shapes
         for shape in shapes_plane:
             shapes.append((prop, shape, shape.bounds))
+
+    if interior_disjoint_geometries:
+        # No need to consider overlapping. We simply group shapes by property, and union_all
+        # shapes of the same property.
+        shapes_by_prop = defaultdict(list)
+        for prop, shape, _ in shapes:
+            shapes_by_prop[prop].append(shape)
+        # union shapes of same property
+        results = []
+        for prop, shapes in shapes_by_prop.items():
+            unionized = shapely.union_all(shapes).buffer(0).normalize()
+            if not unionized.is_empty:
+                results.append((prop, unionized))
+        return results
 
     background_shapes = []
     for prop, shape, bounds in shapes:

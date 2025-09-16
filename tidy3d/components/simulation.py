@@ -111,6 +111,8 @@ from .structure import MeshOverrideStructure, Structure
 from .subpixel_spec import SubpixelSpec
 from .types import (
     TYPE_TAG_STR,
+    ArrayFloat1D,
+    ArrayFloat2D,
     Ax,
     Axis,
     CoordinateOptional,
@@ -970,6 +972,20 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         return pml_thicknesses
 
     @cached_property
+    def _internal_layerfinement_corners_and_convexity_2d(
+        self,
+    ) -> list[tuple[list[ArrayFloat2D], list[ArrayFloat1D]]]:
+        """Internal inplane corners and their convexity for each layer_refinement_specs."""
+        cached_data = []
+        for layer in self.grid_spec.layer_refinement_specs:
+            cached_data.append(
+                layer._corners_and_convexity_2d(
+                    structure_list=self.scene.all_structures, ravel=False
+                )
+            )
+        return cached_data
+
+    @cached_property
     def internal_override_structures(self) -> list[MeshOverrideStructure]:
         """Internal mesh override structures. So far, internal override structures all come from `layer_refinement_specs`.
 
@@ -984,6 +1000,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             wavelength,
             self.geometry.size,
             self.lumped_elements,
+            self._internal_layerfinement_corners_and_convexity_2d,
         )
 
     @cached_property
@@ -996,7 +1013,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             List of snapping points coordinates.
         """
         return self.grid_spec.internal_snapping_points(
-            self.scene.all_structures, self.lumped_elements
+            self.scene.all_structures,
+            self.lumped_elements,
+            self._internal_layerfinement_corners_and_convexity_2d,
         )
 
     @equal_aspect
