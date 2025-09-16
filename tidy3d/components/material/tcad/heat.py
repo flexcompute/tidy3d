@@ -47,25 +47,15 @@ class AbstractHeatMedium(ABC, Tidy3dBaseModel):
 
 class FluidMedium(AbstractHeatMedium):
     """Fluid medium. Heat simulations will not solve for temperature
-    in a structure that has a medium with this 'heat_spec'.
+    in a structure that has a medium with this ``heat_spec``.
 
+
+    Notes
+    --------
     The full set of parameters is primarily intended for calculations involving natural
     convection, where they are used to determine the heat transfer coefficient.
     In the current version, these specific properties may not be utilized for
     other boundary condition types.
-
-    Attributes
-    ----------
-    thermal_conductivity : float, optional
-        Thermal conductivity ($k$) of the fluid in $W/(\\mu m \\cdot K)$.
-    viscosity : float, optional
-        Dynamic viscosity ($\\mu$) of the fluid in $kg/(\\mu m \\cdot s)$.
-    specific_heat : float, optional
-        Specific heat ($c_p$) of the fluid in $\\mu m^2/(s^2 \\cdot K)$.
-    density : float, optional
-        Density ($\rho$) of the fluid in $kg/\\mu m^3$.
-    expansivity : float, optional
-        Thermal expansion coefficient ($\beta$) of the fluid in $1/K$.
 
     Examples
     --------

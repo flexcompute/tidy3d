@@ -45,3 +45,6 @@ Individual Datasets
    tidy3d.PointDataArray
    tidy3d.CellDataArray
    tidy3d.IndexedDataArray
+   tidy3d.IndexedVoltageDataArray
+   tidy3d.IndexedTimeDataArray
+   tidy3d.IndexedFieldVoltageDataArray

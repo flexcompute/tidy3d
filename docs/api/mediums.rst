@@ -139,6 +139,7 @@ Anisotropic
    :template: module.rst
 
    tidy3d.AnisotropicMedium
+   tidy3d.AnisotropicMediumFromMedium2D
    tidy3d.FullyAnisotropicMedium
    tidy3d.Medium2D
 
@@ -403,7 +404,7 @@ Multiphysics Medium
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.components.material.multi_physics.MultiPhysicsMedium
+   tidy3d.MultiPhysicsMedium
 
 This section is still under construction. 
 

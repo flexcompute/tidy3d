@@ -30,7 +30,7 @@ class TemperatureBC(HeatChargeBC):
 
     temperature: pd.PositiveFloat = pd.Field(
         title="Temperature",
-        description=f"Temperature value in units of {KELVIN}.",
+        description="Temperature value.",
         units=KELVIN,
     )
 
@@ -46,7 +46,7 @@ class HeatFluxBC(HeatChargeBC):
 
     flux: float = pd.Field(
         title="Heat Flux",
-        description=f"Heat flux value in units of {HEAT_FLUX}.",
+        description="Heat flux value.",
         units=HEAT_FLUX,
     )
 
@@ -55,19 +55,26 @@ class VerticalNaturalConvectionCoeffModel(Tidy3dBaseModel):
     """
     Specification for natural convection from a vertical plate.
 
+    Notes
+    -----
+
     This class calculates the heat transfer coefficient (h) based on fluid
     properties and an expected temperature difference, then provides these
-    values as 'base' and 'exponent' for a generalized heat flux equation
-    q = base * (T_surf - T_fluid)^exponent + base * (T_surf - T_fluid).
+    values as  :math:`\\text{base_l}`,  :math:`\\text{base_nl}`, and  :math:`\\text{exponent}`  for a generalized heat flux equation
+
+    .. math::
+
+        q = \\text{base_nl} * (T_\\text{surf} - T_\\text{fluid})^\\text{exponent} + \\text{base}_{l} * (T_\\text{surf}- T_\\text{fluid}).
+
     """
 
     medium: FluidMedium = pd.Field(
         default=None,
         title="Interface medium",
         description=(
-            "The `FluidMedium` used for the heat transfer coefficient calculation. "
+            "The :class:`FluidMedium` used for the heat transfer coefficient calculation. "
             "If `None`, the fluid is automatically deduced from the interface, which can be defined"
-            "by either a `MediumMediumInterface` or a `StructureStructureInterface`."
+            "by either a :class:`MediumMediumInterface` or a :class:`StructureStructureInterface`."
         ),
     )
 
@@ -151,12 +158,12 @@ class ConvectionBC(HeatChargeBC):
 
     ambient_temperature: pd.PositiveFloat = pd.Field(
         title="Ambient Temperature",
-        description=f"Ambient temperature value in units of {KELVIN}.",
+        description="Ambient temperature.",
         units=KELVIN,
     )
 
     transfer_coeff: Union[pd.NonNegativeFloat, VerticalNaturalConvectionCoeffModel] = pd.Field(
         title="Heat Transfer Coefficient",
-        description=f"Heat flux value in units of {HEAT_TRANSFER_COEFF}.",
+        description="Heat transfer coefficient value.",
         units=HEAT_TRANSFER_COEFF,
     )

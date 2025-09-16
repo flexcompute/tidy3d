@@ -60,6 +60,6 @@ class SlotboomBandGapNarrowing(Tidy3dBaseModel):
         ...,
         title="Minimum total doping",
         description="Bandgap narrowing is applied at location where total doping "
-        "is higher than 'min_N'.",
+        "is higher than ``min_N``.",
         units=PERCMCUBE,
     )
