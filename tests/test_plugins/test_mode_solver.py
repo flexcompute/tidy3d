@@ -259,8 +259,16 @@ def compare_colocation(ms):
     data_at_boundaries = ms_nocol.sim_data.at_boundaries(MODE_MONITOR_NAME)
 
     for key, field in data_col.field_components.items():
-        # Check the colocated data is the same
-        assert np.allclose(data_at_boundaries[key], field, atol=1e-7)
+        # Normalize both fields per-mode and per-frequency to the same peak value
+        # (colocate=True and colocate=False may have different normalizations)
+        field_at_boundaries = data_at_boundaries[key]
+        # Get dims to reduce over (all except mode_index and f)
+        reduce_dims = [d for d in field.dims if d not in ("mode_index", "f")]
+        max_field = np.abs(field).max(dim=reduce_dims)
+        max_at_boundaries = np.abs(field_at_boundaries).max(dim=reduce_dims)
+        field_normalized = field / max_field
+        field_at_boundaries_normalized = field_at_boundaries / max_at_boundaries
+        assert np.allclose(field_at_boundaries_normalized, field_normalized, atol=1e-7)
 
         # Also check coordinates
         for dim, coords1 in field.coords.items():
@@ -1642,6 +1650,8 @@ def test_degenerate_mode_processing():
         mode_spec=mode_spec,
         freqs=[freq0],
         direction="+",
+        colocate=False,
+        conjugated_dot_product=False,
     )
 
     mode_data = ms.data_raw
@@ -1652,7 +1662,7 @@ def test_degenerate_mode_processing():
     assert len(degen_sets) == 1
 
     S = mode_data.outer_dot(mode_data, conjugate=False).isel(f=0).values
-    threshold = 1e-7
+    threshold = 1e-9
     off_diag_mask = ~np.eye(S.shape[0], dtype=bool)
     large_vals = np.abs(S) > threshold
     problem_mask = off_diag_mask & large_vals

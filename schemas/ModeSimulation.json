@@ -8228,6 +8228,14 @@
           ],
           "default": null
         },
+        "normalization_grid": {
+          "default": "colocated",
+          "enum": [
+            "colocated",
+            "staggered"
+          ],
+          "type": "string"
+        },
         "num_freqs": {
           "default": 1,
           "maximum": 20,

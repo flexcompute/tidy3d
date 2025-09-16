@@ -130,6 +130,16 @@ SIM = td.Simulation(
     boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
 )
 
+SIM_2D = td.Simulation(
+    size=(SIZE_3D[0], 0, SIZE_3D[2]),
+    run_time=RUN_TIME,
+    grid_spec=GRID_SPEC,
+    symmetry=(0, 0, 0),
+    sources=[SOURCES[0]],
+    structures=STRUCTURES,
+    boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+)
+
 """ Generate the data arrays (used in other test files) """
 
 

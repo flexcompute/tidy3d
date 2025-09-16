@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `DesignSpace` support for sweeping `WorkflowType` objects, including mode/EME simulations and component modelers.
 - Added `current_amplitude_definition` parameter to `UniformCurrentSource` for size-independent total current injection. Set to `"total"` to interpret the source amplitude as total current rather than current density.
 - Added baseband source time classes (`BasebandStep`, `BasebandGaussianPulse`, `BasebandRectangularPulse`, `BasebandCustomSourceTime`) for transient RF simulations with real-valued time signals.
+- Monitors with `colocate=False` now compute flux, dot product, and outer dot product directly on the
+  Yee grid without interpolation, improving accuracy.
+- Added `normalization_grid` field on `PlaneWave`, `GaussianBeam`, `AstigmaticGaussianBeam`,
+  `ModeSource`, and `TFSF` sources. Set to `"staggered"` to match monitors with `colocate=False`,
+  or keep the default `"colocated"` to match monitors with `colocate=True`. Using the same grid
+  for both source normalization and monitor computation gives the most consistent results.
 
 ### Breaking Changes
 - `web.Batch(simulations=...)` now requires string task names when simulations are passed as a dictionary. Numeric keys (for example `0`, `1`) are no longer converted automatically; convert them to strings first (for example `"0"`, `"1"`).

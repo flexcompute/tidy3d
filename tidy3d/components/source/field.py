@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
 from pydantic import Field, NonNegativeInt, PositiveFloat, field_validator, model_validator
@@ -53,6 +53,15 @@ class PlanarSource(Source, ABC):
     """A source defined on a 2D plane."""
 
     _plane_validator = assert_plane()
+
+    normalization_grid: Literal["colocated", "staggered"] = Field(
+        "colocated",
+        title="Normalization Grid",
+        description="Grid type used when computing the flux for source power normalization. "
+        "'colocated' uses fields interpolated to grid cell boundaries, matching monitors "
+        "with ``colocate=True``. 'staggered' uses fields at native Yee grid positions, "
+        "matching monitors with ``colocate=False``.",
+    )
 
     @cached_property
     def injection_axis(self) -> Axis:
@@ -705,6 +714,15 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
         description="Specifies the injection axis. The plane of incidence is defined via this "
         "``injection_axis`` and the ``direction``. The popagation axis is defined with respect "
         "to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
+    )
+
+    normalization_grid: Literal["colocated", "staggered"] = Field(
+        "colocated",
+        title="Normalization Grid",
+        description="Grid type used when computing the flux for source power normalization. "
+        "'colocated' uses fields interpolated to grid cell boundaries, matching monitors "
+        "with ``colocate=True``. 'staggered' uses fields at native Yee grid positions, "
+        "matching monitors with ``colocate=False``.",
     )
 
     @cached_property

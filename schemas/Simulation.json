@@ -794,6 +794,14 @@
           ],
           "default": null
         },
+        "normalization_grid": {
+          "default": "colocated",
+          "enum": [
+            "colocated",
+            "staggered"
+          ],
+          "type": "string"
+        },
         "num_freqs": {
           "default": 1,
           "maximum": 20,
@@ -3876,6 +3884,14 @@
             }
           ],
           "default": null
+        },
+        "normalization_grid": {
+          "default": "colocated",
+          "enum": [
+            "colocated",
+            "staggered"
+          ],
+          "type": "string"
         },
         "size": {
           "maxItems": 3,
@@ -7784,6 +7800,14 @@
           ],
           "default": null
         },
+        "normalization_grid": {
+          "default": "colocated",
+          "enum": [
+            "colocated",
+            "staggered"
+          ],
+          "type": "string"
+        },
         "num_freqs": {
           "default": 1,
           "maximum": 20,
@@ -11399,6 +11423,14 @@
           ],
           "default": null
         },
+        "normalization_grid": {
+          "default": "colocated",
+          "enum": [
+            "colocated",
+            "staggered"
+          ],
+          "type": "string"
+        },
         "num_freqs": {
           "default": 1,
           "maximum": 20,
@@ -13111,6 +13143,14 @@
             }
           ],
           "default": null
+        },
+        "normalization_grid": {
+          "default": "colocated",
+          "enum": [
+            "colocated",
+            "staggered"
+          ],
+          "type": "string"
         },
         "num_freqs": {
           "default": 3,
@@ -15088,6 +15128,14 @@
             }
           ],
           "default": null
+        },
+        "normalization_grid": {
+          "default": "colocated",
+          "enum": [
+            "colocated",
+            "staggered"
+          ],
+          "type": "string"
         },
         "num_freqs": {
           "default": 1,
