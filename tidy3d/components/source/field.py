@@ -13,6 +13,7 @@ from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
+from tidy3d.components.grid.grid import Coords
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, Coordinate, Direction
 from tidy3d.components.validators import (
@@ -280,15 +281,25 @@ class CustomFieldSource(FieldSource, PlanarSource):
             if len(freqs) > 1:
                 raise ValueError("Multiple frequencies found in field_dataset. Can't compute VJP.")
 
-            DL = fld_cmp.coords["x"].values[1] - fld_cmp.coords["x"].values[0]
-            field_values = field_values / DL**3
+            # apply volume element correction
+            # dv = 1.0
+            # for dim in 'xyz':
+            #     coords_dim = fld_cmp.coords[dim]
+            #     if len(coords_dim) > 1:
+            #         dl = np.mean(np.diff(coords_dim))
+            #         dv *= dl
+            coords = dict(fld_cmp.coords.copy())
+            grid_coords = Coords(**{key: coords[key] for key in "xyz"})
+            dv = grid_coords.cell_size_meshgrid.reshape(field_values.shape)
+            field_values *= dv
 
-            # field_values = field_values # RMS error: 1.813e+00
-            field_values = -1j * field_values  # RMS error: 7.940e-01
+            # flip the field propagation direction
+            field_values = -np.conj(field_values)
 
-            # field_values = np.conj(field_values) # RMS error: 1.091e+00
-            # field_values = 1j * np.conj(field_values) # RMS error: 1.480e+00
+            # mysterious factor to match finite difference gradient
+            field_values = field_values / 2.0
 
+            # do we really need to flip H? it doesnt make a difference
             if field_name[0] == "H":
                 field_values = -1 * field_values
 

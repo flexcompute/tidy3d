@@ -32,22 +32,22 @@ from tidy3d.web import run
 LAMBDA0 = 1.55
 FREQ0 = td.C_0 / LAMBDA0
 FWIDTH = FREQ0 / 10.0
-DL = 0.03
+DL = 0.02
 LY = 0.0  # 2D simulation along y (suppressed)
-BAR_WIDTH = 0.5
-BAR_HEIGHT = 0.2
+BAR_WIDTH = 1.4
+BAR_HEIGHT = 0.8
 EPS_SI = 4.0  # ~ (n=3.48)^2 constant-permittivity silicon
 NUM_BARS = 8
-BAR_SPACING = 0.6
-LX = (BAR_SPACING + BAR_WIDTH) * NUM_BARS + BAR_SPACING
+BAR_SPACING = 2.3
+LX = (BAR_SPACING + BAR_WIDTH) * NUM_BARS + 3 * BAR_SPACING
 SILICON = td.Medium(permittivity=EPS_SI)
 RUN_TIME = 100 / FWIDTH
 MNT_SIZE_Z = 2 * DL
-SPC_ABOVE_GRATING = 1.0
-LZ = SPC_ABOVE_GRATING + BAR_HEIGHT + 4 * SPC_ABOVE_GRATING
+SPC_ABOVE_GRATING = 2.0
+LZ = SPC_ABOVE_GRATING + BAR_HEIGHT + SPC_ABOVE_GRATING + 2 * LAMBDA0
 FLD1_CENTER_Z = SPC_ABOVE_GRATING + BAR_HEIGHT / 2
 SRC2_CENTER_Z = -FLD1_CENTER_Z
-PML_X = False
+PML_X = True
 
 PLOT_SIMS = False
 
@@ -66,8 +66,9 @@ def build_grating_structures_from_params(
         Common z center of all bars.
     """
 
-    spc_left = -LX / 2 + BAR_SPACING + BAR_WIDTH / 2
-    base_centers_x = spc_left + np.arange(NUM_BARS) * (BAR_SPACING + BAR_WIDTH)
+    # spc_left = -LX / 2 + BAR_SPACING + BAR_WIDTH / 2
+    base_centers_x = np.arange(NUM_BARS) * (BAR_SPACING + BAR_WIDTH)
+    base_centers_x = base_centers_x - np.mean(base_centers_x)
 
     centers_x = base_centers_x + p
 
@@ -234,7 +235,7 @@ if __name__ == "__main__":
     print(J, grad_adj)
 
     # Numerical finite-difference gradient (centered difference)
-    delta = 1e-3
+    delta = DL
     grad_fd = np.zeros_like(np.asarray(p0), dtype=float)
     base = np.asarray(p0, dtype=float)
     for i in range(grad_fd.size):
