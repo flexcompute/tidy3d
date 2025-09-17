@@ -215,6 +215,7 @@ def run(
     )
     start(
         task_id,
+        verbose=verbose,
         solver_version=solver_version,
         worker_group=worker_group,
         pay_type=pay_type,
@@ -473,6 +474,7 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo:
 @wait_for_connection
 def start(
     task_id: TaskId,
+    verbose: bool = True,
     solver_version: Optional[str] = None,
     worker_group: Optional[str] = None,
     pay_type: Union[PayType, str] = PayType.AUTO,
@@ -485,6 +487,8 @@ def start(
 
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
+    verbose : bool = True
+        If ``True``, will print log messages, otherwise, will run silently.
     solver_version: str = None
         target solver version.
     worker_group: str = None
@@ -499,7 +503,7 @@ def start(
     To monitor progress, can call :meth:`monitor` after starting simulation.
     """
 
-    console = get_logging_console()
+    console = get_logging_console() if verbose else None
 
     # Component modeler batch path: hide split/check/submit
     if _is_modeler_batch(task_id):
@@ -509,7 +513,8 @@ def start(
         status = detail.totalStatus
         status_str = status.value
         if status_str in ("validate_success", "validate_warn"):
-            console.log("Component modeler batch validation has been successful.")
+            if verbose:
+                console.log("Component modeler batch validation has been successful.")
         if status_str not in ("validate_success", "validate_warn"):
             raise WebError(f"Batch task {task_id} is blocked: {status_str}")
         # Submit batch to start runs after validation

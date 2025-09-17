@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Restructured the smatrix plugin with backwards-incompatible changes for a more robust architecture. Notably, `ComponentModeler` has been renamed to `ModalComponentModeler` and internal web API methods have been removed. Please see our migration guide for details on updating your workflows.
 - Prevent small bandwidth sources from being created in `TerminalComponentModeler` when modeler frequencies are close together.
 - `Simulation.epsilon` now samples off-diagonal elements of fully tensorial permittivity at grid *boundaries*, to be consistent with the how these enter the FDTD simulation. This means that all off-diagonal components are now sampled at the same locations.
+- Propagate `verbose` to `start` function in web API.
 
 ### Fixed
 - Bug in `TerminalComponentModeler.get_antenna_metrics_data` when port amplitudes are set to zero.
