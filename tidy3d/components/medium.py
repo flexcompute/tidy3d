@@ -315,17 +315,17 @@ class NonlinearSusceptibility(NonlinearModel):
     chi3: float = pd.Field(
         0,
         title="Chi3",
-        description="Chi3 nonlinear susceptibility.",
+        description=":math:`\\chi_3` nonlinear susceptibility.",
         units=f"{MICROMETER}^2 / {VOLT}^2",
     )
 
     numiters: pd.PositiveInt = pd.Field(
         None,
         title="Number of iterations",
-        description="Deprecated. The old usage 'nonlinear_spec=model' with 'model.numiters' "
+        description="Deprecated. The old usage ``nonlinear_spec=model`` with ``model.numiters`` "
         "is deprecated and will be removed in a future release. The new usage is "
-        r"'nonlinear_spec=NonlinearSpec(models=\[model], num_iters=num_iters)'. Under the new "
-        "usage, this parameter is ignored, and 'NonlinearSpec.num_iters' is used instead.",
+        "``nonlinear_spec=NonlinearSpec(models=[model], num_iters=num_iters)``. Under the new "
+        "usage, this parameter is ignored, and ``NonlinearSpec.num_iters`` is used instead.",
     )
 
     @pd.validator("numiters", always=True)
@@ -762,7 +762,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         title="Allow gain medium",
         description="Allow the medium to be active. Caution: "
         "simulations with a gain medium are unstable, and are likely to diverge."
-        "Simulations where 'allow_gain' is set to 'True' will still be charged even if "
+        "Simulations where ``allow_gain`` is set to ``True`` will still be charged even if "
         "diverged. Monitor data up to the divergence point will still be returned and can be "
         "useful in some cases.",
     )
@@ -6080,7 +6080,7 @@ class LossyMetalMedium(Medium):
         title="Allow gain medium",
         description="Allow the medium to be active. Caution: "
         "simulations with a gain medium are unstable, and are likely to diverge."
-        "Simulations where 'allow_gain' is set to 'True' will still be charged even if "
+        "Simulations where ``allow_gain`` is set to ``True`` will still be charged even if "
         "diverged. Monitor data up to the divergence point will still be returned and can be "
         "useful in some cases.",
     )
@@ -6866,8 +6866,8 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     interp_method: Optional[InterpMethod] = pd.Field(
         None,
         title="Interpolation method",
-        description="When the value is 'None', each component will follow its own "
-        "interpolation method. When the value is other than 'None', the interpolation "
+        description="When the value is ``None`` each component will follow its own "
+        "interpolation method. When the value is other than ``None`` the interpolation "
         "method specified by this field will override the one in each component.",
     )
 

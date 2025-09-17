@@ -9,7 +9,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
-from tidy3d.constants import PERCMCUBE
+from tidy3d.constants import MICROMETER, PERCMCUBE
 from tidy3d.exceptions import SetupError
 
 
@@ -115,7 +115,7 @@ class ConstantDoping(AbstractDopingBox):
     concentration: pd.NonNegativeFloat = pd.Field(
         default=0,
         title="Doping concentration density.",
-        description="Doping concentration density in #/cm^3.",
+        description="Doping concentration density.",
         units=PERCMCUBE,
     )
 
@@ -189,11 +189,13 @@ class GaussianDoping(AbstractDopingBox):
         title="Reference concentration.",
         description="Reference concentration. This is the minimum concentration in the box "
         "and it is attained at the edges/faces of the box.",
+        units=PERCMCUBE,
     )
 
     concentration: pd.PositiveFloat = pd.Field(
         title="Concentration",
         description="The concentration at the center of the box.",
+        units=PERCMCUBE,
     )
 
     width: pd.PositiveFloat = pd.Field(
@@ -201,6 +203,7 @@ class GaussianDoping(AbstractDopingBox):
         description="Width of the gaussian. The concentration will transition from "
         "``concentration`` at the center of the box to ``ref_con`` at the edge/face "
         "of the box in a distance equal to ``width``. ",
+        units=MICROMETER,
     )
 
     source: str = pd.Field(
@@ -208,8 +211,8 @@ class GaussianDoping(AbstractDopingBox):
         title="Source face",
         description="Specifies the side of the box acting as the source, i.e., "
         "the face specified does not have a gaussian evolution normal to it, instead "
-        "the concentration is constant from this face. Accepted values for 'source' "
-        "are ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax']",
+        "the concentration is constant from this face. Accepted values for ``source`` "
+        "are [``xmin``, ``xmax``, ``ymin``, ``ymax``, ``zmin``, ``zmax``]",
     )
 
     @cached_property

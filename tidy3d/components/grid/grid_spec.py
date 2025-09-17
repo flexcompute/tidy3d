@@ -2108,7 +2108,7 @@ class GridSpec(Tidy3dBaseModel):
     wavelength: float = pd.Field(
         None,
         title="Free-space wavelength",
-        description="Free-space wavelength for automatic nonuniform grid. It can be 'None' "
+        description="Free-space wavelength for automatic nonuniform grid. It can be ``None`` "
         "if there is at least one source in the simulation, in which case it is defined by "
         "the source central frequency. "
         "Note: it only takes effect when at least one of the three dimensions "

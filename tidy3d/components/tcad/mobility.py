@@ -3,6 +3,7 @@ from __future__ import annotations
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.constants import PERCMCUBE
 
 
 class ConstantMobilityModel(Tidy3dBaseModel):
@@ -116,14 +117,16 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
     # mobilities
     mu_min: pd.PositiveFloat = pd.Field(
         ...,
-        title=r"$\mu_{min}$ Minimum electron mobility",
-        description="Minimum electron mobility at reference temperature (300K) in cm^2/V-s. ",
+        title="Minimum electron mobility",
+        description="Minimum electron mobility  :math:`\\mu_{\\text{min}}`  at reference temperature (300K).",
+        units="cm^2/V-s",
     )
 
     mu: pd.PositiveFloat = pd.Field(
         ...,
         title="Reference mobility",
-        description="Reference mobility at reference temperature (300K) in cm^2/V-s",
+        description="Reference mobility at reference temperature (300K).",
+        units="cm^2/V-s",
     )
 
     # thermal exponent for reference mobility
@@ -142,7 +145,8 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
     ref_N: pd.PositiveFloat = pd.Field(
         ...,
         title="Reference doping",
-        description="Reference doping at reference temperature (300K) in #/cm^3.",
+        description="Reference doping at reference temperature (300K).",
+        units=PERCMCUBE,
     )
 
     # temperature exponent

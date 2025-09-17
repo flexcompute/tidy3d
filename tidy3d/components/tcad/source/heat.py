@@ -30,7 +30,7 @@ class HeatSource(StructureBasedHeatChargeSource):
 
 class UniformHeatSource(HeatSource):
     """Volumetric heat source. This class is deprecated. You can use
-    'HeatSource' instead.
+    :class:`HeatSource` instead.
 
     Example
     -------

@@ -14,11 +14,7 @@ from tidy3d.components.tcad.types import (
     MobilityModelType,
     RecombinationModelType,
 )
-from tidy3d.constants import (
-    CONDUCTIVITY,
-    ELECTRON_VOLT,
-    PERMITTIVITY,
-)
+from tidy3d.constants import CONDUCTIVITY, ELECTRON_VOLT, PERCMCUBE, PERMITTIVITY
 
 
 class AbstractChargeMedium(AbstractMedium):
@@ -47,7 +43,7 @@ class AbstractChargeMedium(AbstractMedium):
 class ChargeInsulatorMedium(AbstractChargeMedium):
     """
     Insulating medium. Conduction simulations will not solve for electric
-    potential in a structure that has a medium with this 'charge'.
+    potential in a structure that has a medium with this ``charge``.
 
     Example
     -------
@@ -258,21 +254,21 @@ class SemiconductorMedium(AbstractChargeMedium):
     N_c: pd.PositiveFloat = pd.Field(
         ...,
         title="Effective density of electron states",
-        description=r"$N_c$ Effective density of states in the conduction band.",
-        units="cm^(-3)",
+        description=":math:`N_c` Effective density of states in the conduction band.",
+        units=PERCMCUBE,
     )
 
     N_v: pd.PositiveFloat = pd.Field(
         ...,
         title="Effective density of hole states",
-        description=r"$N_v$ Effective density of states in the valence band.",
-        units="cm^(-3)",
+        description=":math:`N_v` Effective density of states in the valence band.",
+        units=PERCMCUBE,
     )
 
     E_g: pd.PositiveFloat = pd.Field(
         ...,
         title="Band-gap energy",
-        description="Band-gap energy",
+        description=":math:`E_g` Band-gap energy",
         units=ELECTRON_VOLT,
     )
 
@@ -296,8 +292,9 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     delta_E_g: BandGapNarrowingModelType = pd.Field(
         None,
-        title=":math:`\\Delta E_g` Bandgap narrowing model.",
-        description="Bandgap narrowing model.",
+        title="Bandgap narrowing model.",
+        description=":math:`\\Delta E_g` Bandgap narrowing model.",
+        units=ELECTRON_VOLT,
     )
 
     N_a: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
@@ -306,7 +303,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         description="Concentration of acceptor impurities, which create mobile holes, resulting in p-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
         "or a tuple of geometric shapes to define specific doped regions.",
-        units="1/cm^3",
+        units=PERCMCUBE,
     )
 
     N_d: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
@@ -315,5 +312,5 @@ class SemiconductorMedium(AbstractChargeMedium):
         description="Concentration of donor impurities, which create mobile electrons, resulting in n-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
         "or a tuple of geometric shapes to define specific doped regions.",
-        units="1/cm^3",
+        units=PERCMCUBE,
     )

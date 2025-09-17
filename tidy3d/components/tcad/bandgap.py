@@ -39,21 +39,21 @@ class SlotboomBandGapNarrowing(Tidy3dBaseModel):
 
     v1: pd.PositiveFloat = pd.Field(
         ...,
-        title=r"$V_{1,bgn}$ parameter",
-        description=r"$V_{1,bgn}$ parameter",
+        title=":math:`V_{1,bgn}` parameter",
+        description=":math:`V_{1,bgn}` parameter",
         units=VOLT,
     )
 
     n2: pd.PositiveFloat = pd.Field(
         ...,
-        title=r"$N_{2,bgn}$ parameter",
-        description=r"$N_{2,bgn}$ parameter",
+        title=":math:`N_{2,bgn}` parameter",
+        description=":math:`N_{2,bgn}` parameter",
         units=PERCMCUBE,
     )
 
     c2: float = pd.Field(
-        title=r"$C_{2,bgn}$ parameter",
-        description=r"$C_{2,bgn}$ parameter",
+        title=":math:`C_{2,bgn}` parameter",
+        description=":math:`C_{2,bgn}` parameter",
     )
 
     min_N: pd.NonNegativeFloat = pd.Field(

@@ -380,8 +380,9 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
     E: UnstructuredFieldType = pd.Field(
         None,
         title="Electric field",
-        description="Contains the computed electric field in :math:`V/\\mu m`.",
+        description="Contains the computed electric field.",
         discriminator=TYPE_TAG_STR,
+        units=":math:`V/\\mu m`",
     )
 
     @property
@@ -422,8 +423,9 @@ class SteadyCurrentDensityData(HeatChargeMonitorData):
     J: UnstructuredFieldType = pd.Field(
         None,
         title="Current density",
-        description="Contains the computed current density in :math:`A/\\mu m^2`.",
+        description="Contains the computed current density.",
         discriminator=TYPE_TAG_STR,
+        units=":math:`A/\\mu m^2`",
     )
 
     @property
