@@ -18,6 +18,7 @@ from tidy3d.components.tcad.types import (
     HeatChargeMonitorType,
 )
 from tidy3d.components.types import Coordinate, ScalarSymmetry, annotate_type
+from tidy3d.constants import MICROMETER
 from tidy3d.log import log
 
 FieldDataset = Union[
@@ -45,6 +46,7 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
         (0, 0, 0),
         title="Symmetry Center",
         description="Symmetry center of the original simulation in x, y, and z.",
+        units=MICROMETER,
     )
 
     @abstractmethod

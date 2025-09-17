@@ -91,11 +91,17 @@ class AugerRecombination(Tidy3dBaseModel):
     """
 
     c_n: pd.PositiveFloat = pd.Field(
-        ..., title="Constant for electrons", description="Constant for electrons in cm^6/s"
+        ...,
+        title="Constant for electrons",
+        description="Constant for electrons.",
+        units="cm^6/s",
     )
 
     c_p: pd.PositiveFloat = pd.Field(
-        ..., title="Constant for holes", description="Constant for holes in cm^6/s"
+        ...,
+        title="Constant for holes",
+        description="Constant for holes.",
+        units="cm^6/s",
     )
 
 
@@ -122,8 +128,9 @@ class RadiativeRecombination(Tidy3dBaseModel):
 
     r_const: float = pd.Field(
         ...,
-        title="Radiation constant in cm^3/s",
-        description="Radiation constant in cm^3/s",
+        title="Radiation constant",
+        description="Radiation constant of the radiative recombination model.",
+        units="cm^3/s",
     )
 
 
@@ -193,8 +200,8 @@ class DistributedGeneration(Tidy3dBaseModel):
     rate: SpatialDataArray = pd.Field(
         ...,
         title="Generation rate",
-        description="Spatially varying generation rate in cm^-3 s^-1",
-        units="cm^-3 s^-1",
+        description="Spatially varying generation rate.",
+        units="1/(cm^3 s^1)",
     )
 
     @classmethod

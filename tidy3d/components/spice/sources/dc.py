@@ -52,7 +52,7 @@ class DCVoltageSource(Tidy3dBaseModel):
     voltage: ArrayFloat1D = pd.Field(
         ...,
         title="Voltage",
-        description="DC voltage usually used as source in 'VoltageBC' boundary conditions.",
+        description="DC voltage usually used as source in :class:`VoltageBC` boundary conditions.",
         units=VOLT,
     )
 
@@ -81,7 +81,7 @@ class DCCurrentSource(Tidy3dBaseModel):
     name: Optional[str]
     current: pd.FiniteFloat = pd.Field(
         title="Current",
-        description="DC current usually used as source in 'CurrentBC' boundary conditions.",
+        description="DC current usually used as source in :class:`CurrentBC` boundary conditions.",
         units=AMP,
     )
 
