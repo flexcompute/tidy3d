@@ -28,6 +28,7 @@ from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
 from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, BatchData, Job
+from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 from tidy3d.web.api.webapi import run as run_webapi
 from tidy3d.web.core.s3utils import download_file, upload_file
 from tidy3d.web.core.types import PayType
@@ -96,7 +97,7 @@ def is_valid_for_autograd_async(simulations: dict[str, td.Simulation]) -> bool:
 
 def run(
     simulation: WorkflowType,
-    task_name: str,
+    task_name: typing.Optional[str] = None,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
     callback_url: typing.Optional[str] = None,
@@ -121,8 +122,8 @@ def run(
     ----------
     simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModalComponentModeler`, :class:`.TerminalComponentModeler`]
         Simulation to upload to server.
-    task_name : str
-        Name of task.
+    task_name : Optional[str] = None
+        Name of task. If not provided, a default name will be generated.
     folder_name : str = "default"
         Name of folder to store task on web UI.
     path : str = "simulation_data.hdf5"
@@ -200,6 +201,10 @@ def run(
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
 
+    if task_name is None:
+        stub = Tidy3dStub(simulation=simulation)
+        task_name = stub.get_default_task_name()
+
     # component modeler path: route autograd-valid modelers to local run
     from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
 
@@ -261,7 +266,7 @@ def run(
 
 
 def run_async(
-    simulations: dict[str, td.Simulation],
+    simulations: typing.Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: typing.Optional[str] = None,
@@ -283,8 +288,8 @@ def run_async(
 
     Parameters
     ----------
-    simulations : Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]]
-        Mapping of task name to simulation.
+    simulations : Union[Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]], tuple[Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]], list[Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]]]
+        Mapping of task name to simulation or list of simulations.
     folder_name : str = "default"
         Name of folder to store each task on web UI.
     path_dir : str
@@ -328,6 +333,13 @@ def run_async(
     # validate priority if specified
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
+
+    if isinstance(simulations, (tuple, list)):
+        sim_dict = {}
+        for i, sim in enumerate(simulations, 1):
+            task_name = Tidy3dStub(simulation=sim).get_default_task_name() + f"_{i}"
+            sim_dict[task_name] = sim
+        simulations = sim_dict
 
     if is_valid_for_autograd_async(simulations):
         return _run_async(

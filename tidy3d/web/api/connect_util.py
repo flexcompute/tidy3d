@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from functools import wraps
+from typing import Optional
 
 from requests import ReadTimeout
 from requests.exceptions import ConnectionError as ConnErr
@@ -12,13 +13,14 @@ from urllib3.exceptions import NewConnectionError
 
 from tidy3d.exceptions import WebError
 from tidy3d.log import log
-from tidy3d.web.common import CONNECTION_RETRY_TIME, REFRESH_TIME
+from tidy3d.web import common
+from tidy3d.web.common import REFRESH_TIME
 
 
-def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RETRY_TIME):
+def wait_for_connection(decorated_fn=None, wait_time_sec: Optional[float] = None):
     """Causes function to ignore connection errors and retry for ``wait_time_sec`` secs."""
 
-    def decorator(web_fn):
+    def decorator(web_fn, wait_time_sec=wait_time_sec):
         """Decorator returned by @wait_for_connection()"""
 
         @wraps(web_fn)
@@ -27,12 +29,14 @@ def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RET
             time_start = time.time()
             warned_previously = False
 
-            while (time.time() - time_start) < wait_time_sec:
+            timeout = common.CONNECTION_RETRY_TIME if wait_time_sec is None else wait_time_sec
+
+            while (time.time() - time_start) < timeout:
                 try:
                     return web_fn(*args, **kwargs)
                 except (ConnErr, ConnectionError, NewConnectionError, ReadTimeout, JSONDecodeError):
                     if not warned_previously:
-                        log.warning(f"No connection: Retrying for {wait_time_sec} seconds.")
+                        log.warning(f"No connection: Retrying for {timeout} seconds.")
                         warned_previously = True
                     time.sleep(REFRESH_TIME)
 
@@ -41,7 +45,7 @@ def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RET
         return web_fn_wrapped
 
     if decorated_fn:
-        return decorator(decorated_fn)
+        return decorator(decorated_fn, wait_time_sec=wait_time_sec)
 
     return decorator
 

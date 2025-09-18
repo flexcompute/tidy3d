@@ -12,7 +12,7 @@ from .container import DEFAULT_DATA_DIR, Batch, BatchData
 
 
 def run_async(
-    simulations: dict[str, WorkflowType],
+    simulations: Union[dict[str, WorkflowType], tuple[WorkflowType], list[WorkflowType]],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: Optional[str] = None,
@@ -32,8 +32,8 @@ def run_async(
 
     Parameters
     ----------
-    simulations : Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]]
-        Mapping of task name to simulation.
+    simulations : Union[Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]], tuple[Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]], list[Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]]]
+        Mapping of task name to simulation or list of simulations.
     folder_name : str = "default"
         Name of folder to store each task on web UI.
     path_dir : str

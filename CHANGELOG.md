@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - New `MediumMonitor` that returns both permittivity and permeability profiles.
+- Task names are now optional when using `run(sim)` or `Job`. When running multiple jobs (via `run_async` or `Batch`), you can also provide simulations as a list without specifying task names. The previous dictionary-based format with explicit task names is still supported.
+
 ### Changed
 
 ### Fixed

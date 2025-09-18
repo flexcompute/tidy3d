@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Callable, Optional
 
 import pydantic.v1 as pd
@@ -172,6 +173,27 @@ class Tidy3dStub(BaseModel, TaskStub):
             self.simulation.validate_pre_upload(source_required)
         elif isinstance(self.simulation, EMESimulation):
             self.simulation.validate_pre_upload()
+
+    def get_default_task_name(self) -> str:
+        """
+        Generate a default task name based on the simulation type and
+        the current date and time.
+
+        The name is composed of the simulation type and a human-readable timestamp in the format ``YYYY-MM-DD_HH-MM-SS``
+
+        Example
+        -------
+        >>> stub.get_default_task_name() # doctest: +SKIP
+        'fdtd_2025-09-16_14-30-55'
+
+        Returns
+        -------
+        str
+            Default task name, e.g. ``"fdtd_2025-09-16_14-30-55"``.
+        """
+        sim_type = self.get_type().lower()
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        return f"{sim_type}_{timestamp}"
 
 
 class Tidy3dStubData(BaseModel, TaskStubData):
