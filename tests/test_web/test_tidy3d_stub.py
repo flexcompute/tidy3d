@@ -15,6 +15,7 @@ from tidy3d.components.source.current import PointDipole
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub, Tidy3dStubData
 from tidy3d.web.core.environment import Env, EnvironmentConfig
+from tidy3d.web.core.types import TaskType
 
 test_env = EnvironmentConfig(
     name="test",
@@ -119,3 +120,10 @@ def test_stub_data_postprocess_logs(tmp_path):
     file_path = os.path.join(tmp_path, "test_warnings.hdf5")
     sim_data.to_file(file_path)
     Tidy3dStubData.postprocess(file_path)
+
+
+def test_default_task_name():
+    sim = make_sim()
+    stub = Tidy3dStub(simulation=sim)
+    default_task_name = stub.get_default_task_name()
+    assert default_task_name.startswith(TaskType.FDTD.name.lower())

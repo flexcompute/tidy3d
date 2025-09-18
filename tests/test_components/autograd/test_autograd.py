@@ -860,7 +860,8 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_autograd_async(use_emulated_run, structure_key, monitor_key):
+@pytest.mark.parametrize("use_task_names", [True, False])
+def test_autograd_async(use_emulated_run, structure_key, monitor_key, use_task_names):
     """Test an objective function through tidy3d autograd."""
 
     fn_dict = get_functions(structure_key, monitor_key)
@@ -870,7 +871,10 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     task_names = {"test_a", "adjoint", "_test"}
 
     def objective(*args):
-        sims = {task_name: make_sim(*args) for task_name in task_names}
+        if use_task_names:
+            sims = {task_name: make_sim(*args) for task_name in task_names}
+        else:
+            sims = [make_sim(*args)] * len(task_names)
         batch_data = run_async(sims, verbose=False)
         value = 0.0
         for _, sim_data in batch_data.items():

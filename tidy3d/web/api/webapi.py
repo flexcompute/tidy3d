@@ -106,7 +106,7 @@ def _task_dict_to_url_bullet_list(data_dict: dict) -> str:
 @wait_for_connection
 def run(
     simulation: WorkflowType,
-    task_name: str,
+    task_name: Optional[str] = None,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
     callback_url: Optional[str] = None,
@@ -129,8 +129,8 @@ def run(
     ----------
     simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation to upload to server.
-    task_name : str
-        Name of task.
+    task_name : Optional[str] = None
+        Name of task. If not provided, a default name will be generated.
     folder_name : str = "default"
         Name of folder to store task on web UI.
     path : str = "simulation_data.hdf5"
@@ -233,7 +233,7 @@ def run(
 @wait_for_connection
 def upload(
     simulation: WorkflowType,
-    task_name: str,
+    task_name: Optional[str] = None,
     folder_name: str = "default",
     callback_url: Optional[str] = None,
     verbose: bool = True,
@@ -251,8 +251,8 @@ def upload(
     ----------
     simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation to upload to server.
-    task_name : str
-        Name of task.
+    task_name : Optional[str]
+        Name of task. If not provided, a default name will be generated.
     folder_name : str
         Name of folder to store task on web UI
     callback_url : str = None
@@ -299,6 +299,9 @@ def upload(
     stub = Tidy3dStub(simulation=simulation)
     stub.validate_pre_upload(source_required=source_required)
     log.debug("Creating task.")
+
+    if task_name is None:
+        task_name = stub.get_default_task_name()
 
     task_type = stub.get_type()
     # Component modeler compatibility: map to RF task type

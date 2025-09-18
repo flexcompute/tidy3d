@@ -8,7 +8,7 @@ import time
 from abc import ABC
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 import pydantic.v1 as pd
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
@@ -20,6 +20,7 @@ from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.exceptions import DataError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api import webapi as web
+from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 from tidy3d.web.core.constants import TaskId, TaskName
 from tidy3d.web.core.task_core import Folder
 from tidy3d.web.core.task_info import RunInfo, TaskInfo
@@ -151,7 +152,11 @@ class Job(WebContainer):
         discriminator="type",
     )
 
-    task_name: TaskName = pd.Field(..., title="Task Name", description="Unique name of the task.")
+    task_name: TaskName = pd.Field(
+        None,
+        title="Task Name",
+        description="Unique name of the task. Will be auto-generated if not provided.",
+    )
 
     folder_name: str = pd.Field(
         "default", title="Folder Name", description="Name of folder to store task on web UI."
@@ -421,6 +426,17 @@ class Job(WebContainer):
         if len(parent_dir) > 0 and not os.path.exists(parent_dir):
             os.makedirs(parent_dir, exist_ok=True)
 
+    @pd.root_validator(pre=True)
+    def set_task_name_if_none(cls, values):
+        """
+        Auto-assign a task_name if user did not provide one.
+        """
+        if values.get("task_name") is None:
+            sim = values.get("simulation")
+            stub = Tidy3dStub(simulation=sim)
+            values["task_name"] = stub.get_default_task_name()
+        return values
+
 
 class BatchData(Tidy3dBaseModel, Mapping):
     """
@@ -532,7 +548,9 @@ class Batch(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulations: dict[TaskName, annotate_type(WorkflowType)] = pd.Field(
+    simulations: Union[
+        dict[TaskName, annotate_type(WorkflowType)], tuple[annotate_type(WorkflowType)]
+    ] = pd.Field(
         ...,
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",
@@ -663,12 +681,21 @@ class Batch(WebContainer):
         if self.jobs_cached is not None:
             return self.jobs_cached
 
+        if isinstance(self.simulations, tuple):
+            simulations = {}
+            for i, sim in enumerate(self.simulations, 1):
+                stub = Tidy3dStub(simulation=sim)
+                task_name = stub.get_default_task_name() + f"_{i}"
+                simulations[task_name] = sim
+        else:
+            simulations = self.simulations
+
         # the type of job to upload (to generalize to subclasses)
         JobType = self._job_type
         self_dict = self.dict()
 
         jobs = {}
-        for task_name, simulation in self.simulations.items():
+        for task_name, simulation in simulations.items():
             job_kwargs = {}
 
             for key in JobType._upload_fields:
