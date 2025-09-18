@@ -13,7 +13,6 @@ from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
-from tidy3d.components.grid.grid import Coords
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, Coordinate, Direction
 from tidy3d.components.validators import (
@@ -271,38 +270,63 @@ class CustomFieldSource(FieldSource, PlanarSource):
         for field_path in derivative_info.paths:
             field_name = field_path[-1]
 
-            fld_cmp = self.field_dataset.field_components.get(field_name)
-            if fld_cmp is None:
-                raise ValueError(f"Field component {field_name} not found in field_dataset.")
+            adjoint_field = derivative_info.E_adj.get(field_name)
+            if adjoint_field is None:
+                derivative_map[tuple(field_path)] = (
+                    0 * self.field_dataset.field_components[field_name].values
+                )
+                from tidy3d.log import log
 
-            field_values = fld_cmp.values
+                log.warning(f"Field component {field_name} not found in adjoint fields.")
+                continue
+                #  ValueError(f"Field component {field_name} not found in adjoint fields.")
 
-            freqs = fld_cmp.coords["f"].values
+            freqs = adjoint_field.coords["f"].values
             if len(freqs) > 1:
                 raise ValueError("Multiple frequencies found in field_dataset. Can't compute VJP.")
 
+            # interpolate adjoint fields to the source plane coordinates
+            coords_source = {
+                k: np.array(v)
+                for k, v in self.field_dataset.field_components[field_name].coords.items()
+            }
+
+            # put coords_source in the global coordinate system relative to the source center
+            coords_global = {
+                key: coords_source[key] + self.center[i] for i, key in enumerate("xyz")
+            }
+            coords_interp = {
+                k: v for k, v in coords_global.items() if len(adjoint_field.coords[k]) > 1
+            }
+            field_values = adjoint_field.interp(**coords_interp).data
+
             # apply volume element correction
-            # dv = 1.0
-            # for dim in 'xyz':
-            #     coords_dim = fld_cmp.coords[dim]
-            #     if len(coords_dim) > 1:
-            #         dl = np.mean(np.diff(coords_dim))
-            #         dv *= dl
-            coords = dict(fld_cmp.coords.copy())
-            grid_coords = Coords(**{key: coords[key] for key in "xyz"})
-            dv = grid_coords.cell_size_meshgrid.reshape(field_values.shape)
-            field_values *= dv
+            # coords = dict(fld_cmp.coords.copy())
+            # grid_coords = Coords(**{key: coords[key] for key in "xyz"})
+            # dv = grid_coords.cell_size_meshgrid.reshape(field_values.shape)
+            # field_values *= dv
 
             # flip the field propagation direction
-            field_values = -np.conj(field_values)
+            # field_values =  -np.conj(field_values)
 
             # mysterious factor to match finite difference gradient
-            field_values = field_values / 2.0
+            field_values = -np.nan_to_num(1j * np.conj(field_values))
 
             # do we really need to flip H? it doesnt make a difference
-            if field_name[0] == "H":
-                field_values = -1 * field_values
+            # if field_name[0] == "H":
+            #     field_values = -1 * field_values
 
+            # import matplotlib.pyplot as plt
+            # plt.plot(np.real(field_values.squeeze()), label="real")
+            # plt.plot(np.imag(field_values.squeeze()), label="imag")
+            # plt.plot(np.abs(field_values.squeeze()), label="abs")
+            # plt.legend()
+            # plt.show()
+
+            # import pdb; pdb.set_trace()
+
+            # import pdb; pdb.set_trace()
+            # print(np.sum(field_values))
             derivative_map[tuple(field_path)] = field_values
 
         return derivative_map

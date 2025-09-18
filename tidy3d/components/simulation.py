@@ -4397,6 +4397,7 @@ class Simulation(AbstractYeeGridSimulation):
                     center=source_center,
                     size=source_size,
                     freqs=freqs,
+                    fields=["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
                     name=f"source_adjoint_{i}",
                 )
 

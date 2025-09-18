@@ -955,7 +955,7 @@ def setup_adj(
             verbose=False,
         )
         _, (ax0, ax1, ax2, ax3) = plt.subplots(1, 4, tight_layout=True, figsize=(10, 4))
-        sim_adj_plot.plot(y=0, ax=ax0)
+        sims_adj[0].plot(y=0, ax=ax0)
         sim_data_new.plot_field("adjoint_fields", "Ex", "re", ax=ax1)
         sim_data_new.plot_field("adjoint_fields", "Ey", "re", ax=ax2)
         sim_data_new.plot_field("adjoint_fields", "Ez", "re", ax=ax3)
@@ -1242,18 +1242,12 @@ def _process_source_gradients(
 
         # Look for field monitors in the forward simulation data
         for _monitor_name, monitor_data in sim_data_fwd.monitor_data.items():
-            if isinstance(monitor_data, td.FieldData):
+            if isinstance(monitor_data, td.FieldData) and monitor_data.monitor.name[:6] == "source":
                 # Get field components from this monitor
                 for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
-                    if hasattr(monitor_data, field_name):
-                        field_data = getattr(monitor_data, field_name)
-                        if field_name not in E_adj:
-                            E_adj[field_name] = field_data
-                        else:
-                            # If we have multiple monitors with the same field,
-                            # we'll use the first one for now
-                            # In the future, we should merge or select based on source bounds
-                            pass
+                    field_data = monitor_data.field_components.get(field_name)
+                    if field_data is not None:
+                        E_adj[field_name] = field_data
 
         # Create derivative info with actual field data
         derivative_info = DerivativeInfo(
