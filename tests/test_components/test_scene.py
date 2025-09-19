@@ -355,3 +355,67 @@ def test_structure_automatic_priority():
     scene = scene.updated_copy(structure_priority_mode="conductor")
     assert scene.sorted_structures[-1].medium == td.PEC
     assert isinstance(scene.sorted_structures[-2].medium, td.LossyMetalMedium)
+
+
+def test_plot_property():
+    """Make sure that plot_structures_property works for different inputs"""
+
+    display_plots = False
+
+    # generate mediums
+    semicon = td.material_library["cSi"].variants["Si_MultiPhysics"].medium.charge
+    mpm = td.MultiPhysicsMedium(
+        optical=td.Medium(permittivity=11.7),
+        charge=semicon,
+        name="Si_MultiPhysics",
+    )
+
+    def try_plotting(mpm, display=False):
+        # Structure
+        struct = td.Structure(
+            geometry=td.Box(size=(2, 2, 2), center=(0, 0, 0)),
+            medium=mpm,
+        )
+
+        # Scene
+        scene = td.Scene(
+            medium=td.Medium(permittivity=1.0),
+            structures=[struct],
+        )
+
+        _, ax = plt.subplots(1, 4, figsize=(20, 4))
+        scene.plot_structures_property(z=0, property="N_a", ax=ax[0])
+        scene.plot_structures_property(z=0, property="N_d", ax=ax[1])
+        scene.plot_structures_property(z=0, property="doping", ax=ax[2])
+        scene.plot_structures_property(z=0, ax=ax[3])  # eps
+        if display:
+            plt.show()
+
+    # constant doping
+    const_doping = td.ConstantDoping(concentration=1e15)
+    mpm = mpm.updated_copy(charge=semicon.updated_copy(N_a=[const_doping], N_d=[const_doping]))
+    try_plotting(mpm, display=display_plots)
+
+    # add some Gaussian doping
+    gaussian_box = td.GaussianDoping(
+        center=(0, 0, 0), size=(2, 2, 2), ref_con=1e15, concentration=1e18, width=0.1, source="xmin"
+    )
+    mpm = mpm.updated_copy(charge=semicon.updated_copy(N_a=[gaussian_box], N_d=[gaussian_box]))
+    try_plotting(mpm, display=display_plots)
+
+    # now try with a custom doping
+    x = np.linspace(-1, 1, 30)
+    y = np.linspace(-1, 1, 30)
+    z = np.linspace(-1, 1, 30)
+    X, Y, _ = np.meshgrid(x, y, z, indexing="ij")
+    data = X * Y * 1e18
+    concentration = td.SpatialDataArray(
+        data=data,
+        coords={"x": x, "y": y, "z": z},
+    )
+    # _, ax = plt.subplots()
+    # concentration.isel(z=0).plot(ax=ax)
+    # plt.show()
+    custom_box1 = td.CustomDoping(center=(0, 0, 0), size=(2, 2, 2), concentration=concentration)
+    mpm = mpm.updated_copy(charge=semicon.updated_copy(N_a=[custom_box1], N_d=[custom_box1]))
+    try_plotting(mpm, display=display_plots)

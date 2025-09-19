@@ -49,7 +49,7 @@ from tidy3d.components.tcad.data.types import (
     SteadyPotentialData,
     TemperatureData,
 )
-from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
+from tidy3d.components.tcad.doping import ConstantDoping, CustomDoping, GaussianDoping
 from tidy3d.components.tcad.generation_recombination import FossumCarrierLifetime
 from tidy3d.components.tcad.grid import (
     DistanceUnstructuredGrid,
@@ -490,6 +490,7 @@ __all__ = [
     "CustomChargePerturbation",
     "CustomCurrentSource",
     "CustomDebye",
+    "CustomDoping",
     "CustomDrude",
     "CustomFieldSource",
     "CustomGrid",

@@ -6,27 +6,26 @@ from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
+import xarray as xr
 
+from tidy3d.components.autograd import TracedSize
 from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.geometry.base import Box
-from tidy3d.constants import MICROMETER, PERCMCUBE
+from tidy3d.constants import MICROMETER, PERCMCUBE, inf
 from tidy3d.exceptions import SetupError
 
 
 class AbstractDopingBox(Box):
     """Derived class from Box to deal with dopings"""
 
-    def _normal_dim(self):
-        """Returns the normal direction if the box is 2D. False otherwise"""
-
-        normal_dim = None
-        for dim in range(3):
-            if self.size[dim] == np.inf:
-                if normal_dim is not None:
-                    raise SetupError("Only 3D and 2D boxes are considered for doping.")
-                normal_dim = dim
-
-        return normal_dim
+    # Override size so that we can set default values
+    size: TracedSize = pd.Field(
+        (inf, inf, inf),
+        title="Size",
+        description="Size in x, y, and z directions.",
+        units=MICROMETER,
+    )
 
     def _get_indices_in_box(self, coords: dict, meshgrid: bool = True):
         """Returns locations inside box"""
@@ -37,23 +36,6 @@ class AbstractDopingBox(Box):
             for var_name in "xyz":
                 if var_name not in coords:
                     coords[var_name] = [0]
-
-        # work out whether the dimensions are 2D
-        normal_axis = None
-        # normal_position = None
-        for dim in range(3):
-            var_name = "xyz"[dim]
-            if len(coords[var_name]) == 1:
-                normal_axis = dim
-                # normal_position = coords[var_name][0]
-
-        if all(len(coords[var_name]) == 1 for var_name in "xyz"):
-            # if all coordinates have 1 point, we don't assume  2D unless the box itself is.
-            normal_axis = None
-
-        # if provided coordinates are 3D, check if box is 2D
-        if normal_axis is None:
-            normal_axis = self._normal_dim()
 
         if meshgrid:
             X, Y, Z = np.meshgrid(coords["x"], coords["y"], coords["z"], indexing="ij")
@@ -75,25 +57,14 @@ class AbstractDopingBox(Box):
         indices_in_box = np.logical_and(indices_in_box, new_bounds[0][2] <= Z)
         indices_in_box = np.logical_and(indices_in_box, new_bounds[1][2] >= Z)
 
-        return indices_in_box, X, Y, Z, normal_axis
+        return indices_in_box, X, Y, Z
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_dimensions(cls, values):
-        """Make sure dimensionality is specified correctly. I.e.,
-        a 2D box must be defined with an inf size in the normal direction."""
-
-        size = values["size"]
-        for dim in range(3):
-            if size[dim] == 0:
-                zero_dim_name = "xyz"[dim]
-
-                raise SetupError(
-                    f"The doping box has been set up with 0 size in the {zero_dim_name} direction. "
-                    "If this was intended to be translationally invariant, the box must have a large "
-                    "or infinite ('td.inf') size in the perpendicular direction."
-                )
-
-        return values
+    def _post_init_validators(self):
+        # check the doping box is 3D
+        if len(self.zero_dims) > 0:
+            raise SetupError(
+                "The doping box must be 3D. If you want a 2D doping box, please set one of the dimensions to a large or infinite size."
+            )
 
 
 class ConstantDoping(AbstractDopingBox):
@@ -122,18 +93,12 @@ class ConstantDoping(AbstractDopingBox):
     def _get_contrib(self, coords: dict, meshgrid: bool = True):
         """Returns the contribution to the doping a the locations specified in coords"""
 
-        indices_in_box, X, _, _, normal_axis = self._get_indices_in_box(
-            coords=coords, meshgrid=meshgrid
-        )
+        indices_in_box, X, _, _ = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
 
         contrib = np.zeros(X.shape)
         contrib[indices_in_box] = self.concentration
 
-        if normal_axis is not None and meshgrid:
-            slices = [slice(None)] * X.ndim
-            slices[normal_axis] = 0
-            return contrib[tuple(slices)]
-        return contrib
+        return contrib.squeeze()
 
 
 class GaussianDoping(AbstractDopingBox):
@@ -223,104 +188,152 @@ class GaussianDoping(AbstractDopingBox):
     def _get_contrib(self, coords: dict, meshgrid: bool = True):
         """Returns the contribution to the doping a the locations specified in coords"""
 
-        indices_in_box, X, Y, Z, normal_axis = self._get_indices_in_box(
-            coords=coords, meshgrid=meshgrid
-        )
+        indices_in_box, X, Y, Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
 
         x_contrib = np.ones(X.shape)
-        if normal_axis != 0:
-            x_contrib = np.zeros(X.shape)
-            x_contrib[indices_in_box] = 1
-            # lower x face
-            if self.source != "xmin":
-                x0 = self.bounds[0][0]
-                indices = np.logical_and(x0 <= X, x0 + self.width >= X)
-                indices = np.logical_and(indices, indices_in_box)
-                x_contrib[indices] = np.exp(
-                    -(X[indices] - x0 - self.width)
-                    * (X[indices] - x0 - self.width)
-                    / 2
-                    / self.sigma
-                    / self.sigma
-                )
-            # higher x face
-            if self.source != "xmax":
-                x1 = self.bounds[1][0]
-                indices = np.logical_and(x1 - self.width <= X, x1 >= X)
-                indices = np.logical_and(indices, indices_in_box)
-                x_contrib[indices] = np.exp(
-                    -(X[indices] - x1 + self.width)
-                    * (X[indices] - x1 + self.width)
-                    / 2
-                    / self.sigma
-                    / self.sigma
-                )
+        if self.source != "xmin":
+            x0 = self.bounds[0][0]
+            indices = np.logical_and(x0 <= X, x0 + self.width >= X)
+            indices = np.logical_and(indices, indices_in_box)
+            x_contrib[indices] = np.exp(
+                -(X[indices] - x0 - self.width)
+                * (X[indices] - x0 - self.width)
+                / 2
+                / self.sigma
+                / self.sigma
+            )
+        # higher x face
+        if self.source != "xmax":
+            x1 = self.bounds[1][0]
+            indices = np.logical_and(x1 - self.width <= X, x1 >= X)
+            indices = np.logical_and(indices, indices_in_box)
+            x_contrib[indices] = np.exp(
+                -(X[indices] - x1 + self.width)
+                * (X[indices] - x1 + self.width)
+                / 2
+                / self.sigma
+                / self.sigma
+            )
 
         y_contrib = np.ones(X.shape)
-        if normal_axis != 1:
-            y_contrib = np.zeros(X.shape)
-            y_contrib[indices_in_box] = 1
-            # lower y face
-            if self.source != "ymin":
-                y0 = self.bounds[0][1]
-                indices = np.logical_and(y0 <= Y, y0 + self.width >= Y)
-                indices = np.logical_and(indices, indices_in_box)
-                y_contrib[indices] = np.exp(
-                    -(Y[indices] - y0 - self.width)
-                    * (Y[indices] - y0 - self.width)
-                    / 2
-                    / self.sigma
-                    / self.sigma
-                )
-            # higher y face
-            if self.source != "ymax":
-                y1 = self.bounds[1][1]
-                indices = np.logical_and(y1 - self.width <= Y, y1 >= Y)
-                indices = np.logical_and(indices, indices_in_box)
-                y_contrib[indices] = np.exp(
-                    -(Y[indices] - y1 + self.width)
-                    * (Y[indices] - y1 + self.width)
-                    / 2
-                    / self.sigma
-                    / self.sigma
-                )
+        if self.source != "ymin":
+            y0 = self.bounds[0][1]
+            indices = np.logical_and(y0 <= Y, y0 + self.width >= Y)
+            indices = np.logical_and(indices, indices_in_box)
+            y_contrib[indices] = np.exp(
+                -(Y[indices] - y0 - self.width)
+                * (Y[indices] - y0 - self.width)
+                / 2
+                / self.sigma
+                / self.sigma
+            )
+        # higher y face
+        if self.source != "ymax":
+            y1 = self.bounds[1][1]
+            indices = np.logical_and(y1 - self.width <= Y, y1 >= Y)
+            indices = np.logical_and(indices, indices_in_box)
+            y_contrib[indices] = np.exp(
+                -(Y[indices] - y1 + self.width)
+                * (Y[indices] - y1 + self.width)
+                / 2
+                / self.sigma
+                / self.sigma
+            )
 
         z_contrib = np.ones(X.shape)
-        if normal_axis != 2:
-            z_contrib = np.zeros(X.shape)
-            z_contrib[indices_in_box] = 1
-            # lower z face
-            if self.source != "zmin":
-                z0 = self.bounds[0][2]
-                indices = np.logical_and(z0 <= Z, z0 + self.width >= Z)
-                indices = np.logical_and(indices, indices_in_box)
-                z_contrib[indices] = np.exp(
-                    -(Z[indices] - z0 - self.width)
-                    * (Z[indices] - z0 - self.width)
-                    / 2
-                    / self.sigma
-                    / self.sigma
-                )
-            # higher z face
-            if self.source != "zmax":
-                z1 = self.bounds[1][2]
-                indices = np.logical_and(z1 - self.width <= Z, z1 >= Z)
-                indices = np.logical_and(indices, indices_in_box)
-                z_contrib[indices] = np.exp(
-                    -(Z[indices] - z1 + self.width)
-                    * (Z[indices] - z1 + self.width)
-                    / 2
-                    / self.sigma
-                    / self.sigma
-                )
+        if self.source != "zmin":
+            z0 = self.bounds[0][2]
+            indices = np.logical_and(z0 <= Z, z0 + self.width >= Z)
+            indices = np.logical_and(indices, indices_in_box)
+            z_contrib[indices] = np.exp(
+                -(Z[indices] - z0 - self.width)
+                * (Z[indices] - z0 - self.width)
+                / 2
+                / self.sigma
+                / self.sigma
+            )
+        # higher z face
+        if self.source != "zmax":
+            z1 = self.bounds[1][2]
+            indices = np.logical_and(z1 - self.width <= Z, z1 >= Z)
+            indices = np.logical_and(indices, indices_in_box)
+            z_contrib[indices] = np.exp(
+                -(Z[indices] - z1 + self.width)
+                * (Z[indices] - z1 + self.width)
+                / 2
+                / self.sigma
+                / self.sigma
+            )
 
         total_contrib = x_contrib * y_contrib * z_contrib * self.concentration
 
-        if normal_axis is not None and meshgrid:
-            slices = [slice(None)] * X.ndim
-            slices[normal_axis] = 0
-            return total_contrib[tuple(slices)]
-        return total_contrib
+        return total_contrib.squeeze()
 
 
-DopingBoxType = Union[ConstantDoping, GaussianDoping]
+class CustomDoping(AbstractDopingBox):
+    """Sets a custom doping in the specified box.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> import numpy as np
+    >>> box_coords = [
+    ...     [-1, -1, -1],
+    ...     [1, 1, 1]
+    ... ]
+    >>> x = np.linspace(-1, 1, 5)
+    >>> y = np.linspace(-1, 1, 5)
+    >>> z = np.linspace(-1, 1, 5)
+    >>> data = np.random.rand(5, 5, 5)*1e18
+    >>> concentration = td.SpatialDataArray(
+    ...     data=data,
+    ...     coords={'x': x, 'y': y, 'z': z},
+    ... )
+    >>> custom_box1 = td.CustomDoping(
+    ...     center=(0, 0, 0),
+    ...     size=(2, 2, 2),
+    ...     concentration=concentration
+    ... )
+    >>> custom_box2 = td.CustomDoping.from_bounds(
+    ...     rmin=box_coords[0],
+    ...     rmax=box_coords[1],
+    ...     concentration=concentration
+    ... )
+    """
+
+    concentration: SpatialDataArray = pd.Field(
+        ...,
+        title="Doping concentration data array.",
+        description="Doping concentration data array.",
+        units=PERCMCUBE,
+    )
+
+    def _get_contrib(self, coords: dict, meshgrid: bool = True):
+        """Returns the contribution to the doping a the locations specified in coords"""
+
+        indices_in_box, X, Y, Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
+
+        contrib = np.zeros(X.shape)
+        # interpolate
+        if meshgrid:
+            interp_result = self.concentration.interp(coords)
+            contrib[indices_in_box] = interp_result.values[indices_in_box]
+        else:
+            # X, Y, Z are 1D arrays of coordinates
+            # interp_result = self.concentration.interp(coords)
+            # contrib = np.zeros(X.shape)
+            # contrib[indices_in_box] = interp_result.values[indices_in_box]
+
+            interp_coords = coords
+            interp_da = {
+                name: xr.DataArray(data, dims="new_dim") for name, data in interp_coords.items()
+            }
+            interp_res = self.concentration.interp(
+                **interp_da, kwargs={"fill_value": 0, "bounds_error": False}
+            )
+            contrib[indices_in_box] = interp_res.values[indices_in_box]
+
+        return contrib.squeeze()
+
+
+DopingBoxType = Union[ConstantDoping, GaussianDoping, CustomDoping]

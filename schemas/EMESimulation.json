@@ -1851,6 +1851,11 @@
             {
               "type": "autograd.tracer.Box"
             }
+          ],
+          "default": [
+            Infinity,
+            Infinity,
+            Infinity
           ]
         },
         "type": {
@@ -1861,9 +1866,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "size"
-      ],
       "type": "object"
     },
     "ConstantEffectiveDOS": {
@@ -2488,6 +2490,138 @@
       "required": [
         "coeffs",
         "eps_inf"
+      ],
+      "type": "object"
+    },
+    "CustomDoping": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ],
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "concentration": {
+          "properties": {
+            "_dims": {
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ],
+          "type": "xr.DataArray"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ],
+          "default": [
+            Infinity,
+            Infinity,
+            Infinity
+          ]
+        },
+        "type": {
+          "default": "CustomDoping",
+          "enum": [
+            "CustomDoping"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "concentration"
       ],
       "type": "object"
     },
@@ -5176,6 +5310,11 @@
             {
               "type": "autograd.tracer.Box"
             }
+          ],
+          "default": [
+            Infinity,
+            Infinity,
+            Infinity
           ]
         },
         "source": {
@@ -5197,7 +5336,6 @@
       "required": [
         "concentration",
         "ref_con",
-        "size",
         "width"
       ],
       "type": "object"
@@ -9548,6 +9686,10 @@
             },
             {
               "$ref": "#/definitions/VarshniEnergyBandGap"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
             }
           ]
         },
@@ -9558,6 +9700,9 @@
                 "anyOf": [
                   {
                     "$ref": "#/definitions/ConstantDoping"
+                  },
+                  {
+                    "$ref": "#/definitions/CustomDoping"
                   },
                   {
                     "$ref": "#/definitions/GaussianDoping"
@@ -9582,7 +9727,7 @@
               "type": "xr.DataArray"
             }
           ],
-          "default": 0
+          "default": []
         },
         "N_c": {
           "anyOf": [
@@ -9597,6 +9742,10 @@
             },
             {
               "$ref": "#/definitions/MultiValleyEffectiveDOS"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
             }
           ]
         },
@@ -9607,6 +9756,9 @@
                 "anyOf": [
                   {
                     "$ref": "#/definitions/ConstantDoping"
+                  },
+                  {
+                    "$ref": "#/definitions/CustomDoping"
                   },
                   {
                     "$ref": "#/definitions/GaussianDoping"
@@ -9631,7 +9783,7 @@
               "type": "xr.DataArray"
             }
           ],
-          "default": 0
+          "default": []
         },
         "N_v": {
           "anyOf": [
@@ -9646,6 +9798,10 @@
             },
             {
               "$ref": "#/definitions/MultiValleyEffectiveDOS"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
             }
           ]
         },

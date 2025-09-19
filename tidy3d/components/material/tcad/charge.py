@@ -8,15 +8,18 @@ import pydantic.v1 as pd
 
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.medium import AbstractMedium
-from tidy3d.components.tcad.doping import DopingBoxType
+from tidy3d.components.tcad.doping import ConstantDoping, DopingBoxType
 from tidy3d.components.tcad.types import (
     BandGapNarrowingModelType,
+    ConstantEffectiveDOS,
+    ConstantEnergyBandGap,
     EffectiveDOSModelType,
     EnergyBandGapModelType,
     MobilityModelType,
     RecombinationModelType,
 )
 from tidy3d.constants import CONDUCTIVITY, ELECTRON_VOLT, PERCMCUBE, PERMITTIVITY
+from tidy3d.log import log
 
 
 class AbstractChargeMedium(AbstractMedium):
@@ -228,8 +231,8 @@ class SemiconductorMedium(AbstractChargeMedium):
         ...         c2=0.5,
         ...         min_N=1e15,
         ...     ),
-        ...     N_a=0,
-        ...     N_d=0
+        ...     N_a=[td.ConstantDoping(concentration=1e15)],
+        ...     N_d=[td.ConstantDoping(concentration=1e15)]
         ... )
 
 
@@ -253,21 +256,21 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     """
 
-    N_c: EffectiveDOSModelType = pd.Field(
+    N_c: Union[EffectiveDOSModelType, pd.PositiveFloat] = pd.Field(
         ...,
         title="Effective density of electron states",
         description=":math:`N_c` Effective density of states in the conduction band.",
         units=PERCMCUBE,
     )
 
-    N_v: EffectiveDOSModelType = pd.Field(
+    N_v: Union[EffectiveDOSModelType, pd.PositiveFloat] = pd.Field(
         ...,
         title="Effective density of hole states",
         description=":math:`N_v` Effective density of states in the valence band.",
         units=PERCMCUBE,
     )
 
-    E_g: EnergyBandGapModelType = pd.Field(
+    E_g: Union[EnergyBandGapModelType, pd.PositiveFloat] = pd.Field(
         ...,
         title="Band-gap energy",
         description=":math:`E_g` Band-gap energy",
@@ -300,7 +303,7 @@ class SemiconductorMedium(AbstractChargeMedium):
     )
 
     N_a: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
-        0,
+        (),
         title="Doping: Acceptor concentration",
         description="Concentration of acceptor impurities, which create mobile holes, resulting in p-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
@@ -309,10 +312,66 @@ class SemiconductorMedium(AbstractChargeMedium):
     )
 
     N_d: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
-        0,
+        (),
         title="Doping: Donor concentration",
         description="Concentration of donor impurities, which create mobile electrons, resulting in n-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
         "or a tuple of geometric shapes to define specific doped regions.",
         units=PERCMCUBE,
     )
+
+    # DEPRECATION VALIDATORS
+    @pd.validator("N_c", always=True)
+    def check_nc_uses_model(cls, val, values):
+        """Issue deprecation warning if float is provided"""
+        if isinstance(val, (float, int)):
+            log.warning(
+                "Passing a float to 'N_c' is deprecated and will be removed in future versions. "
+                "Please use 'ConstantEffectiveDOS' instead."
+            )
+            return ConstantEffectiveDOS(N=val)
+        return val
+
+    @pd.validator("N_v", always=True)
+    def check_nv_uses_model(cls, val, values):
+        """Issue deprecation warning if float is provided"""
+        if isinstance(val, (float, int)):
+            log.warning(
+                "Passing a float to 'N_v' is deprecated and will be removed in future versions. "
+                "Please use 'ConstantEffectiveDOS' instead."
+            )
+            return ConstantEffectiveDOS(N=val)
+        return val
+
+    @pd.validator("E_g", always=True)
+    def check_eg_uses_model(cls, val, values):
+        """Issue deprecation warning if float is provided"""
+        if isinstance(val, (float, int)):
+            log.warning(
+                "Passing a float to 'E_g' is deprecated and will be removed in future versions. "
+                "Please use 'ConstantEnergyBandGap' instead."
+            )
+            return ConstantEnergyBandGap(eg=val)
+        return val
+
+    @pd.validator("N_d", always=True)
+    def check_nd_uses_model(cls, val, values):
+        """Issue deprecation warning if float is provided"""
+        if isinstance(val, (float, int)):
+            log.warning(
+                "Passing a float to 'N_d' is deprecated and will be removed in future versions. "
+                f"Please use a list of 'DopingBoxType' instead, e.g., [ConstantDoping(concentration={val})]."
+            )
+            return (ConstantDoping(concentration=val),)
+        return val
+
+    @pd.validator("N_a", always=True)
+    def check_na_uses_model(cls, val, values):
+        """Issue deprecation warning if float is provided"""
+        if isinstance(val, (float, int)):
+            log.warning(
+                "Passing a float to 'N_a' is deprecated and will be removed in future versions. "
+                f"Please use a list of 'DopingBoxType' instead, e.g., [ConstantDoping(concentration={val})]."
+            )
+            return (ConstantDoping(concentration=val),)
+        return val

@@ -2099,8 +2099,6 @@ cSi_MultiPhysics = VariantItem(
                 c2=0.5,
                 min_N=1e15,
             ),
-            N_a=0,
-            N_d=0,
         ),
     ),
     reference=[material_refs["Green2008"]],
