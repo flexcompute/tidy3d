@@ -3042,6 +3042,7 @@
           "type": "number"
         },
         "name": {
+          "minLength": 1,
           "type": "string"
         },
         "type": {
@@ -3065,6 +3066,7 @@
           "type": "object"
         },
         "name": {
+          "minLength": 1,
           "type": "string"
         },
         "type": {
@@ -4105,6 +4107,23 @@
       ],
       "type": "object"
     },
+    "GroundVoltage": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "type": {
+          "default": "GroundVoltage",
+          "enum": [
+            "GroundVoltage"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "HammerstadSurfaceRoughness": {
       "additionalProperties": false,
       "properties": {
@@ -4487,6 +4506,58 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "IsothermalSSACAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "convergence_dv": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "fermi_dirac": {
+          "default": false,
+          "type": "boolean"
+        },
+        "freqs": {
+          "type": "ArrayLike"
+        },
+        "temperature": {
+          "default": 300,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "tolerance_settings": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ChargeToleranceSpec"
+            }
+          ],
+          "default": {
+            "abs_tol": 10000000000.0,
+            "attrs": {},
+            "max_iters": 30,
+            "ramp_up_iters": 1,
+            "rel_tol": 1e-10,
+            "type": "ChargeToleranceSpec"
+          }
+        },
+        "type": {
+          "default": "IsothermalSSACAnalysis",
+          "enum": [
+            "IsothermalSSACAnalysis"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "freqs"
+      ],
       "type": "object"
     },
     "IsothermalSteadyChargeDCAnalysis": {
@@ -6561,6 +6632,84 @@
       },
       "required": [
         "r_const"
+      ],
+      "type": "object"
+    },
+    "SSACAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "convergence_dv": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "fermi_dirac": {
+          "default": false,
+          "type": "boolean"
+        },
+        "freqs": {
+          "type": "ArrayLike"
+        },
+        "tolerance_settings": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ChargeToleranceSpec"
+            }
+          ],
+          "default": {
+            "abs_tol": 10000000000.0,
+            "attrs": {},
+            "max_iters": 30,
+            "ramp_up_iters": 1,
+            "rel_tol": 1e-10,
+            "type": "ChargeToleranceSpec"
+          }
+        },
+        "type": {
+          "default": "SSACAnalysis",
+          "enum": [
+            "SSACAnalysis"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "freqs"
+      ],
+      "type": "object"
+    },
+    "SSACVoltageSource": {
+      "additionalProperties": false,
+      "properties": {
+        "amplitude": {
+          "default": 1.0,
+          "type": "number"
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "default": "SSACVoltageSource",
+          "enum": [
+            "SSACVoltageSource"
+          ],
+          "type": "string"
+        },
+        "voltage": {
+          "type": "ArrayLike"
+        }
+      },
+      "required": [
+        "voltage"
       ],
       "type": "object"
     },
@@ -9454,9 +9603,15 @@
           "type": "object"
         },
         "source": {
-          "allOf": [
+          "anyOf": [
             {
               "$ref": "#/definitions/DCVoltageSource"
+            },
+            {
+              "$ref": "#/definitions/GroundVoltage"
+            },
+            {
+              "$ref": "#/definitions/SSACVoltageSource"
             }
           ]
         },
@@ -9478,7 +9633,13 @@
     "analysis_spec": {
       "anyOf": [
         {
+          "$ref": "#/definitions/IsothermalSSACAnalysis"
+        },
+        {
           "$ref": "#/definitions/IsothermalSteadyChargeDCAnalysis"
+        },
+        {
+          "$ref": "#/definitions/SSACAnalysis"
         },
         {
           "$ref": "#/definitions/SteadyChargeDCAnalysis"

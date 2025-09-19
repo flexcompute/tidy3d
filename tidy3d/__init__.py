@@ -20,12 +20,14 @@ from tidy3d.components.material.tcad.heat import (
 from tidy3d.components.microwave.data.monitor_data import (
     AntennaMetricsData,
 )
+from tidy3d.components.spice.analysis.ac import IsothermalSSACAnalysis, SSACAnalysis
 from tidy3d.components.spice.analysis.dc import (
     ChargeToleranceSpec,
     IsothermalSteadyChargeDCAnalysis,
     SteadyChargeDCAnalysis,
 )
-from tidy3d.components.spice.sources.dc import DCCurrentSource, DCVoltageSource
+from tidy3d.components.spice.sources.ac import SSACVoltageSource
+from tidy3d.components.spice.sources.dc import DCCurrentSource, DCVoltageSource, GroundVoltage
 from tidy3d.components.spice.sources.types import VoltageSourceType
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis, UnsteadySpec
 from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
@@ -590,6 +592,7 @@ __all__ = [
     "GridRefinementLine",
     "GridRefinementRegion",
     "GridSpec",
+    "GroundVoltage",
     "HammerstadSurfaceRoughness",
     "HeatBoundarySpec",
     "HeatChargeBoundarySpec",
@@ -610,6 +613,7 @@ __all__ = [
     "IndexedVoltageDataArray",
     "InsulatingBC",
     "InternalAbsorber",
+    "IsothermalSSACAnalysis",
     "IsothermalSteadyChargeDCAnalysis",
     "IsotropicEffectiveDOS",
     "KerrNonlinearity",
@@ -678,6 +682,8 @@ __all__ = [
     "RectangularLumpedElement",
     "RotationAroundAxis",
     "RunTimeSpec",
+    "SSACAnalysis",
+    "SSACVoltageSource",
     "ScalarFieldDataArray",
     "ScalarFieldTimeDataArray",
     "ScalarModeFieldCylindricalDataArray",

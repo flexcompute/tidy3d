@@ -35,10 +35,13 @@ from tidy3d.components.material.tcad.heat import (
 from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
 from tidy3d.components.medium import Medium
 from tidy3d.components.scene import Scene
+from tidy3d.components.spice.sources.ac import SSACVoltageSource
 from tidy3d.components.spice.sources.dc import DCVoltageSource
 from tidy3d.components.spice.types import (
     ElectricalAnalysisType,
+    IsothermalSSACAnalysis,
     IsothermalSteadyChargeDCAnalysis,
+    SSACAnalysis,
     SteadyChargeDCAnalysis,
 )
 from tidy3d.components.structure import Structure
@@ -87,7 +90,14 @@ from tidy3d.components.tcad.viz import (
     plot_params_heat_bc,
     plot_params_heat_source,
 )
-from tidy3d.components.types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely, annotate_type
+from tidy3d.components.types import (
+    TYPE_TAG_STR,
+    Ax,
+    Bound,
+    ScalarSymmetry,
+    Shapely,
+    annotate_type,
+)
 from tidy3d.components.viz import PlotParams, add_ax_if_none, equal_aspect
 from tidy3d.constants import VOLUMETRIC_HEAT_RATE, inf
 from tidy3d.exceptions import SetupError
@@ -459,6 +469,9 @@ class HeatChargeSimulation(AbstractSimulation):
                     if isinstance(bc.condition.source, DCVoltageSource):
                         if len(bc.condition.source.voltage) > 1:
                             voltage_array_present = True
+                    elif isinstance(bc.condition.source, SSACVoltageSource):
+                        if len(bc.condition.source.voltage) > 1:
+                            voltage_array_present = True
         if is_capacitance_mnt and not voltage_array_present:
             raise SetupError(
                 "Monitors of type 'SteadyCapacitanceMonitor' have been defined but no array of voltages "
@@ -466,6 +479,21 @@ class HeatChargeSimulation(AbstractSimulation):
                 "Voltage arrays can be included in a source in this manner: "
                 "'VoltageBC(source=DCVoltageSource(voltage=yourArray))'"
             )
+        return values
+
+    @pd.root_validator(skip_on_failure=True)
+    def check_single_ssac(cls, values):
+        boundary_spec = values["boundary_spec"]
+        ssac_present = False
+        for bc in boundary_spec:
+            if isinstance(bc.condition, VoltageBC):
+                if isinstance(bc.condition.source, SSACVoltageSource):
+                    if ssac_present:
+                        raise SetupError(
+                            "Only a single 'SSACVoltageSource' source can be supplied."
+                        )
+                    else:
+                        ssac_present = True
         return values
 
     @pd.root_validator(skip_on_failure=True)
@@ -626,6 +654,30 @@ class HeatChargeSimulation(AbstractSimulation):
                             "Currently voltage arrays are supported only for one of the BCs."
                         )
         return val
+
+    @pd.root_validator(skip_on_failure=True)
+    def check_freqs_requires_ac_source(cls, values):
+        """Ensure that if freqs is provided, at least one ACVoltageSource is present."""
+        analysis_spec = values.get("analysis_spec")
+        if (
+            isinstance(analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis))
+            and len(analysis_spec.freqs) > 0
+        ):
+            bcs = values.get("boundary_spec")
+            has_ac_source = False
+            for bc in bcs:
+                if isinstance(bc.condition, VoltageBC):
+                    if isinstance(bc.condition.source, SSACVoltageSource):
+                        has_ac_source = True
+                        break
+
+            if not has_ac_source:
+                raise SetupError(
+                    "If 'freqs' is provided and not empty, at least one "
+                    "'SSACVoltageSource' must be present in the boundary conditions."
+                )
+
+        return values
 
     @pd.root_validator(skip_on_failure=True)
     def check_charge_simulation(cls, values):
@@ -1883,7 +1935,12 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # NOTE: for the time being, if a simulation has SemiconductorMedium
         # then we consider it of being a 'TCADAnalysisTypes.CHARGE'
-        ChargeTypes = (SteadyChargeDCAnalysis, IsothermalSteadyChargeDCAnalysis)
+        ChargeTypes = (
+            SteadyChargeDCAnalysis,
+            IsothermalSteadyChargeDCAnalysis,
+            SSACAnalysis,
+            IsothermalSSACAnalysis,
+        )
         if isinstance(self.analysis_spec, ChargeTypes):
             if self._check_if_semiconductor_present(self.structures):
                 return [TCADAnalysisTypes.CHARGE]
@@ -1926,3 +1983,24 @@ class HeatChargeSimulation(AbstractSimulation):
         """Returns True if 'HeatFromElectricSource' has been defined."""
 
         return any(isinstance(source, HeatFromElectricSource) for source in self.sources)
+
+    def _get_charge_type(self):
+        if isinstance(self.analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
+            return "ac"
+        else:
+            return "dc"
+
+    def _get_ssac_frequency_and_amplitude(self):
+        if not isinstance(self.analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
+            raise SetupError(
+                "Invalid analysis type for Small-Signal AC (SSAC). "
+                "SSAC requires a 'SSACAnalysis' or 'IsothermalSSACAnalysis', "
+                f"but received '{type(self.analysis_spec).__name__}' instead."
+            )
+
+        amplitude = None
+        for bc in self.boundary_spec:
+            if isinstance(bc.condition, VoltageBC):
+                if isinstance(bc.condition.source, SSACVoltageSource):
+                    amplitude = bc.condition.source.amplitude
+        return (self.analysis_spec.freqs, amplitude)
