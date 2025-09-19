@@ -517,7 +517,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 )
 
                 # get the PEC box with its face surfaces
-                (box, inj_axis, direction) = sim._pec_frame_box(shifted_absorber)
+                (box, inj_axis, direction) = sim._pec_frame_box(shifted_absorber, expand=True)
                 surfaces = box.surfaces(box.size, box.center)
 
                 # get extrusion coordinates and a cutting plane for inference of intersecting structures.
@@ -529,8 +529,8 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
                 # move cutting plane beyond the waveport plane along the `ModeSource` injection direction.
                 center = list(cutting_plane.center)
-                center[inj_axis] = port.center[inj_axis] - sign * fp_eps * box.size[inj_axis]
-                cutting_plane = cutting_plane.updated_copy(center=center)
+                center[inj_axis] = port.center[inj_axis] - sign * 0.5 * box.size[inj_axis]
+                cutting_plane = cutting_plane.updated_copy(center=center, size=tuple(1.0*np.array(cutting_plane.size)))
 
                 # define extrusion bounds
                 extrusion_bounds = [center[inj_axis], extrude_to][::sign]
