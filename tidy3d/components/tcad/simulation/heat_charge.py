@@ -216,8 +216,8 @@ class HeatChargeSimulation(AbstractSimulation):
     ...     name="air"
     ... )
     >>> intrinsic_Si = td.material_library['cSi'].variants['Si_MultiPhysics'].medium.charge
-    >>> Si_n = intrinsic_Si.updated_copy(N_d=1e16, name="Si_n")
-    >>> Si_p = intrinsic_Si.updated_copy(N_a=1e16, name="Si_p")
+    >>> Si_n = intrinsic_Si.updated_copy(N_d=[td.ConstantDoping(concentration=1e16)], name="Si_n")
+    >>> Si_p = intrinsic_Si.updated_copy(N_a=[td.ConstantDoping(concentration=1e16)], name="Si_p")
     >>> n_side = td.Structure(
     ...     geometry=td.Box(center=(-0.5, 0, 0), size=(1, 1, 1)),
     ...     medium=Si_n,

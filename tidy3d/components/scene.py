@@ -20,7 +20,12 @@ from tidy3d.components.material.tcad.charge import (
 )
 from tidy3d.components.material.tcad.heat import SolidMedium, SolidSpec
 from tidy3d.components.material.types import MultiPhysicsMediumType3D, StructureMediumType
-from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
+from tidy3d.components.tcad.doping import (
+    ConstantDoping,
+    CustomDoping,
+    DopingBoxType,
+    GaussianDoping,
+)
 from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
 from tidy3d.constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from tidy3d.exceptions import SetupError, Tidy3dError
@@ -1901,6 +1906,7 @@ class Scene(Tidy3dBaseModel):
                             limits[0] = doping
                         if doping > limits[1]:
                             limits[1] = doping
+                    # NOTE: This will be deprecated.
                     if isinstance(doping, SpatialDataArray):
                         min_value = np.min(doping.data.flatten())
                         max_value = np.max(doping.data.flatten())
@@ -1920,6 +1926,13 @@ class Scene(Tidy3dBaseModel):
                                     limits[0] = doping_box.ref_con
                                 if doping_box.concentration > limits[1]:
                                     limits[1] = doping_box.concentration
+                            if isinstance(doping_box, CustomDoping):
+                                min_value = np.min(doping_box.concentration.data.flatten())
+                                max_value = np.max(doping_box.concentration.data.flatten())
+                                if min_value < limits[0]:
+                                    limits[0] = min_value
+                                if max_value > limits[1]:
+                                    limits[1] = max_value
         return acceptors_lims, donors_lims
 
     def _pcolormesh_shape_doping_box(
@@ -1968,6 +1981,7 @@ class Scene(Tidy3dBaseModel):
         for n, doping in enumerate([electric_spec.N_a, electric_spec.N_d]):
             if isinstance(doping, float):
                 struct_doping[n] = struct_doping[n] + doping
+            # NOTE: This will be deprecated.
             if isinstance(doping, SpatialDataArray):
                 struct_coords = {"xyz"[d]: coords_2D[i] for i, d in enumerate(plane_axes_inds)}
                 data_2D = doping
@@ -1978,9 +1992,10 @@ class Scene(Tidy3dBaseModel):
                     data_2D = doping.sel(**selector)
                 contrib = data_2D.interp(**struct_coords, method="nearest")
                 struct_doping[n] = struct_doping[n] + contrib
+            # Handle doping boxes
             if isinstance(doping, tuple):
                 for doping_box in doping:
-                    if isinstance(doping_box, (ConstantDoping, GaussianDoping)):
+                    if isinstance(doping_box, DopingBoxType.__args__):
                         coords_dict = {
                             "xyz"[d]: coords_2D[i] for i, d in enumerate(plane_axes_inds)
                         }

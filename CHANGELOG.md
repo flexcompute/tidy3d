@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Task names are now optional when using `run(sim)` or `Job`. When running multiple jobs (via `run_async` or `Batch`), you can also provide simulations as a list without specifying task names. The previous dictionary-based format with explicit task names is still supported.
 - Added support for `tidy3d-extras`, an optional plugin that enables more accurate local mode solving via subpixel averaging.
 - Enabled lazy loading of data via `web.load(..., lazy=True)`. When used, this returns a lightweight proxy object holding a reference to the data. On first access to any field or method, the proxy transparently loads the full object (same as with the default lazy=False).
+- A new type of doping box has been introduced, `CustomDoping` which accepts a `SpatialDataArray` to define doping concentration. Unlike in the case where a `SpatialDataArray`, custom doping defined with `CustomDoping` have additive behavior, i.e., one can add other doping on top. This deprecates the `SpatialDataArray` as direct input for `N_a` and `N_d`.
+- Non-isothermal Charge simulations are now available. One can now run this type of simulations by using the `SteadyChargeDCAnalysis` as the `analysis_spec` of a `HeatChargeSimulation`. This type of simulations couple the heat equation with the drift-diffusion equations which allow to account for self heating behavior.
+- Because non-isothermal Charge simulations are now supported, new models for the effective density of states and bandgap energy have been introduced. These models are the following: `ConstantEffectiveDOS`, `IsotropicEffectiveDOS`, `MultiValleyEffectiveDOS`, `DualValleyEffectiveDOS`.
 
 ### Changed
 - `LayerRefinementSpec` defaults to assuming structures made of different materials are interior-disjoint for more efficient mesh generation.

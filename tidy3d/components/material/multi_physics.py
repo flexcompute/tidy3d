@@ -75,8 +75,8 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         ...             c2=0.5,
         ...             min_N=1e15,
         ...         ),
-        ...         N_a=0,
-        ...         N_d=0
+        ...         N_a=[td.ConstantDoping(concentration=1e15)],
+        ...         N_d=[td.ConstantDoping(concentration=1e15)]
         ...     )
         ... )
     """
