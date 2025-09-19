@@ -11,6 +11,7 @@ import pydantic.v1 as pd
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (
+    FreqVoltageDataArray,
     SpatialDataArray,
     SteadyVoltageDataArray,
 )
@@ -82,6 +83,15 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         description="Steady DC computation of the small signal resistance. This is computed "
         "as the derivative of the current-voltage relation :math:`\\frac{\\Delta V}{\\Delta I}`, and the result "
         "is given in Ohms. Note that in 2D the resistance is given in :math:`\\Omega \\mu`.",
+    )
+
+    ac_current_voltage: Optional[FreqVoltageDataArray] = pd.Field(
+        None,
+        title="Small-signal AC current-voltage",
+        description="Small-signal AC current as a function of DC bias voltage and frequency. "
+        "This complex-valued data :math:`I(v, f)` is computed from small-signal analysis and "
+        "can be used to determine frequency-dependent device parameters like admittance. "
+        "For 2D simulations, the units are :math:`A/{\\mu m}`, so scale by device width.",
     )
 
 

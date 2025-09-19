@@ -254,3 +254,63 @@ def test_gaussian_pulse():
     assert "'fmax'" in msg and "'fmin'" in msg
     assert "conflict" in msg.lower()
     assert "exclude" in msg.lower()
+
+
+def test_sweep_decade():
+    """
+    Test the sweep_decade method for generating logarithmically spaced frequencies.
+    """
+    # Test basic functionality
+    freq_range = td.FreqRange.from_freq_interval(1e3, 1e6)  # 1 kHz to 1 MHz (3 decades)
+    freqs = freq_range.sweep_decade(10)  # 10 points per decade
+
+    # Check that the frequencies have the correct bounds and are logarithmically spaced
+    assert len(freqs) > 0
+    ratios = freqs[1:] / freqs[:-1]
+    assert np.allclose(ratios, ratios[0])
+    assert np.isclose(freqs[0], freq_range.fmin)
+    assert np.isclose(freqs[-1], freq_range.fmax)
+
+    # Test with different number of points per decade
+    freqs_9 = freq_range.sweep_decade(9)
+    freqs_11 = freq_range.sweep_decade(11)
+
+    # More points per decade should result in more total points
+    assert len(freqs_9) < len(freqs) < len(freqs_11)
+
+    # All should span the same range
+    assert np.isclose(freqs_9[0], freqs_11[0])
+    assert np.isclose(freqs_9[-1], freqs_11[-1])
+    assert np.isclose(freqs[0], freqs_11[0])
+    assert np.isclose(freqs[-1], freqs_11[-1])
+
+
+def test_sweep_decade_edge_cases():
+    """
+    Test edge cases and error conditions for sweep_decade.
+    """
+    # Test with single decade
+    freq_range = td.FreqRange.from_freq_interval(1e3, 1e4)  # 1 decade
+    freqs = freq_range.sweep_decade(5)
+
+    # Check that the frequencies have the correct bounds and are logarithmically spaced
+    assert len(freqs) >= 5  # Should have at least 5 points
+    ratios = freqs[1:] / freqs[:-1]
+    assert np.allclose(ratios, ratios[0])
+    assert np.isclose(freqs[0], freq_range.fmin)
+    assert np.isclose(freqs[-1], freq_range.fmax)
+
+    # Test error conditions
+    freq_range = td.FreqRange.from_freq_interval(1e3, 1e6)
+
+    # Negative points per decade
+    with pytest.raises(
+        ValueError, match="'num_points_per_decade' must be strictly positive, got -1."
+    ):
+        freq_range.sweep_decade(-1)
+
+    # Zero points per decade
+    with pytest.raises(
+        ValueError, match="'num_points_per_decade' must be strictly positive, got 0."
+    ):
+        freq_range.sweep_decade(0)

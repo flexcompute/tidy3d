@@ -897,6 +897,99 @@ def test_heat_charge_bcs_validation(boundary_conditions):
     with pytest.raises(pd.ValidationError):
         td.VoltageBC(source=td.DCVoltageSource(voltage=np.array([td.inf, 0, 1])))
 
+    # Invalid SSACVoltageSource: infinite voltage
+    with pytest.raises(pd.ValidationError):
+        td.VoltageBC(source=td.SSACVoltageSource(voltage=np.array([td.inf, 0, 1]), amplitude=1e-2))
+
+
+def test_freqs_validation():
+    """Test validation that freqs requires SSACVoltageSource."""
+    solid_box_1 = td.Box(center=(0, 0, 0), size=(2, 2, 2))
+    solid_box_2 = td.Box(center=(1, 1, 1), size=(2, 2, 2))
+    solid_box_3 = td.Box(center=(2, 2, 2), size=(2, 2, 2))
+
+    metal_medium = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        charge=td.ChargeConductorMedium(conductivity=1),
+        name="metal",
+    )
+
+    cathode = td.Structure(
+        geometry=solid_box_1,
+        medium=metal_medium,
+        name="cathode",
+    )
+    silicon = td.Structure(
+        geometry=solid_box_2,
+        medium=CHARGE_SIMULATION.intrinsic_Si,
+        name="silicon",
+    )
+    anode = td.Structure(
+        geometry=solid_box_3,
+        medium=metal_medium,
+        name="anode",
+    )
+    structures = [cathode, silicon, anode]
+
+    volt_monitor = td.SteadyPotentialMonitor(
+        center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="voltage"
+    )
+
+    charge_tolerance = td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400)
+    freqs_input = [1e3, 1e4, 1e5]
+    isothermal_spec = td.IsothermalSSACAnalysis(
+        temperature=300,
+        tolerance_settings=charge_tolerance,
+        fermi_dirac=True,
+        freqs=freqs_input,
+    )
+
+    # Test that freqs with SSACVoltageSource works
+    ssac_source = td.SSACVoltageSource(voltage=[0, 1, 2], amplitude=1e-3)
+    sim = td.HeatChargeSimulation(
+        size=(8, 8, 8),
+        center=(0, 0, 0),
+        structures=structures,
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["anode", "silicon"]),
+                condition=td.VoltageBC(source=ssac_source),
+            ),
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["cathode", "silicon"]),
+                condition=td.VoltageBC(source=td.GroundVoltage()),
+            ),
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        monitors=[volt_monitor],
+        analysis_spec=isothermal_spec,
+    )
+
+    # Test that freqs without SSACVoltageSource raises error
+    with pytest.raises(
+        pd.ValidationError,
+        match="If 'freqs' is provided and not empty, at least one 'SSACVoltageSource' must be present in the boundary conditions.",
+    ):
+        sim.updated_copy(
+            boundary_spec=[
+                td.HeatChargeBoundarySpec(
+                    placement=td.StructureStructureInterface(structures=["cathode", "silicon"]),
+                    condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0)),
+                ),
+            ],
+        )
+
+    # test the getter function
+    freqs, amplitude = sim._get_ssac_frequency_and_amplitude()
+    assert np.isclose(freqs, freqs_input).all()
+    assert np.isclose(1e-3, amplitude)
+
+    with pytest.raises(pd.ValidationError, match="'freqs' cannot contain infinite frequencies."):
+        sim.updated_copy(analysis_spec=sim.analysis_spec.updated_copy(freqs=[1e2, np.inf]))
+
+    with pytest.raises(pd.ValidationError, match="'freqs' cannot contain negative frequencies."):
+        sim.updated_copy(analysis_spec=sim.analysis_spec.updated_copy(freqs=[1e2, -1e2]))
+
 
 def test_vertical_natural_convection():
     solid_box_l = td.Box(center=(0, 0, 0), size=(2, 2, 2))
@@ -1481,6 +1574,34 @@ class TestCharge:
         # At least 2 VoltageBCs should be defined
         with pytest.raises(pd.ValidationError):
             sim.updated_copy(boundary_spec=[bc_n])
+
+        condition_ssac_n = td.VoltageBC(source=td.SSACVoltageSource(voltage=[0, 1], amplitude=1e-3))
+        condition_ssac_p = td.VoltageBC(source=td.SSACVoltageSource(voltage=[0, 1], amplitude=1e-3))
+        # Two AC sources cannot be defined
+        with pytest.raises(
+            pd.ValidationError, match="Only a single 'SSACVoltageSource' source can be supplied."
+        ):
+            analysis = td.IsothermalSSACAnalysis(freqs=[1e2, 1e3], temperature=300)
+            sim.updated_copy(
+                boundary_spec=[
+                    bc_n.updated_copy(condition=condition_ssac_n),
+                    bc_p.updated_copy(condition=condition_ssac_p),
+                ],
+                analysis_spec=analysis,
+            )
+
+        # Test SSACAnalysis as well
+        with pytest.raises(
+            pd.ValidationError, match="Only a single 'SSACVoltageSource' source can be supplied."
+        ):
+            analysis_ssac = td.SSACAnalysis(freqs=[1e2, 1e3], tolerance_settings=charge_tolerance)
+            sim.updated_copy(
+                boundary_spec=[
+                    bc_n.updated_copy(condition=condition_ssac_n),
+                    bc_p.updated_copy(condition=condition_ssac_p),
+                ],
+                analysis_spec=analysis_ssac,
+            )
 
         # Define ChargeSimulation with no Semiconductor materials
         medium = td.MultiPhysicsMedium(

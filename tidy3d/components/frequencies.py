@@ -436,6 +436,55 @@ class FreqRange(Tidy3dBaseModel):
                 f"Received: {spacing!r}. Please provide a valid spacing type."
             )
 
+    def sweep_decade(self, num_points_per_decade: int) -> NDArray[np.float64]:
+        """
+        Generate frequencies with logarithmic spacing across decades.
+
+        Notes
+        -----
+        This method creates a logarithmically spaced frequency sweep.
+        It is analogous to the SPICE AC analysis command for a decade
+        sweep:  ``.ac dec <num_points_per_decade> <fmin> <fmax>``
+
+        Parameters
+        ----------
+        num_points_per_decade : int
+            Number of frequency points per decade. Must be strictly positive.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            Array of frequencies with logarithmic spacing across decades.
+
+        Raises
+        ------
+        ValueError
+            If ``num_points_per_decade`` is not positive, or if frequency range is invalid.
+
+        Examples
+        --------
+        >>> import tidy3d as td
+        >>> freq_range = td.FreqRange.from_freq_interval(1e3, 1e6)  # 1 kHz to 1 MHz
+        >>> freqs = freq_range.sweep_decade(10)  # 10 points per decade
+        """
+        # Input validation
+        if num_points_per_decade <= 0:
+            raise ValueError(
+                f"'num_points_per_decade' must be strictly positive, got {num_points_per_decade}."
+            )
+
+        # Calculate logarithmic range
+        fstart = np.log10(self.fmin)
+        fend = np.log10(self.fmax)
+        num_decades = fend - fstart
+
+        # Calculate total number of points
+        # Add 1 to include the endpoint, ensuring we cover the full range
+        num_total_points = int(np.round(num_decades * num_points_per_decade)) + 1
+
+        # Generate logarithmically spaced frequencies
+        return np.logspace(fstart, fend, num_total_points)
+
     def wvls(self, num_points: int, spacing: str = "uniform_wvl") -> NDArray[np.float64]:
         """
         method ``wvls()`` returns a numpy array of ``num_points`` wavelengths uniformly

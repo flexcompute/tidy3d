@@ -535,6 +535,24 @@ class FreqDataArray(DataArray):
     _dims = ("f",)
 
 
+class FreqVoltageDataArray(DataArray):
+    """Frequency-domain array.
+
+    Example
+    -------
+    >>> f = [2e14, 3e14]
+    >>> v = [0.1, 0.2, 0.3]
+    >>> coords = dict(f=f, v=v)
+    >>> fd = FreqVoltageDataArray((1+1j) * np.random.random((2, 3)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = (
+        "f",
+        "v",
+    )
+
+
 class FreqModeDataArray(DataArray):
     """Array over frequency and mode index.
 
@@ -1559,6 +1577,7 @@ DATA_ARRAY_TYPES = [
     FreqDataArray,
     TimeDataArray,
     FreqModeDataArray,
+    FreqVoltageDataArray,
     TriangleMeshDataArray,
     HeatDataArray,
     EMEScalarFieldDataArray,

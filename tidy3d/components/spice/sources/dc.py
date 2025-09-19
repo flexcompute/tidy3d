@@ -48,7 +48,13 @@ class DCVoltageSource(Tidy3dBaseModel):
     >>> voltage_source = td.DCVoltageSource(voltage=voltages)
     """
 
-    name: Optional[str]
+    name: Optional[str] = pd.Field(
+        None,
+        title="Name",
+        description="Unique name for the DC voltage source",
+        min_length=1,
+    )
+
     voltage: ArrayFloat1D = pd.Field(
         ...,
         title="Voltage",
@@ -68,6 +74,30 @@ class DCVoltageSource(Tidy3dBaseModel):
         return val
 
 
+class GroundVoltage(Tidy3dBaseModel):
+    """
+    Ground voltage source (0V reference).
+
+
+    Notes
+    -----
+    This source explicitly sets the ground reference (0V) for the simulation.
+    It is equivalent to :class:`DCVoltageSource(voltage=0)` but more explicit about
+    establishing the ground reference.
+
+    If no :class:`GroundVoltage` is specified, the smallest voltage among all
+    sources will be considered as the ground reference. Note that the boundary
+    conditions defined using a voltage array will be ignored during this
+    process and cannot be used as a default ground.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> ground_source = td.GroundVoltage()
+    >>> voltage_bc = td.VoltageBC(source=ground_source)
+    """
+
+
 class DCCurrentSource(Tidy3dBaseModel):
     """
     DC current source in amperes.
@@ -78,7 +108,13 @@ class DCCurrentSource(Tidy3dBaseModel):
     >>> current_source = td.DCCurrentSource(current=0.4)
     """
 
-    name: Optional[str]
+    name: Optional[str] = pd.Field(
+        None,
+        title="Name",
+        description="Unique name for the DC current source",
+        min_length=1,
+    )
+
     current: pd.FiniteFloat = pd.Field(
         title="Current",
         description="DC current usually used as source in :class:`CurrentBC` boundary conditions.",
