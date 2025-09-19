@@ -547,7 +547,11 @@ class TerminalComponentModeler(AbstractComponentModeler):
                     for geom in shapely_geom:
                         polygon_list = polygon_list + ClipOperation.to_polygon_list(geom)
 
-                    new_geoms = []
+                    if isinstance(structure.geometry, GeometryGroup):
+                        new_geoms = list(structure.geometry.geometries)
+                    else:
+                        new_geoms = [structure.geometry]
+
                     # loop over identified geometries and extrude them
                     for polygon in polygon_list:
                         # construct outer shell of an extruded geometry first
@@ -579,7 +583,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
                         new_geoms.append(extruded_slab_new)
 
                     # add the original geometry
-                    new_geoms.append(structure.geometry)
+                    # new_geoms.append(structure.geometry)
 
                     # update structure and add it to the list
                     new_struct = structure.updated_copy(
