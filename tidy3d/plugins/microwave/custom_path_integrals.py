@@ -9,14 +9,12 @@ import xarray as xr
 
 from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
 from tidy3d.components.data.monitor_data import FieldTimeData
-from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.microwave.path_integrals.base_spec import CustomPathIntegral2DSpec
 from tidy3d.components.microwave.path_integrals.current_spec import (
     CompositeCurrentIntegralSpec,
     CustomCurrentIntegral2DSpec,
 )
 from tidy3d.components.microwave.path_integrals.voltage_spec import CustomVoltageIntegral2DSpec
-from tidy3d.components.types import Axis, Coordinate
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
 
@@ -98,8 +96,8 @@ class CustomPathIntegral2D(CustomPathIntegral2DSpec):
         field2_interp = field2.interp(path_indexer, method="linear")
 
         # Determine the differential length elements along the path
-        dl_x = self._compute_dl_component(x_path, self.is_closed_contour)
-        dl_y = self._compute_dl_component(y_path, self.is_closed_contour)
+        dl_x = CustomPathIntegral2DSpec._compute_dl_component(x_path, self.is_closed_contour)
+        dl_y = CustomPathIntegral2DSpec._compute_dl_component(y_path, self.is_closed_contour)
         dl_x = xr.DataArray(dl_x, dims="s")
         dl_y = xr.DataArray(dl_y, dims="s")
 
@@ -109,69 +107,6 @@ class CustomPathIntegral2D(CustomPathIntegral2DSpec):
         result = integrand.integrate(coord="s")
         result = result.reset_coords(drop=True)
         return _make_base_result_data_array(result)
-
-    @staticmethod
-    def _compute_dl_component(coord_array: xr.DataArray, closed_contour=False) -> np.array:
-        """Computes the differential length element along the integration path."""
-        dl = np.gradient(coord_array)
-        if closed_contour:
-            # If the contour is closed, we can use central difference on the starting/end point
-            # which will be more accurate than the default forward/backward choice in np.gradient
-            grad_end = np.gradient([coord_array[-2], coord_array[0], coord_array[1]])
-            dl[0] = dl[-1] = grad_end[1]
-        return dl
-
-    @classmethod
-    def from_circular_path(
-        cls, center: Coordinate, radius: float, num_points: int, normal_axis: Axis, clockwise: bool
-    ) -> CustomPathIntegral2D:
-        """Creates a ``CustomPathIntegral2D`` from a circular path given a desired number of points
-        along the perimeter.
-
-        Parameters
-        ----------
-        center : Coordinate
-            The center of the circle.
-        radius : float
-            The radius of the circle.
-        num_points : int
-            THe number of equidistant points to use along the perimeter of the circle.
-        normal_axis : Axis
-            The axis normal to the defined circle.
-        clockwise : bool
-            When ``True``, the points will be ordered clockwise with respect to the positive
-            direction of the ``normal_axis``.
-
-        Returns
-        -------
-        :class:`.CustomPathIntegral2D`
-            A path integral defined on a circular path.
-        """
-
-        def generate_circle_coordinates(radius: float, num_points: int, clockwise: bool):
-            """Helper for generating x,y vertices around a circle in the local coordinate frame."""
-            sign = 1.0
-            if clockwise:
-                sign = -1.0
-            angles = np.linspace(0, sign * 2 * np.pi, num_points, endpoint=True)
-            xt = radius * np.cos(angles)
-            yt = radius * np.sin(angles)
-            return (xt, yt)
-
-        # Get transverse axes
-        normal_center, trans_center = Geometry.pop_axis(center, normal_axis)
-
-        # These x,y coordinates in the local coordinate frame
-        if normal_axis == 1:
-            # Handle special case when y is the axis that is popped
-            clockwise = not clockwise
-        xt, yt = generate_circle_coordinates(radius, num_points, clockwise)
-        xt += trans_center[0]
-        yt += trans_center[1]
-        circle_vertices = np.column_stack((xt, yt))
-        # Close the contour exactly
-        circle_vertices[-1, :] = circle_vertices[0, :]
-        return cls(axis=normal_axis, position=normal_center, vertices=circle_vertices)
 
 
 class CustomVoltageIntegral2D(CustomPathIntegral2D, CustomVoltageIntegral2DSpec):

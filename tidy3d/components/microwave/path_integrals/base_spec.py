@@ -8,6 +8,7 @@ import numpy as np
 import pydantic.v1 as pd
 import shapely
 import xarray as xr
+from typing_extensions import Self
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.base import Box, Geometry
@@ -150,7 +151,7 @@ class CustomPathIntegral2DSpec(AbstractAxesRH):
     @classmethod
     def from_circular_path(
         cls, center: Coordinate, radius: float, num_points: int, normal_axis: Axis, clockwise: bool
-    ) -> CustomPathIntegral2DSpec:
+    ) -> Self:
         """Creates a ``CustomPathIntegral2DSpec`` from a circular path given a desired number of points
         along the perimeter.
 

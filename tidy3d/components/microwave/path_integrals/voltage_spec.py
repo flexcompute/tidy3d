@@ -6,6 +6,7 @@ from typing import Optional
 
 import numpy as np
 import pydantic.v1 as pd
+from typing_extensions import Self
 
 from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.microwave.path_integrals.base_spec import (
@@ -32,8 +33,9 @@ class VoltageIntegralAxisAlignedSpec(AxisAlignedPathIntegralSpec):
         description="Positive indicates V=Vb-Va where position b has a larger coordinate along the axis of integration.",
     )
 
-    @staticmethod
+    @classmethod
     def from_terminal_positions(
+        cls,
         plus_terminal: float,
         minus_terminal: float,
         x: Optional[float] = None,
@@ -41,7 +43,7 @@ class VoltageIntegralAxisAlignedSpec(AxisAlignedPathIntegralSpec):
         z: Optional[float] = None,
         extrapolate_to_endpoints: bool = True,
         snap_path_to_grid: bool = True,
-    ) -> VoltageIntegralAxisAlignedSpec:
+    ) -> Self:
         """Helper to create a :class:`VoltageIntegralAxisAlignedSpec` from two coordinates that
         define a line and two positions indicating the endpoints of the path integral.
 
@@ -81,7 +83,7 @@ class VoltageIntegralAxisAlignedSpec(AxisAlignedPathIntegralSpec):
         if plus_terminal < minus_terminal:
             direction = "-"
 
-        return VoltageIntegralAxisAlignedSpec(
+        return cls(
             center=center,
             size=size,
             extrapolate_to_endpoints=extrapolate_to_endpoints,

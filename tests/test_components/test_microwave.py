@@ -26,12 +26,13 @@ from tidy3d.components.microwave.formulas.circuit_parameters import (
 )
 from tidy3d.components.microwave.path_integrals.path_integral_factory import (
     make_current_integral,
+    make_path_integrals,
     make_voltage_integral,
 )
 from tidy3d.components.microwave.path_integrals.path_spec_generator import PathSpecGenerator
 from tidy3d.components.types import Ax, Shapely
 from tidy3d.constants import EPSILON_0
-from tidy3d.exceptions import ValidationError
+from tidy3d.exceptions import SetupError, ValidationError
 
 from ..test_data.test_monitor_data import make_directivity_data
 
@@ -43,6 +44,9 @@ if MAKE_PLOTS:
     from matplotlib import use
 
     use("TkAgg")
+
+COAX_R1 = 0.04
+COAX_R2 = 0.5
 
 
 def make_mw_sim(
@@ -211,7 +215,7 @@ def make_mw_sim(
 
 
 def plot_auto_path_spec(
-    path_spec: tidy3d.components.microwave.path_integrals.current_spec.CompositeCurrentIntegralSpec,
+    path_spec: td.CompositeCurrentIntegralSpec,
     geoms: list[Shapely],
     ax: Ax = None,
 ) -> Ax:
@@ -318,6 +322,53 @@ def test_antenna_parameters():
         antenna_params.partial_gain("invalid")
     with pytest.raises(ValueError):
         antenna_params.partial_realized_gain("invalid")
+
+
+def test_path_integral_plotting():
+    """Test that all types of path integrals correctly plot themselves."""
+
+    mean_radius = (COAX_R2 + COAX_R1) * 0.5
+    size = [COAX_R2 - COAX_R1, 0, 0]
+    center = [mean_radius, 0, 0]
+
+    voltage_integral = td.VoltageIntegralAxisAlignedSpec(
+        center=center, size=size, sign="-", extrapolate_to_endpoints=True, snap_path_to_grid=True
+    )
+
+    current_integral = td.CustomCurrentIntegral2DSpec.from_circular_path(
+        center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=2, clockwise=False
+    )
+
+    ax = voltage_integral.plot(z=0)
+    current_integral.plot(z=0, ax=ax)
+    plt.close()
+
+    # Test off center plotting
+    ax = voltage_integral.plot(z=2)
+    current_integral.plot(z=2, ax=ax)
+    plt.close()
+
+    # Plot
+    voltage_integral = td.CustomVoltageIntegral2DSpec(
+        axis=1, position=0, vertices=[(-1, -1), (0, 0), (1, 1)]
+    )
+
+    current_integral = td.CurrentIntegralAxisAlignedSpec(
+        center=(0, 0, 0),
+        size=(2, 0, 1),
+        sign="-",
+        extrapolate_to_endpoints=False,
+        snap_contour_to_grid=False,
+    )
+
+    ax = voltage_integral.plot(y=0)
+    current_integral.plot(y=0, ax=ax)
+    plt.close()
+
+    # Test off center plotting
+    ax = voltage_integral.plot(y=2)
+    current_integral.plot(y=2, ax=ax)
+    plt.close()
 
 
 @pytest.mark.parametrize("colocate", [False, True])
@@ -451,20 +502,10 @@ def test_auto_path_spec_validation():
 def test_composite_current_integral_validation():
     """Ensures that the CompositeCurrentIntegralSpec is validated correctly."""
 
-    current_spec = (
-        tidy3d.components.microwave.path_integrals.current_spec.CurrentIntegralAxisAlignedSpec(
-            center=(1, 2, 3), size=(0, 1, 1), sign="-"
-        )
-    )
-    voltage_spec = (
-        tidy3d.components.microwave.path_integrals.voltage_spec.VoltageIntegralAxisAlignedSpec(
-            center=(1, 2, 3), size=(0, 0, 1), sign="-"
-        )
-    )
-    path_spec = (
-        tidy3d.components.microwave.path_integrals.current_spec.CompositeCurrentIntegralSpec(
-            center=(1, 2, 3), size=(0, 1, 1), path_specs=[current_spec], sum_spec="sum"
-        )
+    current_spec = td.CurrentIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 1, 1), sign="-")
+    voltage_spec = td.VoltageIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
+    path_spec = td.CompositeCurrentIntegralSpec(
+        center=(1, 2, 3), size=(0, 1, 1), path_specs=[current_spec], sum_spec="sum"
     )
 
     with pytest.raises(pd.ValidationError):
@@ -491,12 +532,10 @@ def test_path_integral_creation():
     )
     current_integral = make_current_integral(path_spec)
 
-    path_spec = tidy3d.components.microwave.path_integrals.voltage_spec.CustomVoltageIntegral2DSpec(
-        vertices=[(0, 1), (0, 4)], axis=1, position=2
-    )
+    path_spec = td.CustomVoltageIntegral2DSpec(vertices=[(0, 1), (0, 4)], axis=1, position=2)
     voltage_integral = make_voltage_integral(path_spec)
 
-    path_spec = tidy3d.components.microwave.path_integrals.current_spec.CustomCurrentIntegral2DSpec(
+    path_spec = td.CustomCurrentIntegral2DSpec(
         vertices=[
             (0, 1),
             (0, 4),
@@ -509,17 +548,15 @@ def test_path_integral_creation():
     _ = make_current_integral(path_spec)
 
     with pytest.raises(pd.ValidationError):
-        path_spec = (
-            tidy3d.components.microwave.path_integrals.current_spec.CustomCurrentIntegral2DSpec(
-                vertices=[
-                    (0, 1, 3),
-                    (0, 4, 5),
-                    (3, 4, 5),
-                    (3, 1, 5),
-                ],
-                axis=1,
-                position=2,
-            )
+        path_spec = td.CustomCurrentIntegral2DSpec(
+            vertices=[
+                (0, 1, 3),
+                (0, 4, 5),
+                (3, 4, 5),
+                (3, 1, 5),
+            ],
+            axis=1,
+            position=2,
         )
 
 
@@ -529,12 +566,8 @@ def test_microwave_mode_spec_validation():
     _ = td.MicrowaveModeSpec()
     _ = td.MicrowaveModeSpec(voltage_spec=None, current_spec=None)
 
-    v_spec = tidy3d.components.microwave.path_integrals.voltage_spec.VoltageIntegralAxisAlignedSpec(
-        center=(1, 2, 3), size=(0, 0, 1), sign="-"
-    )
-    i_spec = tidy3d.components.microwave.path_integrals.current_spec.CurrentIntegralAxisAlignedSpec(
-        center=(1, 2, 3), size=(0, 1, 1), sign="-"
-    )
+    v_spec = td.VoltageIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
+    i_spec = td.CurrentIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 1, 1), sign="-")
 
     # All valid methods
     _ = td.MicrowaveModeSpec(voltage_spec=(v_spec,), current_spec=(i_spec,))
@@ -560,3 +593,241 @@ def test_microwave_mode_spec_validation():
 
     with pytest.raises(pd.ValidationError):
         _ = td.MicrowaveModeSpec(current_spec=(None, i_spec))
+
+
+def test_path_integral_factory_voltage_validation():
+    """Test make_voltage_integral validation and error handling."""
+
+    # Valid voltage specs
+    axis_aligned_spec = td.VoltageIntegralAxisAlignedSpec(
+        center=(1, 2, 3), size=(0, 0, 1), sign="-"
+    )
+    custom_2d_spec = td.CustomVoltageIntegral2DSpec(vertices=[(0, 1), (0, 4)], axis=1, position=2)
+
+    # Test successful creation with axis-aligned spec
+    voltage_integral = make_voltage_integral(axis_aligned_spec)
+    assert voltage_integral is not None
+    assert voltage_integral.center == (1, 2, 3)
+    assert voltage_integral.size == (0, 0, 1)
+
+    # Test successful creation with custom 2D spec
+    voltage_integral = make_voltage_integral(custom_2d_spec)
+    assert voltage_integral is not None
+    assert voltage_integral.axis == 1
+    assert voltage_integral.position == 2
+
+    # Test ValidationError with unsupported type
+    class UnsupportedVoltageSpec:
+        def dict(self, exclude=None):
+            return {}
+
+    with pytest.raises(ValidationError, match="Unsupported voltage path specification type"):
+        make_voltage_integral(UnsupportedVoltageSpec())
+
+
+def test_path_integral_factory_current_validation():
+    """Test make_current_integral validation and error handling."""
+
+    # Valid current specs
+    axis_aligned_spec = td.CurrentIntegralAxisAlignedSpec(
+        center=(1, 2, 3), size=(0, 1, 1), sign="-"
+    )
+    custom_2d_spec = td.CustomCurrentIntegral2DSpec(
+        vertices=[(0, 1), (0, 4), (3, 4), (3, 1)], axis=1, position=2
+    )
+    composite_spec = td.CompositeCurrentIntegralSpec(
+        center=(1, 2, 3), size=(0, 1, 1), path_specs=[axis_aligned_spec], sum_spec="sum"
+    )
+
+    # Test successful creation with axis-aligned spec
+    current_integral = make_current_integral(axis_aligned_spec)
+    assert current_integral is not None
+    assert current_integral.center == (1, 2, 3)
+    assert current_integral.size == (0, 1, 1)
+
+    # Test successful creation with custom 2D spec
+    current_integral = make_current_integral(custom_2d_spec)
+    assert current_integral is not None
+    assert current_integral.axis == 1
+    assert current_integral.position == 2
+
+    # Test successful creation with composite spec
+    current_integral = make_current_integral(composite_spec)
+    assert current_integral is not None
+    assert current_integral.center == (1, 2, 3)
+    assert len(current_integral.path_specs) == 1
+
+    # Test ValidationError with unsupported type
+    class UnsupportedCurrentSpec:
+        def dict(self, exclude=None):
+            return {}
+
+    with pytest.raises(ValidationError, match="Unsupported current path specification type"):
+        make_current_integral(UnsupportedCurrentSpec())
+
+
+def test_make_path_integrals_validation():
+    """Test make_path_integrals validation and error handling."""
+
+    # Create a basic simulation setup
+    sim = make_mw_sim(False, False, "microstrip")
+    mode_monitor = sim.monitors[0]
+
+    # Valid microwave mode spec with explicit specs
+    v_spec = td.VoltageIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
+    i_spec = td.CurrentIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 1, 1), sign="-")
+
+    microwave_mode_spec = td.MicrowaveModeSpec(voltage_spec=(v_spec,), current_spec=(i_spec,))
+
+    # Test successful creation
+    voltage_integrals, current_integrals = make_path_integrals(
+        microwave_mode_spec, mode_monitor, sim
+    )
+    assert len(voltage_integrals) == 1
+    assert len(current_integrals) == 1
+    assert voltage_integrals[0] is not None
+    assert current_integrals[0] is not None
+
+    # Test with None specs - when both are None, use_automatic_setup is True
+    # This means current integrals will be auto-generated, not None
+    microwave_mode_spec_none = td.MicrowaveModeSpec(voltage_spec=None, current_spec=None)
+
+    voltage_integrals, current_integrals = make_path_integrals(
+        microwave_mode_spec_none, mode_monitor, sim
+    )
+    assert len(voltage_integrals) == mode_monitor.mode_spec.num_modes
+    assert len(current_integrals) == mode_monitor.mode_spec.num_modes
+    assert all(vi is None for vi in voltage_integrals)
+    # When use_automatic_setup=True, current integrals are auto-generated
+    assert all(ci is not None for ci in current_integrals)
+
+    # Test with automatic setup enabled (same as above, but explicit)
+    microwave_mode_spec_auto = td.MicrowaveModeSpec()
+
+    voltage_integrals_auto, current_integrals_auto = make_path_integrals(
+        microwave_mode_spec_auto, mode_monitor, sim
+    )
+    assert len(voltage_integrals_auto) == mode_monitor.mode_spec.num_modes
+    assert len(current_integrals_auto) == mode_monitor.mode_spec.num_modes
+    assert all(vi is None for vi in voltage_integrals_auto)
+    assert all(ci is not None for ci in current_integrals_auto)
+
+
+def test_make_path_integrals_setup_errors():
+    """Test that make_path_integrals raises appropriate SetupErrors."""
+
+    # Create a simulation that will cause path spec generation to fail
+    sim = make_mw_sim(False, False, "microstrip")
+    mode_monitor = sim.monitors[0]
+
+    # Create a microwave mode spec that will trigger auto-generation but fail
+    # We'll modify the simulation to have structures that will cause validation errors
+    bad_coax = td.GeometryGroup(
+        geometries=(
+            td.ClipOperation(
+                operation="difference",
+                geometry_a=td.Cylinder(axis=0, radius=2 * mm, center=(0, 0, 5 * mm), length=td.inf),
+                geometry_b=td.Cylinder(
+                    axis=0, radius=1.4 * mm, center=(0, 0, 5 * mm), length=td.inf
+                ),
+            ),
+            td.Cylinder(axis=0, radius=1 * mm, center=(0, 0, 5 * mm), length=td.inf),
+        )
+    )
+    bad_struct = td.Structure(geometry=bad_coax, medium=td.PEC)
+    bad_sim = sim.updated_copy(structures=[bad_struct])
+
+    microwave_mode_spec_auto = td.MicrowaveModeSpec()
+
+    # This should raise a SetupError due to auto-generation failure
+    with pytest.raises(SetupError, match="Failed to auto-generate path specification"):
+        make_path_integrals(microwave_mode_spec_auto, mode_monitor, bad_sim)
+
+
+def test_make_path_integrals_construction_errors(monkeypatch):
+    """Test that make_path_integrals handles construction errors properly."""
+
+    sim = make_mw_sim(False, False, "microstrip")
+    mode_monitor = sim.monitors[0]
+
+    # Create a valid spec
+    v_spec = td.VoltageIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
+
+    microwave_mode_spec = td.MicrowaveModeSpec(voltage_spec=(v_spec,), current_spec=(None,))
+
+    # Mock make_voltage_integral to raise an exception
+    def mock_make_voltage_integral(path_spec):
+        raise RuntimeError("Intentional construction failure")
+
+    monkeypatch.setattr(
+        "tidy3d.components.microwave.path_integrals.path_integral_factory.make_voltage_integral",
+        mock_make_voltage_integral,
+    )
+
+    # This should raise a SetupError due to construction failure
+    with pytest.raises(SetupError, match="Failed to construct path integrals"):
+        make_path_integrals(microwave_mode_spec, mode_monitor, sim)
+
+
+def test_path_integral_factory_composite_current():
+    """Test make_current_integral with CompositeCurrentIntegralSpec and integration."""
+
+    # Create base specs for the composite
+    axis_aligned_spec1 = td.CurrentIntegralAxisAlignedSpec(
+        center=(1, 2, 3), size=(0, 1, 1), sign="-"
+    )
+    axis_aligned_spec2 = td.CurrentIntegralAxisAlignedSpec(
+        center=(2, 2, 3), size=(0, 1, 1), sign="+"
+    )
+
+    # Test creation of CompositeCurrentIntegralSpec
+    composite_spec = td.CompositeCurrentIntegralSpec(
+        center=(1.5, 2, 3),
+        size=(2, 1, 1),
+        path_specs=[axis_aligned_spec1, axis_aligned_spec2],
+        sum_spec="sum",
+    )
+
+    # Test successful creation with composite spec
+    current_integral = make_current_integral(composite_spec)
+    assert current_integral is not None
+    assert current_integral.center == (1.5, 2, 3)
+    assert len(current_integral.path_specs) == 2
+
+    # Test with different sum_spec options
+    composite_spec_split = td.CompositeCurrentIntegralSpec(
+        center=(1.5, 2, 3),
+        size=(2, 1, 1),
+        path_specs=[axis_aligned_spec1, axis_aligned_spec2],
+        sum_spec="split",
+    )
+    current_integral_split = make_current_integral(composite_spec_split)
+    assert current_integral_split is not None
+    assert current_integral_split.sum_spec == "split"
+
+
+def test_path_integral_factory_mixed_specs():
+    """Test make_path_integrals with mixed voltage and current specs (some None)."""
+
+    sim = make_mw_sim(False, False, "microstrip")
+    mode_monitor = sim.monitors[0]
+
+    # Create specs where some are None
+    v_spec = td.VoltageIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
+    i_spec = td.CurrentIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 1, 1), sign="-")
+
+    # Test with mixed specs - some None, some specified
+    microwave_mode_spec = td.MicrowaveModeSpec(
+        voltage_spec=(v_spec, None), current_spec=(None, i_spec)
+    )
+
+    voltage_integrals, current_integrals = make_path_integrals(
+        microwave_mode_spec, mode_monitor, sim
+    )
+
+    assert len(voltage_integrals) == 2
+    assert len(current_integrals) == 2
+    assert voltage_integrals[0] is not None  # First mode has voltage spec
+    assert voltage_integrals[1] is None  # Second mode has no voltage spec
+    assert current_integrals[0] is None  # First mode has no current spec
+    assert current_integrals[1] is not None  # Second mode has current spec

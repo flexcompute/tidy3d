@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 
@@ -18,7 +18,6 @@ from tidy3d.components.data.data_array import (
     _make_voltage_data_array,
 )
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
-from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.microwave.path_integrals.base_spec import AxisAlignedPathIntegralSpec
 from tidy3d.components.microwave.path_integrals.current_spec import (
     CurrentIntegralAxisAlignedSpec,
@@ -139,63 +138,6 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral, VoltageIntegralAxisAli
             voltage *= -1
 
         return _make_voltage_data_array(voltage)
-
-    @staticmethod
-    def from_terminal_positions(
-        plus_terminal: float,
-        minus_terminal: float,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        extrapolate_to_endpoints: bool = True,
-        snap_path_to_grid: bool = True,
-    ) -> VoltageIntegralAxisAligned:
-        """Helper to create a :class:`VoltageIntegralAxisAligned` from two coordinates that
-        define a line and two positions indicating the endpoints of the path integral.
-
-        Parameters
-        ----------
-        plus_terminal : float
-            Position along the voltage axis of the positive terminal.
-        minus_terminal : float
-            Position along the voltage axis of the negative terminal.
-        x : float = None
-            Position in x direction, only two of x,y,z can be specified to define line.
-        y : float = None
-            Position in y direction, only two of x,y,z can be specified to define line.
-        z : float = None
-            Position in z direction, only two of x,y,z can be specified to define line.
-        extrapolate_to_endpoints: bool = True
-            Passed directly to :class:`VoltageIntegralAxisAligned`
-        snap_path_to_grid: bool = True
-            Passed directly to :class:`VoltageIntegralAxisAligned`
-
-        Returns
-        -------
-        VoltageIntegralAxisAligned
-            The created path integral for computing voltage between the two terminals.
-        """
-        axis_positions = Geometry.parse_two_xyz_kwargs(x=x, y=y, z=z)
-        # Calculate center and size of the future box
-        midpoint = (plus_terminal + minus_terminal) / 2
-        length = np.abs(plus_terminal - minus_terminal)
-        center = [midpoint, midpoint, midpoint]
-        size = [length, length, length]
-        for axis, position in axis_positions:
-            size[axis] = 0
-            center[axis] = position
-
-        direction = "+"
-        if plus_terminal < minus_terminal:
-            direction = "-"
-
-        return VoltageIntegralAxisAligned(
-            center=center,
-            size=size,
-            extrapolate_to_endpoints=extrapolate_to_endpoints,
-            snap_path_to_grid=snap_path_to_grid,
-            sign=direction,
-        )
 
 
 class CurrentIntegralAxisAligned(CurrentIntegralAxisAlignedSpec):

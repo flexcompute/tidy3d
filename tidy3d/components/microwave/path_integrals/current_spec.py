@@ -6,7 +6,6 @@ from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
-import shapely
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box, Geometry
@@ -268,19 +267,6 @@ class CustomCurrentIntegral2DSpec(CustomPathIntegral2DSpec):
             arrowprops=ARROW_CURRENT,
         )
         return ax
-
-    @cached_property
-    def sign(self) -> Direction:
-        """Uses the ordering of the vertices to determine the direction of the current flow."""
-        linestr = shapely.LineString(coordinates=self.vertices)
-        is_ccw = shapely.is_ccw(linestr)
-        # Invert statement when the vertices are given as (x, z)
-        if self.axis == 1:
-            is_ccw = not is_ccw
-        if is_ccw:
-            return "+"
-        else:
-            return "-"
 
 
 class CompositeCurrentIntegralSpec(Box):

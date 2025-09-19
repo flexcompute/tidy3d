@@ -620,57 +620,13 @@ def test_impedance_accuracy_on_coaxial():
     assert np.allclose(Z_calc, Z_analytic, rtol=0.04)
 
 
-def test_path_integral_plotting():
-    """Test that all types of path integrals correctly plot themselves."""
-
-    mean_radius = (COAX_R2 + COAX_R1) * 0.5
-    size = [COAX_R2 - COAX_R1, 0, 0]
-    center = [mean_radius, 0, 0]
-
-    voltage_integral = mw.VoltageIntegralAxisAligned(
-        center=center, size=size, sign="-", extrapolate_to_endpoints=True, snap_path_to_grid=True
-    )
-
-    current_integral = mw.CustomCurrentIntegral2D.from_circular_path(
-        center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=2, clockwise=False
-    )
-
-    ax = voltage_integral.plot(z=0)
-    current_integral.plot(z=0, ax=ax)
-    plt.close()
-
-    # Test off center plotting
-    ax = voltage_integral.plot(z=2)
-    current_integral.plot(z=2, ax=ax)
-    plt.close()
-
-    # Plot
-    voltage_integral = mw.CustomVoltageIntegral2D(
-        axis=1, position=0, vertices=[(-1, -1), (0, 0), (1, 1)]
-    )
-
-    current_integral = mw.CurrentIntegralAxisAligned(
-        center=(0, 0, 0),
-        size=(2, 0, 1),
-        sign="-",
-        extrapolate_to_endpoints=False,
-        snap_contour_to_grid=False,
-    )
-
-    ax = voltage_integral.plot(y=0)
-    current_integral.plot(y=0, ax=ax)
-    plt.close()
-
-    # Test off center plotting
-    ax = voltage_integral.plot(y=2)
-    current_integral.plot(y=2, ax=ax)
-    plt.close()
-
-
 def test_creation_from_terminal_positions():
     """Test creating an VoltageIntegralAxisAligned using terminal positions."""
     _ = mw.VoltageIntegralAxisAligned.from_terminal_positions(
         plus_terminal=2, minus_terminal=1, y=2.2, z=1
+    )
+    _ = mw.VoltageIntegralAxisAligned.from_terminal_positions(
+        plus_terminal=1, minus_terminal=2, y=2.2, z=1
     )
 
 
@@ -841,3 +797,224 @@ def test_lobe_plots(min_value):
     lobe_measurer.plot(0, ax)
     if MAKE_PLOTS:
         plt.show()
+
+
+def test_composite_current_integral_compute_current():
+    """Test CompositeCurrentIntegral.compute_current method with different sum_spec behaviors."""
+
+    # Create individual path specs for the composite
+    path_spec1 = mw.CurrentIntegralAxisAligned(center=(0, 0, 0), size=(0.5, 0.5, 0), sign="+")
+    path_spec2 = mw.CurrentIntegralAxisAligned(center=(0.25, 0, 0), size=(0.5, 0.5, 0), sign="-")
+
+    # Test with sum_spec="sum"
+    composite_integral_sum = mw.CompositeCurrentIntegral(
+        center=(0, 0, 0), size=(1, 1, 0), path_specs=[path_spec1, path_spec2], sum_spec="sum"
+    )
+
+    current_sum = composite_integral_sum.compute_current(SIM_Z_DATA["field"])
+    assert current_sum is not None
+    assert hasattr(current_sum, "values")
+
+    # Test with sum_spec="split"
+    composite_integral_split = mw.CompositeCurrentIntegral(
+        center=(0, 0, 0), size=(1, 1, 0), path_specs=[path_spec1, path_spec2], sum_spec="split"
+    )
+
+    current_split = composite_integral_split.compute_current(SIM_Z_DATA["field"])
+    assert current_split is not None
+    assert hasattr(current_split, "values")
+
+    # Test that both methods return results with the same dimensions
+    assert current_sum.dims == current_split.dims
+
+
+def test_composite_current_integral_time_domain_error():
+    """Test that CompositeCurrentIntegral raises error for time domain data with split sum_spec."""
+
+    path_spec = mw.CurrentIntegralAxisAligned(center=(0, 0, 0), size=(0.5, 0.5, 0), sign="+")
+
+    composite_integral = mw.CompositeCurrentIntegral(
+        center=(0, 0, 0), size=(1, 1, 0), path_specs=[path_spec], sum_spec="split"
+    )
+
+    # Should raise DataError for time domain data with split sum_spec
+    with pytest.raises(
+        td.exceptions.DataError, match="Only frequency domain field data is supported"
+    ):
+        composite_integral.compute_current(SIM_Z_DATA["field_time"])
+
+
+def test_composite_current_integral_phase_consistency_warnings():
+    """Test CompositeCurrentIntegral phase consistency warning methods."""
+    from tidy3d.components.data.data_array import FreqModeDataArray
+
+    # Create a composite integral for testing
+    path_spec = mw.CurrentIntegralAxisAligned(center=(0, 0, 0), size=(0.5, 0.5, 0), sign="+")
+
+    composite_integral = mw.CompositeCurrentIntegral(
+        center=(0, 0, 0), size=(1, 1, 0), path_specs=[path_spec], sum_spec="split"
+    )
+
+    # Test _check_phase_sign_consistency with consistent data
+    f = [2e9, 3e9, 4e9]
+    mode_index = list(np.arange(3))
+    coords = {"f": f, "mode_index": mode_index}
+
+    # Phase difference data that is consistent (all in phase)
+    consistent_phase_values = np.zeros((3, 3))  # All zeros = in phase
+    consistent_phase_diff = FreqModeDataArray(consistent_phase_values, coords=coords)
+
+    # This should return True (no warning)
+    result = composite_integral._check_phase_sign_consistency(consistent_phase_diff)
+    assert result is True
+
+    # Phase difference data that is inconsistent
+    inconsistent_phase_values = np.array([[0, 0, 0], [0, np.pi, 0], [0, 0, np.pi]])  # Mixed phases
+    inconsistent_phase_diff = FreqModeDataArray(inconsistent_phase_values, coords=coords)
+
+    # This should return False and emit a warning
+    # Note: The warning is logged, but we'll just test the return value here
+    result = composite_integral._check_phase_sign_consistency(inconsistent_phase_diff)
+    assert result is False
+
+    # Test _check_phase_amplitude_consistency
+    current_values = np.ones((3, 3))
+    current_in_phase = FreqModeDataArray(current_values, coords=coords)
+    current_out_phase = FreqModeDataArray(0.5 * current_values, coords=coords)
+
+    # Consistent amplitudes (in_phase always larger)
+    result = composite_integral._check_phase_amplitude_consistency(
+        current_in_phase, current_out_phase
+    )
+    assert result is True
+
+    # Inconsistent amplitudes (mix of which is larger)
+    inconsistent_out_phase = FreqModeDataArray(
+        np.array([[0.5, 0.5, 0.5], [1.5, 0.5, 0.5], [0.5, 1.5, 0.5]]), coords=coords
+    )
+
+    # This should return False and emit a warning
+    # Note: The warning is logged, but we'll just test the return value here
+    result = composite_integral._check_phase_amplitude_consistency(
+        current_in_phase, inconsistent_out_phase
+    )
+    assert result is False
+
+
+def test_impedance_calculator_compute_impedance_with_return_extras():
+    """Test ImpedanceCalculator.compute_impedance with return_voltage_and_current=True."""
+
+    # Setup path integrals
+    voltage_integral = mw.VoltageIntegralAxisAligned(
+        center=(0, 0, 0), size=(0, 0.5, 0), sign="+", extrapolate_to_endpoints=True
+    )
+    current_integral = mw.CurrentIntegralAxisAligned(center=(0, 0, 0), size=(0.5, 0.5, 0), sign="+")
+
+    # Test with both voltage and current integrals
+    Z_calc = mw.ImpedanceCalculator(
+        voltage_integral=voltage_integral, current_integral=current_integral
+    )
+
+    # Test with mode data that supports flux calculations
+    result = Z_calc.compute_impedance(SIM_Z_DATA["mode"], return_voltage_and_current=True)
+
+    # Should return a tuple of (impedance, voltage, current)
+    assert isinstance(result, tuple)
+    assert len(result) == 3
+    impedance, voltage, current = result
+
+    assert impedance is not None
+    assert voltage is not None
+    assert current is not None
+    assert hasattr(impedance, "values")
+    assert hasattr(voltage, "values")
+    assert hasattr(current, "values")
+
+    # Test with only voltage integral (current computed from flux)
+    Z_calc_voltage_only = mw.ImpedanceCalculator(voltage_integral=voltage_integral)
+
+    result_voltage_only = Z_calc_voltage_only.compute_impedance(
+        SIM_Z_DATA["mode"], return_voltage_and_current=True
+    )
+
+    assert isinstance(result_voltage_only, tuple)
+    assert len(result_voltage_only) == 3
+    impedance_v, voltage_v, current_v = result_voltage_only
+
+    assert impedance_v is not None
+    assert voltage_v is not None
+    assert current_v is not None  # Should be computed from flux
+
+    # Test with only current integral (voltage computed from flux)
+    Z_calc_current_only = mw.ImpedanceCalculator(current_integral=current_integral)
+
+    result_current_only = Z_calc_current_only.compute_impedance(
+        SIM_Z_DATA["mode"], return_voltage_and_current=True
+    )
+
+    assert isinstance(result_current_only, tuple)
+    assert len(result_current_only) == 3
+    impedance_c, voltage_c, current_c = result_current_only
+
+    assert impedance_c is not None
+    assert voltage_c is not None  # Should be computed from flux
+    assert current_c is not None
+
+
+def test_composite_current_integral_freq_mode_data():
+    """Test CompositeCurrentIntegral works correctly with FreqModeDataArray."""
+
+    # Create individual path specs for the composite
+    path_spec1 = mw.CurrentIntegralAxisAligned(center=(0, 0, 0), size=(0.5, 0.5, 0), sign="+")
+    path_spec2 = mw.CurrentIntegralAxisAligned(center=(0.25, 0, 0), size=(0.5, 0.5, 0), sign="-")
+
+    # Test with sum_spec="sum" - should work with FreqModeDataArray
+    composite_integral_sum = mw.CompositeCurrentIntegral(
+        center=(0, 0, 0), size=(1, 1, 0), path_specs=[path_spec1, path_spec2], sum_spec="sum"
+    )
+
+    # Use mode data which provides FreqModeDataArray
+    current_sum = composite_integral_sum.compute_current(SIM_Z_DATA["mode"])
+    assert current_sum is not None
+    assert hasattr(current_sum, "values")
+
+    # Verify it's a FreqModeDataArray by checking dimensions
+    assert "f" in current_sum.dims
+    assert "mode_index" in current_sum.dims
+
+    # Test with sum_spec="split" - should also work with FreqModeDataArray
+    composite_integral_split = mw.CompositeCurrentIntegral(
+        center=(0, 0, 0), size=(1, 1, 0), path_specs=[path_spec1, path_spec2], sum_spec="split"
+    )
+
+    current_split = composite_integral_split.compute_current(SIM_Z_DATA["mode"])
+    assert current_split is not None
+    assert hasattr(current_split, "values")
+
+    # Verify it's a FreqModeDataArray by checking dimensions
+    assert "f" in current_split.dims
+    assert "mode_index" in current_split.dims
+
+    # Test that both methods return compatible results
+    assert current_sum.dims == current_split.dims
+    assert current_sum.shape == current_split.shape
+
+
+def test_impedance_calculator_mode_direction_handling():
+    """Test that ImpedanceCalculator properly handles mode direction for flux calculation."""
+
+    current_integral = mw.CurrentIntegralAxisAligned(center=(0, 0, 0), size=(0.5, 0.5, 0), sign="+")
+
+    # Test with ModeSolverMonitor data
+    Z_calc = mw.ImpedanceCalculator(current_integral=current_integral)
+
+    impedance_mode_solver = Z_calc.compute_impedance(SIM_Z_DATA["mode_solver"])
+    assert impedance_mode_solver is not None
+
+    # Test with ModeMonitor data
+    impedance_mode = Z_calc.compute_impedance(SIM_Z_DATA["mode"])
+    assert impedance_mode is not None
+
+    # Both should produce valid impedance values
+    assert hasattr(impedance_mode_solver, "values")
+    assert hasattr(impedance_mode, "values")

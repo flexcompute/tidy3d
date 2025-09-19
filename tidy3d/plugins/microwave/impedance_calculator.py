@@ -58,7 +58,7 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         self, em_field: MonitorDataTypes, return_voltage_and_current=False
     ) -> Union[
         ImpedanceResultTypes,
-        tuple[VoltageIntegralResultTypes, CurrentIntegralResultTypes, ImpedanceResultTypes],
+        tuple[ImpedanceResultTypes, VoltageIntegralResultTypes, CurrentIntegralResultTypes],
     ]:
         """Compute impedance for the supplied ``em_field`` using ``voltage_integral`` and
         ``current_integral``. If only a single integral has been defined, impedance is
