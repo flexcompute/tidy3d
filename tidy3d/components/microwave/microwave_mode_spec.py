@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Union
 
 import pydantic.v1 as pd
 
-from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.base import TYPE_TAG_STR, Tidy3dBaseModel
 from tidy3d.exceptions import SetupError
 
 from .path_integrals.types import CurrentPathSpecTypes, VoltagePathSpecTypes
 
 
-class MicrowaveModeSpec(Tidy3dBaseModel):
+class AutoImpedanceSpec(Tidy3dBaseModel):
     """Specification for computing transmission line voltages and currents in mode solvers.
 
     The :class:`.MicrowaveModeSpec` class specifies how quantities related to transmission line
@@ -22,9 +22,19 @@ class MicrowaveModeSpec(Tidy3dBaseModel):
     Users may supply their own voltage and current path specifications to control where these integrals
     are evaluated. If neither voltage nor current specifications are provided, an automatic choice of
     paths will be made based on the simulation geometry and context.
+    """
 
-    TODO
-        Validate that either all specs are voltage specs/ all current specs or all a pair of VI specs
+
+class CustomImpedanceSpec(Tidy3dBaseModel):
+    """Specification for computing transmission line voltages and currents in mode solvers.
+
+    The :class:`.MicrowaveModeSpec` class specifies how quantities related to transmission line
+    modes are computed. For example, it defines the paths for line integrals, which are used to
+    compute voltage, current, and characteristic impedance of the transmission line.
+
+    Users may supply their own voltage and current path specifications to control where these integrals
+    are evaluated. If neither voltage nor current specifications are provided, an automatic choice of
+    paths will be made based on the simulation geometry and context.
     """
 
     voltage_spec: Optional[tuple[Optional[VoltagePathSpecTypes], ...]] = pd.Field(
@@ -44,22 +54,16 @@ class MicrowaveModeSpec(Tidy3dBaseModel):
     )
 
     @property
-    def use_automatic_setup(self) -> bool:
-        """Whether to setup the :class:`.MicrowaveModeSpec` automatically or use the supplied
-        path specifications."""
-        return self.voltage_spec is None and self.current_spec is None
-
-    @property
     def num_voltage_specs(self) -> Optional[int]:
         """The number of voltage specifications supplied."""
-        if type(self.voltage_spec) is tuple:
+        if self.voltage_spec is not None:
             return len(self.voltage_spec)
         return None
 
     @property
     def num_current_specs(self) -> Optional[int]:
         """The number of current specifications supplied."""
-        if type(self.current_spec) is tuple:
+        if self.current_spec is not None:
             return len(self.current_spec)
         return None
 
@@ -98,3 +102,21 @@ class MicrowaveModeSpec(Tidy3dBaseModel):
                 )
 
         return val
+
+
+ImpedanceSpecTypes = Union[AutoImpedanceSpec, CustomImpedanceSpec]
+
+
+class MicrowaveModeSpec(Tidy3dBaseModel):
+    """
+    The :class:`.MicrowaveModeSpec` class specifies how quantities related to transmission line
+    modes and microwave waveguides are computed. For example, it defines the paths for line integrals, which are used to
+    compute voltage, current, and characteristic impedance of the transmission line.
+    """
+
+    impedance_spec: Optional[ImpedanceSpecTypes] = pd.Field(
+        AutoImpedanceSpec(),
+        title="Impedance Specification",
+        description="Field controls how the impedance is calculated from mode solver data.",
+        discriminator=TYPE_TAG_STR,
+    )

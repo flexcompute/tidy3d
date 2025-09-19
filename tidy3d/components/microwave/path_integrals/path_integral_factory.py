@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Union
 
-from tidy3d.components.microwave.microwave_mode_spec import MicrowaveModeSpec
+from tidy3d.components.microwave.microwave_mode_spec import (
+    AutoImpedanceSpec,
+    ImpedanceSpecTypes,
+)
 from tidy3d.components.microwave.path_integrals.current_spec import (
     CompositeCurrentIntegralSpec,
     CurrentIntegralAxisAlignedSpec,
@@ -84,17 +87,18 @@ def make_current_integral(path_spec: CurrentPathSpecTypes) -> CurrentIntegralTyp
 
 
 def make_path_integrals(
-    microwave_mode_spec: MicrowaveModeSpec,
+    impedance_spec: ImpedanceSpecTypes,
     monitor: Union[ModeMonitor, ModeSolverMonitor],
     sim: Simulation,
 ) -> tuple[tuple[VoltageIntegralTypes], tuple[CurrentIntegralTypes]]:
     """
-    Given a ``MicrowaveModeSpec``, monitor, and simulation instance, create the voltage and current path integrals used for impedance computation.
+    Given an impedance specification, monitor, and simulation instance, create the voltage and
+    current path integrals used for the impedance computation.
 
     Parameters
     ----------
-    mw_mode_spec : MicrowaveModeSpec
-        Terminal specification containing voltage and current path specifications.
+    impedance_spec : ImpedanceSpecTypes
+        Impedance specification for creating voltage and current path specifications.
     monitor : Union[ModeMonitor, ModeSolverMonitor]
         The monitor for which the path integrals are being generated.
     sim : Simulation
@@ -110,10 +114,11 @@ def make_path_integrals(
     SetupError
         If path specifications cannot be auto-generated or path integrals cannot be constructed.
     """
-    try:
-        v_specs = microwave_mode_spec.voltage_spec
-        i_specs = microwave_mode_spec.current_spec
-        if microwave_mode_spec.use_automatic_setup:
+
+    v_specs = None
+    i_specs = None
+    if isinstance(impedance_spec, AutoImpedanceSpec):
+        try:
             i_spec, _ = PathSpecGenerator.create_current_path_specs(
                 monitor.bounding_box,
                 sim.structures,
@@ -123,15 +128,18 @@ def make_path_integrals(
                 monitor.colocate,
             )
             i_specs = (i_spec,) * monitor.mode_spec.num_modes
-        if v_specs is None:
-            v_specs = (None,) * monitor.mode_spec.num_modes
-        if i_specs is None:
-            i_specs = (None,) * monitor.mode_spec.num_modes
+        except ValidationError as e:
+            raise SetupError(
+                f"Failed to auto-generate path specification for impedance calculation in monitor '{monitor.name}'."
+            ) from e
+    else:
+        v_specs = impedance_spec.voltage_spec
+        i_specs = impedance_spec.current_spec
 
-    except ValidationError as e:
-        raise SetupError(
-            f"Failed to auto-generate path specification for impedance calculation in monitor '{monitor.name}'."
-        ) from e
+    if v_specs is None:
+        v_specs = (None,) * monitor.mode_spec.num_modes
+    if i_specs is None:
+        i_specs = (None,) * monitor.mode_spec.num_modes
 
     try:
         voltage_integrals = []
@@ -148,7 +156,7 @@ def make_path_integrals(
         path_integrals = (tuple(voltage_integrals), tuple(current_integrals))
     except Exception as e:
         raise SetupError(
-            f"Failed to construct path integrals from the microwave mode specification for monitor '{monitor.name}'. "
+            f"Failed to construct path integrals from the impedance specification in monitor '{monitor.name}'. "
             "Please create a github issue so that the problem can be investigated."
         ) from e
     return path_integrals

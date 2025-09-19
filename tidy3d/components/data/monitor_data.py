@@ -18,6 +18,7 @@ from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
+from tidy3d.components.microwave.data.dataset import MicrowaveModeDataset
 from tidy3d.components.monitor import (
     AuxFieldTimeMonitor,
     DiffractionMonitor,
@@ -63,7 +64,6 @@ from tidy3d.exceptions import DataError, SetupError, Tidy3dNotImplementedError, 
 from tidy3d.log import log
 
 from .data_array import (
-    CurrentFreqModeDataArray,
     DataArray,
     DiffractionDataArray,
     EMEFreqModeDataArray,
@@ -75,14 +75,12 @@ from .data_array import (
     FreqDataArray,
     FreqModeDataArray,
     GroupIndexDataArray,
-    ImpedanceFreqModeDataArray,
     MixedModeDataArray,
     ModeAmpsDataArray,
     ModeDispersionDataArray,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
     TimeDataArray,
-    VoltageFreqModeDataArray,
 )
 from .dataset import (
     AbstractFieldDataset,
@@ -1653,30 +1651,11 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         "computed. Possible values are 'diagonal', 'tensorial_real', 'tensorial_complex'.",
     )
 
-    Z0: Optional[ImpedanceFreqModeDataArray] = pd.Field(
+    microwave_data: Optional[MicrowaveModeDataset] = pd.Field(
         None,
-        title="Characteristic Impedance",
-        description="Optional quantity calculated for transmission lines. "
-        "The characteristic impedance is only calculated when a :class:`MicrowaveModeSpec` "
-        "is provided to the :class:`ModeSpec` associated with this data.",
-    )
-
-    voltage_coeffs: Optional[VoltageFreqModeDataArray] = pd.Field(
-        None,
-        title="Mode Voltage Coefficients",
-        description="Optional quantity calculated for transmission lines, which associates "
-        "a voltage-like quantity with each mode profile that scales linearly with the "
-        "complex-valued mode amplitude. The mode voltages are only calculated when a :class:`MicrowaveModeSpec` "
-        "is provided to the :class:`ModeSpec` associated with this data.",
-    )
-
-    current_coeffs: Optional[CurrentFreqModeDataArray] = pd.Field(
-        None,
-        title="Mode Current Coefficients",
-        description="Optional quantity calculated for transmission lines, which associates "
-        "a current-like quantity with each mode profile that scales linearly with the "
-        "complex-valued mode amplitude. The mode currents are only calculated when a :class:`MicrowaveModeSpec`"
-        " is provided to the :class:`ModeSpec` associated with this data.",
+        title="Microwave Mode Dataset",
+        description="Additional data relevant to RF and microwave applications, like characteristic impedance. "
+        "This field is populated when a :class:`MicrowaveModeSpec` has been provided to the :class:`ModeSpec`.",
     )
 
     @pd.validator("eps_spec", always=True)
@@ -2137,9 +2116,9 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             info["wg TE fraction"] = self.pol_fraction_waveguide["te"]
             info["wg TM fraction"] = self.pol_fraction_waveguide["tm"]
 
-        if self.Z0 is not None:
-            info["Re(Z0)"] = self.Z0.real
-            info["Im(Z0)"] = self.Z0.imag
+        if self.microwave_data is not None:
+            info["Re(Z0)"] = self.microwave_data.Z0.real
+            info["Im(Z0)"] = self.microwave_data.Z0.imag
 
         return xr.Dataset(data_vars=info)
 

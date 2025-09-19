@@ -21,6 +21,8 @@ from tidy3d.components.microwave.data.monitor_data import (
     AntennaMetricsData,
 )
 from tidy3d.components.microwave.microwave_mode_spec import (
+    AutoImpedanceSpec,
+    CustomImpedanceSpec,
     MicrowaveModeSpec,
 )
 from tidy3d.components.microwave.path_integrals.current_spec import (
@@ -461,6 +463,7 @@ __all__ = [
     "AstigmaticGaussianBeamProfile",
     "AugerRecombination",
     "AutoGrid",
+    "AutoImpedanceSpec",
     "AuxFieldTimeData",
     "AuxFieldTimeMonitor",
     "BlochBoundary",
@@ -501,6 +504,7 @@ __all__ = [
     "CustomGrid",
     "CustomGridBoundaries",
     "CustomHeatPerturbation",
+    "CustomImpedanceSpec",
     "CustomLorentz",
     "CustomMedium",
     "CustomPoleResidue",

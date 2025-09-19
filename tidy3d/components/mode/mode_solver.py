@@ -34,6 +34,7 @@ from tidy3d.components.medium import (
     IsotropicUniformMediumType,
     LossyMetalMedium,
 )
+from tidy3d.components.microwave.data.dataset import MicrowaveModeDataset
 from tidy3d.components.microwave.path_integrals.path_integral_factory import make_path_integrals
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
@@ -1369,8 +1370,10 @@ class ModeSolver(Tidy3dBaseModel):
         """Calculate and add microwave data to ``mode_solver_data`` which uses the path specifications.
         If they were not supplied by the user, then create a specification automatically.
         """
+        if self.mode_spec.microwave_mode_spec.impedance_spec is None:
+            return mode_solver_data
         voltage_integrals, current_integrals = make_path_integrals(
-            self.mode_spec.microwave_mode_spec,
+            self.mode_spec.microwave_mode_spec.impedance_spec,
             self.to_monitor(name=MODE_MONITOR_NAME),
             self.simulation,
         )
@@ -1380,26 +1383,34 @@ class ModeSolver(Tidy3dBaseModel):
         V_list = []
         I_list = []
         for mode_index in range(self.mode_spec.num_modes):
-            impedance_calc = ImpedanceCalculator(
-                voltage_integral=voltage_integrals[mode_index],
-                current_integral=current_integrals[mode_index],
-            )
-            single_mode_data = mode_solver_data_expanded._isel(mode_index=[mode_index])
-            Z0, voltage, current = impedance_calc.compute_impedance(
-                single_mode_data, return_voltage_and_current=True
-            )
-            Z0_list.append(Z0)
-            V_list.append(voltage)
-            I_list.append(current)
+            vi = voltage_integrals[mode_index]
+            ci = current_integrals[mode_index]
+            if vi is None and ci is None:
+                Z0_list.append(None)
+                V_list.append(None)
+                I_list.append(None)
+            else:
+                impedance_calc = ImpedanceCalculator(
+                    voltage_integral=voltage_integrals[mode_index],
+                    current_integral=current_integrals[mode_index],
+                )
+                single_mode_data = mode_solver_data_expanded._isel(mode_index=[mode_index])
+                Z0, voltage, current = impedance_calc.compute_impedance(
+                    single_mode_data, return_voltage_and_current=True
+                )
+                Z0_list.append(Z0)
+                V_list.append(voltage)
+                I_list.append(current)
         all_mode_Z0 = xr.concat(Z0_list, dim="mode_index")
         all_mode_Z0 = _make_impedance_data_array(all_mode_Z0)
         all_mode_V = xr.concat(V_list, dim="mode_index")
         all_mode_V = _make_voltage_data_array(all_mode_V)
         all_mode_I = xr.concat(I_list, dim="mode_index")
         all_mode_I = _make_current_data_array(all_mode_I)
-        return mode_solver_data.updated_copy(
+        mw_data = MicrowaveModeDataset(
             Z0=all_mode_Z0, voltage_coeffs=all_mode_V, current_coeffs=all_mode_I
         )
+        return mode_solver_data.updated_copy(microwave_data=mw_data)
 
     @cached_property
     def data(self) -> ModeSolverData:
