@@ -5081,6 +5081,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "interior_disjoint_geometries": {
+          "default": true,
+          "type": "boolean"
+        },
         "min_steps_along_axis": {
           "exclusiveMinimum": 0,
           "type": "number"
