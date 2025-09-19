@@ -60,7 +60,7 @@ from tidy3d.components.validators import (
     validate_freqs_not_empty,
 )
 from tidy3d.components.viz import make_ax, plot_params_pml
-from tidy3d.constants import C_0
+from tidy3d.constants import C_0, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
@@ -299,7 +299,7 @@ class ModeSolver(Tidy3dBaseModel):
         _, plane_axs = mode_plane.pop_axis([0, 1, 2], mode_plane.size.index(0.0))
         radial_ax = plane_axs[(mode_spec.bend_axis + 1) % 2]
 
-        if np.abs(mode_spec.bend_radius) < mode_plane.size[radial_ax] / 2:
+        if np.abs(mode_spec.bend_radius) <= mode_plane.size[radial_ax] / 2 + fp_eps:
             raise ValueError(
                 "Mode solver bend radius is smaller than half the mode plane size "
                 "along the radial axis, which can produce wrong results."

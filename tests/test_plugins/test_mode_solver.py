@@ -1171,6 +1171,14 @@ def test_mode_small_bend_radius_fail():
             mode_spec=td.ModeSpec(num_modes=1, bend_radius=1, bend_axis=0),
             simulation=simulation,
         )
+    # also error when bend radius is exactly aligned with simulation boundary
+    with pytest.raises(ValueError):
+        ms = ModeSolver(
+            plane=PLANE,
+            freqs=np.linspace(1e14, 2e14, 100),
+            mode_spec=td.ModeSpec(num_modes=1, bend_radius=1.5, bend_axis=0),
+            simulation=simulation,
+        )
     # should work for infinite mode plane
     ms = ModeSolver(
         plane=td.Box(center=(0, 0, 0), size=(td.inf, 0, td.inf)),

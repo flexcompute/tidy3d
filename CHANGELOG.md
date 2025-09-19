@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Stricter validation for `bend_radius` in mode simulations, preventing the bend center from coinciding with the simulation boundary.
 
 
 ## [v2.10.0rc1] - 2025-09-11
