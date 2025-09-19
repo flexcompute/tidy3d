@@ -209,7 +209,7 @@ class WavePort(AbstractTerminalPort, Box):
             boundary_spec = ModeABCBoundary(
                 mode_spec=self.mode_spec,
                 mode_index=self.mode_index,
-                plane=self.geometry.updated_copy(center=center),
+                plane=self.geometry,
                 freq_spec=freq_spec,
             )
         return InternalAbsorber(
