@@ -26,7 +26,7 @@ from tidy3d.components.types import (
     Undefined,
     annotate_type,
 )
-from tidy3d.constants import C_0, MICROMETER, dp_eps, inf
+from tidy3d.constants import C_0, MICROMETER, dp_eps, fp_eps, inf
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
@@ -1991,16 +1991,33 @@ class LayerRefinementSpec(Box):
         return snapping_lines_y, min_gap_width
 
     def _resolve_gaps(
-        self, structures: list[Structure], grid: Grid, boundaries: tuple, center, size
+        self, structures: list[Structure], grid: Grid, boundary_types: tuple
     ) -> tuple[list[CoordinateOptional], float]:
-        """Detect underresolved gaps and place snapping lines in them. Also return the detected minimal gap width."""
+        """
+        Detect underresolved gaps and place snapping lines in them. Also return the detected minimal gap width.
+
+        Parameters
+        ----------
+        structures : list[Structure]
+            List of structures to consider.
+        grid : Grid
+            Grid to resolve gaps on.
+        boundary_types : Tuple[Tuple[str, str], Tuple[str, str], Tuple[str, str]] = [[None, None], [None, None], [None, None]]
+            Type of boundary conditions along each dimension: "pec/pmc", "periodic", or
+            None for any other. This is relevant only for gap meshing.
+
+        Returns
+        -------
+        tuple[list[CoordinateOptional], float]
+            List of snapping lines and the detected minimal gap width.
+        """
 
         # get x and y coordinates of grid lines
         _, tan_dims = Box.pop_axis([0, 1, 2], self.axis)
         x = grid.boundaries.to_list[tan_dims[0]]
         y = grid.boundaries.to_list[tan_dims[1]]
 
-        _, boundaries_tan = Box.pop_axis(boundaries, self.axis)
+        _, boundaries_tan = Box.pop_axis(boundary_types, self.axis)
 
         # restrict to the size of layer spec
         rmin, rmax = self.bounds
@@ -2036,18 +2053,24 @@ class LayerRefinementSpec(Box):
 
         x, y = new_coords
 
+        merging_area_bounds = np.array(
+            [[x[0] - fp_eps, y[0] - fp_eps], [x[-1] + fp_eps, y[-1] + fp_eps]]
+        )
+
         # restrict size of the plane where pec polygons are found in case of periodic boundary conditions
         # this is to make sure gaps across periodic boundary conditions are resolved
         # (if there is a PEC structure going into periodic boundary, now it will generate a grid line
         # intersection next to that boundary and it will be propagated to the other side)
-        restricted_size_tan = [
-            s * (1.0 - dp_eps) if b[0] == "periodic" else inf
-            for b, s in zip(
-                new_boundaries,
-                size,
-            )
-        ]
-        restricted_size = Box.unpop_axis(size[self.axis], restricted_size_tan, self.axis)
+        for ind in range(2):
+            if new_boundaries[ind][0] == "periodic":
+                merging_area_bounds[0][ind] += fp_eps + dp_eps
+                merging_area_bounds[1][ind] -= fp_eps + dp_eps
+
+        merging_area_center = 0.5 * (merging_area_bounds[0] + merging_area_bounds[1])
+        merging_area_size = merging_area_bounds[1] - merging_area_bounds[0]
+
+        merging_area_center = Box.unpop_axis(self.center[self.axis], merging_area_center, self.axis)
+        merging_area_size = Box.unpop_axis(self.size[self.axis], merging_area_size, self.axis)
 
         # get merged pec structures on plane
         # note that we expect this function to also convert all LossyMetal's into PEC
@@ -2055,8 +2078,8 @@ class LayerRefinementSpec(Box):
             coord=self.center_axis,
             normal_axis=self.axis,
             structure_list=structures,
-            center=center,
-            size=restricted_size,
+            center=merging_area_center,
+            size=merging_area_size,
             interior_disjoint_geometries=self.interior_disjoint_geometries,
         )
 
@@ -2635,8 +2658,6 @@ class GridSpec(Tidy3dBaseModel):
             structure_priority_mode=structure_priority_mode,
         )
 
-        sim_geometry = structures[0].geometry
-
         snapping_lines = []
         if len(self.layer_refinement_specs) > 0:
             num_iters = max(
@@ -2652,8 +2673,6 @@ class GridSpec(Tidy3dBaseModel):
                             structures,
                             old_grid,
                             boundary_types,
-                            center=sim_geometry.center,
-                            size=sim_geometry.size,
                         )
                         new_snapping_lines = new_snapping_lines + one_layer_snapping_lines
                         if layer_spec.dl_min_from_gap_width:
