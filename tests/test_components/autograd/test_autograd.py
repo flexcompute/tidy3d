@@ -1427,6 +1427,58 @@ def test_broadband_adjoint_src_width():
     )
 
 
+def test_autograd_multi_source_normalize_index(use_emulated_run):
+    """Gradient run with multi-source normalization does not raise and returns finite grads."""
+
+    freq0 = 2e14
+    fwidth = 5e13
+
+    source_time = td.GaussianPulse(freq0=freq0, fwidth=fwidth)
+    source0 = td.UniformCurrentSource(
+        size=(0, 0, 0),
+        center=(0.0, -0.2, 0.0),
+        polarization="Hx",
+        source_time=source_time,
+    )
+    source1 = source0.updated_copy(center=(0.0, 0.2, 0.0))
+
+    monitor = td.FieldMonitor(
+        size=(0, 0, 0),
+        center=(0.0, 0.0, 0.0),
+        freqs=[freq0],
+        fields=["Ex"],
+        name="field",
+    )
+
+    base_sim = td.Simulation(
+        size=(1.0, 1.0, 1.0),
+        run_time=8 / fwidth,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[source0, source1],
+        monitors=[monitor],
+        normalize_index=1,
+    )
+
+    def objective(params):
+        eps = 2.0 + params[0]
+        structure = td.Structure(
+            geometry=td.Box(size=(0.5, 0.5, 0.5), center=(0.0, 0.0, 0.0)),
+            medium=td.Medium(permittivity=eps),
+        )
+
+        sim = base_sim.updated_copy(structures=[structure])
+        data = run(sim, task_name="normalize_index_clamp", verbose=False)
+        field = data["field"].Ex.sel(f=freq0).values
+        return anp.real(field).sum()
+
+    params = anp.array([0.1])
+    val, grad = ag.value_and_grad(objective)(params)
+
+    assert anp.isfinite(val)
+    assert grad.shape == params.shape
+    assert anp.all(anp.isfinite(grad))
+
+
 @pytest.mark.parametrize("colocate", [True, False])
 @pytest.mark.parametrize("objtype", ["flux", "intensity"])
 def test_interp_objectives(use_emulated_run, colocate, objtype):
