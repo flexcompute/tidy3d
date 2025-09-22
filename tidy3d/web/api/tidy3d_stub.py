@@ -82,24 +82,28 @@ class Tidy3dStub(BaseModel, TaskStub):
 
         data = json.loads(json_str)
         type_ = data["type"]
-        if type_ == "Simulation":
-            sim = Simulation.from_file(file_path)
-        elif type_ == "ModeSolver":
-            sim = ModeSolver.from_file(file_path)
-        elif type_ == "HeatSimulation":
-            sim = HeatSimulation.from_file(file_path)
-        elif type_ == "HeatChargeSimulation":
-            sim = HeatChargeSimulation.from_file(file_path)
-        elif type_ == "EMESimulation":
-            sim = EMESimulation.from_file(file_path)
-        elif type_ == "ModeSimulation":
-            sim = ModeSimulation.from_file(file_path)
-        elif type_ == "VolumeMesher":
-            sim = VolumeMesher.from_file(file_path)
-        elif type_ == "ModalComponentModeler":
-            sim = ModalComponentModeler.from_file(file_path)
-        elif type_ == "TerminalComponentModeler":
-            sim = TerminalComponentModeler.from_file(file_path)
+
+        supported_classes = [
+            Simulation,
+            ModeSolver,
+            HeatSimulation,
+            HeatChargeSimulation,
+            EMESimulation,
+            ModeSimulation,
+            VolumeMesher,
+            ModalComponentModeler,
+            TerminalComponentModeler,
+        ]
+
+        class_map = {cls.__name__: cls for cls in supported_classes}
+
+        if type_ not in class_map:
+            raise ValueError(
+                f"Unsupported type '{type_}'. Supported types: {list(class_map.keys())}"
+            )
+
+        sim_class = class_map[type_]
+        sim = sim_class.from_file(file_path)
 
         return sim
 
@@ -202,7 +206,9 @@ class Tidy3dStubData(BaseModel, TaskStubData):
     data: WorkflowDataType
 
     @classmethod
-    def from_file(cls, file_path: str) -> WorkflowDataType:
+    def from_file(
+        cls, file_path: str, lazy: bool = False, on_load: Optional[Callable] = None
+    ) -> WorkflowDataType:
         """Loads a Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         from .yaml, .json, or .hdf5 file.
 
@@ -211,6 +217,14 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         file_path : str
             Full path to the .yaml or .json or .hdf5 file to load the
             Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] from.
+        lazy : bool = False
+            Whether to load the actual data (``lazy=False``) or return a proxy that loads
+            the data when accessed (``lazy=True``).
+        on_load : Callable | None = None
+            Callback function executed once the model is fully materialized.
+            Only used if ``lazy=True``. The callback is invoked with the loaded
+            instance as its sole argument, enabling post-processing such as
+            validation, logging, or warnings checks.
 
         Returns
         -------
@@ -227,24 +241,28 @@ class Tidy3dStubData(BaseModel, TaskStubData):
 
         data = json.loads(json_str)
         type_ = data["type"]
-        if type_ == "SimulationData":
-            sim_data = SimulationData.from_file(file_path)
-        elif type_ == "ModeSolverData":
-            sim_data = ModeSolverData.from_file(file_path)
-        elif type_ == "HeatSimulationData":
-            sim_data = HeatSimulationData.from_file(file_path)
-        elif type_ == "HeatChargeSimulationData":
-            sim_data = HeatChargeSimulationData.from_file(file_path)
-        elif type_ == "EMESimulationData":
-            sim_data = EMESimulationData.from_file(file_path)
-        elif type_ == "ModeSimulationData":
-            sim_data = ModeSimulationData.from_file(file_path)
-        elif type_ == "VolumeMesherData":
-            sim_data = VolumeMesherData.from_file(file_path)
-        elif type_ == "ModalComponentModelerData":
-            sim_data = ModalComponentModelerData.from_file(file_path)
-        elif type_ == "TerminalComponentModelerData":
-            sim_data = TerminalComponentModelerData.from_file(file_path)
+
+        supported_data_classes = [
+            SimulationData,
+            ModeSolverData,
+            HeatSimulationData,
+            HeatChargeSimulationData,
+            EMESimulationData,
+            ModeSimulationData,
+            VolumeMesherData,
+            ModalComponentModelerData,
+            TerminalComponentModelerData,
+        ]
+
+        data_class_map = {cls.__name__: cls for cls in supported_data_classes}
+
+        if type_ not in data_class_map:
+            raise ValueError(
+                f"Unsupported data type '{type_}'. Supported types: {list(data_class_map.keys())}"
+            )
+
+        data_class = data_class_map[type_]
+        sim_data = data_class.from_file(file_path, lazy=lazy, on_load=on_load)
 
         return sim_data
 
@@ -265,7 +283,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         self.data.to_file(file_path)
 
     @classmethod
-    def postprocess(cls, file_path: str) -> WorkflowDataType:
+    def postprocess(cls, file_path: str, lazy: bool = True) -> WorkflowDataType:
         """Load .yaml, .json, or .hdf5 file to
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] instance.
 
@@ -274,16 +292,28 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         file_path : str
             Full path to the .yaml or .json or .hdf5 file to save the
             Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] to.
+        lazy : bool = False
+            Whether to load the actual data (``lazy=False``) or return a proxy that loads
+            the data when accessed (``lazy=True``).
 
         Returns
         -------
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             An instance of the component class calling ``load``.
         """
-        stub_data = Tidy3dStubData.from_file(file_path)
+        stub_data = Tidy3dStubData.from_file(
+            file_path, lazy=lazy, on_load=cls._check_convergence_and_warnings
+        )
+        if not lazy:
+            cls._check_convergence_and_warnings(stub_data)
+        return stub_data
 
-        check_log_msg = "For more information, check 'SimulationData.log' or use "
-        check_log_msg += "'web.download_log(task_id)'."
+    @staticmethod
+    def _check_convergence_and_warnings(stub_data: WorkflowDataType) -> None:
+        """Check convergence, divergence, and warnings in the solver log and emit log messages."""
+        check_log_msg = (
+            "For more information, check 'SimulationData.log' or use 'web.download_log(task_id)'."
+        )
         warned_about_warnings = False
 
         if isinstance(stub_data, SimulationData):
@@ -313,5 +343,3 @@ class Tidy3dStubData(BaseModel, TaskStubData):
             and not warned_about_warnings
         ):
             log.warning("Warning messages were found in the solver log. " + check_log_msg)
-
-        return stub_data

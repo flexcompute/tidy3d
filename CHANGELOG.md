@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `MediumMonitor` that returns both permittivity and permeability profiles.
 - Task names are now optional when using `run(sim)` or `Job`. When running multiple jobs (via `run_async` or `Batch`), you can also provide simulations as a list without specifying task names. The previous dictionary-based format with explicit task names is still supported.
 - Added support for `tidy3d-extras`, an optional plugin that enables more accurate local mode solving via subpixel averaging.
+- Enabled lazy loading of data via `web.load(..., lazy=True)`. When used, this returns a lightweight proxy object holding a reference to the data. On first access to any field or method, the proxy transparently loads the full object (same as with the default lazy=False).
 
 ### Changed
 - `LayerRefinementSpec` defaults to assuming structures made of different materials are interior-disjoint for more efficient mesh generation.

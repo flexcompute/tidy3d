@@ -903,6 +903,13 @@ class SimulationData(AbstractYeeGridSimulationData):
         sim_data.to_file(fname='path/to/file.hdf5') # Save a SimulationData object to a HDF5 file
         sim_data = SimulationData.from_file(fname='path/to/file.hdf5') # Load a SimulationData object from a HDF5 file.
 
+    Optionally, the simulation data can be loaded in a lazy mode, which only holds a reference until a field is accessed
+    or a method is applied. This is useful to save I/O operations and memory.
+
+    .. code-block:: python
+
+        sim_data = SimulationData.from_file(fname='path/to/file.hdf5', lazy=True) # Does not contain data until accessed.
+
     See Also
     --------
 
