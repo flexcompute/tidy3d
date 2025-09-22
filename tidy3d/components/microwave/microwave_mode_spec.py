@@ -114,7 +114,7 @@ class MicrowaveModeSpec(Tidy3dBaseModel):
     compute voltage, current, and characteristic impedance of the transmission line.
     """
 
-    impedance_spec: Optional[ImpedanceSpecTypes] = pd.Field(
+    impedance_spec: ImpedanceSpecTypes = pd.Field(
         AutoImpedanceSpec(),
         title="Impedance Specification",
         description="Field controls how the impedance is calculated from mode solver data.",

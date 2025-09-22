@@ -4525,7 +4525,7 @@ class Simulation(AbstractYeeGridSimulation):
                 continue
             mw_mode_spec = monitor.mode_spec.microwave_mode_spec
             if mw_mode_spec is not None:
-                _ = make_path_integrals(mw_mode_spec, monitor, self)
+                _ = make_path_integrals(mw_mode_spec.impedance_spec, monitor, self)
 
     @cached_property
     def monitors_data_size(self) -> dict[str, float]:

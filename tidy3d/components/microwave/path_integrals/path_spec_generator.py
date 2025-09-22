@@ -31,7 +31,7 @@ from tidy3d.exceptions import ValidationError
 
 from .current_spec import CompositeCurrentIntegralSpec, CurrentIntegralAxisAlignedSpec
 
-ConductorType = Union[PECMedium, LossyMetalMedium]
+ConductorTypes = Union[PECMedium, LossyMetalMedium]
 
 
 class PathSpecGenerator(Tidy3dBaseModel):
@@ -124,7 +124,8 @@ class PathSpecGenerator(Tidy3dBaseModel):
         """
 
         def is_conductor(med: Medium) -> bool:
-            return med.is_pec or isinstance(med, ConductorType)
+            union_types = get_args(ConductorTypes)
+            return med.is_pec or isinstance(med, union_types)
 
         geometry_list = [structure.geometry for structure in structures]
         # For metal, we don't distinguish between LossyMetal and PEC,
@@ -230,7 +231,7 @@ class PathSpecGenerator(Tidy3dBaseModel):
         )
 
         if len(conductor_polygons) < 1:
-            expected_types = ", ".join(t.__name__ for t in get_args(ConductorType))
+            expected_types = ", ".join(t.__name__ for t in get_args(ConductorTypes))
             raise ValidationError(
                 "No valid isolated conductors were found in the mode plane. Please ensure that a 'Structure' "
                 f"with a medium of type {expected_types} intersects the mode plane and is not touching "

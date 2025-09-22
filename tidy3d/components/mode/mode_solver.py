@@ -1370,7 +1370,7 @@ class ModeSolver(Tidy3dBaseModel):
         """Calculate and add microwave data to ``mode_solver_data`` which uses the path specifications.
         If they were not supplied by the user, then create a specification automatically.
         """
-        if self.mode_spec.microwave_mode_spec.impedance_spec is None:
+        if self.mode_spec.microwave_mode_spec is None:
             return mode_solver_data
         voltage_integrals, current_integrals = make_path_integrals(
             self.mode_spec.microwave_mode_spec.impedance_spec,
