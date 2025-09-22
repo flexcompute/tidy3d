@@ -1098,8 +1098,12 @@ class SimulationData(AbstractYeeGridSimulationData):
                 "post_norm": adjoint_source_info.post_norm,
             }
 
-            if not adjoint_source_info.normalize_sim:
-                sim_adj_update_dict["normalize_index"] = None
+            if adjoint_source_info.normalize_sim:
+                normalize_index_adj = 0
+            else:
+                normalize_index_adj = None
+
+            sim_adj_update_dict["normalize_index"] = normalize_index_adj
 
             if sim_original.sources and grid_spec_original.wavelength is None:
                 sim_adj_update_dict["grid_spec"] = grid_spec_adj
