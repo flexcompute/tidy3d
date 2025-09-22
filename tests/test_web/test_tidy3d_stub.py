@@ -6,6 +6,7 @@ import numpy as np
 import responses
 
 import tidy3d as td
+from tests.utils import AssertLogLevel
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.data.sim_data import SimulationData
@@ -120,6 +121,45 @@ def test_stub_data_postprocess_logs(tmp_path):
     file_path = os.path.join(tmp_path, "test_warnings.hdf5")
     sim_data.to_file(file_path)
     Tidy3dStubData.postprocess(file_path)
+
+
+@responses.activate
+def test_stub_data_lazy_loading(tmp_path):
+    """Tests the postprocess method with lazy loading of Tidy3dStubData when simulation diverged."""
+    td.log.set_capture(True)
+    sim_diverged_log = "The simulation has diverged!"
+
+    # make sim data where test diverged
+    sim_data = make_sim_data()
+    sim_data = sim_data.updated_copy(diverged=True, log=sim_diverged_log)
+    file_path = os.path.join(tmp_path, "test_diverged.hdf5")
+    sim_data.to_file(file_path)
+
+    # default case with lazy=False should output a warning
+    with AssertLogLevel("WARNING", contains_str=sim_diverged_log):
+        Tidy3dStubData.postprocess(file_path, lazy=False)
+
+    # we expect no warning in lazy mode as object should not be loaded
+    with AssertLogLevel(None):
+        sim_data = Tidy3dStubData.postprocess(file_path, lazy=True)
+
+    sim_data_copy = sim_data.copy()
+    assert type(sim_data).__name__ == "SimulationDataProxy"
+    assert type(sim_data_copy).__name__ == "SimulationDataProxy"
+
+    # the type should be still SimulationData despite being lazy
+    assert isinstance(sim_data, SimulationData)
+
+    # variable dict should only contain metadata to load the data, not the data itself
+    assert set(sim_data.__dict__.keys()) == {
+        "_lazy_fname",
+        "_lazy_group_path",
+        "_lazy_parse_obj_kwargs",
+    }
+
+    # we expect a warning from the lazy object if some field is accessed
+    with AssertLogLevel("WARNING", contains_str=sim_diverged_log):
+        _ = sim_data.monitor_data
 
 
 def test_default_task_name():

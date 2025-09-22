@@ -308,7 +308,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def from_file(
-        cls, fname: str, group_path: Optional[str] = None, **parse_obj_kwargs
+        cls,
+        fname: str,
+        group_path: Optional[str] = None,
+        lazy: bool = False,
+        on_load: Optional[Callable] = None,
+        **parse_obj_kwargs,
     ) -> Tidy3dBaseModel:
         """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
 
@@ -316,9 +321,17 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         ----------
         fname : str
             Full path to the file to load the :class:`Tidy3dBaseModel` from.
-        group_path : str, optional
+        group_path : str | None = None
             Path to a group inside the file to use as the base level. Only for hdf5 files.
             Starting `/` is optional.
+        lazy : bool = False
+            Whether to load the actual data (``lazy=False``) or return a proxy that loads
+            the data when accessed (``lazy=True``).
+        on_load : Callable | None = None
+            Callback function executed once the model is fully materialized.
+            Only used if ``lazy=True``. The callback is invoked with the loaded
+            instance as its sole argument, enabling post-processing such as
+            validation, logging, or warnings checks.
         **parse_obj_kwargs
             Keyword arguments passed to either pydantic's ``parse_obj`` function when loading model.
 
@@ -331,8 +344,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
+        if lazy:
+            Proxy = _make_lazy_proxy(cls, on_load=on_load)  # staticmethod usage
+            return Proxy(fname, group_path, parse_obj_kwargs)
         model_dict = cls.dict_from_file(fname=fname, group_path=group_path)
-        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+        obj = cls.parse_obj(model_dict, **parse_obj_kwargs)
+        if not lazy and on_load is not None:
+            on_load(obj)
+        return obj
 
     @classmethod
     def dict_from_file(cls, fname: str, group_path: Optional[str] = None) -> dict:
@@ -1201,3 +1220,77 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         sci_max = to_sci(max_val, common_exponent, precision)
 
         return sci_min, sci_max
+
+
+def _make_lazy_proxy(
+    target_cls: type,
+    on_load: Optional[Callable[[Any], None]] = None,
+) -> type:
+    """
+    Return a lazy-loading proxy subclass of ``target_cls``.
+
+    Parameters
+    ----------
+    target_cls : type
+        Must implement ``dict_from_file`` and ``parse_obj``.
+    on_load : Callable[[Any], None] | None = None
+        A function to call with the fully loaded instance once loaded.
+
+    Returns
+    -------
+    type
+        A class named ``<TargetClsName>Proxy`` with init args:
+        ``(fname, group_path, parse_obj_kwargs)``.
+    """
+    proxy_name = f"{target_cls.__name__}Proxy"
+
+    class _LazyProxy(target_cls):
+        def __init__(
+            self, fname: str, group_path: Optional[str], parse_obj_kwargs: Optional[dict[str, Any]]
+        ):
+            object.__setattr__(self, "_lazy_fname", fname)
+            object.__setattr__(self, "_lazy_group_path", group_path)
+            object.__setattr__(self, "_lazy_parse_obj_kwargs", dict(parse_obj_kwargs or {}))
+
+        def copy(self, **kwargs):
+            """Return another lazy proxy instead of materializing."""
+            return _LazyProxy(
+                self._lazy_fname,
+                self._lazy_group_path,
+                {**self._lazy_parse_obj_kwargs, **kwargs},
+            )
+
+        def __getattribute__(self, name: str):
+            if name in (
+                "__class__",
+                "__dict__",
+                "__weakref__",
+                "__post_root_validators__",
+                "copy",  # <-- avoid materializing just for copy
+            ) or name.startswith("_lazy_"):
+                return object.__getattribute__(self, name)
+
+            d = object.__getattribute__(self, "__dict__")
+            if "_lazy_fname" in d:  # sentinel: not loaded yet
+                fname = d["_lazy_fname"]
+                group_path = d["_lazy_group_path"]
+                kwargs = d["_lazy_parse_obj_kwargs"]
+
+                model_dict = target_cls.dict_from_file(fname=fname, group_path=group_path)
+                target = target_cls.parse_obj(model_dict, **kwargs)
+
+                d.clear()
+                d.update(target.__dict__)
+                object.__setattr__(self, "__class__", target_cls)
+                object.__setattr__(self, "__fields_set__", set(target.__fields_set__))
+                private_attrs = getattr(target, "__private_attributes__", {}) or {}
+                for attr_name in private_attrs:
+                    object.__setattr__(self, attr_name, getattr(target, attr_name))
+
+                if on_load is not None:
+                    on_load(self)
+
+            return object.__getattribute__(self, name)
+
+    _LazyProxy.__name__ = proxy_name
+    return _LazyProxy

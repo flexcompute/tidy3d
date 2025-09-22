@@ -969,6 +969,7 @@ def load(
     replace_existing: bool = True,
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
+    lazy: bool = False,
 ) -> WorkflowDataType:
     """
     Download and Load simulation results into :class:`.SimulationData` object.
@@ -998,6 +999,9 @@ def load(
         If ``True``, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
+    lazy : bool = False
+        Whether to load the actual data (``lazy=False``) or return a proxy that loads
+        the data when accessed (``lazy=True``).
 
     Returns
     -------
@@ -1019,7 +1023,7 @@ def load(
         else:
             console.log(f"loading simulation from {path}")
 
-    stub_data = Tidy3dStubData.postprocess(path)
+    stub_data = Tidy3dStubData.postprocess(path, lazy=lazy)
     return stub_data
 
 
