@@ -1373,7 +1373,7 @@ class ModeSolver(Tidy3dBaseModel):
         if self.mode_spec.microwave_mode_spec is None:
             return mode_solver_data
         voltage_integrals, current_integrals = make_path_integrals(
-            self.mode_spec.microwave_mode_spec.impedance_spec,
+            self.mode_spec.microwave_mode_spec,
             self.to_monitor(name=MODE_MONITOR_NAME),
             self.simulation,
         )
@@ -1386,21 +1386,18 @@ class ModeSolver(Tidy3dBaseModel):
             vi = voltage_integrals[mode_index]
             ci = current_integrals[mode_index]
             if vi is None and ci is None:
-                Z0_list.append(None)
-                V_list.append(None)
-                I_list.append(None)
-            else:
-                impedance_calc = ImpedanceCalculator(
-                    voltage_integral=voltage_integrals[mode_index],
-                    current_integral=current_integrals[mode_index],
-                )
-                single_mode_data = mode_solver_data_expanded._isel(mode_index=[mode_index])
-                Z0, voltage, current = impedance_calc.compute_impedance(
-                    single_mode_data, return_voltage_and_current=True
-                )
-                Z0_list.append(Z0)
-                V_list.append(voltage)
-                I_list.append(current)
+                continue
+            impedance_calc = ImpedanceCalculator(
+                voltage_integral=voltage_integrals[mode_index],
+                current_integral=current_integrals[mode_index],
+            )
+            single_mode_data = mode_solver_data_expanded._isel(mode_index=[mode_index])
+            Z0, voltage, current = impedance_calc.compute_impedance(
+                single_mode_data, return_voltage_and_current=True
+            )
+            Z0_list.append(Z0)
+            V_list.append(voltage)
+            I_list.append(current)
         all_mode_Z0 = xr.concat(Z0_list, dim="mode_index")
         all_mode_Z0 = _make_impedance_data_array(all_mode_Z0)
         all_mode_V = xr.concat(V_list, dim="mode_index")

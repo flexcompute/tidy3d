@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Optional, Union
 
-from tidy3d.components.microwave.microwave_mode_spec import (
-    AutoImpedanceSpec,
-    ImpedanceSpecTypes,
-)
+from tidy3d.components.microwave.microwave_mode_spec import MicrowaveModeSpec
 from tidy3d.components.microwave.path_integrals.current_spec import (
     CompositeCurrentIntegralSpec,
     CurrentIntegralAxisAlignedSpec,
     CustomCurrentIntegral2DSpec,
 )
-from tidy3d.components.microwave.path_integrals.path_spec_generator import PathSpecGenerator
+from tidy3d.components.microwave.path_integrals.impedance_spec import (
+    AutoImpedanceSpec,
+    PathSpecGenerator,
+)
 from tidy3d.components.microwave.path_integrals.types import (
     CurrentPathSpecTypes,
     VoltagePathSpecTypes,
@@ -87,10 +87,10 @@ def make_current_integral(path_spec: CurrentPathSpecTypes) -> CurrentIntegralTyp
 
 
 def make_path_integrals(
-    impedance_spec: ImpedanceSpecTypes,
+    microwave_mode_spec: MicrowaveModeSpec,
     monitor: Union[ModeMonitor, ModeSolverMonitor],
     sim: Simulation,
-) -> tuple[tuple[VoltageIntegralTypes], tuple[CurrentIntegralTypes]]:
+) -> tuple[tuple[Optional[VoltageIntegralTypes]], tuple[Optional[CurrentIntegralTypes]]]:
     """
     Given an impedance specification, monitor, and simulation instance, create the voltage and
     current path integrals used for the impedance computation.
@@ -115,48 +115,50 @@ def make_path_integrals(
         If path specifications cannot be auto-generated or path integrals cannot be constructed.
     """
 
-    v_specs = None
-    i_specs = None
-    if isinstance(impedance_spec, AutoImpedanceSpec):
+    if microwave_mode_spec._using_auto_current_spec:
+        i_spec_gen = PathSpecGenerator(
+            center=monitor.center, size=monitor.size, field_data_colocated=monitor.colocate
+        )
         try:
-            i_spec, _ = PathSpecGenerator.create_current_path_specs(
-                monitor.bounding_box,
+            auto_i_spec, _ = i_spec_gen.create_current_path_specs(
                 sim.structures,
                 sim.grid,
                 sim.symmetry,
                 sim.bounding_box,
-                monitor.colocate,
             )
-            i_specs = (i_spec,) * monitor.mode_spec.num_modes
         except ValidationError as e:
             raise SetupError(
                 f"Failed to auto-generate path specification for impedance calculation in monitor '{monitor.name}'."
             ) from e
-    else:
-        v_specs = impedance_spec.voltage_spec
-        i_specs = impedance_spec.current_spec
 
-    if v_specs is None:
-        v_specs = (None,) * monitor.mode_spec.num_modes
-    if i_specs is None:
-        i_specs = (None,) * monitor.mode_spec.num_modes
+    v_integrals = []
+    i_integrals = []
+    for idx, impedance_spec in enumerate(microwave_mode_spec.impedance_spec):
+        if impedance_spec is None:
+            # Do not calculate impedance for this mode
+            v_integrals.append(None)
+            i_integrals.append(None)
+            continue
+        elif isinstance(impedance_spec, AutoImpedanceSpec):
+            v_spec = None
+            i_spec = auto_i_spec
+        else:
+            v_spec = impedance_spec.voltage_spec
+            i_spec = impedance_spec.current_spec
 
-    try:
-        voltage_integrals = []
-        current_integrals = []
-        for v_spec, i_spec in zip(v_specs, i_specs):
+        try:
             v_integral = None
             i_integral = None
             if v_spec is not None:
                 v_integral = make_voltage_integral(v_spec)
             if i_spec is not None:
                 i_integral = make_current_integral(i_spec)
-            voltage_integrals.append(v_integral)
-            current_integrals.append(i_integral)
-        path_integrals = (tuple(voltage_integrals), tuple(current_integrals))
-    except Exception as e:
-        raise SetupError(
-            f"Failed to construct path integrals from the impedance specification in monitor '{monitor.name}'. "
-            "Please create a github issue so that the problem can be investigated."
-        ) from e
-    return path_integrals
+            v_integrals.append(v_integral)
+            i_integrals.append(i_integral)
+        except Exception as e:
+            raise SetupError(
+                f"Failed to construct path integrals for the mode index {idx} in monitor '{monitor.name}' "
+                "from the impedance specification. "
+                "Please create a github issue so that the problem can be investigated."
+            ) from e
+    return (tuple(v_integrals), tuple(i_integrals))

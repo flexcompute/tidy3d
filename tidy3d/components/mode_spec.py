@@ -13,7 +13,7 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 from .base import Tidy3dBaseModel, skip_if_fields_missing
-from .microwave.microwave_mode_spec import CustomImpedanceSpec, MicrowaveModeSpec
+from .microwave.microwave_mode_spec import MicrowaveModeSpec
 from .types import Axis2D, TrackFreq
 
 GROUP_INDEX_STEP = 0.005
@@ -247,34 +247,19 @@ class ModeSpec(Tidy3dBaseModel):
 
     @pd.validator("microwave_mode_spec")
     def check_microwave_mode_spec_consistent(cls, val, values):
-        """Either the user has requested an automatic impedance calculation by leaving the path specifications empty
-        or the number of path specifications is equal to the number of modes.
-        """
+        """Check that the number of impedance specifications is equal to the number of modes."""
         if val is None:
             return val
 
-        if isinstance(val, CustomImpedanceSpec):
-            impedance_spec = val.impedance_spec
-            num_modes = values["num_modes"]
-            valid_number_voltage_specs = (
-                impedance_spec.num_voltage_specs is None
-                or impedance_spec.num_voltage_specs == num_modes
-            )
-            valid_number_current_specs = (
-                impedance_spec.num_current_specs is None
-                or impedance_spec.num_current_specs == num_modes
+        num_modes = values["num_modes"]
+        valid_number_impedance_specs = val.num_impedance_specs == num_modes
+
+        if not valid_number_impedance_specs:
+            raise SetupError(
+                f"Given {val.num_impedance_specs} impedance specifications in the 'MicrowaveModeSpec, "
+                f"but the number of modes requested is {num_modes}. Please either ensure that the "
+                "number of impedance specifications is equal to the number of modes or leave the "
+                "'MicrowaveModeSpec' field as 'None', if impedances are not needed."
             )
 
-            if not valid_number_voltage_specs:
-                raise SetupError(
-                    f"Given {impedance_spec.num_voltage_specs} voltage specifications, but the number of modes requested is {num_modes}. "
-                    "Please either ensure that the number of voltage specifications is equal to the "
-                    "number of modes or leave this field as 'None' in the 'MicrowaveModeSpec'."
-                )
-            if not valid_number_current_specs:
-                raise SetupError(
-                    f"Given {impedance_spec.num_current_specs} current specifications, but the number of modes requested is {num_modes}. "
-                    "Please either ensure that the number of voltage specifications is equal to the "
-                    "number of modes or leave this field as 'None' in the 'MicrowaveModeSpec'."
-                )
         return val

@@ -21,14 +21,16 @@ from tidy3d.components.microwave.data.monitor_data import (
     AntennaMetricsData,
 )
 from tidy3d.components.microwave.microwave_mode_spec import (
-    AutoImpedanceSpec,
-    CustomImpedanceSpec,
     MicrowaveModeSpec,
 )
 from tidy3d.components.microwave.path_integrals.current_spec import (
     CompositeCurrentIntegralSpec,
     CurrentIntegralAxisAlignedSpec,
     CustomCurrentIntegral2DSpec,
+)
+from tidy3d.components.microwave.path_integrals.impedance_spec import (
+    AutoImpedanceSpec,
+    CustomImpedanceSpec,
 )
 from tidy3d.components.microwave.path_integrals.voltage_spec import (
     CustomVoltageIntegral2DSpec,

@@ -3807,7 +3807,11 @@ def test_validate_microwave_mode_spec_generation():
         medium=td.PEC,
     )
     mode_spec = td.ModeSpec(
-        num_modes=2, target_neff=1.8, microwave_mode_spec=td.MicrowaveModeSpec()
+        num_modes=2,
+        target_neff=1.8,
+        microwave_mode_spec=td.MicrowaveModeSpec(
+            impedance_spec=(td.AutoImpedanceSpec(), td.AutoImpedanceSpec())
+        ),
     )
 
     mode_mon = td.ModeMonitor(

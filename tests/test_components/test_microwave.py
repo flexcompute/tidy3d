@@ -24,12 +24,12 @@ from tidy3d.components.microwave.formulas.circuit_parameters import (
     mutual_inductance_colinear_wire_segments,
     total_inductance_colinear_rectangular_wire_segments,
 )
+from tidy3d.components.microwave.path_integrals.impedance_spec import PathSpecGenerator
 from tidy3d.components.microwave.path_integrals.path_integral_factory import (
     make_current_integral,
     make_path_integrals,
     make_voltage_integral,
 )
-from tidy3d.components.microwave.path_integrals.path_spec_generator import PathSpecGenerator
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.types import Ax, Shapely
 from tidy3d.constants import EPSILON_0
@@ -183,8 +183,11 @@ def make_mw_sim(
         )
     size_port = [0, sim_width, size_sim[2]]
     center_port = [0, 0, center_sim[2]]
+    impedance_spec = (td.AutoImpedanceSpec(),) * 4
     mode_spec = td.ModeSpec(
-        num_modes=4, target_neff=1.8, microwave_mode_spec=td.MicrowaveModeSpec()
+        num_modes=4,
+        target_neff=1.8,
+        microwave_mode_spec=td.MicrowaveModeSpec(impedance_spec=impedance_spec),
     )
 
     mode_monitor = td.ModeMonitor(
@@ -379,13 +382,16 @@ def test_auto_path_spec_canonical_shapes(colocate, tline_type):
     sim = make_mw_sim(False, colocate, tline_type)
     mode_monitor = sim.monitors[0]
     modal_plane = td.Box(center=mode_monitor.center, size=mode_monitor.size)
-    comp_path_spec, geos = PathSpecGenerator.create_current_path_specs(
-        modal_plane,
+    path_spec_gen = PathSpecGenerator(
+        center=modal_plane.center,
+        size=modal_plane.size,
+        field_data_colocated=mode_monitor.colocate,
+    )
+    comp_path_spec, geos = path_spec_gen.create_current_path_specs(
         sim.structures,
         sim.grid,
         sim.symmetry,
         sim.bounding_box,
-        field_data_colocated=mode_monitor.colocate,
     )
 
     if tline_type == "coax":
@@ -435,13 +441,16 @@ def test_auto_path_spec_advanced(use_2D, symmetry):
     mode_monitor = sim.monitors[0]
 
     modal_plane = td.Box(center=mode_monitor.center, size=mode_monitor.size)
-    comp_path_spec, geos = PathSpecGenerator.create_current_path_specs(
-        modal_plane,
+    path_spec_gen = PathSpecGenerator(
+        center=modal_plane.center,
+        size=modal_plane.size,
+        field_data_colocated=mode_monitor.colocate,
+    )
+    comp_path_spec, geos = path_spec_gen.create_current_path_specs(
         sim.structures,
         sim.grid,
         sim.symmetry,
         sim.bounding_box,
-        field_data_colocated=mode_monitor.colocate,
     )
 
     if symmetry[1] == 1 and symmetry[2] == 1:
@@ -489,14 +498,17 @@ def test_auto_path_spec_validation():
     sim = sim.updated_copy(structures=[coax_struct])
     mode_monitor = sim.monitors[0]
     modal_plane = td.Box(center=mode_monitor.center, size=mode_monitor.size)
+    path_spec_gen = PathSpecGenerator(
+        center=modal_plane.center,
+        size=modal_plane.size,
+        field_data_colocated=mode_monitor.colocate,
+    )
     with pytest.raises(ValidationError):
-        PathSpecGenerator.create_current_path_specs(
-            modal_plane,
+        path_spec_gen.create_current_path_specs(
             sim.structures,
             sim.grid,
             sim.symmetry,
             sim.bounding_box,
-            field_data_colocated=mode_monitor.colocate,
         )
 
 
@@ -565,35 +577,20 @@ def test_microwave_mode_spec_validation():
     """Check that the various allowed methods for supplying path specifications are validated."""
 
     _ = td.AutoImpedanceSpec()
-    _ = td.CustomImpedanceSpec(voltage_spec=None, current_spec=None)
 
     v_spec = td.VoltageIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
     i_spec = td.CurrentIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 1, 1), sign="-")
 
     # All valid methods
-    _ = td.CustomImpedanceSpec(voltage_spec=(v_spec,), current_spec=(i_spec,))
-    _ = td.CustomImpedanceSpec(voltage_spec=(v_spec,))
-    _ = td.CustomImpedanceSpec(current_spec=(i_spec,))
-    _ = td.CustomImpedanceSpec(voltage_spec=(v_spec, v_spec), current_spec=(i_spec, i_spec))
+    both = td.CustomImpedanceSpec(voltage_spec=v_spec, current_spec=i_spec)
+    voltage_only = td.CustomImpedanceSpec(
+        voltage_spec=v_spec,
+    )
+    current_only = td.CustomImpedanceSpec(
+        current_spec=i_spec,
+    )
 
-    # Different lengths is not valid
-    with pytest.raises(pd.ValidationError):
-        _ = td.CustomImpedanceSpec(voltage_spec=(v_spec, v_spec), current_spec=(i_spec,))
-    with pytest.raises(pd.ValidationError):
-        _ = td.CustomImpedanceSpec(voltage_spec=(v_spec,), current_spec=(i_spec, i_spec))
-
-    # Only one path spec missing is ok
-    _ = td.CustomImpedanceSpec(voltage_spec=(v_spec, None), current_spec=(None, i_spec))
-
-    # But at least one must be given for each pair
-    with pytest.raises(pd.ValidationError):
-        _ = td.CustomImpedanceSpec(voltage_spec=(v_spec, None), current_spec=(None, None))
-
-    with pytest.raises(pd.ValidationError):
-        _ = td.CustomImpedanceSpec(voltage_spec=(v_spec, None))
-
-    with pytest.raises(pd.ValidationError):
-        _ = td.CustomImpedanceSpec(current_spec=(None, i_spec))
+    _ = td.MicrowaveModeSpec(impedance_spec=(both, voltage_only, current_only, None))
 
 
 def test_path_integral_factory_voltage_validation():
@@ -678,10 +675,16 @@ def test_make_path_integrals_validation():
     v_spec = td.VoltageIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
     i_spec = td.CurrentIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 1, 1), sign="-")
 
-    impedance_spec = td.CustomImpedanceSpec(voltage_spec=(v_spec,), current_spec=(i_spec,))
+    impedance_spec = td.CustomImpedanceSpec(
+        voltage_spec=v_spec,
+        current_spec=i_spec,
+    )
+    microwave_mode_spec = td.MicrowaveModeSpec(impedance_spec=(impedance_spec,))
 
     # Test successful creation
-    voltage_integrals, current_integrals = make_path_integrals(impedance_spec, mode_monitor, sim)
+    voltage_integrals, current_integrals = make_path_integrals(
+        microwave_mode_spec, mode_monitor, sim
+    )
     assert len(voltage_integrals) == 1
     assert len(current_integrals) == 1
     assert voltage_integrals[0] is not None
@@ -689,8 +692,7 @@ def test_make_path_integrals_validation():
 
     # Test with None specs - when both are None, use_automatic_setup is True
     # This means current integrals will be auto-generated, not None
-    microwave_mode_spec_none = td.CustomImpedanceSpec(voltage_spec=None, current_spec=None)
-
+    microwave_mode_spec_none = td.MicrowaveModeSpec(impedance_spec=(None,))
     voltage_integrals, current_integrals = make_path_integrals(
         microwave_mode_spec_none, mode_monitor, sim
     )
@@ -700,7 +702,7 @@ def test_make_path_integrals_validation():
     assert all(ci is None for ci in current_integrals)
 
     # Test with automatic setup enabled (same as above, but explicit)
-    microwave_mode_spec_auto = td.AutoImpedanceSpec()
+    microwave_mode_spec_auto = td.MicrowaveModeSpec(impedance_spec=(td.AutoImpedanceSpec(),))
 
     voltage_integrals_auto, current_integrals_auto = make_path_integrals(
         microwave_mode_spec_auto, mode_monitor, sim
@@ -735,8 +737,7 @@ def test_make_path_integrals_setup_errors():
     bad_struct = td.Structure(geometry=bad_coax, medium=td.PEC)
     bad_sim = sim.updated_copy(structures=[bad_struct])
 
-    microwave_mode_spec_auto = td.AutoImpedanceSpec()
-
+    microwave_mode_spec_auto = td.MicrowaveModeSpec(impedance_spec=(td.AutoImpedanceSpec(),))
     # This should raise a SetupError due to auto-generation failure
     with pytest.raises(SetupError, match="Failed to auto-generate path specification"):
         make_path_integrals(microwave_mode_spec_auto, mode_monitor, bad_sim)
@@ -751,7 +752,8 @@ def test_make_path_integrals_construction_errors(monkeypatch):
     # Create a valid spec
     v_spec = td.VoltageIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
 
-    impedance_spec = td.CustomImpedanceSpec(voltage_spec=(v_spec,), current_spec=(None,))
+    impedance_spec = td.CustomImpedanceSpec(voltage_spec=v_spec, current_spec=None)
+    microwave_mode_spec = td.MicrowaveModeSpec(impedance_spec=(impedance_spec,))
 
     # Mock make_voltage_integral to raise an exception
     def mock_make_voltage_integral(path_spec):
@@ -764,7 +766,7 @@ def test_make_path_integrals_construction_errors(monkeypatch):
 
     # This should raise a SetupError due to construction failure
     with pytest.raises(SetupError, match="Failed to construct path integrals"):
-        make_path_integrals(impedance_spec, mode_monitor, sim)
+        make_path_integrals(microwave_mode_spec, mode_monitor, sim)
 
 
 def test_path_integral_factory_composite_current():
@@ -815,11 +817,17 @@ def test_path_integral_factory_mixed_specs():
     i_spec = td.CurrentIntegralAxisAlignedSpec(center=(1, 2, 3), size=(0, 1, 1), sign="-")
 
     # Test with mixed specs - some None, some specified
-    impedance_spec = td.CustomImpedanceSpec(
-        voltage_spec=(v_spec, None), current_spec=(None, i_spec)
+    impedance_spec1 = td.CustomImpedanceSpec(voltage_spec=v_spec, current_spec=None)
+    impedance_spec2 = td.CustomImpedanceSpec(voltage_spec=None, current_spec=i_spec)
+    microwave_mode_spec = td.MicrowaveModeSpec(
+        impedance_spec=(
+            impedance_spec1,
+            impedance_spec2,
+        )
     )
-
-    voltage_integrals, current_integrals = make_path_integrals(impedance_spec, mode_monitor, sim)
+    voltage_integrals, current_integrals = make_path_integrals(
+        microwave_mode_spec, mode_monitor, sim
+    )
 
     assert len(voltage_integrals) == 2
     assert len(current_integrals) == 2
@@ -849,11 +857,11 @@ def test_mode_solver_with_microwave_mode_spec():
     thickness = 0.1 * mm
     plane = td.Box(center=(0, 0, 0), size=(0, width, 2 * height))
     num_modes = 3
-
+    impedance_spec = (td.AutoImpedanceSpec(), None, None)
     mode_spec = td.ModeSpec(
         num_modes=num_modes,
         target_neff=2.2,
-        microwave_mode_spec=td.MicrowaveModeSpec(),
+        microwave_mode_spec=td.MicrowaveModeSpec(impedance_spec=impedance_spec),
     )
 
     mms = ModeSolver(
@@ -877,7 +885,5 @@ def test_mode_solver_with_microwave_mode_spec():
     mms.plot(ax=ax)
     mms.plot_grid(ax=ax)
     ax.set_aspect("equal")
-    # ax.set_xlim(modal_plane.bounds[0][1], modal_plane.bounds[1][1])
-    # ax.set_ylim(modal_plane.bounds[0][2], modal_plane.bounds[1][2])
     if MAKE_PLOTS:
         plt.show()

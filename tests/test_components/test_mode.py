@@ -381,3 +381,12 @@ def test_plane_crosses_symmetry_plane_warning(monkeypatch):
             mode_spec=td.ModeSpec(),
             freqs=[td.C_0],
         )
+
+
+def test_mode_spec_with_microwave_mode_spec():
+    """Test that the number of impedance specs is validated against the number of modes."""
+
+    impedance_spec = (td.AutoImpedanceSpec(),)
+    mw_mode_spec = td.MicrowaveModeSpec(impedance_spec=impedance_spec)
+    with pytest.raises(pydantic.ValidationError):
+        td.ModeSpec(num_modes=2, microwave_mode_spec=mw_mode_spec)
