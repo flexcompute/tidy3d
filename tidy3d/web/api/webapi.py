@@ -63,6 +63,25 @@ SOLVER_NAME = {
     "VOLUME_MESH": "VolumeMesher",
 }
 
+TERMINAL_ERRORS = {
+    "validate_fail",
+    "error",
+    "diverged",
+    "blocked",
+    "aborting",
+    "aborted",
+}
+
+RUN_STATUSES = [
+    "draft",
+    "preprocess",
+    "validating",
+    "validate",
+    "running",
+    "postprocess",
+    "success",
+]
+
 
 def _get_url(task_id: str) -> str:
     """Get the URL for a task on our server."""
@@ -1070,21 +1089,13 @@ def _monitor_modeler_batch(
 
     # Non-verbose path: poll without progress bars then return
     if not verbose:
-        terminal_errors = {
-            "validate_fail",
-            "error",
-            "diverged",
-            "blocked",
-            "aborting",
-            "aborted",
-        }
         # Run phase
         while True:
             d = _batch_detail(batch_id)
             s = d.totalStatus.value
             total = d.totalTask or 0
             r = d.runSuccess or 0
-            if s in terminal_errors:
+            if s in TERMINAL_ERRORS:
                 raise WebError(f"Batch {batch_id} terminated: {s}")
             if total and r >= total:
                 break
@@ -1096,7 +1107,7 @@ def _monitor_modeler_batch(
             postprocess_status = d.postprocessStatus
             if postprocess_status == "success":
                 break
-            elif postprocess_status in terminal_errors:
+            elif postprocess_status in TERMINAL_ERRORS:
                 raise WebError(
                     f"Batch {batch_id} terminated. Please contact customer support and provide this Component Modeler batch ID: '{batch_id}'"
                 )
@@ -1110,20 +1121,9 @@ def _monitor_modeler_batch(
         TimeElapsedColumn(),
     )
     with Progress(*progress_columns, console=console, transient=False) as progress:
-        terminal_errors = {"validate_fail", "error", "diverged", "blocked", "aborting", "aborted"}
-
         # Phase: Run (aggregate + per-task)
         p_run = progress.add_task("Run Total", total=1.0)
         task_bars: dict[str, int] = {}
-        run_statuses = [
-            "draft",
-            "preprocess",
-            "validating",
-            "validate",
-            "running",
-            "postprocess",
-            "success",
-        ]
 
         while True:
             detail = _batch_detail(batch_id)
@@ -1140,8 +1140,8 @@ def _monitor_modeler_batch(
                         _, idx = _status_to_stage(tstatus)
                         pbar = progress.add_task(
                             f"  {name}",
-                            total=len(run_statuses) - 1,
-                            completed=min(idx, len(run_statuses) - 1),
+                            total=len(RUN_STATUSES) - 1,
+                            completed=min(idx, len(RUN_STATUSES) - 1),
                         )
                         task_bars[name] = pbar
 
@@ -1174,7 +1174,7 @@ def _monitor_modeler_batch(
 
             if total and r >= total:
                 break
-            if status in terminal_errors:
+            if status in TERMINAL_ERRORS:
                 raise WebError(f"Batch {batch_id} terminated: {status}")
             progress.refresh()
             time.sleep(REFRESH_TIME)
@@ -1195,7 +1195,7 @@ def _monitor_modeler_batch(
                 progress.update(p_post, completed=0.33)
             elif postprocess_status == "running":
                 progress.update(p_post, completed=0.55)
-            elif postprocess_status in terminal_errors:
+            elif postprocess_status in TERMINAL_ERRORS:
                 raise WebError(
                     f"Batch {batch_id} terminated. Please contact customer support and provide this Component Modeler batch ID: '{batch_id}'"
                 )
@@ -1355,22 +1355,40 @@ def estimate_cost(
     console = get_logging_console() if verbose else None
 
     if _is_modeler_batch(task_id):
-        status = _batch_detail(task_id).totalStatus.value
+        d = _batch_detail(task_id)
+        status = d.totalStatus.value
 
         # Wait for a termination status
         while status not in ["validate_success", "success", "error", "failed"]:
             time.sleep(REFRESH_TIME)
-            status = _batch_detail(task_id).totalStatus.value
+            d = _batch_detail(task_id)
+            status = d.totalStatus.value
 
-        if status in ["validate_success", "success"]:
-            est_flex_unit = _batch_detail(task_id).estFlexUnit
-            if verbose:
-                console.log(
-                    f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Minimum cost depends on "
-                    "task execution details. Use 'web.real_cost(task_id)' to get the billed FlexCredit "
-                    "cost after a simulation run."
-                )
-            return est_flex_unit
+            if status in ["validate_success", "success"]:
+                est_flex_unit = _batch_detail(task_id).estFlexUnit
+                if verbose:
+                    console.log(
+                        f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Minimum cost depends on "
+                        "task execution details. Use 'web.real_cost(task_id)' to get the billed FlexCredit "
+                        "cost after a simulation run."
+                    )
+                return est_flex_unit
+            elif status in TERMINAL_ERRORS:
+                log.error(f"The ComponentModeler '{task_id}' has failed: {status}")
+
+                if status == "validate_fail":
+                    assert d.validateErrors is not None
+                    for key, error in d.validateErrors.items():
+                        # I don't like this ideally but would like to control the endpoint to make this better
+                        error_dict = json.loads(error)
+                        validation_error = error_dict["validation_error"]
+                        log.error(
+                            f"Subtask '{key}' has failed to validate:"
+                            f" \n {validation_error} \n "
+                            f"Fix your component modeler configuration. "
+                            f"Generate subtask simulations locally using `ComponentModelerType.sim_dict`."
+                        )
+                break
     else:
         task = SimulationTask.get(task_id)
 
