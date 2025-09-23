@@ -316,3 +316,4 @@ class BatchDetail(TaskBase):
     totalCheckMillis: int = None
     message: str = None
     tasks: list[BatchMember] = []
+    validateErrors: dict = None
