@@ -20,16 +20,12 @@ from autograd.test_util import check_grads
 
 import tidy3d as td
 import tidy3d.web as web
-from tidy3d.components.autograd.constants import (
-    MAX_NUM_TRACED_STRUCTURES,
-    MIN_WVL_FRACTION_CYLINDER_DISCRETIZE,
-    MINIMUM_SPACING_FRACTION,
-)
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.field_map import FieldMap
 from tidy3d.components.autograd.utils import is_tidy_box
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.data.data_array import DataArray
+from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
 from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import run, run_async
@@ -1372,7 +1368,8 @@ def test_too_many_traced_structures(monkeypatch, use_emulated_run):
     def make_sim(*args):
         structure = make_structures(*args)[structure_key]
         return SIM_BASE.updated_copy(
-            structures=(MAX_NUM_TRACED_STRUCTURES + 1) * [structure], monitors=[monitor]
+            structures=(config.adjoint.max_traced_structures + 1) * [structure],
+            monitors=[monitor],
         )
 
     def objective(*args):
@@ -1895,7 +1892,7 @@ def test_adaptive_spacing(eps_real):
     )
 
     with AssertLogLevel("WARNING", contains_str="Based on the material, the adaptive spacing"):
-        expected_vjp_spacing = info.wavelength_min * MINIMUM_SPACING_FRACTION
+        expected_vjp_spacing = info.wavelength_min * config.adjoint.minimum_spacing_fraction
         vjp_spacing = info.adaptive_vjp_spacing()
 
         assert np.isclose(expected_vjp_spacing, vjp_spacing), "Unexpected adaptive vjp spacing!"
@@ -1929,7 +1926,7 @@ def test_cylinder_discretization(eps_real):
     ):
         cylinder = td.Cylinder(axis=2, length=info.wavelength_min, radius=2 * info.wavelength_min)
 
-        expected_wvl_mat = info.wavelength_min * MIN_WVL_FRACTION_CYLINDER_DISCRETIZE
+        expected_wvl_mat = info.wavelength_min * config.adjoint.min_wvl_fraction
         wvl_mat = cylinder._discretization_wavelength(derivative_info=info)
 
         assert np.isclose(expected_wvl_mat, wvl_mat), (

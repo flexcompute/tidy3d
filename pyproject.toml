@@ -37,6 +37,7 @@ pydantic = "^2.0"
 PyYAML = "*"
 dask = "*"
 toml = "*"
+tomlkit = "^0.13.2"
 autograd = ">=1.7.0"
 scipy = "*"
 ### NOT CORE

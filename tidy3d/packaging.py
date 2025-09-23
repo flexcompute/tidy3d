@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import functools
 from importlib import import_module
-from importlib.util import find_spec
 from typing import Literal
 
 import numpy as np
 
-from .config import config
+from tidy3d.config import config
+
 from .exceptions import Tidy3dImportError
 from .log import log
 from .version import __version__
@@ -189,42 +189,37 @@ def supports_local_subpixel(fn):
 
     @functools.wraps(fn)
     def _fn(*args, **kwargs):
-        if config.use_local_subpixel is False:
+        preference = config.simulation.use_local_subpixel
+
+        if preference is False:
             tidy3d_extras["use_local_subpixel"] = False
             tidy3d_extras["mod"] = None
         else:
             # first try to import the module
             if tidy3d_extras["mod"] is None:
-                tidy3d_extras["use_local_subpixel"] = False
-                module_exists = find_spec("tidy3d_extras") is not None
-                if config.use_local_subpixel is True and not module_exists:
-                    raise Tidy3dImportError(
-                        "The package 'tidy3d-extras' is required for this "
-                        "operation when 'config.use_local_subpixel' is 'True'. "
-                        "Please install the 'tidy3d-extras' package using, for "
-                        "example, 'pip install tidy3d[extras]'."
-                    )
+                try:
+                    import tidy3d_extras as tidy3d_extras_mod
 
-                if module_exists:
-                    try:
-                        import tidy3d_extras as tidy3d_extras_mod
-
-                    except ImportError as exc:
-                        # this should not happen; if the API key is invalid,
-                        # the package should still import but the version will be None
+                except ImportError as exc:
+                    tidy3d_extras["mod"] = None
+                    tidy3d_extras["use_local_subpixel"] = False
+                    if preference is True:
                         raise Tidy3dImportError(
-                            "The package 'tidy3d-extras' did not initialize correctly. "
-                            "To suppress this error, you can set "
-                            "'config.use_local_subpixel=False'."
+                            "The package 'tidy3d-extras' is required for this "
+                            "operation when 'config.use_local_subpixel' is 'True'. "
+                            "Please install the 'tidy3d-extras' package using, for "
+                            "example, 'pip install tidy3d[extras]'."
                         ) from exc
 
+                else:
                     version = tidy3d_extras_mod.__version__
 
                     if version is None:
+                        tidy3d_extras["mod"] = None
+                        tidy3d_extras["use_local_subpixel"] = False
                         raise Tidy3dImportError(
                             "The package 'tidy3d-extras' did not initialize correctly, "
-                            "likely due to an invalid API key. To suppress this error, "
-                            "you can set 'config.use_local_subpixel=False'."
+                            "likely due to an invalid API key."
                         )
 
                     if version != __version__:
@@ -239,6 +234,9 @@ def supports_local_subpixel(fn):
 
                     tidy3d_extras["mod"] = tidy3d_extras_mod
                     tidy3d_extras["use_local_subpixel"] = "local_subpixel" in features
+            else:
+                features = tidy3d_extras["mod"].extension._features()
+                tidy3d_extras["use_local_subpixel"] = "local_subpixel" in features
 
         return fn(*args, **kwargs)
 
@@ -250,11 +248,13 @@ def disable_local_subpixel(fn):
 
     @functools.wraps(fn)
     def _fn(*args, **kwargs):
-        use_local_subpixel = config.use_local_subpixel
-        config.use_local_subpixel = False
+        simulation = config.simulation
+        previous = simulation.use_local_subpixel
+
+        simulation.use_local_subpixel = False
         try:
             return fn(*args, **kwargs)
         finally:
-            config.use_local_subpixel = use_local_subpixel
+            simulation.use_local_subpixel = previous
 
     return _fn

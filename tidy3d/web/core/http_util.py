@@ -6,12 +6,12 @@ import json
 import os
 from enum import Enum
 from functools import wraps
-from os.path import expanduser
 
 import requests
-import toml
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
+
+from tidy3d.config import config
 
 from . import core_config
 from .constants import (
@@ -22,22 +22,11 @@ from .constants import (
     HEADER_SOURCE_VALUE,
     HEADER_USER_AGENT,
     HEADER_VERSION,
-    KEY_APIKEY,
     SIMCLOUD_APIKEY,
 )
 from .core_config import get_logger
 from .environment import Env
 from .exceptions import WebError, WebNotFoundError
-
-REINITIALIZED = False
-
-TIDY3D_DIR = f"{expanduser('~')}"
-if os.access(TIDY3D_DIR, os.W_OK):
-    TIDY3D_DIR = f"{expanduser('~')}/.tidy3d"
-else:
-    TIDY3D_DIR = "/tmp/.tidy3d"
-CONFIG_FILE = TIDY3D_DIR + "/config"
-CREDENTIAL_FILE = TIDY3D_DIR + "/auth.json"
 
 
 class ResponseCodes(Enum):
@@ -63,12 +52,17 @@ def api_key() -> None:
 
     if os.environ.get(SIMCLOUD_APIKEY):
         return os.environ.get(SIMCLOUD_APIKEY)
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, encoding="utf-8") as config_file:
-            config = toml.loads(config_file.read())
-            return config.get(KEY_APIKEY, "")
 
-    return None
+    try:
+        apikey = config.web.apikey
+    except AttributeError:
+        return None
+
+    if apikey is None:
+        return None
+    if hasattr(apikey, "get_secret_value"):
+        return apikey.get_secret_value()
+    return str(apikey)
 
 
 def api_key_auth(request: requests.request) -> requests.request:
@@ -213,20 +207,24 @@ class HttpSessionManager:
 
     def __init__(self, session: requests.Session):
         """Initialize the session."""
-        ssl_version = Env.current.ssl_version
-        if ssl_version:
-            session.mount("https://", TLSAdapter())
-        session.verify = Env.current.ssl_verify
         self.session = session
+        self._mounted_ssl_version = None
+        self._ensure_tls_adapter(Env.current.ssl_version)
+        self.session.verify = Env.current.ssl_verify
 
     def reinit(self):
         """Reinitialize the session."""
-        global REINITIALIZED
         ssl_version = Env.current.ssl_version
-        if ssl_version and not REINITIALIZED:
-            self.session.mount("https://", TLSAdapter())
-            REINITIALIZED = True
+        self._ensure_tls_adapter(ssl_version)
         self.session.verify = Env.current.ssl_verify
+
+    def _ensure_tls_adapter(self, ssl_version):
+        if not ssl_version:
+            self._mounted_ssl_version = None
+            return
+        if self._mounted_ssl_version != ssl_version:
+            self.session.mount("https://", TLSAdapter())
+            self._mounted_ssl_version = ssl_version
 
     @http_interceptor
     def get(self, path: str, json=None, params=None):

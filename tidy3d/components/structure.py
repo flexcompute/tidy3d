@@ -11,10 +11,7 @@ import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 
-from tidy3d.components.autograd.constants import (
-    AUTOGRAD_MONITOR_INTERVAL_SPACE_CUSTOM,
-    AUTOGRAD_MONITOR_INTERVAL_SPACE_POLY,
-)
+from tidy3d.config import config
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, Tidy3dImportError
 from tidy3d.log import log
@@ -316,10 +313,12 @@ class Structure(AbstractStructure):
         size = [get_static(x) for x in box.size]
         center = [get_static(x) for x in box.center]
 
+        monitor_cfg = config.adjoint
+
         if contains("medium", field_keys):
-            interval_space = AUTOGRAD_MONITOR_INTERVAL_SPACE_CUSTOM
+            interval_space = monitor_cfg.monitor_interval_custom
         else:
-            interval_space = AUTOGRAD_MONITOR_INTERVAL_SPACE_POLY
+            interval_space = monitor_cfg.monitor_interval_poly
 
         field_components_for_adjoint = [f"E{dim}" for dim in "xyz"]
         if self.medium.is_pec:

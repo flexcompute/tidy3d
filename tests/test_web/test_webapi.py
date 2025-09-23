@@ -74,7 +74,7 @@ class ImmediateExecutor:
         future = Future()
         try:
             result = fn(*args, **kwargs)
-        except Exception as err:  # pragma: no cover - defensive
+        except Exception as err:
             future.set_exception(err)
         else:
             future.set_result(result)

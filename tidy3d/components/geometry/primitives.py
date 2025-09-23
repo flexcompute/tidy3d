@@ -11,13 +11,10 @@ import pydantic.v1 as pydantic
 import shapely
 
 from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
-from tidy3d.components.autograd.constants import (
-    MIN_WVL_FRACTION_CYLINDER_DISCRETIZE,
-    PTS_PER_WVL_MAT_CYLINDER_DISCRETIZE,
-)
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
+from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -287,7 +284,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         wvl0_min = derivative_info.wavelength_min
         wvl_mat = wvl0_min / np.max([1.0, np.max(np.sqrt(abs(derivative_info.eps_in)))])
 
-        min_wvl_mat = MIN_WVL_FRACTION_CYLINDER_DISCRETIZE * wvl0_min
+        grid_cfg = config.adjoint
+
+        min_wvl_mat = grid_cfg.min_wvl_fraction * wvl0_min
         if wvl_mat < min_wvl_mat:
             log.warning(
                 f"The minimum wavelength inside the cylinder material is {wvl_mat:.3e} μm, which would "
@@ -309,9 +308,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         circumference = 2 * np.pi * self.radius
         wvls_in_circumference = circumference / wvl_mat
 
-        num_pts_circumference = int(
-            np.ceil(PTS_PER_WVL_MAT_CYLINDER_DISCRETIZE * wvls_in_circumference)
-        )
+        grid_cfg = config.adjoint
+        num_pts_circumference = int(np.ceil(grid_cfg.points_per_wavelength * wvls_in_circumference))
         num_pts_circumference = max(3, num_pts_circumference)
 
         # construct equivalent polyslab and compute the derivatives

@@ -14,12 +14,6 @@ from autograd.tracer import getval, isbox
 from numpy.polynomial.legendre import leggauss as _leggauss
 
 from tidy3d.components.autograd import AutogradFieldMap, TracedVertices, get_static
-from tidy3d.components.autograd.constants import (
-    EDGE_CLIP_TOLERANCE,
-    GAUSS_QUADRATURE_ORDER,
-    GRADIENT_DTYPE_FLOAT,
-    QUAD_SAMPLE_FRACTION,
-)
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.types import TracedFloat
 from tidy3d.components.base import cached_property, skip_if_fields_missing
@@ -35,6 +29,7 @@ from tidy3d.components.types import (
     PlanePosition,
     Shapely,
 )
+from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
@@ -61,7 +56,9 @@ _MIN_POLYGON_AREA = fp_eps
 def leggauss(n):
     """Cached version of leggauss with dtype conversions."""
     g, w = _leggauss(n)
-    return g.astype(GRADIENT_DTYPE_FLOAT, copy=False), w.astype(GRADIENT_DTYPE_FLOAT, copy=False)
+    return g.astype(config.adjoint.gradient_dtype_float, copy=False), w.astype(
+        config.adjoint.gradient_dtype_float, copy=False
+    )
 
 
 class PolySlab(base.Planar):
@@ -1163,7 +1160,9 @@ class PolySlab(base.Planar):
         # sample at a few dilation values
         dist_list = (
             dilation
-            * np.linspace(0, 1, 1 + _N_SAMPLE_POLYGON_INTERSECT, dtype=GRADIENT_DTYPE_FLOAT)[1:]
+            * np.linspace(
+                0, 1, 1 + _N_SAMPLE_POLYGON_INTERSECT, dtype=config.adjoint.gradient_dtype_float
+            )[1:]
         )
         for dist in dist_list:
             # offset: we offset the vertices first, and then use shapely to make it proper
@@ -1470,7 +1469,7 @@ class PolySlab(base.Planar):
         # create interpolators once for ALL derivative computations
         # use provided interpolators if available to avoid redundant field data conversions
         interpolators = derivative_info.interpolators or derivative_info.create_interpolators(
-            dtype=GRADIENT_DTYPE_FLOAT
+            dtype=config.adjoint.gradient_dtype_float
         )
 
         for path in derivative_info.paths:
@@ -1514,20 +1513,19 @@ class PolySlab(base.Planar):
         Returns (z_centers, dz, z0, z1). For 2D, returns single center and dz=1.
         """
         if is_2d:
-            midpoint_z = np.maximum(
-                np.minimum(self.center_axis, sim_max[self.axis]), sim_min[self.axis]
-            )
-            zc = np.array([midpoint_z], dtype=GRADIENT_DTYPE_FLOAT)
+            zc = np.array([self.center_axis], dtype=config.adjoint.gradient_dtype_float)
             return zc, 1.0, self.center_axis, self.center_axis
 
         z0 = max(self.slab_bounds[0], sim_min[self.axis])
         z1 = min(self.slab_bounds[1], sim_max[self.axis])
         if z1 <= z0:
-            return np.array([], dtype=GRADIENT_DTYPE_FLOAT), 0.0, z0, z1
+            return np.array([], dtype=config.adjoint.gradient_dtype_float), 0.0, z0, z1
 
         n_z = max(1, int(np.ceil((z1 - z0) / dx)))
         dz = (z1 - z0) / n_z
-        z_centers = np.linspace(z0 + dz / 2, z1 - dz / 2, n_z, dtype=GRADIENT_DTYPE_FLOAT)
+        z_centers = np.linspace(
+            z0 + dz / 2, z1 - dz / 2, n_z, dtype=config.adjoint.gradient_dtype_float
+        )
         return z_centers, dz, z0, z1
 
     @staticmethod
@@ -1536,13 +1534,14 @@ class PolySlab(base.Planar):
     ) -> Optional[tuple[float, float]]:
         """Parametric bounds [t0,t1] of segment within [sim_min, sim_max]."""
         t_start, t_end = 0.0, 1.0
+        edge_clip_tolerance = config.adjoint.edge_clip_tolerance
 
         for dim in range(3):
             v0_d, v1_d = v0_3d[dim], v1_3d[dim]
             min_d, max_d = sim_min[dim], sim_max[dim]
 
             if np.isclose(v0_d, v1_d):
-                if v0_d < (min_d - EDGE_CLIP_TOLERANCE) or v0_d > (max_d + EDGE_CLIP_TOLERANCE):
+                if v0_d < (min_d - edge_clip_tolerance) or v0_d > (max_d + edge_clip_tolerance):
                     return None
                 continue
 
@@ -1556,7 +1555,7 @@ class PolySlab(base.Planar):
             if t_start >= t_end:
                 return None
 
-        if t_end <= t_start + EDGE_CLIP_TOLERANCE:
+        if t_end <= t_start + edge_clip_tolerance:
             return None
 
         return (t_start, t_end)
@@ -1566,26 +1565,34 @@ class PolySlab(base.Planar):
         """Gauss samples and weights along [t_start,t_end] with adaptive count."""
         L_eff = L * max(0.0, t_end - t_start)
         n_uniform = max(1, int(np.ceil(L_eff / dx)))
-        n_gauss = n_uniform if n_uniform <= 3 else max(2, int(n_uniform * QUAD_SAMPLE_FRACTION))
-        if n_gauss <= GAUSS_QUADRATURE_ORDER:
+        sample_fraction = config.adjoint.quadrature_sample_fraction
+        gauss_quadrature_order = config.adjoint.gauss_quadrature_order
+        n_gauss = n_uniform if n_uniform <= 3 else max(2, int(n_uniform * sample_fraction))
+        if n_gauss <= gauss_quadrature_order:
             g, w = leggauss(n_gauss)
             s = (0.5 * (t_end - t_start) * g + 0.5 * (t_end + t_start)).astype(
-                GRADIENT_DTYPE_FLOAT, copy=False
+                config.adjoint.gradient_dtype_float, copy=False
             )
-            wt = (w * 0.5 * (t_end - t_start)).astype(GRADIENT_DTYPE_FLOAT, copy=False)
+            wt = (w * 0.5 * (t_end - t_start)).astype(
+                config.adjoint.gradient_dtype_float, copy=False
+            )
             return s, wt
 
         # composite Gauss with fixed local order
-        g_loc, w_loc = leggauss(GAUSS_QUADRATURE_ORDER)
+        g_loc, w_loc = leggauss(gauss_quadrature_order)
         segs = n_uniform
-        edges_t = np.linspace(t_start, t_end, segs + 1, dtype=GRADIENT_DTYPE_FLOAT)
+        edges_t = np.linspace(t_start, t_end, segs + 1, dtype=config.adjoint.gradient_dtype_float)
         S, W = [], []
         for i in range(segs):
             a, b = edges_t[i], edges_t[i + 1]
             S.append(
-                (0.5 * (b - a) * g_loc + 0.5 * (b + a)).astype(GRADIENT_DTYPE_FLOAT, copy=False)
+                (0.5 * (b - a) * g_loc + 0.5 * (b + a)).astype(
+                    config.adjoint.gradient_dtype_float, copy=False
+                )
             )
-            W.append((w_loc * 0.5 * (b - a)).astype(GRADIENT_DTYPE_FLOAT, copy=False))
+            W.append(
+                (w_loc * 0.5 * (b - a)).astype(config.adjoint.gradient_dtype_float, copy=False)
+            )
         return np.concatenate(S), np.concatenate(W)
 
     def _collect_sidewall_patches(
@@ -1622,7 +1629,7 @@ class PolySlab(base.Planar):
         dprime = -tan_th  # dd/dz
 
         # axis unit vector in 3D
-        axis_vec = np.zeros(3, dtype=GRADIENT_DTYPE_FLOAT)
+        axis_vec = np.zeros(3, dtype=config.adjoint.gradient_dtype_float)
         axis_vec[self.axis] = 1.0
 
         # densify along axis as |theta| grows: dz scales with cos(theta)
@@ -1631,14 +1638,14 @@ class PolySlab(base.Planar):
         # early exit: no slices
         if (not is_2d) and len(z_centers) == 0:
             return {
-                "centers": np.empty((0, 3), dtype=GRADIENT_DTYPE_FLOAT),
-                "normals": np.empty((0, 3), dtype=GRADIENT_DTYPE_FLOAT),
-                "perps1": np.empty((0, 3), dtype=GRADIENT_DTYPE_FLOAT),
-                "perps2": np.empty((0, 3), dtype=GRADIENT_DTYPE_FLOAT),
-                "Ls": np.empty((0,), dtype=GRADIENT_DTYPE_FLOAT),
-                "s_vals": np.empty((0,), dtype=GRADIENT_DTYPE_FLOAT),
-                "s_weights": np.empty((0,), dtype=GRADIENT_DTYPE_FLOAT),
-                "zc_vals": np.empty((0,), dtype=GRADIENT_DTYPE_FLOAT),
+                "centers": np.empty((0, 3), dtype=config.adjoint.gradient_dtype_float),
+                "normals": np.empty((0, 3), dtype=config.adjoint.gradient_dtype_float),
+                "perps1": np.empty((0, 3), dtype=config.adjoint.gradient_dtype_float),
+                "perps2": np.empty((0, 3), dtype=config.adjoint.gradient_dtype_float),
+                "Ls": np.empty((0,), dtype=config.adjoint.gradient_dtype_float),
+                "s_vals": np.empty((0,), dtype=config.adjoint.gradient_dtype_float),
+                "s_weights": np.empty((0,), dtype=config.adjoint.gradient_dtype_float),
+                "zc_vals": np.empty((0,), dtype=config.adjoint.gradient_dtype_float),
                 "dz": dz,
                 "edge_indices": np.empty((0,), dtype=int),
             }
@@ -1657,22 +1664,22 @@ class PolySlab(base.Planar):
         estimated_patches = int(max(1, estimated_patches) * 1.2)
 
         # pre-allocate arrays
-        centers = np.empty((estimated_patches, 3), dtype=GRADIENT_DTYPE_FLOAT)
-        normals = np.empty((estimated_patches, 3), dtype=GRADIENT_DTYPE_FLOAT)
-        perps1 = np.empty((estimated_patches, 3), dtype=GRADIENT_DTYPE_FLOAT)
-        perps2 = np.empty((estimated_patches, 3), dtype=GRADIENT_DTYPE_FLOAT)
-        Ls = np.empty((estimated_patches,), dtype=GRADIENT_DTYPE_FLOAT)
-        s_vals = np.empty((estimated_patches,), dtype=GRADIENT_DTYPE_FLOAT)
-        s_weights = np.empty((estimated_patches,), dtype=GRADIENT_DTYPE_FLOAT)
-        zc_vals = np.empty((estimated_patches,), dtype=GRADIENT_DTYPE_FLOAT)
+        centers = np.empty((estimated_patches, 3), dtype=config.adjoint.gradient_dtype_float)
+        normals = np.empty((estimated_patches, 3), dtype=config.adjoint.gradient_dtype_float)
+        perps1 = np.empty((estimated_patches, 3), dtype=config.adjoint.gradient_dtype_float)
+        perps2 = np.empty((estimated_patches, 3), dtype=config.adjoint.gradient_dtype_float)
+        Ls = np.empty((estimated_patches,), dtype=config.adjoint.gradient_dtype_float)
+        s_vals = np.empty((estimated_patches,), dtype=config.adjoint.gradient_dtype_float)
+        s_weights = np.empty((estimated_patches,), dtype=config.adjoint.gradient_dtype_float)
+        zc_vals = np.empty((estimated_patches,), dtype=config.adjoint.gradient_dtype_float)
         edge_indices = np.empty((estimated_patches,), dtype=int)
 
         patch_idx = 0
 
         # if the simulation is effectively 2D (one tangential dimension collapsed),
         # slightly expand degenerate bounds to enable finite-length clipping of edges.
-        sim_min_eff = np.array(sim_min, dtype=GRADIENT_DTYPE_FLOAT)
-        sim_max_eff = np.array(sim_max, dtype=GRADIENT_DTYPE_FLOAT)
+        sim_min_eff = np.array(sim_min, dtype=config.adjoint.gradient_dtype_float)
+        sim_max_eff = np.array(sim_max, dtype=config.adjoint.gradient_dtype_float)
         for dim in range(3):
             if dim == self.axis:
                 continue
@@ -1706,11 +1713,15 @@ class PolySlab(base.Planar):
 
                 # clip offset edge against simulation bounds in 3D
                 v0_3d = (
-                    self.unpop_axis_vect(np.array([zc], dtype=GRADIENT_DTYPE_FLOAT), v0[None])[0]
+                    self.unpop_axis_vect(
+                        np.array([zc], dtype=config.adjoint.gradient_dtype_float), v0[None]
+                    )[0]
                     + offset3d
                 )
                 v1_3d = (
-                    self.unpop_axis_vect(np.array([zc], dtype=GRADIENT_DTYPE_FLOAT), v1[None])[0]
+                    self.unpop_axis_vect(
+                        np.array([zc], dtype=config.adjoint.gradient_dtype_float), v1[None]
+                    )[0]
                     + offset3d
                 )
                 clip = self._clip_edge_to_bounds_t(v0_3d, v1_3d, sim_min_eff, sim_max_eff)
@@ -1726,7 +1737,7 @@ class PolySlab(base.Planar):
                 pts2d = v0 + np.outer(s_list, edge_vec)
                 xyz = (
                     self.unpop_axis_vect(
-                        np.full(len(s_list), zc, dtype=GRADIENT_DTYPE_FLOAT), pts2d
+                        np.full(len(s_list), zc, dtype=config.adjoint.gradient_dtype_float), pts2d
                     )
                     + offset3d
                 )
@@ -1818,7 +1829,9 @@ class PolySlab(base.Planar):
         Therefore each patch weight is w = L * dz * (-(z - z_ref)) / cos(theta)^2.
         """
         if interpolators is None:
-            interpolators = derivative_info.create_interpolators(dtype=GRADIENT_DTYPE_FLOAT)
+            interpolators = derivative_info.create_interpolators(
+                dtype=config.adjoint.gradient_dtype_float
+            )
 
         # 2D sim => no dependence on theta (z_local=0)
         if is_2d:
@@ -1892,8 +1905,6 @@ class PolySlab(base.Planar):
         r2_min = max(r2_min, poly_min_r2)
         r2_max = min(r2_max, poly_max_r2)
 
-        # intersect the polygon with the simulation bounds
-        face_poly = face_poly.intersection(shapely.box(r1_min, r2_min, r1_max, r2_max))
         if (r1_max <= r1_min) and (r2_max <= r2_min):
             # the polygon does not intersect the current simulation slice
             return 0.0
@@ -1950,7 +1961,9 @@ class PolySlab(base.Planar):
 
         dx = derivative_info.adaptive_vjp_spacing()
         n_seg = max(1, int(np.ceil(length / dx)))
-        coords = np.linspace(l_min, l_max, 2 * n_seg + 1, dtype=GRADIENT_DTYPE_FLOAT)[1::2]
+        coords = np.linspace(
+            l_min, l_max, 2 * n_seg + 1, dtype=config.adjoint.gradient_dtype_float
+        )[1::2]
 
         # build XY coordinates and in-plane direction vectors
         if line_dim == 0:
@@ -2010,10 +2023,10 @@ class PolySlab(base.Planar):
         g2, w2 = leggauss(n2)
 
         coords1 = (0.5 * (r1_max - r1_min) * g1 + 0.5 * (r1_max + r1_min)).astype(
-            GRADIENT_DTYPE_FLOAT, copy=False
+            config.adjoint.gradient_dtype_float, copy=False
         )
         coords2 = (0.5 * (r2_max - r2_min) * g2 + 0.5 * (r2_max + r2_min)).astype(
-            GRADIENT_DTYPE_FLOAT, copy=False
+            config.adjoint.gradient_dtype_float, copy=False
         )
 
         r1_grid, r2_grid = np.meshgrid(coords1, coords2, indexing="ij")
@@ -2026,29 +2039,33 @@ class PolySlab(base.Planar):
             return 0.0
 
         xyz = self.unpop_axis_vect(
-            np.full(in_face.sum(), ax_val, dtype=GRADIENT_DTYPE_FLOAT), pts[in_face]
+            np.full(in_face.sum(), ax_val, dtype=config.adjoint.gradient_dtype_float), pts[in_face]
         )
         n_patches = xyz.shape[0]
 
         normals_xyz = self.unpop_axis_vect(
-            np.full(n_patches, -1 if min_max_index == 0 else 1, dtype=GRADIENT_DTYPE_FLOAT),
-            np.zeros((n_patches, 2), dtype=GRADIENT_DTYPE_FLOAT),
+            np.full(
+                n_patches,
+                -1 if min_max_index == 0 else 1,
+                dtype=config.adjoint.gradient_dtype_float,
+            ),
+            np.zeros((n_patches, 2), dtype=config.adjoint.gradient_dtype_float),
         )
         perps1_xyz = self.unpop_axis_vect(
-            np.zeros(n_patches, dtype=GRADIENT_DTYPE_FLOAT),
+            np.zeros(n_patches, dtype=config.adjoint.gradient_dtype_float),
             np.column_stack(
                 (
-                    np.ones(n_patches, dtype=GRADIENT_DTYPE_FLOAT),
-                    np.zeros(n_patches, dtype=GRADIENT_DTYPE_FLOAT),
+                    np.ones(n_patches, dtype=config.adjoint.gradient_dtype_float),
+                    np.zeros(n_patches, dtype=config.adjoint.gradient_dtype_float),
                 )
             ),
         )
         perps2_xyz = self.unpop_axis_vect(
-            np.zeros(n_patches, dtype=GRADIENT_DTYPE_FLOAT),
+            np.zeros(n_patches, dtype=config.adjoint.gradient_dtype_float),
             np.column_stack(
                 (
-                    np.zeros(n_patches, dtype=GRADIENT_DTYPE_FLOAT),
-                    np.ones(n_patches, dtype=GRADIENT_DTYPE_FLOAT),
+                    np.zeros(n_patches, dtype=config.adjoint.gradient_dtype_float),
+                    np.ones(n_patches, dtype=config.adjoint.gradient_dtype_float),
                 )
             ),
         )
@@ -2105,7 +2122,9 @@ class PolySlab(base.Planar):
 
         # use provided interpolators or create them if not provided
         if interpolators is None:
-            interpolators = derivative_info.create_interpolators(dtype=GRADIENT_DTYPE_FLOAT)
+            interpolators = derivative_info.create_interpolators(
+                dtype=config.adjoint.gradient_dtype_float
+            )
 
         # evaluate integrand
         g = derivative_info.evaluate_gradient_at_points(
@@ -2140,7 +2159,7 @@ class PolySlab(base.Planar):
         vjp_per_vertex = np.stack((v0x + v1x, v0y + v1y), axis=1)
         return vjp_per_vertex
 
-    def _edge_geometry_arrays(self, dtype: np.dtype = GRADIENT_DTYPE_FLOAT):
+    def _edge_geometry_arrays(self, dtype: np.dtype = config.adjoint.gradient_dtype_float):
         """Return (vertices, next_v, edges, basis) arrays for sidewall edge geometry."""
         vertices = np.asarray(self.vertices, dtype=dtype)
         next_v = np.roll(vertices, -1, axis=0)
@@ -2155,11 +2174,11 @@ class PolySlab(base.Planar):
         """Normalized basis vectors for ``normal`` direction, ``slab`` tangent direction and ``edge``."""
 
         # ensure edges have consistent dtype
-        edges = edges.astype(GRADIENT_DTYPE_FLOAT, copy=False)
+        edges = edges.astype(config.adjoint.gradient_dtype_float, copy=False)
 
         num_vertices, _ = edges.shape
-        zeros = np.zeros(num_vertices, dtype=GRADIENT_DTYPE_FLOAT)
-        ones = np.ones(num_vertices, dtype=GRADIENT_DTYPE_FLOAT)
+        zeros = np.zeros(num_vertices, dtype=config.adjoint.gradient_dtype_float)
+        ones = np.ones(num_vertices, dtype=config.adjoint.gradient_dtype_float)
 
         # normalized vectors along edges
         edges_norm_in_plane = self.normalize_vect(edges)
@@ -2171,7 +2190,7 @@ class PolySlab(base.Planar):
         slabs_axis_components = cos_angle * ones
 
         # create axis_norm as array directly to avoid tuple->array conversion in np.cross
-        axis_norm = np.zeros(3, dtype=GRADIENT_DTYPE_FLOAT)
+        axis_norm = np.zeros(3, dtype=config.adjoint.gradient_dtype_float)
         axis_norm[self.axis] = 1.0
         slab_normal_xyz = -sin_angle * np.cross(edges_norm_xyz, axis_norm)
         _, slab_normal_in_plane = self.pop_axis_vect(slab_normal_xyz)
