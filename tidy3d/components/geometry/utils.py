@@ -541,11 +541,10 @@ def _shift_value_signed(
             f"{name} position '{obj_position}' is outside of simulation bounds '({grid_boundaries[0]}, {grid_boundaries[-1]})' along dimension '{'xyz'[normal_axis]}'."
         )
     obj_index = obj_pos_gt_grid_bounds[-1]
+
     # shift the obj to the left
     signed_shift = shift if direction == "+" else -shift
     if signed_shift < 0:
-        if np.isclose(obj_position, grid_boundaries[obj_index + 1]):
-            obj_index += 1
         shifted_index = obj_index + signed_shift
         if shifted_index < 0 or grid_centers[shifted_index] <= bounds[0][normal_axis]:
             raise SetupError(
