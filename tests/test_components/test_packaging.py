@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import builtins
+
 import pytest
 
+from tidy3d.config import config, reload_config
 from tidy3d.packaging import (
     Tidy3dImportError,
     check_import,
@@ -88,6 +91,55 @@ def test_tidy3d_extras():
             assert tidy3d_extras["mod"] is None
 
     get_eps()
+
+
+def test_supports_local_subpixel_respects_config_false():
+    reload_config(profile="default")
+    tidy3d_extras["mod"] = object()
+    tidy3d_extras["use_local_subpixel"] = True
+
+    try:
+        config.update_section("simulation", use_local_subpixel=False)
+
+        @supports_local_subpixel
+        def get_flag():
+            return tidy3d_extras["use_local_subpixel"]
+
+        assert get_flag() is False
+        assert tidy3d_extras["mod"] is None
+    finally:
+        tidy3d_extras["mod"] = None
+        tidy3d_extras["use_local_subpixel"] = None
+        reload_config(profile="default")
+
+
+def test_supports_local_subpixel_requires_extras_when_forced(monkeypatch):
+    reload_config(profile="default")
+    tidy3d_extras["mod"] = None
+    tidy3d_extras["use_local_subpixel"] = None
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "tidy3d_extras":
+            raise ImportError("forced failure")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    try:
+        config.update_section("simulation", use_local_subpixel=True)
+
+        @supports_local_subpixel
+        def get_flag():
+            return tidy3d_extras["use_local_subpixel"]
+
+        with pytest.raises(Tidy3dImportError):
+            get_flag()
+    finally:
+        tidy3d_extras["mod"] = None
+        tidy3d_extras["use_local_subpixel"] = None
+        reload_config(profile="default")
 
 
 if __name__ == "__main__":

@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-import os
-from os.path import expanduser
+from tidy3d.config.loader import resolve_config_directory
 
-TIDY3D_BASE_DIR = os.getenv("TIDY3D_BASE_DIR", f"{expanduser('~')}")
+_CONFIG_ROOT = resolve_config_directory()
 
-if os.access(TIDY3D_BASE_DIR, os.W_OK):
-    TIDY3D_DIR = f"{TIDY3D_BASE_DIR}/.tidy3d"
-else:
-    TIDY3D_DIR = "/tmp/.tidy3d"
-
-CONFIG_FILE = TIDY3D_DIR + "/config"
-CREDENTIAL_FILE = TIDY3D_DIR + "/auth.json"
+TIDY3D_DIR = str(_CONFIG_ROOT)
+CONFIG_FILE = str(_CONFIG_ROOT / "config.toml")
+CREDENTIAL_FILE = str(_CONFIG_ROOT / "auth.json")

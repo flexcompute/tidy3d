@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import typing
 
-from tidy3d.components.autograd.constants import MAX_NUM_ADJOINT_PER_FWD
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+from tidy3d.config import config
 from tidy3d.web.api.autograd.autograd import run as run_autograd
 from tidy3d.web.api.autograd.autograd import run_async
-from tidy3d.web.api.autograd.constants import LOCAL_GRADIENT
 from tidy3d.web.api.container import DEFAULT_DATA_DIR, DEFAULT_DATA_PATH
 from tidy3d.web.core.types import PayType
 
@@ -91,8 +90,8 @@ def run(
     worker_group: typing.Optional[str] = None,
     simulation_type: str = "tidy3d",
     parent_tasks: typing.Optional[list[str]] = None,
-    local_gradient: bool = LOCAL_GRADIENT,
-    max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
+    local_gradient: typing.Optional[bool] = None,
+    max_num_adjoint_per_fwd: typing.Optional[int] = None,
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
@@ -147,10 +146,13 @@ def run(
         Simulation type label passed through to the runners.
     parent_tasks : Optional[List[str]] = None
         Parent task IDs, if any.
-    local_gradient : bool = ``LOCAL_GRADIENT``
+    local_gradient : Optional[bool] = None
         Compute gradients locally (more downloads; useful for experimental features).
-    max_num_adjoint_per_fwd : int = ``MAX_NUM_ADJOINT_PER_FWD``
-        Maximum number of adjoint simulations allowed per forward run.
+        Defaults to ``config.adjoint.local_gradient`` when not provided. Remote gradients
+        always use server-side defaults.
+    max_num_adjoint_per_fwd : Optional[int] = None
+        Maximum number of adjoint simulations allowed per forward run. Defaults to
+        ``config.adjoint.max_adjoint_per_fwd`` when not provided.
     reduce_simulation : {"auto", True, False} = "auto"
         Whether to reduce structures to the simulation domain (mode solver only).
     pay_type : Union[PayType, str] = PayType.AUTO
@@ -219,6 +221,12 @@ def run(
     h2sim: dict[str, WorkflowType] = _collect_by_hash(simulation)
     if not h2sim:
         raise ValueError("No simulation data found in simulation input.")
+
+    if local_gradient is None:
+        local_gradient = bool(config.adjoint.local_gradient)
+
+    if max_num_adjoint_per_fwd is None:
+        max_num_adjoint_per_fwd = config.adjoint.max_adjoint_per_fwd
 
     key_prefix = ""
     if len(h2sim) == 1:

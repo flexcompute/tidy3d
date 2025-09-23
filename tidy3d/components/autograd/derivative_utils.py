@@ -10,15 +10,10 @@ import xarray as xr
 
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
 from tidy3d.components.types import ArrayLike, Bound, tidycomplex
+from tidy3d.config import config
 from tidy3d.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
 from tidy3d.log import log
 
-from .constants import (
-    DEFAULT_WAVELENGTH_FRACTION,
-    GRADIENT_DTYPE_COMPLEX,
-    GRADIENT_DTYPE_FLOAT,
-    MINIMUM_SPACING_FRACTION,
-)
 from .types import PathType
 from .utils import get_static
 
@@ -212,12 +207,16 @@ class DerivativeInfo:
         dict[str, np.ndarray]
             Dictionary mapping component names to field values at coordinates.
         """
+        auto_cfg = config.adjoint
+        float_dtype = auto_cfg.gradient_dtype_float
+        complex_dtype = auto_cfg.gradient_dtype_complex
+
         coords = DerivativeInfo._nan_to_num_if_needed(coords)
-        if coords.dtype != GRADIENT_DTYPE_FLOAT and coords.dtype != GRADIENT_DTYPE_COMPLEX:
-            coords = coords.astype(GRADIENT_DTYPE_FLOAT, copy=False)
+        if coords.dtype != float_dtype and coords.dtype != complex_dtype:
+            coords = coords.astype(float_dtype, copy=False)
         return {name: interp(coords) for name, interp in interpolators.items()}
 
-    def create_interpolators(self, dtype=GRADIENT_DTYPE_FLOAT) -> dict:
+    def create_interpolators(self, dtype: Optional[np.dtype] = None) -> dict:
         """Create interpolators for field components and permittivity data.
 
         Creates and caches ``RegularGridInterpolator`` objects for all field components
@@ -227,8 +226,9 @@ class DerivativeInfo:
 
         Parameters
         ----------
-        dtype : np.dtype = GRADIENT_DTYPE_FLOAT
-            Data type for interpolation coordinates and values.
+        dtype : np.dtype, optional
+            Data type for interpolation coordinates and values. Defaults to the
+            current ``config.adjoint.gradient_dtype_float``.
 
         Returns
         -------
@@ -238,6 +238,11 @@ class DerivativeInfo:
             - Permittivity: {"eps_inf": interpolator, "eps_no": interpolator}
         """
         from scipy.interpolate import RegularGridInterpolator
+
+        auto_cfg = config.adjoint
+        if dtype is None:
+            dtype = auto_cfg.gradient_dtype_float
+        complex_dtype = auto_cfg.gradient_dtype_complex
 
         cache_key = str(dtype)
         if cache_key in self._interpolators_cache:
@@ -261,7 +266,7 @@ class DerivativeInfo:
 
                 def creator_func(arr=arr, points=points):
                     data = arr.data.astype(
-                        GRADIENT_DTYPE_COMPLEX if np.iscomplexobj(arr.data) else dtype, copy=False
+                        complex_dtype if np.iscomplexobj(arr.data) else dtype, copy=False
                     )
                     # create interpolator with frequency dimension
                     if "f" in arr.dims:
@@ -711,8 +716,8 @@ class DerivativeInfo:
 
     def adaptive_vjp_spacing(
         self,
-        wl_fraction: float = DEFAULT_WAVELENGTH_FRACTION,
-        min_allowed_spacing_fraction: float = MINIMUM_SPACING_FRACTION,
+        wl_fraction: Optional[float] = None,
+        min_allowed_spacing_fraction: Optional[float] = None,
     ) -> float:
         """Compute adaptive spacing for finite-difference gradient evaluation.
 
@@ -721,17 +726,27 @@ class DerivativeInfo:
 
         Parameters
         ----------
-        wl_fraction : float = 0.1
-            Fraction of wavelength/skin depth to use as spacing.
-        min_allowed_spacing_fraction : float = 1e-2
-            Minimum allowed spacing fraction of free space wavelength to
-            prevent numerical issues.
+        wl_fraction : float, optional
+            Fraction of wavelength/skin depth to use as spacing. Defaults to the configured
+            ``autograd.default_wavelength_fraction`` when ``None``.
+        min_allowed_spacing_fraction : float, optional
+            Minimum allowed spacing fraction of free space wavelength used to
+            prevent numerical issues. Defaults to ``config.adjoint.minimum_spacing_fraction``
+            when not specified.
 
         Returns
         -------
         float
             Adaptive spacing value for gradient evaluation.
         """
+        if wl_fraction is None or min_allowed_spacing_fraction is None:
+            from tidy3d.config import config
+
+            if wl_fraction is None:
+                wl_fraction = config.adjoint.default_wavelength_fraction
+            if min_allowed_spacing_fraction is None:
+                min_allowed_spacing_fraction = config.adjoint.minimum_spacing_fraction
+
         # handle FreqDataArray or scalar eps_in
         if isinstance(self.eps_in, FreqDataArray):
             eps_real = np.asarray(self.eps_in.values, dtype=np.complex128).real

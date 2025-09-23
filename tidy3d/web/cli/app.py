@@ -10,11 +10,16 @@ import ssl
 
 import click
 import requests
-import toml
 
-from tidy3d.web.cli.constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
-from tidy3d.web.cli.migrate import migrate
-from tidy3d.web.core.constants import HEADER_APIKEY, KEY_APIKEY
+from tidy3d.config import config, get_manager
+from tidy3d.config.loader import (
+    canonical_config_directory,
+    legacy_config_directory,
+    migrate_legacy_config,
+)
+from tidy3d.web.cli.constants import CREDENTIAL_FILE, TIDY3D_DIR
+from tidy3d.web.cli.migrate import migrate as migrate_authentication
+from tidy3d.web.core.constants import HEADER_APIKEY
 from tidy3d.web.core.environment import Env
 
 from .develop.index import develop
@@ -31,12 +36,15 @@ def get_description():
         The description for the config command.
     """
 
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, encoding="utf-8") as f:
-            content = f.read()
-            config = toml.loads(content)
-            return config.get(KEY_APIKEY, "")
-    return ""
+    try:
+        apikey = config.web.apikey
+    except AttributeError:
+        return ""
+    if apikey is None:
+        return ""
+    if hasattr(apikey, "get_secret_value"):
+        return apikey.get_secret_value()
+    return str(apikey)
 
 
 @click.group()
@@ -88,8 +96,7 @@ def configure_fn(apikey: str) -> None:
         email = auth_json["email"]
         password = auth_json["password"]
         if email and password:
-            if migrate():
-                click.echo("Migrate successfully. auth.json is renamed to auth.json.bak.")
+            if migrate_authentication():
                 return
 
     if not apikey:
@@ -106,18 +113,16 @@ def configure_fn(apikey: str) -> None:
 
     if resp.status_code == 200:
         click.echo("Configured successfully.")
-        with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:
-            toml_config = toml.loads(config_file.read())
-            toml_config.update({KEY_APIKEY: apikey})
-            config_file.write(toml.dumps(toml_config))
+        config.update_section("web", apikey=apikey)
+        config.save()
     else:
         click.echo("API key is invalid.")
 
 
-@click.command()
-def migration():
+@click.command(name="auth-migrate")
+def migrate_command():
     """Click command to migrate the credential to api key."""
-    migrate()
+    migrate_authentication()
 
 
 @click.command()
@@ -132,7 +137,79 @@ def convert(lsf_file, new_file):
     )
 
 
+@click.command(name="config-reset")
+@click.option("--yes", is_flag=True, help="Do not prompt before resetting the configuration.")
+@click.option(
+    "--preserve-profiles",
+    is_flag=True,
+    help="Keep user profile overrides instead of deleting them.",
+)
+def config_reset(yes: bool, preserve_profiles: bool) -> None:
+    """Reset tidy3d configuration files to the default annotated state."""
+
+    if not yes:
+        message = "Reset configuration to defaults?"
+        if not preserve_profiles:
+            message += " This will delete user profiles."
+        click.confirm(message, abort=True)
+
+    manager = get_manager()
+    manager.reset_to_defaults(include_profiles=not preserve_profiles)
+    click.echo("Configuration reset to defaults.")
+
+
+@click.command(name="config-migrate")
+@click.option(
+    "--overwrite",
+    is_flag=True,
+    help="Replace existing files in the destination configuration directory if they already exist.",
+)
+@click.option(
+    "--delete-legacy",
+    is_flag=True,
+    help="Remove the legacy '~/.tidy3d' directory after a successful migration.",
+)
+def config_migrate(overwrite: bool, delete_legacy: bool) -> None:
+    """Copy configuration files from '~/.tidy3d' to the canonical location."""
+
+    legacy_dir = legacy_config_directory()
+    if not legacy_dir.exists():
+        click.echo("No legacy configuration directory found at '~/.tidy3d'; nothing to migrate.")
+        return
+
+    canonical_dir = canonical_config_directory()
+    try:
+        destination = migrate_legacy_config(overwrite=overwrite, remove_legacy=delete_legacy)
+    except FileExistsError:
+        click.echo(
+            f"Destination '{canonical_dir}' already exists. "
+            "Use '--overwrite' to replace the existing files."
+        )
+        return
+    except RuntimeError as exc:
+        click.echo(str(exc))
+        return
+    except FileNotFoundError:
+        click.echo("No legacy configuration directory found; nothing to migrate.")
+        return
+
+    click.echo(f"Configuration migrated to '{destination}'.")
+    if delete_legacy:
+        click.echo("The legacy '~/.tidy3d' directory was removed.")
+    else:
+        click.echo(f"The legacy directory remains at '{legacy_dir}'.")
+
+
+@click.group()
+def config_group():
+    """Configuration utilities."""
+
+
+config_group.add_command(config_migrate, name="migrate")
+config_group.add_command(config_reset, name="reset")
+
 tidy3d_cli.add_command(configure)
-tidy3d_cli.add_command(migration)
+tidy3d_cli.add_command(migrate_command, name="migrate")
 tidy3d_cli.add_command(convert)
 tidy3d_cli.add_command(develop)
+tidy3d_cli.add_command(config_group, name="config")

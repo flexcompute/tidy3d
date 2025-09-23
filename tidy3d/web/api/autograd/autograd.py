@@ -10,12 +10,9 @@ from autograd.extend import defvjp, primitive
 
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap
-from tidy3d.components.autograd.constants import (
-    MAX_NUM_ADJOINT_PER_FWD,
-    MAX_NUM_TRACED_STRUCTURES,
-)
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
@@ -30,8 +27,6 @@ from .constants import (
     AUX_KEY_FWD_TASK_ID,
     AUX_KEY_SIM_DATA_FWD,
     AUX_KEY_SIM_DATA_ORIGINAL,
-    LOCAL_ADJOINT_DIR,
-    LOCAL_GRADIENT,
 )
 from .engine import (
     _run_async_tidy3d as _run_async_tidy3d_engine,
@@ -47,6 +42,19 @@ from .engine import (
 )
 from .forward import postprocess_fwd as _postprocess_fwd_impl
 from .forward import setup_fwd as _setup_fwd_impl
+from .io_utils import (
+    get_vjp_traced_fields as _get_vjp_traced_fields_impl,
+)
+from .io_utils import (
+    upload_sim_fields_keys as _upload_sim_fields_keys_impl,
+)
+
+
+def _resolve_local_gradient(value: typing.Optional[bool]) -> bool:
+    if value is not None:
+        return bool(value)
+
+    return bool(config.adjoint.local_gradient)
 
 
 def is_valid_for_autograd(simulation: td.Simulation) -> bool:
@@ -71,9 +79,10 @@ def is_valid_for_autograd(simulation: td.Simulation) -> bool:
     # if too many structures, raise an error
     structure_indices = {i for key, i, *_ in traced_fields.keys() if key == "structures"}
     num_traced_structures = len(structure_indices)
-    if num_traced_structures > MAX_NUM_TRACED_STRUCTURES:
+    max_structures = config.adjoint.max_traced_structures
+    if num_traced_structures > max_structures:
         raise AdjointError(
-            f"Autograd support is currently limited to {MAX_NUM_TRACED_STRUCTURES} structures with "
+            f"Autograd support is currently limited to {max_structures} structures with "
             f"traced fields. Found {num_traced_structures} structures with traced fields."
         )
 
@@ -102,12 +111,12 @@ def run(
     worker_group: typing.Optional[str] = None,
     simulation_type: str = "tidy3d",
     parent_tasks: typing.Optional[list[str]] = None,
-    local_gradient: bool = LOCAL_GRADIENT,
-    max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
+    local_gradient: typing.Optional[bool] = None,
+    max_num_adjoint_per_fwd: typing.Optional[int] = None,
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
-    lazy: bool = False,
+    lazy: typing.Optional[bool] = None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -138,21 +147,23 @@ def run(
         target solver version.
     worker_group: str = None
         worker group
-    local_gradient: bool = False
-        Whether to perform gradient calculation locally, requiring more downloads but potentially
+    local_gradient: Optional[bool] = None
+        Whether to perform gradient calculation locally. Defaults to
+        ``config.adjoint.local_gradient`` when not provided. Local gradients require more downloads
+        but apply the configuration overrides defined in ``config.adjoint``; remote gradients ignore
+        those overrides and enforce backend defaults.
         more stable with experimental features.
-    max_num_adjoint_per_fwd: int = 10
-        Maximum number of adjoint simulations allowed to run automatically.
+    max_num_adjoint_per_fwd: typing.Optional[int] = None
+        Maximum number of adjoint simulations allowed to run automatically. Uses the autograd configuration when None.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type: typing.Union[PayType, str] = PayType.AUTO
         Which method to pay for the simulation.
     priority: int = None
         Task priority for vGPU queue (1=lowest, 10=highest).
-    lazy : bool = False
-        Whether to load the actual data (``lazy=False``) or return a proxy that loads
-        the data when accessed (``lazy=True``).
-
+    lazy: Optional[bool] = None
+        Whether to return lazy data proxies. Defaults to ``False`` for single runs when
+        unspecified, matching :func:`tidy3d.web.run`.
     Returns
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`, :class:`.ModalComponentModelerData`, :class:`.TerminalComponentModelerData`]
@@ -197,8 +208,15 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
+    local_gradient = _resolve_local_gradient(local_gradient)
+
+    if max_num_adjoint_per_fwd is None:
+        max_num_adjoint_per_fwd = config.adjoint.max_adjoint_per_fwd
+
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
+
+    lazy = False if lazy is None else bool(lazy)
 
     if task_name is None:
         stub = Tidy3dStub(simulation=simulation)
@@ -276,12 +294,12 @@ def run_async(
     simulation_type: str = "tidy3d",
     solver_version: typing.Optional[str] = None,
     parent_tasks: typing.Optional[dict[str, list[str]]] = None,
-    local_gradient: bool = LOCAL_GRADIENT,
-    max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
+    local_gradient: typing.Optional[bool] = None,
+    max_num_adjoint_per_fwd: typing.Optional[int] = None,
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
-    lazy: bool = False,
+    lazy: typing.Optional[bool] = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -307,18 +325,21 @@ def run_async(
         Type of simulation being uploaded.
     solver_version: Optional[str] = None
         Target solver version.
-    local_gradient: bool = False
-        Whether to perform gradient calculations locally, requiring more downloads but potentially
-        more stable with experimental features.
-    max_num_adjoint_per_fwd: int = 10
-        Maximum number of adjoint simulations allowed to run automatically.
+    local_gradient: Optional[bool] = None
+        Whether to perform gradient calculations locally. Defaults to
+        ``config.adjoint.local_gradient`` when not provided. Local gradients require more downloads
+        but ensure autograd overrides take effect; remote gradients ignore those overrides.
+    max_num_adjoint_per_fwd: typing.Optional[int] = None
+        Maximum number of adjoint simulations allowed to run automatically. Uses the autograd configuration when None.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type: typing.Union[PayType, str] = PayType.AUTO
         Specify the payment method.
-    lazy : bool = False
-        Whether to load the actual data (``lazy=False``) or return a proxy that loads
-        the data when accessed (``lazy=True``).
+    priority: typing.Optional[int] = None
+        Queue priority for vGPU simulations (1=lowest, 10=highest).
+    lazy: Optional[bool] = None
+        Whether to return lazy data proxies. Defaults to ``True`` for batch runs when
+        unspecified, matching :func:`tidy3d.web.run`.
 
     Returns
     ------
@@ -338,6 +359,13 @@ def run_async(
     # validate priority if specified
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
+
+    local_gradient = _resolve_local_gradient(local_gradient)
+
+    if max_num_adjoint_per_fwd is None:
+        max_num_adjoint_per_fwd = config.adjoint.max_adjoint_per_fwd
+
+    lazy = True if lazy is None else bool(lazy)
 
     if isinstance(simulations, (tuple, list)):
         sim_dict = {}
@@ -387,8 +415,8 @@ def run_async(
 def _run(
     simulation: td.Simulation,
     task_name: str,
-    local_gradient: bool = LOCAL_GRADIENT,
-    max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
+    local_gradient: bool = False,
+    max_num_adjoint_per_fwd: typing.Optional[int] = None,
     **run_kwargs,
 ) -> td.SimulationData:
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
@@ -409,15 +437,15 @@ def _run(
     # will store the SimulationData for original and forward so we can access them later
     aux_data = {}
 
-    # run our custom @primitive, passing the traced fields first to register with autograd
-    sim_static = simulation.to_static()
-    traced_keys_payload = simulation._serialized_traced_field_keys()
-    if traced_keys_payload:
-        sim_static.attrs[TRACED_FIELD_KEYS_ATTR] = traced_keys_payload
+    payload = simulation._serialized_traced_field_keys(traced_fields_sim)
+    sim_original = simulation.to_static()
+    if payload:
+        sim_original.attrs[TRACED_FIELD_KEYS_ATTR] = payload
 
+    # run our custom @primitive, passing the traced fields first to register with autograd
     traced_fields_data = _run_primitive(
         traced_fields_sim,  # if you pass as a kwarg it will not trace :/
-        sim_original=sim_static,
+        sim_original=sim_original,
         task_name=task_name,
         aux_data=aux_data,
         local_gradient=local_gradient,
@@ -430,25 +458,24 @@ def _run(
 
 def _run_async(
     simulations: dict[str, td.Simulation],
-    local_gradient: bool = LOCAL_GRADIENT,
-    max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
+    local_gradient: bool = False,
+    max_num_adjoint_per_fwd: typing.Optional[int] = None,
     **run_async_kwargs,
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""
 
     task_names = simulations.keys()
 
-    traced_fields_sim_dict = {}
-    sims_original = {}
+    traced_fields_sim_dict: dict[str, AutogradFieldMap] = {}
+    sims_original: dict[str, td.Simulation] = {}
     for task_name in task_names:
-        simulation = simulations[task_name]
-        traced_fields = setup_run(simulation=simulation)
+        sim = simulations[task_name]
+        traced_fields = setup_run(simulation=sim)
         traced_fields_sim_dict[task_name] = traced_fields
-        sim_static = simulation.to_static()
-        if traced_fields:
-            traced_keys_payload = simulation._serialized_traced_field_keys()
-            if traced_keys_payload:
-                sim_static.attrs[TRACED_FIELD_KEYS_ATTR] = traced_keys_payload
+        payload = sim._serialized_traced_field_keys(traced_fields)
+        sim_static = sim.to_static()
+        if payload:
+            sim_static.attrs[TRACED_FIELD_KEYS_ATTR] = payload
         sims_original[task_name] = sim_static
     traced_fields_sim_dict = dict_ag(traced_fields_sim_dict)
 
@@ -618,7 +645,7 @@ def _run_async_primitive(
 def setup_fwd(
     sim_fields: AutogradFieldMap,
     sim_original: td.Simulation,
-    local_gradient: bool = LOCAL_GRADIENT,
+    local_gradient: bool = False,
 ) -> td.Simulation:
     """Return a forward simulation with adjoint monitors attached (delegated)."""
     return _setup_fwd_impl(
@@ -635,6 +662,21 @@ def postprocess_fwd(
     return _postprocess_fwd_impl(
         sim_data_combined=sim_data_combined, sim_original=sim_original, aux_data=aux_data
     )
+
+
+def upload_sim_fields_keys(sim_fields_keys: list[tuple], task_id: str, verbose: bool = False):
+    """Upload traced simulation field keys for adjoint runs (delegated)."""
+    return _upload_sim_fields_keys_impl(
+        sim_fields_keys=sim_fields_keys, task_id=task_id, verbose=verbose
+    )
+
+
+""" VJP maker for ADJ pass."""
+
+
+def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
+    """Fetch VJP traced fields for a completed adjoint job (delegated)."""
+    return _get_vjp_traced_fields_impl(task_id_adj=task_id_adj, verbose=verbose)
 
 
 def _run_bwd(
@@ -701,8 +743,9 @@ def _run_bwd(
             # Run all adjoint sims in batch
             td.log.info("Starting local batch adjoint simulations")
             path = Path(run_kwargs.pop("path"))
-            path_dir_adj = path.parent / LOCAL_ADJOINT_DIR
-            path_dir_adj.mkdir(exist_ok=True)
+            adjoint_dir = config.adjoint.local_adjoint_dir
+            path_dir_adj = path.parent / adjoint_dir
+            path_dir_adj.mkdir(parents=True, exist_ok=True)
 
             batch_data_adj, _ = _run_async_tidy3d(
                 sims_adj_dict, path_dir=str(path_dir_adj), **run_kwargs
@@ -838,8 +881,9 @@ def _run_async_bwd(
         if local_gradient:
             # Run all adjoint simulations in a single batch
             path_dir = Path(run_async_kwargs.pop("path_dir"))
-            path_dir_adj = path_dir / LOCAL_ADJOINT_DIR
-            path_dir_adj.mkdir(exist_ok=True)
+            adjoint_dir = config.adjoint.local_adjoint_dir
+            path_dir_adj = path_dir / adjoint_dir
+            path_dir_adj.mkdir(parents=True, exist_ok=True)
 
             batch_data_adj, _ = _run_async_tidy3d(
                 all_sims_adj, path_dir=str(path_dir_adj), **run_async_kwargs
@@ -967,3 +1011,11 @@ def _run_async_tidy3d_bwd(
 ) -> dict[str, AutogradFieldMap]:
     """Run a batch of adjoint simulations via engine wrapper (delegated)."""
     return _run_async_tidy3d_bwd_engine(simulations=simulations, **run_kwargs)
+
+
+def __getattr__(name: str):
+    if name == "MAX_NUM_TRACED_STRUCTURES":
+        return config.adjoint.max_traced_structures
+    if name == "MAX_NUM_ADJOINT_PER_FWD":
+        return config.adjoint.max_adjoint_per_fwd
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import pydantic.v1 as pd
 
-from tidy3d.components.autograd.constants import MAX_NUM_ADJOINT_PER_FWD
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.geometry.utils import _shift_value_signed
 from tidy3d.components.simulation import Simulation
@@ -19,6 +18,7 @@ from tidy3d.components.validators import (
     validate_freqs_not_empty,
     validate_freqs_unique,
 )
+from tidy3d.config import config
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.log import log
@@ -318,7 +318,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         pay_type: Union[PayType, str] = "AUTO",
         priority: Optional[int] = None,
         local_gradient: bool = False,
-        max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
+        max_num_adjoint_per_fwd: Optional[int] = None,
     ):
         log.warning(
             "'ComponentModeler.run()' is deprecated and will be removed in a future release. "
@@ -327,6 +327,9 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
             log_once=True,
         )
         from tidy3d.plugins.smatrix.run import _run_local
+
+        if max_num_adjoint_per_fwd is None:
+            max_num_adjoint_per_fwd = config.adjoint.max_adjoint_per_fwd
 
         data = _run_local(
             self,

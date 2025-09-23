@@ -4,15 +4,49 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 import click
 import requests
-import toml
 
-from tidy3d.web.core.constants import HEADER_APPLICATION, HEADER_APPLICATION_VALUE, KEY_APIKEY
+from tidy3d.config import config
+from tidy3d.web.core.constants import HEADER_APPLICATION, HEADER_APPLICATION_VALUE
 from tidy3d.web.core.environment import Env
 
-from .constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
+from .constants import CREDENTIAL_FILE, TIDY3D_DIR
+
+
+def _persist_api_key(apikey: str, credential_path: Path) -> bool:
+    """Persist the API key and back up the legacy auth file."""
+
+    previous_apikey = getattr(getattr(config, "web", None), "apikey", None)
+
+    try:
+        config.update_section("web", apikey=apikey)
+        config.save()
+    except Exception as exc:
+        config.update_section("web", apikey=previous_apikey)
+        click.echo(f"Failed to store API key in configuration; migration aborted. Error: {exc}")
+        return False
+
+    backup_path = credential_path.with_name(f"{credential_path.name}.bak")
+    try:
+        os.replace(credential_path, backup_path)
+    except OSError as exc:
+        config.update_section("web", apikey=previous_apikey)
+        try:
+            config.save()
+        except Exception:
+            pass
+        click.echo(
+            "Stored API key but failed to back up legacy 'auth.json'; "
+            "restored previous configuration. "
+            f"Error: {exc}"
+        )
+        return False
+
+    click.echo("Migrate successfully. auth.json is renamed to auth.json.bak.")
+    return True
 
 
 def migrate() -> bool:
@@ -59,14 +93,10 @@ def migrate() -> bool:
                         click.echo(f"Migrate to api key failed: {resp.text}")
                         return False
                     apikey = resp.json()["data"]
-                if not os.path.exists(TIDY3D_DIR):
-                    os.mkdir(TIDY3D_DIR)
-                with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:
-                    toml_config = toml.loads(config_file.read())
-                    toml_config.update({KEY_APIKEY: apikey})
-                    config_file.write(toml.dumps(toml_config))
-
-                # rename auth.json to auth.json.bak
-                os.rename(CREDENTIAL_FILE, CREDENTIAL_FILE + ".bak")
-                return True
+                base_dir = Path(TIDY3D_DIR)
+                base_dir.mkdir(parents=True, exist_ok=True)
+                credential_path = Path(CREDENTIAL_FILE)
+                return _persist_api_key(apikey, credential_path)
             click.echo("You can migrate to api key by running 'tidy3d migrate' command.")
+    click.echo("Could not find a valid auth.json file, skipping migration.")
+    return False
