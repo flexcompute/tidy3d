@@ -572,7 +572,7 @@ def _shift_value_signed(
     return new_pos - obj_position
 
 
-def _shift_object(obj: Box, grid: Grid, bounds: Bound, direction: Direction, shift: int) -> Box:
+def _shift_object(obj: Box, grid: Grid, bounds: Bound, direction: Direction, shift: int, absorber = True) -> Box:
     """Move a plane-like object by ``shift`` number
     of cells in the positive or negative ``direction`` along the dimension given by
     ``obj._normal_axis``.
@@ -582,4 +582,7 @@ def _shift_object(obj: Box, grid: Grid, bounds: Bound, direction: Direction, shi
     new_center[obj._normal_axis] += shift
     # note: if this needs to be generalized beyond absorber, one would probably
     # slightly adjust the code below regarding grid_shift
-    return obj.updated_copy(center=tuple(new_center), grid_shift=0)
+    if absorber:
+        return obj.updated_copy(center=tuple(new_center), grid_shift=0)
+    
+    return obj.updated_copy(center=tuple(new_center))

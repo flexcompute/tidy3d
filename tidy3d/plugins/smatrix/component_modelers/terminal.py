@@ -504,7 +504,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
         # get all mode sources from TerminalComponentModeler that correspond to ports with ``extrude_structures`` flag set to ``True``.
         for port in self.ports:
-            if isinstance(port, WavePort) and port.extrude_structures:
+            if isinstance(port, WavePort) and port.extrude_structures != 0:
                 # compute snap_center and shift the internal absorber associated with the current port
                 snap_center = port.center[port.injection_axis] + self._shift_value_signed(port)
                 absorber = port.to_absorber(snap_center=snap_center)
@@ -517,23 +517,35 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 )
 
                 # get the PEC box with its face surfaces
+                extend = int(np.round(port.extrude_structures))
+                extend_diff = extend - port.extrude_structures
                 (box, inj_axis, direction) = sim._pec_frame_box(shifted_absorber, expand=True)
                 surfaces = box.surfaces(box.size, box.center)
 
                 # get extrusion coordinates and a cutting plane for inference of intersecting structures.
                 sign = 1 if direction == "+" else -1
-                cutting_plane = surfaces[2 * inj_axis + (1 if direction == "+" else 0)]
+                back_pec_plane = surfaces[2 * inj_axis + (1 if direction == "+" else 0)]
+                cutting_plane = surfaces[2 * inj_axis + (0 if direction == "+" else 1)]
 
                 # get extrusion extent along injection axis
-                extrude_to = cutting_plane.center[inj_axis]
+                extrude_to = back_pec_plane.center[inj_axis]
 
                 # move cutting plane beyond the waveport plane along the `ModeSource` injection direction.
                 center = list(cutting_plane.center)
-                center[inj_axis] = port.center[inj_axis] - sign * 0.5 * box.size[inj_axis]
-                cutting_plane = cutting_plane.updated_copy(center=center, size=tuple(1.0*np.array(cutting_plane.size)))
+                center[inj_axis] = port.center[inj_axis] + sign * extend_diff * box.size[inj_axis]
+                cutting_plane = cutting_plane.updated_copy(center=center)
+
+                cutting_plane = _shift_object(
+                    obj=cutting_plane,
+                    grid=sim.grid,
+                    bounds=sim.bounds,
+                    direction=direction,
+                    shift=-extend,
+                    absorber=False,
+                )
 
                 # define extrusion bounds
-                extrusion_bounds = [center[inj_axis], extrude_to][::sign]
+                extrusion_bounds = [cutting_plane.center[inj_axis], extrude_to][::sign]
 
                 new_structures = []
 
@@ -547,17 +559,18 @@ class TerminalComponentModeler(AbstractComponentModeler):
                     for geom in shapely_geom:
                         polygon_list = polygon_list + ClipOperation.to_polygon_list(geom)
 
+                    new_geoms = []
                     if isinstance(structure.geometry, GeometryGroup):
-                        new_geoms = list(structure.geometry.geometries)
+                        new_geoms = new_geoms + list(structure.geometry.geometries)
                     else:
-                        new_geoms = [structure.geometry]
+                        new_geoms = new_geoms + [structure.geometry]
 
                     # loop over identified geometries and extrude them
                     for polygon in polygon_list:
                         # construct outer shell of an extruded geometry first
                         exterior_vertices = np.array(polygon.exterior.coords)
                         outer_shell = PolySlab(
-                            axis=inj_axis, slab_bounds=extrusion_bounds, vertices=exterior_vertices
+                            axis=inj_axis, slab_bounds=extrusion_bounds, vertices=exterior_vertices, dilation=0e-5
                         )
 
                         # construct innner shells that represent holes
@@ -566,6 +579,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
                                 axis=inj_axis,
                                 slab_bounds=extrusion_bounds,
                                 vertices=np.array(hole.coords),
+                                dilation=-0e-5,
                             )
                             for hole in polygon.interiors
                         ]

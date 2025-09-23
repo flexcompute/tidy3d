@@ -98,8 +98,8 @@ class WavePort(AbstractTerminalPort, Box):
         "If :class:`.ABCBoundary` or :class:`.ModeABCBoundary`, a mode absorber is placed in the port with the specified boundary conditions.",
     )
 
-    extrude_structures: bool = pd.Field(
-        False,
+    extrude_structures: float = pd.Field(
+        0,
         title="Extrude Structures",
         description="Extrudes structures that intersect the wave port plane by a few grid cells when ``True``, improving mode injection accuracy.",
     )

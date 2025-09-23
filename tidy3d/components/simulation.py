@@ -5847,9 +5847,8 @@ class Simulation(AbstractYeeGridSimulation):
         if expand:
             for dim in range(3):
                 if dim != axis:
-                    span_inds[dim][1] += 2
-                    span_inds[dim][0] -= 2
-
+                    span_inds[dim][1] += 1
+                    span_inds[dim][0] -= 1
 
         box_bounds = [
             [
