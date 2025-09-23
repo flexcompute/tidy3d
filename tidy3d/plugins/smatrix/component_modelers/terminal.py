@@ -516,36 +516,31 @@ class TerminalComponentModeler(AbstractComponentModeler):
                     shift=absorber.grid_shift,
                 )
 
+
                 # get the PEC box with its face surfaces
-                extend = int(np.round(port.extrude_structures))
-                extend_diff = extend - port.extrude_structures
-                (box, inj_axis, direction) = sim._pec_frame_box(shifted_absorber, expand=True)
+                extend = int(np.floor(port.extrude_structures))
+                extend_diff = port.extrude_structures - extend
+                (box, inj_axis, direction) = sim._pec_frame_box(shifted_absorber, expand=True, extend=extend)
+                sign = 1 if direction == "+" else -1
+                (box_next_cell, _, _) = sim._pec_frame_box(shifted_absorber, expand=True, extend=extend - sign)
+
                 surfaces = box.surfaces(box.size, box.center)
+                surfaces_next_cell = box_next_cell.surfaces(box_next_cell.size, box_next_cell.center)
 
                 # get extrusion coordinates and a cutting plane for inference of intersecting structures.
-                sign = 1 if direction == "+" else -1
                 back_pec_plane = surfaces[2 * inj_axis + (1 if direction == "+" else 0)]
                 cutting_plane = surfaces[2 * inj_axis + (0 if direction == "+" else 1)]
-
-                # get extrusion extent along injection axis
-                extrude_to = back_pec_plane.center[inj_axis]
+                cutting_plane_next_cell = surfaces_next_cell[2 * inj_axis + (0 if direction == "+" else 1)]
 
                 # move cutting plane beyond the waveport plane along the `ModeSource` injection direction.
                 center = list(cutting_plane.center)
-                center[inj_axis] = port.center[inj_axis] + sign * extend_diff * box.size[inj_axis]
+                center[inj_axis] = cutting_plane.center[inj_axis] * (1 - extend_diff) + extend_diff * cutting_plane_next_cell.center[inj_axis]
                 cutting_plane = cutting_plane.updated_copy(center=center)
-
-                cutting_plane = _shift_object(
-                    obj=cutting_plane,
-                    grid=sim.grid,
-                    bounds=sim.bounds,
-                    direction=direction,
-                    shift=-extend,
-                    absorber=False,
-                )
+                extrude_from = center[inj_axis]
 
                 # define extrusion bounds
-                extrusion_bounds = [cutting_plane.center[inj_axis], extrude_to][::sign]
+                extrude_to = back_pec_plane.center[inj_axis]
+                extrusion_bounds = [extrude_from, extrude_to][::sign]
 
                 new_structures = []
 

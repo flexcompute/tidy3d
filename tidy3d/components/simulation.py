@@ -5827,7 +5827,7 @@ class Simulation(AbstractYeeGridSimulation):
                 "Please inspect '._finalized'."
             )
 
-    def _pec_frame_box(self, obj: Union[ModeSource, InternalAbsorber], expand = False) -> tuple[Box, int, str]:
+    def _pec_frame_box(self, obj: Union[ModeSource, InternalAbsorber], expand = False, extend = 0) -> tuple[Box, int, str]:
         """Return pec bounding box, frame axis and object's direction"""
 
         span_inds = np.array(self.grid.discretize_inds(obj))
@@ -5849,6 +5849,13 @@ class Simulation(AbstractYeeGridSimulation):
                 if dim != axis:
                     span_inds[dim][1] += 1
                     span_inds[dim][0] -= 1
+                else:
+                    if direction == "-":
+                        span_inds[dim][1] += 2 + extend
+                    else:
+                        span_inds[dim][0] -= 2 + extend
+
+
 
         box_bounds = [
             [
