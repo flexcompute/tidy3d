@@ -15999,7 +15999,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2.10.0rc1",
+      "default": "2.10.0rc2",
       "type": "string"
     }
   },

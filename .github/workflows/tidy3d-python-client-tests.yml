@@ -286,7 +286,7 @@ jobs:
       cancel-in-progress: true
     strategy:
       matrix:
-        python-version: ['3.9', '3.13']
+        python-version: ['3.10', '3.13']
     defaults:
       run:
         shell: bash
@@ -395,7 +395,7 @@ jobs:
       cancel-in-progress: true
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.10', '3.11', '3.12', '3.13']
         platform: [windows-latest, ubuntu-latest, macos-latest]
     defaults:
       run:
@@ -423,14 +423,25 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: install-project
+      shell: bash
+      if: ${{ matrix.platform }} != "windows-latest"
       run: |
         poetry --version
+        python --version
+        python -m venv .venv
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          source .venv/Scripts/activate
+          python --version
+        else
+          source .venv/bin/activate
+          which python
+        fi
         poetry env use python
         poetry env info
         poetry run pip install --upgrade pip wheel setuptools
         poetry run pip install gdstk --only-binary gdstk
         poetry install -E dev
-
+    
     - name: run-doctests
       run: |
         poetry run pytest -rF --tb=short tidy3d

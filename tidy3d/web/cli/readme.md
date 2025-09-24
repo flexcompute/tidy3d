@@ -53,11 +53,11 @@ Once I did this, the steps from the previous section worked properly.
 
 To test, in a clean environment
 
-``python3.9 -m pip install --index-url https://test.pypi.org/simple/ tidy3d-beta``
+``python -m pip install --index-url https://test.pypi.org/simple/ tidy3d-beta``
 
 note: I was getting errors doing this, because it was trying to install all previously uploaded versions of `tidy3d-beta`. So when I did
 
-``python3.9 -m pip install --index-url https://test.pypi.org/simple/ tidy3d-beta==1.8.0``
+``python -m pip install --index-url https://test.pypi.org/simple/ tidy3d-beta==1.8.0``
 
 It started working, however I got another error
 
@@ -71,22 +71,22 @@ ERROR: No matching distribution found for pyroots<0.6.0,>=0.5.0
 It turns out this is expected using test pyPI as explained [here](https://packaging.python.org/en/latest/tutorials/packaging-projects/#installing-your-newly-uploaded-package).
 
 When I try to install `tidy3d-beta` from test.pyPI in an environment with the dependencies already installed from 
-``python3.9 -m pip install -e '.[dev]'``
-``python3.9 -m pip uninstall tidy3d-beta``
+``python -m pip install -e '.[dev]'``
+``python -m pip uninstall tidy3d-beta``
 
 It works as expected, besides needing `click`
 
-``python3.9 -c "import tidy3d as td; import tidy3d.web as web; from tidy3d.plugins.mode import ModeSolver"``
+``python -c "import tidy3d as td; import tidy3d.web as web; from tidy3d.plugins.mode import ModeSolver"``
 
 ```
 [11:04:02] INFO     Using client version: 1.8.0                                                                                                                                              __init__.py:112
 Traceback (most recent call last):
   File "<string>", line 1, in <module>
-  File "/usr/local/lib/python3.9/site-packages/tidy3d/web/__init__.py", line 8, in <module>
+  File "/usr/local/lib/python/site-packages/tidy3d/web/__init__.py", line 8, in <module>
     from .cli import tidy3d_cli
-  File "/usr/local/lib/python3.9/site-packages/tidy3d/web/cli/__init__.py", line 4, in <module>
+  File "/usr/local/lib/python/site-packages/tidy3d/web/cli/__init__.py", line 4, in <module>
     from .app import tidy3d_cli
-  File "/usr/local/lib/python3.9/site-packages/tidy3d/web/cli/app.py", line 7, in <module>
+  File "/usr/local/lib/python/site-packages/tidy3d/web/cli/app.py", line 7, in <module>
     import click
 ModuleNotFoundError: No module named 'click'
 ```

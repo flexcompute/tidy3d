@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.10.0rc1"
+version = "2.10.0rc2"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -9,7 +9,6 @@ homepage = "https://github.com/flexcompute/tidy3d"
 repository = "https://github.com/flexcompute/tidy3d"
 classifiers = [
   "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -23,7 +22,7 @@ include = [{ path = "tidy3d/style.mplstyle", format = ["sdist", "wheel"] }]
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.14"
+python = ">=3.10,<3.14"
 pyroots = ">=0.5.0"
 xarray = ">=2023.08"
 importlib-metadata = ">=6.0.0"
@@ -117,7 +116,7 @@ sphinxemoji = { version = "*", optional = true }
 devsim = { version = "*", optional = true }
 cma = { version = "*", optional = true }
 openpyxl = { version = "*", optional = true }
-# tidy3d-extras = { version = "2.10.0rc1", optional = true }
+# tidy3d-extras = { version = "2.10.0rc2", optional = true }
 
 [tool.poetry.extras]
 dev = [
