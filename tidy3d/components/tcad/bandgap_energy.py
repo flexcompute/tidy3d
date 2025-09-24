@@ -25,9 +25,9 @@ class VarshniEnergyBandGap(Tidy3dBaseModel):
     -----
     The model implements the following formula:
 
-        .. math::
+    .. math::
 
-            E_g(T) = E_g(0) - \\frac{\\alpha T^2}{T + \\beta}$
+        E_g(T) = E_g(0) - \\frac{\\alpha T^2}{T + \\beta}
 
     Example
     -------

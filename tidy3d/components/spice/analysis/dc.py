@@ -72,7 +72,7 @@ class SteadyChargeDCAnalysis(Tidy3dBaseModel):
     fermi_dirac: bool = pd.Field(
         False,
         title="Fermi-Dirac statistics",
-        description="Determines whether Fermi-Dirac statistics are used. When False, "
+        description="Determines whether Fermi-Dirac statistics are used. When ``False``, "
         "Boltzmann statistics will be used. This can provide more accurate results in situations "
         "where very high doping may lead the pseudo-Fermi energy level to approach "
         "either the conduction or valence energy bands.",
