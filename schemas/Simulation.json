@@ -8741,6 +8741,41 @@
       ],
       "type": "object"
     },
+    "HurkxDirectBandToBandTunneling": {
+      "additionalProperties": false,
+      "properties": {
+        "A": {
+          "default": 400000000000000.0,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "B": {
+          "default": 1900000.0,
+          "type": "number"
+        },
+        "E_0": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "sigma": {
+          "default": 2.5,
+          "type": "number"
+        },
+        "type": {
+          "default": "HurkxDirectBandToBandTunneling",
+          "enum": [
+            "HurkxDirectBandToBandTunneling"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "IndexPerturbation": {
       "additionalProperties": false,
       "properties": {
@@ -14256,6 +14291,63 @@
       ],
       "type": "object"
     },
+    "SelberherrImpactIonization": {
+      "additionalProperties": false,
+      "properties": {
+        "E_n_crit": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "E_p_crit": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "alpha_n_inf": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "alpha_p_inf": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "beta_n": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "beta_p": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "formulation": {
+          "default": "PQ",
+          "enum": [
+            "PQ",
+            "Selberherr"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "default": "SelberherrImpactIonization",
+          "enum": [
+            "SelberherrImpactIonization"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "E_n_crit",
+        "E_p_crit",
+        "alpha_n_inf",
+        "alpha_p_inf",
+        "beta_n",
+        "beta_p"
+      ],
+      "type": "object"
+    },
     "Sellmeier": {
       "additionalProperties": false,
       "properties": {
@@ -14502,7 +14594,13 @@
                 "$ref": "#/definitions/DistributedGeneration"
               },
               {
+                "$ref": "#/definitions/HurkxDirectBandToBandTunneling"
+              },
+              {
                 "$ref": "#/definitions/RadiativeRecombination"
+              },
+              {
+                "$ref": "#/definitions/SelberherrImpactIonization"
               },
               {
                 "$ref": "#/definitions/ShockleyReedHallRecombination"
