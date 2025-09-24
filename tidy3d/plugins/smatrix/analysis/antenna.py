@@ -7,7 +7,6 @@ import numpy as np
 from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
-from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import NetworkIndex
 
 
@@ -52,18 +51,8 @@ def get_antenna_metrics_data(
     """
     # Use the first port as default if none specified
     if port_amplitudes is None:
-        first_port = terminal_component_modeler_data.modeler.ports[0]
-        mode_index = None
-        if isinstance(first_port, WavePort):
-            mode_index = first_port.mode_index
-        port_amplitudes = {
-            terminal_component_modeler_data.modeler.network_index(first_port, mode_index): None
-        }
-    # Check port names, and create map from port to amplitude
-    port_dict = {}
-    for key in port_amplitudes.keys():
-        port, _ = terminal_component_modeler_data.modeler.network_dict[key]
-        port_dict[port] = port_amplitudes[key]
+        first_port_index = terminal_component_modeler_data.modeler.matrix_indices_source[0]
+        port_amplitudes = {first_port_index: None}
     # Get the radiation monitor, use first as default
     # if none specified
     if monitor_name is None:
@@ -87,9 +76,8 @@ def get_antenna_metrics_data(
     a_matrix, b_matrix = terminal_component_modeler_data.port_power_wave_matrices
     # Retrieve associated simulation data
     combined_directivity_data = None
-    for port, amplitude in port_dict.items():
-        port_in_index = terminal_component_modeler_data.modeler.network_index(port)
-        _, mode_index = terminal_component_modeler_data.modeler.network_dict[port_in_index]
+    for port_in_index, amplitude in port_amplitudes.items():
+        port, mode_index = terminal_component_modeler_data.modeler.network_dict[port_in_index]
         if amplitude is not None:
             if np.isclose(amplitude, 0.0):
                 continue
@@ -114,7 +102,7 @@ def get_antenna_metrics_data(
         else:
             scaled_directivity_data = (
                 terminal_component_modeler_data._monitor_data_at_port_amplitude(
-                    port, rad_mon.name, amplitude, a_raw
+                    port_in_index, rad_mon.name, amplitude, a_raw
                 )
             )
             scale_factor = amplitude / a_raw

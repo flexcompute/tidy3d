@@ -208,13 +208,18 @@ class CompositeCurrentIntegral(CompositeCurrentIntegralSpec):
         current_out_phase = _make_current_data_array(current_out_phase)
 
         if self.sum_spec == "sum":
-            return current_in_phase + current_out_phase
+            current = current_in_phase + current_out_phase
+        else:
+            # For split mode, return the larger magnitude current
+            current = xr.where(
+                abs(current_in_phase) >= abs(current_out_phase), current_in_phase, current_out_phase
+            )
+            # Choose sign for current when using the split method.
+            # We prefer both V and I to be positive
+            current = xr.where(current.real >= 0.0, current, -current)
+            current = _make_current_data_array(current)
 
-        # For split mode, return the larger magnitude current
-        current = xr.where(
-            abs(current_in_phase) >= abs(current_out_phase), current_in_phase, current_out_phase
-        )
-        return _make_current_data_array(current)
+        return current
 
     def _check_phase_sign_consistency(
         self,

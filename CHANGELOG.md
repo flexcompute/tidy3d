@@ -28,6 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added support of `os.PathLike` objects as paths like `pathlib.Path` alongside `str` paths in all path-related functions.
 - Added configurable local simulation result caching with checksum validation, eviction limits, and per-call overrides across `web.run`, `web.load`, and job workflows.
 - Added `DirectivityMonitorSpec` for automated creation and configuration of directivity radiation monitors in `TerminalComponentModeler`.
+- Added multimode support to `WavePort` in the smatrix plugin, allowing multiple modes to be analyzed per port.
+
+### Breaking Changes
+**Note: These breaking changes only affect the microwave and smatrix plugins.**
+- Renamed path integral classes for improved consistency. Please see our migration guide for details on updating your code.
+  - `VoltageIntegralAxisAligned` → `AxisAlignedVoltageIntegral`
+  - `CurrentIntegralAxisAligned` → `AxisAlignedCurrentIntegral`
+  - `CustomPathIntegral2D` → `Custom2DPathIntegral`
+  - `CustomVoltageIntegral2D` → `Custom2DVoltageIntegral`
+  - `CustomCurrentIntegral2D` → `Custom2DCurrentIntegral`
+  - Path integral and impedance calculator classes have been refactored and moved from the microwave plugin into Tidy3D components. They are now publicly exported via the top-level package `__init__.py`.
+- `WavePort` has been refactored to use `MicrowaveModeSpec`. The fields `voltage_integral`, and `current_integral` have been removed. Impedance specifications are now defined in `MicrowaveModeSpec.impedance_specs`. Please see our migration guide for details on updating your code.
 
 ### Changed
 - Improved performance of antenna metrics calculation by utilizing cached wave amplitude calculations instead of recomputing wave amplitudes for each port excitation in the `TerminalComponentModelerData`.
@@ -35,13 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Allowing for more geometries in a ClipOperation geometry.
 - Improved the speed of computing `Box` shape derivatives when used inside a `GeometryGroup`.
 - All RF and microwave specific components now inherit from `MicrowaveBaseModel`.
-- **[BREAKING]** Renamed path integral classes in `tidy3d.plugins.microwave` for improved consistency. Please see our migration guide for details on updating your code.
-  - `VoltageIntegralAxisAligned` → `AxisAlignedVoltageIntegral`
-  - `CurrentIntegralAxisAligned` → `AxisAlignedCurrentIntegral`
-  - `CustomPathIntegral2D` → `Custom2DPathIntegral`
-  - `CustomVoltageIntegral2D` → `Custom2DVoltageIntegral`
-  - `CustomCurrentIntegral2D` → `Custom2DCurrentIntegral`
-  - Path integral and impedance calculator classes have been refactored and moved from `tidy3d.plugins.microwave` to `tidy3d.components.microwave`. They are now publicly exported via the top-level package `__init__.py`, so you can import them directly, e.g. `from tidy3d import ImpedanceCalculator, AxisAlignedVoltageIntegral, AxisAlignedCurrentIntegral, Custom2DVoltageIntegral, Custom2DCurrentIntegral, Custom2DPathIntegral`.
 - `DirectivityMonitor` now forces `far_field_approx` to `True`, which was previously configurable.
 - Unified run submission API: `web.run(...)` is now a container-aware wrapper that accepts a single simulation or arbitrarily nested containers (`list`, `tuple`, `dict` values) and returns results in the same shape.
 - `web.Batch(ComponentModeler)` and `web.Job(ComponentModeler)` native support

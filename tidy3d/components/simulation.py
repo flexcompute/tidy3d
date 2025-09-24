@@ -11,6 +11,8 @@ from typing import Any, Literal, Optional, Union, get_args
 
 import autograd.numpy as np
 
+from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
+
 from .types.monitor import MonitorType
 
 try:
@@ -74,7 +76,7 @@ from .medium import (
     MediumType3D,
     PECMedium,
 )
-from .microwave.mode_spec import MicrowaveModeSpec
+from .microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from .microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from .monitor import (
     AbstractFieldProjectionMonitor,
@@ -4266,6 +4268,12 @@ class Simulation(AbstractYeeGridSimulation):
                 # we just pick one of the in-plane axes to test the roation
                 rotate_kwargs = {"angle": theta, "axis": axes[1]}
                 ModeSolver._make_rotated_structures(structs_in, translate_kwargs, rotate_kwargs)
+            # Validate microwave mode spec with mode solver setup
+            if isinstance(mode_obj.mode_spec, MicrowaveModeSpec):
+                ModeSolver._validate_microwave_mode_spec(
+                    mode_spec=mode_obj.mode_spec,
+                    plane=mode_obj.geometry,
+                )
 
         for imnt, monitor in enumerate(self.monitors):
             if isinstance(monitor, AbstractModeMonitor):
@@ -4687,13 +4695,10 @@ class Simulation(AbstractYeeGridSimulation):
         fail to instantiate.
         """
         for monitor in self.monitors:
-            if not isinstance(monitor, AbstractModeMonitor):
+            if not isinstance(monitor, (MicrowaveModeMonitor, MicrowaveModeSolverMonitor)):
                 continue
 
-            if (
-                isinstance(monitor.mode_spec, MicrowaveModeSpec)
-                and monitor.mode_spec._using_auto_current_spec
-            ):
+            if monitor.mode_spec._using_auto_current_spec:
                 mode_plane_analyzer = ModePlaneAnalyzer(
                     center=monitor.center, size=monitor.size, field_data_colocated=monitor.colocate
                 )
@@ -4706,7 +4711,7 @@ class Simulation(AbstractYeeGridSimulation):
                     )
                 except SetupError as e:
                     raise SetupError(
-                        f"Failed to setup auto impedance specification for monitor '{monitor.name}'"
+                        f"Failed to setup auto impedance specification for monitor '{monitor.name}'. {e!s}"
                     ) from e
 
     @cached_property

@@ -9,6 +9,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box, Geometry
+from tidy3d.components.geometry.bound_ops import bounds_union
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.path_integrals.specs.base import (
     AbstractAxesRH,
@@ -16,7 +17,7 @@ from tidy3d.components.microwave.path_integrals.specs.base import (
     Custom2DPathIntegralSpec,
 )
 from tidy3d.components.microwave.path_integrals.viz import ARROW_CURRENT, plot_params_current_path
-from tidy3d.components.types import Ax
+from tidy3d.components.types import Ax, Bound
 from tidy3d.components.types.base import Axis, Direction
 from tidy3d.components.validators import assert_plane
 from tidy3d.components.viz import add_ax_if_none
@@ -372,3 +373,24 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
                 "'CompositeCurrentIntegralSpec.path_specs' must be a list of one or more current integrals. "
             )
         return val
+
+    @cached_property
+    def bounds(self) -> Bound:
+        """Return the overall bounding box of all path specifications.
+
+        Computed by taking the union of bounds from all path specs.
+
+        Returns
+        -------
+        Bound
+            Tuple of (rmin, rmax) where rmin and rmax are tuples of (x, y, z) coordinates
+            representing the minimum and maximum corners of the bounding box.
+        """
+        # Start with bounds of first path spec
+        overall_bounds = self.path_specs[0].bounds
+
+        # Union with bounds of remaining path specs
+        for path_spec in self.path_specs[1:]:
+            overall_bounds = bounds_union(overall_bounds, path_spec.bounds)
+
+        return overall_bounds

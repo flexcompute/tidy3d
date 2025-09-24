@@ -572,6 +572,49 @@ def test_composite_current_integral_validation():
         path_spec.updated_copy(path_specs=[voltage_spec])
 
 
+def test_composite_current_integral_bounds():
+    """Test that CompositeCurrentIntegralSpec correctly computes overall bounding box."""
+
+    # Single axis-aligned spec
+    spec1 = td.AxisAlignedCurrentIntegralSpec(center=(0, 0, 0), size=(2, 2, 0), sign="+")
+    composite1 = td.CompositeCurrentIntegralSpec(path_specs=(spec1,), sum_spec="sum")
+    expected_bounds1 = ((-1.0, -1.0, 0.0), (1.0, 1.0, 0.0))
+    assert composite1.bounds == expected_bounds1
+
+    # Two disjoint axis-aligned specs
+    spec2 = td.AxisAlignedCurrentIntegralSpec(center=(5, 5, 0), size=(2, 2, 0), sign="+")
+    composite2 = td.CompositeCurrentIntegralSpec(path_specs=(spec1, spec2), sum_spec="sum")
+    # Should span from (-1, -1, 0) to (6, 6, 0)
+    expected_bounds2 = ((-1.0, -1.0, 0.0), (6.0, 6.0, 0.0))
+    assert composite2.bounds == expected_bounds2
+
+    # Custom 2D spec
+    vertices = np.array([[0, 0], [2, 0], [2, 1], [0, 1], [0, 0]])
+    spec3 = td.Custom2DCurrentIntegralSpec(axis=2, position=0, vertices=vertices)
+    composite3 = td.CompositeCurrentIntegralSpec(path_specs=(spec3,), sum_spec="sum")
+    expected_bounds3 = ((0.0, 0.0, 0.0), (2.0, 1.0, 0.0))
+    assert composite3.bounds == expected_bounds3
+
+    # Mixed spec types (axis-aligned + custom 2D)
+    spec4 = td.AxisAlignedCurrentIntegralSpec(center=(-3, -3, 0), size=(1, 1, 0), sign="-")
+    composite4 = td.CompositeCurrentIntegralSpec(path_specs=(spec3, spec4), sum_spec="split")
+    # Custom spec: (0, 0, 0) to (2, 1, 0)
+    # Axis-aligned spec: (-3.5, -3.5, 0) to (-2.5, -2.5, 0)
+    # Overall: (-3.5, -3.5, 0) to (2, 1, 0)
+    expected_bounds4 = ((-3.5, -3.5, 0.0), (2.0, 1.0, 0.0))
+    assert composite4.bounds == expected_bounds4
+
+    # Overlapping specs
+    spec5 = td.AxisAlignedCurrentIntegralSpec(center=(1, 1, 0), size=(4, 4, 0), sign="+")
+    spec6 = td.AxisAlignedCurrentIntegralSpec(center=(2, 2, 0), size=(2, 2, 0), sign="+")
+    composite5 = td.CompositeCurrentIntegralSpec(path_specs=(spec5, spec6), sum_spec="sum")
+    # spec5: (-1, -1, 0) to (3, 3, 0)
+    # spec6: (1, 1, 0) to (3, 3, 0)
+    # Overall: (-1, -1, 0) to (3, 3, 0)
+    expected_bounds5 = ((-1.0, -1.0, 0.0), (3.0, 3.0, 0.0))
+    assert composite5.bounds == expected_bounds5
+
+
 def test_path_integral_creation():
     """Check that path integrals are correctly constructed from path specifications."""
 

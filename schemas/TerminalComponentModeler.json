@@ -1085,138 +1085,6 @@
       ],
       "type": "object"
     },
-    "AxisAlignedCurrentIntegral": {
-      "additionalProperties": false,
-      "properties": {
-        "attrs": {
-          "default": {},
-          "type": "object"
-        },
-        "center": {
-          "anyOf": [
-            {
-              "items": [
-                {
-                  "anyOf": [
-                    {
-                      "type": "autograd.tracer.Box"
-                    },
-                    {
-                      "type": "number"
-                    }
-                  ]
-                },
-                {
-                  "anyOf": [
-                    {
-                      "type": "autograd.tracer.Box"
-                    },
-                    {
-                      "type": "number"
-                    }
-                  ]
-                },
-                {
-                  "anyOf": [
-                    {
-                      "type": "autograd.tracer.Box"
-                    },
-                    {
-                      "type": "number"
-                    }
-                  ]
-                }
-              ],
-              "maxItems": 3,
-              "minItems": 3,
-              "type": "array"
-            },
-            {
-              "type": "autograd.tracer.Box"
-            }
-          ],
-          "default": [
-            0.0,
-            0.0,
-            0.0
-          ]
-        },
-        "extrapolate_to_endpoints": {
-          "default": false,
-          "type": "boolean"
-        },
-        "sign": {
-          "enum": [
-            "+",
-            "-"
-          ],
-          "type": "string"
-        },
-        "size": {
-          "anyOf": [
-            {
-              "items": [
-                {
-                  "anyOf": [
-                    {
-                      "minimum": 0,
-                      "type": "number"
-                    },
-                    {
-                      "type": "autograd.tracer.Box"
-                    }
-                  ]
-                },
-                {
-                  "anyOf": [
-                    {
-                      "minimum": 0,
-                      "type": "number"
-                    },
-                    {
-                      "type": "autograd.tracer.Box"
-                    }
-                  ]
-                },
-                {
-                  "anyOf": [
-                    {
-                      "minimum": 0,
-                      "type": "number"
-                    },
-                    {
-                      "type": "autograd.tracer.Box"
-                    }
-                  ]
-                }
-              ],
-              "maxItems": 3,
-              "minItems": 3,
-              "type": "array"
-            },
-            {
-              "type": "autograd.tracer.Box"
-            }
-          ]
-        },
-        "snap_contour_to_grid": {
-          "default": false,
-          "type": "boolean"
-        },
-        "type": {
-          "default": "AxisAlignedCurrentIntegral",
-          "enum": [
-            "AxisAlignedCurrentIntegral"
-          ],
-          "type": "string"
-        }
-      },
-      "required": [
-        "sign",
-        "size"
-      ],
-      "type": "object"
-    },
     "AxisAlignedCurrentIntegralSpec": {
       "additionalProperties": false,
       "properties": {
@@ -1339,138 +1207,6 @@
           "default": "AxisAlignedCurrentIntegralSpec",
           "enum": [
             "AxisAlignedCurrentIntegralSpec"
-          ],
-          "type": "string"
-        }
-      },
-      "required": [
-        "sign",
-        "size"
-      ],
-      "type": "object"
-    },
-    "AxisAlignedVoltageIntegral": {
-      "additionalProperties": false,
-      "properties": {
-        "attrs": {
-          "default": {},
-          "type": "object"
-        },
-        "center": {
-          "anyOf": [
-            {
-              "items": [
-                {
-                  "anyOf": [
-                    {
-                      "type": "autograd.tracer.Box"
-                    },
-                    {
-                      "type": "number"
-                    }
-                  ]
-                },
-                {
-                  "anyOf": [
-                    {
-                      "type": "autograd.tracer.Box"
-                    },
-                    {
-                      "type": "number"
-                    }
-                  ]
-                },
-                {
-                  "anyOf": [
-                    {
-                      "type": "autograd.tracer.Box"
-                    },
-                    {
-                      "type": "number"
-                    }
-                  ]
-                }
-              ],
-              "maxItems": 3,
-              "minItems": 3,
-              "type": "array"
-            },
-            {
-              "type": "autograd.tracer.Box"
-            }
-          ],
-          "default": [
-            0.0,
-            0.0,
-            0.0
-          ]
-        },
-        "extrapolate_to_endpoints": {
-          "default": false,
-          "type": "boolean"
-        },
-        "sign": {
-          "enum": [
-            "+",
-            "-"
-          ],
-          "type": "string"
-        },
-        "size": {
-          "anyOf": [
-            {
-              "items": [
-                {
-                  "anyOf": [
-                    {
-                      "minimum": 0,
-                      "type": "number"
-                    },
-                    {
-                      "type": "autograd.tracer.Box"
-                    }
-                  ]
-                },
-                {
-                  "anyOf": [
-                    {
-                      "minimum": 0,
-                      "type": "number"
-                    },
-                    {
-                      "type": "autograd.tracer.Box"
-                    }
-                  ]
-                },
-                {
-                  "anyOf": [
-                    {
-                      "minimum": 0,
-                      "type": "number"
-                    },
-                    {
-                      "type": "autograd.tracer.Box"
-                    }
-                  ]
-                }
-              ],
-              "maxItems": 3,
-              "minItems": 3,
-              "type": "array"
-            },
-            {
-              "type": "autograd.tracer.Box"
-            }
-          ]
-        },
-        "snap_path_to_grid": {
-          "default": false,
-          "type": "boolean"
-        },
-        "type": {
-          "default": "AxisAlignedVoltageIntegral",
-          "enum": [
-            "AxisAlignedVoltageIntegral"
           ],
           "type": "string"
         }
@@ -2771,47 +2507,6 @@
       ],
       "type": "object"
     },
-    "CompositeCurrentIntegral": {
-      "additionalProperties": false,
-      "properties": {
-        "attrs": {
-          "default": {},
-          "type": "object"
-        },
-        "path_specs": {
-          "items": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/AxisAlignedCurrentIntegralSpec"
-              },
-              {
-                "$ref": "#/definitions/Custom2DCurrentIntegralSpec"
-              }
-            ]
-          },
-          "type": "array"
-        },
-        "sum_spec": {
-          "enum": [
-            "split",
-            "sum"
-          ],
-          "type": "string"
-        },
-        "type": {
-          "default": "CompositeCurrentIntegral",
-          "enum": [
-            "CompositeCurrentIntegral"
-          ],
-          "type": "string"
-        }
-      },
-      "required": [
-        "path_specs",
-        "sum_spec"
-      ],
-      "type": "object"
-    },
     "CompositeCurrentIntegralSpec": {
       "additionalProperties": false,
       "properties": {
@@ -3189,42 +2884,6 @@
       },
       "type": "object"
     },
-    "Custom2DCurrentIntegral": {
-      "additionalProperties": false,
-      "properties": {
-        "attrs": {
-          "default": {},
-          "type": "object"
-        },
-        "axis": {
-          "enum": [
-            0,
-            1,
-            2
-          ],
-          "type": "integer"
-        },
-        "position": {
-          "type": "number"
-        },
-        "type": {
-          "default": "Custom2DCurrentIntegral",
-          "enum": [
-            "Custom2DCurrentIntegral"
-          ],
-          "type": "string"
-        },
-        "vertices": {
-          "type": "ArrayLike"
-        }
-      },
-      "required": [
-        "axis",
-        "position",
-        "vertices"
-      ],
-      "type": "object"
-    },
     "Custom2DCurrentIntegralSpec": {
       "additionalProperties": false,
       "properties": {
@@ -3247,42 +2906,6 @@
           "default": "Custom2DCurrentIntegralSpec",
           "enum": [
             "Custom2DCurrentIntegralSpec"
-          ],
-          "type": "string"
-        },
-        "vertices": {
-          "type": "ArrayLike"
-        }
-      },
-      "required": [
-        "axis",
-        "position",
-        "vertices"
-      ],
-      "type": "object"
-    },
-    "Custom2DVoltageIntegral": {
-      "additionalProperties": false,
-      "properties": {
-        "attrs": {
-          "default": {},
-          "type": "object"
-        },
-        "axis": {
-          "enum": [
-            0,
-            1,
-            2
-          ],
-          "type": "integer"
-        },
-        "position": {
-          "type": "number"
-        },
-        "type": {
-          "default": "Custom2DVoltageIntegral",
-          "enum": [
-            "Custom2DVoltageIntegral"
           ],
           "type": "string"
         },
@@ -18074,19 +17697,6 @@
           "default": false,
           "type": "boolean"
         },
-        "current_integral": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/AxisAlignedCurrentIntegral"
-            },
-            {
-              "$ref": "#/definitions/CompositeCurrentIntegral"
-            },
-            {
-              "$ref": "#/definitions/Custom2DCurrentIntegral"
-            }
-          ]
-        },
         "direction": {
           "enum": [
             "+",
@@ -18111,46 +17721,21 @@
           }
         },
         "mode_index": {
-          "default": 0,
           "minimum": 0,
           "type": "integer"
+        },
+        "mode_selection": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
         },
         "mode_spec": {
           "allOf": [
             {
-              "$ref": "#/definitions/ModeSpec"
+              "$ref": "#/definitions/MicrowaveModeSpec"
             }
-          ],
-          "default": {
-            "angle_phi": 0.0,
-            "angle_rotation": false,
-            "angle_theta": 0.0,
-            "attrs": {},
-            "bend_axis": null,
-            "bend_radius": null,
-            "filter_pol": null,
-            "group_index_step": false,
-            "num_modes": 1,
-            "num_pml": [
-              0,
-              0
-            ],
-            "precision": "double",
-            "sort_spec": {
-              "attrs": {},
-              "filter_key": null,
-              "filter_order": "over",
-              "filter_reference": 0.0,
-              "sort_key": null,
-              "sort_order": "ascending",
-              "sort_reference": null,
-              "track_freq": "central",
-              "type": "ModeSortSpec"
-            },
-            "target_neff": null,
-            "track_freq": null,
-            "type": "ModeSpec"
-          }
+          ]
         },
         "name": {
           "minLength": 1,
@@ -18214,16 +17799,6 @@
             "WavePort"
           ],
           "type": "string"
-        },
-        "voltage_integral": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/AxisAlignedVoltageIntegral"
-            },
-            {
-              "$ref": "#/definitions/Custom2DVoltageIntegral"
-            }
-          ]
         }
       },
       "required": [
