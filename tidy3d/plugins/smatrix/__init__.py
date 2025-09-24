@@ -8,7 +8,10 @@ from tidy3d.plugins.smatrix.component_modelers.base import (
     AbstractComponentModeler,
 )
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
-from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
+from tidy3d.plugins.smatrix.component_modelers.terminal import (
+    TerminalComponentModeler,
+    ModelerLowFrequencySmoothingSpec,
+)
 from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
 from tidy3d.plugins.smatrix.data.data_array import (
     ModalPortDataArray,
@@ -17,7 +20,6 @@ from tidy3d.plugins.smatrix.data.data_array import (
 )
 from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import (
-    LowFrequencySmoothingSpec,
     MicrowaveSMatrixData,
     TerminalComponentModelerData,
 )
@@ -43,7 +45,7 @@ __all__ = [
     "ComponentModeler",
     "ComponentModelerDataType",
     "ComponentModelerType",
-    "LowFrequencySmoothingSpec",
+    "ModelerLowFrequencySmoothingSpec",
     "LumpedPort",
     "MicrowaveSMatrixData",
     "ModalComponentModeler",

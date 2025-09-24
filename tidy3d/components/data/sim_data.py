@@ -26,7 +26,8 @@ from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.constants import C_0, inf
+from tidy3d.components.frequency_extrapolation import LowFrequencySmoothingSpec
+from tidy3d.constants import C_0, inf, fp_eps
 from tidy3d.exceptions import DataError, FileError, Tidy3dKeyError
 from tidy3d.log import log
 

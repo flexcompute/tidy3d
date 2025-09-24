@@ -141,6 +141,8 @@ from .viz import (
     plot_sim_3d,
 )
 
+from .frequency_extrapolation import LowFrequencySmoothingSpec
+
 try:
     gdstk_available = True
     import gdstk
@@ -2832,6 +2834,12 @@ class Simulation(AbstractYeeGridSimulation):
 
     """
 
+    low_freq_smoothing: Optional[LowFrequencySmoothingSpec] = pydantic.Field(
+        None,
+        title="Low Frequency Smoothing",
+        description="The low frequency smoothing parameters for the simulation.",
+    )
+
     """ Validating setup """
 
     @pydantic.root_validator(pre=True)
@@ -4043,6 +4051,24 @@ class Simulation(AbstractYeeGridSimulation):
                     "source is only meaningful if field decay occurs."
                 )
 
+        return val
+
+    @pydantic.validator("low_freq_smoothing", always=True)
+    def _validate_low_freq_smoothing(cls, val, values):
+        """Validate the low frequency smoothing parameters."""
+        # check that all monitors are present and they are mode monitors
+        if val is None:
+            return val
+        monitors = values.get("monitors")
+        present_mode_monitor_names = [
+            monitor.name for monitor in monitors if isinstance(monitor, ModeMonitor)
+        ]
+        print("present_mode_monitor_names: ", present_mode_monitor_names)
+        for monitor in val.monitors:
+            if monitor not in present_mode_monitor_names:
+                raise SetupError(
+                    f"Low frequency smoothing specification refers to monitor '{monitor}' which either does not exist or is not a mode monitor."
+                )
         return val
 
     """ Post-init validators """
