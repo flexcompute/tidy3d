@@ -2495,3 +2495,21 @@ def test_generation_recombination():
         tau_n=tau_fossum,
         tau_p=tau_fossum,
     )
+
+    # make sure we can build a HurkxDirectBandToBandTunneling
+    _ = td.HurkxDirectBandToBandTunneling(
+        A=1e19,
+        B=1.9e6,
+        E_0=1,
+        sigma=2,
+    )
+
+    # make sure we can build a SelberherrImpactIonization
+    _ = td.SelberherrImpactIonization(
+        alpha_n_inf=7.03e5,
+        alpha_p_inf=1.582e6,
+        E_n_crit=1.23e6,
+        E_p_crit=2.03e6,
+        beta_n=1,
+        beta_p=1,
+    )
