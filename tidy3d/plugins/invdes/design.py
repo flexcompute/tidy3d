@@ -128,10 +128,9 @@ class InverseDesign(AbstractInverseDesign):
         None,
         title="Output Monitor Names",
         description="Optional names of monitors whose data the differentiable output depends on."
-        "If this field is left ``None``, the plugin will try to add all compatible monitors to "
-        "``JaxSimulation.output_monitors``. While this will work, there may be warnings if the "
-        "monitors are not compatible with the ``adjoint`` plugin, for example if there are "
-        "``FieldMonitor`` instances with ``.colocate != False``.",
+        "If this field is left ``None``, the plugin will try to add all compatible monitors "
+        "automatically. While this will work, there may be warnings if certain monitor types are "
+        "not fully supported, for example ``FieldMonitor`` instances with ``.colocate != False``.",
     )
 
     _check_sim_pixel_size = check_pixel_size("simulation")
@@ -270,10 +269,9 @@ class InverseDesignMulti(AbstractInverseDesign):
         None,
         title="Output Monitor Names",
         description="Optional names of monitors whose data the differentiable output depends on."
-        "If this field is left ``None``, the plugin will try to add all compatible monitors to "
-        "``JaxSimulation.output_monitors``. While this will work, there may be warnings if the "
-        "monitors are not compatible with the ``adjoint`` plugin, for example if there are "
-        "``FieldMonitor`` instances with ``.colocate != False``.",
+        "If this field is left ``None``, the plugin will try to add all compatible monitors "
+        "automatically. While this will work, there may be warnings if certain monitor types are "
+        "not fully supported, for example ``FieldMonitor`` instances with ``.colocate != False``.",
     )
 
     _check_sim_pixel_size = check_pixel_size("simulations")
