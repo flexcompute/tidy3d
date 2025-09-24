@@ -223,3 +223,52 @@ class DistributedGeneration(Tidy3dBaseModel):
             raise ValueError("SpatialDataArray must be at least 2D.")
 
         return values
+
+
+class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
+    """
+    This class defines a direct band-to-band tunneling recombination model based on the Hurkx model
+    as described in [1]_.
+
+    Notes
+    -----
+
+        The direct band-to-band tunneling recombination rate ``R_{BTBT}`` is primarily defined by the
+        material's bandgap energy :math:`E_g` and the electric field :math:`F`.
+
+        .. math::
+
+            R^{BTBT} = A \\cdot \frac{n \\cdot p - n_i^2}{(n + n_i) \\cdot (p + n_i)} \\cdot \\left( \frac{|\\mathbf{E}|}{E_0} \right)^{\\sigma} \\cdot \\exp \\left( -\frac{B}{|\\mathbf{E}|} \\cdot \\left( \frac{E_g}{E_{g,300}} \right)^{3/2} \right )
+
+        where :math:`A`, :math:`B`, :math:`E_0`, and :math:`\\sigma` are material-dependent parameters.
+
+    References
+    ----------
+        .. [1] Palankovski, Vassil, and Rüdiger Quay. Analysis and simulation of heterostructure devices. Springer Science & Business Media, 2004.
+    """
+
+    A: float = pd.Field(
+        4e14,
+        title="Parameter A",
+        description="Parameter A in the direct BTBT Hurkx model.",
+        units="1/(cm^3 s)",
+    )
+    B: float = pd.Field(
+        1.9e6,
+        title="Parameter B",
+        description="Parameter B in the direct BTBT Hurkx model.",
+        units="V/cm",
+    )
+    E_0: float = pd.Field(
+        1,
+        title="Reference electric field E_0",
+        description="Reference electric field E_0 in the direct BTBT Hurkx model.",
+        units="V/cm",
+    )
+    sigma: float = pd.Field(
+        ...,
+        title="Exponent parameter",
+        description="Exponent sigma in the direct BTBT Hurkx model. For direct "
+        "semiconductors sigma is typically 2.0, while for indirect "
+        "semiconductors sigma is typically 2.5.",
+    )

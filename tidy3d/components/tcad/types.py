@@ -24,6 +24,7 @@ from tidy3d.components.tcad.effective_DOS import (
 from tidy3d.components.tcad.generation_recombination import (
     AugerRecombination,
     DistributedGeneration,
+    HurkxDirectBandToBandTunneling,
     RadiativeRecombination,
     ShockleyReedHallRecombination,
 )
@@ -46,7 +47,11 @@ EffectiveDOSModelType = Union[
 EnergyBandGapModelType = Union[ConstantEnergyBandGap, VarshniEnergyBandGap]
 MobilityModelType = Union[CaugheyThomasMobility, ConstantMobilityModel]
 RecombinationModelType = Union[
-    AugerRecombination, DistributedGeneration, RadiativeRecombination, ShockleyReedHallRecombination
+    AugerRecombination,
+    DistributedGeneration,
+    RadiativeRecombination,
+    ShockleyReedHallRecombination,
+    HurkxDirectBandToBandTunneling,
 ]
 BandGapNarrowingModelType = Union[SlotboomBandGapNarrowing]
 

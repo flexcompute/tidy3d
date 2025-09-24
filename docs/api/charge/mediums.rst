@@ -34,6 +34,7 @@ Generation Recombination
    tidy3d.ShockleyReedHallRecombination
    tidy3d.FossumCarrierLifetime
    tidy3d.DistributedGeneration
+   tidy3d.HurkxDirectBandToBandTunneling
 
 
 Doping
