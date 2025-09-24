@@ -1,54 +1,58 @@
 # autograd wrapper for web functions
 from __future__ import annotations
 
-import os
-import tempfile
 import typing
-from collections import defaultdict
-from os.path import basename, dirname, join
+from os.path import dirname
 from pathlib import Path
 
 import numpy as np
-import xarray as xr
 from autograd.builtins import dict as dict_ag
 from autograd.extend import defvjp, primitive
 
 import tidy3d as td
-from tidy3d.components.autograd import AutogradFieldMap, get_static
+from tidy3d.components.autograd import AutogradFieldMap
 from tidy3d.components.autograd.constants import (
-    ADJOINT_FREQ_CHUNK_SIZE,
     MAX_NUM_ADJOINT_PER_FWD,
     MAX_NUM_TRACED_STRUCTURES,
 )
-from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.components.data.data_array import DataArray
-from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
-from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, BatchData, Job
+from tidy3d.web.api.container import BatchData
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 from tidy3d.web.api.webapi import run as run_webapi
-from tidy3d.web.core.s3utils import download_file, upload_file
 from tidy3d.web.core.types import PayType
 
-from .utils import E_to_D, FieldMap, TracerKeys, get_derivative_maps
-
-# keys for data into auxiliary dictionary
-AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
-AUX_KEY_SIM_DATA_FWD = "sim_data_fwd_adjoint"
-AUX_KEY_FWD_TASK_ID = "task_id_fwd"
-AUX_KEY_SIM_ORIGINAL = "sim_original"
-# server-side auxiliary files to upload/download
-SIM_VJP_FILE = "output/autograd_sim_vjp.hdf5"
-SIM_FIELDS_KEYS_FILE = "autograd_sim_fields_keys.hdf5"
-
-# default value for whether to do local gradient calculation (True) or server side (False)
-LOCAL_GRADIENT = False
-
-# directory to store adjoint data for local gradient calculation relative to run path
-LOCAL_ADJOINT_DIR = "adjoint_data"
+from .backward import postprocess_adj as _postprocess_adj_impl
+from .backward import setup_adj as _setup_adj_impl
+from .constants import (
+    AUX_KEY_FWD_TASK_ID,
+    AUX_KEY_SIM_DATA_FWD,
+    AUX_KEY_SIM_DATA_ORIGINAL,
+    LOCAL_ADJOINT_DIR,
+    LOCAL_GRADIENT,
+)
+from .engine import (
+    _run_async_tidy3d as _run_async_tidy3d_engine,
+)
+from .engine import (
+    _run_async_tidy3d_bwd as _run_async_tidy3d_bwd_engine,
+)
+from .engine import (
+    _run_tidy3d as _run_tidy3d_engine,
+)
+from .engine import (
+    parse_run_kwargs as _parse_run_kwargs_impl,
+)
+from .forward import postprocess_fwd as _postprocess_fwd_impl
+from .forward import setup_fwd as _setup_fwd_impl
+from .io_utils import (
+    get_vjp_traced_fields as _get_vjp_traced_fields_impl,
+)
+from .io_utils import (
+    upload_sim_fields_keys as _upload_sim_fields_keys_impl,
+)
 
 # if True, will plot the adjoint fields on the plane provided. used for debugging only
 _INSPECT_ADJOINT_FIELDS = False
@@ -602,12 +606,10 @@ def setup_fwd(
     sim_original: td.Simulation,
     local_gradient: bool = LOCAL_GRADIENT,
 ) -> td.Simulation:
-    """Return a forward simulation with adjoint monitors attached."""
-
-    # Always try to build the variant that includes adjoint monitors so that
-    # errors in monitor placement are caught early.
-    sim_with_adj_mon = sim_original._with_adjoint_monitors(sim_fields)
-    return sim_with_adj_mon if local_gradient else sim_original
+    """Return a forward simulation with adjoint monitors attached (delegated)."""
+    return _setup_fwd_impl(
+        sim_fields=sim_fields, sim_original=sim_original, local_gradient=local_gradient
+    )
 
 
 def postprocess_fwd(
@@ -615,60 +617,25 @@ def postprocess_fwd(
     sim_original: td.Simulation,
     aux_data: dict,
 ) -> AutogradFieldMap:
-    """Postprocess the combined simulation data into an Autograd field map."""
-
-    num_mnts_original = len(sim_original.monitors)
-    sim_data_original, sim_data_fwd = sim_data_combined._split_original_fwd(
-        num_mnts_original=num_mnts_original
+    """Postprocess the combined simulation data into an Autograd field map (delegated)."""
+    return _postprocess_fwd_impl(
+        sim_data_combined=sim_data_combined, sim_original=sim_original, aux_data=aux_data
     )
-
-    aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_original
-    aux_data[AUX_KEY_SIM_DATA_FWD] = sim_data_fwd
-
-    # strip out the tracer AutogradFieldMap for the .data from the original sim
-    data_traced = sim_data_original._strip_traced_fields(
-        include_untraced_data_arrays=True, starting_path=("data",)
-    )
-
-    # return the AutogradFieldMap that autograd registers as the "output" of the primitive
-    return data_traced
 
 
 def upload_sim_fields_keys(sim_fields_keys: list[tuple], task_id: str, verbose: bool = False):
-    """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
-    handle, fname = tempfile.mkstemp(suffix=".hdf5")
-    os.close(handle)
-    try:
-        TracerKeys(keys=sim_fields_keys).to_file(fname)
-        upload_file(
-            task_id,
-            fname,
-            SIM_FIELDS_KEYS_FILE,
-            verbose=verbose,
-        )
-    except Exception as e:
-        td.log.error(f"Error occurred while uploading simulation fields keys: {e}")
-        raise e
-    finally:
-        os.unlink(fname)
+    """Upload traced simulation field keys for adjoint runs (delegated)."""
+    return _upload_sim_fields_keys_impl(
+        sim_fields_keys=sim_fields_keys, task_id=task_id, verbose=verbose
+    )
 
 
 """ VJP maker for ADJ pass."""
 
 
 def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
-    """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
-    handle, fname = tempfile.mkstemp(suffix=".hdf5")
-    os.close(handle)
-    try:
-        download_file(task_id_adj, SIM_VJP_FILE, to_file=fname, verbose=verbose)
-        field_map = FieldMap.from_file(fname)
-    except Exception as e:
-        td.log.error(f"Error occurred while getting VJP traced fields: {e}")
-        raise e
-    finally:
-        os.unlink(fname)
-    return field_map.to_autograd_field_map
+    """Fetch VJP traced fields for a completed adjoint job (delegated)."""
+    return _get_vjp_traced_fields_impl(task_id_adj=task_id_adj, verbose=verbose)
 
 
 def _run_bwd(
@@ -943,131 +910,29 @@ def setup_adj(
     sim_fields_keys: list[tuple],
     max_num_adjoint_per_fwd: int,
 ) -> list[td.Simulation]:
-    """Construct an adjoint simulation from a set of data_fields for the VJP."""
-
-    td.log.info("Running custom vjp (adjoint) pipeline.")
-
-    # filter out any data_fields_vjp with all 0's
-    data_fields_vjp = {
-        k: get_static(v) for k, v in data_fields_vjp.items() if not np.allclose(v, 0)
-    }
-
-    for k, v in data_fields_vjp.items():
-        if np.any(np.isnan(v)):
-            raise AdjointError(
-                f"NaN values detected for data field {k} in the adjoint pipeline. This may be "
-                f"due to NaN values in the simulation data or the computed value of your "
-                f"objective function."
-            )
-
-    # if all entries are zero, there is no adjoint sim to run
-    if not data_fields_vjp:
-        return []
-
-    # start with the full simulation data structure and either zero out the fields
-    # that have no tracer data for them or insert the tracer data
-    full_sim_data_dict = sim_data_orig._strip_traced_fields(
-        include_untraced_data_arrays=True, starting_path=("data",)
+    """Construct adjoint simulations (delegated)."""
+    return _setup_adj_impl(
+        data_fields_vjp=data_fields_vjp,
+        sim_data_orig=sim_data_orig,
+        sim_fields_keys=sim_fields_keys,
+        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
     )
-    for path in full_sim_data_dict.keys():
-        if path in data_fields_vjp:
-            full_sim_data_dict[path] = data_fields_vjp[path]
-        else:
-            full_sim_data_dict[path] *= 0
-
-    # insert the raw VJP data into the .data of the original SimulationData
-    sim_data_vjp = sim_data_orig._insert_traced_fields(field_mapping=full_sim_data_dict)
-
-    # make adjoint simulation from that SimulationData
-    data_vjp_paths = set(data_fields_vjp.keys())
-
-    num_monitors = len(sim_data_orig.simulation.monitors)
-    adjoint_monitors = sim_data_orig.simulation._with_adjoint_monitors(sim_fields_keys).monitors[
-        num_monitors:
-    ]
-
-    sims_adj = sim_data_vjp._make_adjoint_sims(
-        data_vjp_paths=data_vjp_paths,
-        adjoint_monitors=adjoint_monitors,
-    )
-
-    if _INSPECT_ADJOINT_FIELDS and sims_adj:
-        adj_fld_mnt = td.FieldMonitor(
-            center=_INSPECT_ADJOINT_PLANE.center,
-            size=_INSPECT_ADJOINT_PLANE.size,
-            freqs=adjoint_monitors[0].freqs,
-            name="adjoint_fields",
-        )
-
-        import matplotlib.pylab as plt
-
-        import tidy3d.web as web
-
-        sim_data_new = web.run(
-            sims_adj[0].updated_copy(monitors=[adj_fld_mnt]),
-            task_name="adjoint_field_viz",
-            verbose=False,
-        )
-        _, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True, figsize=(10, 4))
-        sim_data_new.plot_field("adjoint_fields", "Ex", "re", ax=ax1)
-        sim_data_new.plot_field("adjoint_fields", "Ey", "re", ax=ax2)
-        sim_data_new.plot_field("adjoint_fields", "Ez", "re", ax=ax3)
-        plt.show()
-
-    if len(sims_adj) > max_num_adjoint_per_fwd:
-        raise AdjointError(
-            f"Number of adjoint simulations ({len(sims_adj)}) exceeds the maximum allowed "
-            f"({max_num_adjoint_per_fwd}) per forward simulation. This typically means that "
-            "there are many frequencies and monitors in the simulation that are being differentiated "
-            "w.r.t. in the objective function. To proceed, please double-check the simulation "
-            "setup, increase the 'max_num_adjoint_per_fwd' parameter in the run function, and re-run."
-        )
-
-    return sims_adj
 
 
 def _compute_eps_array(medium, frequencies):
-    """Compute permittivity array for all frequencies.
+    """Deprecated shim, kept for backward compatibility; use ops_backward._compute_eps_array."""
+    from .backward import _compute_eps_array as __impl
 
-    Parameters
-    ----------
-    medium : Medium
-        Medium to compute permittivity for.
-    frequencies : ArrayLike
-        Array of frequencies at which to evaluate permittivity.
-
-    Returns
-    -------
-    DataArray
-        Permittivity values with frequency dimension.
-    """
-    eps_data = [np.mean(medium.eps_model(f)) for f in frequencies]
-    return DataArray(data=np.array(eps_data), dims=("f",), coords={"f": frequencies})
+    return __impl(medium, frequencies)
 
 
 def _slice_field_data(
     field_data: dict, freqs: np.ndarray, component_indicator: typing.Optional[str] = None
 ) -> dict:
-    """Slice field data dictionary along frequency dimension.
+    """Deprecated shim, kept for backward compatibility; use ops_backward._slice_field_data."""
+    from .backward import _slice_field_data as __impl
 
-    Parameters
-    ----------
-    field_data : dict
-        Dictionary of field components.
-    freqs : np.ndarray
-        Frequencies to select.
-    component_indicator: str
-        Component to filter field data selction on.
-
-    Returns
-    -------
-    dict
-        Sliced field data dictionary.
-    """
-    if component_indicator:
-        return {k: v.sel(f=freqs) for k, v in field_data.items() if component_indicator in k}
-    else:
-        return {k: v.sel(f=freqs) for k, v in field_data.items()}
+    return __impl(field_data, freqs, component_indicator)
 
 
 def postprocess_adj(
@@ -1076,220 +941,13 @@ def postprocess_adj(
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
 ) -> AutogradFieldMap:
-    """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
-
-    # map of index into 'structures' to the list of paths we need vjps for
-    sim_vjp_map = defaultdict(list)
-    for _, structure_index, *structure_path in sim_fields_keys:
-        structure_path = tuple(structure_path)
-        sim_vjp_map[structure_index].append(structure_path)
-
-    # store the derivative values given the forward and adjoint data
-    sim_fields_vjp = {}
-    for structure_index, structure_paths in sim_vjp_map.items():
-        # grab the forward and adjoint data
-        fld_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
-        eps_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="eps")
-        fld_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="fld")
-        eps_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="eps")
-
-        # post normalize the adjoint fields if a single, broadband source
-        fwd_flds_adj_normed = {}
-        for key, val in fld_adj.field_components.items():
-            fwd_flds_adj_normed[key] = val * sim_data_adj.simulation.post_norm
-
-        fld_adj = fld_adj.updated_copy(**fwd_flds_adj_normed)
-
-        # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
-        der_maps = get_derivative_maps(
-            fld_fwd=fld_fwd,
-            eps_fwd=eps_fwd,
-            fld_adj=fld_adj,
-            eps_adj=eps_adj,
-        )
-        E_der_map = der_maps["E"]
-        D_der_map = der_maps["D"]
-        H_der_map = der_maps["H"]
-
-        H_info_exists = H_der_map is not None
-
-        D_fwd = E_to_D(fld_fwd, eps_fwd)
-        D_adj = E_to_D(fld_adj, eps_fwd)
-
-        # compute the derivatives for this structure
-        structure = sim_data_fwd.simulation.structures[structure_index]
-
-        # compute epsilon arrays for all frequencies
-        adjoint_frequencies = np.array(fld_adj.monitor.freqs)
-
-        eps_in = _compute_eps_array(structure.medium, adjoint_frequencies)
-        eps_out = _compute_eps_array(sim_data_orig.simulation.medium, adjoint_frequencies)
-
-        # handle background medium if present
-        if structure.background_medium:
-            eps_background = _compute_eps_array(structure.background_medium, adjoint_frequencies)
-        else:
-            eps_background = None
-
-        # auto permittivity detection for non-box geometries
-        if not isinstance(structure.geometry, td.Box):
-            sim_orig = sim_data_orig.simulation
-            plane_eps = eps_fwd.monitor.geometry
-
-            sim_orig_grid_spec = GridSpec.from_grid(sim_orig.grid)
-
-            # permittivity without this structure
-            structs_no_struct = list(sim_orig.structures)
-            structs_no_struct.pop(structure_index)
-            sim_no_structure = sim_orig.updated_copy(
-                structures=structs_no_struct, monitors=[], sources=[], grid_spec=sim_orig_grid_spec
-            )
-
-            eps_no_structure_data = [
-                sim_no_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
-                for f in adjoint_frequencies
-            ]
-
-            eps_no_structure = xr.concat(eps_no_structure_data, dim="f").assign_coords(
-                f=adjoint_frequencies
-            )
-
-            if structure.medium.is_pec:
-                eps_inf_structure = None
-            else:
-                # permittivity with infinite structure
-                structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
-                sim_inf_structure = sim_orig.updated_copy(
-                    structures=structs_inf_struct,
-                    medium=structure.medium,
-                    monitors=[],
-                    sources=[],
-                    grid_spec=sim_orig_grid_spec,
-                )
-
-                eps_inf_structure_data = [
-                    sim_inf_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
-                    for f in adjoint_frequencies
-                ]
-
-                eps_inf_structure = xr.concat(eps_inf_structure_data, dim="f").assign_coords(
-                    f=adjoint_frequencies
-                )
-        else:
-            eps_no_structure = eps_inf_structure = None
-
-        # compute bounds intersection
-        struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds
-        rmin_sim, rmax_sim = sim_data_orig.simulation.bounds
-        rmin_intersect = tuple([max(a, b) for a, b in zip(rmin_sim, rmin_struct)])
-        rmax_intersect = tuple([min(a, b) for a, b in zip(rmax_sim, rmax_struct)])
-        bounds_intersect = (rmin_intersect, rmax_intersect)
-
-        # get chunk size - if None, process all frequencies as one chunk
-        freq_chunk_size = ADJOINT_FREQ_CHUNK_SIZE
-        n_freqs = len(adjoint_frequencies)
-        if freq_chunk_size is None:
-            freq_chunk_size = n_freqs
-
-        # process in chunks
-        vjp_value_map = {}
-
-        for chunk_start in range(0, n_freqs, freq_chunk_size):
-            chunk_end = min(chunk_start + freq_chunk_size, n_freqs)
-            freq_slice = slice(chunk_start, chunk_end)
-
-            select_adjoint_freqs = adjoint_frequencies[freq_slice]
-
-            # slice field data for current chunk
-            E_der_map_chunk = _slice_field_data(E_der_map.field_components, select_adjoint_freqs)
-            D_der_map_chunk = _slice_field_data(D_der_map.field_components, select_adjoint_freqs)
-            E_fwd_chunk = _slice_field_data(
-                fld_fwd.field_components, select_adjoint_freqs, component_indicator="E"
-            )
-            E_adj_chunk = _slice_field_data(
-                fld_adj.field_components, select_adjoint_freqs, component_indicator="E"
-            )
-            D_fwd_chunk = _slice_field_data(D_fwd.field_components, select_adjoint_freqs)
-            D_adj_chunk = _slice_field_data(D_adj.field_components, select_adjoint_freqs)
-            eps_data_chunk = _slice_field_data(eps_fwd.field_components, select_adjoint_freqs)
-
-            H_der_map_chunk = None
-            H_fwd_chunk = None
-            H_adj_chunk = None
-
-            if H_info_exists:
-                H_der_map_chunk = _slice_field_data(
-                    H_der_map.field_components, select_adjoint_freqs
-                )
-                H_fwd_chunk = _slice_field_data(
-                    fld_fwd.field_components, select_adjoint_freqs, component_indicator="H"
-                )
-                H_adj_chunk = _slice_field_data(
-                    fld_adj.field_components, select_adjoint_freqs, component_indicator="H"
-                )
-
-            # slice epsilon arrays
-            eps_in_chunk = eps_in.sel(f=select_adjoint_freqs)
-            eps_out_chunk = eps_out.sel(f=select_adjoint_freqs)
-            eps_background_chunk = (
-                eps_background.sel(f=select_adjoint_freqs) if eps_background is not None else None
-            )
-            eps_no_structure_chunk = (
-                eps_no_structure.sel(f=select_adjoint_freqs)
-                if eps_no_structure is not None
-                else None
-            )
-            eps_inf_structure_chunk = (
-                eps_inf_structure.sel(f=select_adjoint_freqs)
-                if eps_inf_structure is not None
-                else None
-            )
-
-            # create derivative info with sliced data
-            derivative_info = DerivativeInfo(
-                paths=structure_paths,
-                E_der_map=E_der_map_chunk,
-                D_der_map=D_der_map_chunk,
-                H_der_map=H_der_map_chunk,
-                E_fwd=E_fwd_chunk,
-                E_adj=E_adj_chunk,
-                D_fwd=D_fwd_chunk,
-                D_adj=D_adj_chunk,
-                H_fwd=H_fwd_chunk,
-                H_adj=H_adj_chunk,
-                eps_data=eps_data_chunk,
-                eps_in=eps_in_chunk,
-                eps_out=eps_out_chunk,
-                eps_background=eps_background_chunk,
-                frequencies=select_adjoint_freqs,  # only chunk frequencies
-                eps_no_structure=eps_no_structure_chunk,
-                eps_inf_structure=eps_inf_structure_chunk,
-                bounds=struct_bounds,
-                bounds_intersect=bounds_intersect,
-                simulation_bounds=sim_data_orig.simulation.bounds,
-                is_medium_pec=structure.medium.is_pec,
-            )
-
-            # compute derivatives for chunk
-            vjp_chunk = structure._compute_derivatives(derivative_info)
-
-            # accumulate results
-            for path, value in vjp_chunk.items():
-                if path in vjp_value_map:
-                    val = vjp_value_map[path]
-                    if isinstance(val, (list, tuple)) and isinstance(value, (list, tuple)):
-                        vjp_value_map[path] = type(val)(x + y for x, y in zip(val, value))
-                    else:
-                        vjp_value_map[path] += value
-                else:
-                    vjp_value_map[path] = value
-
-        # store vjps in output map
-        for structure_path, vjp_value in vjp_value_map.items():
-            sim_path = ("structures", structure_index, *list(structure_path))
-            sim_fields_vjp[sim_path] = vjp_value
-
-    return sim_fields_vjp
+    """Postprocess adjoint results into VJPs (delegated)."""
+    return _postprocess_adj_impl(
+        sim_data_adj=sim_data_adj,
+        sim_data_orig=sim_data_orig,
+        sim_data_fwd=sim_data_fwd,
+        sim_fields_keys=sim_fields_keys,
+    )
 
 
 """ Register primitives and VJP makers used by the user-facing functions."""
@@ -1302,86 +960,27 @@ defvjp(_run_async_primitive, _run_async_bwd, argnums=[0])
 
 
 def parse_run_kwargs(**run_kwargs):
-    """Parse the ``run_kwargs`` to extract what should be passed to the ``Job`` initialization."""
-    job_fields = [*list(Job._upload_fields), "solver_version", "pay_type"]
-    job_init_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
-    return job_init_kwargs
+    """Parse run kwargs for low-level engine (delegated)."""
+    return _parse_run_kwargs_impl(**run_kwargs)
 
 
 def _run_tidy3d(
     simulation: td.Simulation, task_name: str, **run_kwargs
 ) -> tuple[td.SimulationData, str]:
-    """Run a simulation without any tracers using regular web.run()."""
-
-    job_init_kwargs = parse_run_kwargs(**run_kwargs)
-    job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
-    td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d()'")
-    if job.simulation_type == "autograd_fwd":
-        verbose = run_kwargs.get("verbose", False)
-        upload_sim_fields_keys(run_kwargs["sim_fields_keys"], task_id=job.task_id, verbose=verbose)
-    path = run_kwargs.get("path", DEFAULT_DATA_PATH)
-    priority = run_kwargs.get("priority")
-    if task_name.endswith("_adjoint"):
-        path_parts = basename(path).split(".")
-        path = join(dirname(path), path_parts[0] + "_adjoint." + ".".join(path_parts[1:]))
-    data = job.run(path, priority=priority)
-    return data, job.task_id
+    """Run a simulation via engine wrapper (delegated)."""
+    return _run_tidy3d_engine(simulation=simulation, task_name=task_name, **run_kwargs)
 
 
 def _run_async_tidy3d(
     simulations: dict[str, td.Simulation], **run_kwargs
 ) -> tuple[BatchData, dict[str, str]]:
-    """Run a batch of simulations using regular web.run()."""
-
-    batch_init_kwargs = parse_run_kwargs(**run_kwargs)
-    path_dir = run_kwargs.pop("path_dir", None)
-    priority = run_kwargs.get("priority")
-    batch = Batch(simulations=simulations, **batch_init_kwargs)
-    td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d()'")
-
-    if batch.simulation_type == "autograd_fwd":
-        verbose = run_kwargs.get("verbose", False)
-        # Need to upload to get the task_ids
-        sims = {
-            task_name: sim.updated_copy(simulation_type="autograd_fwd", deep=False)
-            for task_name, sim in batch.simulations.items()
-        }
-        batch = batch.updated_copy(simulations=sims)
-
-        batch.upload()
-        task_ids = {key: job.task_id for key, job in batch.jobs.items()}
-        for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items():
-            task_id = task_ids[task_name]
-            upload_sim_fields_keys(sim_fields_keys, task_id=task_id, verbose=verbose)
-
-    if path_dir:
-        batch_data = batch.run(path_dir, priority=priority)
-    else:
-        batch_data = batch.run(priority=priority)
-
-    task_ids = {key: job.task_id for key, job in batch.jobs.items()}
-    return batch_data, task_ids
+    """Run a batch of simulations via engine wrapper (delegated)."""
+    return _run_async_tidy3d_engine(simulations=simulations, **run_kwargs)
 
 
 def _run_async_tidy3d_bwd(
     simulations: dict[str, td.Simulation],
     **run_kwargs,
 ) -> dict[str, AutogradFieldMap]:
-    """Run a batch of adjoint simulations using regular web.run()."""
-
-    batch_init_kwargs = parse_run_kwargs(**run_kwargs)
-    _ = run_kwargs.pop("path_dir", None)
-    batch = Batch(simulations=simulations, **batch_init_kwargs)
-    td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d_bwd()'")
-
-    priority = run_kwargs.get("priority")
-    batch.start(priority=priority)
-    batch.monitor()
-
-    vjp_traced_fields_dict = {}
-    for task_name, job in batch.jobs.items():
-        task_id = job.task_id
-        vjp = get_vjp_traced_fields(task_id_adj=task_id, verbose=batch.verbose)
-        vjp_traced_fields_dict[task_name] = vjp
-
-    return vjp_traced_fields_dict
+    """Run a batch of adjoint simulations via engine wrapper (delegated)."""
+    return _run_async_tidy3d_bwd_engine(simulations=simulations, **run_kwargs)
