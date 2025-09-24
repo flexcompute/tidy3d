@@ -6,7 +6,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.constants import HBAR, K_B, M_E_EV
+from tidy3d.constants import HBAR, K_B, M_E_EV, PERCMCUBE
 from tidy3d.exceptions import DataError
 
 um_3_to_cm_3 = 1e12  # conversion factor from micron^(-3) to cm^(-3)
@@ -33,7 +33,7 @@ class ConstantEffectiveDOS(EffectiveDOS):
     """Constant effective density of states model."""
 
     N: pd.PositiveFloat = pd.Field(
-        ..., title="Effective DOS", description="Effective density of states", units="cm^(-3)"
+        ..., title="Effective DOS", description="Effective density of states", units=PERCMCUBE
     )
 
     def calc_eff_dos(self, T: float):
@@ -44,11 +44,13 @@ class IsotropicEffectiveDOS(EffectiveDOS):
     """Effective density of states model that assumes single valley and isotropic effective mass.
     The model assumes the standard equation for the 3D semiconductor with parabolic energy dispersion:
 
+    Notes
+    -----
+
     .. math::
 
-        \\begin{equation}
-             \\mathbf{N_eff} = 2 * (\\frac{m_eff * m_e * k_B T}{2 \\pi \\hbar^2})^(3/2)
-        \\end{equation}
+        \\mathbf{N_eff} = 2 * (\\frac{m_eff * m_e * k_B T}{2 \\pi \\hbar^2})^(3/2)
+
     """
 
     m_eff: pd.PositiveFloat = pd.Field(
@@ -65,11 +67,13 @@ class MultiValleyEffectiveDOS(EffectiveDOS):
     """Effective density of states model that assumes multiple equivalent valleys and anisotropic effective mass.
     The model assumes the standard equation for the 3D semiconductor with parabolic energy dispersion:
 
+    Notes
+    -----
+
     .. math::
 
-        \\begin{equation}
-             \\mathbf{N_eff} = 2 * N_valley * (m_{eff_long} * m_{eff_trans} * m_{eff_trans})^(1/2) *(\\frac{m_e * k_B * T}{2 \\pi * \\hbar^2})^(3/2)
-        \\end{equation}
+       N_{\\text{eff}} = 2 N_{\\text{valley}} \\left( m_{\\text{eff,long}} m_{\\text{eff,trans}}^2 \\right)^{1/2} \\left( \\frac{m_e k_B T}{2 \\pi \\hbar^2} \\right)^{3/2}
+
     """
 
     m_eff_long: pd.PositiveFloat = pd.Field(
@@ -101,11 +105,13 @@ class DualValleyEffectiveDOS(EffectiveDOS):
     """Effective density of states model that assumes combination of light holes and heavy holes with isotropic effective masses.
     The model assumes the standard equation for the 3D semiconductor with parabolic energy dispersion:
 
+    Notes
+    -----
+
     .. math::
 
-        \\begin{equation}
-             \\mathbf{N_eff} = 2 * ( {\\frac{m_{eff_lh} * m_e * k_B * T}{2 \\pi \\hbar^2})^(3/2) + (\\frac{m_{eff_hh} * m_e * k_B * T}{2 \\pi \\hbar^2})^(3/2) )
-        \\end{equation}
+       N_{eff} = 2 \\left( \\frac{m_{\\text{eff, lh}} m_e k_B T}{2 \\pi \\hbar^2} \\right)^{3/2} + 2 \\left( \\frac{m_{\\text{eff, hh}} m_e k_B T}{2 \\pi \\hbar^2} \\right)^{3/2}
+
     """
 
     m_eff_lh: pd.PositiveFloat = pd.Field(

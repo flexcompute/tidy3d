@@ -59,6 +59,28 @@ Bandgap
    tidy3d.SlotboomBandGapNarrowing
 
 
+Effective Density Of States (DOS)
+^^^^^^^^
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+   tidy3d.ConstantEffectiveDOS
+   tidy3d.IsotropicEffectiveDOS
+   tidy3d.MultiValleyEffectiveDOS
+   tidy3d.DualValleyEffectiveDOS
+
+Energy Bandgap
+^^^^^^^^
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+   tidy3d.ConstantEnergyBandGap
+   tidy3d.VarshniEnergyBandGap
+
 Charge Carrier Properties
 ------------------------------------
 

@@ -27,4 +27,5 @@ Analysis
    tidy3d.AbstractSSACAnalysis
    tidy3d.SSACAnalysis
    tidy3d.IsothermalSSACAnalysis
+   tidy3d.SteadyChargeDCAnalysis
    tidy3d.ChargeToleranceSpec
