@@ -14,6 +14,12 @@ from autograd.tracer import new_box
 import tidy3d as td
 from tidy3d import ModeIndexDataArray
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.data.data_array import (
+    CurrentFreqModeDataArray,
+    ImpedanceFreqModeDataArray,
+    VoltageFreqModeDataArray,
+)
+from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
 from tidy3d.log import _get_level_int
 from tidy3d.web import BatchData
 
@@ -1230,6 +1236,60 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
             **field_cmps,
         )
 
+    def make_microwave_mode_solver_data(
+        monitor: td.MicrowaveModeSolverMonitor,
+    ) -> td.MicrowaveModeSolverData:
+        """make a random ModeSolverData from a MicrowaveModeSolverMonitor."""
+        field_cmps = {}
+        grid = simulation.discretize_monitor(monitor)
+        index_coords = {}
+        index_coords["f"] = list(monitor.freqs)
+        index_coords["mode_index"] = np.arange(monitor.mode_spec.num_modes)
+        index_data_shape = (len(index_coords["f"]), len(index_coords["mode_index"]))
+        index_data = ModeIndexDataArray(
+            (1 + 1j) * DATA_GEN_FN(index_data_shape), coords=index_coords
+        )
+        for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
+            coords = get_spatial_coords_dict(simulation, monitor, field_name)
+            coords["f"] = list(monitor.freqs)
+            coords["mode_index"] = index_coords["mode_index"]
+
+            field_cmps[field_name] = make_data(
+                coords=coords, data_array_type=td.ScalarModeFieldDataArray, is_complex=True
+            )
+
+        impedance_specs: tuple = monitor.mode_spec._impedance_specs_as_tuple
+        if len(impedance_specs) == 1:
+            impedance_specs = impedance_specs * monitor.mode_spec.num_modes
+        used_mode_inds = []
+        for mode_index, spec in enumerate(impedance_specs):
+            if spec is not None:
+                used_mode_inds.append(mode_index)
+        index_coords = {}
+        index_coords["f"] = list(monitor.freqs)
+        index_coords["mode_index"] = np.array(used_mode_inds)
+        index_data_shape = (len(index_coords["f"]), len(index_coords["mode_index"]))
+        Z0_data = ImpedanceFreqModeDataArray(
+            (1000 + 1j) * DATA_GEN_FN(index_data_shape), coords=index_coords
+        )
+        V_data = VoltageFreqModeDataArray(
+            (1000 + 1j) * DATA_GEN_FN(index_data_shape), coords=index_coords
+        )
+        I_data = CurrentFreqModeDataArray(
+            (1000 + 1j) * DATA_GEN_FN(index_data_shape), coords=index_coords
+        )
+        tl_data = TransmissionLineDataset(Z0=Z0_data, voltage_coeffs=V_data, current_coeffs=I_data)
+
+        return td.MicrowaveModeSolverData(
+            monitor=monitor,
+            symmetry=(0, 0, 0),
+            symmetry_center=simulation.center,
+            grid_expanded=grid,
+            n_complex=index_data,
+            transmission_line_data=tl_data,
+            **field_cmps,
+        )
+
     def make_eps_data(monitor: td.PermittivityMonitor) -> td.PermittivityData:
         """make a random PermittivityData from a PermittivityMonitor."""
         field_mnt = td.FieldMonitor(**monitor.dict(exclude={"type", "fields"}))
@@ -1289,11 +1349,66 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
                 field_cmps[field_name] = make_data(
                     coords=coords, data_array_type=td.ScalarModeFieldDataArray, is_complex=True
                 )
+
         return td.ModeData(
             monitor=monitor,
             n_complex=n_complex,
             amps=amps,
             grid_expanded=simulation.discretize_monitor(monitor),
+            **field_cmps,
+        )
+
+    def make_microwave_mode_data(monitor: td.MicrowaveModeMonitor) -> td.MicrowaveModeData:
+        """Make a random microwave mode data"""
+        _ = np.arange(monitor.mode_spec.num_modes)
+        index_coords = {}
+        index_coords["f"] = list(monitor.freqs)
+        index_coords["mode_index"] = np.arange(monitor.mode_spec.num_modes)
+        n_complex = make_data(
+            coords=index_coords, data_array_type=td.ModeIndexDataArray, is_complex=True
+        )
+        coords_amps = {"direction": ["+", "-"]}
+        coords_amps.update(index_coords)
+        amps = make_data(coords=coords_amps, data_array_type=td.ModeAmpsDataArray, is_complex=True)
+        field_cmps = {}
+        if monitor.store_fields_direction is not None:
+            for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
+                coords = get_spatial_coords_dict(simulation, monitor, field_name)
+                coords["f"] = list(monitor.freqs)
+                coords["mode_index"] = index_coords["mode_index"]
+                field_cmps[field_name] = make_data(
+                    coords=coords, data_array_type=td.ScalarModeFieldDataArray, is_complex=True
+                )
+
+        impedance_specs: tuple = monitor.mode_spec._impedance_specs_as_tuple
+        if len(impedance_specs) == 1:
+            impedance_specs = impedance_specs * monitor.mode_spec.num_modes
+        used_mode_inds = []
+        for mode_index, spec in enumerate(impedance_specs):
+            if spec is not None:
+                used_mode_inds.append(mode_index)
+
+        index_coords = {}
+        index_coords["f"] = list(monitor.freqs)
+        index_coords["mode_index"] = np.array(used_mode_inds)
+        index_data_shape = (len(index_coords["f"]), len(index_coords["mode_index"]))
+        Z0_data = ImpedanceFreqModeDataArray(
+            (1000 + 1j) * DATA_GEN_FN(index_data_shape), coords=index_coords
+        )
+        V_data = VoltageFreqModeDataArray(
+            (1000 + 1j) * DATA_GEN_FN(index_data_shape), coords=index_coords
+        )
+        I_data = CurrentFreqModeDataArray(
+            (1000 + 1j) * DATA_GEN_FN(index_data_shape), coords=index_coords
+        )
+        tl_data = TransmissionLineDataset(Z0=Z0_data, voltage_coeffs=V_data, current_coeffs=I_data)
+
+        return td.MicrowaveModeData(
+            monitor=monitor,
+            n_complex=n_complex,
+            amps=amps,
+            grid_expanded=simulation.discretize_monitor(monitor),
+            transmission_line_data=tl_data,
             **field_cmps,
         )
 
@@ -1469,7 +1584,9 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         td.FieldMonitor: make_field_data,
         td.FieldTimeMonitor: make_field_time_data,
         td.ModeSolverMonitor: make_mode_solver_data,
+        td.MicrowaveModeSolverMonitor: make_microwave_mode_solver_data,
         td.ModeMonitor: make_mode_data,
+        td.MicrowaveModeMonitor: make_microwave_mode_data,
         td.PermittivityMonitor: make_eps_data,
         td.MediumMonitor: make_medium_data,
         td.DiffractionMonitor: make_diff_data,

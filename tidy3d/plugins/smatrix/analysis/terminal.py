@@ -147,7 +147,7 @@ def port_reference_impedances(modeler_data: TerminalComponentModelerData) -> Por
         if isinstance(port, WavePort):
             # WavePorts have a port impedance calculated from its associated modal field distribution
             # and is frequency dependent.
-            data = port.compute_port_impedance(sim_data).data
+            data = port.get_port_impedance(sim_data, mode_index).data
             port_impedances = port_impedances._with_updated_data(data=data, coords=indexer)
         else:
             # LumpedPorts have a constant reference impedance
@@ -195,9 +195,17 @@ def _compute_port_voltages_currents(
     V_matrix = PortDataArray(values, coords=coords)
     I_matrix = V_matrix.copy(deep=True)
 
+    waveport_cache_results = (None, None, None)
     for network_index in network_indices:
         port, mode_index = modeler.network_dict[network_index]
-        V_out, I_out = compute_port_VI(port, sim_data)
+        if isinstance(port, WavePort):
+            if waveport_cache_results[0] is not port:
+                V_modes, I_modes = compute_port_VI(port, sim_data)
+                waveport_cache_results = (port, V_modes, I_modes)
+            V_out = waveport_cache_results[1].sel(mode_index=mode_index)
+            I_out = waveport_cache_results[2].sel(mode_index=mode_index)
+        else:
+            V_out, I_out = compute_port_VI(port, sim_data)
         indexer = {"port": network_index}
         V_matrix = V_matrix._with_updated_data(data=V_out.data, coords=indexer)
         I_matrix = I_matrix._with_updated_data(data=I_out.data, coords=indexer)

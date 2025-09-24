@@ -5,7 +5,6 @@ from typing import Optional, Union
 import numpy as np
 
 import tidy3d as td
-import tidy3d.plugins.microwave as mw
 from tidy3d.plugins.smatrix import (
     CoaxialLumpedPort,
     LumpedPort,
@@ -286,24 +285,30 @@ def make_coaxial_component_modeler(
             voltage_center[0] += mean_radius
             voltage_size = [Router - Rinner, 0, 0]
 
-            voltage_integral = None
+            voltage_spec = None
             if use_voltage:
-                voltage_integral = td.AxisAlignedVoltageIntegral(
+                voltage_spec = td.AxisAlignedVoltageIntegralSpec(
                     center=voltage_center,
                     size=voltage_size,
                     extrapolate_to_endpoints=True,
                     snap_path_to_grid=True,
                     sign="+",
                 )
-            current_integral = None
+            current_spec = None
             if use_current:
-                current_integral = td.Custom2DCurrentIntegral.from_circular_path(
+                current_spec = td.Custom2DCurrentIntegralSpec.from_circular_path(
                     center=center,
                     radius=mean_radius,
                     num_points=41,
                     normal_axis=2,
                     clockwise=direction != "+",
                 )
+            mw_mode_spec = td.MicrowaveModeSpec(
+                num_modes=1,
+                impedance_specs=(
+                    td.CustomImpedanceSpec(voltage_spec=voltage_spec, current_spec=current_spec),
+                ),
+            )
             port_cells = None
             if port_refinement:
                 port_cells = 5
@@ -312,10 +317,7 @@ def make_coaxial_component_modeler(
                 size=[2 * Router, 2 * Router, 0],
                 direction=direction,
                 name="wave" + name,
-                mode_spec=td.ModeSpec(num_modes=1),
-                mode_index=0,
-                voltage_integral=voltage_integral,
-                current_integral=current_integral,
+                mode_spec=mw_mode_spec,
                 num_grid_cells=port_cells,
             )
         return port
@@ -416,19 +418,25 @@ def make_differential_stripline_modeler():
         z=td.Boundary.pml(),
     )
 
-    # Define port specification
-    wave_port_mode_spec = td.ModeSpec(num_modes=1, target_neff=np.sqrt(eps))
-
     # Define current and voltage integrals
-    current_integral = mw.AxisAlignedCurrentIntegral(
+    current_spec = td.AxisAlignedCurrentIntegralSpec(
         center=((se + w) / 2, 0, -waveport_z / 2), size=(2 * w, 3 * t, 0), sign="+"
     )
-    voltage_integral = mw.AxisAlignedVoltageIntegral(
+    voltage_spec = td.AxisAlignedVoltageIntegralSpec(
         center=(0, 0, -waveport_z / 2),
         size=(se, 0, 0),
         extrapolate_to_endpoints=True,
         snap_path_to_grid=True,
         sign="+",
+    )
+
+    # Define port specification
+    wave_port_mode_spec = td.MicrowaveModeSpec(
+        num_modes=1,
+        target_neff=np.sqrt(eps),
+        impedance_specs=td.CustomImpedanceSpec(
+            voltage_spec=voltage_spec, current_spec=current_spec
+        ),
     )
 
     # Define wave ports
@@ -438,18 +446,14 @@ def make_differential_stripline_modeler():
         mode_spec=wave_port_mode_spec,
         direction="+",
         name="WP1",
-        mode_index=0,
-        current_integral=current_integral,
-        voltage_integral=voltage_integral,
     )
     WP2 = WP1.updated_copy(
         name="WP2",
         center=(0, 0, waveport_z / 2),
         direction="-",
-        current_integral=current_integral.updated_copy(
-            center=((se + w) / 2, 0, waveport_z / 2), sign="-"
+        mode_spec=wave_port_mode_spec.updated_copy(
+            path="impedance_specs", current_spec=current_spec.updated_copy(sign="-")
         ),
-        voltage_integral=voltage_integral.updated_copy(center=(0, 0, waveport_z / 2)),
     )
 
     # define fimulation

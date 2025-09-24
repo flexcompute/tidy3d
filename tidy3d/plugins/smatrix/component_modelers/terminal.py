@@ -37,7 +37,7 @@ from tidy3d.plugins.smatrix.data.data_array import PortDataArray
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
-from tidy3d.plugins.smatrix.ports.types import TerminalPortType
+from tidy3d.plugins.smatrix.ports.types import LumpedPortType, TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import NetworkElement, NetworkIndex, SParamDef
 
@@ -321,19 +321,22 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         NetworkIndex
             A unique string that is used to identify the row/column of the scattering matrix.
         """
-        # Currently the mode_index is ignored, but will be supported once multimodal WavePorts are enabled.
-        return f"{port.name}"
+        if isinstance(port, LumpedPortType):
+            return f"{port.name}"
+        return f"{port.name}_{mode_index}"
 
     @cached_property
     def network_dict(self) -> dict[NetworkIndex, tuple[TerminalPortType, int]]:
         """Dictionary associating each unique ``NetworkIndex`` to a port and mode index."""
         network_dict = {}
         for port in self.ports:
-            mode_index = None
             if isinstance(port, WavePort):
-                mode_index = port.mode_index
-            key = TerminalComponentModeler.network_index(port, mode_index)
-            network_dict[key] = (port, mode_index)
+                for mode_index in port._mode_indices:
+                    key = self.network_index(port, mode_index)
+                    network_dict[key] = (port, mode_index)
+            else:
+                key = self.network_index(port, None)
+                network_dict[key] = (port, None)
         return network_dict
 
     @staticmethod
@@ -355,7 +358,8 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         matrix_indices = []
         for port in ports:
             if isinstance(port, WavePort):
-                matrix_indices.append(TerminalComponentModeler.network_index(port, port.mode_index))
+                for mode_index in port._mode_indices:
+                    matrix_indices.append(TerminalComponentModeler.network_index(port, mode_index))
             else:
                 matrix_indices.append(TerminalComponentModeler.network_index(port))
         return tuple(matrix_indices)
@@ -697,7 +701,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         if isinstance(port, WavePort):
             # Source is placed just before the field monitor of the port
             mode_src_pos = port.center[port.injection_axis] + self._shift_value_signed(port)
-            port_source = port.to_source(self._source_time, snap_center=mode_src_pos)
+            port_source = port.to_source(
+                self._source_time, snap_center=mode_src_pos, mode_index=mode_index
+            )
         else:
             port_center_on_axis = port.center[port.injection_axis]
             new_port_center = snap_coordinate_to_grid(

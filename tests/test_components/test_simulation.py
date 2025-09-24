@@ -3787,8 +3787,8 @@ def test_structures_per_medium(monkeypatch):
         )
 
 
-def test_validate_microwave_mode_spec_generation():
-    """Test that auto generation of path specs is correctly validated for currently unsupported structures."""
+def test_validate_microwave_mode_spec():
+    """Test that auto generation ande user supplied path specs are correctly validated."""
     freq0 = 10e9
     mm = 1e3
     run_time_spec = td.RunTimeSpec(quality_factor=3.0)
@@ -3840,3 +3840,24 @@ def test_validate_microwave_mode_spec_generation():
     # check that validation error is caught
     with pytest.raises(SetupError):
         sim._validate_microwave_mode_specs()
+
+    # Custom current spec is too large for mode plane
+    custom_spec = td.CustomImpedanceSpec(
+        current_spec=td.Custom2DCurrentIntegralSpec.from_circular_path(
+            center=(0, 0, 0), radius=10 * mm, num_points=21, normal_axis=0, clockwise=True
+        )
+    )
+    mode_spec = td.MicrowaveModeSpec(
+        num_modes=2,
+        target_neff=1.8,
+        impedance_specs=(custom_spec, td.AutoImpedanceSpec()),
+    )
+
+    mode_mon = mode_mon.updated_copy(
+        path="mode_spec/", impedance_specs=(custom_spec, td.AutoImpedanceSpec())
+    )
+    # check that validation error is in the MicrowaveModeSpec
+    with pytest.raises(SetupError):
+        sim = sim.updated_copy(
+            monitors=[mode_mon],
+        )

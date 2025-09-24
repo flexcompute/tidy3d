@@ -22,7 +22,7 @@ from tidy3d.plugins.smatrix.data.data_array import (
     PortNameDataArray,
     TerminalPortDataArray,
 )
-from tidy3d.plugins.smatrix.ports.types import LumpedPortType, TerminalPortType
+from tidy3d.plugins.smatrix.ports.types import LumpedPortType
 from tidy3d.plugins.smatrix.types import NetworkIndex, SParamDef
 from tidy3d.plugins.smatrix.utils import (
     ab_to_s,
@@ -179,9 +179,8 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
                     f"Please, make sure the port name is from the following list {port_names}"
                 )
 
-            # get index of a shifted port in port_names list
-            idx = port_names.index(shift_name)
-            port = ports[idx]
+            # get the port by the name
+            port = self.modeler.get_port_by_name(shift_name)
 
             # if de-embedding is requested for lumped port
             if isinstance(port, LumpedPortType):
@@ -192,14 +191,16 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
                 # alternatively we can send a warning and set `shifts_vector[index]` to 0.
                 # shifts_vector[index] = 0.0
             else:
-                shifts_vec[idx] = port_shifts.sel(port=shift_name).values
-                directions_vec[idx] = -1 if port.direction == "-" else 1
-                port_idxs.append(idx)
-
                 # Collect corresponding mode_data
                 mode_data = mode_map[port._mode_monitor_name]
-                n_complex = mode_data.n_complex.sel(mode_index=port.mode_index)
-                n_complex_new.append(np.squeeze(n_complex.data))
+                for mode_index in port._mode_indices:
+                    network_index = self.modeler.network_index(port, mode_index)
+                    idx = smatrix.data.indexes["port_in"].get_loc(network_index)
+                    shifts_vec[idx] = port_shifts.sel(port=shift_name).values
+                    directions_vec[idx] = -1 if port.direction == "-" else 1
+                    port_idxs.append(idx)
+                    n_complex = mode_data.n_complex.sel(mode_index=mode_index)
+                    n_complex_new.append(np.squeeze(n_complex.data))
 
         # flatten port shift vector
         shifts_vec = np.ravel(shifts_vec)
@@ -236,7 +237,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
 
     def _monitor_data_at_port_amplitude(
         self,
-        port: TerminalPortType,
+        port_index: NetworkIndex,
         monitor_name: str,
         a_port: Union[FreqDataArray, complex],
         a_raw_port: FreqDataArray,
@@ -249,7 +250,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
 
         Parameters
         ----------
-        port : TerminalPortType
+        port_index : NetworkIndex
             The port at which to normalize the amplitude.
         monitor_name : str
             Name of the monitor to normalize.
@@ -265,7 +266,8 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         :class:`.MonitorData`
             Normalized monitor data scaled to the desired port amplitude.
         """
-        sim_data_port = self.data[self.modeler.get_task_name(port)]
+        port, mode_index = self.modeler.network_dict[port_index]
+        sim_data_port = self.data[self.modeler.get_task_name(port, mode_index)]
         monitor_data = sim_data_port[monitor_name]
         if not isinstance(a_port, FreqDataArray):
             freqs = list(monitor_data.monitor.freqs)

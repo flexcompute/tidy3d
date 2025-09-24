@@ -51,7 +51,9 @@ def run_component_modeler(
     )
     modeler_data = TerminalComponentModelerData(modeler=modeler, data=port_data)
     monkeypatch.setattr(
-        td.plugins.smatrix.utils, "port_array_inv", lambda matrix: np.eye(len(modeler.ports))
+        td.plugins.smatrix.utils,
+        "port_array_inv",
+        lambda matrix: np.eye(len(modeler.matrix_indices_monitor)),
     )
     monkeypatch.setattr(
         td.plugins.smatrix.utils,
@@ -770,10 +772,10 @@ def test_run_coaxial_component_modeler_with_wave_ports(
 
     shape_one_port = (len(modeler.freqs), len(modeler.ports))
     shape_both_ports = (len(modeler.freqs),)
-    for port_in in modeler.ports:
-        for port_out in modeler.ports:
-            coords_in = {"port_in": port_in.name}
-            coords_out = {"port_out": port_out.name}
+    for port_in in modeler.network_dict.keys():
+        for port_out in modeler.network_dict.keys():
+            coords_in = {"port_in": port_in}
+            coords_out = {"port_out": port_out}
 
             assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
                 "source index not present in S matrix"
@@ -783,16 +785,16 @@ def test_run_coaxial_component_modeler_with_wave_ports(
             ), "monitor index not present in S matrix"
 
     # Another run with more modes in the mode spec
-    mode_spec = td.ModeSpec(num_modes=2)
-    modeler = modeler.updated_copy(path="ports/0/", mode_spec=mode_spec)
+    mode_spec = td.MicrowaveModeSpec(num_modes=2)
+    modeler: TerminalComponentModeler = modeler.updated_copy(path="ports/0/", mode_spec=mode_spec)
     s_matrix = get_terminal_port_data_array(monkeypatch, modeler)
 
-    shape_one_port = (len(modeler.freqs), len(modeler.ports))
+    shape_one_port = (len(modeler.freqs), len(modeler.matrix_indices_monitor))
     shape_both_ports = (len(modeler.freqs),)
-    for port_in in modeler.ports:
-        for port_out in modeler.ports:
-            coords_in = {"port_in": port_in.name}
-            coords_out = {"port_out": port_out.name}
+    for port_in in modeler.network_dict.keys():
+        for port_out in modeler.network_dict.keys():
+            coords_in = {"port_in": port_in}
+            coords_out = {"port_out": port_out}
 
             assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
                 "source index not present in S matrix"
@@ -814,10 +816,10 @@ def test_run_mixed_component_modeler_with_wave_ports(monkeypatch, tmp_path):
 
     shape_one_port = (len(modeler.freqs), len(modeler.ports))
     shape_both_ports = (len(modeler.freqs),)
-    for port_in in modeler.ports:
-        for port_out in modeler.ports:
-            coords_in = {"port_in": port_in.name}
-            coords_out = {"port_out": port_out.name}
+    for port_in in modeler.network_dict.keys():
+        for port_out in modeler.network_dict.keys():
+            coords_in = {"port_in": port_in}
+            coords_out = {"port_out": port_out}
 
             assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
                 "source index not present in S matrix"
@@ -832,7 +834,7 @@ def test_wave_port_path_integral_validation():
     size_port = [2, 2, 0]
     center_port = [0, 0, -10]
 
-    voltage_path = td.AxisAlignedVoltageIntegral(
+    voltage_path = td.AxisAlignedVoltageIntegralSpec(
         center=(0.5, 0, -10),
         size=(1.0, 0, 0),
         extrapolate_to_endpoints=True,
@@ -840,83 +842,115 @@ def test_wave_port_path_integral_validation():
         sign="+",
     )
 
-    custom_current_path = td.Custom2DCurrentIntegral.from_circular_path(
+    custom_current_path = td.Custom2DCurrentIntegralSpec.from_circular_path(
         center=center_port, radius=0.5, num_points=21, normal_axis=2, clockwise=False
     )
 
-    mode_spec = td.ModeSpec(num_modes=1, target_neff=1.8)
-
-    _ = WavePort(
-        center=center_port,
-        size=size_port,
-        name="wave_port_1",
-        mode_spec=mode_spec,
-        direction="+",
-        voltage_integral=voltage_path,
-        current_integral=None,
+    mw_mode_spec = td.MicrowaveModeSpec(
+        num_modes=1,
+        target_neff=1.8,
+        impedance_specs=(td.CustomImpedanceSpec(voltage_spec=voltage_path, current_spec=None),),
     )
 
     _ = WavePort(
         center=center_port,
         size=size_port,
         name="wave_port_1",
-        mode_spec=mode_spec,
+        mode_spec=mw_mode_spec,
         direction="+",
-        voltage_integral=None,
-        current_integral=custom_current_path,
+    )
+
+    mw_mode_spec = td.MicrowaveModeSpec(
+        num_modes=1,
+        target_neff=1.8,
+        impedance_specs=(
+            td.CustomImpedanceSpec(voltage_spec=None, current_spec=custom_current_path),
+        ),
+    )
+
+    _ = WavePort(
+        center=center_port,
+        size=size_port,
+        name="wave_port_1",
+        mode_spec=mw_mode_spec,
+        direction="+",
     )
 
     with pytest.raises(pd.ValidationError):
+        mw_mode_spec = td.MicrowaveModeSpec(
+            num_modes=1,
+            target_neff=1.8,
+            impedance_specs=(td.CustomImpedanceSpec(voltage_spec=None, current_spec=None),),
+        )
         _ = WavePort(
             center=center_port,
             size=size_port,
             name="wave_port_1",
-            mode_spec=mode_spec,
+            mode_spec=mw_mode_spec,
             direction="+",
-            voltage_integral=None,
-            current_integral=None,
         )
 
     voltage_path = voltage_path.updated_copy(size=(4, 0, 0))
     with pytest.raises(pd.ValidationError):
+        mode_spec = td.MicrowaveModeSpec(
+            num_modes=1,
+            target_neff=1.8,
+            impedance_specs=(td.CustomImpedanceSpec(voltage_spec=voltage_path, current_spec=None),),
+        )
         _ = WavePort(
             center=center_port,
             size=size_port,
             name="wave_port_1",
             mode_spec=mode_spec,
             direction="+",
-            voltage_integral=voltage_path,
-            current_integral=None,
         )
 
-    custom_current_path = td.Custom2DCurrentIntegral.from_circular_path(
+    custom_current_path = td.Custom2DCurrentIntegralSpec.from_circular_path(
         center=center_port, radius=3, num_points=21, normal_axis=2, clockwise=False
     )
+
     with pytest.raises(pd.ValidationError):
+        mode_spec = td.MicrowaveModeSpec(
+            num_modes=1,
+            target_neff=1.8,
+            impedance_specs=(
+                td.CustomImpedanceSpec(voltage_spec=None, current_spec=custom_current_path),
+            ),
+        )
         _ = WavePort(
             center=center_port,
             size=size_port,
             name="wave_port_1",
             mode_spec=mode_spec,
             direction="+",
-            voltage_integral=None,
-            current_integral=custom_current_path,
         )
 
     # Test integral path only slightly larger than port bounds
+    voltage_path_large = td.AxisAlignedVoltageIntegralSpec(
+        size=(0, 0, 70.000000298023424),
+        center=(0, 10000, 70.000000298023424),
+        extrapolate_to_endpoints=True,
+        snap_path_to_grid=True,
+        sign="+",
+    )
+    mw_mode_spec = td.MicrowaveModeSpec(
+        num_modes=1,
+        target_neff=1.8,
+        impedance_specs=(
+            td.CustomImpedanceSpec(voltage_spec=voltage_path_large, current_spec=None),
+        ),
+    )
     wave_port = WavePort(
         center=(0, 10000, 115.00000022351743),
         size=(500, 0, 160.00000000000003),
         name="wave_port_1",
-        mode_spec=mode_spec,
+        mode_spec=mw_mode_spec,
         direction="+",
-        voltage_integral=voltage_path.updated_copy(
-            size=(0, 0, 70.000000298023424), center=(0, 10000, 70.000000298023424)
-        ),
-        current_integral=None,
     )
     # Make sure validation would have failed if a strict comparison was used
-    assert wave_port.bounds[0][2] > wave_port.voltage_integral.bounds[0][2]
+    # Note: Need to access the voltage spec from the mode spec now
+    voltage_spec = wave_port.mode_spec.impedance_specs[0].voltage_spec
+    assert wave_port.bounds[0][2] > voltage_spec.bounds[0][2]
 
 
 def test_wave_port_grid_validation(tmp_path):
@@ -924,7 +958,7 @@ def test_wave_port_grid_validation(tmp_path):
     size_port = [2, 2, 0]
     center_port = [0, 0, -10]
 
-    voltage_path = td.AxisAlignedVoltageIntegral(
+    voltage_path = td.AxisAlignedVoltageIntegralSpec(
         center=(0.5, 0, -10),
         size=(1.0, 0, 0),
         extrapolate_to_endpoints=True,
@@ -932,23 +966,27 @@ def test_wave_port_grid_validation(tmp_path):
         sign="+",
     )
 
-    current_path = td.AxisAlignedCurrentIntegral(
+    current_path = td.AxisAlignedCurrentIntegralSpec(
         center=(0.5, 0, -10),
         size=(0.25, 0.5, 0),
         snap_contour_to_grid=True,
         sign="+",
     )
 
-    mode_spec = td.ModeSpec(num_modes=1, target_neff=1.8)
+    mw_mode_spec = td.MicrowaveModeSpec(
+        num_modes=1,
+        target_neff=1.8,
+        impedance_specs=(
+            td.CustomImpedanceSpec(voltage_spec=voltage_path, current_spec=current_path),
+        ),
+    )
 
     _ = WavePort(
         center=center_port,
         size=size_port,
         name="wave_port_1",
-        mode_spec=mode_spec,
+        mode_spec=mw_mode_spec,
         direction="+",
-        voltage_integral=voltage_path,
-        current_integral=current_path,
         num_grid_cells=None,
     )
 
@@ -957,10 +995,8 @@ def test_wave_port_grid_validation(tmp_path):
             center=center_port,
             size=size_port,
             name="wave_port_1",
-            mode_spec=mode_spec,
+            mode_spec=mw_mode_spec,
             direction="+",
-            voltage_integral=voltage_path,
-            current_integral=current_path,
             num_grid_cells=2,
         )
 
@@ -992,19 +1028,21 @@ def test_port_source_snapped_to_PML(tmp_path):
     """
     modeler = make_component_modeler(planar_pec=True)
     port_pos = 5e4
-    voltage_path = td.AxisAlignedVoltageIntegral(
+    voltage_path = td.AxisAlignedVoltageIntegralSpec(
         center=(port_pos, 0, 0),
         size=(0, 1e3, 0),
         sign="+",
+    )
+    mw_mode_spec = td.MicrowaveModeSpec(
+        num_modes=1,
+        impedance_specs=(td.CustomImpedanceSpec(voltage_spec=voltage_path, current_spec=None),),
     )
     port = WavePort(
         center=(port_pos, 0, 0),
         size=(0, 1e3, 1e3),
         name="wave_port",
-        mode_spec=td.ModeSpec(num_modes=1),
+        mode_spec=mw_mode_spec,
         direction="-",
-        voltage_integral=voltage_path,
-        current_integral=None,
     )
     modeler = modeler.updated_copy(ports=[port])
 
@@ -1019,20 +1057,23 @@ def test_port_source_snapped_to_PML(tmp_path):
 
     # also validate the negative side
     voltage_path = voltage_path.updated_copy(center=(-port_pos, 0, 0))
-    port = port.updated_copy(direction="+", center=(-port_pos, 0, 0), voltage_integral=voltage_path)
+    mw_mode_spec = td.MicrowaveModeSpec(
+        num_modes=1,
+        impedance_specs=(td.CustomImpedanceSpec(voltage_spec=voltage_path, current_spec=None),),
+    )
+    port = WavePort(
+        center=(-port_pos, 0, 0),
+        size=(0, 1e3, 1e3),
+        name="wave_port",
+        mode_spec=mw_mode_spec,
+        direction="+",
+    )
     modeler = modeler.updated_copy(ports=[port])
     with pytest.raises(SetupError):
         modeler.sim_dict
 
     with pytest.raises(SetupError):
         modeler._shift_value_signed(port)
-
-
-def test_wave_port_validate_current_integral(tmp_path):
-    """Checks that the current integral direction validator runs correctly."""
-    modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort))
-    with pytest.raises(pd.ValidationError):
-        _ = modeler.updated_copy(direction="-", path="ports/0/")
 
 
 def test_port_impedance_check():
@@ -1064,10 +1105,11 @@ def test_antenna_helpers(monkeypatch, tmp_path):
         theta=theta,
         phi=phi,
     )
-    modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+    modeler: TerminalComponentModeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
 
     # Run simulation to get data
     modeler_data = run_component_modeler(monkeypatch, modeler)
+    port_0_index = modeler.network_index(modeler.ports[0])
     sim_data = modeler_data.data[modeler_data.modeler.get_task_name(modeler.ports[0])]
     rad_mon_data = sim_data[radiation_monitor.name]
 
@@ -1081,10 +1123,10 @@ def test_antenna_helpers(monkeypatch, tmp_path):
     a_array = FreqDataArray(np.ones(len(modeler.freqs)), {"f": modeler.freqs})
     a_array_raw = 2.0 * a_array
     normalized_data_array = modeler_data._monitor_data_at_port_amplitude(
-        modeler.ports[0], radiation_monitor.name, a_array, a_array_raw
+        port_0_index, radiation_monitor.name, a_array, a_array_raw
     )
     normalized_data_const = modeler_data._monitor_data_at_port_amplitude(
-        modeler.ports[0], radiation_monitor.name, 1.0, a_array_raw
+        port_0_index, radiation_monitor.name, 1.0, a_array_raw
     )
     assert isinstance(normalized_data_array, td.DirectivityData)
     assert isinstance(normalized_data_const, td.DirectivityData)
@@ -1136,7 +1178,7 @@ def test_antenna_parameters(monkeypatch, port_type):
     modeler_data = run_component_modeler(monkeypatch, modeler)
 
     # Make sure network index works for single mode / multimode cases
-    port_1_network_index = modeler.network_index(modeler.ports[0])
+    port_1_network_index = modeler.network_index(modeler.ports[0], 0)
     port_2_network_index = modeler.network_index(modeler.ports[1], 0)
     _ = modeler_data.get_antenna_metrics_data({port_1_network_index: 1.0})
     _ = modeler_data.get_antenna_metrics_data({port_2_network_index: None})
@@ -1235,7 +1277,7 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
         port_types=(CoaxialLumpedPort, CoaxialLumpedPort), grid_spec=grid_spec
     )
     port0_idx = modeler.network_index(modeler.ports[0])
-    port1_idx = modeler.network_index(modeler.ports[1])
+    port1_idx = modeler.network_index(modeler.ports[1], 0)
     modeler_run1 = modeler.updated_copy(run_only=(port0_idx,))
 
     # Make sure the smatrix and impedance calculations work for reduced simulations
@@ -1398,7 +1440,7 @@ def test_wave_port_to_absorber(tmp_path):
     absorber = sim.internal_absorbers[0]
 
     assert absorber.boundary_spec.mode_spec == modeler.ports[0].mode_spec
-    assert absorber.boundary_spec.mode_index == modeler.ports[0].mode_index
+    assert absorber.boundary_spec.mode_index == 0
     assert absorber.boundary_spec.plane == modeler.ports[0].geometry
     assert absorber.boundary_spec.freq_spec == BroadbandModeABCSpec(
         frequency_range=(np.min(modeler.freqs), np.max(modeler.freqs))
@@ -1571,6 +1613,20 @@ def test_S_parameter_deembedding(monkeypatch, tmp_path):
     assert not np.allclose(S_dmb.data.values, s_matrix.data.values)
     assert np.allclose(S_dmb.data.values, S_dmb_shortcut.data.values)
 
+    # Test multimodal version of de-embedding
+    old_custom_spec = modeler.ports[0].mode_spec.impedance_specs[0]
+    new_mode_spec = modeler.ports[0].mode_spec.updated_copy(
+        num_modes=2, impedance_specs=(old_custom_spec, old_custom_spec)
+    )
+    modeler = modeler.updated_copy(path="ports/0/", mode_spec=new_mode_spec)
+    modeler_data = run_component_modeler(monkeypatch, modeler)
+    s_matrix = modeler_data.smatrix()
+    # reuse previous port shifts
+    S_dmb = modeler_data.change_port_reference_planes(smatrix=s_matrix, port_shifts=port_shifts)
+    S_dmb_shortcut = modeler_data.smatrix_deembedded(port_shifts=port_shifts)
+    assert not np.allclose(S_dmb.data.values, s_matrix.data.values)
+    assert np.allclose(S_dmb.data.values, S_dmb_shortcut.data.values)
+
     # test if `.smatrix_deembedded()` raises a `ValueError` when at least one port to be shifted is not defined in TCM
     port_shifts_wrong = PortNameDataArray(data=[10, -10], coords={"port": ["wave_1", "LP_wave_2"]})
 
@@ -1674,10 +1730,8 @@ def test_wave_port_extrusion_coaxial():
     # move wave port plane so that is does not intersect any structures
     port_1_center_new = (638.4, 0.0, -51000)
 
-    # update voltage integral
-    voltage_int = port_1.voltage_integral.updated_copy(center=port_1_center_new)
     # update WavePort
-    port_1 = port_1.updated_copy(center=port_1_center_new, voltage_integral=voltage_int)
+    port_1 = port_1.updated_copy(center=port_1_center_new)
 
     # update component modeler
     tcm = tcm.updated_copy(ports=[port_1, port_2])
@@ -1758,14 +1812,8 @@ def test_wave_port_extrusion_differential_stripline():
     port_1 = port_1.updated_copy(extrude_structures=True)
     port_2 = port_2.updated_copy(extrude_structures=True)
 
-    # update current and voltage integrals
-    current_int = port_1.current_integral.updated_copy(center=port_1_center_new)
-    voltage_int = port_1.voltage_integral.updated_copy(center=port_1_center_new)
-
     # update WavePort
-    port_1 = port_1.updated_copy(
-        center=port_1_center_new, current_integral=current_int, voltage_integral=voltage_int
-    )
+    port_1 = port_1.updated_copy(center=port_1_center_new)
 
     # update component modeler
     tcm = tcm.updated_copy(ports=[port_1, port_2])
@@ -1842,8 +1890,8 @@ def test_validate_run_only_with_wave_ports():
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
     modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort), grid_spec=grid_spec)
 
-    port0_idx = modeler.network_index(modeler.ports[0])
-    port1_idx = modeler.network_index(modeler.ports[1])
+    port0_idx = modeler.network_index(modeler.ports[0], 0)
+    port1_idx = modeler.network_index(modeler.ports[1], 0)
 
     # Valid case
     modeler_updated = modeler.updated_copy(run_only=(port0_idx,))
@@ -1973,3 +2021,141 @@ def test_radiation_monitors_auto():
     assert isinstance(default_origin_monitor, td.DirectivityMonitor)
     # Default should be (0, 0, 0) as defined in the field
     assert default_origin_monitor.custom_origin == (0, 0, 0)
+
+
+def test_wave_port_mode_index_validation():
+    """Test that WavePort.mode_index is validated correctly."""
+    # Create mode_spec with 3 modes - don't specify impedance_specs to use defaults
+    mode_spec = td.MicrowaveModeSpec(num_modes=3)
+
+    # Valid: single mode
+    port = WavePort(
+        center=(0, 0, -10),
+        size=(0, 2, 2),
+        name="port1",
+        mode_spec=mode_spec,
+        direction="+",
+        mode_index=0,
+    )
+    assert port._mode_indices == (0,)
+
+    # Invalid: index greater than number of modes
+    with pytest.raises(pd.ValidationError):
+        WavePort(
+            center=(0, 0, -10),
+            size=(0, 2, 2),
+            name="port_neg",
+            mode_spec=mode_spec,
+            direction="+",
+            mode_index=4,
+        )
+
+    # Valid: multiple modes as tuple
+    port = WavePort(
+        center=(0, 0, -10),
+        size=(0, 2, 2),
+        name="port2",
+        mode_spec=mode_spec,
+        direction="+",
+        mode_selection=[0, 2],
+    )
+    assert port._mode_indices == (0, 2)
+
+    # Valid: None (use all modes)
+    port = WavePort(
+        center=(0, 0, -10),
+        size=(0, 2, 2),
+        name="port3",
+        mode_spec=mode_spec,
+        direction="+",
+        mode_selection=None,
+    )
+    assert port._mode_indices == (0, 1, 2)
+
+    # Invalid: negative index
+    with pytest.raises(pd.ValidationError, match="non-negative"):
+        WavePort(
+            center=(0, 0, -10),
+            size=(0, 2, 2),
+            name="port_neg",
+            mode_spec=mode_spec,
+            direction="+",
+            mode_selection=(-1,),
+        )
+
+    # Invalid: index >= num_modes
+    with pytest.raises(pd.ValidationError, match="mode_spec.num_modes"):
+        WavePort(
+            center=(0, 0, -10),
+            size=(0, 2, 2),
+            name="port_large",
+            mode_spec=mode_spec,
+            direction="+",
+            mode_selection=(3,),  # num_modes is 3, so valid range is 0-2
+        )
+
+    # Invalid: duplicate indices
+    with pytest.raises(pd.ValidationError, match="duplicate"):
+        WavePort(
+            center=(0, 0, -10),
+            size=(0, 2, 2),
+            name="port_dup",
+            mode_spec=mode_spec,
+            direction="+",
+            mode_selection=(0, 1, 0),
+        )
+
+
+def test_wave_port_mode_index_with_modeler():
+    """Test that WavePort.mode_index works correctly with TerminalComponentModeler."""
+    z_grid = td.UniformGrid(dl=1 * 1e3)
+    xy_grid = td.UniformGrid(dl=0.1 * 1e3)
+    grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
+
+    # Create mode_spec with 4 modes - use defaults
+    mode_spec = td.MicrowaveModeSpec(num_modes=4)
+
+    # Create port with mode_index selecting subset
+    port = WavePort(
+        center=(0, 0, -10),
+        size=(0, 2, 2),
+        name="port1",
+        mode_spec=mode_spec,
+        direction="+",
+        mode_selection=(0, 2),  # Only modes 0 and 2
+    )
+
+    # Verify the port has only the selected modes
+    assert port._mode_indices == (0, 2)
+
+    # Create a simple simulation to test with
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        grid_spec=grid_spec,
+        run_time=1e-12,
+        structures=[],
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
+    )
+
+    # Create a modeler with this port
+    lumped_port = LumpedPort(
+        center=(0, 0, 10),
+        size=(1, 1, 0),
+        voltage_axis=0,  # x-direction since port is in x-y plane
+        name="lumped_port",
+    )
+
+    modeler = TerminalComponentModeler(
+        simulation=sim,
+        ports=[port, lumped_port],
+        freqs=[2e9, 3e9],
+        element_mappings=(),
+    )
+
+    # Verify network_dict only has entries for the selected modes
+    network_indices = set(modeler.network_dict.keys())
+    assert "port1_0" in network_indices
+    assert "port1_2" in network_indices
+    assert "port1_1" not in network_indices
+    assert "port1_3" not in network_indices
+    assert "lumped_port" in network_indices

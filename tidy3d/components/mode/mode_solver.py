@@ -266,6 +266,8 @@ class ModeSolver(Tidy3dBaseModel):
         self._warn_thick_pml(simulation=self.simulation, plane=self.plane, mode_spec=self.mode_spec)
         self._validate_rotate_structures()
         self._validate_num_grid_points()
+        if self._has_microwave_mode_spec:
+            self._validate_microwave_mode_spec(mode_spec=self.mode_spec, plane=self.plane)
 
     @classmethod
     def _warn_thick_pml(
@@ -337,6 +339,11 @@ class ModeSolver(Tidy3dBaseModel):
                 "Too many grid points on the modal plane. Please reduce the modal plane size, apply a coarser grid, "
                 "or reduce the number of modes."
             )
+
+    @classmethod
+    def _validate_microwave_mode_spec(cls, mode_spec: MicrowaveModeSpec, plane: Box) -> None:
+        """Validate that the microwave mode spec is correctly setup."""
+        mode_spec._check_path_integrals_within_box(plane)
 
     @cached_property
     def normal_axis(self) -> Axis:
