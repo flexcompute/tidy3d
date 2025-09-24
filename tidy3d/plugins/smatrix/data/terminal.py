@@ -59,23 +59,32 @@ class MicrowaveSMatrixData(Tidy3dBaseModel):
 
 class LowFrequencySmoothingSpec(Tidy3dBaseModel):
     """Specifies the low frequency smoothing parameters for the terminal component simulation.
-    The low frequency smoothing is performed by fitting a polynomial to the data in the trusted frequency range
-    and then using the polynomial to extrapolate the data outside of the trusted frequency range into lower frequencies.
+    The low frequency smoothing is performed by fitting a polynomial to the data in the trusted frequency range,
+    defined by the minimum and maximum sampling times, and then using the polynomial to extrapolate
+    the data outside of the trusted frequency range into lower frequencies.
 
     Example
     -------
     >>> low_freq_smoothing = LowFrequencySmoothingSpec(
-    ...     trusted_range=(3, 6),
+    ...     min_sampling_time=3,
+    ...     max_sampling_time=6,
     ...     order=1,
     ...     max_deviation=0.5,
     ... )
     """
 
-    trusted_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
-        (1, 5),
-        title="Trusted Sampling Time Range (periods)",
-        description="Frequency domain results for which the simulation time in periods of the corresponding frequency is within this range "
-        "will be used to fit the polynomial for the low frequency extrapolation.",
+    min_sampling_time: pd.NonNegativeFloat = pd.Field(
+        1,
+        title="Minimum Sampling Time (periods)",
+        description="The minimum simulation time in periods of the corresponding frequency for which frequency domain results will be used to fit the polynomial for the low frequency extrapolation. "
+        "Results below this threshold will be completely discarded.",
+    )
+
+    max_sampling_time: pd.NonNegativeFloat = pd.Field(
+        5,
+        title="Maximum Sampling Time (periods)",
+        description="The maximum simulation time in periods of the corresponding frequency for which frequency domain results will be used to fit the polynomial for the low frequency extrapolation. "
+        "Results above this threshold will be not be modified.",
     )
 
     order: int = pd.Field(
@@ -89,17 +98,20 @@ class LowFrequencySmoothingSpec(Tidy3dBaseModel):
     max_deviation: Optional[float] = pd.Field(
         0.5,
         title="Maximum Deviation",
-        description="The maximum deviation (in percent) from the trusted values to allow for the low frequency smoothing.",
+        description="The maximum deviation (in fraction of the trusted values) to allow for the low frequency smoothing.",
         ge=0,
     )
 
-    @pd.validator("trusted_range")
-    def _validate_trusted_range(cls, v, values):
-        if v[0] >= v[1]:
-            raise ValueError(
-                "The trusted range must be a tuple of two positive numbers with the first number being less than the second number."
-            )
-        return v
+    @pd.root_validator
+    def _validate_sampling_times(cls, values):
+        min_sampling_time = values.get("min_sampling_time")
+        max_sampling_time = values.get("max_sampling_time")
+        if min_sampling_time is not None and max_sampling_time is not None:
+            if min_sampling_time >= max_sampling_time:
+                raise ValueError(
+                    "The minimum sampling time must be less than the maximum sampling time."
+                )
+        return values
 
     def _smoothstep(self, x: np.ndarray, a: float, b: float) -> np.ndarray:
         """
@@ -123,6 +135,36 @@ class LowFrequencySmoothingSpec(Tidy3dBaseModel):
             return 0.5 * np.ones_like(x)
         t = np.clip((x - a) / (b - a), 0, 1)
         return 0.5 * (1 - np.cos(np.pi * t))
+
+    def _arctan_smooth_transition(
+        self,
+        values: np.ndarray,
+        trusted_bound: float,
+        constraint_bound: float,
+    ) -> np.ndarray:
+        """Apply arctan-based smooth transition from trusted_bound to constraint_bound.
+
+        Parameters
+        ----------
+        values: np.ndarray
+            The values to smooth.
+        trusted_bound: float
+            The trusted boundary value.
+        constraint_bound: float
+            The constraint boundary value.
+
+        Returns
+        -------
+        np.ndarray
+            The smoothed values using arctan transition.
+        """
+        # Use arctan for smooth transition from trusted_bound to constraint_bound
+        # Scale the arctan to map [trusted_bound, constraint_bound] smoothly
+        # The arctan provides smooth asymptotic approach to the limits
+        x = (values - trusted_bound) / (constraint_bound - trusted_bound)
+        # Arctan maps [0, inf] to [0, π/2], scale to [0, 1]
+        smooth_factor = 2 * np.arctan(x * np.pi / 2) / np.pi
+        return trusted_bound + smooth_factor * (constraint_bound - trusted_bound)
 
     def _smooth_constraint(
         self,
@@ -155,32 +197,31 @@ class LowFrequencySmoothingSpec(Tidy3dBaseModel):
         if self.max_deviation is None:
             return values
 
+        if constraint_min > trusted_min:
+            raise ValueError("The constraint minimum must be less than the trusted minimum.")
+        if constraint_max < trusted_max:
+            print(constraint_max, trusted_max)
+            raise ValueError("The constraint maximum must be greater than the trusted maximum.")
+        if trusted_min > trusted_max:
+            raise ValueError("The trusted minimum must be less than the trusted maximum.")
+
         result = values.copy()
 
         # Handle values below trusted range
         below_mask = values < trusted_min
         if np.any(below_mask):
             below_values = values[below_mask]
-
-            # Use arctan for smooth transition from constraint_min to trusted_min
-            # Scale the arctan to map [constraint_min, trusted_min] smoothly
-            # The arctan provides smooth asymptotic approach to the limits
-            x = (below_values - trusted_min) / (trusted_min - constraint_min)
-            # Arctan maps [0, inf] to [0, π/2], scale to [0, 1]
-            smooth_factor = 2 * np.arctan(x * np.pi / 2) / np.pi
-            result[below_mask] = trusted_min + smooth_factor * (trusted_min - constraint_min)
+            result[below_mask] = self._arctan_smooth_transition(
+                below_values, trusted_min, constraint_min
+            )
 
         # Handle values above trusted range
         above_mask = values > trusted_max
         if np.any(above_mask):
             above_values = values[above_mask]
-
-            # Use arctan for smooth transition from trusted_max to constraint_max
-            # Scale the arctan to map [trusted_max, constraint_max] smoothly
-            x = (above_values - trusted_max) / (constraint_max - trusted_max)
-            # Arctan maps [0, inf] to [0, π/2], scale to [0, 1]
-            smooth_factor = 2 * np.arctan(x * np.pi / 2) / np.pi
-            result[above_mask] = trusted_max + smooth_factor * (constraint_max - trusted_max)
+            result[above_mask] = self._arctan_smooth_transition(
+                above_values, trusted_max, constraint_max
+            )
 
         return result
 
@@ -230,7 +271,7 @@ class LowFrequencySmoothingSpec(Tidy3dBaseModel):
             trusted_min = np.min(trusted_mag)
             trusted_max = np.max(trusted_mag)
             mag_min = trusted_min * max(1 - self.max_deviation, 0)
-            mag_max = trusted_max * max(1 + self.max_deviation, 0)
+            mag_max = trusted_max * (1 + self.max_deviation)
 
             extrapolated_mag = self._smooth_constraint(
                 extrapolated_mag, trusted_min, trusted_max, mag_min, mag_max
@@ -242,7 +283,7 @@ class LowFrequencySmoothingSpec(Tidy3dBaseModel):
         # such that the original data is completely discarded for frequencies below min_periods
         # and is kept without any changes for frequencies above max_periods
         blending = self._smoothstep(
-            data.f * run_time_actual, self.trusted_range[0], self.trusted_range[1]
+            data.f * run_time_actual, self.min_sampling_time, self.max_sampling_time
         )
         blended = data * blending + extrapolated * (1 - blending)
 
@@ -310,8 +351,8 @@ class LowFrequencySmoothingSpec(Tidy3dBaseModel):
         """Get the indices of the data that are within the trusted sampling time range."""
         num_periods_passed = np.array(freqs) * run_time_actual
         return np.logical_and(
-            num_periods_passed >= self.trusted_range[0] - fp_eps,
-            num_periods_passed <= self.trusted_range[1] + fp_eps,
+            num_periods_passed >= self.min_sampling_time - fp_eps,
+            num_periods_passed <= self.max_sampling_time + fp_eps,
         )
 
     def _smooth_tcm_data(
@@ -354,7 +395,7 @@ class LowFrequencySmoothingSpec(Tidy3dBaseModel):
 
                 if (
                     sum(trusted_freq_indices) <= MIN_NUM_TRUSTED_FREQUENCY_POINTS
-                    and np.min(tcm_data.modeler.freqs) * run_time_actual < self.trusted_range[0]
+                    and np.min(tcm_data.modeler.freqs) * run_time_actual < self.min_sampling_time
                 ):
                     log.warning(
                         "Not enough data to fit a polynomial for low frequency extrapolation. Returning original data."

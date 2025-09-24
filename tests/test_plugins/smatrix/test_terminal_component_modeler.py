@@ -1399,7 +1399,8 @@ def test_low_freq_smoothing_spec_initialization_default_values():
     from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
 
     spec = LowFrequencySmoothingSpec()
-    assert spec.trusted_range == (1, 5)
+    assert spec.min_sampling_time == 1
+    assert spec.max_sampling_time == 5
     assert spec.order == 1
     assert spec.max_deviation == 0.5
 
@@ -1408,26 +1409,29 @@ def test_low_freq_smoothing_spec_initialization_custom_values():
     """Test that LowFrequencySmoothingSpec initializes with custom values."""
     from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
 
-    spec = LowFrequencySmoothingSpec(trusted_range=(2, 8), order=2, max_deviation=0.3)
-    assert spec.trusted_range == (2, 8)
+    spec = LowFrequencySmoothingSpec(
+        min_sampling_time=2, max_sampling_time=8, order=2, max_deviation=0.3
+    )
+    assert spec.min_sampling_time == 2
+    assert spec.max_sampling_time == 8
     assert spec.order == 2
     assert spec.max_deviation == 0.3
 
 
-def test_low_freq_smoothing_spec_validation_trusted_range_invalid():
-    """Test validation of trusted_range parameter."""
+def test_low_freq_smoothing_spec_validation_sampling_times_invalid():
+    """Test validation of sampling time parameters."""
     from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
 
-    # Test invalid range where first value >= second value
+    # Test invalid range where min_sampling_time >= max_sampling_time
     with pytest.raises(
-        ValueError, match="The trusted range must be a tuple of two positive numbers"
+        ValueError, match="The minimum sampling time must be less than the maximum sampling time"
     ):
-        LowFrequencySmoothingSpec(trusted_range=(5, 3))
+        LowFrequencySmoothingSpec(min_sampling_time=5, max_sampling_time=3)
 
     with pytest.raises(
-        ValueError, match="The trusted range must be a tuple of two positive numbers"
+        ValueError, match="The minimum sampling time must be less than the maximum sampling time"
     ):
-        LowFrequencySmoothingSpec(trusted_range=(3, 3))
+        LowFrequencySmoothingSpec(min_sampling_time=3, max_sampling_time=3)
 
 
 def test_low_freq_smoothing_spec_validation_order_bounds():
@@ -1520,7 +1524,7 @@ def test_low_freq_smoothing_spec_trusted_selection_function():
     """Test the _trusted_selection function."""
     from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
 
-    spec = LowFrequencySmoothingSpec(trusted_range=(2, 6))
+    spec = LowFrequencySmoothingSpec(min_sampling_time=2, max_sampling_time=6)
 
     # Test with frequencies and run time
     freqs = np.array([1e9, 2e9, 3e9, 4e9, 5e9, 6e9, 7e9])
@@ -1541,7 +1545,7 @@ def test_low_freq_smoothing_spec_smooth_freq_data_with_mock_data():
     from tidy3d.components.data.data_array import ModeAmpsDataArray
     from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
 
-    spec = LowFrequencySmoothingSpec(trusted_range=(2, 6), order=1)
+    spec = LowFrequencySmoothingSpec(min_sampling_time=2, max_sampling_time=6, order=1)
 
     # Create mock frequency data
     freqs = np.linspace(1e9, 10e9, 20)
@@ -1582,7 +1586,9 @@ def test_low_freq_smoothing_spec_polynomial_fitting(order, amp_coeffs, phase_coe
     from tidy3d.components.data.data_array import ModeAmpsDataArray
     from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
 
-    spec = LowFrequencySmoothingSpec(trusted_range=(2, 6), order=order, max_deviation=None)
+    spec = LowFrequencySmoothingSpec(
+        min_sampling_time=2, max_sampling_time=6, order=order, max_deviation=None
+    )
 
     # Create mock frequency data
     freqs = np.linspace(1, 10, 100)
@@ -1628,7 +1634,7 @@ def test_low_freq_smoothing_spec_smooth_mode_data_with_mock_data():
     from tidy3d.components.data.monitor_data import ModeData
     from tidy3d.plugins.smatrix.data.terminal import LowFrequencySmoothingSpec
 
-    spec = LowFrequencySmoothingSpec(trusted_range=(2, 6), order=1)
+    spec = LowFrequencySmoothingSpec(min_sampling_time=2, max_sampling_time=6, order=1)
 
     # Create mock frequency data
     freqs = np.linspace(1e9, 10e9, 20)
@@ -1724,7 +1730,7 @@ def test_low_freq_smoothing_spec_smooth_tcm_data_insufficient_trusted_points(mon
     smatrix_data = tcm_data.smatrix()
 
     # insufficient trusted points (too little points in between)
-    spec = LowFrequencySmoothingSpec(trusted_range=(2, 2.1))
+    spec = LowFrequencySmoothingSpec(min_sampling_time=2, max_sampling_time=2.1)
     with AssertLogLevel(
         "WARNING", contains_str="Not enough data to fit a polynomial for low frequency"
     ):
