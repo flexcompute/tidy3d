@@ -85,7 +85,7 @@ Automated Testing
 
 We use GitHub Actions to perform these tests automatically and across different operating systems.
 
-On commits, each of the ``pytest`` tests are run using Python 3.9 - 3.12 installed on Ubuntu, MacOS, and Windows operating systems.
+On commits, each of the ``pytest`` tests are run using Python (minimum supported version up to maximum supported version) installed on Ubuntu, MacOS, and Windows operating systems.
 
 See the "actions" tab for details on previous tests and ``.github/workflows/run_tests.yml`` for the configuration and to see the specific tests run.
 

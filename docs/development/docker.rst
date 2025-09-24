@@ -56,6 +56,22 @@ You are now inside the container's shell. From here, you can set up the Python e
 
 With the environment ready, you can run tests, format code, or start a Jupyter Lab session.
 
+Running Github Actions Locally
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To run github actions locally install the
+[act](https://github.com/nektos/gh-act) extension:
+```bash
+gh extension install nektos/gh-act
+```
+
+You can then run remote-tests locally:
+
+.. code-block:: bash
+
+    gh act --pull=false -W .github/workflows/tidy3d-python-client-tests.yml -P "ubuntu-latest=tidy3d_python_client_dev:latest" --input remote_tests=true "workflow_dispatch"
+
+
 Running Jupyter Lab
 ^^^^^^^^^^^^^^^^^^^
 
