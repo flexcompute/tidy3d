@@ -11,10 +11,9 @@ This functionality was previously available using the `adjoint` plugin, which us
 3. Because we inherited these classes from their `tidy3d` components, for technical reasons, we needed to separate the `jax`-traced fields from the regular fields.
    For example, `JaxSimulation.input_structures` and `.output_monitors` were needed.
 
-All of these limitations (among others) motivated us to come up with a new approach to automatic differentiation, which was introduced as an experimental feature in `2.7`.
-The `adjoint` plugin will continue to be supported indefinitely, but no new features will be developed for it.
-We also believe the new approach offers a far better user experience, so we encourage users to switch whenever is convenient.
-This guide will give some instructions on how to do so.
+All of these limitations (among others) motivated us to come up with a new approach to automatic differentiation, which was introduced as an experimental feature in `2.7` and is now the default.
+The previous JAX-based `adjoint` plugin has been removed in favor of this built-in workflow.
+This guide will give some instructions on how to migrate existing code.
 
 ## New implementation using `autograd`
 
@@ -89,18 +88,12 @@ Additionally, `autograd` has a `grad_with_aux` function that can be used to comp
 
 Otherwise, `jax` and `autograd` are very similar to each other in practice.
 
-### Migrating from `adjoint` plugin
+### Migrating from the deprecated `adjoint` plugin
 
 Converting code from the `adjoint` plugin to the native autograd support is straightforward.
 
-Instead of importing classes from the `tda` namespace, with names like `tda.Jax_`, we can just use regular `td.` classes.
-
-```py
-import tidy3d.plugins.adjoint as tda
-tda.JaxStructure(...)
-```
-
-becomes
+Instead of importing classes from the old `tidy3d.plugins.adjoint` namespace (for example `tda.JaxStructure`),
+you can use the regular `tidy3d` classes directly:
 
 ```py
 import tidy3d as td

@@ -9,7 +9,6 @@ import time
 from datetime import datetime
 from typing import Callable, Optional, Union
 
-import pydantic.v1 as pd
 from botocore.exceptions import ClientError
 from pydantic.v1 import Extra, Field, parse_obj_as
 
@@ -199,20 +198,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     #     title="Parent Tasks",
     #     description="List of parent task ids for the simulation, used internally only."
     # )
-
-    @pd.root_validator(pre=True)
-    def _error_if_jax_sim(cls, values):
-        """Raise error if user tries to submit simulation that's a JaxSimulation."""
-        sim = values.get("simulation")
-        if sim is None:
-            return values
-        if "JaxSimulation" in str(type(sim)):
-            raise ValueError(
-                "'JaxSimulation' not compatible with regular webapi functions. "
-                "Either convert it to Simulation with 'jax_sim.to_simulation()[0]' or use "
-                "the 'adjoint.run' function to run JaxSimulations."
-            )
-        return values
 
     @classmethod
     def create(

@@ -4,7 +4,7 @@
 
 This describes the "Inverse Design" (`invdes`) plugin of Tidy3D.
 
-The goal of `invdes` is to provide a simpler interface for setting up most practical inverse design problems. It wraps the lower-level `adjoint` plugin of Tidy3D to perform the gradient calculations, but allows the user to focus on the important aspects of their design without getting into the details of `autograd`.
+The goal of `invdes` is to provide a simpler interface for setting up most practical inverse design problems. It leverages Tidy3D's native autograd-based adjoint infrastructure to perform the gradient calculations, while allowing the user to focus on the important aspects of their design without getting into low-level workflow details.
 
 In this notebook, we'll give a simple demo showing the inverse design of a 1 -> 3 splitter using the inverse design plugin.
 
@@ -97,7 +97,7 @@ Next we want to define the base `td.Simulation` that contains the static portion
 
 For this, we will make a bunch of regular `tidy3d` components (excluding the design region) and put them into a `td.Simulation`.
 
-> Note: we don't need to use `adjoint` components, such as `td.Simulation` in the `invdes` plugin. These components are created behind the scenes by the higher level wrappers that we define here.
+> Note: there is no need to use any special autograd-specific component classes in user code; the plugin builds the differentiable structures internally from the standard `td.*` objects defined here.
 
 ```py
 
@@ -285,7 +285,7 @@ design = tdi.InverseDesign(
     output_monitor_names=[mnt.name for mnt in monitors_out],
 )
 ```
-> Note: the `output_monitor_names` field is used to specify which monitors to use in the objective function. If they are not supplied, `invdes` will automatically include all compatible monitors, but at times these can raise warnings in the `adjoint` plugin, so it can be nice to specify.
+> Note: the `output_monitor_names` field is used to specify which monitors to use in the objective function. If they are not supplied, `invdes` will automatically include all compatible monitors, but at times these can raise warnings if the differentiable workflow cannot trace certain monitor types, so it can be nice to specify.
 
 The `InverseDesign` object can be exported to a `td.Simulation` given some parameters using the `to_simulation(params)` method.
 
