@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pydantic
 from typing import Optional
+
+import pydantic.v1 as pydantic
+
 from tidy3d.components.base import Tidy3dBaseModel
 
 
@@ -20,6 +22,7 @@ class LowFrequencySmoothingSpec(Tidy3dBaseModel):
     ...     max_sampling_time=6,
     ...     order=1,
     ...     max_deviation=0.5,
+    ...     monitors=("monitor1", "monitor2"),
     ... )
     """
 

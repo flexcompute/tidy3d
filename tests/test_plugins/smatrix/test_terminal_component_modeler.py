@@ -32,7 +32,7 @@ from tidy3d.plugins.smatrix import (
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.utils import s_to_z, validate_square_matrix
 
-from ...utils import AssertLogLevel, run_emulated
+from ...utils import run_emulated
 from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
 
 mm = 1e3

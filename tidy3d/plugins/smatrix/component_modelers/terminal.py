@@ -7,8 +7,9 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.base import cached_property, Tidy3dBaseModel
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.boundary import BroadbandModeABCSpec
+from tidy3d.components.frequency_extrapolation import LowFrequencySmoothingSpec
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.monitor import DirectivityMonitor, ModeMonitor
@@ -30,8 +31,6 @@ from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import NetworkElement, NetworkIndex, SParamDef
-
-from tidy3d.components.frequency_extrapolation import LowFrequencySmoothingSpec
 
 
 class ModelerLowFrequencySmoothingSpec(Tidy3dBaseModel):

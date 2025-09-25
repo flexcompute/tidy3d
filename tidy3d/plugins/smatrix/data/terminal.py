@@ -8,18 +8,15 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
-from tidy3d.components.data.data_array import FreqDataArray, ModeAmpsDataArray
-from tidy3d.components.data.monitor_data import ModeData, MonitorData
+from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.data.monitor_data import MonitorData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
-from tidy3d.constants import fp_eps
-from tidy3d.exceptions import DataError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.data.base import AbstractComponentModelerData
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
-from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import SParamDef
 from tidy3d.plugins.smatrix.utils import (
     ab_to_s,

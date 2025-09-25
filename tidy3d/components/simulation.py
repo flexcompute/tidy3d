@@ -50,6 +50,7 @@ from .data.dataset import Dataset
 from .data.unstructured.tetrahedral import TetrahedralGridDataset
 from .data.unstructured.triangular import TriangularGridDataset
 from .data.utils import CustomSpatialDataType
+from .frequency_extrapolation import LowFrequencySmoothingSpec
 from .geometry.base import Box, Geometry, GeometryGroup
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import _shift_object, flatten_groups, traverse_geometries
@@ -140,8 +141,6 @@ from .viz import (
     plot_params_pml,
     plot_sim_3d,
 )
-
-from .frequency_extrapolation import LowFrequencySmoothingSpec
 
 try:
     gdstk_available = True

@@ -233,8 +233,8 @@ def initialize_params_from_simulation(
         ).data
         if outside_handling == "mask":
             # build mask from coverage bounds of base epsilon coordinates
-            xb, yb, zb = [np.array(eps_base_da.coords[d]) for d in ("x", "y", "z")]
-            xd, yd, zd = [np.array(design_eps_da.coords[d]) for d in ("x", "y", "z")]
+            xb, yb, zb = (np.array(eps_base_da.coords[d]) for d in ("x", "y", "z"))
+            xd, yd, zd = (np.array(design_eps_da.coords[d]) for d in ("x", "y", "z"))
             mask_x = (xd >= np.min(xb)) & (xd <= np.max(xb))
             mask_y = (yd >= np.min(yb)) & (yd <= np.max(yb))
             mask_z = (zd >= np.min(zb)) & (zd <= np.max(zb))

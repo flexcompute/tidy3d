@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from tidy3d.components.boundary import BroadbandModeABCFitterParam, BroadbandModeABCSpec
-from tidy3d.components.data.frequency_extrapolation import LowFrequencySmoothingSpec
 from tidy3d.components.data.index import SimulationDataMap
+from tidy3d.components.frequency_extrapolation import LowFrequencySmoothingSpec
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import (
@@ -433,7 +433,6 @@ GeometryGroup.update_forward_refs()
 
 __all__ = [
     "C_0",
-    "LowFrequencySmoothingSpec",
     "DATA_TYPE_MAP",
     "EPSILON_0",
     "ETA_0",
@@ -621,6 +620,7 @@ __all__ = [
     "LinearLumpedElement",
     "Lorentz",
     "LossyMetalMedium",
+    "LowFrequencySmoothingSpec",
     "LumpedElement",
     "LumpedResistor",
     "Medium",
