@@ -253,6 +253,8 @@ def check_ms_reduction(ms):
     assert np.allclose(grids_1d.z, grids_1d_red.z)
     modes_red = ms.solve()
     assert np.allclose(ms.data.n_eff.values, modes_red.n_eff.values)
+    assert len(ms_red.simulation.sources) == 0
+    assert len(ms_red.simulation.internal_absorbers) == 0
 
 
 def test_mode_solver_validation():

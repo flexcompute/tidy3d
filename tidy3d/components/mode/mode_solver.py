@@ -569,15 +569,7 @@ class ModeSolver(Tidy3dBaseModel):
         # # if self.mode_spec.bend_radius is None, use this instead
         #     solver_ref_data_straight = self._ref_data_straight(mode_solver_data=solver_ref_data)
 
-        try:
-            solver = self.reduced_simulation_copy
-        except Exception as e:
-            solver = self
-            log.warning(
-                "Mode solver reduced_simulation_copy failed. "
-                "Falling back to non-reduced simulation, which may be slower. "
-                f"Exception: {e!s}"
-            )
+        solver = self._reduced_simulation_copy_with_fallback
 
         # Compute the mode solution by rotating the reference data to the monitor plane
         rotated_mode_fields = self._mode_rotation(
@@ -1128,22 +1120,26 @@ class ModeSolver(Tidy3dBaseModel):
 
         return bend_center
 
-    def _data_on_yee_grid(self) -> ModeSolverData:
-        """Solve for all modes, and construct data with fields on the Yee grid."""
-
+    @cached_property
+    def _reduced_simulation_copy_with_fallback(self) -> ModeSolver:
+        """Try to get a reduced simulation copy. If it fails, fall back to the non-reduced simulation."""
         # we try to do reduced simulation copy for efficiency
         # it should never fail -- if it does, this is likely due to an oversight
         # in the Simulation.subsection method. but falling back to non-reduced
         # simulation prevents unneeded errors in this case
         try:
-            solver = self.reduced_simulation_copy
+            return self.reduced_simulation_copy
         except Exception as e:
-            solver = self
             log.warning(
                 "Mode solver reduced_simulation_copy failed. "
                 "Falling back to non-reduced simulation, which may be slower. "
                 f"Exception: {e!s}"
             )
+            return self
+
+    def _data_on_yee_grid(self) -> ModeSolverData:
+        """Solve for all modes, and construct data with fields on the Yee grid."""
+        solver = self._reduced_simulation_copy_with_fallback
 
         _, _solver_coords = solver.plane.pop_axis(
             solver._solver_grid.boundaries.to_list, axis=solver.normal_axis
@@ -2609,6 +2605,7 @@ class ModeSolver(Tidy3dBaseModel):
             region=new_sim_box,
             monitors=[],
             sources=[],
+            internal_absorbers=[],
             warn_symmetry_expansion=False,  # we already warn upon mode solver creation
             grid_spec="identical",
             boundary_spec=new_bspec,
