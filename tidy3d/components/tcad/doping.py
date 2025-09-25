@@ -190,7 +190,8 @@ class GaussianDoping(AbstractDopingBox):
 
         indices_in_box, X, Y, Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
 
-        x_contrib = np.ones(X.shape)
+        x_contrib = np.zeros(X.shape)
+        x_contrib[indices_in_box] = 1.0
         if self.source != "xmin":
             x0 = self.bounds[0][0]
             indices = np.logical_and(x0 <= X, x0 + self.width >= X)
@@ -215,7 +216,8 @@ class GaussianDoping(AbstractDopingBox):
                 / self.sigma
             )
 
-        y_contrib = np.ones(X.shape)
+        y_contrib = np.zeros(X.shape)
+        y_contrib[indices_in_box] = 1.0
         if self.source != "ymin":
             y0 = self.bounds[0][1]
             indices = np.logical_and(y0 <= Y, y0 + self.width >= Y)
@@ -240,7 +242,8 @@ class GaussianDoping(AbstractDopingBox):
                 / self.sigma
             )
 
-        z_contrib = np.ones(X.shape)
+        z_contrib = np.zeros(X.shape)
+        z_contrib[indices_in_box] = 1.0
         if self.source != "zmin":
             z0 = self.bounds[0][2]
             indices = np.logical_and(z0 <= Z, z0 + self.width >= Z)
