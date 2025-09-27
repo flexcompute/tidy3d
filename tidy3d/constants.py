@@ -261,6 +261,11 @@ LARGE_NUMBER = 1e10
 Large number used for comparing infinity.
 """
 
+LARGEST_FP_NUMBER = 1e38
+"""
+Largest number used for single precision floating point number.
+"""
+
 inf = np.inf
 """
 Representation of infinity used within tidy3d.

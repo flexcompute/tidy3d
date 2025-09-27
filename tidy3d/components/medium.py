@@ -24,6 +24,7 @@ from tidy3d.constants import (
     ETA_0,
     HBAR,
     HERTZ,
+    LARGEST_FP_NUMBER,
     MICROMETER,
     MU_0,
     PERMITTIVITY,
@@ -3367,6 +3368,18 @@ class PoleResidue(DispersiveMedium):
                 raise SetupError("For stable medium, 'Re(a_i)' must be non-positive.")
         return val
 
+    @pd.validator("poles", always=True)
+    def _poles_largest_value(cls, val):
+        """Assert pole parameters are not too large."""
+        for a, c in val:
+            if np.any(abs(_get_numpy_array(a)) > LARGEST_FP_NUMBER):
+                raise ValidationError(
+                    "The value of some 'a_i' is too large. They are unlikely to contribute to material dispersion."
+                )
+            if np.any(abs(_get_numpy_array(c)) > LARGEST_FP_NUMBER):
+                raise ValidationError("The value of some 'c_i' is too large.")
+        return val
+
     _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
     _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
@@ -4261,14 +4274,19 @@ class Sellmeier(DispersiveMedium):
     def _pole_residue_dict(self) -> dict:
         """Dict representation of Medium as a pole-residue model"""
         poles = []
+        eps_inf = _ones_like(self.coeffs[0][0])
         for B, C in self.coeffs:
-            beta = 2 * np.pi * C_0 / np.sqrt(C)
-            alpha = -0.5 * beta * B
-            a = 1j * beta
-            c = 1j * alpha
-            poles.append((a, c))
+            # for small C, it's equivalent to modifying eps_inf
+            if np.any(np.isclose(_get_numpy_array(C), 0)):
+                eps_inf += B
+            else:
+                beta = 2 * np.pi * C_0 / np.sqrt(C)
+                alpha = -0.5 * beta * B
+                a = 1j * beta
+                c = 1j * alpha
+                poles.append((a, c))
         return {
-            "eps_inf": 1,
+            "eps_inf": eps_inf,
             "poles": poles,
             "frequency_range": self.frequency_range,
             "name": self.name,
@@ -4436,6 +4454,18 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
                     "To simulate a gain medium, please set 'allow_gain=True'. "
                     "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
+                )
+        return val
+
+    @pd.validator("coeffs", always=True)
+    def _coeffs_C_all_near_zero_or_much_greater(cls, val):
+        """We restrict either all C~=0, or very different from 0."""
+        for _, C in val:
+            c_array_near_zero = np.isclose(_get_numpy_array(C), 0)
+            if np.any(c_array_near_zero) and not np.all(c_array_near_zero):
+                raise SetupError(
+                    "Coefficients 'C_i' are restricted to be "
+                    "either all near zero or much greater than 0."
                 )
         return val
 
@@ -5546,14 +5576,19 @@ class Debye(DispersiveMedium):
         """Dict representation of Medium as a pole-residue model."""
 
         poles = []
+        eps_inf = self.eps_inf
         for de, tau in self.coeffs:
-            a = -2 * np.pi / tau + 0j
-            c = -0.5 * de * a
+            # for |tau| close to 0, it's equivalent to modifying eps_inf
+            if np.any(abs(_get_numpy_array(tau)) < 1 / 2 / np.pi / LARGEST_FP_NUMBER):
+                eps_inf = eps_inf + de
+            else:
+                a = -2 * np.pi / tau + 0j
+                c = -0.5 * de * a
 
-            poles.append((a, c))
+                poles.append((a, c))
 
         return {
-            "eps_inf": self.eps_inf,
+            "eps_inf": eps_inf,
             "poles": poles,
             "frequency_range": self.frequency_range,
             "name": self.name,
@@ -5687,6 +5722,16 @@ class CustomDebye(CustomDispersiveMedium, Debye):
                 )
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, tau)):
                 raise SetupError("All terms in 'coeffs' must be real.")
+        return val
+
+    @pd.validator("coeffs", always=True)
+    def _coeffs_tau_all_sufficient_positive(cls, val):
+        """We restrict either all tau is sufficently greater than 0."""
+        for _, tau in val:
+            if np.any(_get_numpy_array(tau) < 1 / 2 / np.pi / LARGEST_FP_NUMBER):
+                raise SetupError(
+                    "Coefficients 'tau_i' are restricted to be sufficiently greater than 0."
+                )
         return val
 
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
