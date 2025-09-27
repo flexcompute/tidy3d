@@ -62,6 +62,15 @@ def test_medium():
         _ = td.Medium(conductivity=-1.0)
 
 
+def test_validate_largest_pole_parameters():
+    # error for large pole parameters
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.PoleResidue(poles=[((-1e50 + 2j), (1 + 3j))])
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.PoleResidue(poles=[((-1 + 2j), (1e50 + 3j))])
+
+
 def test_medium_conversions():
     n = 4.0
     k = 1.0
@@ -255,13 +264,15 @@ def test_medium_dispersion():
 def test_medium_dispersion_conversion():
     m_PR = td.PoleResidue(eps_inf=1.0, poles=[((-1 + 2j), (1 + 3j)), ((-2 + 4j), (1 + 5j))])
     m_SM = td.Sellmeier(coeffs=[(2, 3), (2, 4)])
+    m_SM_small_C = td.Sellmeier(coeffs=[(2, 3), (2, 1e-20)])
     m_LZ = td.Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
     m_LZ2 = td.Lorentz(eps_inf=1.0, coeffs=[(1, 2, 3), (2, 1, 4)])
     m_DR = td.Drude(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
     m_DB = td.Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
+    m_DB_small_tau = td.Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 1e-50)])
 
     freqs = np.linspace(0.01, 1, 1001)
-    for medium in [m_PR, m_SM, m_DB, m_LZ, m_DR, m_LZ2]:  # , m_DB]:
+    for medium in [m_PR, m_SM, m_SM_small_C, m_DB, m_DB_small_tau, m_LZ, m_DR, m_LZ2]:  # , m_DB]:
         eps_model = medium.eps_model(freqs)
         eps_pr = medium.pole_residue.eps_model(freqs)
         np.testing.assert_allclose(eps_model, eps_pr)

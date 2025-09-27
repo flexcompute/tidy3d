@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Improved performance of antenna metrics calculation by utilizing cached wave amplitude calculations instead of recomputing wave amplitudes for each port excitation in the `TerminalComponentModelerData`.
 
+### Fixed
+- More robust `Sellmeier` and `Debye` material model, and prevent very large pole parameters in `PoleResidue` material model.
+
+
 ## [v2.10.0rc2] - 2025-10-01
 
 ### Added

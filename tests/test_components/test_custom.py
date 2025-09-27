@@ -72,12 +72,14 @@ def make_custom_current_source():
     return td.CustomCurrentSource(size=SIZE, source_time=ST, current_dataset=current_dataset)
 
 
-def make_spatial_data(value=0, dx=0, unstructured=False, seed=None, uniform=False):
+def make_spatial_data(
+    value=0, dx=0, unstructured=False, seed=None, uniform=False, random_magnitude=1
+):
     """Makes a spatial data array."""
     if uniform:
         data = value * np.ones((Nx, Ny, Nz))
     else:
-        data = np.random.random((Nx, Ny, Nz)) + value
+        data = np.random.random((Nx, Ny, Nz)) * random_magnitude + value
     arr = td.SpatialDataArray(data, coords={"x": X + dx, "y": Y, "z": Z})
     if unstructured:
         method = "direct" if uniform else "linear"
@@ -777,11 +779,11 @@ def test_custom_pole_residue(unstructured):
 def test_custom_sellmeier(unstructured):
     """Custom Sellmeier medium."""
     seed = 897245
-    b1 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
-    c1 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
+    b1 = make_spatial_data(value=0.1, unstructured=unstructured, seed=seed)
+    c1 = make_spatial_data(value=0.1, unstructured=unstructured, seed=seed)
 
-    b2 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
-    c2 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
+    b2 = make_spatial_data(value=0.1, unstructured=unstructured, seed=seed)
+    c2 = make_spatial_data(value=0.1, unstructured=unstructured, seed=seed)
 
     # complex b
     with pytest.raises(pydantic.ValidationError):
@@ -814,6 +816,13 @@ def test_custom_sellmeier(unstructured):
     with pytest.raises(pydantic.ValidationError):
         btmp = make_spatial_data(value=0, dx=1, unstructured=(not unstructured), seed=seed)
         mat = CustomSellmeier(coeffs=((b1, c2), (btmp, c2)))
+
+    # some of C is close to 0
+    with pytest.raises(pydantic.ValidationError):
+        ctmp = make_spatial_data(
+            value=0, unstructured=unstructured, seed=seed, random_magnitude=1e-7
+        )
+        mat = CustomSellmeier(coeffs=((b1, c1), (b2, ctmp)))
 
     mat = CustomSellmeier(coeffs=((b1, c1), (b2, c2)))
     verify_custom_dispersive_medium_methods(mat, ["coeffs"])
@@ -931,10 +940,10 @@ def test_custom_debye(unstructured):
     eps_inf = make_spatial_data(value=1, unstructured=unstructured, seed=seed)
 
     eps1 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
-    tau1 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
+    tau1 = make_spatial_data(value=0.1, unstructured=unstructured, seed=seed)
 
     eps2 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
-    tau2 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
+    tau2 = make_spatial_data(value=0.1, unstructured=unstructured, seed=seed)
 
     # complex eps
     with pytest.raises(pydantic.ValidationError):
@@ -951,6 +960,12 @@ def test_custom_debye(unstructured):
         tautmp = make_spatial_data(value=-0.5, unstructured=unstructured, seed=seed)
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tautmp)))
 
+    # some of tau is close to 0
+    with pytest.raises(pydantic.ValidationError):
+        tautmp = make_spatial_data(
+            value=0, unstructured=unstructured, seed=seed, random_magnitude=1e-38
+        )
+        mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tautmp)))
     # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
         epstmp = make_spatial_data(value=0, dx=1, unstructured=unstructured, seed=seed)
