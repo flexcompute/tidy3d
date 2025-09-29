@@ -2374,3 +2374,11 @@ def test_generation_recombination():
         tau_n=tau_fossum,
         tau_p=tau_fossum,
     )
+
+    # make sure we can build a HurkxDirectBandToBandTunneling
+    _ = td.HurkxDirectBandToBandTunneling(
+        A=1e19,
+        B=1.9e6,
+        E_0=1,
+        sigma=2,
+    )

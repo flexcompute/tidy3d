@@ -247,7 +247,7 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
         .. [1] Palankovski, Vassil, and Rüdiger Quay. Analysis and simulation of heterostructure devices. Springer Science & Business Media, 2004.
     """
 
-    A: float = pd.Field(
+    A: pd.PositiveFloat = pd.Field(
         4e14,
         title="Parameter A",
         description="Parameter A in the direct BTBT Hurkx model.",
@@ -259,7 +259,7 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
         description="Parameter B in the direct BTBT Hurkx model.",
         units="V/cm",
     )
-    E_0: float = pd.Field(
+    E_0: pd.PositiveFloat = pd.Field(
         1,
         title="Reference electric field E_0",
         description="Reference electric field E_0 in the direct BTBT Hurkx model.",
