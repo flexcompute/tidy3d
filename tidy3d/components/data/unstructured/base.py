@@ -8,7 +8,7 @@ from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
-from xarray import DataArray as XrDataArray
+from xarray import DataArray as XrDataArray, concat as xr_concat
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.data.data_array import (
@@ -885,7 +885,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
 
     @requires_vtk
     def reflect(
-        self, axis: Axis, center: float, reflection_only: bool = False
+        self, axis: Axis, center: float, reflection_only: bool = False, symmetry: Literal[-1, 1] = 1
     ) -> UnstructuredDataset:
         """Reflect unstructured dataset across the plane define by parameters ``axis`` and ``center``.
         By default the original dataset is preserved, setting ``reflection_only`` to ``True`` will
@@ -899,24 +899,55 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
             Location of the reflection plane along its normal direction.
         reflection_only : bool = False
             Return only reflected dataset.
+        symmetry : Literal[-1, 1] = 1
+            Symmetry of the reflected field.
 
         Returns
         -------
         UnstructuredDataset
             Dataset after reflextion is performed.
         """
+        if reflection_only:
+            reflected_points = self.points
+            reflected_points.loc[{"axis": axis}] = 2 * center - self.points.sel(axis=axis)
+            return self.updated_copy(points=reflected_points, values=self.values * symmetry)
+        
+        # record number of existing points
+        num_points = len(self.points)
 
-        reflector = vtk["mod"].vtkReflectionFilter()
-        reflector.SetPlane([reflector.USE_X, reflector.USE_Y, reflector.USE_Z][axis])
-        reflector.SetCenter(center)
-        reflector.SetCopyInput(not reflection_only)
-        reflector.SetInputData(self._vtk_obj)
-        reflector.Update()
+        # detect points that are off the reflection plane
+        # and that need to be duplicated
+        points_off_plane_map = ~np.isclose(self.points.sel(axis=axis), center)
+        num_new_points = np.sum(points_off_plane_map)
 
-        # since reflection does not really change geometries, let's not clean it
-        return self._from_vtk_obj_internal(
-            reflector.GetOutput(), remove_degenerate_cells=False, remove_unused_points=False
-        )
+        # create new points id
+        new_points_id = np.arange(num_new_points) + num_points
+
+        new_points_id_map = -1 * np.ones_like(points_off_plane_map)
+        new_points_id_map[points_off_plane_map] = new_points_id
+
+        new_points = self.points.sel(index=points_off_plane_map).copy()
+        new_points.loc[{"axis": axis}] = 2 * center - new_points.sel(axis=axis)
+
+        # create new cells
+        new_cells = self.cells.copy()
+        new_points_in_new_cells_map = points_off_plane_map[new_cells]
+        new_points_in_new_cells_orig_id = new_cells.data[new_points_in_new_cells_map]
+        new_cells.data[new_points_in_new_cells_map] = new_points_id_map[new_points_in_new_cells_orig_id]
+
+        # create new values
+        new_values = self.values.sel(index=points_off_plane_map) * symmetry
+
+        # combine with original data
+        combined_points = xr_concat([self.points, new_points], dim="index")
+        combined_values = xr_concat([self.values, new_values], dim="index")
+        combined_cells = xr_concat([self.cells, new_cells], dim="cell_index")
+
+        combined_points.coords["index"] = np.arange(len(combined_points))
+        combined_values.coords["index"] = np.arange(len(combined_values))
+        combined_cells.coords["cell_index"] = np.arange(len(combined_cells))
+
+        return self.updated_copy(points=combined_points, cells=combined_cells, values=combined_values)
 
     """ Data selection """
 
