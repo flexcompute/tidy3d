@@ -5735,6 +5735,41 @@
       ],
       "type": "object"
     },
+    "HurkxDirectBandToBandTunneling": {
+      "additionalProperties": false,
+      "properties": {
+        "A": {
+          "default": 400000000000000.0,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "B": {
+          "default": 1900000.0,
+          "type": "number"
+        },
+        "E_0": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "sigma": {
+          "default": 2.5,
+          "type": "number"
+        },
+        "type": {
+          "default": "HurkxDirectBandToBandTunneling",
+          "enum": [
+            "HurkxDirectBandToBandTunneling"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "IndexPerturbation": {
       "additionalProperties": false,
       "properties": {
@@ -9814,6 +9849,9 @@
               },
               {
                 "$ref": "#/definitions/DistributedGeneration"
+              },
+              {
+                "$ref": "#/definitions/HurkxDirectBandToBandTunneling"
               },
               {
                 "$ref": "#/definitions/RadiativeRecombination"

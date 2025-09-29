@@ -266,7 +266,7 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
         units="V/cm",
     )
     sigma: float = pd.Field(
-        ...,
+        2.5,
         title="Exponent parameter",
         description="Exponent sigma in the direct BTBT Hurkx model. For direct "
         "semiconductors sigma is typically 2.0, while for indirect "
