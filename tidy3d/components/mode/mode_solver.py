@@ -2671,3 +2671,15 @@ class ModeSolver(Tidy3dBaseModel):
         self._cached_properties["data_raw"] = data
         self._cached_properties.pop("data", None)
         self._cached_properties.pop("sim_data", None)
+
+    def plot_3d(self, width=800, height=800) -> None:
+        """Render 3D plot of ``ModeSolver`` (in jupyter notebook only).
+        Parameters
+        ----------
+        width : float = 800
+            width of the 3d view dom's size
+        height : float = 800
+            height of the 3d view dom's size
+
+        """
+        return self.simulation.plot_3d(width=width, height=height)
