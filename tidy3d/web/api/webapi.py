@@ -1464,10 +1464,10 @@ def real_cost(task_id: str, verbose=True) -> float | None:
     if _is_modeler_batch(task_id):
         status = _batch_detail(task_id).totalStatus.value
         flex_unit = _batch_detail(task_id).realFlexUnit or None
-        if status not in ["success", "run_success"]:
+        if (status not in ["success", "run_success"]) or (flex_unit is None):
             log.warning(
                 f"Billed FlexCredit for task '{task_id}' is not available. If the task has been "
-                "successfully run, it should be available shortly."
+                "successfully run, it should be available shortly. If this issue persists, contact customer support."
             )
         else:
             if verbose:
@@ -1476,6 +1476,7 @@ def real_cost(task_id: str, verbose=True) -> float | None:
                     "task execution details. Use 'web.real_cost(task_id)' to get the billed FlexCredit "
                     "cost after a simulation run."
                 )
+
         return flex_unit
     else:
         task_info = get_info(task_id)
