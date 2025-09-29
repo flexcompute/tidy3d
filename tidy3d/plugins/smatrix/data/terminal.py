@@ -130,15 +130,34 @@ class TerminalComponentModelerData(AbstractComponentModelerData):
         port: TerminalPortType,
         monitor_name: str,
         a_port: Union[FreqDataArray, complex],
+        a_raw_port: FreqDataArray,
     ) -> MonitorData:
-        """Normalize the monitor data to a desired complex amplitude of a port,
-        represented by ``a_port``, where :math:`\frac{1}{2}|a|^2` is the power
-        incident from the port into the system.
+        """Normalize monitor data to a desired complex amplitude at a specific port.
+
+        This method scales the monitor data so that the incident wave amplitude at the
+        specified port matches the desired value, where :math:`\frac{1}{2}|a|^2` represents
+        the power incident from the port into the system.
+
+        Parameters
+        ----------
+        port : TerminalPortType
+            The port at which to normalize the amplitude.
+        monitor_name : str
+            Name of the monitor to normalize.
+        a_port : Union[:class:`.FreqDataArray`, complex]
+            Desired complex amplitude at the port. If a complex number is provided,
+            it is applied uniformly across all frequencies.
+        a_raw_port : :class:`.FreqDataArray`
+            Raw incident wave amplitude at the port from the simulation, used as
+            the reference for scaling.
+
+        Returns
+        -------
+        :class:`.MonitorData`
+            Normalized monitor data scaled to the desired port amplitude.
         """
         sim_data_port = self.data[self.modeler.get_task_name(port)]
         monitor_data = sim_data_port[monitor_name]
-        a_raw, _ = self.compute_power_wave_amplitudes_at_each_port(sim_data=sim_data_port)
-        a_raw_port = a_raw.sel(port=self.modeler.network_index(port))
         if not isinstance(a_port, FreqDataArray):
             freqs = list(monitor_data.monitor.freqs)
             array_vals = a_port * np.ones(len(freqs))
@@ -263,20 +282,8 @@ class TerminalComponentModelerData(AbstractComponentModelerData):
         tuple[:class:`.PortDataArray`, :class:`.PortDataArray`]
             Incident (a) and reflected (b) power wave amplitudes at each port.
         """
-        from tidy3d.plugins.smatrix.analysis.terminal import (
-            compute_power_wave_amplitudes_at_each_port,
-        )
-
-        port_reference_impedances_i = (
-            port_reference_impedances
-            if port_reference_impedances is not None
-            else self.port_reference_impedances
-        )
-
-        return compute_power_wave_amplitudes_at_each_port(
-            modeler=self.modeler,
-            port_reference_impedances=port_reference_impedances_i,
-            sim_data=sim_data,
+        return self.compute_wave_amplitudes_at_each_port(
+            sim_data, port_reference_impedances, s_param_def="power"
         )
 
     def s_to_z(
@@ -331,6 +338,134 @@ class TerminalComponentModelerData(AbstractComponentModelerData):
             assume_ideal_excitation=assume_ideal_excitation, s_param_def=s_param_def
         )
         return s_to_z(s_matrix=s_matrix.data, reference=reference, s_param_def=s_param_def)
+
+    @cached_property
+    def port_voltage_current_matrices(self) -> tuple[TerminalPortDataArray, TerminalPortDataArray]:
+        """Compute voltage and current matrices for all port combinations.
+
+        This method returns two matrices containing the voltage and current values computed
+        across all frequency points and port combinations. The matrices represent the response
+        at each output port when each input port is excited individually.
+
+        Returns
+        -------
+        tuple[:class:`.TerminalPortDataArray`, :class:`.TerminalPortDataArray`]
+            A tuple containing the voltage matrix and current matrix. Each matrix has dimensions
+            (f, port_out, port_in) representing the voltage/current response at
+            each output port due to excitation at each input port.
+        """
+        from tidy3d.plugins.smatrix.analysis.terminal import (
+            _compute_port_voltages_currents,
+        )
+
+        ports_in = list(self.modeler.matrix_indices_run_sim)
+        ports_out = list(self.modeler.matrix_indices_monitor)
+        freqs = self.modeler.freqs
+        values = np.zeros(
+            (len(freqs), len(ports_out), len(ports_in)),
+            dtype=complex,
+        )
+        coords = {
+            "f": np.array(freqs),
+            "port_out": ports_out,
+            "port_in": ports_in,
+        }
+
+        port_voltage_matrix = TerminalPortDataArray(values, coords=coords)
+        port_current_matrix = port_voltage_matrix.copy(deep=True)
+
+        for source_index in self.modeler.matrix_indices_run_sim:
+            port, mode_index = self.modeler.network_dict[source_index]
+            task_name = self.modeler.get_task_name(port, mode_index)
+            sim_data = self.data[task_name]
+            port_voltages, port_currents = _compute_port_voltages_currents(self.modeler, sim_data)
+            indexer = {"port_in": source_index}
+            port_voltage_matrix = port_voltage_matrix._with_updated_data(
+                data=port_voltages.data, coords=indexer
+            )
+            port_current_matrix = port_current_matrix._with_updated_data(
+                data=port_currents.data, coords=indexer
+            )
+        return port_voltage_matrix, port_current_matrix
+
+    def compute_port_wave_amplitude_matrices(
+        self,
+        s_param_def: SParamDef = "pseudo",
+    ) -> tuple[TerminalPortDataArray, TerminalPortDataArray]:
+        """Compute wave amplitude matrices for all port combinations.
+
+        This method computes the incident (a) and reflected (b) wave amplitude matrices
+        for all frequency points and port combinations using the specified wave definition.
+        The matrices represent the forward and backward traveling wave amplitudes at each
+        output port when each input port is excited individually.
+
+        Parameters
+        ----------
+        s_param_def : SParamDef, optional
+            The type of waves to compute, either "pseudo" waves (Equation 53-54 in [1]) or
+            "power" waves (Equation 4.67 in [2]). Defaults to "pseudo".
+
+        Returns
+        -------
+        tuple[:class:`.TerminalPortDataArray`, :class:`.TerminalPortDataArray`]
+            A tuple containing the incident (a) and reflected (b) wave amplitude matrices.
+            Each matrix has dimensions (f, port_out, port_in) representing
+            the wave amplitudes at each output port due to excitation at each input port.
+        """
+        from tidy3d.plugins.smatrix.analysis.terminal import (
+            _compute_wave_amplitudes_from_VI,
+        )
+
+        port_voltage_matrix, port_current_matrix = self.port_voltage_current_matrices
+        a_matrix = port_voltage_matrix.copy(deep=True)
+        b_matrix = port_voltage_matrix.copy(deep=True)
+        for source_index in self.modeler.matrix_indices_run_sim:
+            port_a, port_b = _compute_wave_amplitudes_from_VI(
+                self.port_reference_impedances,
+                port_voltage_matrix.sel(port_in=source_index, drop=True),
+                port_current_matrix.sel(port_in=source_index, drop=True),
+                s_param_def=s_param_def,
+            )
+            indexer = {"port_in": source_index}
+            a_matrix = a_matrix._with_updated_data(data=port_a.data, coords=indexer)
+            b_matrix = b_matrix._with_updated_data(data=port_b.data, coords=indexer)
+        return a_matrix, b_matrix
+
+    @cached_property
+    def port_pseudo_wave_matrices(self) -> tuple[TerminalPortDataArray, TerminalPortDataArray]:
+        """Compute pseudo-wave amplitude matrices for all port combinations.
+
+        This method returns the incident (a) and reflected (b) pseudo-wave amplitude matrices
+        computed using the pseudo-wave definition from Marks and Williams [1]. The matrices
+        represent the forward and backward traveling wave amplitudes at each output port when
+        each input port is excited individually.
+
+        Returns
+        -------
+        tuple[:class:`.TerminalPortDataArray`, :class:`.TerminalPortDataArray`]
+            A tuple containing the incident (a) and reflected (b) pseudo-wave amplitude matrices.
+            Each matrix has dimensions (f, port_out, port_in) representing
+            the pseudo-wave amplitudes at each output port due to excitation at each input port.
+        """
+        return self.compute_port_wave_amplitude_matrices(s_param_def="pseudo")
+
+    @cached_property
+    def port_power_wave_matrices(self) -> tuple[TerminalPortDataArray, TerminalPortDataArray]:
+        """Compute power-wave amplitude matrices for all port combinations.
+
+        This method returns the incident (a) and reflected (b) power-wave amplitude matrices
+        computed using the power-wave definition from Pozar [2]. The matrices represent the
+        forward and backward traveling wave amplitudes at each output port when each input
+        port is excited individually.
+
+        Returns
+        -------
+        tuple[:class:`.TerminalPortDataArray`, :class:`.TerminalPortDataArray`]
+            A tuple containing the incident (a) and reflected (b) power-wave amplitude matrices.
+            Each matrix has dimensions (f, port_out, port_in) representing
+            the power-wave amplitudes at each output port due to excitation at each input port.
+        """
+        return self.compute_port_wave_amplitude_matrices(s_param_def="power")
 
     # Mirror Utils
     # So they can be reused elsewhere without a class reimport
