@@ -885,7 +885,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
 
     @requires_vtk
     def reflect(
-        self, axis: Axis, center: float, reflection_only: bool = False, symmetry: Literal[-1, 1] = 1
+        self, axis: Axis, center: float, reflection_only: bool = False, symmetry: Union[Literal[-1, 1], XrDataArray] = 1
     ) -> UnstructuredDataset:
         """Reflect unstructured dataset across the plane define by parameters ``axis`` and ``center``.
         By default the original dataset is preserved, setting ``reflection_only`` to ``True`` will
@@ -899,7 +899,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
             Location of the reflection plane along its normal direction.
         reflection_only : bool = False
             Return only reflected dataset.
-        symmetry : Literal[-1, 1] = 1
+        symmetry : Union[Literal[-1, 1], XrDataArray] = 1
             Symmetry of the reflected field.
 
         Returns
@@ -907,6 +907,22 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         UnstructuredDataset
             Dataset after reflextion is performed.
         """
+        # validate that if symmetry is an xarray, its dims are a subset of the values dims
+        # and coords values coincide along those dims
+        if isinstance(symmetry, XrDataArray):
+            value_dims = set(self.values.dims) - {"index"}
+            sym_dims = set(symmetry.dims)
+            if not sym_dims.issubset(value_dims):
+                raise DataError(
+                    f"Symmetry xarray dimensions {sym_dims} must be a subset of values dimensions {value_dims}"
+                )
+            # Check that coordinates match along shared dimensions
+            for dim in sym_dims:
+                if not np.array_equal(symmetry.coords[dim], self.values.coords[dim]):
+                    raise DataError(
+                        f"Coordinate values for dimension '{dim}' must match between symmetry and values"
+                    )
+
         if reflection_only:
             reflected_points = self.points
             reflected_points.loc[{"axis": axis}] = 2 * center - self.points.sel(axis=axis)
