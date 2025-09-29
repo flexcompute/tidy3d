@@ -1058,11 +1058,12 @@ def test_antenna_helpers(monkeypatch, tmp_path):
 
     # Test monitor data normalization with different amplitude types
     a_array = FreqDataArray(np.ones(len(modeler.freqs)), {"f": modeler.freqs})
+    a_array_raw = 2.0 * a_array
     normalized_data_array = modeler_data._monitor_data_at_port_amplitude(
-        modeler.ports[0], radiation_monitor.name, a_array
+        modeler.ports[0], radiation_monitor.name, a_array, a_array_raw
     )
     normalized_data_const = modeler_data._monitor_data_at_port_amplitude(
-        modeler.ports[0], radiation_monitor.name, 1.0
+        modeler.ports[0], radiation_monitor.name, 1.0, a_array_raw
     )
     assert isinstance(normalized_data_array, td.DirectivityData)
     assert isinstance(normalized_data_const, td.DirectivityData)
@@ -1198,7 +1199,7 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
     modeler = make_coaxial_component_modeler(
-        port_types=(CoaxialLumpedPort, WavePort), grid_spec=grid_spec
+        port_types=(CoaxialLumpedPort, CoaxialLumpedPort), grid_spec=grid_spec
     )
     port0_idx = modeler.network_index(modeler.ports[0])
     port1_idx = modeler.network_index(modeler.ports[1])

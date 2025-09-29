@@ -5,9 +5,6 @@ from typing import Optional
 import numpy as np
 
 from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
-from tidy3d.plugins.smatrix.analysis.terminal import (
-    compute_wave_amplitudes_at_each_port,
-)
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 
@@ -69,9 +66,11 @@ def get_antenna_metrics_data(
         coords=coords,
     )
     b_sum = a_sum.copy()
+    a_matrix, b_matrix = terminal_component_modeler_data.port_power_wave_matrices
     # Retrieve associated simulation data
     combined_directivity_data = None
     for port, amplitude in port_dict.items():
+        port_in_index = terminal_component_modeler_data.modeler.network_index(port)
         if amplitude is not None:
             if np.isclose(amplitude, 0.0):
                 continue
@@ -79,16 +78,15 @@ def get_antenna_metrics_data(
             terminal_component_modeler_data.modeler.get_task_name(port)
         ]
 
-        a, b = compute_wave_amplitudes_at_each_port(
-            modeler=terminal_component_modeler_data.modeler,
-            port_reference_impedances=terminal_component_modeler_data.port_reference_impedances,
-            sim_data=sim_data_port,
-            s_param_def="power",
+        a, b = (
+            a_matrix.sel(port_in=port_in_index, drop=True),
+            b_matrix.sel(port_in=port_in_index, drop=True),
         )
+
         # Select a possible subset of frequencies
         a = a.sel(f=f)
         b = b.sel(f=f)
-        a_raw = a.sel(port=terminal_component_modeler_data.modeler.network_index(port))
+        a_raw = a.sel(port_out=port_in_index)
 
         if amplitude is None:
             # No scaling performed when amplitude is None
@@ -97,7 +95,7 @@ def get_antenna_metrics_data(
         else:
             scaled_directivity_data = (
                 terminal_component_modeler_data._monitor_data_at_port_amplitude(
-                    port, rad_mon.name, amplitude
+                    port, rad_mon.name, amplitude, a_raw
                 )
             )
             scale_factor = amplitude / a_raw
@@ -109,8 +107,8 @@ def get_antenna_metrics_data(
             combined_directivity_data = scaled_directivity_data
         else:
             combined_directivity_data = combined_directivity_data + scaled_directivity_data
-        a_sum += a
-        b_sum += b
+        a_sum += a.rename({"port_out": "port"})
+        b_sum += b.rename({"port_out": "port"})
 
     # Compute and add power measures to results
     power_incident = np.real(0.5 * a_sum * np.conj(a_sum)).sum(dim="port")
