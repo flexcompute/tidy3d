@@ -702,3 +702,15 @@ class AbstractSimulation(Box, ABC):
             medium=scene.medium,
             **kwargs,
         )
+
+    def plot_3d(self, width=800, height=800) -> None:
+        """Render 3D plot of ``AbstractSimulation`` (in jupyter notebook only).
+        Parameters
+        ----------
+        width : float = 800
+            width of the 3d view dom's size
+        height : float = 800
+            height of the 3d view dom's size
+
+        """
+        return self.scene.plot_3d(width=width, height=height)
