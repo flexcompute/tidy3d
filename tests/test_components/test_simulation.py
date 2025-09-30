@@ -3047,7 +3047,7 @@ def test_2d_material_subdivision():
     med_2d = td.Medium2D(ss=conductor, tt=conductor)
     plane_size = [0, 1.5 * plane_width, 1.5 * plane_height]
     plane_material = td.Structure(
-        geometry=td.Box(size=plane_size, center=[plane_pos, 0, 0]), medium=med_2d
+        geometry=td.Box(size=plane_size, center=[plane_pos, 0, 0]), medium=med_2d, name="plane"
     )
 
     structures = [face, left_top, right_top, bottom, plane_material]
@@ -3063,6 +3063,8 @@ def test_2d_material_subdivision():
         monitors=[],
         run_time=1e-12,
     )
+
+    _ = sim_td._finalized
 
     volume = td.Box(center=(plane_pos, 0, 0), size=(0, 2 * plane_width, 2 * plane_height))
     eps_centers = sim_td.epsilon(box=volume, freq=freq0, coord_key="Ey")

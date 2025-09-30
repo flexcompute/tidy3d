@@ -594,6 +594,7 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def validate_pre_upload(self) -> None:
         """Validate the fully initialized EME simulation is ok for upload to our servers."""
+        super().validate_pre_upload()
         log.begin_capture()
         self._validate_sweep_spec_size()
         self._validate_size()

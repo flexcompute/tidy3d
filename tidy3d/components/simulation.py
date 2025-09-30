@@ -1805,7 +1805,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             # subdivide
             subdivided_geometries = subdivide(geometry, background_structures)
             # Create and add volumetric equivalents
-            for subdivided_geometry in subdivided_geometries:
+            for i, subdivided_geometry in enumerate(subdivided_geometries):
                 # Snap to the grid and create volumetric equivalent
                 snapped_geometry = snap_to_grid(subdivided_geometry[0], axis)
                 snapped_center = get_bounds(snapped_geometry, axis)[0]
@@ -1819,7 +1819,12 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
                 new_bounds = (snapped_center, snapped_center)
                 new_geometry = snapped_geometry._update_from_bounds(bounds=new_bounds, axis=axis)
-                new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
+                new_name = structure.name
+                if new_name:
+                    new_name += f"_SUBDIVIDED[{i}]"
+                new_structure = structure.updated_copy(
+                    geometry=new_geometry, medium=new_medium, name=new_name
+                )
 
                 new_structures.append(new_structure)
 
@@ -2130,6 +2135,99 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     def _invalidate_solver_cache(self) -> None:
         """Clear cached attributes that become stale when subpixel changes."""
         self._cached_properties.pop("_mode_solver", None)
+
+    def validate_pre_upload(self) -> None:
+        """Validate the fully initialized simulation is ok for upload to our servers."""
+        log.begin_capture()
+        self._validate_finalized()
+        log.end_capture(self)
+
+    def _make_pec_frame(self, obj: Union[ModeSource, InternalAbsorber]) -> Structure:
+        """Make a pec frame around a mode source or an internal absorber. For mode sources,
+        the frame is added around the injection plane. For internal absorbers, a backing pec
+        plate is also added on the non-absorbing side.
+        """
+        span_inds = np.array(self.grid.discretize_inds(obj))
+
+        coords = self.grid.boundaries.to_list
+        direction = obj.direction
+        if isinstance(obj, ModeSource):
+            axis = obj.injection_axis
+            length = obj.frame.length
+            if direction == "+":
+                span_inds[axis][1] += length - 1
+            else:
+                span_inds[axis][0] -= length - 1
+        else:
+            axis = obj.size.index(0.0)
+
+        box_bounds = [
+            [
+                c[beg],
+                c[end],
+            ]
+            for c, (beg, end) in zip(coords, span_inds)
+        ]
+
+        box = Box.from_bounds(*np.transpose(box_bounds))
+
+        surfaces = Box.surfaces(box.size, box.center)
+        if isinstance(obj, ModeSource):
+            del surfaces[2 * axis : 2 * axis + 2]
+        else:
+            if direction == "-":
+                del surfaces[2 * axis + 1]
+            else:
+                del surfaces[2 * axis]
+
+        structure = Structure(
+            geometry=GeometryGroup(
+                geometries=surfaces,
+            ),
+            medium=PECMedium(),
+        )
+
+        return structure
+
+    @cached_property
+    def _modal_plane_frames(self) -> list[Structure]:
+        """Return frames to add around mode sources and internal absorbers."""
+
+        pec_frames = [
+            self._make_pec_frame(src)
+            for src in self.sources
+            if isinstance(src, ModeSource) and isinstance(src.frame, PECFrame)
+        ]
+
+        pec_frames = pec_frames + [
+            self._make_pec_frame(abc) for abc in self._shifted_internal_absorbers
+        ]
+
+        return pec_frames
+
+    @cached_property
+    def _finalized(self) -> Simulation:
+        """Return the finalized version of the simulation setup. That is, including automatic frames around mode sources and internal absorbers, and 2d strutures converted into volumetric analogues."""
+
+        modal_frames = self._modal_plane_frames
+
+        if len(modal_frames) == 0 and not self._contains_converted_volumetric_structures:
+            return self
+
+        structures = list(self.volumetric_structures) + modal_frames
+
+        return self.updated_copy(grid_spec=GridSpec.from_grid(self.grid), structures=structures)
+
+    def _validate_finalized(self):
+        """Validate that after adding pec frames simulation setup is still valid."""
+
+        try:
+            _ = self._finalized
+        except Exception:
+            log.error(
+                "Simulation fails after requested mode source PEC frames are added. "
+                "Please inspect '._finalized'."
+            )
 
 
 class Simulation(AbstractYeeGridSimulation):
@@ -4336,6 +4434,7 @@ class Simulation(AbstractYeeGridSimulation):
         source_required: bool = True
             If ``True``, validation will fail in case no sources are found in the simulation.
         """
+        super().validate_pre_upload()
         log.begin_capture()
         self._validate_size()
         self._validate_monitor_size()
@@ -4346,7 +4445,6 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_time_monitors_outside_run_time()
         self._validate_time_monitors_num_steps()
         self._validate_freq_monitors_freq_range()
-        self._validate_finalized()
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
             raise SetupError("No sources in simulation.")
@@ -5655,90 +5753,3 @@ class Simulation(AbstractYeeGridSimulation):
         )
 
     _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
-
-    def _make_pec_frame(self, obj: Union[ModeSource, InternalAbsorber]) -> Structure:
-        """Make a pec frame around a mode source or an internal absorber. For mode sources,
-        the frame is added around the injection plane. For internal absorbers, a backing pec
-        plate is also added on the non-absorbing side.
-        """
-        span_inds = np.array(self.grid.discretize_inds(obj))
-
-        coords = self.grid.boundaries.to_list
-        direction = obj.direction
-        if isinstance(obj, ModeSource):
-            axis = obj.injection_axis
-            length = obj.frame.length
-            if direction == "+":
-                span_inds[axis][1] += length - 1
-            else:
-                span_inds[axis][0] -= length - 1
-        else:
-            axis = obj.size.index(0.0)
-
-        box_bounds = [
-            [
-                c[beg],
-                c[end],
-            ]
-            for c, (beg, end) in zip(coords, span_inds)
-        ]
-
-        box = Box.from_bounds(*np.transpose(box_bounds))
-
-        surfaces = Box.surfaces(box.size, box.center)
-        if isinstance(obj, ModeSource):
-            del surfaces[2 * axis : 2 * axis + 2]
-        else:
-            if direction == "-":
-                del surfaces[2 * axis + 1]
-            else:
-                del surfaces[2 * axis]
-
-        structure = Structure(
-            geometry=GeometryGroup(
-                geometries=surfaces,
-            ),
-            medium=PECMedium(),
-        )
-
-        return structure
-
-    @cached_property
-    def _modal_plane_frames(self) -> list[Structure]:
-        """Return frames to add around mode sources and internal absorbers."""
-
-        pec_frames = [
-            self._make_pec_frame(src)
-            for src in self.sources
-            if isinstance(src, ModeSource) and isinstance(src.frame, PECFrame)
-        ]
-
-        pec_frames = pec_frames + [
-            self._make_pec_frame(abc) for abc in self._shifted_internal_absorbers
-        ]
-
-        return pec_frames
-
-    @cached_property
-    def _finalized(self) -> Simulation:
-        """Return the finalized version of the simulation setup. That is, including automatic frames around mode sources and internal absorbers, and 2d strutures converted into volumetric analogues."""
-
-        modal_frames = self._modal_plane_frames
-
-        if len(modal_frames) == 0 and not self._contains_converted_volumetric_structures:
-            return self
-
-        structures = list(self.volumetric_structures) + modal_frames
-
-        return self.updated_copy(grid_spec=GridSpec.from_grid(self.grid), structures=structures)
-
-    def _validate_finalized(self):
-        """Validate that after adding pec frames simulation setup is still valid."""
-
-        try:
-            _ = self._finalized
-        except Exception:
-            log.error(
-                "Simulation fails after requested mode source PEC frames are added. "
-                "Please inspect '._finalized'."
-            )

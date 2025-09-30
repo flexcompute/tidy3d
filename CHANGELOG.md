@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - More robust `Sellmeier` and `Debye` material model, and prevent very large pole parameters in `PoleResidue` material model.
 - Bug in `WavePort` when more than one mode is requested in the `ModeSpec`.
+- Solver error for named 2D materials with inhomogeneous substrates.
 
 ## [v2.10.0rc2] - 2025-10-01
 
@@ -37,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stricter validation for `bend_radius` in mode simulations, preventing the bend center from coinciding with the simulation boundary.
 - Prevent autograd adjoint simulations from reusing out-of-range `normalize_index` values by defaulting their normalization to the first adjoint source when needed.
 - Subtasks validation errors from `web.upload(ComponentModeler)` previously were not being propagated to users, and hung without response.
+
 
 ## [v2.10.0rc1] - 2025-09-11
 
