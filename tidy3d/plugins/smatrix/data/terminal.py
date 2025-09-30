@@ -13,10 +13,16 @@ from tidy3d.components.data.monitor_data import MonitorData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
+from tidy3d.constants import C_0
+from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.data.base import AbstractComponentModelerData
-from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
-from tidy3d.plugins.smatrix.ports.types import TerminalPortType
+from tidy3d.plugins.smatrix.data.data_array import (
+    PortDataArray,
+    PortNameDataArray,
+    TerminalPortDataArray,
+)
+from tidy3d.plugins.smatrix.ports.types import LumpedPortType, TerminalPortType
 from tidy3d.plugins.smatrix.types import NetworkIndex, SParamDef
 from tidy3d.plugins.smatrix.utils import (
     ab_to_s,
@@ -116,6 +122,117 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
             s_param_def=s_param_def if (s_param_def is not None) else self.modeler.s_param_def,
         )
         return smatrix_data
+
+    def change_port_reference_planes(
+        self, smatrix: MicrowaveSMatrixData, port_shifts: PortNameDataArray = None
+    ) -> MicrowaveSMatrixData:
+        """
+        Performs S-parameter de-embedding by shifting reference planes ``port_shifts`` um.
+
+        Parameters
+        ----------
+        smatrix : :class:`.MicrowaveSMatrixData`
+            S-parameters before reference planes are shifted.
+        port_shifts : :class:`.PortNameDataArray`
+            Data array of shifts of wave ports' reference planes.
+            The sign of a port shift reflects direction with respect to the axis normal to a ``WavePort`` plane:
+            E.g.: ``PortNameDataArray(data=-a, coords={"port": "WP1"})`` defines a shift in the first ``WavePort`` by
+            ``a`` um in the direction opposite to the positive axis direction (the axis normal to the port plane).
+
+        Returns
+        -------
+        :class:`MicrowaveSMatrixData`
+            De-embedded S-parameters with respect to updated reference frames.
+        """
+
+        # get s-parameters with respect to current `WavePort` locations
+        S_matrix = smatrix.data.values
+        S_new = np.zeros_like(S_matrix, dtype=complex)
+        N_freq, N_ports, _ = S_matrix.shape
+
+        # pre-allocate memory for effective propagation constants
+        kvecs = np.zeros((N_freq, N_ports), dtype=complex)
+        shifts_vec = np.zeros(N_ports)
+        directions_vec = np.ones(N_ports)
+
+        port_idxs = []
+        n_complex_new = []
+
+        # extract raw data
+        key = self.data.keys_tuple[0]
+        data = self.data[key].data
+        ports = self.modeler.ports
+
+        # get port names and names of ports to be shifted
+        port_names = [port.name for port in ports]
+        shift_names = port_shifts.coords["port"].values
+
+        # Build a mapping for quick lookup from monitor name to monitor data
+        mode_map = {mode_data.monitor.name: mode_data for mode_data in data}
+
+        # form a numpy vector of port shifts
+        for shift_name in shift_names:
+            # ensure that port shifts were defined for valid ports
+            if shift_name not in port_names:
+                raise ValueError(
+                    "The specified port could not be found in the simulation! "
+                    f"Please, make sure the port name is from the following list {port_names}"
+                )
+
+            # get index of a shifted port in port_names list
+            idx = port_names.index(shift_name)
+            port = ports[idx]
+
+            # if de-embedding is requested for lumped port
+            if isinstance(port, LumpedPortType):
+                raise ValueError(
+                    "De-embedding currently supports only 'WavePort' instances. "
+                    f"Received type: '{type(port).__name__}'."
+                )
+                # alternatively we can send a warning and set `shifts_vector[index]` to 0.
+                # shifts_vector[index] = 0.0
+            else:
+                shifts_vec[idx] = port_shifts.sel(port=shift_name).values
+                directions_vec[idx] = -1 if port.direction == "-" else 1
+                port_idxs.append(idx)
+
+                # Collect corresponding mode_data
+                mode_data = mode_map[port._mode_monitor_name]
+                n_complex = mode_data.n_complex.sel(mode_index=port.mode_index)
+                n_complex_new.append(np.squeeze(n_complex.data))
+
+        # flatten port shift vector
+        shifts_vec = np.ravel(shifts_vec)
+        directions_vec = np.ravel(directions_vec)
+
+        # Convert to stacked arrays
+        freqs = np.array(self.modeler.freqs)
+        n_complex_new = np.array(n_complex_new).T
+
+        # construct transformation matrix P_inv
+        kvecs[:, port_idxs] = 2 * np.pi * freqs[:, np.newaxis] * n_complex_new / C_0
+        phase = -kvecs * shifts_vec * directions_vec
+        P_inv = np.exp(1j * phase)
+
+        # de-embed S-parameters: S_new = P_inv @ S_matrix @ P_inv
+        S_new = S_matrix * P_inv[:, :, np.newaxis] * P_inv[:, np.newaxis, :]
+
+        # create a new Port Data Array
+        smat_data = TerminalPortDataArray(S_new, coords=smatrix.data.coords)
+
+        return smatrix.updated_copy(data=smat_data)
+
+    def smatrix_deembedded(self, port_shifts: np.ndarray = None) -> MicrowaveSMatrixData:
+        """Interface function returns  de-embedded S-parameter matrix."""
+        return self.change_port_reference_planes(self.smatrix(), port_shifts=port_shifts)
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
 
     def _monitor_data_at_port_amplitude(
         self,

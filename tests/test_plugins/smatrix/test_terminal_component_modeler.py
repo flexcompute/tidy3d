@@ -24,6 +24,7 @@ from tidy3d.plugins.smatrix import (
     TerminalPortDataArray,
     WavePort,
 )
+from tidy3d.plugins.smatrix.data.data_array import PortNameDataArray
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.utils import s_to_z, validate_square_matrix
 
@@ -1531,3 +1532,66 @@ def test_low_freq_smoothing_spec_sim_dict():
     modeler = modeler.updated_copy(low_freq_smoothing=None)
     for sim in modeler.sim_dict.values():
         assert sim.low_freq_smoothing is None
+
+
+def test_S_parameter_deembedding(monkeypatch, tmp_path):
+    """Test S-parameter de-embedding."""
+
+    z_grid = td.UniformGrid(dl=1 * 1e3)
+    xy_grid = td.UniformGrid(dl=0.1 * 1e3)
+    grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
+    modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort), grid_spec=grid_spec)
+
+    # Make sure the smatrix and impedance calculations work for reduced simulations
+    modeler_data = run_component_modeler(monkeypatch, modeler)
+    s_matrix = modeler_data.smatrix()
+
+    # set up port shifts
+    port_names = [port.name for port in modeler.ports]
+    coords = {"port": port_names}
+    shift_vec = [0, 0]
+    port_shifts = PortNameDataArray(data=shift_vec, coords=coords)
+
+    # make sure that de-embedded S-matrices are identical to the original one if reference planes are not shifted
+    S_dmb = modeler_data.change_port_reference_planes(smatrix=s_matrix, port_shifts=port_shifts)
+    S_dmb_shortcut = modeler_data.smatrix_deembedded(port_shifts=port_shifts)
+    assert np.allclose(S_dmb.data.values, s_matrix.data.values)
+    assert np.allclose(S_dmb_shortcut.data.values, s_matrix.data.values)
+
+    # make sure S-parameters are different if reference planes are moved
+    port_shifts = PortNameDataArray(data=[-100, 200], coords=coords)
+    S_dmb = modeler_data.change_port_reference_planes(smatrix=s_matrix, port_shifts=port_shifts)
+    S_dmb_shortcut = modeler_data.smatrix_deembedded(port_shifts=port_shifts)
+    assert not np.allclose(S_dmb.data.values, s_matrix.data.values)
+    assert np.allclose(S_dmb.data.values, S_dmb_shortcut.data.values)
+
+    # test if `.smatrix_deembedded()` raises a `ValueError` when at least one port to be shifted is not defined in TCM
+    port_shifts_wrong = PortNameDataArray(data=[10, -10], coords={"port": ["wave_1", "LP_wave_2"]})
+
+    with pytest.raises(ValueError):
+        S_dmb = modeler_data.smatrix_deembedded(port_shifts=port_shifts_wrong)
+
+    # set up a new TCM with a mixture of `WavePort` and `CoaxialLumpedPort`
+    modeler_LP = make_coaxial_component_modeler(
+        port_types=(WavePort, CoaxialLumpedPort), grid_spec=grid_spec
+    )
+    modeler_data_LP = run_component_modeler(monkeypatch, modeler_LP)
+
+    # test if `.smatrix_deembedded()` raises a `ValueError` when one tries to de-embed a lumped port
+    port_shifts_LP = PortNameDataArray(data=[10, -10], coords={"port": ["wave_1", "coax_2"]})
+    with pytest.raises(ValueError):
+        S_dmb = modeler_data_LP.smatrix_deembedded(port_shifts=port_shifts_LP)
+
+    # update port shifts so that a reference plane is shifted only for `WavePort` port
+    port_shifts_LP = PortNameDataArray(data=[100], coords={"port": ["wave_1"]})
+
+    # get a new S-matrix
+    s_matrix_LP = modeler_data_LP.smatrix()
+
+    # de-embed S-matrix
+    S_dmb = modeler_data_LP.change_port_reference_planes(
+        smatrix=s_matrix_LP, port_shifts=port_shifts_LP
+    )
+    S_dmb_shortcut = modeler_data_LP.smatrix_deembedded(port_shifts=port_shifts_LP)
+    assert not np.allclose(S_dmb.data.values, s_matrix_LP.data.values)
+    assert np.allclose(S_dmb_shortcut.data.values, S_dmb.data.values)
