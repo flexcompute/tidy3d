@@ -449,13 +449,22 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
 
     @property
     @requires_vtk
-    def _vtk_obj(self):
+    def _vtk_obj_empty(self):
         """A VTK representation (vtkUnstructuredGrid) of the grid."""
 
         grid = vtk["mod"].vtkUnstructuredGrid()
 
         grid.SetPoints(self._vtk_points)
         grid.SetCells(self._vtk_cell_type(), self._vtk_cells)
+
+        return grid
+
+    @property
+    @requires_vtk
+    def _vtk_obj(self):
+        """A VTK representation (vtkUnstructuredGrid) of the grid."""
+
+        grid = self._vtk_obj_empty
 
         if self.is_complex:
             # vtk doesn't support complex numbers
@@ -883,6 +892,43 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
 
         return self._from_vtk_obj_internal(clean_clip)
 
+    @cached_property
+    @requires_vtk
+    def _boundary_points_indices(self):
+        """Find points that lie on open edges/faces."""
+        
+        surface_filter = vtk["mod"].vtkDataSetSurfaceFilter()
+        surface_filter.SetInputData(self._vtk_obj_empty)
+        surface_filter.PassThroughPointIdsOn()  # Important for getting original indices
+        surface_filter.Update()
+
+        boundary_edges_vtk = surface_filter.GetOutput()
+
+        if self._cell_num_vertices() == 3:
+            feature_edges = vtk["mod"].vtkFeatureEdges()
+            feature_edges.SetInputData(boundary_edges_vtk)
+            
+            # Enable the extraction of boundary edges
+            feature_edges.BoundaryEdgesOn()
+            
+            # Disable other types of edges to get only the boundary
+            feature_edges.FeatureEdgesOff()
+            feature_edges.ManifoldEdgesOff()
+            feature_edges.NonManifoldEdgesOff()
+            
+            feature_edges.Update()
+            boundary_edges_vtk = feature_edges.GetOutput()
+        
+        if boundary_edges_vtk.GetNumberOfCells() == 0:
+            # Mesh is watertight, no boundary
+            return np.array([], dtype=int)
+        
+        # Get the original point indices
+        original_ids_array = vtk["vtk_to_numpy"](boundary_edges_vtk.GetPointData().GetArray("vtkOriginalPointIds"))
+        boundary_point_indices = original_ids_array.copy()
+        return boundary_point_indices.astype(int)
+
+
     @requires_vtk
     def reflect(
         self, axis: Axis, center: float, reflection_only: bool = False, symmetry: Union[Literal[-1, 1], XrDataArray] = 1
@@ -931,15 +977,16 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         # record number of existing points
         num_points = len(self.points)
 
-        # detect points that are off the reflection plane
-        # and that need to be duplicated
-        points_off_plane_map = ~np.isclose(self.points.sel(axis=axis), center)
+        # detect points that are not on the reflection plane and on open edges
+        # Those will need to be duplicated
+        points_off_plane_map = np.ones(len(self.points), dtype=bool)
+        points_off_plane_map[self._boundary_points_indices] = ~np.isclose(self.points.sel(axis=axis).data[self._boundary_points_indices], center, atol=1e-4, rtol=1e-4)
         num_new_points = np.sum(points_off_plane_map)
 
         # create new points id
         new_points_id = np.arange(num_new_points) + num_points
 
-        new_points_id_map = -1 * np.ones_like(points_off_plane_map)
+        new_points_id_map = -1 * np.ones_like(points_off_plane_map, dtype=int)
         new_points_id_map[points_off_plane_map] = new_points_id
 
         new_points = self.points.sel(index=points_off_plane_map).copy()
@@ -952,7 +999,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         new_cells.data[new_points_in_new_cells_map] = new_points_id_map[new_points_in_new_cells_orig_id]
 
         # create new values
-        new_values = self.values.sel(index=points_off_plane_map) * symmetry
+        new_values = self.values.sel(index=points_off_plane_map).copy() * symmetry
 
         # combine with original data
         combined_points = xr_concat([self.points, new_points], dim="index")
