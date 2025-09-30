@@ -259,10 +259,10 @@ class ModeSimulation(AbstractYeeGridSimulation):
             return subpixel_sim.run_local()
 
         for mnt in self.monitors:
-            if isinstance(mnt, PermittivityMonitor):
+            if isinstance(mnt, (PermittivityMonitor, MediumMonitor)):
                 raise SetupError(
                     "The package 'tidy3d-extras' is required "
-                    "for accurate local 'PermittivityMonitor' handling. "
+                    "for accurate local 'PermittivityMonitor' and 'MediumMonitor' handling. "
                     "Please install this package using, for example, "
                     "'pip install tidy3d[extras]', and ensure "
                     "'config.use_local_subpixel' is not 'False'. "
