@@ -26,6 +26,7 @@ from tidy3d.components.tcad.generation_recombination import (
     DistributedGeneration,
     HurkxDirectBandToBandTunneling,
     RadiativeRecombination,
+    SelberherrImpactIonization,
     ShockleyReedHallRecombination,
 )
 from tidy3d.components.tcad.mobility import CaugheyThomasMobility, ConstantMobilityModel
@@ -52,6 +53,7 @@ RecombinationModelType = Union[
     RadiativeRecombination,
     ShockleyReedHallRecombination,
     HurkxDirectBandToBandTunneling,
+    SelberherrImpactIonization,
 ]
 BandGapNarrowingModelType = Union[SlotboomBandGapNarrowing]
 

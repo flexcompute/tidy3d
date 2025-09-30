@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Non-isothermal Charge simulations are now available. One can now run this type of simulations by using the `SteadyChargeDCAnalysis` as the `analysis_spec` of a `HeatChargeSimulation`. This type of simulations couple the heat equation with the drift-diffusion equations which allow to account for self heating behavior.
 - Because non-isothermal Charge simulations are now supported, new models for the effective density of states and bandgap energy have been introduced. These models are the following: `ConstantEffectiveDOS`, `IsotropicEffectiveDOS`, `MultiValleyEffectiveDOS`, `DualValleyEffectiveDOS`.
 - Added the Hurkx model for direct band-to-band tunneling `HurkxDirectBandToBandTunneling`.
+- Added Selberherr's model for impact ionization `SelberherrImpactIonization`.
 
 ### Changed
 - `LayerRefinementSpec` defaults to assuming structures made of different materials are interior-disjoint for more efficient mesh generation.

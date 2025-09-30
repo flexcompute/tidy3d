@@ -282,3 +282,81 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
         "semiconductors sigma is typically 2.0, while for indirect "
         "semiconductors sigma is typically 2.5.",
     )
+
+
+class SelberherrImpactIonization(Tidy3dBaseModel):
+    """
+    This class defines the parameters for the Selberherr impact ionization model. Two formulations are available that
+    depend on the driving field, as described in [1]_ (:math:`\\| E \\|`) and [2]_ (:math:`E \\cdot J_{\\nu} / \\| E \\|` for :math:`\\nu = n,p`).
+
+    Notes
+    -----
+
+        The impact ionization rate ``\\alpha_{\\nu}`` (for :math:`\\nu = p` (holes) and :math:`\\nu = n` (electrons)) is defined by:
+
+        .. math::
+
+            \\alpha_{\\nu} = \\alpha_{\\nu}^\\infty \\cdot \\exp \\left( - \\left( \\frac{E_{\\nu}^{\\text{crit}} \\cdot |\\mathbf{J}_{\\nu}|}{E \\cdot \\mathbf{J}_{\\nu}} \\right)^{\\beta_{\\nu}} \\right)
+
+        where :math:`\\alpha_{\\nu}^\\infty`, :math:`E_{\\nu}^{\\text{crit}}`, and :math:`\\beta_{\\nu}` are material-dependent parameters.
+
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> default_Si = td.SelberherrImpactIonization(
+        ...   alpha_n_inf=7.03e5,
+        ...   alpha_p_inf=1.582e6,
+        ...   E_n_crit=1.23e6,
+        ...   E_p_crit=2.03e6,
+        ...   beta_n=1,
+        ...   beta_p=1,
+        ...   formulation='PQ'
+        ... )
+
+    References
+    ----------
+        .. [1] Selberherr, Siegfried. Analysis and simulation of semiconductor devices. Springer Science & Business Media, 1984.
+        .. [2] Vassil Palankovski and Rüdiger Quay. Analysis and simulation of heterostructure devices. Springer Science & Business Media, 2004.
+    """
+
+    alpha_n_inf: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Electron ionization coefficient at infinite field",
+        description="Electron ionization coefficient at infinite field.",
+        units="1/cm",
+    )
+    alpha_p_inf: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Hole ionization coefficient at infinite field",
+        description="Hole ionization coefficient at infinite field.",
+        units="1/cm",
+    )
+    E_n_crit: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Critical electric field for electrons",
+        description="Critical electric field for electrons.",
+        units="V/cm",
+    )
+    E_p_crit: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Critical electric field for holes",
+        description="Critical electric field for holes.",
+        units="V/cm",
+    )
+    beta_n: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Exponent for electrons",
+        description="Exponent for electrons.",
+    )
+    beta_p: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Exponent for holes",
+        description="Exponent for holes.",
+    )
+
+    formulation: str = pd.Field(
+        "PQ",
+        title="Formulation",
+        description="Formulation used for impact ionization. Options are 'Selberherr' "
+        "or 'PQ' for Selberherr and Palankovski and Quay formulations, respectively.",
+    )
