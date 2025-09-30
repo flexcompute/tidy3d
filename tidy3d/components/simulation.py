@@ -69,6 +69,7 @@ from .medium import (
     MediumType,
     MediumType3D,
     PECMedium,
+    _is_pec_like,
 )
 from .monitor import (
     AbstractFieldProjectionMonitor,
@@ -89,6 +90,7 @@ from .monitor import (
     MonitorType,
     PermittivityMonitor,
     SurfaceIntegrationMonitor,
+    SurfaceMonitorType,
     TimeMonitor,
 )
 from .run_time_spec import RunTimeSpec
@@ -115,6 +117,8 @@ from .types import (
     ArrayFloat2D,
     Ax,
     Axis,
+    Bound,
+    Coordinate,
     CoordinateOptional,
     FreqBound,
     InterpMethod,
@@ -3925,6 +3929,62 @@ class Simulation(AbstractYeeGridSimulation):
                 if not np.all(index_k == 0):
                     raise SetupError(f"'{monitor.type}' must not lie in a lossy medium.")
         return val
+
+    @classmethod
+    def _get_surface_monitor_bounds(cls, center: Coordinate, size: Coordinate, monitor: SurfaceMonitorType, medium: MediumType3D, structures: list[Structure]) -> list[Bound]:
+        """Intersect a surface monitor with the bounding box of each PEC structure."""
+
+        sim_box = Box(center=center, size=size)
+        mnt_bounds = Box.bounds_intersection(monitor.bounds, sim_box.bounds)
+
+        if _is_pec_like(medium):
+            return [mnt_bounds]
+
+        bounds = []
+        for structure in structures:
+            if _is_pec_like(structure.medium):
+                intersection_bounds = Box.bounds_intersection(mnt_bounds, structure.geometry.bounds)
+                if all(bmin <= bmax for bmin, bmax in zip(*intersection_bounds)):
+                    bounds.append(intersection_bounds)
+
+        return bounds
+
+    def _get_surface_monitor_bounds_self(self, monitor: SurfaceMonitorType) -> list[Bound]:
+        """Intersect a surface monitor with the bounding box of each PEC structure."""
+
+        sim_box = Box(center=self.center, size=self.size)
+        mnt_bounds = Box.bounds_intersection(monitor.bounds, sim_box.bounds)
+
+        if _is_pec_like(self.medium):
+            return [mnt_bounds]
+
+        bounds = []
+        for structure in self.structures:
+            if _is_pec_like(structure.medium):
+                intersection_bounds = Box.bounds_intersection(mnt_bounds, structure.geometry.bounds)
+                if all(bmin <= bmax for bmin, bmax in zip(*intersection_bounds)):
+                    bounds.append(intersection_bounds)
+
+        return bounds
+
+    @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["medium", "structures", "size", "medium"])
+    def error_empty_surface_monitor(cls, val, values):
+        """Error if any surface monitor does not at least cross a bounding box of a PEC/LossyMetal structure."""
+        monitors = val
+        center = values.get("center")
+        size = values.get("size")
+        structures = values.get("structures")
+        medium = values.get("medium")
+        for mnt in monitors:
+            if isinstance(mnt, SurfaceMonitorType):
+                bounds = cls._get_surface_monitor_bounds(center, size, mnt, medium, structures)
+                if len(bounds) == 0:
+                    raise SetupError(
+                            f"Surface monitor {mnt.name} does not cross any PEC of LossyMetalMedium structures."
+                        )
+        return val
+        
 
     @pydantic.validator("grid_spec", always=True)
     @skip_if_fields_missing(["medium", "sources", "structures"])

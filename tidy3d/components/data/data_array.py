@@ -1500,6 +1500,51 @@ class ImpedanceFreqModeDataArray(ImpedanceArray, FreqModeDataArray):
     __slots__ = ()
 
 
+class IndexedFieldDataArray(DataArray):
+    """Stores indexed values of vector fields in frequency domain. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated vector data.
+
+    Example
+    -------
+    >>> indexed_array = IndexedFieldDataArray(
+    ...     (1+1j) * np.random.random((4,3,1)), coords=dict(index=np.arange(4), axis=np.arange(3), f=[1e9])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "axis", "f")
+
+
+class IndexedFieldTimeDataArray(DataArray):
+    """Stores indexed values of vector fields in time domain. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated vector data.
+
+    Example
+    -------
+    >>> indexed_array = IndexedFieldDataArray(
+    ...     (1+1j) * np.random.random((4,3,1)), coords=dict(index=np.arange(4), axis=np.arange(3), t=[0])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "axis", "t")
+
+
+class IndexedFreqDataArray(DataArray):
+    """Stores indexed values of scalar fields in frequency domain. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated vector data.
+
+    Example
+    -------
+    >>> indexed_array = IndexedFieldDataArray(
+    ...     (1+1j) * np.random.random((4,1)), coords=dict(index=np.arange(4), f=[1e9])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "f")
+
+
 def _make_base_result_data_array(result: DataArray) -> IntegralResultTypes:
     """Helper for creating the proper base result type."""
     cls = FreqDataArray
@@ -1586,12 +1631,19 @@ DATA_ARRAY_TYPES = [
     ImpedanceFreqDataArray,
     ImpedanceTimeDataArray,
     ImpedanceFreqModeDataArray,
+    IndexedFieldDataArray,
+    IndexedFieldTimeDataArray,
+    IndexedFreqDataArray,
+]
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
 
 IndexedDataArrayTypes = Union[
     IndexedDataArray,
     IndexedVoltageDataArray,
+    IndexedFieldDataArray,
+    IndexedFieldTimeDataArray,
+    IndexedFreqDataArray,
     IndexedTimeDataArray,
     IndexedFieldVoltageDataArray,
     PointDataArray,

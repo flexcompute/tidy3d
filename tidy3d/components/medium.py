@@ -8103,3 +8103,20 @@ def medium_from_nk(n: float, k: float, freq: float, **kwargs) -> Union[Medium, L
     if eps_complex.real >= 1:
         return Medium.from_nk(n, k, freq, **kwargs)
     return Lorentz.from_nk(n, k, freq, **kwargs)
+
+
+def _is_pec_like(medium: MediumType3D) -> bool:
+    """Check whether the medium is PEC or lossy metal.
+
+    Parameters
+    ----------
+    medium : MediumType3D
+        Medium to check
+
+    Returns
+    -------
+    bool
+        True if PEC or lossy metal.
+    """
+
+    return medium.is_pec or isinstance(medium, LossyMetalMedium)

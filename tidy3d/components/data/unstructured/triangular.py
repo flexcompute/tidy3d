@@ -305,7 +305,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
                     "Reflection in the normal direction to the grid is prohibited unless 'reflection_only=True'."
                 )
 
-        return super().reflect(axis=axis, center=center, reflection_only=reflection_only)
+        tan_dims = [0, 1, 2]
+        tan_dims.remove(self.normal_axis)
+        tan_axis = tan_dims.index(axis)
+
+        return super().reflect(axis=tan_axis, center=center, reflection_only=reflection_only)
 
     """ Interpolation """
 
