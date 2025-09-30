@@ -242,6 +242,16 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
 
         where :math:`A`, :math:`B`, :math:`E_0`, and :math:`\\sigma` are material-dependent parameters.
 
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> default_Si = td.HurkxDirectBandToBandTunneling(
+        ...   A=1e19,
+        ...   B=1.9e6,
+        ...   E_0=1,
+        ...   sigma=2.5
+        ... )
+
     References
     ----------
         .. [1] Palankovski, Vassil, and Rüdiger Quay. Analysis and simulation of heterostructure devices. Springer Science & Business Media, 2004.
