@@ -65,3 +65,19 @@ class TerminalPortDataArray(DataArray):
     __slots__ = ()
     _dims = ("f", "port_out", "port_in")
     _data_attrs = {"long_name": "terminal-based port matrix element"}
+
+
+class PortNameDataArray(DataArray):
+    """Array of values indexed by port name.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> port_names = ["port1", "port2"]
+    >>> coords = dict(port_name=port_names)
+    >>> data = (1 + 1j) * np.random.random((2,))
+    >>> port_data = PortNameDataArray(data, coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = "port_name"
