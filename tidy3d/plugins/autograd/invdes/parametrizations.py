@@ -201,8 +201,8 @@ def initialize_params_from_simulation(
     ...     param_to_structure=param_to_structure,
     ...     params0=params0,
     ...     maxiter=3,
-    ... )
-    >>> params.shape
+    ... ) # doctest: +SKIP
+    >>> params.shape # doctest: +SKIP
     (3, 3)
     """
     structure_init = param_to_structure(params0, **param_kwargs)

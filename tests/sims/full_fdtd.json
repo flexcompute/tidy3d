@@ -2572,6 +2572,37 @@
         },
         {
             "attrs": {},
+            "type": "MediumMonitor",
+            "center": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "size": [
+                1.0,
+                1.0,
+                0.1
+            ],
+            "name": "mat",
+            "interval_space": [
+                1,
+                1,
+                1
+            ],
+            "colocate": false,
+            "freqs": [
+                100000000000000.0
+            ],
+            "apodization": {
+                "attrs": {},
+                "start": null,
+                "end": null,
+                "width": null,
+                "type": "ApodizationSpec"
+            }
+        },
+        {
+            "attrs": {},
             "type": "ModeMonitor",
             "center": [
                 0.0,
@@ -3396,7 +3427,7 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.10.0rc1",
+    "version": "2.10.0rc2",
     "plot_length_units": "\u03bcm",
     "structure_priority_mode": "equal",
     "lumped_elements": [

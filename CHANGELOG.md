@@ -6,12 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased]
+## [v2.10.0rc2] - 2025-10-01
 
 ### Added
 - New `MediumMonitor` that returns both permittivity and permeability profiles.
 - Task names are now optional when using `run(sim)` or `Job`. When running multiple jobs (via `run_async` or `Batch`), you can also provide simulations as a list without specifying task names. The previous dictionary-based format with explicit task names is still supported.
-- Added support for `tidy3d-extras`, an optional plugin that enables more accurate local mode solving via subpixel averaging.
 - Enabled lazy loading of data via `web.load(..., lazy=True)`. When used, this returns a lightweight proxy object holding a reference to the data. On first access to any field or method, the proxy transparently loads the full object (same as with the default lazy=False).
 - A new type of doping box has been introduced, `CustomDoping` which accepts a `SpatialDataArray` to define doping concentration. Unlike in the case where a `SpatialDataArray`, custom doping defined with `CustomDoping` have additive behavior, i.e., one can add other doping on top. This deprecates the `SpatialDataArray` as direct input for `N_a` and `N_d`.
 - Non-isothermal Charge simulations are now available. One can now run this type of simulations by using the `SteadyChargeDCAnalysis` as the `analysis_spec` of a `HeatChargeSimulation`. This type of simulations couple the heat equation with the drift-diffusion equations which allow to account for self heating behavior.
@@ -19,12 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `LayerRefinementSpec` defaults to assuming structures made of different materials are interior-disjoint for more efficient mesh generation.
--  Removal of the Adjoint plugin.
+- Removal of the Adjoint plugin.
+- Deprecation of Python 3.9 support.
 
 ### Fixed
 - Stricter validation for `bend_radius` in mode simulations, preventing the bend center from coinciding with the simulation boundary.
 - Prevent autograd adjoint simulations from reusing out-of-range `normalize_index` values by defaulting their normalization to the first adjoint source when needed.
-
+- Subtasks validation propagation of `web.upload(ComponentModeler)` previously was not being propagated to users, and hung without response.
 
 ## [v2.10.0rc1] - 2025-09-11
 
