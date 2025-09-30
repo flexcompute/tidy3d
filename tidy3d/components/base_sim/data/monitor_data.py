@@ -52,7 +52,7 @@ class AbstractUnstructuredMonitorData(AbstractMonitorData, ABC):
     def _symmetry_expanded_copy(
         self, 
         property: Union[UnstructuredGridDatasetType, SpatialDataArray], 
-        symmetry: tuple[Union[Literal[-1, 1], XrDataArray], ...] = (1, 1, 1),
+        custom_symmetry: Optional[tuple[Union[Literal[-1, 1], XrDataArray], ...]] = None,
     ) -> Union[UnstructuredGridDatasetType, SpatialDataArray]:
         """Return the property with symmetry applied."""
 
@@ -78,7 +78,7 @@ class AbstractUnstructuredMonitorData(AbstractMonitorData, ABC):
             # do not expand monitor with zero size along symmetry direction
             # this is done because 2d unstructured data does not support this
             if self.symmetry[dim] != 0:
-                symmetry_factor = symmetry[dim] * self.symmetry[dim]
+                symmetry_factor = self.symmetry[dim] if custom_symmetry is None else custom_symmetry[dim]
                 center = self.symmetry_center[dim]
 
                 if mnt_bounds[1][dim] < data_bounds[0][dim]:

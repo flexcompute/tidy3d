@@ -15,7 +15,7 @@ from pandas import DataFrame
 from xarray.core.types import Self
 
 from tidy3d.components.base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
-from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
+from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData, AbstractUnstructuredMonitorData
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
 from tidy3d.components.monitor import (
@@ -1575,21 +1575,28 @@ class AbstractSurfaceFieldData(MonitorData, AbstractFieldDataset, AbstractUnstru
     def _symmetry_update_dict(self) -> dict:
         """Dictionary of data fields to create data with expanded symmetry."""
 
+        h_symmetry = [
+            xr.DataArray([1, -1, -1], coords={"axis": [0, 1, 2]}) * self.symmetry[0],
+            xr.DataArray([-1, 1, -1], coords={"axis": [0, 1, 2]}) * self.symmetry[1],
+            xr.DataArray([-1, -1, 1], coords={"axis": [0, 1, 2]}) * self.symmetry[2],
+        ]
+
         e_symmetry = [
+            xr.DataArray([-1, 1, 1], coords={"axis": [0, 1, 2]}) * self.symmetry[0],
+            xr.DataArray([1, -1, 1], coords={"axis": [0, 1, 2]}) * self.symmetry[1],
+            xr.DataArray([1, 1, -1], coords={"axis": [0, 1, 2]}) * self.symmetry[2],
+        ]
+
+        # normal field is always even under symmetry
+        n_symmetry = [
             xr.DataArray([1, -1, -1], coords={"axis": [0, 1, 2]}),
             xr.DataArray([-1, 1, -1], coords={"axis": [0, 1, 2]}),
             xr.DataArray([-1, -1, 1], coords={"axis": [0, 1, 2]}),
         ]
 
-        h_symmetry = [
-            xr.DataArray([-1, 1, 1], coords={"axis": [0, 1, 2]}),
-            xr.DataArray([1, -1, 1], coords={"axis": [0, 1, 2]}),
-            xr.DataArray([1, 1, -1], coords={"axis": [0, 1, 2]}),
-        ]
-
-        E = self._symmetry_expanded_copy(self.E, e_symmetry)
-        H = self._symmetry_expanded_copy(self.H, h_symmetry)
-        normal = self._symmetry_expanded_copy(self.normal, h_symmetry)
+        E = [None if e_one_side is None else self._symmetry_expanded_copy(e_one_side, e_symmetry) for e_one_side in self.E]
+        H = [None if h_one_side is None else self._symmetry_expanded_copy(h_one_side, h_symmetry) for h_one_side in self.H]
+        normal = self._symmetry_expanded_copy(self.normal, n_symmetry)
         return {"E": E, "H": H, "normal": normal}
 
 
