@@ -1533,25 +1533,10 @@ class AuxFieldTimeData(AuxFieldTimeDataset, AbstractFieldData):
     _contains_monitor_fields = enforce_monitor_fields_present()
 
 
-class AbstractSurfaceFieldData(MonitorData, AbstractFieldDataset, ABC):
+class AbstractSurfaceFieldData(MonitorData, AbstractFieldDataset, AbstractUnstructuredMonitorData, ABC):
     """Collection of vector fields on a surfacewith some symmetry properties."""
 
     monitor: Union[SurfaceFieldMonitor, SurfaceFieldTimeMonitor]
-
-    symmetry: tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
-        (0, 0, 0),
-        title="Symmetry",
-        description="Symmetry eigenvalues of the original simulation in x, y, and z.",
-    )
-
-    symmetry_center: Coordinate = pd.Field(
-        None,
-        title="Symmetry Center",
-        description="Center of the symmetry planes of the original simulation in x, y, and z. "
-        "Required only if any of the ``symmetry`` field are non-zero.",
-    )
-
-    _require_sym_center = required_if_symmetry_present("symmetry_center")
 
     @property
     def symmetry_expanded(self):
@@ -1590,7 +1575,22 @@ class AbstractSurfaceFieldData(MonitorData, AbstractFieldDataset, ABC):
     def _symmetry_update_dict(self) -> dict:
         """Dictionary of data fields to create data with expanded symmetry."""
 
-        raise Tidy3dNotImplementedError("Surface monitors currently do not support symmetry.")
+        e_symmetry = [
+            xr.DataArray([1, -1, -1], coords={"axis": [0, 1, 2]}),
+            xr.DataArray([-1, 1, -1], coords={"axis": [0, 1, 2]}),
+            xr.DataArray([-1, -1, 1], coords={"axis": [0, 1, 2]}),
+        ]
+
+        h_symmetry = [
+            xr.DataArray([-1, 1, 1], coords={"axis": [0, 1, 2]}),
+            xr.DataArray([1, -1, 1], coords={"axis": [0, 1, 2]}),
+            xr.DataArray([1, 1, -1], coords={"axis": [0, 1, 2]}),
+        ]
+
+        E = self._symmetry_expanded_copy(self.E, e_symmetry)
+        H = self._symmetry_expanded_copy(self.H, h_symmetry)
+        normal = self._symmetry_expanded_copy(self.normal, h_symmetry)
+        return {"E": E, "H": H, "normal": normal}
 
 
 class ElectromagneticSurfaceFieldData(
