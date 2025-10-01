@@ -662,12 +662,10 @@ class HeatChargeSimulation(AbstractSimulation):
                     "but none have been defined."
                 )
 
-            # NOTE: SteadyPotentialMonitor and SteadyFreeCarrierMonitor are only supported
-            # for unstructured = True
+            # NOTE: in Charge we're only supporting unstructured monitors.
+            # only Temperature and Potential monitors can be structured.
             for mnt in monitors:
-                if isinstance(mnt, SteadyPotentialMonitor) or isinstance(
-                    mnt, SteadyFreeCarrierMonitor
-                ):
+                if isinstance(mnt, SteadyPotentialMonitor) or isinstance(mnt, TemperatureMonitor):
                     if not mnt.unstructured:
                         log.warning(
                             "Currently, Charge simulations support only unstructured monitors. Please set "
