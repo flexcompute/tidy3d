@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Stricter validation for `bend_radius` in mode simulations, preventing the bend center from coinciding with the simulation boundary.
 - Prevent autograd adjoint simulations from reusing out-of-range `normalize_index` values by defaulting their normalization to the first adjoint source when needed.
-- Subtasks validation propagation of `web.upload(ComponentModeler)` previously was not being propagated to users, and hung without response.
+- Subtasks validation errors from `web.upload(ComponentModeler)` previously were not being propagated to users, and hung without response.
 
 ## [v2.10.0rc1] - 2025-09-11
 
