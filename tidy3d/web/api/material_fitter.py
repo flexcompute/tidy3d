@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import numpy as np
 import requests
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 
 from tidy3d.plugins.dispersion import DispersionFitter
 from tidy3d.web.core.http_util import http
@@ -95,10 +95,10 @@ class MaterialFitterTask(Submittable):
                 raise resp.raise_for_status()
             fitter_req = _FitterRequest(
                 fileName=os.path.basename(temp.name),
-                jsonInput=options.json(exclude_none=True),
+                jsonInput=options.model_dump_json(exclude_none=True),
                 resourcePath=uid,
             )
-            resp = http.post("tidy3d/fitter/fit", json=fitter_req.dict())
+            resp = http.post("tidy3d/fitter/fit", json=fitter_req.model_dump())
             return cls(dispersion_fitter=fitter, **resp)
 
     def sync_status(self) -> None:
