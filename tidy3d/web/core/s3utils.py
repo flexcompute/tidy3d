@@ -13,7 +13,7 @@ from typing import Callable, Optional
 
 import boto3
 from boto3.s3.transfer import TransferConfig
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from rich.progress import (
     BarColumn,
     DownloadColumn,
@@ -208,7 +208,7 @@ def get_s3_sts_token(
         if extra_arguments is not None:
             method += "&" + "&".join(f"{k}={v}" for k, v in extra_arguments.items())
         resp = http.get(method)
-        token = _S3STSToken.parse_obj(resp)
+        token = _S3STSToken.model_validate(resp)
         _s3_sts_tokens[cache_key] = token
     return _s3_sts_tokens[cache_key]
 
