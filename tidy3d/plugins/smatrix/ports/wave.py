@@ -103,8 +103,6 @@ class WavePort(AbstractTerminalPort, Box):
         to the total port voltage.
         """
         flux_sign = 1 if self.direction == "+" else -1
-
-        mode_data = mode_data._isel(mode_index=[self.mode_index])
         if self.voltage_integral is None:
             flux_sign = 1 if mode_data.monitor.store_fields_direction == "+" else -1
             current_coeffs = self.current_integral.compute_current(mode_data)
@@ -118,7 +116,6 @@ class WavePort(AbstractTerminalPort, Box):
         to the total port current.
         """
         flux_sign = 1 if self.direction == "+" else -1
-        mode_data = mode_data._isel(mode_index=[self.mode_index])
         if self.current_integral is None:
             flux_sign = 1 if mode_data.monitor.store_fields_direction == "+" else -1
             voltage_coeffs = self.voltage_integral.compute_voltage(mode_data)
@@ -221,20 +218,20 @@ class WavePort(AbstractTerminalPort, Box):
 
     def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
         """Helper to compute voltage across the port."""
-        mode_data = sim_data[self._mode_monitor_name]
+        mode_data = sim_data[self._mode_monitor_name]._isel(mode_index=[self.mode_index])
         voltage_coeffs = self._mode_voltage_coefficients(mode_data)
         amps = mode_data.amps
-        fwd_amps = amps.sel(direction="+").squeeze()
-        bwd_amps = amps.sel(direction="-").squeeze()
+        fwd_amps = amps.sel(direction="+", mode_index=self.mode_index).squeeze()
+        bwd_amps = amps.sel(direction="-", mode_index=self.mode_index).squeeze()
         return voltage_coeffs * (fwd_amps + bwd_amps)
 
     def compute_current(self, sim_data: SimulationData) -> FreqDataArray:
         """Helper to compute current flowing through the port."""
-        mode_data = sim_data[self._mode_monitor_name]
+        mode_data = sim_data[self._mode_monitor_name]._isel(mode_index=[self.mode_index])
         current_coeffs = self._mode_current_coefficients(mode_data)
         amps = mode_data.amps
-        fwd_amps = amps.sel(direction="+").squeeze()
-        bwd_amps = amps.sel(direction="-").squeeze()
+        fwd_amps = amps.sel(direction="+", mode_index=self.mode_index).squeeze()
+        bwd_amps = amps.sel(direction="-", mode_index=self.mode_index).squeeze()
         # In ModeData, fwd_amps and bwd_amps are not relative to
         # the direction fields are stored
         sign = 1.0
