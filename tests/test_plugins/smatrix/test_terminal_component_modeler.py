@@ -780,6 +780,25 @@ def test_run_coaxial_component_modeler_with_wave_ports(
                 s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
             ), "monitor index not present in S matrix"
 
+    # Another run with more modes in the mode spec
+    mode_spec = td.ModeSpec(num_modes=2)
+    modeler = modeler.updated_copy(path="ports/0/", mode_spec=mode_spec)
+    s_matrix = get_terminal_port_data_array(monkeypatch, modeler)
+
+    shape_one_port = (len(modeler.freqs), len(modeler.ports))
+    shape_both_ports = (len(modeler.freqs),)
+    for port_in in modeler.ports:
+        for port_out in modeler.ports:
+            coords_in = {"port_in": port_in.name}
+            coords_out = {"port_out": port_out.name}
+
+            assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
+                "source index not present in S matrix"
+            )
+            assert np.all(
+                s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
+            ), "monitor index not present in S matrix"
+
 
 def test_run_mixed_component_modeler_with_wave_ports(monkeypatch, tmp_path):
     """Checks the terminal component modeler will allow mixed ports."""

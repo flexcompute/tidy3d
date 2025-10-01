@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - More robust `Sellmeier` and `Debye` material model, and prevent very large pole parameters in `PoleResidue` material model.
-
+- Bug in `WavePort` when more than one mode is requested in the `ModeSpec`.
 
 ## [v2.10.0rc2] - 2025-10-01
 
