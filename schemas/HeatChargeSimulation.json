@@ -9904,7 +9904,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2.10.0rc2",
+      "default": "2.10.0rc3",
       "type": "string"
     }
   },
