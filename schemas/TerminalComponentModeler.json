@@ -9658,6 +9658,53 @@
       ],
       "type": "object"
     },
+    "LowFrequencySmoothingSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "max_deviation": {
+          "default": 0.5,
+          "minimum": 0,
+          "type": "number"
+        },
+        "max_sampling_time": {
+          "default": 5.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "min_sampling_time": {
+          "default": 1.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "monitors": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "order": {
+          "default": 1,
+          "maximum": 3,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": {
+          "default": "LowFrequencySmoothingSpec",
+          "enum": [
+            "LowFrequencySmoothingSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "monitors"
+      ],
+      "type": "object"
+    },
     "LumpedPort": {
       "additionalProperties": false,
       "properties": {
@@ -11478,6 +11525,44 @@
           "default": "ModeSpec",
           "enum": [
             "ModeSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ModelerLowFrequencySmoothingSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "max_deviation": {
+          "default": 0.5,
+          "minimum": 0,
+          "type": "number"
+        },
+        "max_sampling_time": {
+          "default": 5.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "min_sampling_time": {
+          "default": 1.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "order": {
+          "default": 1,
+          "maximum": 3,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": {
+          "default": "ModelerLowFrequencySmoothingSpec",
+          "enum": [
+            "ModelerLowFrequencySmoothingSpec"
           ],
           "type": "string"
         }
@@ -14240,6 +14325,13 @@
           },
           "type": "array"
         },
+        "low_freq_smoothing": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/LowFrequencySmoothingSpec"
+            }
+          ]
+        },
         "lumped_elements": {
           "default": [],
           "items": {
@@ -16921,6 +17013,21 @@
           "type": "ArrayLike"
         }
       ]
+    },
+    "low_freq_smoothing": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ModelerLowFrequencySmoothingSpec"
+        }
+      ],
+      "default": {
+        "attrs": {},
+        "max_deviation": 0.5,
+        "max_sampling_time": 5.0,
+        "min_sampling_time": 1.0,
+        "order": 1,
+        "type": "ModelerLowFrequencySmoothingSpec"
+      }
     },
     "name": {
       "default": "",

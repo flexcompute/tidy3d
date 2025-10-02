@@ -1424,3 +1424,115 @@ def test_wave_port_to_absorber(tmp_path):
     sim = list(modeler.sim_dict.values())[0]
     absorber = sim.internal_absorbers[0]
     assert absorber.boundary_spec == custom_boundary_spec
+
+
+def test_low_freq_smoothing_spec_initialization_default_values():
+    """Test that LowFrequencySmoothingSpec initializes with correct default values."""
+    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
+
+    spec = ModelerLowFrequencySmoothingSpec()
+    assert spec.min_sampling_time == 1
+    assert spec.max_sampling_time == 5
+    assert spec.order == 1
+    assert spec.max_deviation == 0.5
+
+
+def test_low_freq_smoothing_spec_initialization_custom_values():
+    """Test that LowFrequencySmoothingSpec initializes with custom values."""
+    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
+
+    spec = ModelerLowFrequencySmoothingSpec(
+        min_sampling_time=2, max_sampling_time=8, order=2, max_deviation=0.3
+    )
+    assert spec.min_sampling_time == 2
+    assert spec.max_sampling_time == 8
+    assert spec.order == 2
+    assert spec.max_deviation == 0.3
+
+
+def test_low_freq_smoothing_spec_edge_cases():
+    """Test edge cases and boundary conditions."""
+    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
+
+    # Test with order 0 (constant fit)
+    spec = ModelerLowFrequencySmoothingSpec(order=0)
+    assert spec.order == 0
+
+    # Test with maximum order
+    spec = ModelerLowFrequencySmoothingSpec(order=3)
+    assert spec.order == 3
+
+    # Test with zero max_deviation
+    spec = ModelerLowFrequencySmoothingSpec(max_deviation=0.0)
+    assert spec.max_deviation == 0.0
+
+    # Test with maximum max_deviation
+    spec = ModelerLowFrequencySmoothingSpec(max_deviation=1.0)
+    assert spec.max_deviation == 1.0
+
+
+def test_low_freq_smoothing_spec_validation_sampling_times_invalid():
+    """Test validation of sampling time parameters."""
+    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
+
+    # Test invalid range where min_sampling_time >= max_sampling_time
+    with pytest.raises(
+        ValueError, match="The minimum sampling time must be less than the maximum sampling time"
+    ):
+        ModelerLowFrequencySmoothingSpec(min_sampling_time=5, max_sampling_time=3)
+
+    with pytest.raises(
+        ValueError, match="The minimum sampling time must be less than the maximum sampling time"
+    ):
+        ModelerLowFrequencySmoothingSpec(min_sampling_time=3, max_sampling_time=3)
+
+
+def test_low_freq_smoothing_spec_validation_order_bounds():
+    """Test validation of order parameter bounds."""
+    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
+
+    # Test valid orders
+    ModelerLowFrequencySmoothingSpec(order=0)
+    ModelerLowFrequencySmoothingSpec(order=3)
+
+    # Test invalid orders
+    with pytest.raises(pd.ValidationError):
+        ModelerLowFrequencySmoothingSpec(order=-1)
+
+    with pytest.raises(pd.ValidationError):
+        ModelerLowFrequencySmoothingSpec(order=4)
+
+
+def test_low_freq_smoothing_spec_validation_max_deviation_bounds():
+    """Test validation of max_deviation parameter bounds."""
+    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
+
+    # Test valid max_deviation
+    ModelerLowFrequencySmoothingSpec(max_deviation=0.0)
+    ModelerLowFrequencySmoothingSpec(max_deviation=1.0)
+
+    # Test invalid max_deviation
+    with pytest.raises(pd.ValidationError):
+        ModelerLowFrequencySmoothingSpec(max_deviation=-0.1)
+
+
+def test_low_freq_smoothing_spec_sim_dict():
+    """Test that LowFrequencySmoothingSpec is correctly added to the sim_dict."""
+    from tidy3d.plugins.smatrix.component_modelers.terminal import ModelerLowFrequencySmoothingSpec
+
+    spec = ModelerLowFrequencySmoothingSpec(
+        min_sampling_time=2, max_sampling_time=8, order=2, max_deviation=0.3
+    )
+
+    modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort))
+    modeler = modeler.updated_copy(low_freq_smoothing=spec)
+    for sim in modeler.sim_dict.values():
+        assert spec.min_sampling_time == sim.low_freq_smoothing.min_sampling_time
+        assert spec.max_sampling_time == sim.low_freq_smoothing.max_sampling_time
+        assert spec.order == sim.low_freq_smoothing.order
+        assert spec.max_deviation == sim.low_freq_smoothing.max_deviation
+        assert sim.low_freq_smoothing.monitors == tuple(mnt.name for mnt in sim.monitors[-2:])
+
+    modeler = modeler.updated_copy(low_freq_smoothing=None)
+    for sim in modeler.sim_dict.values():
+        assert sim.low_freq_smoothing is None

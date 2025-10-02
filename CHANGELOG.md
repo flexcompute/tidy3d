@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added support for `tidy3d-extras`, an optional plugin that enables more accurate local mode solving via subpixel averaging.
 - Added support for `symlog` and `log` scale plotting in `Scene.plot_eps()` and `Scene.plot_structures_property()` methods. The `symlog` scale provides linear behavior near zero and logarithmic behavior elsewhere, while 'log' is a base 10 logarithmic scale.
+- Added `LowFrequencySmoothingSpec` and `ModelerLowFrequencySmoothingSpec` for automatic smoothing of mode monitor data at low frequencies where DFT sampling is insufficient.
 
 ### Changed
 - Improved performance of antenna metrics calculation by utilizing cached wave amplitude calculations instead of recomputing wave amplitudes for each port excitation in the `TerminalComponentModelerData`.
