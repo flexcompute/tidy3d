@@ -1,3 +1,5 @@
+"""Public API for the `invdes2` inverse design scaffold."""
+
 from __future__ import annotations
 
 from .design_region import DesignRegion
