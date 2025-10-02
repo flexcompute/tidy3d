@@ -7,5 +7,5 @@ from dataclasses import dataclass
 class OptimizerSpec:
     """Hyperparameters describing the optimization loop to be used externally."""
 
-    learning_rate: float
     num_steps: int
+    learning_rate: float

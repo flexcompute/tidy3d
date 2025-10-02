@@ -58,3 +58,34 @@ class InverseDesign:
         sims = self.get_simulations(params)
         batch_data = self.run_simulations(sims)
         return self.get_metric(batch_data)
+
+    @property
+    def parameter_shape(self) -> list[list[int]]:
+        """Return the shape of the parameters for each device."""
+        return [device_spec.parameter_shape for device_spec in self.device_specs]
+
+    def _flatten_params(self, params: list[list[np.ndarray]]) -> np.ndarray:
+        """Flatten the parameters for each device."""
+        flattened_params = []
+        for device_params in params:
+            for design_region_params in device_params:
+                flattened_params.append(design_region_params.flatten())
+        return np.concatenate(flattened_params)
+
+    def _unflatten_params(self, params: np.ndarray) -> list[list[np.ndarray]]:
+        """Unflatten the parameters by slicing using per-region sizes.
+
+        The method reverses `_flatten_params`, reconstructing a nested list
+        aligned with `device_specs[i].design_regions[j]`.
+        """
+        result: list[list[np.ndarray]] = []
+        cursor = 0
+        for device_spec in self.device_specs:
+            device_params: list[np.ndarray] = []
+            for region in device_spec.design_regions:
+                size = int(region.parameter_shape)
+                segment = params[cursor : cursor + size]
+                device_params.append(segment)
+                cursor += size
+            result.append(device_params)
+        return result

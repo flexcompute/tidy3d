@@ -7,8 +7,8 @@ import autograd.numpy as np
 import tidy3d as td
 import tidy3d.web as web
 
-from .design_region import DesignRegion
-from .metric import Metric
+from .design_region import DesignRegionType
+from .metric import MetricType
 
 
 @dataclass
@@ -31,8 +31,8 @@ class DeviceSpec:
     """
 
     simulation: td.Simulation
-    design_regions: list[DesignRegion]
-    metrics: list[Metric]
+    design_regions: list[DesignRegionType]
+    metrics: list[MetricType]
     name: str
 
     def get_simulation(self, params: list[np.ndarray]) -> td.Simulation:
@@ -74,7 +74,8 @@ class DeviceSpec:
         """
         value = 0.0
         for metric in self.metrics:
-            value = value + getattr(metric, "weight", 1.0) * metric.evaluate(sim_data)
+            mnt_data = sim_data[metric.monitor_name]
+            value = value + metric.weight * metric.evaluate(mnt_data)
         return value
 
     def get_objective(self, params: list[np.ndarray]) -> float:
@@ -82,3 +83,8 @@ class DeviceSpec:
         sim = self.get_simulation(params)
         sim_data = self.run_simulation(sim)
         return self.get_metric(sim_data)
+
+    @property
+    def parameter_shape(self) -> list[int]:
+        """Return the shape of the parameters for each design region."""
+        return [design_region.parameter_shape for design_region in self.design_regions]
