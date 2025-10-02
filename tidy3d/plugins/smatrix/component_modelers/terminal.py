@@ -9,9 +9,13 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BroadbandModeABCSpec
+from tidy3d.components.frequency_extrapolation import (
+    AbstractLowFrequencySmoothingSpec,
+    LowFrequencySmoothingSpec,
+)
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.index import SimulationMap
-from tidy3d.components.monitor import DirectivityMonitor
+from tidy3d.components.monitor import DirectivityMonitor, ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Ax, Complex
@@ -30,6 +34,27 @@ from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import NetworkElement, NetworkIndex, SParamDef
+
+
+class ModelerLowFrequencySmoothingSpec(AbstractLowFrequencySmoothingSpec):
+    """Specifies the low frequency smoothing parameters for the terminal component simulation.
+    This specification affects only results at wave ports. Specifically, the mode decomposition data
+    for frequencies for which the total simulation time in units of the corresponding period (T = 1/f) is less than
+    the specified minimum sampling time will be overridden by extrapolation from the data in the trusted frequency range.
+    The trusted frequency range is defined in terms of minimum and maximum sampling times (the total simulation time divided by the corresponding period).
+
+    Example
+    -------
+    >>> low_freq_smoothing = ModelerLowFrequencySmoothingSpec(
+    ...     min_sampling_time=3,
+    ...     max_sampling_time=6,
+    ...     order=1,
+    ...     max_deviation=0.5,
+    ... )
+    """
+
+
+DEFAULT_LOW_FREQUENCY_SMOOTHING_SPEC = ModelerLowFrequencySmoothingSpec()
 
 
 class TerminalComponentModeler(AbstractComponentModeler):
@@ -97,6 +122,12 @@ class TerminalComponentModeler(AbstractComponentModeler):
         "pseudo",
         title="Scattering Parameter Definition",
         description="Whether to compute scattering parameters using the 'pseudo' or 'power' wave definitions.",
+    )
+
+    low_freq_smoothing: Optional[ModelerLowFrequencySmoothingSpec] = pd.Field(
+        DEFAULT_LOW_FREQUENCY_SMOOTHING_SPEC,
+        title="Low Frequency Smoothing",
+        description="The low frequency smoothing parameters for the terminal component simulation.",
     )
 
     @pd.root_validator(pre=False)
@@ -343,6 +374,17 @@ class TerminalComponentModeler(AbstractComponentModeler):
             "grid_spec": new_grid_spec,
             "internal_absorbers": new_absorbers,
         }
+
+        # propagate the low frequency smoothing specification to the simulation
+        mode_monitors = [mnt.name for mnt in field_monitors if isinstance(mnt, ModeMonitor)]
+        if mode_monitors and self.low_freq_smoothing is not None:
+            update_dict["low_freq_smoothing"] = LowFrequencySmoothingSpec(
+                monitors=mode_monitors,
+                min_sampling_time=self.low_freq_smoothing.min_sampling_time,
+                max_sampling_time=self.low_freq_smoothing.max_sampling_time,
+                order=self.low_freq_smoothing.order,
+                max_deviation=self.low_freq_smoothing.max_deviation,
+            )
 
         # This is the new default simulation will all shared components added
         return sim_wo_source.copy(update=update_dict)
