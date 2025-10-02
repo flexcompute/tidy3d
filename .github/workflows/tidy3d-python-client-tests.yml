@@ -159,6 +159,41 @@ jobs:
         run: ruff format --check --diff
       - name: Run ruff check
         run: ruff check tidy3d
+  
+  lint-commit-messages:
+    needs: determine-test-scope
+    runs-on: ubuntu-latest
+    name: veryify-commit-linting
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # fetch all commits in the PR
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install commitlint
+        run: npm install -D @commitlint/cli @commitlint/config-conventional
+
+      - name: Print versions
+        run: |
+          git --version
+          node --version
+          npm --version
+          npx commitlint --version
+        
+      - name: Check commit messages (merge_group)
+        if: github.event_name == 'merge_group'
+        run: |
+          # For merge groups, check the commits being merged
+          npx commitlint --from ${{ github.event.merge_group.base_sha }} --to ${{ github.event.merge_group.head_sha }} --verbose || {
+            echo "Commit message linting failed; please follow the conventional commits format at https://www.conventionalcommits.org/"
+            exit 1
+          }
+      
 
   verify-schema-change:
     name: verify-schema-change
@@ -480,7 +515,7 @@ jobs:
       (( needs.determine-test-scope.outputs.pr_approval_state == 'true' ) && 
       ( needs.determine-test-scope.outputs.local_tests == 'true' ) || 
       ( needs.determine-test-scope.outputs.remote_tests == 'true' ))
-    needs: [local-tests, remote-tests, lint, verify-schema-change]
+    needs: [local-tests, remote-tests, lint, verify-schema-change, lint-commit-messages]
     runs-on: ubuntu-latest
     steps:
       - name: check-passing-remote-tests
@@ -501,6 +536,9 @@ jobs:
             echo "❌ local-tests failed or were skipped."
           elif [[ "${{ needs.determine-test-scope.outputs.pr_approval_state }}" == 'true' && github.event.pull_request ]]; then
             echo "❌ PR requires approval."
+            exit 1
+          elif [[ github.event_name == 'merge_group' && "${{ needs.lint-commit-messages.result }}" != 'success' ]]; then
+            echo "❌ Linting of commit messages failed or was skipped."
             exit 1
           fi
           echo "✅ All required test jobs passed!"

@@ -1,3 +1,6 @@
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.11.11"
@@ -5,4 +8,11 @@ repos:
      - id: ruff-check
        args: [ --fix ]
      - id: ruff-format
+  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
+    rev: v9.22.0
+    hooks:
+      - id: commitlint
+        stages: [commit-msg]
+        verbose: true
+        entry: bash -c 'commitlint --edit || exit 0'
 
