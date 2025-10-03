@@ -9,6 +9,7 @@ import pytest
 
 import tidy3d as td
 from tidy3d.components.scene import MAX_GEOMETRY_COUNT, MAX_NUM_MEDIUMS
+from tidy3d.exceptions import SetupError
 
 from ..utils import SIM_FULL, cartesian_to_unstructured
 
@@ -370,7 +371,7 @@ def test_plot_property():
         name="Si_MultiPhysics",
     )
 
-    def try_plotting(mpm, display=False):
+    def try_plotting(mpm, display=False, scale=None):
         # Structure
         struct = td.Structure(
             geometry=td.Box(size=(2, 2, 2), center=(0, 0, 0)),
@@ -384,10 +385,16 @@ def test_plot_property():
         )
 
         _, ax = plt.subplots(1, 4, figsize=(20, 4))
-        scene.plot_structures_property(z=0, property="N_a", ax=ax[0])
-        scene.plot_structures_property(z=0, property="N_d", ax=ax[1])
-        scene.plot_structures_property(z=0, property="doping", ax=ax[2])
-        scene.plot_structures_property(z=0, ax=ax[3])  # eps
+        if scale:
+            scene.plot_structures_property(z=0, property="N_a", ax=ax[0], scale=scale)
+            scene.plot_structures_property(z=0, property="N_d", ax=ax[1], scale=scale)
+            scene.plot_structures_property(z=0, property="doping", ax=ax[2], scale=scale)
+            scene.plot_structures_property(z=0, ax=ax[3], scale=scale)  # eps
+        else:
+            scene.plot_structures_property(z=0, property="N_a", ax=ax[0])
+            scene.plot_structures_property(z=0, property="N_d", ax=ax[1])
+            scene.plot_structures_property(z=0, property="doping", ax=ax[2])
+            scene.plot_structures_property(z=0, ax=ax[3])  # eps
         if display:
             plt.show()
 
@@ -395,6 +402,7 @@ def test_plot_property():
     const_doping = td.ConstantDoping(concentration=1e15)
     mpm = mpm.updated_copy(charge=semicon.updated_copy(N_a=[const_doping], N_d=[const_doping]))
     try_plotting(mpm, display=display_plots)
+    try_plotting(mpm, display=display_plots, scale="symlog")
 
     # add some Gaussian doping
     gaussian_box = td.GaussianDoping(
@@ -402,6 +410,7 @@ def test_plot_property():
     )
     mpm = mpm.updated_copy(charge=semicon.updated_copy(N_a=[gaussian_box], N_d=[gaussian_box]))
     try_plotting(mpm, display=display_plots)
+    try_plotting(mpm, display=display_plots, scale="symlog")
 
     # now try with a custom doping
     x = np.linspace(-1, 1, 30)
@@ -419,3 +428,60 @@ def test_plot_property():
     custom_box1 = td.CustomDoping(center=(0, 0, 0), size=(2, 2, 2), concentration=concentration)
     mpm = mpm.updated_copy(charge=semicon.updated_copy(N_a=[custom_box1], N_d=[custom_box1]))
     try_plotting(mpm, display=display_plots)
+    try_plotting(mpm, display=display_plots, scale="symlog")
+
+
+def test_log_scale_with_custom_limits():
+    """Test log scale with custom limits."""
+
+    # Create a scene with different permittivity values
+    scene = td.Scene(
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+                medium=td.MultiPhysicsMedium(
+                    optical=td.Medium(permittivity=1.0),
+                ),
+            ),
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+                medium=td.MultiPhysicsMedium(
+                    optical=td.Medium(permittivity=10.0),
+                ),
+            ),
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(1, 0, 0)),
+                medium=td.MultiPhysicsMedium(
+                    optical=td.Medium(permittivity=100.0),
+                ),
+            ),
+        ],
+        medium=td.MultiPhysicsMedium(
+            optical=td.Medium(permittivity=1.0),
+        ),
+    )
+
+    # Test log scale with custom limits
+    _ = scene.plot_eps(x=0, scale="log", eps_lim=(1e-2, 100))
+    plt.close()
+
+    _ = scene.plot_eps(x=0, scale="log", eps_lim=(1e-5, 100))
+    plt.close()
+
+    with pytest.raises(SetupError, match="Log scale cannot be used with non-positive values."):
+        _ = scene.plot_eps(x=0, scale="log", eps_lim=(-1e-2, 100))
+        plt.close()
+
+    _ = scene.plot_structures_property(x=0, property="eps", scale="log", limits=(1e-2, 100))
+    plt.close()
+
+    with pytest.raises(SetupError, match="Log scale cannot be used with non-positive values."):
+        _ = scene.plot_structures_property(x=0, property="eps", scale="log", limits=(-2e-2, 100))
+        plt.close()
+
+    # Test that invalid scale raises error
+    with pytest.raises(
+        SetupError, match="The scale 'invalid' is not supported for plotting structures property."
+    ):
+        _ = scene.plot_structures_property(x=0, property="eps", scale="invalid")
+    plt.close()

@@ -13,7 +13,7 @@ from tidy3d.components.data.monitor_data import FieldTimeData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.file_util import replace_values
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeMonitor
-from tidy3d.exceptions import DataError, Tidy3dKeyError
+from tidy3d.exceptions import DataError, SetupError, Tidy3dKeyError
 
 from ..utils import get_nested_shape
 from .test_data_arrays import FIELD_MONITOR, SIM, SIM_SYM
@@ -527,3 +527,19 @@ def test_to_mat_file(tmp_path):
     sim_data = make_sim_data()
     path = str(tmp_path / "test.mat")
     sim_data.to_mat_file(path)
+
+
+def test_plot_field_monitor_data_unsupported_scale():
+    """Test plot_field_monitor_data with unsupported scale to trigger SetupError."""
+    sim_data = make_sim_data()
+
+    # Test with unsupported scale
+    with pytest.raises(
+        SetupError, match="The scale 'invalid' is not supported for plotting field data"
+    ):
+        sim_data.plot_field_monitor_data(
+            field_monitor_data=sim_data.monitor_data["field"],
+            field_name="Ex",
+            val="real",
+            scale="invalid",
+        )
