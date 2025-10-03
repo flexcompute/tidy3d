@@ -261,3 +261,60 @@ objective = inv.get_metric(batch)
 ```
 
 
+How invdes2 differs from invdes (design philosophy)
+---------------------------------------------------
+
+At a glance
+- **invdes2 (this module)**: minimal, composable, and backend-agnostic scaffold. Focuses on clear seams: regions → device build → batch run → metric aggregation. No optimizer baked-in by design.
+- **invdes (existing plugin)**: feature-rich, opinionated, and end-to-end. Includes parameter transforms, penalties, initialization specs, optimizer with history/caching, and analysis helpers.
+
+Side‑by‑side comparison
+
+- **Core abstraction**
+  - invdes2: `DesignRegion` + `DeviceSpec` + `Metric` + `InverseDesign` (orchestration only).
+  - invdes: `DesignRegion` with transformations/penalties, `InverseDesign`/`InverseDesignMulti`, plus an `Optimizer` producing an `InverseDesignResult`.
+
+- **Parameter mapping to permittivity**
+  - invdes2: `TopologyDesignRegion.to_structure(params)` reshapes a 1D vector into a voxel grid; `eps_bounds` reserved for future use; no built-in transforms/penalties.
+  - invdes: rich pipeline: transformations (e.g., filter + projection) → material density → penalties (e.g., erosion/dilation) → permittivity mapping; validated gradients.
+
+- **Objective composition**
+  - invdes2: explicit `Metric` objects per monitor; `DeviceSpec.get_metric` does weighted sum; `InverseDesign.get_metric` aggregates across devices.
+  - invdes: user supplies a `post_process_fn(sim_data)` (or batch dict) that defines the scalar objective; penalties subtract from the objective; helpers/utilities available.
+
+- **Execution model**
+  - invdes2: `web.run` for single and `web.run_async` for batches; easy monkeypatch seams in tests for emulation.
+  - invdes: same web backends, but wrapped inside an optimizer loop with result persistence.
+
+- **Optimization**
+  - invdes2: no optimizer included; provides `_flatten_params/_unflatten_params` and simple helpers like `ones()` to integrate with external optimizers.
+  - invdes: built‑in Adam optimizer, gradient computation via autograd, progress display, callbacks, result caching to disk, continue/resume, plotting, and export helpers.
+
+- **State and results**
+  - invdes2: stateless orchestration; returns scalars and leaves bookkeeping to the caller.
+  - invdes: stateful `InverseDesignResult` with history of params, grads, states, and convenience accessors.
+
+- **Validation and typing**
+  - invdes2: plain dataclasses + simple ABCs; minimal validation; lightweight surface for rapid iteration.
+  - invdes: heavy validation with Pydantic, explicit error messaging, gradient checks for transforms/penalties.
+
+Why invdes2 exists
+- **Iteration speed**: smaller conceptual surface for experimentation and research prototypes.
+- **Composability**: metrics are small objects; devices are thin wrappers around base simulations; orchestration is explicit.
+- **Testability**: seams for swapping execution (`run_simulation`, `run_simulations`) enable local/emulated unit tests without network calls.
+
+Trade‑offs
+- Fewer batteries included: no transformations, penalties, optimizer history, or built‑in continuation.
+- Less guardrail validation: places more responsibility on the optimization script for bounds, projections, and schedules.
+
+Migration guidance (invdes → invdes2)
+- Map `post_process_fn` to one or more `Metric` implementations. If your post‑process touched multiple monitors, create a metric per monitor and combine via weights, or implement a custom metric that reads multiple monitors from `sim_data`.
+- Convert transformations/penalties into your optimization loop: pre‑process the parameter vectors (e.g., filtering + projection) before passing to `to_structure`, and subtract penalty values inside your objective (or define a negative‑weight metric analogue).
+- Replace `InverseDesignMulti` with multiple `DeviceSpec`s (one per simulation scenario); `InverseDesign` will build a batch and sum device objectives.
+- Replace `Optimizer.run(...)` with an external loop that calls `get_objective(params)` or wraps it with autograd for gradients; use `_flatten_params/_unflatten_params` to interoperate with libraries.
+
+When to choose which
+- Choose invdes2 when you want a lean, hackable kernel for orchestration and prefer to own the optimization and parameter processing.
+- Choose invdes when you want a turnkey, validated pipeline with transformations, penalties, built‑in optimizers, and analysis utilities.
+
+
