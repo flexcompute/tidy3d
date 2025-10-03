@@ -64,13 +64,7 @@ def test_parameter_shapes():
 
 
 def test_flatten_unflatten_params():
-    params = [
-        [
-            np.ones_like(design_region.parameter_shape)
-            for design_region in device_spec.design_regions
-        ]
-        for device_spec in invdes.device_specs
-    ]
+    params = invdes.ones()
     flat = invdes._flatten_params(params)
     restored = invdes._unflatten_params(flat)
     flat2 = invdes._flatten_params(restored)
@@ -80,24 +74,19 @@ def test_flatten_unflatten_params():
 
 def test_design_region_to_structure():
     for design_region in design_regions:
-        params = np.ones(design_region.parameter_shape)
+        params = design_region.ones()
         _ = design_region.to_structure(params)
 
 
 def test_device_spec_get_simulation():
     for device_spec in device_specs:
-        params = [
-            np.ones(design_region.parameter_shape) for design_region in device_spec.design_regions
-        ]
+        params = device_spec.ones()
         sim = device_spec.get_simulation(params)
         assert len(sim.structures) == len(sim_base.structures) + len(device_spec.design_regions)
 
 
 def test_invdes_get_simulations():
-    params = [
-        [np.ones(design_region.parameter_shape) for design_region in device_spec.design_regions]
-        for device_spec in invdes.device_specs
-    ]
+    params = invdes.ones()
     sims = invdes.get_simulations(params)
 
     assert len(sims) == len(invdes.device_specs)
@@ -147,9 +136,6 @@ def use_emulated(monkeypatch):
 
 
 def test_objective_function(use_emulated):
-    params = [
-        [np.ones(design_region.parameter_shape) for design_region in device_spec.design_regions]
-        for device_spec in invdes.device_specs
-    ]
+    params = invdes.ones()
     val = invdes.get_objective(params)
     assert not np.allclose(val, 0.0)

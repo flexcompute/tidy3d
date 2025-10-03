@@ -26,6 +26,10 @@ class DesignRegion:
     def parameter_shape(self) -> int:
         """Return the (flattened) shape of the parameters for this design region."""
 
+    def ones(self, **kwargs) -> np.ndarray:
+        """Return an array of ones with the shape of the parameters for this design region."""
+        return np.ones(self.parameter_shape, **kwargs)
+
 
 @dataclass
 class TopologyDesignRegion(DesignRegion):

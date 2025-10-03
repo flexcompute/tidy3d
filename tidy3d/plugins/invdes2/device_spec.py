@@ -74,7 +74,7 @@ class DeviceSpec:
         """
         value = 0.0
         for metric in self.metrics:
-            mnt_data = sim_data.monitor_data[metric.monitor_name]
+            mnt_data = sim_data[metric.monitor_name]
             value = value + metric.weight * metric.evaluate(mnt_data)
         return value
 
@@ -88,3 +88,7 @@ class DeviceSpec:
     def parameter_shape(self) -> list[int]:
         """Return the shape of the parameters for each design region."""
         return [design_region.parameter_shape for design_region in self.design_regions]
+
+    def ones(self, **kwargs) -> list[np.ndarray]:
+        """Return a list of arrays of ones with the shape of the parameters for each design region."""
+        return [design_region.ones(**kwargs) for design_region in self.design_regions]

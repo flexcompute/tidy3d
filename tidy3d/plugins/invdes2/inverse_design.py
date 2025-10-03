@@ -8,6 +8,7 @@ autograd-enabled Tidy3D Web.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import autograd.numpy as np
@@ -45,7 +46,7 @@ class InverseDesign:
         """Execute multiple simulations concurrently via Tidy3D Web."""
         return web.run_async(sims)
 
-    def get_metric(self, batch_data: web.BatchData) -> float:
+    def get_metric(self, batch_data: Mapping[str, td.SimulationData]) -> float:
         """Aggregate metrics across all devices."""
         value = 0.0
         for device_spec in self.device_specs:
@@ -63,6 +64,10 @@ class InverseDesign:
     def parameter_shape(self) -> list[list[int]]:
         """Return the shape of the parameters for each device."""
         return [device_spec.parameter_shape for device_spec in self.device_specs]
+
+    def ones(self, **kwargs) -> list[list[np.ndarray]]:
+        """Return a list of arrays of ones with the shape of the parameters for each design region."""
+        return [device_spec.ones(**kwargs) for device_spec in self.device_specs]
 
     def _flatten_params(self, params: list[list[np.ndarray]]) -> np.ndarray:
         """Flatten the parameters for each device."""
