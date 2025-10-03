@@ -54,9 +54,7 @@ class TopologyDesignRegion(DesignRegion):
         # TODO: add transformations
         eps_data = params.reshape(self.shape_3d)
 
-        return td.Structure.from_permittivity_array(
-            geometry=geometry, eps_data=eps_data, eps_bounds=self.eps_bounds
-        )
+        return td.Structure.from_permittivity_array(geometry=geometry, eps_data=eps_data)
 
 
 DesignRegionType = Union[TopologyDesignRegion]

@@ -4,7 +4,6 @@ import autograd.numpy as np
 import pytest
 
 import tidy3d as td
-import tidy3d.web as web
 from tidy3d.plugins.invdes2 import (
     DeviceSpec,
     FluxMetric,
@@ -66,7 +65,10 @@ def test_parameter_shapes():
 
 def test_flatten_unflatten_params():
     params = [
-        [np.ones_like(design_region.shape_3d) for design_region in device_spec.design_regions]
+        [
+            np.ones_like(design_region.parameter_shape)
+            for design_region in device_spec.design_regions
+        ]
         for device_spec in invdes.device_specs
     ]
     flat = invdes._flatten_params(params)
@@ -78,27 +80,28 @@ def test_flatten_unflatten_params():
 
 def test_design_region_to_structure():
     for design_region in design_regions:
-        params = np.ones_like(design_region.shape_3d)
+        params = np.ones(design_region.parameter_shape)
         _ = design_region.to_structure(params)
 
 
 def test_device_spec_get_simulation():
     for device_spec in device_specs:
         params = [
-            np.ones_like(design_region.shape_3d) for design_region in device_spec.design_regions
+            np.ones(design_region.parameter_shape) for design_region in device_spec.design_regions
         ]
         sim = device_spec.get_simulation(params)
+        assert len(sim.structures) == len(sim_base.structures) + len(device_spec.design_regions)
 
 
 def test_invdes_get_simulations():
     params = [
-        [np.ones_like(design_region.shape_3d) for design_region in device_spec.design_regions]
+        [np.ones(design_region.parameter_shape) for design_region in device_spec.design_regions]
         for device_spec in invdes.device_specs
     ]
     sims = invdes.get_simulations(params)
 
     assert len(sims) == len(invdes.device_specs)
-    assert {sims.keys()} == {device_spec.name for device_spec in invdes.device_specs}
+    assert set(sims.keys()) == {device_spec.name for device_spec in invdes.device_specs}
 
 
 def test_metric_evaluate():
@@ -110,16 +113,12 @@ def test_metric_evaluate():
 
 def test_device_spec_get_metric():
     for device_spec in device_specs:
-        for metric in device_spec.metrics:
-            mnt_data = sim_data_base[metric.monitor_name]
-            val = device_spec.get_metric(mnt_data, metric)
-            assert not np.allclose(val, 0.0)
+        val = device_spec.get_metric(sim_data_base)
+        assert not np.allclose(val, 0.0)
 
 
 def test_invdes_get_metric():
-    batch_data = web.BatchData(
-        {device_spec.name: sim_data_base for device_spec in invdes.device_specs}
-    )
+    batch_data = {device_spec.name: sim_data_base for device_spec in invdes.device_specs}
     val = invdes.get_metric(batch_data)
     assert not np.allclose(val, 0.0)
 
@@ -149,7 +148,7 @@ def use_emulated(monkeypatch):
 
 def test_objective_function(use_emulated):
     params = [
-        [np.ones_like(design_region.shape_3d) for design_region in device_spec.design_regions]
+        [np.ones(design_region.parameter_shape) for design_region in device_spec.design_regions]
         for device_spec in invdes.device_specs
     ]
     val = invdes.get_objective(params)
