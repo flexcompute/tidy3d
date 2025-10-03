@@ -1514,7 +1514,10 @@ class PolySlab(base.Planar):
         Returns (z_centers, dz, z0, z1). For 2D, returns single center and dz=1.
         """
         if is_2d:
-            zc = np.array([self.center_axis], dtype=GRADIENT_DTYPE_FLOAT)
+            midpoint_z = np.maximum(
+                np.minimum(self.center_axis, sim_max[self.axis]), sim_min[self.axis]
+            )
+            zc = np.array([midpoint_z], dtype=GRADIENT_DTYPE_FLOAT)
             return zc, 1.0, self.center_axis, self.center_axis
 
         z0 = max(self.slab_bounds[0], sim_min[self.axis])
@@ -1889,6 +1892,8 @@ class PolySlab(base.Planar):
         r2_min = max(r2_min, poly_min_r2)
         r2_max = min(r2_max, poly_max_r2)
 
+        # intersect the polygon with the simulation bounds
+        face_poly = face_poly.intersection(shapely.box(r1_min, r2_min, r1_max, r2_max))
         if (r1_max <= r1_min) and (r2_max <= r2_min):
             # the polygon does not intersect the current simulation slice
             return 0.0
