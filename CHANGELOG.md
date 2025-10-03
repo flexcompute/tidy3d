@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved performance of antenna metrics calculation by utilizing cached wave amplitude calculations instead of recomputing wave amplitudes for each port excitation in the `TerminalComponentModelerData`.
 - Changed hashing method in `Tidy3dBaseModel` from sha256 to md5.
 - Allowing for more geometries in a ClipOperation geometry.
+- Improved the speed of computing `Box` shape derivatives when used inside a `GeometryGroup`.
 
 ### Fixed
 - More robust `Sellmeier` and `Debye` material model, and prevent very large pole parameters in `PoleResidue` material model.
