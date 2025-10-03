@@ -56,6 +56,11 @@ invdes = InverseDesign(optimizer_spec=optimizer_spec, device_specs=device_specs)
 
 
 def test_parameter_shapes():
+    """Ensure parameter shape metadata aligns across devices and regions.
+
+    - `InverseDesign.parameter_shape` should equal the list of each `DeviceSpec.parameter_shape`.
+    - Each `DeviceSpec.parameter_shape` should equal the list of each region's `parameter_shape`.
+    """
     assert invdes.parameter_shape == [d.parameter_shape for d in invdes.device_specs]
     for device_spec in invdes.device_specs:
         assert device_spec.parameter_shape == [
@@ -64,6 +69,11 @@ def test_parameter_shapes():
 
 
 def test_flatten_unflatten_params():
+    """Round-trip flatten/unflatten preserves the parameter vector.
+
+    Uses helper constructors to build correctly sized parameter arrays, then verifies that
+    flatten → unflatten → flatten yields an identical 1D vector.
+    """
     params = invdes.ones()
     flat = invdes._flatten_params(params)
     restored = invdes._unflatten_params(flat)
@@ -73,12 +83,22 @@ def test_flatten_unflatten_params():
 
 
 def test_design_region_to_structure():
+    """Each design region can map its parameter vector to a `td.Structure`.
+
+    Builds per-region parameter arrays with the provided helper and ensures `to_structure`
+    returns a structure without error.
+    """
     for design_region in design_regions:
         params = design_region.ones()
         _ = design_region.to_structure(params)
 
 
 def test_device_spec_get_simulation():
+    """`DeviceSpec.get_simulation` appends one structure per design region.
+
+    The resulting simulation should contain the original structures plus the number of
+    design regions in the spec.
+    """
     for device_spec in device_specs:
         params = device_spec.ones()
         sim = device_spec.get_simulation(params)
@@ -86,6 +106,11 @@ def test_device_spec_get_simulation():
 
 
 def test_invdes_get_simulations():
+    """`InverseDesign.get_simulations` returns a batch keyed by device names.
+
+    Confirms the number of simulations equals the number of device specs and that keys are
+    exactly the device names.
+    """
     params = invdes.ones()
     sims = invdes.get_simulations(params)
 
@@ -94,6 +119,7 @@ def test_invdes_get_simulations():
 
 
 def test_metric_evaluate():
+    """`Metric.evaluate` produces a non-zero scalar from emulated monitor data."""
     for metric in metrics:
         mnt_data = sim_data_base[metric.monitor_name]
         val = metric.evaluate(mnt_data)
@@ -101,18 +127,21 @@ def test_metric_evaluate():
 
 
 def test_device_spec_get_metric():
+    """`DeviceSpec.get_metric` aggregates weighted metric values into a scalar."""
     for device_spec in device_specs:
         val = device_spec.get_metric(sim_data_base)
         assert not np.allclose(val, 0.0)
 
 
 def test_invdes_get_metric():
+    """`InverseDesign.get_metric` sums device metrics from batch results."""
     batch_data = {device_spec.name: sim_data_base for device_spec in invdes.device_specs}
     val = invdes.get_metric(batch_data)
     assert not np.allclose(val, 0.0)
 
 
 def test_inverse_design_unique_names_validation():
+    """Constructing `InverseDesign` with duplicate device names raises `ValueError`."""
     device_specs_fail = [device_spec1, device_spec1]
     with pytest.raises(ValueError):
         InverseDesign(optimizer_spec=optimizer_spec, device_specs=device_specs_fail)
@@ -136,6 +165,7 @@ def use_emulated(monkeypatch):
 
 
 def test_objective_function(use_emulated):
+    """`InverseDesign.get_objective` returns a non-zero scalar using emulated runs."""
     params = invdes.ones()
     val = invdes.get_objective(params)
     assert not np.allclose(val, 0.0)
