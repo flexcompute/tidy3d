@@ -27,7 +27,7 @@ from tidy3d.components.structure import Structure
 from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, inf
-from tidy3d.exceptions import DataError, FileError, Tidy3dKeyError
+from tidy3d.exceptions import DataError, FileError, SetupError, Tidy3dKeyError
 from tidy3d.log import log
 
 from .data_array import FreqDataArray, TimeDataArray
@@ -540,7 +540,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             field_data = db_factor * np.log10(np.abs(field_data))
             field_data.name += " (dB)"
             cmap_type = "sequential"
-        else:
+        elif scale == "lin":
             cmap_type = (
                 "cyclic"
                 if val == "phase"
@@ -550,6 +550,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
                     else "sequential"
                 )
             )
+        else:
+            raise SetupError(f"The scale '{scale}' is not supported for plotting field data.")
 
         # interp out any monitor.size==0 dimensions
         monitor = field_monitor_data.monitor

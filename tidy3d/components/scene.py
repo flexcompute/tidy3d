@@ -59,6 +59,7 @@ from .types import (
     InterpMethod,
     LengthUnit,
     PermittivityComponent,
+    PlotScale,
     PriorityMode,
     Shapely,
     Size,
@@ -632,11 +633,19 @@ class Scene(Tidy3dBaseModel):
         return plot_params
 
     @staticmethod
-    def _add_cbar(vmin: float, vmax: float, label: str, cmap: str, ax: Ax = None) -> None:
+    def _add_cbar(
+        vmin: float,
+        vmax: float,
+        label: str,
+        cmap: str,
+        ax: Ax = None,
+        norm: mpl.colors.Normalize = None,
+    ) -> None:
         """Add a colorbar to plot."""
-        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.15)
+        if norm is None:
+            norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
         mappable = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
         plt.colorbar(mappable, cax=cax, label=label)
 
@@ -804,6 +813,8 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        eps_lim: tuple[Union[float, None], Union[float, None]] = (None, None),
+        scale: PlotScale = "lin",
     ) -> Ax:
         """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -828,6 +839,10 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        eps_lim : Tuple[float, float] = None
+            Custom limits for eps coloring.
+        scale : PlotScale = "lin"
+            Scale for the plot. Either 'lin' for linear, 'log' for log10, 'symlog' for symmetric logarithmic (linear near zero, logarithmic elsewhere), or 'dB' for decibel scale.
 
         Returns
         -------
@@ -838,7 +853,17 @@ class Scene(Tidy3dBaseModel):
         hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         ax = self.plot_structures_eps(
-            freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            freq=freq,
+            cbar=True,
+            alpha=alpha,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            eps_lim=eps_lim,
+            scale=scale,
         )
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         return ax
@@ -855,6 +880,7 @@ class Scene(Tidy3dBaseModel):
         cbar: bool = True,
         reverse: bool = False,
         eps_lim: tuple[Union[float, None], Union[float, None]] = (None, None),
+        scale: PlotScale = "lin",
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
@@ -885,6 +911,8 @@ class Scene(Tidy3dBaseModel):
             Defaults to the structure default alpha.
         eps_lim : Tuple[float, float] = None
             Custom limits for eps coloring.
+        scale : PlotScale = "lin"
+            Scale for the plot. Either 'lin' for linear, 'log' for log10, 'symlog' for symmetric logarithmic (linear near zero, logarithmic elsewhere), or 'dB' for decibel scale.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -911,6 +939,7 @@ class Scene(Tidy3dBaseModel):
             cbar=cbar,
             reverse=reverse,
             limits=eps_lim,
+            scale=scale,
             ax=ax,
             hlim=hlim,
             vlim=vlim,
@@ -931,6 +960,7 @@ class Scene(Tidy3dBaseModel):
         cbar: bool = True,
         reverse: bool = False,
         limits: tuple[Union[float, None], Union[float, None]] = (None, None),
+        scale: PlotScale = "lin",
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
@@ -962,6 +992,9 @@ class Scene(Tidy3dBaseModel):
             Defaults to the structure default alpha.
         limits : Tuple[float, float] = None
             Custom coloring limits for the property to plot.
+        scale : PlotScale = "lin"
+            Scale for the plot. Either 'lin' for linear, 'log' for log10, or 'dB' for decibel scale.
+            For log scale with negative values, the absolute value is taken before log transformation.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -1018,23 +1051,52 @@ class Scene(Tidy3dBaseModel):
         if property_min is None or property_max is None:
             if property == "eps":
                 eps_min_sim, eps_max_sim = self.eps_bounds(freq=freq, eps_component=eps_component)
-                if property_min is None:
-                    property_min = eps_min_sim
-
-                if property_max is None:
-                    property_max = eps_max_sim
+                property_min = property_min if property_min is not None else eps_min_sim
+                property_max = property_max if property_max is not None else eps_max_sim
+                linthresh = 1e-2 * property_min
 
             if property in ["N_d", "N_a", "doping"]:
                 acceptor_limits, donor_limits = self.doping_bounds()
+                acceptor_abs_min, donor_abs_min = self.doping_absolute_minimum()
                 if property == "N_d":
-                    property_min = donor_limits[0]
-                    property_max = donor_limits[1]
+                    property_min = property_min if property_min is not None else donor_limits[0]
+                    property_max = property_max if property_max is not None else donor_limits[1]
+                    linthresh = donor_abs_min
                 elif property == "N_a":
-                    property_min = acceptor_limits[0]
-                    property_max = acceptor_limits[1]
+                    property_min = property_min if property_min is not None else acceptor_limits[0]
+                    property_max = property_max if property_max is not None else acceptor_limits[1]
+                    linthresh = acceptor_abs_min
                 elif property == "doping":
-                    property_min = -donor_limits[1]
-                    property_max = acceptor_limits[1]
+                    property_min = property_min if property_min is not None else -donor_limits[1]
+                    property_max = property_max if property_max is not None else acceptor_limits[1]
+                    linthresh = min(acceptor_abs_min, donor_abs_min)
+
+            if np.isclose(linthresh, 0.0):
+                # fallback to default linthresh of 1e-3
+                linthresh = 1e-3
+        else:
+            if np.isclose(property_min, 0.0) or property_min < 0.0:
+                linthresh = 1e-3
+            else:
+                linthresh = 1e-2 * np.abs(property_min)
+
+        if scale == "lin":
+            norm = mpl.colors.Normalize(vmin=property_min, vmax=property_max)
+        elif scale == "log":
+            # LogNorm doesn't work with negative values, so we need to handle this case
+            if property_min <= 0 or property_max <= 0:
+                raise SetupError(
+                    f"Log scale cannot be used with non-positive values. "
+                    f"Property range: [{property_min}, {property_max}]. "
+                    f"Consider using 'symlog' scale instead."
+                )
+            norm = mpl.colors.LogNorm(vmin=property_min, vmax=property_max)
+        elif scale == "symlog":
+            norm = mpl.colors.SymLogNorm(linthresh=linthresh, vmin=property_min, vmax=property_max)
+        else:
+            raise SetupError(
+                f"The scale '{scale}' is not supported for plotting structures property."
+            )
 
         for medium, shape in medium_shapes:
             if property in ["doping", "N_a", "N_d"]:
@@ -1051,7 +1113,17 @@ class Scene(Tidy3dBaseModel):
                     )
                 else:
                     self._pcolormesh_shape_doping_box(
-                        x, y, z, alpha, medium, property_min, property_max, shape, ax, property
+                        x,
+                        y,
+                        z,
+                        alpha,
+                        medium,
+                        property_min,
+                        property_max,
+                        shape,
+                        ax,
+                        property,
+                        norm,
                     )
             else:
                 # if the background medium is custom medium, it needs to be rendered separately
@@ -1069,6 +1141,7 @@ class Scene(Tidy3dBaseModel):
                         shape=shape,
                         ax=ax,
                         eps_component=eps_component,
+                        norm=norm,
                     )
                 else:
                     # For custom medium, apply pcolormesh clipped by the shape.
@@ -1086,6 +1159,7 @@ class Scene(Tidy3dBaseModel):
                         ax,
                         grid,
                         eps_component=eps_component,
+                        norm=norm,
                     )
 
         if cbar:
@@ -1096,10 +1170,11 @@ class Scene(Tidy3dBaseModel):
                     label=r"$\rm{Doping} \#/cm^3$",
                     cmap=HEAT_SOURCE_CMAP,
                     ax=ax,
+                    norm=norm,
                 )
             else:
                 self._add_cbar_eps(
-                    eps_min=property_min, eps_max=property_max, ax=ax, reverse=reverse
+                    eps_min=property_min, eps_max=property_max, ax=ax, reverse=reverse, norm=norm
                 )
 
         # clean up the axis display
@@ -1113,7 +1188,13 @@ class Scene(Tidy3dBaseModel):
         return ax
 
     @staticmethod
-    def _add_cbar_eps(eps_min: float, eps_max: float, ax: Ax = None, reverse: bool = False) -> None:
+    def _add_cbar_eps(
+        eps_min: float,
+        eps_max: float,
+        ax: Ax = None,
+        reverse: bool = False,
+        norm: Optional[mpl.colors.Normalize] = None,
+    ) -> None:
         """Add a permittivity colorbar to plot."""
         Scene._add_cbar(
             vmin=eps_min,
@@ -1121,6 +1202,7 @@ class Scene(Tidy3dBaseModel):
             label=r"$\epsilon_r$",
             cmap=STRUCTURE_EPS_CMAP if not reverse else STRUCTURE_EPS_CMAP_R,
             ax=ax,
+            norm=norm,
         )
 
     @staticmethod
@@ -1182,6 +1264,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax,
         grid: Grid,
         eps_component: Optional[PermittivityComponent] = None,
+        norm: mpl.colors.Normalize = None,
     ):
         """
         Plot shape made of custom medium with ``pcolormesh``.
@@ -1324,10 +1407,9 @@ class Scene(Tidy3dBaseModel):
             eps_shape,
             clip_path=(polygon_path(shape), ax.transData),
             cmap=STRUCTURE_EPS_CMAP,
-            vmin=eps_min,
-            vmax=eps_max,
             alpha=alpha,
             clip_box=ax.bbox,
+            norm=norm,
         )
 
     @staticmethod
@@ -1339,6 +1421,7 @@ class Scene(Tidy3dBaseModel):
         reverse: bool = False,
         alpha: Optional[float] = None,
         eps_component: Optional[PermittivityComponent] = None,
+        norm: Optional[mpl.colors.Normalize] = None,
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in scene.plot_eps()."""
 
@@ -1364,11 +1447,19 @@ class Scene(Tidy3dBaseModel):
             plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
         else:
             eps_medium = medium._eps_plot(frequency=freq, eps_component=eps_component)
-            delta_eps = eps_medium - eps_min
-            delta_eps_max = eps_max - eps_min + 1e-5
-            eps_fraction = delta_eps / delta_eps_max
-            color = eps_fraction if reverse else 1 - eps_fraction
-            color = min(1, max(color, 0))  # clip in case of custom eps limits
+            if norm is not None:
+                # Use the same normalization as the colorbar for consistency
+                color = norm(eps_medium)
+                if reverse:
+                    color = 1 - color
+                color = min(1, max(color, 0))  # clip in case of custom eps limits
+            else:
+                # Fallback to linear mapping for backward compatibility
+                delta_eps = eps_medium - eps_min
+                delta_eps_max = eps_max - eps_min + 1e-5
+                eps_fraction = delta_eps / delta_eps_max
+                color = eps_fraction if reverse else 1 - eps_fraction
+                color = min(1, max(color, 0))  # clip in case of custom eps limits
             plot_params = plot_params.copy(update={"facecolor": str(color)})
 
         return plot_params
@@ -1384,6 +1475,7 @@ class Scene(Tidy3dBaseModel):
         reverse: bool = False,
         alpha: Optional[float] = None,
         eps_component: Optional[PermittivityComponent] = None,
+        norm: Optional[mpl.colors.Normalize] = None,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
         plot_params = self._get_structure_eps_plot_params(
@@ -1394,6 +1486,7 @@ class Scene(Tidy3dBaseModel):
             alpha=alpha,
             reverse=reverse,
             eps_component=eps_component,
+            norm=norm,
         )
         ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
         return ax
@@ -1935,6 +2028,67 @@ class Scene(Tidy3dBaseModel):
                                     limits[1] = max_value
         return acceptors_lims, donors_lims
 
+    def doping_absolute_minimum(self):
+        """Get the absolute minimum values of the doping concentrations.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Absolute minimum values for acceptors and donors respectively.
+        """
+        # Use more reasonable initial values
+        acceptors_abs_min = np.inf
+        donors_abs_min = np.inf
+
+        for struct in self.all_structures:
+            if isinstance(struct.medium.charge, SemiconductorMedium):
+                electric_spec = struct.medium.charge
+
+                # Process acceptors
+                acceptors_min = self._get_absolute_minimum_from_doping(electric_spec.N_a)
+                if acceptors_min < acceptors_abs_min:
+                    acceptors_abs_min = acceptors_min
+
+                # Process donors
+                donors_min = self._get_absolute_minimum_from_doping(electric_spec.N_d)
+                if donors_min < donors_abs_min:
+                    donors_abs_min = donors_min
+
+        return acceptors_abs_min, donors_abs_min
+
+    def _get_absolute_minimum_from_doping(self, doping):
+        """Helper method to get absolute minimum from a single doping specification.
+
+        Parameters
+        ----------
+        doping : Union[float, SpatialDataArray, tuple]
+            Doping specification to analyze.
+
+        Returns
+        -------
+        float
+            Absolute minimum value found in the doping specification.
+        """
+        if isinstance(doping, float):
+            return np.abs(doping)
+
+        # NOTE: This will be deprecated.
+        if isinstance(doping, SpatialDataArray):
+            return np.min(np.abs(doping.data.flatten()))
+
+        if isinstance(doping, tuple):
+            min_values = []
+            for doping_box in doping:
+                if isinstance(doping_box, ConstantDoping):
+                    min_values.append(np.abs(doping_box.concentration))
+                elif isinstance(doping_box, GaussianDoping):
+                    min_values.append(np.abs(doping_box.ref_con))
+                elif isinstance(doping_box, CustomDoping):
+                    min_values.append(np.min(np.abs(doping_box.concentration.data.flatten())))
+            return min(min_values) if min_values else np.inf
+
+        return np.inf
+
     def _pcolormesh_shape_doping_box(
         self,
         x: float,
@@ -1947,6 +2101,7 @@ class Scene(Tidy3dBaseModel):
         shape: Shapely,
         ax: Ax,
         plt_type: str = "doping",
+        norm: mpl.colors.Normalize = None,
     ):
         """
         Plot shape made of structure defined with doping.
@@ -2015,10 +2170,9 @@ class Scene(Tidy3dBaseModel):
             struct_doping_to_plot,
             clip_path=(polygon_path(shape), ax.transData),
             cmap=HEAT_SOURCE_CMAP,
-            vmin=doping_min,
-            vmax=doping_max,
             alpha=alpha,
             clip_box=ax.bbox,
+            norm=norm,
         )
 
     def plot_3d(self, width=800, height=800) -> None:
