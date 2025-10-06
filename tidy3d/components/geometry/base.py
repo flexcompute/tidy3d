@@ -2572,7 +2572,7 @@ class Box(SimplePlaneIntersection, Centered):
             dims=integration_dims,
             bounds=integration_bounds,
         )
-
+        print(integral_result)
         return complex(integral_result.sum("f"))
 
     @staticmethod
