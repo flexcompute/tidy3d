@@ -160,6 +160,54 @@ jobs:
       - name: Run ruff check
         run: ruff check tidy3d
   
+  lint-branch-name:
+    needs: determine-test-scope
+    runs-on: ubuntu-latest
+    name: lint-branch-name
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: extract-branch-name
+        id: extract-branch-name
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          echo "Branch name: $BRANCH_NAME"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: enforce-jira-key
+        id: enforce-jira-key
+        run: |
+          BRANCH_NAME="${{ steps.extract-branch-name.outputs.branch_name }}"
+          echo $BRANCH_NAME
+          JIRA_PATTERN='[A-Z]{2,}-[0-9]+'
+
+          # List of exempt prefixes (case-insensitive)
+          EXEMPT_PREFIXES=("chore" "hotfix" "daily-chore")
+          
+          # Convert branch name to lowercase for comparison
+          BRANCH_LOWER=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]')
+
+          # Check if branch starts with any exempt prefix
+          for prefix in "${EXEMPT_PREFIXES[@]}"; do
+            if [[ "$BRANCH_LOWER" == $prefix* ]]; then
+              echo "ℹ️  Branch starts with '$prefix' - Jira key not required"
+              exit 0
+            fi
+          done
+
+          if [[ "$BRANCH_NAME" =~ $JIRA_PATTERN ]]; then
+              echo "✅ Jira key found in branch name: ${BASH_REMATCH[0]}"
+          else
+              echo "❌ No Jira key found in branch name, checking PR name as fallback"
+              if [[ "$PR_TITLE" =~ $JIRA_PATTERN ]]; then
+                echo "✅ Jira key found in PR-title: ${BASH_REMATCH[0]}"
+              else
+                echo "❌ No Jira key found in branch name and PR title"
+                exit 1
+              fi
+          fi
+
   lint-commit-messages:
     needs: determine-test-scope
     runs-on: ubuntu-latest
@@ -515,7 +563,7 @@ jobs:
       (( needs.determine-test-scope.outputs.pr_approval_state == 'true' ) && 
       ( needs.determine-test-scope.outputs.local_tests == 'true' ) || 
       ( needs.determine-test-scope.outputs.remote_tests == 'true' ))
-    needs: [local-tests, remote-tests, lint, verify-schema-change, lint-commit-messages]
+    needs: [local-tests, remote-tests, lint, verify-schema-change, lint-commit-messages, lint-branch-name]
     runs-on: ubuntu-latest
     steps:
       - name: check-passing-remote-tests
@@ -539,6 +587,9 @@ jobs:
             exit 1
           elif [[ github.event_name == 'merge_group' && "${{ needs.lint-commit-messages.result }}" != 'success' ]]; then
             echo "❌ Linting of commit messages failed or was skipped."
+            exit 1
+          elif [[ "${{ github.event_name }}" == 'pull_request' && "${{ needs.lint-branch-name.result }}" != 'success' ]]; then
+            echo "❌ Linting of branch name failed."
             exit 1
           fi
           echo "✅ All required test jobs passed!"
