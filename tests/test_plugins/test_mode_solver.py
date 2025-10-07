@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import get_args
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
@@ -12,6 +14,7 @@ from tidy3d import ScalarFieldDataArray
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.components.mode.solver import compute_modes
+from tidy3d.components.mode_spec import MODE_DATA_KEYS
 from tidy3d.exceptions import DataError, SetupError
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
@@ -689,7 +692,7 @@ def test_mode_solver_angle_bend():
         bend_axis=0,
         angle_theta=np.pi / 3,
         angle_phi=np.pi,
-        track_freq="highest",
+        sort_spec=td.ModeSortSpec(track_freq="highest"),
     )
     # put plane entirely in the symmetry quadrant rather than sitting on its center
     plane = td.Box(center=(0, 0.5, 0), size=(1, 0, 1))
@@ -850,7 +853,7 @@ def test_group_index(mock_remote_api, local, tmp_path):
         num_modes=2,
         target_neff=3.0,
         precision="double" if local else "single",
-        track_freq="central",
+        sort_spec=td.ModeSortSpec(track_freq="central"),
     )
 
     if local:
@@ -1299,3 +1302,204 @@ def test_translated_dot():
 
     assert np.allclose(data2.outer_dot(data_translated), data2.outer_dot(data2), atol=atol)
     assert np.allclose(data_translated.outer_dot(data2), data2.outer_dot(data2), atol=atol)
+
+
+def test_mode_spec_filter_pol_sort_spec_exclusive():
+    """Ensure ModeSpec errors when both filter_pol and sort_spec are set."""
+    with pytest.raises(pydantic.ValidationError, match="simultaneously"):
+        _ = td.ModeSpec(num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(sort_key="n_eff"))
+
+
+def test_modes_filter_sort():
+    """Test the filtering and sorting of modes."""
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+    # turn off track_freq so sorting is exact at all freqs
+    mode_spec = td.ModeSpec(
+        num_modes=5,
+        target_neff=2.0,
+        sort_spec=td.ModeSortSpec(sort_key="n_eff", sort_order="ascending", track_freq=None),
+        num_pml=(10, 10),
+    )
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=[td.C_0 / 1.0, td.C_0 / 2.0],
+        direction="-",
+    )
+    modes = ms.solve()
+    n_eff = modes.n_eff
+    print(n_eff.diff(dim="mode_index"))
+    assert np.all(n_eff.diff(dim="mode_index") >= 0)
+
+    for key in get_args(MODE_DATA_KEYS):
+        print(key)
+        # Test ascending
+        sort_spec = td.ModeSortSpec(sort_key=key, sort_order="ascending", track_freq=None)
+        modes = modes.sort_modes(sort_spec)
+        metric = getattr(modes, key)
+        assert np.all(metric.diff(dim="mode_index") >= 0)
+
+        # Test descending
+        sort_spec = td.ModeSortSpec(sort_key=key, sort_order="descending", track_freq=None)
+        modes = modes.sort_modes(sort_spec)
+        metric = getattr(modes, key)
+        assert np.all(metric.diff(dim="mode_index") <= 0)
+
+        # Test descending with a large reference value should be the same as ascending
+        sort_spec = td.ModeSortSpec(
+            sort_key=key, sort_order="descending", sort_reference=100, track_freq=None
+        )
+        modes = modes.sort_modes(sort_spec)
+        metric = getattr(modes, key)
+        assert np.all(metric.diff(dim="mode_index") >= 0)
+
+    # Test filter + sort within groups using n_eff at first frequency
+    ms = ms.updated_copy(mode_spec=mode_spec)
+    metric = modes.n_eff.isel(f=0)
+    thresh = float(np.median(metric.values))
+
+    # Test filter by n_eff and sort by k_eff
+    sort_spec = td.ModeSortSpec(
+        filter_key="n_eff",
+        filter_reference=thresh,
+        filter_order="over",
+        sort_key="k_eff",
+        sort_order="ascending",
+        track_freq=None,
+    )
+    modes = modes.sort_modes(sort_spec)
+    for ifreq in range(len(ms.freqs)):
+        metric_filtered = modes.n_eff.isel(f=ifreq)
+        metric_sorted = modes.k_eff.isel(f=ifreq)
+        first_group_size = int(np.sum(metric_filtered.values >= thresh))
+        # first group satisfies filter
+        assert np.all(metric_filtered.isel(mode_index=slice(0, first_group_size)).values >= thresh)
+        # and is sorted ascending within the group
+        assert np.all(
+            metric_sorted.isel(mode_index=slice(0, first_group_size)).diff(dim="mode_index") >= 0
+        )
+        # second group satisfies filter
+        assert np.all(
+            metric_filtered.isel(mode_index=slice(first_group_size, None)).values < thresh
+        )
+        # and is also sorted ascending within the group
+        assert np.all(
+            metric_sorted.isel(mode_index=slice(first_group_size, None)).diff(dim="mode_index") >= 0
+        )
+
+    # Test filter only with filter_order="under", and no sorting defined
+    ms = ms.updated_copy(
+        mode_spec=mode_spec.updated_copy(
+            sort_spec=td.ModeSortSpec(
+                filter_key="TE_fraction",
+                filter_reference=0.5,
+                filter_order="under",
+            )
+        )
+    )
+    # need to solve again because so that the default sorting from the solver will apply, as
+    # the modes had been reordered previously, and sort_val is None
+    modes = ms.solve()
+    for ifreq in range(len(ms.freqs)):
+        metric_filtered = modes.TE_fraction.isel(f=ifreq)
+        metric_sorted = modes.n_eff.isel(f=ifreq)  # defaults to n_eff in descending order
+        first_group_size = int(np.sum(metric_filtered.values <= 0.5))
+
+        # print(metric_filtered.values)
+        # print(metric_sorted.values)
+
+        # first group satisfies filter
+        assert np.all(metric_filtered.isel(mode_index=slice(0, first_group_size)).values <= 0.5)
+        # and is sorted
+        assert np.all(
+            metric_sorted.isel(mode_index=slice(0, first_group_size)).diff(dim="mode_index") <= 0
+        )
+        # second group satisfies filter
+        assert np.all(metric_filtered.isel(mode_index=slice(first_group_size, None)).values > 0.5)
+        # and is also sorted
+        assert np.all(
+            metric_sorted.isel(mode_index=slice(first_group_size, None)).diff(dim="mode_index") <= 0
+        )
+
+    # Test that if we now reorder based on a track_freq, the original order is preserved at
+    # the track_freq, but not at the other one
+    sort_spec = td.ModeSortSpec(
+        sort_key="k_eff",
+        sort_order="ascending",
+        track_freq="lowest",
+    )
+    modes = modes.sort_modes(sort_spec=sort_spec)
+    assert np.all(np.diff(modes.k_eff.isel(f=0)) >= 0)
+    assert not np.all(np.diff(modes.k_eff.isel(f=-1)) >= 0)
+
+
+def test_sort_spec_track_freq():
+    """Test various ways to sort and track that should result in the same final modes."""
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+    sort_spec = td.ModeSortSpec(sort_key="TE_fraction")
+    mode_spec = td.ModeSpec(
+        num_modes=5,
+        target_neff=2.0,
+        sort_spec=sort_spec.updated_copy(track_freq="lowest"),
+        num_pml=(10, 10),
+        group_index_step=True,
+    )
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=[td.C_0 / 0.5, td.C_0 / 1.0, td.C_0 / 2.0],
+        direction="-",
+    )
+    modes_lowest = ms.solve()
+
+    # TODO remove this when track_freq is removed
+    mode_spec = td.ModeSpec(
+        num_modes=5,
+        target_neff=2.0,
+        sort_spec=sort_spec,
+        track_freq="lowest",
+        num_pml=(10, 10),
+        group_index_step=True,
+    )
+    ms = ms.updated_copy(mode_spec=mode_spec)
+    modes_lowest_legacy = ms.solve()
+
+    assert modes_lowest == modes_lowest_legacy
+
+    mode_spec = td.ModeSpec(
+        num_modes=5,
+        target_neff=2.0,
+        sort_spec=sort_spec.updated_copy(track_freq=None),
+        num_pml=(10, 10),
+        group_index_step=True,
+    )
+    ms = ms.updated_copy(mode_spec=mode_spec)
+    modes_untracked = ms.solve()
+
+    assert not np.all(modes_lowest.n_eff == modes_untracked.n_eff)
+
+    modes_lowest_retracked = modes_untracked.overlap_sort(track_freq="lowest")
+
+    # The field modes come out with a different phase so the datas are not equivalent but we can
+    # check that everything matches
+    assert np.allclose(modes_lowest.Ex.abs, modes_lowest_retracked.Ex.abs)
+    assert np.all(modes_lowest.n_eff == modes_lowest_retracked.n_eff)
+    assert np.all(modes_lowest.n_group == modes_lowest_retracked.n_group)

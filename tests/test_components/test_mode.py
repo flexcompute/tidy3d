@@ -33,9 +33,9 @@ def test_modes():
     _ = td.ModeSpec(num_modes=2)
     _ = td.ModeSpec(num_modes=1, target_neff=1.0)
 
-    options = [None, "lowest", "highest", "central"]
-    for opt in options:
-        _ = td.ModeSpec(num_modes=3, track_freq=opt)
+    # Valid options now specified via ModeSortSpec.track_freq
+    for opt in ["lowest", "highest", "central"]:
+        _ = td.ModeSpec(num_modes=3, sort_spec=td.ModeSortSpec(track_freq=opt))
 
     with pytest.raises(pydantic.ValidationError):
         _ = td.ModeSpec(num_modes=3, track_freq="middle")
@@ -161,7 +161,9 @@ def test_validation_from_simulation():
 
 
 def get_mode_sim():
-    mode_spec = MODE_SPEC.updated_copy(filter_pol="tm")
+    mode_spec = MODE_SPEC.updated_copy(
+        sort_spec=td.ModeSortSpec(filter_key="TM_fraction", filter_reference=0.5)
+    )
     permittivity_monitor = td.PermittivityMonitor(
         size=(1, 1, 0), center=(0, 0, 0), name="eps", freqs=FS
     )
@@ -339,6 +341,12 @@ def test_mode_sim_data():
     sim_data = get_mode_sim_data()
     _ = sim_data.plot_field("Ey", ax=AX, mode_index=0, f=FS[0])
 
+    sort_spec = td.ModeSortSpec(sort_key="k_eff", track_freq=None)
+    sim_data_sorted = sim_data.sort_modes(sort_spec)
+    assert sim_data_sorted.simulation.mode_spec.sort_spec == sort_spec
+    assert sim_data_sorted.modes_raw.monitor.mode_spec.sort_spec == sort_spec
+    assert np.all(sim_data_sorted.modes_raw.k_eff.diff(dim="mode_index") >= 0)
+
 
 def test_plane_crosses_symmetry_plane_warning(monkeypatch):
     """Test that a warning is issued if the mode plane crosses a symmetry plane but the centers do not match."""
@@ -389,3 +397,19 @@ def test_plane_crosses_symmetry_plane_warning(monkeypatch):
             mode_spec=td.ModeSpec(),
             freqs=[td.C_0],
         )
+
+
+def test_track_freq_deprecation():
+    """Ensure using ModeSpec.track_freq emits a deprecation warning."""
+    from ..utils import AssertLogLevel
+
+    with AssertLogLevel("WARNING", contains_str="deprecated"):
+        _ = td.ModeSpec(num_modes=3, track_freq="central")
+
+    # Deprecated value still takes precedence (backwards compatibility)
+    ms = td.ModeSpec(num_modes=3, track_freq="lowest", sort_spec=td.ModeSortSpec())
+    assert ms._track_freq == "lowest"
+
+    # Tracking can be turned off in ModeSortSpec
+    ms = td.ModeSpec(num_modes=3, sort_spec=td.ModeSortSpec(track_freq=None))
+    assert ms._track_freq is None

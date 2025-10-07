@@ -50,6 +50,7 @@ from .test_data_arrays import (
     make_far_field_data_array,
     make_flux_data_array,
     make_flux_time_data_array,
+    make_group_index_data_array,
     make_mode_amps_data_array,
     make_mode_index_data_array,
     make_scalar_field_data_array,
@@ -61,6 +62,7 @@ from .test_data_arrays import (
 # data array instances
 AMPS = make_mode_amps_data_array()
 N_COMPLEX = make_mode_index_data_array()
+N_GROUP = make_group_index_data_array()
 FLUX = make_flux_data_array()
 FLUX_TIME = make_flux_time_data_array()
 GRID_CORRECTION = FreqModeDataArray(
@@ -179,6 +181,7 @@ def make_mode_solver_data_smooth(conjugated_dot_product: bool = True):
         symmetry_center=SIM_SYM.center,
         grid_expanded=SIM_SYM.discretize_monitor(MODE_MONITOR_WITH_FIELDS),
         n_complex=N_COMPLEX.copy(),
+        n_group=N_GROUP.copy(),
         grid_primal_correction=GRID_CORRECTION,
         grid_dual_correction=GRID_CORRECTION,
         amps=AMPS.copy(),
@@ -709,7 +712,6 @@ def test_mode_solver_data_sort(conjugated_dot_product):
     # make it unsorted
     num_modes = len(data.Ex.coords["mode_index"])
     num_freqs = len(data.Ex.coords["f"])
-    phases = 2 * np.pi * np.random.random((num_freqs, num_modes))
     unsorting = np.arange(num_modes) * np.ones((num_freqs, num_modes))
     unsorting = unsorting.astype(int)
     # we keep first, central, and last sorted
@@ -718,7 +720,11 @@ def test_mode_solver_data_sort(conjugated_dot_product):
             unsorting[freq_id, :] = np.random.permutation(unsorting[freq_id, :])
 
     # unsort using sorting tool
-    data_unsorted = data._reorder_modes(unsorting, phases, None)
+    data_unsorted = data._apply_mode_reorder(unsorting)
+    assert not np.allclose(data.n_complex, data_unsorted.n_complex)
+    assert not np.allclose(data.grid_dual_correction, data_unsorted.grid_dual_correction)
+    assert not np.allclose(data.grid_primal_correction, data_unsorted.grid_primal_correction)
+    assert not np.allclose(data.n_group, data_unsorted.n_group)
 
     # sort back using all starting frequencies
     overlap_thresh = 0.95
@@ -733,6 +739,7 @@ def test_mode_solver_data_sort(conjugated_dot_product):
         assert np.allclose(data.n_complex, data_sorted.n_complex)
         assert np.allclose(data.grid_dual_correction, data_sorted.grid_dual_correction)
         assert np.allclose(data.grid_primal_correction, data_sorted.grid_primal_correction)
+        assert np.allclose(data.n_group, data_sorted.n_group)
 
         # make sure neighboring frequencies are in phase
         data_1 = data._isel(f=[0])

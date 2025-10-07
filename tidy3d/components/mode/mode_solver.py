@@ -547,12 +547,13 @@ class ModeSolver(Tidy3dBaseModel):
         self._normalize_modes(mode_solver_data=mode_solver_data)
 
         # filter polarization if requested
-        if self.mode_spec.filter_pol is not None:
-            self._filter_polarization(mode_solver_data=mode_solver_data)
+        mode_solver_data = self._filter_polarization(mode_solver_data=mode_solver_data)
 
-        # sort modes if requested
-        if self.mode_spec.track_freq and len(self.freqs) > 1:
-            mode_solver_data = mode_solver_data.overlap_sort(self.mode_spec.track_freq)
+        # filter and sort modes if requested by sort_spec
+        mode_solver_data = mode_solver_data.sort_modes(
+            sort_spec=self.mode_spec.sort_spec,
+            track_freq=self.mode_spec.track_freq,
+        )
 
         self._field_decay_warning(mode_solver_data.symmetry_expanded)
 
@@ -1352,11 +1353,20 @@ class ModeSolver(Tidy3dBaseModel):
         return mode_solver_data.updated_copy(**skip_components, validate=False)
 
     def _filter_polarization(self, mode_solver_data: ModeSolverData):
-        """Filter polarization. Note: this modifies ``mode_solver_data`` in-place."""
+        """Filter polarization."""
+        filter_pol = self.mode_spec.filter_pol
+        if filter_pol is None:
+            return mode_solver_data
+
+        num_freqs = len(self.freqs)
+        num_modes = self.mode_spec.num_modes
+        identity = np.arange(num_modes)
+        sort_inds_2d = np.tile(identity, (num_freqs, 1))
+
         pol_frac = mode_solver_data.pol_fraction
-        for ifreq in range(len(self.freqs)):
-            te_frac = pol_frac.te.isel(f=ifreq)
-            if self.mode_spec.filter_pol == "te":
+        for ifreq in range(num_freqs):
+            te_frac = pol_frac.te.isel(f=ifreq).values
+            if filter_pol == "te":
                 sort_inds = np.concatenate(
                     (
                         np.where(te_frac >= 0.5)[0],
@@ -1364,7 +1374,7 @@ class ModeSolver(Tidy3dBaseModel):
                         np.where(np.isnan(te_frac))[0],
                     )
                 )
-            elif self.mode_spec.filter_pol == "tm":
+            elif filter_pol == "tm":
                 sort_inds = np.concatenate(
                     (
                         np.where(te_frac <= 0.5)[0],
@@ -1372,13 +1382,13 @@ class ModeSolver(Tidy3dBaseModel):
                         np.where(np.isnan(te_frac))[0],
                     )
                 )
-            for data in [
-                *list(mode_solver_data.field_components.values()),
-                mode_solver_data.n_complex,
-                mode_solver_data.grid_primal_correction,
-                mode_solver_data.grid_dual_correction,
-            ]:
-                data.values[..., ifreq, :] = data.values[..., ifreq, sort_inds]
+            sort_inds_2d[ifreq, : len(sort_inds)] = sort_inds
+
+        # If no reordering needed across all frequencies, skip
+        if np.all(sort_inds_2d == np.tile(identity, (num_freqs, 1))):
+            return mode_solver_data
+
+        return mode_solver_data._apply_mode_reorder(sort_inds_2d)
 
     def _make_path_integrals(
         self,

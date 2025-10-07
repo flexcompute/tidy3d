@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 from math import isclose
-from typing import Literal, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -17,6 +17,73 @@ from .base import Tidy3dBaseModel, skip_if_fields_missing
 from .types import Axis2D, TrackFreq
 
 GROUP_INDEX_STEP = 0.005
+MODE_DATA_KEYS = Literal[
+    "n_eff",
+    "k_eff",
+    "TE_fraction",
+    "TM_fraction",
+    "wg_TE_fraction",
+    "wg_TM_fraction",
+    "mode_area",
+]
+
+
+class ModeSortSpec(Tidy3dBaseModel):
+    """Specification for filtering and sorting modes within each frequency.
+
+    First, an optional filtering step splits the modes into two groups based on a threshold
+    applied to ``filter_key``: modes "over" or "under" ``filter_reference`` are placed first,
+    with the remaining modes placed next. Second, an optional sorting step orders modes within
+    each group according to ``sort_key``, optionally with respect to ``sort_reference`` and in
+    the specified ``sort_order``.
+    """
+
+    # Filtering stage
+    filter_key: Optional[MODE_DATA_KEYS] = pd.Field(
+        None,
+        title="Filtering key",
+        description="Quantity used to filter modes into two groups before sorting.",
+    )
+    filter_reference: float = pd.Field(
+        0.0,
+        title="Filtering reference",
+        description="Reference value used in the filtering stage.",
+    )
+    filter_order: Literal["over", "under"] = pd.Field(
+        "over",
+        title="Filtering order",
+        description="Select whether the first group contains values over or under the reference.",
+    )
+
+    # Sorting stage
+    sort_key: Optional[MODE_DATA_KEYS] = pd.Field(
+        None,
+        title="Sorting key",
+        description="Quantity used to sort modes within each filtered group. If ``None``, "
+        "sorting is by descending effective index.",
+    )
+    sort_reference: Optional[float] = pd.Field(
+        None,
+        title="Sorting reference",
+        description=(
+            "If provided, sorting is based on the absolute difference to this reference value."
+        ),
+    )
+    sort_order: Literal["ascending", "descending"] = pd.Field(
+        "ascending",
+        title="Sorting direction",
+        description="Sort order for the selected key or difference to reference value.",
+    )
+
+    # Frequency tracking - applied after sorting and filtering
+    track_freq: Optional[TrackFreq] = pd.Field(
+        "central",
+        title="Tracking base frequency",
+        description="If provided, enables cross-frequency mode tracking. Can be 'lowest', "
+        "'central', or 'highest', which refers to the frequency **index** in the list of "
+        "frequencies. The mode sorting would then be exact at the specified frequency, "
+        "while at other frequencies it can change depending on the mode tracking.",
+    )
 
 
 class AbstractModeSpec(Tidy3dBaseModel, ABC):
@@ -109,13 +176,10 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "Note: currently only supported when 'angle_phi' is a multiple of 'np.pi'.",
     )
 
-    track_freq: Union[TrackFreq, None] = pd.Field(
-        "central",
-        title="Mode Tracking Frequency",
-        description="Parameter that turns on/off mode tracking based on their similarity. "
-        "Can take values ``'lowest'``, ``'central'``, or ``'highest'``, which correspond to "
-        "mode tracking based on the lowest, central, or highest frequency. "
-        "If ``None`` no mode tracking is performed.",
+    track_freq: Optional[TrackFreq] = pd.Field(
+        None,
+        title="Mode Tracking Frequency (deprecated)",
+        description="Deprecated. Use 'sort_spec.track_freq' instead.",
     )
 
     group_index_step: Union[pd.PositiveFloat, bool] = pd.Field(
@@ -125,6 +189,14 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "set to a positive value, it sets the fractional frequency step used in the numerical "
         "differentiation of the effective index to compute the group index. If set to `True`, the "
         f"default of {GROUP_INDEX_STEP} is used.",
+    )
+
+    sort_spec: ModeSortSpec = pd.Field(
+        ModeSortSpec(),
+        title="Mode filtering and sorting specification",
+        description="Defines how to filter and sort modes within each frequency. If ``track_freq`` "
+        "is not ``None``, the sorting is only exact at the specified frequency, while at other "
+        "frequencies it can change depending on the mode tracking.",
     )
 
     @pd.validator("bend_axis", always=True)
@@ -173,10 +245,16 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     def check_precision(cls, values):
         """Verify critical ModeSpec settings for group index calculation."""
         if values["group_index_step"] > 0:
-            if values["track_freq"] is None:
+            # prefer explicit track_freq on ModeSpec, else fall back to sort_spec.track_freq
+            # TODO: can be replaced with self._track_freq in pydantic v2
+            tf = values.get("track_freq")
+            if tf is None:
+                sort_spec = values.get("sort_spec")
+                tf = None if sort_spec is None else sort_spec.track_freq
+            if tf is None:
                 log.warning(
                     "Group index calculation without mode tracking can lead to incorrect results "
-                    "around mode crossings. Consider setting 'track_freq' to 'central'."
+                    "around mode crossings. Consider setting 'sort_spec.track_freq' to 'central'."
                 )
 
             # multiply by 5 to be safe
@@ -199,6 +277,48 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
                 "enabled."
             )
         return val
+
+    @pd.root_validator(skip_on_failure=True)
+    def _filter_pol_and_sort_spec_exclusive(cls, values):
+        """Ensure that 'filter_pol' and 'sort_spec' are not used together."""
+        sort_spec = values.get("sort_spec")
+        sort_or_filter = sort_spec.filter_key is not None or sort_spec.sort_key is not None
+        if values.get("filter_pol") is not None and sort_or_filter:
+            raise SetupError(
+                "'filter_pol' cannot be used simultaneously with sorting or filtering "
+                "defined in 'sort_spec'. Define the filtering in 'sort_spec' exclusively."
+            )
+        return values
+
+    @pd.validator("filter_pol", always=True)
+    def _filter_pol_deprecated(cls, val):
+        """Warn that 'filter_pol' is deprecated in favor of 'sort_spec'."""
+        if val is not None:
+            log.warning(
+                "'filter_pol' is deprecated and will be removed in future versions. "
+                "Please use 'sort_spec' instead."
+            )
+        return val
+
+    @pd.validator("track_freq", always=True)
+    def _track_freq_deprecated(cls, val):
+        """Warn that 'track_freq' on ModeSpec is deprecated in favor of 'sort_spec.track_freq'."""
+        if val is not None:
+            log.warning(
+                "'ModeSpec.track_freq' is deprecated and will be removed in future versions. "
+                "Please use 'sort_spec.track_freq' instead."
+            )
+        return val
+
+    @property
+    def _track_freq(self) -> Optional[TrackFreq]:
+        """Private resolver for tracking frequency: prefers ModeSpec.track_freq if set,
+        otherwise falls back to ModeSortSpec.track_freq."""
+        if self.track_freq is not None:
+            return self.track_freq
+        if self.sort_spec is not None:
+            return self.sort_spec.track_freq
+        return None
 
 
 class ModeSpec(AbstractModeSpec):

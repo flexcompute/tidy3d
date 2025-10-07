@@ -18,6 +18,7 @@ from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
+from tidy3d.components.mode_spec import ModeSortSpec
 from tidy3d.components.monitor import (
     AuxFieldTimeMonitor,
     DiffractionMonitor,
@@ -1679,6 +1680,12 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         corresponds to physically the same mode at all frequencies. Modes with overlap values over
         ``overlap_thresh`` are considered matching and not rearranged.
 
+        Note
+        ----
+            The monitor associated to this data is updated so that the deprecated
+            ``monitor.mode_spec.track_freq`` is set to ``None``, while
+            ``monitor.mode_spec.sort_spec.track_freq`` is set to the provided ``track_freq``.
+
         Parameters
         ----------
         track_freq : Literal["central", "lowest", "highest"]
@@ -1758,13 +1765,24 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 data_template = data_to_sort
 
         # Rearrange modes using computed sorting values
-        mode_data_sorted = self._reorder_modes(
-            sorting=sorting,
-            phase=phase,
-            track_freq=track_freq,
+
+        # 1) Reorder using the shared implementation (creates a copy)
+        data_reordered = self._apply_mode_reorder(sorting)
+
+        # 2) Apply phase shifts to field components in-place (data_reordered is already a copy)
+        for field in data_reordered.field_components.values():
+            phase_fact = np.exp(-1j * phase[None, None, None, :, :]).astype(field.data.dtype)
+            field.values *= phase_fact
+
+        # 3) Update mode_spec: prefer sort_spec.track_freq; clear deprecated track_freq
+        mspec = data_reordered.monitor.mode_spec
+        sort_spec = mspec.sort_spec.updated_copy(track_freq=track_freq)
+        mspec_updated = mspec.updated_copy(sort_spec=sort_spec, track_freq=None, validate=False)
+        monitor_updated = data_reordered.monitor.updated_copy(
+            mode_spec=mspec_updated, validate=False
         )
 
-        return mode_data_sorted
+        return data_reordered.updated_copy(monitor=monitor_updated, deep=False, validate=False)
 
     def _isel(self, **isel_kwargs):
         """Wraps ``xarray.DataArray.isel`` for all data fields that are defined over frequency and
@@ -1850,49 +1868,6 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             arr_abs[:, jmax] = -1
 
         return pairs, values
-
-    def _reorder_modes(
-        self,
-        sorting: Numpy,
-        phase: Numpy,
-        track_freq: TrackFreq,
-    ) -> ModeData:
-        """Rearrange modes for the i-th frequency according to sorting[i, :] and apply phase
-        shifts."""
-
-        num_freqs, _ = np.shape(sorting)
-
-        # Create new dict with rearranged field components
-        update_dict = {}
-        for field_name, field in self.field_components.items():
-            field_sorted = field.copy()
-
-            # Rearrange modes
-            for freq_id in range(num_freqs):
-                field_sorted.data[..., freq_id, :] = field_sorted.data[
-                    ..., freq_id, sorting[freq_id, :]
-                ]
-
-            # Apply phase shift
-            phase_fact = np.exp(-1j * phase[None, None, None, :, :]).astype(field_sorted.data.dtype)
-            field_sorted.data = field_sorted.data * phase_fact
-
-            update_dict[field_name] = field_sorted
-
-        # Rearrange data over f and mode_index
-        data_dict = dict(**self._grid_correction_dict, n_complex=self.n_complex)
-        for key, data in data_dict.items():
-            update_dict[key] = data.copy()
-            for freq_id in range(num_freqs):
-                update_dict[key].data[freq_id, :] = update_dict[key].data[
-                    freq_id, sorting[freq_id, :]
-                ]
-
-        # Update mode_spec in the monitor
-        mode_spec = self.monitor.mode_spec.copy(update={"track_freq": track_freq})
-        update_dict["monitor"] = self.monitor.copy(update={"mode_spec": mode_spec})
-
-        return self.copy(update=update_dict)
 
     def _group_index_post_process(self, frequency_step: float) -> ModeData:
         """Calculate group index and remove added frequencies used only for this calculation.
@@ -2080,6 +2055,26 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         return xr.Dataset(data_vars={"te": te_frac, "tm": tm_frac})
 
     @property
+    def TE_fraction(self) -> xr.DataArray:
+        """Alias for ``pol_fraction.te``."""
+        return self.pol_fraction["te"]
+
+    @property
+    def TM_fraction(self) -> xr.DataArray:
+        """Alias for ``pol_fraction.tm``."""
+        return self.pol_fraction["tm"]
+
+    @property
+    def wg_TE_fraction(self) -> xr.DataArray:
+        """Alias for ``pol_fraction_waveguide.te``."""
+        return self.pol_fraction_waveguide["te"]
+
+    @property
+    def wg_TM_fraction(self) -> xr.DataArray:
+        """Alias for ``pol_fraction_waveguide.tm``."""
+        return self.pol_fraction_waveguide["tm"]
+
+    @property
     def modes_info(self) -> xr.Dataset:
         """Dataset collecting various properties of the stored modes."""
 
@@ -2104,9 +2099,9 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         if len(self.field_components) == 6:
             info["mode area"] = self.mode_area
-            info[f"TE (E{self._tangential_dims[0]}) fraction"] = self.pol_fraction["te"]
-            info["wg TE fraction"] = self.pol_fraction_waveguide["te"]
-            info["wg TM fraction"] = self.pol_fraction_waveguide["tm"]
+            info[f"TE (E{self._tangential_dims[0]}) fraction"] = self.TE_fraction
+            info["wg TE fraction"] = self.wg_TE_fraction
+            info["wg TM fraction"] = self.wg_TM_fraction
 
         return xr.Dataset(data_vars=info)
 
@@ -2209,6 +2204,133 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         )
 
         return src_adj
+
+    def _apply_mode_reorder(self, sort_inds_2d):
+        """Apply a mode reordering along mode_index for all frequency indices.
+
+        Parameters
+        ----------
+        sort_inds_2d : np.ndarray
+            Array of shape (num_freqs, num_modes) where each row is the
+            permutation to apply to the mode_index for that frequency.
+        """
+        num_freqs, num_modes = sort_inds_2d.shape
+        modify_data = {}
+        for key, data in self.data_arrs.items():
+            if "mode_index" not in data.dims or "f" not in data.dims:
+                continue
+            dims_orig = data.dims
+            f_coord = data.coords["f"]
+            slices = []
+            for ifreq in range(num_freqs):
+                sl = data.isel(f=ifreq, mode_index=sort_inds_2d[ifreq])
+                slices.append(sl.assign_coords(mode_index=np.arange(num_modes)))
+            # Concatenate along the 'f' dimension name and then restore original frequency coordinates
+            data = xr.concat(slices, dim="f").assign_coords(f=f_coord).transpose(*dims_orig)
+            modify_data[key] = data
+        return self.updated_copy(**modify_data)
+
+    def sort_modes(
+        self, sort_spec: Optional[ModeSortSpec] = None, track_freq: Optional[TrackFreq] = None
+    ) -> ModeSolverData:
+        """Sort modes per frequency according to ``sort_spec``.
+
+        The modes are first filtered if ``sort_spec.filter_key`` is provided. They are then sorted
+        within each filtered group according to ``sort_spec.sort_key``. if provided. Finally,
+        if a tracking frequency is also provided either in ``sort_spec`` or as a separate argument,
+        the tracking is applied . The tracking could reshuffle the filter/sort criteria at
+        frequencies away from the tracking frequency.
+
+        Parameters
+        ----------
+        sort_spec : Optional[:class:`.ModeSortSpec`]
+            Specification of how to sort the modes.
+        track_freq : Optional[Literal["central", "lowest", "highest"]]
+            Specifies that modes should be tracked across frequencies. Overrides
+            ``sort_spec.track_freq``, but the returned data will have
+            ``monitor.mode_spec.sort_spec.track_freq`` set to the provided value, while
+            ``self.monitor.mode_spec.track_freq`` will be set to ``None``.
+
+        Returns
+        -------
+        :class:`.ModeSolverData`
+            Copy of self with modes sorted according to ``sort_spec``.
+        """
+
+        # Return the original data if no new sorting / tracking required
+        if track_freq is None and sort_spec is None:
+            return self
+
+        num_freqs = self.n_eff["f"].size
+        num_modes = self.n_eff["mode_index"].size
+        all_inds = np.arange(num_modes)
+        identity = np.arange(num_modes)
+        sort_inds_2d = np.tile(identity, (num_freqs, 1))
+
+        # Helper to compute ordered indices within a subset
+        def _order_indices(indices, vals_all):
+            if indices.size == 0:
+                return indices
+            vals = vals_all.isel(mode_index=indices)
+            order = np.argsort(vals)
+            if sort_spec.sort_order == "descending":
+                order = order[::-1]
+            return indices[order]
+
+        # Precompute metrics if provided
+        filter_metric = None
+        sort_metric = None
+        if sort_spec.filter_key is not None:
+            filter_metric = getattr(self, sort_spec.filter_key)
+        if sort_spec.sort_key is not None:
+            sort_metric = getattr(self, sort_spec.sort_key)
+
+        for ifreq in range(num_freqs):
+            # Build groups according to filter if requested
+            if filter_metric is not None:
+                vals_filt = filter_metric.isel(f=ifreq).values
+                # Boolean mask for modes in the first group
+                if sort_spec.filter_order == "over":
+                    mask_first = vals_filt >= sort_spec.filter_reference
+                else:
+                    mask_first = vals_filt <= sort_spec.filter_reference
+                group1 = all_inds[mask_first]
+                group2 = all_inds[~mask_first]
+            else:
+                group1 = all_inds
+                group2 = np.array([], dtype=int)
+
+            # Sorting within each group if requested
+            if sort_metric is not None:
+                vals_sort = sort_metric.isel(f=ifreq)
+                if sort_spec.sort_reference is not None:
+                    vals_sort = np.abs(vals_sort - sort_spec.sort_reference)
+                g1 = _order_indices(group1, vals_sort)
+                g2 = _order_indices(group2, vals_sort)
+                sort_inds = np.concatenate([g1, g2])
+            else:
+                # only filtering applied, keep original ordering within groups
+                sort_inds = np.concatenate([group1, group2])
+
+            sort_inds_2d[ifreq, : len(sort_inds)] = sort_inds
+
+        # If all rows are identity, skip
+        if np.all(sort_inds_2d == np.tile(identity, (num_freqs, 1))):
+            data_sorted = self
+        else:
+            data_sorted = self._apply_mode_reorder(sort_inds_2d)  # this creates a copy
+            data_sorted = data_sorted.updated_copy(
+                path="monitor/mode_spec", sort_spec=sort_spec, deep=False, validate=False
+            )
+
+        # Sort modes across frequencies if requested.
+        # Note: after sorting, ``track_freq`` is set in ``sort_spec`` regardless of how it was
+        # provided. The deprecated ``mode_spec.track_freq`` is cleared.
+        track_freq = track_freq or sort_spec.track_freq
+        if track_freq and num_freqs > 1:
+            data_sorted = data_sorted.overlap_sort(track_freq)
+
+        return data_sorted
 
 
 class ModeSolverData(ModeData):
@@ -2988,7 +3110,7 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
         return tangential_dims
 
     @property
-    def poynting(self) -> DataArray:
+    def poynting(self) -> ScalarFieldDataArray:
         """Time-averaged Poynting vector for field data associated to a Cartesian field projection monitor."""
         fc = self.fields_cartesian
         dim1, dim2 = self.tangential_dims

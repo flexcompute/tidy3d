@@ -205,6 +205,11 @@ def make_mode_index_data_array():
     return td.ModeIndexDataArray(values, coords={"f": FS, "mode_index": MODE_INDICES})
 
 
+def make_group_index_data_array():
+    values = (1 + 0.1j) * np.random.random((len(FS), len(MODE_INDICES)))
+    return td.GroupIndexDataArray(values, coords={"f": FS, "mode_index": MODE_INDICES})
+
+
 def make_far_field_data_array():
     values = (1 + 1j) * np.random.random((len(PD), len(THETAS), len(PHIS), len(FS)))
     return td.FieldProjectionAngleDataArray(

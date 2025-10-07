@@ -10,6 +10,7 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.data.monitor_data import MediumData, PermittivityData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.mode.simulation import ModeSimulation
+from tidy3d.components.mode_spec import ModeSortSpec
 from tidy3d.components.types import TYPE_TAG_STR, Ax, PlotScale
 from tidy3d.components.types.monitor_data import ModeSolverDataType
 
@@ -102,4 +103,13 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
             vmax=vmax,
             ax=ax,
             **sel_kwargs,
+        )
+
+    def sort_modes(self, sort_spec: ModeSortSpec) -> ModeSimulationData:
+        """Sort modes per frequency according to ``sort_spec``."""
+
+        modes_sorted = self.modes_raw.sort_modes(sort_spec=sort_spec)
+        data_sorted = self.updated_copy(modes_raw=modes_sorted)
+        return data_sorted.updated_copy(
+            path="simulation", mode_spec=modes_sorted.monitor.mode_spec, deep=False, validate=False
         )
