@@ -17,7 +17,7 @@ on:
       - latest
       - develop
       - 'pre/*'
-    types: ['opened', 'reopened', 'synchronize', 'ready_for_review']
+    types: ['opened', 'reopened', 'synchronize', 'ready_for_review', 'edited']
   pull_request_review:
     types: [submitted]
 
