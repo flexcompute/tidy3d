@@ -5,7 +5,6 @@ import typing
 from os.path import dirname
 from pathlib import Path
 
-import numpy as np
 from autograd.builtins import dict as dict_ag
 from autograd.extend import defvjp, primitive
 
@@ -47,16 +46,6 @@ from .engine import (
 )
 from .forward import postprocess_fwd as _postprocess_fwd_impl
 from .forward import setup_fwd as _setup_fwd_impl
-from .io_utils import (
-    get_vjp_traced_fields as _get_vjp_traced_fields_impl,
-)
-from .io_utils import (
-    upload_sim_fields_keys as _upload_sim_fields_keys_impl,
-)
-
-# if True, will plot the adjoint fields on the plane provided. used for debugging only
-_INSPECT_ADJOINT_FIELDS = False
-_INSPECT_ADJOINT_PLANE = td.Box(center=(0, 0, 0), size=(td.inf, td.inf, 0))
 
 
 def is_valid_for_autograd(simulation: td.Simulation) -> bool:
@@ -623,21 +612,6 @@ def postprocess_fwd(
     )
 
 
-def upload_sim_fields_keys(sim_fields_keys: list[tuple], task_id: str, verbose: bool = False):
-    """Upload traced simulation field keys for adjoint runs (delegated)."""
-    return _upload_sim_fields_keys_impl(
-        sim_fields_keys=sim_fields_keys, task_id=task_id, verbose=verbose
-    )
-
-
-""" VJP maker for ADJ pass."""
-
-
-def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
-    """Fetch VJP traced fields for a completed adjoint job (delegated)."""
-    return _get_vjp_traced_fields_impl(task_id_adj=task_id_adj, verbose=verbose)
-
-
 def _run_bwd(
     data_fields_original: AutogradFieldMap,
     sim_fields_original: AutogradFieldMap,
@@ -917,22 +891,6 @@ def setup_adj(
         sim_fields_keys=sim_fields_keys,
         max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
     )
-
-
-def _compute_eps_array(medium, frequencies):
-    """Deprecated shim, kept for backward compatibility; use ops_backward._compute_eps_array."""
-    from .backward import _compute_eps_array as __impl
-
-    return __impl(medium, frequencies)
-
-
-def _slice_field_data(
-    field_data: dict, freqs: np.ndarray, component_indicator: typing.Optional[str] = None
-) -> dict:
-    """Deprecated shim, kept for backward compatibility; use ops_backward._slice_field_data."""
-    from .backward import _slice_field_data as __impl
-
-    return __impl(field_data, freqs, component_indicator)
 
 
 def postprocess_adj(
