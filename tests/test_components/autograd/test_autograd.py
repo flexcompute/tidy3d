@@ -2555,7 +2555,7 @@ def test_background_medium():
 
 class TestTidyArrayBox:
     def test_is_tidy_box(self):
-        da = DataArray(tracer_arr, dims=map(str, range(tracer_arr.ndim)))
+        da = DataArray(tracer_arr, dims=tuple(map(str, range(tracer_arr.ndim))))
         assert is_tidy_box(da.data)
 
     def test_real(self):

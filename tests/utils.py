@@ -1597,6 +1597,59 @@ def assert_log_level(
             )
 
 
+def assert_str_in_log(
+    records: list[tuple[int, str]],
+    log_level_test: str,
+    excludes_str: Optional[str] = None,
+    contains_str: Optional[str] = None,
+) -> None:
+    """Testing tool: Raises error if `excludes_str` appears , or `contains_str` doesn't appear at the test log level.
+    Unlike ``assert_log_level``, we don't raise error if the ``log_level_test`` is not present in the records.
+
+    Parameters
+    ----------
+    records : List[Tuple[int, str]]
+        List of (log_level: int, message: str) holding all of the captured logs.
+    log_level_test: str
+        String version of the log level for checking string (all uppercase).
+    excludes_str : str = None
+        If specified, errors if found in any of the log messages that are at level
+        ``log_level_test``.
+    contains_str : str = None
+        If specified, errors if not found in any of the log messages that are at level
+        ``log_level_test``.
+
+    Returns
+    -------
+        None
+    """
+
+    import sys
+
+    sys.stderr.write(str(records) + "\n")
+
+    # do nothing for None log level
+    if log_level_test is None:
+        return
+
+    log_level_test_int = _get_level_int(log_level_test)
+    contains_str_found = False
+    for log in records:
+        log_level, log_message = log
+        if log_level == log_level_test_int:
+            if excludes_str is not None and excludes_str in log_message:
+                raise AssertionError(
+                    f"Log record at level '{log_level_test}' contained '{excludes_str}'."
+                )
+            if contains_str is not None and contains_str in log_message:
+                contains_str_found = True
+
+    if contains_str and not contains_str_found:
+        raise AssertionError(
+            f"Log record at level '{log_level_test}' did not contain '{contains_str}'."
+        )
+
+
 class AssertLogLevelHandler:
     """Log handler used to store log records during assertion."""
 
@@ -1608,8 +1661,8 @@ class AssertLogLevelHandler:
 
 
 @dataclasses.dataclass
-class AssertLogLevel:
-    """Context manager to check log level for records logged within its context."""
+class AbstractAssertLog:
+    """Context manager to check logs."""
 
     log_level_expected: Union[str, None]
     contains_str: str = None
@@ -1630,11 +1683,34 @@ class AssertLogLevel:
         td.log.handlers["assert_log_level"] = self.handler
         return self
 
+
+@dataclasses.dataclass
+class AssertLogLevel(AbstractAssertLog):
+    """Context manager to check log level for records logged within its context."""
+
     def __exit__(self, exc_type, exc_value, traceback):
         # Check the records and clean up
         assert_log_level(
             records=self.records,
             log_level_expected=self.log_level_expected,
+            contains_str=self.contains_str,
+        )
+        # Remove handler
+        del td.log.handlers["assert_log_level"]
+
+
+@dataclasses.dataclass
+class AssertLogStr(AbstractAssertLog):
+    """Context manager to check if log contains certain strings at the test log level for records logged within its context."""
+
+    excludes_str: str = None
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # Check the records and clean up
+        assert_str_in_log(
+            records=self.records,
+            log_level_test=self.log_level_expected,
+            excludes_str=self.excludes_str,
             contains_str=self.contains_str,
         )
         # Remove handler

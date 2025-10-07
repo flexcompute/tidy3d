@@ -11,7 +11,7 @@ import tidy3d as td
 from tidy3d.components.source.field import CHEB_GRID_WIDTH, DirectionalSource
 from tidy3d.exceptions import SetupError
 
-from ..utils import AssertLogLevel
+from ..utils import AssertLogLevel, AssertLogStr
 
 ST = td.GaussianPulse(freq0=2e14, fwidth=1e14)
 S = td.PointDipole(source_time=ST, polarization="Ex")
@@ -133,6 +133,11 @@ def test_gaussian_from_frequency_range():
     g2 = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax)
     assert g2.remove_dc_component
 
+    with AssertLogLevel("WARNING", contains_str="not sufficiently large"):
+        g_small = td.GaussianPulse.from_frequency_range(
+            fmin=fmin, fmax=60e9, remove_dc_component=True
+        )
+
     # 1) broadband: assert enough amplitude at fmin and fmax
     time = np.linspace(0, 5 / fmin, 10001)
     freqs = np.linspace(fmin, fmax, 101)
@@ -148,6 +153,23 @@ def test_gaussian_from_frequency_range():
     g = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax)
     assert abs(g.fwidth - bandwidth) / bandwidth < 1e-4
     assert abs(g.freq0 - fmin) / fmin < 1e-4
+
+
+def test_gaussian_frequency_sigma_range():
+    sigma = 4
+    # derivative Gaussian
+    g = td.GaussianPulse.from_frequency_range(fmin=1e9, fmax=10e9, remove_dc_component=True)
+    f_range = g.frequency_range_sigma(sigma=sigma)
+    peak_amp = np.abs(g.amp_freq(g.peak_frequency))
+    amp = np.array([np.abs(g.amp_freq(f)) for f in f_range])
+    assert f_range[1] > f_range[0]
+    assert np.allclose(amp / peak_amp, np.exp(-(sigma**2) / 2))
+    # freq0 from frequency_range_sigma is larger than freq0
+    assert g._freq0_sigma_centroid > g._freq0
+
+    # pure Gaussian
+    g = td.GaussianPulse.from_frequency_range(fmin=1e9, fmax=10e9, remove_dc_component=False)
+    assert np.allclose(g.frequency_range(num_fwidth=sigma), g.frequency_range_sigma(sigma=sigma))
 
 
 def test_frequency_source_width():
@@ -357,7 +379,7 @@ def test_pol_arrow():
 def test_broadband_source():
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
     mode_spec = td.ModeSpec(num_modes=2)
-    fmin, fmax = g.frequency_range(num_fwidth=CHEB_GRID_WIDTH)
+    fmin, fmax = g.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
     fdiff = (fmax - fmin) / 2
     fmean = (fmax + fmin) / 2
 
@@ -659,3 +681,17 @@ def test_source_frame():
         size=(1, 1, 0),
         frame=td.PECFrame(),
     )
+
+
+def test_rf_frequency_range_miswarning():
+    """GaussianPulse with DC removed is asymmetric. More accurate frequency range
+    computation for validating if it's a photonics simulation.
+    """
+    source_time = td.GaussianPulse(freq0=400e12, fwidth=99.999e12)
+    source = td.PointDipole(center=(0, 0, 0), polarization="Ex", source_time=source_time)
+    with AssertLogStr("WARNING", excludes_str="outside of the simulation domain"):
+        sim = td.Simulation(
+            size=(1, 1, 1),
+            run_time=td.RunTimeSpec(quality_factor=1),
+            sources=[source],
+        )

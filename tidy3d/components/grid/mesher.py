@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import warnings
 from abc import ABC, abstractmethod
 from itertools import compress
@@ -1347,8 +1348,10 @@ class GradedMesher(Mesher):
 
             # solve for new scaling factor
             # let's not raise exception here, but manually check the convergence.
+            logger = logging.getLogger("pyroots")
+            logger.setLevel(logging.CRITICAL)
             root_scalar = Brentq(raise_on_fail=False, epsilon=_ROOTS_TOL)
-            sol_scale = root_scalar(fun_scale, 1, max_scale)
+            sol_scale = root_scalar(fun_scale, xa=1, xb=max_scale)
 
             # convergence check based on pyroots API and manual evaluation of the function.
             if sol_scale.converged and abs(fun_scale(sol_scale.x0)) <= _ROOTS_TOL:

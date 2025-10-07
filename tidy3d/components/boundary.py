@@ -311,7 +311,7 @@ class ModeABCBoundary(AbstractABCBoundary):
         """
 
         if freq_spec is None:
-            freq_spec = source.source_time.freq0
+            freq_spec = source.source_time._freq0
 
         return cls(
             plane=source.bounding_box,
@@ -528,7 +528,7 @@ class BlochBoundary(BoundaryEdge):
         if medium is None:
             medium = Medium(permittivity=1.0, name="free_space")
 
-        freq0 = source.source_time.freq0
+        freq0 = source.source_time._freq0
         eps_complex = medium.eps_model(freq0)
         kmag = np.real(freq0 * np.sqrt(eps_complex * EPSILON_0 * MU_0))
 
