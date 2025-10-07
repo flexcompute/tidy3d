@@ -10,6 +10,7 @@ from tidy3d.components.autograd import AutogradFieldMap, get_static
 from tidy3d.components.autograd.constants import ADJOINT_FREQ_CHUNK_SIZE
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.exceptions import AdjointError
+from tidy3d.packaging import disable_local_subpixel
 
 from .utils import E_to_D, get_derivative_maps
 
@@ -98,6 +99,7 @@ def _slice_field_data(
         return {k: v.sel(f=freqs) for k, v in field_data.items()}
 
 
+@disable_local_subpixel
 def postprocess_adj(
     sim_data_adj: td.SimulationData,
     sim_data_orig: td.SimulationData,
