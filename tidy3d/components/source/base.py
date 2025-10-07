@@ -65,7 +65,7 @@ class Source(Box, AbstractSource, ABC):
     @pydantic.validator("source_time", always=True)
     def _freqs_lower_bound(cls, val):
         """Raise validation error if central frequency is too low."""
-        _assert_min_freq(val.freq0, msg_start="'source_time.freq0'")
+        _assert_min_freq(val._freq0_sigma_centroid, msg_start="'source_time.freq0'")
         return val
 
     def plot(
