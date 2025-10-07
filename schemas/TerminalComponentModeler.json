@@ -11842,12 +11842,29 @@
           ],
           "type": "string"
         },
+        "sort_spec": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModeSortSpec"
+            }
+          ],
+          "default": {
+            "attrs": {},
+            "filter_key": null,
+            "filter_order": "over",
+            "filter_reference": 0.0,
+            "sort_key": null,
+            "sort_order": "ascending",
+            "sort_reference": null,
+            "track_freq": "central",
+            "type": "ModeSortSpec"
+          }
+        },
         "target_neff": {
           "exclusiveMinimum": 0,
           "type": "number"
         },
         "track_freq": {
-          "default": "central",
           "enum": [
             "central",
             "highest",
@@ -11904,8 +11921,19 @@
               0
             ],
             "precision": "double",
+            "sort_spec": {
+              "attrs": {},
+              "filter_key": null,
+              "filter_order": "over",
+              "filter_reference": 0.0,
+              "sort_key": null,
+              "sort_order": "ascending",
+              "sort_reference": null,
+              "track_freq": "central",
+              "type": "ModeSortSpec"
+            },
             "target_neff": null,
-            "track_freq": "central",
+            "track_freq": null,
             "type": "ModeSpec"
           },
           "discriminator": {
@@ -12089,8 +12117,19 @@
               0
             ],
             "precision": "double",
+            "sort_spec": {
+              "attrs": {},
+              "filter_key": null,
+              "filter_order": "over",
+              "filter_reference": 0.0,
+              "sort_key": null,
+              "sort_order": "ascending",
+              "sort_reference": null,
+              "track_freq": "central",
+              "type": "ModeSortSpec"
+            },
             "target_neff": null,
-            "track_freq": "central",
+            "track_freq": null,
             "type": "ModeSpec"
           }
         },
@@ -12339,8 +12378,19 @@
               0
             ],
             "precision": "double",
+            "sort_spec": {
+              "attrs": {},
+              "filter_key": null,
+              "filter_order": "over",
+              "filter_reference": 0.0,
+              "sort_key": null,
+              "sort_order": "ascending",
+              "sort_reference": null,
+              "track_freq": "central",
+              "type": "ModeSortSpec"
+            },
             "target_neff": null,
-            "track_freq": "central",
+            "track_freq": null,
             "type": "ModeSpec"
           }
         },
@@ -12415,6 +12465,79 @@
         "name",
         "size"
       ],
+      "type": "object"
+    },
+    "ModeSortSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "filter_key": {
+          "enum": [
+            "TE_fraction",
+            "TM_fraction",
+            "k_eff",
+            "mode_area",
+            "n_eff",
+            "wg_TE_fraction",
+            "wg_TM_fraction"
+          ],
+          "type": "string"
+        },
+        "filter_order": {
+          "default": "over",
+          "enum": [
+            "over",
+            "under"
+          ],
+          "type": "string"
+        },
+        "filter_reference": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "sort_key": {
+          "enum": [
+            "TE_fraction",
+            "TM_fraction",
+            "k_eff",
+            "mode_area",
+            "n_eff",
+            "wg_TE_fraction",
+            "wg_TM_fraction"
+          ],
+          "type": "string"
+        },
+        "sort_order": {
+          "default": "ascending",
+          "enum": [
+            "ascending",
+            "descending"
+          ],
+          "type": "string"
+        },
+        "sort_reference": {
+          "type": "number"
+        },
+        "track_freq": {
+          "default": "central",
+          "enum": [
+            "central",
+            "highest",
+            "lowest"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "default": "ModeSortSpec",
+          "enum": [
+            "ModeSortSpec"
+          ],
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "ModeSource": {
@@ -12508,8 +12631,19 @@
               0
             ],
             "precision": "double",
+            "sort_spec": {
+              "attrs": {},
+              "filter_key": null,
+              "filter_order": "over",
+              "filter_reference": 0.0,
+              "sort_key": null,
+              "sort_order": "ascending",
+              "sort_reference": null,
+              "track_freq": "central",
+              "type": "ModeSortSpec"
+            },
             "target_neff": null,
-            "track_freq": "central",
+            "track_freq": null,
             "type": "ModeSpec"
           },
           "discriminator": {
@@ -12701,12 +12835,29 @@
           ],
           "type": "string"
         },
+        "sort_spec": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModeSortSpec"
+            }
+          ],
+          "default": {
+            "attrs": {},
+            "filter_key": null,
+            "filter_order": "over",
+            "filter_reference": 0.0,
+            "sort_key": null,
+            "sort_order": "ascending",
+            "sort_reference": null,
+            "track_freq": "central",
+            "type": "ModeSortSpec"
+          }
+        },
         "target_neff": {
           "exclusiveMinimum": 0,
           "type": "number"
         },
         "track_freq": {
-          "default": "central",
           "enum": [
             "central",
             "highest",
@@ -17918,8 +18069,19 @@
               0
             ],
             "precision": "double",
+            "sort_spec": {
+              "attrs": {},
+              "filter_key": null,
+              "filter_order": "over",
+              "filter_reference": 0.0,
+              "sort_key": null,
+              "sort_order": "ascending",
+              "sort_reference": null,
+              "track_freq": "central",
+              "type": "ModeSortSpec"
+            },
             "target_neff": null,
-            "track_freq": "central",
+            "track_freq": null,
             "type": "ModeSpec"
           }
         },

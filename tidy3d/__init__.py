@@ -191,6 +191,7 @@ from .components.data.data_array import (
     FieldProjectionKSpaceDataArray,
     FluxDataArray,
     FluxTimeDataArray,
+    GroupIndexDataArray,
     HeatDataArray,
     IndexedDataArray,
     IndexedFieldVoltageDataArray,
@@ -341,7 +342,7 @@ from .components.mode.data.sim_data import ModeSimulationData
 from .components.mode.simulation import ModeSimulation
 
 # modes
-from .components.mode_spec import ModeSpec
+from .components.mode_spec import ModeSortSpec, ModeSpec
 
 # monitors
 from .components.monitor import (
@@ -641,6 +642,7 @@ __all__ = [
     "GridRefinementRegion",
     "GridSpec",
     "GroundVoltage",
+    "GroupIndexDataArray",
     "HammerstadSurfaceRoughness",
     "HeatBoundarySpec",
     "HeatChargeBoundarySpec",
@@ -697,6 +699,7 @@ __all__ = [
     "ModeSolverData",
     "ModeSolverDataset",
     "ModeSolverMonitor",
+    "ModeSortSpec",
     "ModeSource",
     "ModeSpec",
     "ModulationSpec",

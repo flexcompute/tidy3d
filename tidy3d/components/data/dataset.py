@@ -39,6 +39,16 @@ DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
 class Dataset(Tidy3dBaseModel, ABC):
     """Abstract base class for objects that store collections of `:class:`.DataArray`s."""
 
+    @property
+    def data_arrs(self) -> dict:
+        """Returns a dictionary of all `:class:`.DataArray`s in the dataset."""
+        data_arrs = {}
+        for key in self.__fields__.keys():
+            data = getattr(self, key)
+            if isinstance(data, DataArray):
+                data_arrs[key] = data
+        return data_arrs
+
 
 class AbstractFieldDataset(Dataset, ABC):
     """Collection of scalar fields with some symmetry properties."""
