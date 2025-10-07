@@ -2241,7 +2241,7 @@ class GridSpec(Tidy3dBaseModel):
             )
 
         # Use central frequency of sources, if any.
-        freqs = np.array([source.source_time.freq0 for source in sources])
+        freqs = np.array([source.source_time._freq0 for source in sources])
 
         # multiple sources of different central frequencies
         if not np.all(np.isclose(freqs, freqs[0])):

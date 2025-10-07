@@ -21,6 +21,7 @@ from tidy3d.plugins.mode import ModeSolver
 from ..utils import (
     SIM_FULL,
     AssertLogLevel,
+    AssertLogStr,
     cartesian_to_unstructured,
     run_emulated,
 )
@@ -257,8 +258,12 @@ def test_sim_bounds(shift_amount, log_level):
             center = shift_amount * amp * sign
             if np.sum(center) < 1e-12:
                 continue
-            with AssertLogLevel(log_level):
-                place_box(tuple(center))
+            if log_level is None:
+                with AssertLogStr("WARNING", excludes_str="outside of the simulation domain"):
+                    place_box(tuple(center))
+            else:
+                with AssertLogStr("WARNING", contains_str="outside of the simulation domain"):
+                    place_box(tuple(center))
 
 
 def test_sim_size():
@@ -1593,7 +1598,7 @@ def test_warn_lumped_elements_outside_sim_bounds():
         resistance=50,
         name="resistor_inside",
     )
-    with AssertLogLevel("INFO"):
+    with AssertLogStr("WARNING", excludes_str="not completely inside"):
         sim_good = td.Simulation(
             size=sim_size,
             center=sim_center,
@@ -1612,7 +1617,7 @@ def test_warn_lumped_elements_outside_sim_bounds():
         resistance=50,
         name="resistor_touching",
     )
-    with AssertLogLevel("INFO"):
+    with AssertLogStr("WARNING", excludes_str="not completely inside"):
         sim_good = td.Simulation(
             size=sim_size,
             center=sim_center,
@@ -1631,7 +1636,7 @@ def test_warn_lumped_elements_outside_sim_bounds():
         resistance=50,
         name="resistor_outside",
     )
-    with AssertLogLevel("WARNING"):
+    with AssertLogStr("WARNING", contains_str="not completely inside"):
         sim_bad = sim_good.updated_copy(lumped_elements=[resistor_out])
     assert len(sim_bad.volumetric_structures) == 0
 
@@ -1643,7 +1648,7 @@ def test_warn_lumped_elements_outside_sim_bounds():
         resistance=50,
         name="resistor_edge",
     )
-    with AssertLogLevel("WARNING"):
+    with AssertLogStr("WARNING", contains_str="not completely inside"):
         sim_bad = sim_good.updated_copy(lumped_elements=[resistor_edge])
     assert len(sim_bad.volumetric_structures) == 0
 

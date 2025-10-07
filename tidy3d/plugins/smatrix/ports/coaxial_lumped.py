@@ -174,7 +174,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             coord1: xs,
             coord2: ys,
             coord3: [center[self.injection_axis]],
-            "f": [source_time.freq0],
+            "f": [source_time._freq0],
         }
 
         kwargs = {

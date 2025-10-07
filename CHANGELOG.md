@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in `WavePort` when more than one mode is requested in the `ModeSpec`.
 - Solver error for named 2D materials with inhomogeneous substrates.
 - In `Tidy3dBaseModel` the hash (and cached `.json_string`) are now sensitive to changes in `.attrs`.
+- More accurate frequency range for ``GaussianPulse`` when DC is removed.
 
 ## [v2.10.0rc2] - 2025-10-01
 
