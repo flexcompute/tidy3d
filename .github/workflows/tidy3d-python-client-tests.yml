@@ -163,7 +163,7 @@ jobs:
   lint-commit-messages:
     needs: determine-test-scope
     runs-on: ubuntu-latest
-    name: veryify-commit-linting
+    name: lint-commit-messages
     steps:
       - name: Check out source code
         uses: actions/checkout@v4
@@ -534,10 +534,7 @@ jobs:
             exit 1 # Given remote-tests always run after a PR is approved
           elif [[ "${{ needs.local-tests.result }}" != 'success' ]]; then
             echo "❌ local-tests failed or were skipped."
-          elif [[ "${{ needs.determine-test-scope.outputs.pr_approval_state }}" == 'true' && github.event.pull_request ]]; then
-            echo "❌ PR requires approval."
-            exit 1
-          elif [[ github.event_name == 'merge_group' && "${{ needs.lint-commit-messages.result }}" != 'success' ]]; then
+          elif [[ "${{ github.event_name }}" == 'merge_group' && "${{ needs.lint-commit-messages.result }}" != 'success' ]]; then
             echo "❌ Linting of commit messages failed or was skipped."
             exit 1
           fi
