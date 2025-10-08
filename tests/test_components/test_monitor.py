@@ -344,6 +344,14 @@ def test_diffraction_validators():
 FREQS = np.array([1, 2, 3]) * 1e12
 
 
+def test_gaussian_overlap_monitors_basic():
+    g = td.GaussianOverlapMonitor(size=(1, 1, 0), name="g", freqs=FREQS)
+    a = td.AstigmaticGaussianOverlapMonitor(size=(1, 1, 0), name="a", freqs=FREQS)
+    for m in (g, a):
+        s = m.storage_size(num_cells=10, tmesh=[0.0, 1.0])
+        assert isinstance(s, int) and s > 0
+
+
 def test_monitor():
     size = (1, 2, 3)
     center = (1, 2, 3)
@@ -381,10 +389,14 @@ def test_monitor():
     m10 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
     m11 = td.AuxFieldTimeMonitor(size=size, center=center, name="aux_field_time", fields=("Nfx",))
     m12 = td.MediumMonitor(size=size, center=center, freqs=FREQS, name="mat")
+    m13 = td.GaussianOverlapMonitor(size=(1, 1, 0), center=center, freqs=FREQS, name="gauss")
+    m14 = td.AstigmaticGaussianOverlapMonitor(
+        size=(1, 1, 0), center=center, freqs=FREQS, name="astigauss"
+    )
 
     tmesh = np.linspace(0, 1, 10)
 
-    for m in [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m12]:
+    for m in [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14]:
         m.storage_size(num_cells=100, tmesh=tmesh)
 
     for m in [m2, m4]:

@@ -205,7 +205,6 @@ class BeamProfile(Box):
                 field_vals[2, :] *= -1
             else:
                 field_vals[:2, :] *= -1
-
         # Rotate the fields back to the original propagation axes
         field_vals = self._inverse_rotate_field_vals_z(field_vals, background_n)
 
@@ -371,11 +370,11 @@ class GaussianBeamProfile(BeamProfile):
         0.0,
         title="Waist Distance",
         description="Distance from the beam waist along the propagation direction. "
-        "A positive value means the waist is positioned behind the beam, considering the propagation direction. "
-        "For example, for a beam propagating in the ``+`` direction, a positive value of ``beam_distance`` "
-        "means the beam waist is positioned in the ``-`` direction (behind the beam). "
-        "A negative value means the beam waist is in the ``+`` direction (in front of the beam). "
-        "For an angled beam, the distance is defined along the rotated propagation direction.",
+        "A positive value places the waist behind the beam plane (toward the negative normal axis). "
+        "A negative value places the waist in front of the beam plane (toward the positive normal axis). "
+        "This definition is independent of the ``direction`` parameter, ensuring consistent waist "
+        "positioning for both forward- and backward-propagating beams. "
+        "For an angled beam, the distance is measured along the rotated propagation direction.",
         units=MICROMETER,
     )
     _backward_waist_warning = warn_backward_waist_distance("waist_distance")
@@ -392,6 +391,8 @@ class GaussianBeamProfile(BeamProfile):
         """
 
         w_0, z_0 = self.waist_radius, self.waist_distance
+        if self.direction == "-":
+            z_0 = -z_0
         z_r = w_0**2 * k0 / 2  # shape k0
         w_z = w_0 * np.sqrt(1 + ((z + z_0) / z_r) ** 2)  # shape (Np, Nk0)
         # inv_r_z shape (Np, Nk0)
@@ -441,10 +442,9 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
         "for the waist sizes in the local x and y directions. "
-        "When ``direction`` is ``+`` and ``waist_distances`` are positive, the waist "
-        "is on the ``-`` side (behind) the beam plane. When ``direction`` is ``+`` and "
-        "``waist_distances`` are negative, the waist is on the ``+`` side (in front) of "
-        "the beam plane.",
+        "Positive values place the waist behind the beam plane (toward the negative normal axis); "
+        "negative values place the waist in front of the beam plane. "
+        "This definition is independent of the ``direction`` parameter.",
         units=MICROMETER,
     )
     _backward_waist_warning = warn_backward_waist_distance("waist_distances")
@@ -461,6 +461,8 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
         """
 
         w_xy, z_xy = self.waist_sizes, self.waist_distances  # shape (2, )
+        if self.direction == "-":
+            z_xy = [-z_i for z_i in z_xy]
         z_r = [w**2 * k0 / 2 for w in w_xy]  # shape (2, Nk0)
         w_z, w_0, inv_r_z, psi_g = [], [], [], []  # final shape (2, Np, Nk0) after loop below
         for w, z_i, z_ri in zip(w_xy, z_xy, z_r):

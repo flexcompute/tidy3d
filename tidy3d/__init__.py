@@ -226,6 +226,7 @@ from .components.data.monitor_data import (
     DiffractionData,
     DirectivityData,
     FieldData,
+    FieldOverlapData,
     FieldProjectionAngleData,
     FieldProjectionCartesianData,
     FieldProjectionKSpaceData,
@@ -355,6 +356,7 @@ from .components.mode_spec import (
 
 # monitors
 from .components.monitor import (
+    AstigmaticGaussianOverlapMonitor,
     AuxFieldTimeMonitor,
     DiffractionMonitor,
     DirectivityMonitor,
@@ -366,6 +368,7 @@ from .components.monitor import (
     FieldTimeMonitor,
     FluxMonitor,
     FluxTimeMonitor,
+    GaussianOverlapMonitor,
     MediumMonitor,
     ModeMonitor,
     ModeSolverMonitor,
@@ -518,6 +521,7 @@ __all__ = [
     "ApodizationSpec",
     "AstigmaticGaussianBeam",
     "AstigmaticGaussianBeamProfile",
+    "AstigmaticGaussianOverlapMonitor",
     "AugerRecombination",
     "AutoGrid",
     "AutoImpedanceSpec",
@@ -636,6 +640,7 @@ __all__ = [
     "FieldDataset",
     "FieldGrid",
     "FieldMonitor",
+    "FieldOverlapData",
     "FieldProjectionAngleData",
     "FieldProjectionAngleDataArray",
     "FieldProjectionAngleMonitor",
@@ -667,6 +672,7 @@ __all__ = [
     "GaussianBeam",
     "GaussianBeamProfile",
     "GaussianDoping",
+    "GaussianOverlapMonitor",
     "GaussianPulse",
     "Geometry",
     "GeometryGroup",

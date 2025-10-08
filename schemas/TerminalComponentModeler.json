@@ -821,6 +821,248 @@
       ],
       "type": "object"
     },
+    "AstigmaticGaussianOverlapMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "angle_phi": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "angle_theta": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "apodization": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ApodizationSpec"
+            }
+          ],
+          "default": {
+            "attrs": {},
+            "end": null,
+            "start": null,
+            "type": "ApodizationSpec",
+            "width": null
+          }
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ],
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "colocate": {
+          "default": true,
+          "type": "boolean"
+        },
+        "conjugated_dot_product": {
+          "default": true,
+          "type": "boolean"
+        },
+        "freqs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "ArrayLike"
+            }
+          ]
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "items": [
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "pol_angle": {
+          "default": 0,
+          "type": "number"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ]
+        },
+        "store_fields_direction": {
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "default": "AstigmaticGaussianOverlapMonitor",
+          "enum": [
+            "AstigmaticGaussianOverlapMonitor"
+          ],
+          "type": "string"
+        },
+        "waist_distances": {
+          "default": [
+            0.0,
+            0.0
+          ],
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "waist_sizes": {
+          "default": [
+            1.0,
+            1.0
+          ],
+          "items": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "freqs",
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
     "AugerRecombination": {
       "additionalProperties": false,
       "properties": {
@@ -8661,6 +8903,221 @@
       ],
       "type": "object"
     },
+    "GaussianOverlapMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "angle_phi": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "angle_theta": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "apodization": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ApodizationSpec"
+            }
+          ],
+          "default": {
+            "attrs": {},
+            "end": null,
+            "start": null,
+            "type": "ApodizationSpec",
+            "width": null
+          }
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ],
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "colocate": {
+          "default": true,
+          "type": "boolean"
+        },
+        "conjugated_dot_product": {
+          "default": true,
+          "type": "boolean"
+        },
+        "freqs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "ArrayLike"
+            }
+          ]
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "items": [
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "pol_angle": {
+          "default": 0,
+          "type": "number"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ]
+        },
+        "store_fields_direction": {
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "default": "GaussianOverlapMonitor",
+          "enum": [
+            "GaussianOverlapMonitor"
+          ],
+          "type": "string"
+        },
+        "waist_distance": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "waist_radius": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "freqs",
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
     "GaussianPulse": {
       "additionalProperties": false,
       "properties": {
@@ -15883,6 +16340,7 @@
           "items": {
             "discriminator": {
               "mapping": {
+                "AstigmaticGaussianOverlapMonitor": "#/definitions/AstigmaticGaussianOverlapMonitor",
                 "AuxFieldTimeMonitor": "#/definitions/AuxFieldTimeMonitor",
                 "DiffractionMonitor": "#/definitions/DiffractionMonitor",
                 "DirectivityMonitor": "#/definitions/DirectivityMonitor",
@@ -15893,6 +16351,7 @@
                 "FieldTimeMonitor": "#/definitions/FieldTimeMonitor",
                 "FluxMonitor": "#/definitions/FluxMonitor",
                 "FluxTimeMonitor": "#/definitions/FluxTimeMonitor",
+                "GaussianOverlapMonitor": "#/definitions/GaussianOverlapMonitor",
                 "MediumMonitor": "#/definitions/MediumMonitor",
                 "MicrowaveModeMonitor": "#/definitions/MicrowaveModeMonitor",
                 "MicrowaveModeSolverMonitor": "#/definitions/MicrowaveModeSolverMonitor",
@@ -15903,6 +16362,9 @@
               "propertyName": "type"
             },
             "oneOf": [
+              {
+                "$ref": "#/definitions/AstigmaticGaussianOverlapMonitor"
+              },
               {
                 "$ref": "#/definitions/AuxFieldTimeMonitor"
               },
@@ -15932,6 +16394,9 @@
               },
               {
                 "$ref": "#/definitions/FluxTimeMonitor"
+              },
+              {
+                "$ref": "#/definitions/GaussianOverlapMonitor"
               },
               {
                 "$ref": "#/definitions/MediumMonitor"

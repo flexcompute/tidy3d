@@ -21,6 +21,7 @@ from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
 from tidy3d.components.mode_spec import ModeSortSpec, ModeSpec
 from tidy3d.components.monitor import (
+    AstigmaticGaussianOverlapMonitor,
     AuxFieldTimeMonitor,
     DiffractionMonitor,
     DirectivityMonitor,
@@ -32,6 +33,7 @@ from tidy3d.components.monitor import (
     FieldTimeMonitor,
     FluxMonitor,
     FluxTimeMonitor,
+    GaussianOverlapMonitor,
     MediumMonitor,
     ModeMonitor,
     ModeSolverMonitor,
@@ -1733,7 +1735,63 @@ class MediumData(MediumDataset, AbstractFieldData):
     )
 
 
-class ModeData(ModeSolverDataset, ElectromagneticFieldData):
+class AbstractOverlapData(ElectromagneticFieldData):
+    amps: ModeAmpsDataArray = pd.Field(
+        ...,
+        title="Amplitudes",
+        description="Complex-valued amplitudes of the overlap decomposition.",
+    )
+
+    def normalize(self, source_spectrum_fn) -> AbstractOverlapData:
+        """Return copy of self after normalization is applied using source spectrum function."""
+        if self.amps is None:
+            return self.copy()
+        source_freq_amps = source_spectrum_fn(self.amps.f)[None, :, None]
+        new_amps = (self.amps / source_freq_amps).astype(self.amps.dtype)
+        return self.copy(update={"amps": new_amps})
+
+    @property
+    def time_reversed_copy(self) -> AbstractOverlapData:
+        """Make a copy of the data with direction-reversed fields. In lossy or gyrotropic systems,
+        the time-reversed fields will not be the same as the backward-propagating modes.
+        Note: this only reverses the store fields, any other stored quantities are untouched.
+        """
+        mnt = self.monitor
+
+        if not mnt.store_fields_direction:
+            return self.copy()
+
+        # Time reversal
+        new_data = {}
+        for comp, field in self.field_components.items():
+            if comp[0] == "H":
+                new_data[comp] = -np.conj(field)
+            else:
+                new_data[comp] = np.conj(field)
+
+        # switch direction in the monitor
+        new_dir = "+" if mnt.store_fields_direction == "-" else "-"
+        update_dict = {"store_fields_direction": new_dir}
+        if hasattr(mnt, "direction"):
+            update_dict["direction"] = new_dir
+        new_data["monitor"] = mnt.updated_copy(**update_dict)
+        return self.copy(update=new_data)
+
+
+class FieldOverlapData(AbstractOverlapData):
+    monitor: Union[GaussianOverlapMonitor, AstigmaticGaussianOverlapMonitor] = pd.Field(
+        ..., title="Monitor", description="Monitor associated with the data."
+    )
+
+    def _make_adjoint_sources(
+        self, dataset_names: list[str], fwidth: float
+    ) -> list[Union[CustomCurrentSource, PointDipole]]:
+        """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
+
+        raise NotImplementedError("Could not formulate adjoint source for overlap monitor output.")
+
+
+class ModeData(ModeSolverDataset, AbstractOverlapData):
     """
     Data associated with a :class:`.ModeMonitor`: modal amplitudes, propagation indices and mode profiles.
 
@@ -1773,11 +1831,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
     """
 
     monitor: ModeMonitor = pd.Field(
-        ..., title="Monitor", description="Mode monitor associated with the data."
-    )
-
-    amps: ModeAmpsDataArray = pd.Field(
-        ..., title="Amplitudes", description="Complex-valued amplitudes associated with the mode."
+        ..., title="Monitor", description="Monitor associated with the data."
     )
 
     eps_spec: list[EpsSpecType] = pd.Field(
@@ -1798,12 +1852,6 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                     "eps_spec must be provided at the same frequencies as mode solver data."
                 )
         return val
-
-    def normalize(self, source_spectrum_fn) -> ModeData:
-        """Return copy of self after normalization is applied using source spectrum function."""
-        source_freq_amps = source_spectrum_fn(self.amps.f)[None, :, None]
-        new_amps = (self.amps / source_freq_amps).astype(self.amps.dtype)
-        return self.copy(update={"amps": new_amps})
 
     def overlap_sort(
         self,
@@ -2091,25 +2139,6 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         update_dict["monitor"] = self.monitor.updated_copy(freqs=freqs)
 
         return self.copy(update=update_dict)
-
-    @property
-    def time_reversed_copy(self) -> FieldData:
-        """Make a copy of the data with direction-reversed fields. In lossy or gyrotropic systems,
-        the time-reversed fields will not be the same as the backward-propagating modes."""
-
-        # Time reversal
-        new_data = {}
-        for comp, field in self.field_components.items():
-            if comp[0] == "H":
-                new_data[comp] = -np.conj(field)
-            else:
-                new_data[comp] = np.conj(field)
-
-        # switch direction in the monitor
-        mnt = self.monitor
-        new_dir = "+" if mnt.store_fields_direction == "-" else "-"
-        new_data["monitor"] = mnt.updated_copy(store_fields_direction=new_dir)
-        return self.copy(update=new_data)
 
     def _colocated_propagation_axes_field(self, field_name: Literal["E", "H"]) -> DataArray:
         """Collect a field DataArray containing all 3 field components and rotate from frame
@@ -2737,10 +2766,6 @@ class ModeSolverData(ModeData):
         "interpolating in frequency.",
     )
 
-    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> ModeSolverData:
-        """Return copy of self after normalization is applied using source spectrum function."""
-        return self.copy()
-
     def _normalize_modes(self):
         """Normalize modes. Note: this modifies ``self`` in-place."""
         scaling = np.sqrt(np.abs(self.flux))
@@ -2958,25 +2983,6 @@ class ModeSolverData(ModeData):
             assume_sorted=True,
         )
         return interpolated_data
-
-    @property
-    def time_reversed_copy(self) -> FieldData:
-        """Make a copy of the data with direction-reversed fields. In lossy or gyrotropic systems,
-        the time-reversed fields will not be the same as the backward-propagating modes."""
-
-        # Time reversal
-        new_data = {}
-        for comp, field in self.field_components.items():
-            if comp[0] == "H":
-                new_data[comp] = -np.conj(field)
-            else:
-                new_data[comp] = np.conj(field)
-
-        # switch direction in the monitor
-        mnt = self.monitor
-        new_dir = "+" if mnt.store_fields_direction == "-" else "-"
-        new_data["monitor"] = mnt.updated_copy(direction=new_dir, store_fields_direction=new_dir)
-        return self.copy(update=new_data)
 
     def _check_fields_stored(self, components: list[str]) -> None:
         """Check that all requested field components are stored in the data."""

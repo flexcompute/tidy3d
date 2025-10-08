@@ -337,8 +337,88 @@ class PlanarMonitor(Monitor, ABC):
         return self.size.index(0.0)
 
 
-class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
+class AbstractOverlapMonitor(PlanarMonitor, FreqMonitor):
+    """:class:`Monitor` that projects fields onto a specified basis and stores overlap amplitudes.
+
+    This base is shared by ModeMonitor and Gaussian-overlap monitors.
+    """
+
+    store_fields_direction: Direction = pydantic.Field(
+        None,
+        title="Store Fields",
+        description="Propagation direction for the field profiles stored from overlap calculation.",
+    )
+
+    colocate: bool = pydantic.Field(
+        True,
+        title="Colocate Fields",
+        description="Toggle whether fields should be colocated to grid cell boundaries (i.e. primal grid nodes).",
+    )
+
+    conjugated_dot_product: bool = pydantic.Field(
+        True,
+        title="Conjugated Dot Product",
+        description="Use conjugated or non-conjugated dot product for overlap/decomposition.",
+    )
+
+    _draw_overlap_arrows: bool = True
+    """Whether to draw arrows in AbstractOverlapMonitor.plot(). Subclasses override to False."""
+
+    def plot(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        **patch_kwargs,
+    ) -> Ax:
+        """Plot this overlap monitor with an arrow indicating propagation direction."""
+        ax = super().plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
+
+        if not self._draw_overlap_arrows:
+            return ax
+
+        kwargs_alpha = patch_kwargs.get("alpha")
+        arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
+
+        ax = self._plot_arrow(
+            x=x,
+            y=y,
+            z=z,
+            ax=ax,
+            direction=self._dir_arrow,
+            bend_radius=None,
+            bend_axis=None,
+            color=ARROW_COLOR_MONITOR,
+            alpha=arrow_alpha,
+            both_dirs=True,
+        )
+        return ax
+
+    @cached_property
+    def _dir_arrow(self) -> tuple[float, float, float]:
+        """Monitor direction normal vector in cartesian coordinates."""
+        theta, phi = self._angles
+        dx = np.cos(phi) * np.sin(theta)
+        dy = np.sin(phi) * np.sin(theta)
+        dz = np.cos(theta)
+        return self.unpop_axis(dz, (dx, dy), axis=self.normal_axis)
+
+    @property
+    def _angles(self) -> tuple[float, float]:
+        """Angle tuple (theta, phi) in radians. Children override to supply values."""
+        return (0.0, 0.0)
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Default size of intermediate data; store all fields on plane for overlap."""
+        num_sample = len(getattr(self, "freqs", [0]))
+        return BYTES_COMPLEX * num_cells * num_sample * 6
+
+
+class AbstractModeMonitor(AbstractOverlapMonitor):
     """:class:`Monitor` that records mode-related data."""
+
+    _draw_overlap_arrows: bool = False  # AbstractModeMonitor.plot() draws its own arrows
 
     mode_spec: ModeSpec = pydantic.Field(
         ModeSpec(),
@@ -401,12 +481,8 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         return ax
 
     @cached_property
-    def _dir_arrow(self) -> tuple[float, float, float]:
-        """Source direction normal vector in cartesian coordinates."""
-        dx = np.cos(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
-        dy = np.sin(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
-        dz = np.cos(self.mode_spec.angle_theta)
-        return self.unpop_axis(dz, (dx, dy), axis=self.normal_axis)
+    def _angles(self) -> tuple[float, float]:
+        return (self.mode_spec.angle_theta, self.mode_spec.angle_phi)
 
     @cached_property
     def _bend_axis(self) -> Axis:
@@ -445,6 +521,136 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         if self.mode_spec.precision == "double":
             return 2 * bytes_single
         return bytes_single
+
+
+class AbstractGaussianOverlapMonitor(AbstractOverlapMonitor):
+    """:class:`Monitor` that records amplitudes from decomposition onto a Gaussian-like beam.
+
+    Common fields and behavior shared by GaussianOverlapMonitor and
+    AstigmaticGaussianOverlapMonitor.
+    """
+
+    angle_theta: float = pydantic.Field(
+        0.0,
+        title="Polar Angle",
+        description="Polar angle of propagation direction.",
+        units=RADIAN,
+    )
+
+    angle_phi: float = pydantic.Field(
+        0.0,
+        title="Azimuth Angle",
+        description="Azimuth angle of propagation direction.",
+        units=RADIAN,
+    )
+
+    pol_angle: float = pydantic.Field(
+        0,
+        title="Polarization Angle",
+        description="Specifies the angle between the electric field polarization of the "
+        "source and the plane defined by the injection axis and the propagation axis (rad). "
+        "``pol_angle=0`` (default) specifies P polarization, "
+        "while ``pol_angle=np.pi/2`` specifies S polarization. "
+        "At normal incidence when S and P are undefined, ``pol_angle=0`` defines: "
+        "- ``Ey`` polarization for propagation along ``x``."
+        "- ``Ex`` polarization for propagation along ``y``."
+        "- ``Ex`` polarization for propagation along ``z``.",
+        units=RADIAN,
+    )
+
+    @property
+    def _angles(self) -> tuple[float, float]:
+        return (self.angle_theta, self.angle_phi)
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization."""
+        # store complex amplitudes for +/- directions
+        num_dirs = 2
+        return BYTES_COMPLEX * len(self.freqs) * num_dirs
+
+
+class GaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
+    """:class:`Monitor` that records amplitudes from decomposition onto a Gaussian beam.
+
+    Example
+    -------
+    >>> gauss = GaussianOverlapMonitor(
+    ...     size=(0, 3, 3),
+    ...     freqs=[2e14],
+    ...     pol_angle=np.pi / 2,
+    ...     waist_radius=1.0,
+    ...     name="gaussian_monitor",
+    ... )
+
+    Notes
+    --------
+        If one wants the focus 'in front' of the monitor, a negative value of ``waist_distance``
+        is needed. See also :class:`.GaussianBeam`.
+    """
+
+    waist_radius: pydantic.PositiveFloat = pydantic.Field(
+        1.0,
+        title="Waist Radius",
+        description="Radius of the beam at the waist.",
+        units=MICROMETER,
+    )
+
+    waist_distance: float = pydantic.Field(
+        0.0,
+        title="Waist Distance",
+        description="Distance from the beam waist along the propagation direction. "
+        "A positive value places the waist behind the monitor plane (toward the negative normal axis). "
+        "A negative value places the waist in front of the monitor plane. "
+        "For an angled beam, the distance is measured along the rotated propagation direction.",
+        units=MICROMETER,
+    )
+
+
+class AstigmaticGaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
+    """:class:`Monitor` that records amplitudes from decomposition onto an astigmatic Gaussian beam.
+
+    The simple astigmatic Gaussian distribution allows
+    both an elliptical intensity profile and different waist locations for the two principal axes
+    of the ellipse. When equal waist sizes and equal waist distances are specified in the two
+    directions, this monitor becomes equivalent to :class:`GaussianOverlapMonitor`.
+
+    Notes
+    -----
+
+        This class implements the simple astigmatic Gaussian beam described in _`[1]`.
+
+        **References**:
+
+        .. [1] Kochkina et al., Applied Optics, vol. 52, issue 24, 2013.
+
+    Example
+    -------
+    >>> gauss = AstigmaticGaussianOverlapMonitor(
+    ...     size=(0,3,3),
+    ...     pol_angle=np.pi / 2,
+    ...     waist_sizes=(1.0, 2.0),
+    ...     waist_distances = (3.0, 4.0),
+    ...     freqs=[2e14],
+    ...     name="astigmatic_gaussian_monitor",
+    ... )
+    """
+
+    waist_sizes: tuple[pydantic.PositiveFloat, pydantic.PositiveFloat] = pydantic.Field(
+        (1.0, 1.0),
+        title="Waist sizes",
+        description="Size of the beam at the waist in the local x and y directions.",
+        units=MICROMETER,
+    )
+
+    waist_distances: tuple[float, float] = pydantic.Field(
+        (0.0, 0.0),
+        title="Waist distances",
+        description="Distance to the beam waist along the propagation direction "
+        "for the waist sizes in the local x and y directions. "
+        "Positive values place the waist behind the monitor plane (toward the negative normal axis); "
+        "negative values place the waist in front of the monitor plane.",
+        units=MICROMETER,
+    )
 
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):

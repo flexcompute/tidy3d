@@ -6,6 +6,7 @@ from typing import Union
 
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from tidy3d.components.monitor import (
+    AstigmaticGaussianOverlapMonitor,
     AuxFieldTimeMonitor,
     DiffractionMonitor,
     DirectivityMonitor,
@@ -16,6 +17,7 @@ from tidy3d.components.monitor import (
     FieldTimeMonitor,
     FluxMonitor,
     FluxTimeMonitor,
+    GaussianOverlapMonitor,
     MediumMonitor,
     ModeMonitor,
     ModeSolverMonitor,
@@ -40,4 +42,6 @@ MonitorType = Union[
     DirectivityMonitor,
     MicrowaveModeMonitor,
     MicrowaveModeSolverMonitor,
+    GaussianOverlapMonitor,
+    AstigmaticGaussianOverlapMonitor,
 ]

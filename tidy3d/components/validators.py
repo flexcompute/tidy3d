@@ -307,11 +307,11 @@ def warn_if_dataset_none(field_name: str):
 
 
 def warn_backward_waist_distance(field_name: str):
-    """Warn if a backward-propagating beam uses a non-zero waist distance."""
+    """Warn about changed waist distance behavior for backward-propagating beams."""
 
     @pydantic.root_validator(allow_reuse=True)
     def _warn_backward_nonzero(cls, values):
-        """Emit deprecation warning for backward propagation with non-zero waist."""
+        """Emit warning about changed waist distance interpretation."""
         direction = values.get("direction")
         if direction != "-":
             return values
@@ -319,12 +319,14 @@ def warn_backward_waist_distance(field_name: str):
         waist_array = np.atleast_1d(waist_value)
         if not np.all(np.isclose(waist_array, 0.0)):
             log.warning(
-                f"Behavior of {cls.__name__} with direction '-' and non-zero '{field_name}' will "
-                "change in version 2.11 to be consistent with upcoming beam overlap monitors and "
-                "ports. Currently, the waist distance is interpreted w.r.t. the directed "
-                "propagation axis, so switching 'direction' also switches the position of the "
-                "waist in the global reference frame. In the future, the waist position will be "
-                "defined such that it is the same for backward- and forward-propagating beams.",
+                f"Starting in version 2.11, the behavior of {cls.__name__} with direction '-' "
+                f"and non-zero '{field_name}' has changed. The waist position is now defined "
+                "consistently for both forward- and backward-propagating beams: a positive "
+                f"'{field_name}' always places the beam waist behind the source/monitor plane "
+                "(toward the negative normal axis). This ensures reciprocity between Gaussian "
+                "sources and overlap monitors used for port-based S-matrix calculations. "
+                "If your simulation relied on the previous behavior (where the waist position "
+                "flipped with direction), you may need to adjust your waist distance values.",
             )
         return values
 
