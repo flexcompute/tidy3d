@@ -10,6 +10,7 @@ from os.path import join
 
 import autograd as ag
 import autograd.numpy as anp
+import h5py
 import matplotlib.pylab as plt
 import numpy as np
 import numpy.testing as npt
@@ -25,12 +26,14 @@ from tidy3d.components.autograd.constants import (
     MINIMUM_SPACING_FRACTION,
 )
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd.field_map import FieldMap
 from tidy3d.components.autograd.utils import is_tidy_box
+from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.exceptions import AdjointError
 from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import run, run_async
-from tidy3d.web.api.autograd.utils import FieldMap
+from tidy3d.web.api.autograd import autograd as autograd_module
 
 from ...utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
 
@@ -1172,6 +1175,124 @@ def test_sim_full_ops(structure_key):
         return anp.sum(sim_full_traced.structures[-1].medium.permittivity.values)
 
     ag.grad(objective)(params0)
+
+
+def test_sim_hash_changes_with_traced_keys():
+    """Ensure the model hash accounts for autograd traced paths."""
+
+    sim_traced = SIM_FULL.copy()
+    original_field_map = sim_traced._strip_traced_fields()
+
+    structures = list(sim_traced.structures)
+    structures[0] = structures[0].to_static()
+    sim_modified = sim_traced.updated_copy(structures=tuple(structures))
+
+    modified_field_map = sim_modified._strip_traced_fields()
+    assert original_field_map != modified_field_map
+    assert sim_traced._hash_self() != sim_modified._hash_self()
+
+
+def test_sim_hdf5_records_traced_keys(tmp_path):
+    """HDF5 exports should include traced-key metadata for caching."""
+
+    sim_traced = SIM_FULL.copy()
+    expected_payload = sim_traced._serialized_traced_field_keys()
+    assert expected_payload, "simulation fixture must yield traced keys"
+
+    sim_traced.attrs.pop(TRACED_FIELD_KEYS_ATTR, None)
+
+    export_path = tmp_path / "sim_traced.hdf5"
+    sim_traced.to_hdf5(str(export_path))
+
+    with h5py.File(export_path, "r") as handle:
+        assert TRACED_FIELD_KEYS_ATTR in handle.attrs
+        assert handle.attrs[TRACED_FIELD_KEYS_ATTR] == expected_payload
+
+    static_export = tmp_path / "sim_traced_static.hdf5"
+    sim_traced.attrs[TRACED_FIELD_KEYS_ATTR] = expected_payload
+    sim_static = sim_traced.to_static()
+    sim_static.to_hdf5(str(static_export))
+
+    with h5py.File(static_export, "r") as handle:
+        assert TRACED_FIELD_KEYS_ATTR in handle.attrs
+        assert handle.attrs[TRACED_FIELD_KEYS_ATTR] == expected_payload
+
+
+def test_web_run_duplicate_simulations(monkeypatch):
+    """Repeated simulation objects should reuse cached data without hash mismatches."""
+
+    sim = SIM_FULL.copy()
+    sim.attrs.pop(TRACED_FIELD_KEYS_ATTR, None)
+
+    copy_calls = {"count": 0}
+
+    class DummyData:
+        def __init__(self, label: str):
+            self.label = label
+
+        def copy(self):
+            copy_calls["count"] += 1
+            return DummyData(f"{self.label}_copy{copy_calls['count']}")
+
+    dummy = DummyData("root")
+
+    def fake_run_autograd(*args, **kwargs):
+        return dummy
+
+    monkeypatch.setattr("tidy3d.web.api.run.run_autograd", fake_run_autograd)
+
+    results = web.run([sim, sim])
+
+    assert isinstance(results, list)
+    assert len(results) == 2
+    assert results[0] is dummy
+    assert results[1] is not dummy
+    assert copy_calls["count"] == 1
+
+
+def test_autograd_run_does_not_mutate_input_attrs(monkeypatch):
+    """Autograd run should attach traced metadata only to the exported static copy."""
+
+    sim = SIM_FULL.copy()
+    sim.attrs.pop(TRACED_FIELD_KEYS_ATTR, None)
+    payload = sim._serialized_traced_field_keys()
+    assert payload
+
+    captured: dict[str, typing.Any] = {}
+
+    def fake_run_primitive(
+        sim_fields,
+        sim_original,
+        task_name,
+        aux_data,
+        local_gradient,
+        max_num_adjoint_per_fwd,
+        **run_kwargs,
+    ):
+        captured["sim_original"] = sim_original
+        captured["payload"] = sim_original.attrs.get(TRACED_FIELD_KEYS_ATTR)
+        captured["sim_fields"] = sim_fields
+        captured["aux_data"] = aux_data
+        return sim_fields
+
+    def fake_postprocess_run(traced_fields_data, aux_data):
+        captured["postprocess_data"] = traced_fields_data
+        captured["postprocess_aux"] = aux_data
+        return "sentinel"
+
+    monkeypatch.setattr(autograd_module, "_run_primitive", fake_run_primitive)
+    monkeypatch.setattr(autograd_module, "postprocess_run", fake_postprocess_run)
+
+    result = autograd_module._run(simulation=sim, task_name="dummy")
+
+    assert result == "sentinel"
+    assert sim.attrs.get(TRACED_FIELD_KEYS_ATTR) is None
+    assert captured["payload"] == payload
+    assert captured["sim_original"] is not sim
+    assert captured["sim_original"].attrs.get(TRACED_FIELD_KEYS_ATTR) == payload
+    assert captured["postprocess_data"] == captured["sim_fields"]
+    assert captured["postprocess_aux"] is captured["aux_data"]
+    assert captured["postprocess_aux"] == {}
 
 
 def test_sim_traced_override_structures():

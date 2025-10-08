@@ -39,6 +39,7 @@ JSON_TAG = "JSON_STRING"
 # If json string is larger than ``MAX_STRING_LENGTH``, split the string when storing in hdf5
 MAX_STRING_LENGTH = 1_000_000_000
 FORBID_SPECIAL_CHARACTERS = ["/"]
+TRACED_FIELD_KEYS_ATTR = "__tidy3d_traced_field_keys__"
 
 
 def cache(prop):
@@ -524,7 +525,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation.to_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        json_string = self._json(indent=INDENT_JSON_FILE)
+        export_model = self.to_static()
+        json_string = export_model._json(indent=INDENT_JSON_FILE)
         self._warn_if_contains_data(json_string)
         with open(fname, "w", encoding="utf-8") as file_handle:
             file_handle.write(json_string)
@@ -586,7 +588,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation.to_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
-        json_string = self._json_string
+        export_model = self.to_static()
+        json_string = export_model._json()
         self._warn_if_contains_data(json_string)
         model_dict = json.loads(json_string)
         with open(fname, "w+", encoding="utf-8") as file_handle:
@@ -792,8 +795,15 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
+        export_model = self.to_static()
+        traced_keys_payload = export_model.attrs.get(TRACED_FIELD_KEYS_ATTR)
+
+        if traced_keys_payload is None:
+            traced_keys_payload = self.attrs.get(TRACED_FIELD_KEYS_ATTR)
+        if traced_keys_payload is None:
+            traced_keys_payload = self._serialized_traced_field_keys()
         with h5py.File(fname, "w") as f_handle:
-            json_str = self._json_string
+            json_str = export_model._json()
             for ind in range(ceil(len(json_str) / MAX_STRING_LENGTH)):
                 ind_start = int(ind * MAX_STRING_LENGTH)
                 ind_stop = min(int(ind + 1) * MAX_STRING_LENGTH, len(json_str))
@@ -816,14 +826,16 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
                     # if a tuple, assign each element a unique key
                     if isinstance(value, (list, tuple)):
-                        value_dict = self.tuple_to_dict(tuple_values=value)
+                        value_dict = export_model.tuple_to_dict(tuple_values=value)
                         add_data_to_file(data_dict=value_dict, group_path=subpath)
 
                     # if a dict, recurse
                     elif isinstance(value, dict):
                         add_data_to_file(data_dict=value, group_path=subpath)
 
-            add_data_to_file(data_dict=self.dict())
+            add_data_to_file(data_dict=export_model.dict())
+            if traced_keys_payload:
+                f_handle.attrs[TRACED_FIELD_KEYS_ATTR] = traced_keys_payload
 
     @classmethod
     def dict_from_hdf5_gz(
@@ -1100,6 +1112,22 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             insert_value(value, path=path, sub_dict=self_dict)
 
         return self.parse_obj(self_dict)
+
+    def _serialized_traced_field_keys(
+        self, field_mapping: AutogradFieldMap | None = None
+    ) -> Optional[str]:
+        """Return a serialized, order-independent representation of traced field paths."""
+
+        if field_mapping is None:
+            field_mapping = self._strip_traced_fields()
+        if not field_mapping:
+            return None
+
+        # TODO: remove this deferred import once TracerKeys is decoupled from Tidy3dBaseModel.
+        from tidy3d.components.autograd.field_map import TracerKeys
+
+        tracer_keys = TracerKeys.from_field_mapping(field_mapping)
+        return tracer_keys.json(separators=(",", ":"), ensure_ascii=True)
 
     def to_static(self) -> Tidy3dBaseModel:
         """Version of object with all autograd-traced fields removed."""
