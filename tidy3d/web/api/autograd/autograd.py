@@ -14,6 +14,7 @@ from tidy3d.components.autograd.constants import (
     MAX_NUM_ADJOINT_PER_FWD,
     MAX_NUM_TRACED_STRUCTURES,
 )
+from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
@@ -409,9 +410,14 @@ def _run(
     aux_data = {}
 
     # run our custom @primitive, passing the traced fields first to register with autograd
+    sim_static = simulation.to_static()
+    traced_keys_payload = simulation._serialized_traced_field_keys()
+    if traced_keys_payload:
+        sim_static.attrs[TRACED_FIELD_KEYS_ATTR] = traced_keys_payload
+
     traced_fields_data = _run_primitive(
         traced_fields_sim,  # if you pass as a kwarg it will not trace :/
-        sim_original=simulation.to_static(),
+        sim_original=sim_static,
         task_name=task_name,
         aux_data=aux_data,
         local_gradient=local_gradient,
@@ -433,16 +439,22 @@ def _run_async(
     task_names = simulations.keys()
 
     traced_fields_sim_dict = {}
+    sims_original = {}
     for task_name in task_names:
-        traced_fields_sim_dict[task_name] = setup_run(simulation=simulations[task_name])
+        simulation = simulations[task_name]
+        traced_fields = setup_run(simulation=simulation)
+        traced_fields_sim_dict[task_name] = traced_fields
+        sim_static = simulation.to_static()
+        if traced_fields:
+            traced_keys_payload = simulation._serialized_traced_field_keys()
+            if traced_keys_payload:
+                sim_static.attrs[TRACED_FIELD_KEYS_ATTR] = traced_keys_payload
+        sims_original[task_name] = sim_static
     traced_fields_sim_dict = dict_ag(traced_fields_sim_dict)
 
     # TODO: shortcut primitive running for any items with no tracers?
 
     aux_data_dict = {task_name: {} for task_name in task_names}
-    sims_original = {
-        task_name: simulation.to_static() for task_name, simulation in simulations.items()
-    }
     traced_fields_data_dict = _run_async_primitive(
         traced_fields_sim_dict,  # if you pass as a kwarg it will not trace :/
         sims_original=sims_original,
