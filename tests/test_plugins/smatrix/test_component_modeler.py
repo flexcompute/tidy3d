@@ -9,7 +9,13 @@ import pytest
 import tidy3d as td
 from tidy3d import SimulationDataMap
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
-from tidy3d.plugins.smatrix import ModalComponentModeler, ModalComponentModelerData, Port
+from tidy3d.plugins.smatrix import (
+    AstigmaticGaussianPort,
+    GaussianPort,
+    ModalComponentModeler,
+    ModalComponentModelerData,
+    Port,
+)
 from tidy3d.web.api.container import Batch
 
 from ...utils import AssertLogStr, run_emulated
@@ -144,6 +150,7 @@ def make_coupler():
 
 def make_ports():
     sim = make_coupler()
+
     # source
     src_pos = sim.size[0] / 2 - straight_wg_length / 2
 
@@ -179,7 +186,28 @@ def make_ports():
         name="left_bot",
     )
 
-    return [port_right_top, port_right_bot, port_left_top, port_left_bot]
+    # Gaussian ports on top and bottom
+    port_z_bot = AstigmaticGaussianPort(
+        center=[0, 0, wg_height + 0.1],
+        size=(10, 10, 0),
+        direction="-",
+        name="z_top",
+        angle_theta=0.0,
+        angle_phi=0.0,
+        pol_angle=0.0,
+    )
+
+    port_z_top = GaussianPort(
+        center=[0, 0, -0.1],
+        size=(10, 10, 0),
+        direction="+",
+        name="z_bot",
+        angle_theta=0.0,
+        angle_phi=0.0,
+        pol_angle=0.0,
+    )
+
+    return [port_right_top, port_right_bot, port_left_top, port_left_bot, port_z_bot, port_z_top]
 
 
 def make_component_modeler(**kwargs):
@@ -283,13 +311,12 @@ def test_run_component_modeler(monkeypatch):
     s_matrix = modeler_data.smatrix()
 
     for port_in in modeler.ports:
-        for mode_index_in in range(port_in.mode_spec.num_modes):
+        for mode_index_in in range(port_in.num_modes):
             for port_out in modeler.ports:
-                for mode_index_out in range(port_out.mode_spec.num_modes):
+                for mode_index_out in range(port_out.num_modes):
                     coords_in = {"port_in": port_in.name, "mode_index_in": mode_index_in}
                     coords_out = {"port_out": port_out.name, "mode_index_out": mode_index_out}
-
-                    assert np.all(s_matrix.sel(**coords_in) != 0), (
+                    assert np.all(s_matrix.sel(**coords_in).sel(mode_index_out=0) != 0), (
                         "source index not present in S matrix"
                     )
                     assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
@@ -309,7 +336,7 @@ def test_component_modeler_run_only(monkeypatch):
     coords_in_run_only = {"port_in": port_run_only, "mode_index_in": mode_index_run_only}
 
     # make sure the run only mappings are non-zero
-    assert np.all(s_matrix.sel(**coords_in_run_only) != 0)
+    assert np.all(s_matrix.sel(**coords_in_run_only).sel(mode_index_out=0) != 0)
 
     # make sure if we zero out the run_only mappings, everythging is zero
     s_matrix.loc[coords_in_run_only] = 0
@@ -370,7 +397,7 @@ def test_mapping_exclusion(monkeypatch):
 
     # add a mapping to each element in the row of EXCLUDE_INDEX
     for port in ports:
-        for mode_index in range(port.mode_spec.num_modes):
+        for mode_index in range(port.num_modes):
             row_index = (port.name, mode_index)
             if row_index != EXCLUDE_INDEX:
                 mapping = ((row_index, row_index), (row_index, EXCLUDE_INDEX), +1)
@@ -400,7 +427,7 @@ def test_mapping_with_run_only():
     run_only = []
     # add a mapping to each element in the row of EXCLUDE_INDEX
     for port in ports:
-        for mode_index in range(port.mode_spec.num_modes):
+        for mode_index in range(port.num_modes):
             # Test that providing a list is properly handled
             row_index = [port.name, mode_index]
             run_only.append(row_index)

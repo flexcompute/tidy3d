@@ -9,6 +9,7 @@ from tidy3d.components.data.monitor_data import (
     DiffractionData,
     DirectivityData,
     FieldData,
+    FieldOverlapData,
     FieldProjectionAngleData,
     FieldProjectionCartesianData,
     FieldProjectionKSpaceData,
@@ -40,6 +41,7 @@ MonitorDataTypes = (
     FieldProjectionAngleData,
     DiffractionData,
     DirectivityData,
+    FieldOverlapData,
     MicrowaveModeData,
     MicrowaveModeSolverData,
 )

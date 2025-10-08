@@ -18,6 +18,7 @@ from tidy3d.components.data.monitor_data import (
     DiffractionData,
     DirectivityData,
     FieldData,
+    FieldOverlapData,
     FieldTimeData,
     FluxData,
     FluxTimeData,
@@ -267,6 +268,16 @@ def make_mode_data():
     return ModeData(monitor=MODE_MONITOR, amps=AMPS.copy(), n_complex=N_COMPLEX.copy())
 
 
+def make_field_overlap_data():
+    monitor = td.GaussianOverlapMonitor(
+        size=(0, 2, 2),
+        freqs=[1e14, 1.1e14],
+        name="gaussian_overlap_monitor",
+        store_fields_direction="+",
+    )
+    return FieldOverlapData(monitor=monitor, amps=AMPS)
+
+
 def make_flux_data():
     return FluxData(monitor=FLUX_MONITOR, flux=FLUX.copy())
 
@@ -472,6 +483,11 @@ def test_mode_data():
     _ = data.n_complex
     _ = data.n_eff
     _ = data.k_eff
+
+
+def test_overlap_data():
+    data = make_field_overlap_data()
+    _ = data.amps
 
 
 def test_flux_data():

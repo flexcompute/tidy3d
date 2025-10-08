@@ -558,13 +558,7 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     ...     direction='+',
     ...     waist_radius=1.0)
 
-    Notes
-    --------
-    If one wants the focus 'in front' of the source, a negative value of ``waist_distance`` is needed.
 
-    .. image:: ../../_static/img/beam_waist.png
-        :width: 30%
-        :align: center
 
     See Also
     --------
@@ -584,11 +578,11 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         0.0,
         title="Waist Distance",
         description="Distance from the beam waist along the propagation direction. "
-        "A positive value means the waist is positioned behind the source, considering the propagation direction. "
-        "For example, for a beam propagating in the ``+`` direction, a positive value of ``beam_distance`` "
-        "means the beam waist is positioned in the ``-`` direction (behind the source). "
-        "A negative value means the beam waist is in the ``+`` direction (in front of the source). "
-        "For an angled source, the distance is defined along the rotated propagation direction.",
+        "A positive value places the waist behind the source plane (toward the negative normal axis). "
+        "A negative value places the waist in front of the source plane (toward the positive normal axis). "
+        "This definition is independent of the ``direction`` parameter, ensuring consistent waist "
+        "positioning for both forward- and backward-propagating beams. "
+        "For an angled source, the distance is measured along the rotated propagation direction.",
         units=MICROMETER,
     )
 
@@ -646,10 +640,9 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
         "for the waist sizes in the local x and y directions. "
-        "When ``direction`` is ``+`` and ``waist_distances`` are positive, the waist "
-        "is on the ``-`` side (behind) the source plane. When ``direction`` is ``+`` and "
-        "``waist_distances`` are negative, the waist is on the ``+`` side (in front) of "
-        "the source plane.",
+        "Positive values place the waist behind the source plane (toward the negative normal axis); "
+        "negative values place the waist in front of the source plane. "
+        "This definition is independent of the ``direction`` parameter.",
         units=MICROMETER,
     )
 

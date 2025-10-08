@@ -1412,6 +1412,25 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
             **field_cmps,
         )
 
+    def make_gaussian_overlap_data(
+        monitor: td.GaussianOverlapMonitor | td.AstigmaticGaussianOverlapMonitor,
+    ) -> td.FieldOverlapData:
+        """Random FieldOverlapData from a GaussianOverlapMonitor or AstigmaticGaussianOverlapMonitor."""
+        grid = simulation.discretize_monitor(monitor)
+        coords_amps = {
+            "direction": ["+", "-"],
+            "f": list(monitor.freqs),
+            "mode_index": [0],  # singleton for Gaussian ports
+        }
+        amps = make_data(coords=coords_amps, data_array_type=td.ModeAmpsDataArray, is_complex=True)
+        return td.FieldOverlapData(
+            monitor=monitor,
+            amps=amps,
+            symmetry=(0, 0, 0),
+            symmetry_center=simulation.center,
+            grid_expanded=grid,
+        )
+
     def make_flux_data(monitor: td.FluxMonitor) -> td.FluxData:
         """make a random ModeData from a ModeMonitor."""
 
@@ -1597,6 +1616,8 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         td.FieldProjectionKSpaceMonitor: make_field_projection_kspace_data,
         td.AuxFieldTimeMonitor: make_aux_field_time_data,
         td.FluxTimeMonitor: make_flux_time_data,
+        td.GaussianOverlapMonitor: make_gaussian_overlap_data,
+        td.AstigmaticGaussianOverlapMonitor: make_gaussian_overlap_data,
     }
 
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
