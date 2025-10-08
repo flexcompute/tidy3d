@@ -216,7 +216,8 @@ def supports_local_subpixel(fn):
                         tidy3d_extras["use_local_subpixel"] = False
                         raise Tidy3dImportError(
                             "The package 'tidy3d-extras' did not initialize correctly, "
-                            "likely due to an invalid API key."
+                            "likely due to an invalid API key. To suppress this error, "
+                            "you can set 'config.use_local_subpixel=False'."
                         )
 
                     if version != __version__:
