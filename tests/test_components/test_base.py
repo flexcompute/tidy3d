@@ -260,3 +260,18 @@ def test_scientific_notation(min_val, max_val, min_digits, expected):
     """Test the _scientific_notation method with various inputs."""
     result = Tidy3dBaseModel._scientific_notation(min_val, max_val, min_digits=min_digits)
     assert result == expected
+
+
+def test_updated_hash_and_json_with_changed_attr():
+    obj = td.Medium(attrs={"foo": "attr"})
+
+    old_hash = obj._hash_self()
+    json_old = obj._json_string
+
+    obj.attrs["foo"] = "changed"
+
+    new_hash = obj._hash_self()
+    json_new = obj._json_string
+
+    assert new_hash != old_hash
+    assert json_old != json_new
