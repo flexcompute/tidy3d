@@ -22,6 +22,7 @@ import yaml
 from autograd.builtins import dict as dict_ag
 from autograd.tracer import isbox
 from pydantic.v1.fields import ModelField
+from pydantic.v1.json import custom_pydantic_encoder
 
 from tidy3d.exceptions import FileError
 from tidy3d.log import log
@@ -68,11 +69,45 @@ def cached_property(cached_property_getter):
     return property(cache(cached_property_getter))
 
 
+def cached_property_guarded(key_func):
+    """Like cached_property, but invalidates when the key_func(self) changes."""
+
+    def _decorator(getter):
+        prop_name = getter.__name__
+
+        @wraps(getter)
+        def _guarded(self):
+            cache_store = self._cached_properties.get(prop_name)
+            current_key = key_func(self)
+            if cache_store is not None:
+                cached_key, cached_value = cache_store
+                if cached_key == current_key:
+                    return cached_value
+            value = getter(self)
+            self._cached_properties[prop_name] = (current_key, value)
+            return value
+
+        return property(_guarded)
+
+    return _decorator
+
+
 def ndarray_encoder(val):
     """How a ``np.ndarray`` gets handled before saving to json."""
     if np.any(np.iscomplex(val)):
         return {"real": val.real.tolist(), "imag": val.imag.tolist()}
     return val.real.tolist()
+
+
+def make_json_compatible(json_string: str) -> str:
+    """Makes the string compatible with json standards, notably for infinity."""
+
+    tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
+    json_string = json_string.replace("-Infinity", tmp_string)
+    json_string = json_string.replace('""-Infinity""', tmp_string)
+    json_string = json_string.replace("Infinity", '"Infinity"')
+    json_string = json_string.replace('""Infinity""', '"Infinity"')
+    return json_string.replace(tmp_string, '"-Infinity"')
 
 
 def _get_valid_extension(fname: str) -> str:
@@ -139,7 +174,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """Hash this component with ``hashlib`` in a way that is the same every session."""
         bf = io.BytesIO()
         self.to_hdf5(bf)
-        return hashlib.sha256(bf.getvalue()).hexdigest()
+        return hashlib.md5(bf.getvalue()).hexdigest()
 
     def __init__(self, **kwargs):
         """Init method, includes post-init validators."""
@@ -216,6 +251,24 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         "that can not be serialized. One can check if ``attrs`` are serializable "
         "by calling ``obj.json()``.",
     )
+
+    def _attrs_digest(self) -> str:
+        """Stable digest of `attrs` using the same JSON encoding rules as pydantic .json()."""
+        encoders = getattr(self.__config__, "json_encoders", {}) or {}
+
+        def _default(o):
+            return custom_pydantic_encoder(encoders, o)
+
+        json_str = json.dumps(
+            self.attrs,
+            default=_default,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        json_str = make_json_compatible(json_str)
+
+        return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
     def copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` and ``validate=True`` as default."""
@@ -719,7 +772,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         )
         return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
-    def to_hdf5(self, fname: str, custom_encoders: Optional[list[Callable]] = None) -> None:
+    def to_hdf5(
+        self,
+        fname: str,
+        custom_encoders: Optional[list[Callable]] = None,
+    ) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
@@ -931,7 +988,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return check_equal(self.dict(), other.dict())
 
-    @cached_property
+    @cached_property_guarded(lambda self: self._attrs_digest())
     def _json_string(self) -> str:
         """Returns string representation of a :class:`Tidy3dBaseModel`.
 
@@ -954,16 +1011,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         str
             Json-formatted string holding :class:`Tidy3dBaseModel` data.
         """
-
-        def make_json_compatible(json_string: str) -> str:
-            """Makes the string compatible with json standards, notably for infinity."""
-
-            tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
-            json_string = json_string.replace("-Infinity", tmp_string)
-            json_string = json_string.replace('""-Infinity""', tmp_string)
-            json_string = json_string.replace("Infinity", '"Infinity"')
-            json_string = json_string.replace('""Infinity""', '"Infinity"')
-            return json_string.replace(tmp_string, '"-Infinity"')
 
         json_string = self.json(indent=indent, exclude_unset=exclude_unset, **kwargs)
         json_string = make_json_compatible(json_string)
