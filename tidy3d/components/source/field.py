@@ -557,7 +557,7 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
     Notes
     --------
-    If one wants the focus 'in front' of the source, a negative value of ``beam_distance`` is needed.
+    If one wants the focus 'in front' of the source, a negative value of ``waist_distance`` is needed.
 
     .. image:: ../../_static/img/beam_waist.png
         :width: 30%
