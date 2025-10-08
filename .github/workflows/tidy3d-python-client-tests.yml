@@ -160,6 +160,20 @@ jobs:
       - name: Run ruff check
         run: ruff check tidy3d
   
+  zizmor:
+    name: Run zizmor 🌈
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor 🌈
+        uses: zizmorcore/zizmor-action@e673c3917a1aef3c65c972347ed84ccd013ecda4 # v0.2.0
+  
   lint-branch-name:
     needs: determine-test-scope
     runs-on: ubuntu-latest
@@ -563,7 +577,7 @@ jobs:
       (( needs.determine-test-scope.outputs.pr_approval_state == 'true' ) && 
       ( needs.determine-test-scope.outputs.local_tests == 'true' ) || 
       ( needs.determine-test-scope.outputs.remote_tests == 'true' ))
-    needs: [local-tests, remote-tests, lint, verify-schema-change, lint-commit-messages, lint-branch-name]
+    needs: [local-tests, remote-tests, lint, verify-schema-change, lint-commit-messages, lint-branch-name, zizmor]
     runs-on: ubuntu-latest
     steps:
       - name: check-passing-remote-tests
@@ -587,6 +601,9 @@ jobs:
             exit 1
           elif [[ "${{ github.event_name }}" == 'pull_request' && "${{ needs.lint-branch-name.result }}" != 'success' ]]; then
             echo "❌ Linting of branch name failed."
+            exit 1
+          elif [[ "${{ needs.zizmor.result }}" != 'success' ]]; then
+            echo "❌ Static check of github actions with zizmor failed."
             exit 1
           fi
           echo "✅ All required test jobs passed!"
