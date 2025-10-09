@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Solver error for named 2D materials with inhomogeneous substrates.
 - In `Tidy3dBaseModel` the hash (and cached `.json_string`) are now sensitive to changes in `.attrs`.
 - More accurate frequency range for ``GaussianPulse`` when DC is removed.
+- Bug in `TerminalComponentModelerData.get_antenna_metrics_data()` where `WavePort` mode indices were not properly handled. Improved docstrings and type hints to make the usage clearer.
 
 ## [v2.10.0rc2] - 2025-10-01
 

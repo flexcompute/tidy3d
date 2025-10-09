@@ -17,7 +17,7 @@ from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponent
 from tidy3d.plugins.smatrix.data.base import AbstractComponentModelerData
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
-from tidy3d.plugins.smatrix.types import SParamDef
+from tidy3d.plugins.smatrix.types import NetworkIndex, SParamDef
 from tidy3d.plugins.smatrix.utils import (
     ab_to_s,
     check_port_impedance_sign,
@@ -167,7 +167,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData):
 
     def get_antenna_metrics_data(
         self,
-        port_amplitudes: Optional[dict[str, complex]] = None,
+        port_amplitudes: Optional[dict[NetworkIndex, complex]] = None,
         monitor_name: Optional[str] = None,
     ) -> AntennaMetricsData:
         """Calculate antenna parameters using superposition of fields from multiple port excitations.
@@ -176,14 +176,22 @@ class TerminalComponentModelerData(AbstractComponentModelerData):
         for a superposition of port excitations, which can be used to analyze antenna radiation
         characteristics.
 
+        Note
+        ----
+        The ``NetworkIndex`` identifies a single excitation in the modeled device, so it represents
+        a :class:`.LumpedPort` or a single mode from a :class:`.WavePort`. Use the static method
+        :meth:`.TerminalComponentModeler.network_index` to convert port and optional mode index
+        into the appropriate ``NetworkIndex`` for use in the ``port_amplitudes`` dictionary.
+
         Parameters
         ----------
-        port_amplitudes : dict[str, complex]
-            Dictionary mapping port names to their desired excitation amplitudes. For each port,
+        port_amplitudes : dict[NetworkIndex, complex] = None
+            Dictionary mapping a network index to their desired excitation amplitudes. For each network port,
             :math:`\\frac{1}{2}|a|^2` represents the incident power from that port into the system.
-            If None, uses only the first port without any scaling of the raw simulation data.  When ``None``
-            is passed as a port amplitude, the raw simulation data is used for that port. Note that in this method ``a`` represents
-            the incident wave amplitude using the power wave definition in [2].
+            If ``None``, uses only the first port without any scaling of the raw simulation data. When
+            ``None`` is passed as a port amplitude, the raw simulation data is used for that port. Note
+            that in this method ``a`` represents the incident wave amplitude using the power wave definition
+            in [2].
         monitor_name : str
             Name of the :class:`.DirectivityMonitor` to use for calculating far fields.
             If None, uses the first monitor in `radiation_monitors`.
