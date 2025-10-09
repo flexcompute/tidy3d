@@ -7,11 +7,13 @@ import numpy as np
 from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
+from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.plugins.smatrix.types import NetworkIndex
 
 
 def get_antenna_metrics_data(
     terminal_component_modeler_data: TerminalComponentModelerData,
-    port_amplitudes: Optional[dict[str, complex]] = None,
+    port_amplitudes: Optional[dict[NetworkIndex, complex]] = None,
     monitor_name: Optional[str] = None,
 ) -> AntennaMetricsData:
     """Calculate antenna parameters using superposition of fields from multiple port excitations.
@@ -20,17 +22,27 @@ def get_antenna_metrics_data(
     for a superposition of port excitations, which can be used to analyze antenna radiation
     characteristics.
 
+    Note
+    ----
+    The ``NetworkIndex`` identifies a single excitation in the modeled device, so it represents
+    a :class:`.LumpedPort` or a single mode from a :class:`.WavePort`. Use the static method
+    :meth:`.TerminalComponentModeler.network_index` to convert port and optional mode index
+    into the appropriate ``NetworkIndex`` for use in the ``port_amplitudes`` dictionary.
+
     Parameters
     ----------
     terminal_component_modeler_data: TerminalComponentModelerData
         Data associated with a :class:`.TerminalComponentModeler` simulation run.
-    port_amplitudes : dict[str, complex] = None
-        Dictionary mapping port names to their desired excitation amplitudes. For each port,
+    port_amplitudes : dict[NetworkIndex, complex] = None
+        Dictionary mapping a network index to their desired excitation amplitudes. For each network port,
         :math:`\\frac{1}{2}|a|^2` represents the incident power from that port into the system.
-        If None, uses only the first port without any scaling of the raw simulation data.
+        If ``None``, uses only the first port without any scaling of the raw simulation data. When
+        ``None`` is passed as a port amplitude, the raw simulation data is used for that port. Note
+        that in this method ``a`` represents the incident wave amplitude using the power wave definition
+        in [2].
     monitor_name : str = None
         Name of the :class:`.DirectivityMonitor` to use for calculating far fields.
-        If None, uses the first monitor in `radiation_monitors`.
+        If ``None``, uses the first monitor in ``radiation_monitors``.
 
     Returns
     -------
@@ -40,7 +52,13 @@ def get_antenna_metrics_data(
     """
     # Use the first port as default if none specified
     if port_amplitudes is None:
-        port_amplitudes = {terminal_component_modeler_data.modeler.ports[0].name: None}
+        first_port = terminal_component_modeler_data.modeler.ports[0]
+        mode_index = None
+        if isinstance(first_port, WavePort):
+            mode_index = first_port.mode_index
+        port_amplitudes = {
+            terminal_component_modeler_data.modeler.network_index(first_port, mode_index): None
+        }
     # Check port names, and create map from port to amplitude
     port_dict = {}
     for key in port_amplitudes.keys():
@@ -71,11 +89,12 @@ def get_antenna_metrics_data(
     combined_directivity_data = None
     for port, amplitude in port_dict.items():
         port_in_index = terminal_component_modeler_data.modeler.network_index(port)
+        _, mode_index = terminal_component_modeler_data.modeler.network_dict[port_in_index]
         if amplitude is not None:
             if np.isclose(amplitude, 0.0):
                 continue
         sim_data_port = terminal_component_modeler_data.data[
-            terminal_component_modeler_data.modeler.get_task_name(port)
+            terminal_component_modeler_data.modeler.get_task_name(port, mode_index)
         ]
 
         a, b = (

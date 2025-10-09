@@ -227,8 +227,8 @@ def make_coaxial_simulation(length: Optional[float] = None, grid_spec: td.GridSp
     # Make simulation
     center_sim = [0, 0, 0]
     size_sim = [
-        2 * Router,
-        2 * Router,
+        4 * Router,
+        4 * Router,
         length + 0.5 * wavelength0,
     ]
 

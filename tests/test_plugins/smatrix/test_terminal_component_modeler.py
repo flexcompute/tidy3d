@@ -1097,10 +1097,16 @@ def test_antenna_helpers(monkeypatch, tmp_path):
     assert isinstance(b, PortDataArray)
 
 
-def test_antenna_parameters(monkeypatch, tmp_path):
+@pytest.mark.parametrize("port_type", ["lumped", "wave"])
+def test_antenna_parameters(monkeypatch, port_type):
     """Test basic antenna parameters computation and validation."""
     # Setup modeler with radiation monitor
-    modeler = make_component_modeler(False)
+    if port_type == "lumped":
+        modeler: TerminalComponentModeler = make_component_modeler(False)
+    else:
+        modeler: TerminalComponentModeler = make_coaxial_component_modeler(
+            port_types=(WavePort, WavePort)
+        )
     sim = modeler.simulation
     theta = np.linspace(0, np.pi, 101)
     phi = np.linspace(0, 2 * np.pi, 201)
@@ -1126,6 +1132,12 @@ def test_antenna_parameters(monkeypatch, tmp_path):
 
     # Run simulation and get antenna parameters
     modeler_data = run_component_modeler(monkeypatch, modeler)
+
+    # Make sure network index works for single mode / multimode cases
+    port_1_network_index = modeler.network_index(modeler.ports[0])
+    port_2_network_index = modeler.network_index(modeler.ports[1], 0)
+    _ = modeler_data.get_antenna_metrics_data({port_1_network_index: 1.0})
+    _ = modeler_data.get_antenna_metrics_data({port_2_network_index: None})
     antenna_params = modeler_data.get_antenna_metrics_data()
 
     # Test that all essential parameters exist and are correct type

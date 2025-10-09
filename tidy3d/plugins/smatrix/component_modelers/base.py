@@ -179,6 +179,8 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         ValueError
             If an invalid `format` string is provided.
         """
+        if isinstance(port, WavePort) and mode_index is None:
+            mode_index = port.mode_index
         if mode_index is not None:
             return f"{port.name}@{mode_index}"
         if format == "PF":
