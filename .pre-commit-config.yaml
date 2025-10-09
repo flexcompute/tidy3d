@@ -15,4 +15,16 @@ repos:
         stages: [commit-msg]
         verbose: true
         entry: bash -c 'commitlint --edit || exit 0'
+  - repo: local
+    hooks:
+      - id: zizmor
+        name: zizmor
+        entry: bash -c 'poetry run zizmor .github/*' --
+        language: system
+        pass_filenames: false
+  # - repo: https://github.com/woodruffw/zizmor-pre-commit
+  #   rev: v1.5.2
+  #   hooks:
+  #     - id: zizmor
+  #       args: [ .github/workflows/* ]
 

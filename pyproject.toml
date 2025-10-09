@@ -65,6 +65,7 @@ pytest-cov = "^6.0.0"
 pytest-env = "^1.1.5"
 tox = { version = "*", optional = true }
 diff-cover = { version = "*", optional = true }
+zizmor = { version = "*", optional = true }
 
 # gdstk
 gdstk = { version = ">=0.9.49", optional = true }
@@ -170,7 +171,8 @@ dev = [
   'devsim',
   'cma',
   'diff-cover',
-  "openpyxl",
+  'openpyxl',
+  'zizmor',
 ]
 docs = [
   "jupyter",
