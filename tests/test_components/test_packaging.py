@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from tidy3d.config import config
 from tidy3d.packaging import (
     Tidy3dImportError,
     check_import,

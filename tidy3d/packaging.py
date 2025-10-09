@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 from importlib import import_module
+from importlib.util import find_spec
 from typing import Literal
 
 import numpy as np
@@ -194,26 +195,32 @@ def supports_local_subpixel(fn):
         else:
             # first try to import the module
             if tidy3d_extras["mod"] is None:
-                try:
-                    import tidy3d_extras as tidy3d_extras_mod
+                tidy3d_extras["use_local_subpixel"] = False
+                module_exists = find_spec("tidy3d_extras") is not None
+                if config.use_local_subpixel is True and not module_exists:
+                    raise Tidy3dImportError(
+                        "The package 'tidy3d-extras' is required for this "
+                        "operation when 'config.use_local_subpixel' is 'True'. "
+                        "Please install the 'tidy3d-extras' package using, for "
+                        "example, 'pip install tidy3d[extras]'."
+                    )
 
-                except ImportError as exc:
-                    tidy3d_extras["mod"] = None
-                    tidy3d_extras["use_local_subpixel"] = False
-                    if config.use_local_subpixel is True:
+                if module_exists:
+                    try:
+                        import tidy3d_extras as tidy3d_extras_mod
+
+                    except ImportError as exc:
+                        # this should not happen; if the API key is invalid,
+                        # the package should still import but the version will be None
                         raise Tidy3dImportError(
-                            "The package 'tidy3d-extras' is required for this "
-                            "operation when 'config.use_local_subpixel' is 'True'. "
-                            "Please install the 'tidy3d-extras' package using, for "
-                            "example, 'pip install tidy3d[extras]'."
+                            "The package 'tidy3d-extras' did not initialize correctly. "
+                            "To suppress this error, you can set "
+                            "'config.use_local_subpixel=False'."
                         ) from exc
 
-                else:
                     version = tidy3d_extras_mod.__version__
 
                     if version is None:
-                        tidy3d_extras["mod"] = None
-                        tidy3d_extras["use_local_subpixel"] = False
                         raise Tidy3dImportError(
                             "The package 'tidy3d-extras' did not initialize correctly, "
                             "likely due to an invalid API key."
@@ -244,8 +251,9 @@ def disable_local_subpixel(fn):
     def _fn(*args, **kwargs):
         use_local_subpixel = config.use_local_subpixel
         config.use_local_subpixel = False
-        result = fn(*args, **kwargs)
-        config.use_local_subpixel = use_local_subpixel
-        return result
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            config.use_local_subpixel = use_local_subpixel
 
     return _fn
