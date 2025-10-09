@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
@@ -185,7 +187,8 @@ def test_mode_sim():
         _ = sim.plot_grid_mode_plane(ax=AX)
         _ = sim.plot_pml_mode_plane(ax=AX)
         _ = sim.reduced_simulation_copy
-    if td.packaging.tidy3d_extras["use_local_subpixel"]:
+    has_tidy3d_extras = importlib.util.find_spec("tidy3d_extras") is not None
+    if has_tidy3d_extras:
         _ = sim.run_local()
     else:
         with pytest.raises(SetupError):
