@@ -21,6 +21,7 @@ from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
+from tidy3d.packaging import supports_microwave, tidy3d_microwave
 
 # how many units of ``twidth`` from the ``offset`` until a gaussian pulse is considered "off"
 END_TIME_FACTOR_GAUSSIAN = 10
@@ -605,4 +606,67 @@ class CustomSourceTime(Pulse):
         return np.max(t_non_zero)
 
 
-SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]
+class BroadbandPulse(SourceTime):
+    """A source time injecting significant energy in the entire custom frequency range."""
+
+    freq_range: FreqBound = pydantic.Field(
+        ...,
+        title="Frequency Range",
+        description="Frequency range where the pulse should have significant energy.",
+        units=HERTZ,
+    )
+    minimum_amplitude: float = pydantic.Field(
+        0.3,
+        title="Minimum Amplitude",
+        description="Minimum amplitude of the pulse relative to the peak amplitude in the frequency range.",
+        gt=0.05,
+        lt=0.5,
+    )
+    offset: float = pydantic.Field(
+        5.0,
+        title="Offset",
+        description="Time delay of the maximum value of the "
+        "pulse in units of 1 / (``2pi * fwidth``).",
+        ge=2.5,
+    )
+
+    @cached_property
+    @supports_microwave
+    def _source(self):
+        """Implementation of broadband pulse."""
+        return tidy3d_microwave["mod"].BroadbandPulse(
+            fmin=self.freq_range[0],
+            fmax=self.freq_range[1],
+            minRelAmp=self.minimum_amplitude,
+            amp=self.amplitude,
+            phase=self.phase,
+            offset=self.offset,
+        )
+
+    def end_time(self) -> float:
+        """Time after which the source is effectively turned off / close to zero amplitude."""
+        return self._source.end_time(END_TIME_FACTOR_GAUSSIAN)
+
+    def amp_time(self, time: float) -> complex:
+        """Complex-valued source amplitude as a function of time."""
+        return self._source.amp_time(time)
+
+    def amp_freq(self, freq: float) -> complex:
+        """Complex-valued source amplitude as a function of frequency."""
+        return self._source.amp_freq(freq)
+
+    def frequency_range_sigma(self, sigma: float = DEFAULT_SIGMA) -> FreqBound:
+        """Frequency range where the source amplitude is within ``exp(-sigma**2/2)`` of the peak amplitude."""
+        return self._source.frequency_range(sigma)
+
+    def frequency_range(self, num_fwidth: float = DEFAULT_SIGMA) -> FreqBound:
+        """Frequency range where the source amplitude is within ``exp(-sigma**2/2)`` of the peak amplitude."""
+        return self.frequency_range_sigma(num_fwidth)
+
+    @cached_property
+    def _freq0(self) -> float:
+        """Central frequency from frequency range."""
+        return np.mean(self.freq_range)
+
+
+SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime, BroadbandPulse]

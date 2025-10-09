@@ -28,6 +28,8 @@ vtk = {
 
 tidy3d_extras = {"mod": None, "use_local_subpixel": None}
 
+tidy3d_microwave = {"mod": None}
+
 
 def check_import(module_name: str) -> bool:
     """
@@ -256,5 +258,49 @@ def disable_local_subpixel(fn):
             return fn(*args, **kwargs)
         finally:
             config.use_local_subpixel = use_local_subpixel
+
+    return _fn
+
+
+def supports_microwave(fn):
+    """When decorating a method, checks that 'tidy3d-microwave' is available."""
+
+    @functools.wraps(fn)
+    def _fn(*args, **kwargs):
+        # first try to import the module
+        if tidy3d_microwave["mod"] is None:
+            try:
+                import tidy3d_microwave as tidy3d_microwave_mod
+
+            except ImportError as exc:
+                tidy3d_microwave["mod"] = None
+                raise Tidy3dImportError(
+                    "The package 'tidy3d-microwave' is required for this "
+                    "operation. "
+                    "Please install the 'tidy3d-microwave' package using, for "
+                    "example, 'pip install tidy3d[microwave]'."
+                ) from exc
+
+            else:
+                version = tidy3d_microwave_mod.__version__
+
+                if version is None:
+                    tidy3d_microwave["mod"] = None
+                    raise Tidy3dImportError(
+                        "The package 'tidy3d-microwave' did not initialize correctly, "
+                        "likely due to an invalid API key."
+                    )
+
+                if version != __version__:
+                    log.warning(
+                        "The package 'tidy3d-microwave' is required for this "
+                        "operation. The version of 'tidy3d-microwave' should match "
+                        "the version of 'tidy3d'. You can install the correct "
+                        "version using 'pip install tidy3d[microwave]'."
+                    )
+
+                tidy3d_microwave["mod"] = tidy3d_microwave_mod
+
+        return fn(*args, **kwargs)
 
     return _fn

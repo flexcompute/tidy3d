@@ -34,6 +34,7 @@ Source Time Dependence
 
    tidy3d.GaussianPulse
    tidy3d.ContinuousWave
+   tidy3d.BroadbandPulse
    tidy3d.SourceTime
    tidy3d.CustomSourceTime
 

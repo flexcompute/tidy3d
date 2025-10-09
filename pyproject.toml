@@ -118,6 +118,7 @@ devsim = { version = "*", optional = true }
 cma = { version = "*", optional = true }
 openpyxl = { version = "*", optional = true }
 # tidy3d-extras = { version = "2.10.0rc3", optional = true }
+# tidy3d-microwave = { version = "2.10.0rc3", optional = true }
 
 [tool.poetry.extras]
 dev = [
@@ -214,6 +215,7 @@ heatcharge = ["trimesh", "vtk", "devsim"]
 pytorch = ["torch"]
 design = ["bayesian-optimization", "pygad", "pyswarms"]
 # extras = ["tidy3d-extras"]
+# microwave = ["tidy3d-microwave"]
 
 [tool.poetry.scripts]
 tidy3d = "tidy3d.web.cli:tidy3d_cli"

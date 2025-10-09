@@ -405,6 +405,7 @@ from .components.source.frame import (
 
 # sources
 from .components.source.time import (
+    BroadbandPulse,
     ContinuousWave,
     CustomSourceTime,
     GaussianPulse,
@@ -510,6 +511,7 @@ __all__ = [
     "Box",
     "BroadbandModeABCFitterParam",
     "BroadbandModeABCSpec",
+    "BroadbandPulse",
     "CaugheyThomasMobility",
     "CellDataArray",
     "ChargeConductorMedium",

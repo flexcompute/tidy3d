@@ -6,7 +6,9 @@ from tidy3d.packaging import (
     Tidy3dImportError,
     check_import,
     supports_local_subpixel,
+    supports_microwave,
     tidy3d_extras,
+    tidy3d_microwave,
     verify_packages_import,
 )
 
@@ -88,6 +90,25 @@ def test_tidy3d_extras():
             assert tidy3d_extras["mod"] is None
 
     get_eps()
+
+
+def test_tidy3d_microwave():
+    import importlib
+
+    has_tidy3d_microwave = importlib.util.find_spec("tidy3d_microwave") is not None
+    print(f"has_tidy3d_microwave = {has_tidy3d_microwave}")
+
+    if has_tidy3d_microwave:
+
+        @supports_microwave
+        def get_pulse():
+            assert tidy3d_microwave["mod"] is not None
+            pulse = tidy3d_microwave["mod"].BroadbandPulse(fmin=0.1, fmax=10)
+            _ = pulse.frequency_range(2)
+
+        get_pulse()
+    else:
+        assert tidy3d_microwave["mod"] is None
 
 
 if __name__ == "__main__":
