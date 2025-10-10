@@ -13,8 +13,9 @@ core_config.set_config(log, get_logging_console(), __version__)
 
 # from .api.asynchronous import run_async # NOTE: we use autograd one now (see below)
 # autograd compatible wrappers for run and run_async
-from .api.autograd.autograd import run, run_async
+from .api.autograd.autograd import run_async
 from .api.container import Batch, BatchData, Job
+from .api.run import run
 from .api.webapi import (
     abort,
     account,

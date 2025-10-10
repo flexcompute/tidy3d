@@ -12,6 +12,7 @@ from tidy3d.components.data.dataset import ModeIndexDataArray
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job
+from tidy3d.web.api.run import run
 from tidy3d.web.api.webapi import (
     abort,
     download_json,
@@ -20,7 +21,6 @@ from tidy3d.web.api.webapi import (
     get_reduced_simulation,
     get_run_info,
     load_simulation,
-    run,
     upload,
 )
 from tidy3d.web.core.environment import Env

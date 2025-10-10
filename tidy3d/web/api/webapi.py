@@ -139,6 +139,7 @@ def run(
     reduce_simulation: Literal["auto", True, False] = "auto",
     pay_type: Union[PayType, str] = PayType.AUTO,
     priority: Optional[int] = None,
+    lazy: bool = False,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -176,6 +177,10 @@ def run(
     priority: int = None
         Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
         It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
+    lazy : bool = False
+        Whether to load the actual data (``lazy=False``) or return a proxy that loads
+        the data when accessed (``lazy=True``).
+
     Returns
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
@@ -242,7 +247,11 @@ def run(
     )
     monitor(task_id, verbose=verbose)
     data = load(
-        task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback_download
+        task_id=task_id,
+        path=path,
+        verbose=verbose,
+        progress_callback=progress_callback_download,
+        lazy=lazy,
     )
     if isinstance(simulation, ModeSolver):
         simulation._patch_data(data=data)

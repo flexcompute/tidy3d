@@ -106,6 +106,7 @@ def run(
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
+    lazy: bool = False,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -147,6 +148,10 @@ def run(
         Which method to pay for the simulation.
     priority: int = None
         Task priority for vGPU queue (1=lowest, 10=highest).
+    lazy : bool = False
+        Whether to load the actual data (``lazy=False``) or return a proxy that loads
+        the data when accessed (``lazy=True``).
+
     Returns
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`, :class:`.ModalComponentModelerData`, :class:`.TerminalComponentModelerData`]
@@ -237,6 +242,7 @@ def run(
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
             pay_type=pay_type,
             priority=priority,
+            lazy=lazy,
         )
 
     return run_webapi(
@@ -255,6 +261,7 @@ def run(
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
         priority=priority,
+        lazy=lazy,
     )
 
 
@@ -273,6 +280,7 @@ def run_async(
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
+    lazy: bool = False,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -307,6 +315,9 @@ def run_async(
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type: typing.Union[PayType, str] = PayType.AUTO
         Specify the payment method.
+    lazy : bool = False
+        Whether to load the actual data (``lazy=False``) or return a proxy that loads
+        the data when accessed (``lazy=True``).
 
     Returns
     ------
@@ -349,6 +360,7 @@ def run_async(
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
             pay_type=pay_type,
             priority=priority,
+            lazy=lazy,
         )
 
     return run_async_webapi(
@@ -364,6 +376,7 @@ def run_async(
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
         priority=priority,
+        lazy=lazy,
     )
 
 
