@@ -1542,21 +1542,24 @@ class AuxFieldTimeData(AuxFieldTimeDataset, AbstractFieldData):
     _contains_monitor_fields = enforce_monitor_fields_present()
 
 
-class AbstractSurfaceFieldData(MonitorData, AbstractFieldDataset, AbstractUnstructuredMonitorData, ABC):
-    """Collection of vector fields on a surfacewith some symmetry properties."""
+class ElectromagneticSurfaceFieldData(MonitorData, AbstractUnstructuredMonitorData, ElectromagneticSurfaceFieldDataset, ABC
+):
+    """Collection of vector fields on a surface with some symmetry properties."""
 
-    monitor: Union[SurfaceFieldMonitor, SurfaceFieldTimeMonitor]
+    monitor: Union[SurfaceFieldMonitor, SurfaceFieldTimeMonitor] 
+
+    _contains_monitor_fields = enforce_monitor_fields_present()
 
     @property
     def symmetry_expanded(self):
-        """Return the :class:`.AbstractSurfaceFieldData` with fields expanded based on symmetry. If
+        """Return the :class:`.ElectromagneticSurfaceFieldData` with fields expanded based on symmetry. If
         any symmetry is nonzero (i.e. expanded), the interpolation implicitly creates a copy of the
         data array. However, if symmetry is not expanded, the returned array contains a view of
         the data, not a copy.
 
         Returns
         -------
-        :class:`AbstractSurfaceFieldData`
+        :class:`ElectromagneticSurfaceFieldData`
             A data object with the symmetry expanded fields.
         """
 
@@ -1567,11 +1570,11 @@ class AbstractSurfaceFieldData(MonitorData, AbstractFieldDataset, AbstractUnstru
 
     @property
     def symmetry_expanded_copy(self) -> AbstractFieldData:
-        """Create a copy of the :class:`.AbstractSurfaceFieldData` with fields expanded based on symmetry.
+        """Create a copy of the :class:`.ElectromagneticSurfaceFieldData` with fields expanded based on symmetry.
 
         Returns
         -------
-        :class:`AbstractSurfaceFieldData`
+        :class:`ElectromagneticSurfaceFieldData`
             A data object with the symmetry expanded fields.
         """
 
@@ -1603,43 +1606,14 @@ class AbstractSurfaceFieldData(MonitorData, AbstractFieldDataset, AbstractUnstru
             xr.DataArray([-1, -1, 1], coords={"axis": [0, 1, 2]}),
         ]
 
-        E = [None if e_one_side is None else self._symmetry_expanded_copy_base(e_one_side, e_symmetry) for e_one_side in self.E]
-        H = [None if h_one_side is None else self._symmetry_expanded_copy_base(h_one_side, h_symmetry) for h_one_side in self.H]
-        normal = self._symmetry_expanded_copy_base(self.normal, n_symmetry)
-        return {"E": E, "H": H, "normal": normal}
-
-
-class ElectromagneticSurfaceFieldData(
-    AbstractSurfaceFieldData, ElectromagneticSurfaceFieldDataset, ABC
-):
-    """Collection of electromagnetic fields on a surface."""
-
-    @property
-    def intensity(self) -> tuple[TriangularSurfaceDataset, TriangularSurfaceDataset]:
-        """Return the sum of the squared absolute electric field components."""
-        intensity = [None, None]
-        for ind in range(2):
-            if self.E[ind] is not None:
-                e_field = self.E[ind]
-                intensity[ind] = e_field.norm(dim="axis") ** 2
-        return intensity
-
-    @property
-    def poynting(self) -> tuple[TriangularSurfaceDataset, TriangularSurfaceDataset]:
-        """Time-averaged Poynting vector for frequency-domain data."""
-
-        poynting = [None, None]
-        for ind in range(2):
-            if self.E[ind] is not None and self.H[ind] is not None:
-                e_field = self.E[ind]
-                h_field = self.H[ind]
-
-                poynting[ind] = e_field.updated_copy(
-                    values=0.5
-                    * np.real(xr.cross(e_field.values, np.conj(h_field.values), dim="axis"))
-                )
-
-        return poynting
+        updated_dict = {}
+        if self.E is not None:
+            updated_dict["E"] = self._symmetry_expanded_copy_base(self.E, e_symmetry)
+        if self.H is not None:
+            updated_dict["H"] = self._symmetry_expanded_copy_base(self.H, h_symmetry)
+        
+        updated_dict["normal"] = self._symmetry_expanded_copy_base(self.normal, n_symmetry)
+        return updated_dict
 
     def _check_fields_stored(self, components: list[str]):
         """Check that all requested field components are stored in the data."""
@@ -1657,17 +1631,17 @@ class SurfaceFieldData(ElectromagneticSurfaceFieldData):
 
     Example
     -------
-    >>> from tidy3d import PointDataArray, IndexedFieldDataArray, TriangularSurfaceDataset, CellDataArray
+    >>> from tidy3d import PointDataArray, IndexedFieldDataArray, TriangularSurfaceDataset, CellDataArray, ElectromagneticSurfaceFieldDataset
     >>> points = PointDataArray([[0, 0, 0], [0, 1, 0], [1, 1, 1]], dims=["index", "axis"])
     >>> cells = CellDataArray([[0, 1, 2]], dims=["cell_index", "vertex_index"])
     >>> values = PointDataArray([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dims=["index", "axis"])
-    >>> field_values = IndexedFieldDataArray(np.ones((3, 3, 1)) + 0j, coords={"index": [0, 1, 2], "axis": [0, 1, 2], "f": [1e10]})
+    >>> field_values = IndexedFieldDataArray(np.ones((3, 1, 3, 1)) + 0j, coords={"index": [0, 1, 2], "side": ["outside"],"axis": [0, 1, 2], "f": [1e10]})
     >>> field = TriangularSurfaceDataset(points=points, cells=cells, values=field_values)
     >>> normal = TriangularSurfaceDataset(points=points, cells=cells, values=values)
     >>> monitor = SurfaceFieldMonitor(
     ...     size=(2,4,6), freqs=[1e10], name='field', fields=['E', 'H']
     ... )
-    >>> data = SurfaceFieldData(monitor=monitor, E=[None, field], H=[None, field], normal=normal)
+    >>> data = SurfaceFieldData(monitor=monitor, E=field, H=field, normal=normal)
 
     """
 
@@ -1675,21 +1649,28 @@ class SurfaceFieldData(ElectromagneticSurfaceFieldData):
         ..., title="Monitor", description="Frequency-domain field monitor associated with the data."
     )
 
-    _contains_monitor_fields = enforce_monitor_fields_present()
+    @property
+    def poynting(self) -> TriangularSurfaceDataset:
+        """Time-averaged Poynting vector for frequency-domain data."""
 
-    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> FieldDataset:
+        if self.E is None or self.H is None:
+            raise ValueError("Could not calculate poynting: the dataset does not contain E or H field information.")
+        e_field = self.E
+        h_field = self.H
+
+        poynting = e_field.updated_copy(
+                    values=0.5
+                    * np.real(xr.cross(e_field.values, np.conj(h_field.values), dim="axis"))
+                )
+
+        return poynting
+
+    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> SurfaceFieldData:
         """Return copy of self after normalization is applied using source spectrum function."""
         fields_norm = {}
+        src_amps = FreqDataArray(source_spectrum_fn(self.monitor.freqs), coords={"f": list(self.monitor.freqs)})
         for field_name, field_data in self.field_components.items():
-            fields_norm[field_name] = [None, None]
-            for ind in range(2):
-                if field_data[ind] is not None:
-                    src_amps = source_spectrum_fn(field_data[ind].values.f)
-                    fields_norm[field_name][ind] = field_data[ind].updated_copy(
-                        values=(field_data[ind].values / src_amps).astype(
-                            field_data[ind].values.dtype
-                        )
-                    )
+            fields_norm[field_name] = field_data.updated_copy(values=(field_data.values / src_amps).astype(field_data.values.dtype))  
 
         return self.copy(update=fields_norm)
 
@@ -1699,38 +1680,35 @@ class SurfaceFieldTimeData(ElectromagneticSurfaceFieldData):
 
     Example
     -------
-    >>> from tidy3d import PointDataArray, IndexedFieldDataArray, TriangularSurfaceDataset, CellDataArray
+    >>> from tidy3d import PointDataArray, IndexedFieldDataArray, TriangularSurfaceDataset, CellDataArray, ElectromagneticSurfaceFieldTimeDataset
     >>> points = PointDataArray([[0, 0, 0], [0, 1, 0], [1, 1, 1]], dims=["index", "axis"])
     >>> cells = CellDataArray([[0, 1, 2]], dims=["cell_index", "vertex_index"])
     >>> values = PointDataArray([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dims=["index", "axis"])
-    >>> field_values = IndexedFieldDataArray(np.ones((3, 3, 1)) + 0j, coords={"index": [0, 1, 2], "axis": [0, 1, 2], "f": [1e10]})
+    >>> field_values = IndexedFieldDataArray(np.ones((3, 1, 3, 1)) + 0j, coords={"index": [0, 1, 2], "side": ["outside"],"axis": [0, 1, 2], "t": [1e-9]})
     >>> field = TriangularSurfaceDataset(points=points, cells=cells, values=field_values)
     >>> normal = TriangularSurfaceDataset(points=points, cells=cells, values=values)
     >>> monitor = SurfaceFieldTimeMonitor(
     ...     size=(2,4,6), interval=100, name='field', fields=['E', 'H']
     ... )
-    >>> data = SurfaceFieldTimeData(monitor=monitor, E=[None, field], H=[None, field], normal=normal)
+    >>> data = SurfaceFieldTimeData(monitor=monitor, E=field, H=field, normal=normal)
     """
 
     monitor: SurfaceFieldTimeMonitor = pd.Field(
         ..., title="Monitor", description="Time-domain field monitor associated with the data."
     )
 
-    _contains_monitor_fields = enforce_monitor_fields_present()
-
     @property
-    def poynting(self) -> ScalarFieldTimeDataArray:
-        """Instantaneous Poynting vector for time-domain data."""
+    def poynting(self) -> TriangularSurfaceDataset:
+        """Poynting vector for time-domain data."""
 
-        poynting = [None, None]
-        for ind in range(2):
-            if self.E[ind] is not None and self.H[ind] is not None:
-                e_field = self.E[ind]
-                h_field = self.H[ind]
+        if self.E is None or self.H is None:
+            raise ValueError("Could not calculate poynting: the dataset does not contain E or H field information.")
+        e_field = self.E
+        h_field = self.H
 
-                poynting[ind] = e_field.updated_copy(
-                    values=np.real(xr.cross(e_field.values.real, h_field.values.real, dim="axis"))
-                )
+        poynting = e_field.updated_copy(
+            values=np.real(xr.cross(e_field.values, np.conj(h_field.values), dim="axis"))
+        )
 
         return poynting
 

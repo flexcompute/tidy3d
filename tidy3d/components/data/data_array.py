@@ -232,7 +232,7 @@ class DataArray(xr.DataArray):
         sub_group = f_handle.create_group(group_path)
         sub_group[DATA_ARRAY_VALUE_NAME] = get_static(self.data)
         for key, val in self.coords.items():
-            if val.dtype == "<U1":
+            if val.dtype == "<U1" or isinstance(val.values[0], str):
                 sub_group[key] = val.values.tolist()
             else:
                 sub_group[key] = val
@@ -1512,7 +1512,7 @@ class IndexedFieldDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "axis", "f")
+    _dims = ("index", "side", "axis", "f")
 
 
 class IndexedFieldTimeDataArray(DataArray):
@@ -1527,7 +1527,7 @@ class IndexedFieldTimeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("index", "axis", "t")
+    _dims = ("index", "side", "axis", "t")
 
 
 class IndexedFreqDataArray(DataArray):

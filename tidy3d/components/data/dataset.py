@@ -484,24 +484,24 @@ class AuxFieldTimeDataset(AuxFieldDataset):
 
 
 class ElectromagneticSurfaceFieldDataset(AbstractFieldDataset, ABC):
-    """Stores a collection of E and H fields with x, y, z components."""
+    """Stores a collection of E and H fields with x, y, z components on one side of the surface."""
 
-    E: tuple[Optional[TriangularSurfaceDataset], Optional[TriangularSurfaceDataset]] = pd.Field(
-        (None, None),
+    E: Optional[TriangularSurfaceDataset] = pd.Field(
+        None,
         title="E",
-        description="Spatial distribution of the electric field on the internal and external sides of the surface.",
+        description="Spatial distribution of the electric field on the one side of the surface.",
     )
 
-    H: tuple[Optional[TriangularSurfaceDataset], Optional[TriangularSurfaceDataset]] = pd.Field(
-        (None, None),
+    H: Optional[TriangularSurfaceDataset] = pd.Field(
+        None,
         title="H",
-        description="Spatial distribution of the magnetic field on the internal and external sides of the surface.",
+        description="Spatial distribution of the magnetic field on the one side of the surface.",
     )
 
     normal: TriangularSurfaceDataset = pd.Field(
-        None,
-        title="Surface Normal",
-        description="Spatial distribution of the surface normal.",
+        ...,
+        title="Normal",
+        description="Normal direction of the surface oriented outward from the surface.",
     )
 
     @property
@@ -514,18 +514,28 @@ class ElectromagneticSurfaceFieldDataset(AbstractFieldDataset, ABC):
         return {field_name: field for field_name, field in fields.items() if field is not None}
 
     @property
-    def current_density(self) -> ElectromagneticSurfaceFieldDataset:
+    def intensity(self) -> TriangularSurfaceDataset:
+        """Return the sum of the squared absolute electric field components."""
+        if self.E is None:
+            raise ValueError("Could not calculate intensity: the dataset does not contain E field information.")
+        intensity = self.E.norm(dim="axis") ** 2
+        return intensity
+
+    @property
+    def current_density(self) -> TriangularSurfaceDataset:
         """Surface current density."""
 
         h_diff = 0
         template = None
         # we assume that is data is None it means field is zero on that side (e.g. PEC)
-        if self.H[0] is not None:
-            h_diff += self.H[0].values
-            template = self.H[0]
-        if self.H[1] is not None:
-            h_diff -= self.H[1].values
-            template = self.H[1]
+        H_inside = self.H.sel(side="inside", drop=True) if "inside" in self.H.side else None
+        H_outside = self.H.sel(side="outside", drop=True) if "outside" in self.H.side else None
+        if H_inside is not None:
+            h_diff += H_inside.values
+            template = H_inside
+        if H_outside is not None:
+            h_diff -= H_outside.values
+            template = H_outside
 
         if template is None:
             raise ValueError(
