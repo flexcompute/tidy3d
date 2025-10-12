@@ -3,6 +3,7 @@ from __future__ import annotations
 from .axes_utils import (
     add_ax_3d_if_none,
     add_ax_if_none,
+    add_plotter_if_none,
     equal_aspect,
     make_ax,
     set_default_labels_and_title,
@@ -70,6 +71,7 @@ __all__ = [
     "VisualizationSpec",
     "add_ax_3d_if_none",
     "add_ax_if_none",
+    "add_plotter_if_none",
     "arrow_style",
     "equal_aspect",
     "make_ax",

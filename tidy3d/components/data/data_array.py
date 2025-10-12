@@ -1500,6 +1500,36 @@ class ImpedanceFreqModeDataArray(ImpedanceArray, FreqModeDataArray):
     __slots__ = ()
 
 
+class IndexedSurfaceFreqDataArray(DataArray):
+    """Stores indexed values of scalar fields on the sides of a surface. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated scalar data.
+
+    Example
+    -------
+    >>> surface_side_array = IndexedSurfaceFreqDataArray(
+    ...     (1+1j) * np.random.random((4,3,1)), coords=dict(index=np.arange(4), side=np.arange(3), axis=np.arange(3), f=[1e9])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "side", "f")
+
+
+class IndexedSurfaceTimeDataArray(DataArray):
+    """Stores indexed values of scalar fields on the sides of a surface. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated scalar data.
+
+    Example
+    -------
+    >>> surface_side_array = IndexedSurfaceTimeDataArray(
+    ...     (1+1j) * np.random.random((4,3,1)), coords=dict(index=np.arange(4), side=np.arange(3), axis=np.arange(3), f=[1e9])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "side", "t")
+
+
 class IndexedFieldDataArray(DataArray):
     """Stores indexed values of vector fields in frequency domain. It is typically used
     in conjuction with a ``PointDataArray`` to store point-associated vector data.
@@ -1646,6 +1676,8 @@ IndexedDataArrayTypes = Union[
     IndexedFreqDataArray,
     IndexedTimeDataArray,
     IndexedFieldVoltageDataArray,
+    IndexedSurfaceFreqDataArray,
+    IndexedSurfaceTimeDataArray,
     PointDataArray,
 ]
 

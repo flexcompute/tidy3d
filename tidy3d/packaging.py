@@ -25,6 +25,8 @@ vtk = {
     "numpy_to_vtk": None,
 }
 
+pyvista = {"mod": None}
+
 tidy3d_extras = {"mod": None, "use_local_subpixel": None}
 
 
@@ -152,6 +154,29 @@ def requires_vtk(fn):
                     "The package 'vtk' is required for this operation, but it was not found. "
                     "Please install the 'vtk' dependencies using, for example, "
                     "'pip install .[vtk]'."
+                ) from exc
+
+        return fn(*args, **kwargs)
+
+    return _fn
+
+
+def requires_pyvista(fn):
+    """When decorating a method, requires that pyvista is available."""
+
+    @functools.wraps(fn)
+    def _fn(*args, **kwargs):
+        if pyvista["mod"] is None:
+            try:
+                import pyvista as pv
+
+                pyvista["mod"] = pv
+
+            except ImportError as exc:
+                raise Tidy3dImportError(
+                    "The package 'pyvista' is required for this operation, but it was not found. "
+                    "Please install the 'pyvista' dependencies using, for example, "
+                    "'pip install pyvista' or 'pip install tidy3d[pyvista]'."
                 ) from exc
 
         return fn(*args, **kwargs)

@@ -6,6 +6,7 @@ from typing import Optional
 from tidy3d.components.types import Ax, Axis, LengthUnit
 from tidy3d.constants import UnitScaling
 from tidy3d.exceptions import Tidy3dKeyError
+from tidy3d.packaging import pyvista
 
 
 def _create_unit_aware_locator():
@@ -157,6 +158,82 @@ def equal_aspect(plot):
         ax = plot(*args, **kwargs)
         ax.set_aspect("equal")
         return ax
+
+    return _plot
+
+
+def _is_notebook() -> bool:
+    """Detect if running in Jupyter notebook.
+
+    Returns
+    -------
+    bool
+        True if running in Jupyter notebook, False otherwise.
+    """
+    try:
+        from IPython import get_ipython
+
+        ipython = get_ipython()
+        if ipython is None:
+            return False
+        return "IPKernelApp" in ipython.config
+    except (ImportError, AttributeError):
+        return False
+
+
+def add_plotter_if_none(plot):
+    """Decorates ``plot(*args, **kwargs, plotter=None)`` function for PyVista.
+    If plotter=None in the function call, creates a plotter and feeds it to rest of function.
+
+    The wrapped function should accept 'plotter' as first argument after self.
+    The wrapped function should return the plotter object.
+
+    This decorator will:
+    - Auto-detect notebook environment (or use windowed parameter)
+    - Create plotter if None
+    - Call plotter.show() at the end if show=True and plotter was created here
+    - Return the plotter object or show() result
+
+    Parameters handled by decorator:
+    - plotter: If None, creates new plotter
+    - show: If True and plotter was created, calls plotter.show()
+    - windowed: If None, auto-detects. If True, forces external window.
+    - window_size: Tuple for window dimensions (only when creating plotter)
+    """
+
+    @wraps(plot)
+    def _plot(*args, **kwargs):
+        """New plot function using a generated plotter if None."""
+        # Extract decorator-specific parameters
+        plotter = kwargs.get("plotter")
+        show = kwargs.pop("show", True)
+        windowed = kwargs.pop("windowed", None)
+        window_size = kwargs.pop("window_size", (800, 600))
+
+        # Determine display mode
+        if windowed is None:
+            # Auto-detect: windowed=False (inline) in notebooks, True otherwise
+            windowed = not _is_notebook()
+
+        # Track if we created the plotter
+        plotter_created = plotter is None
+
+        # Create plotter if not provided
+        if plotter is None:
+            pv = pyvista["mod"]
+            # PyVista uses 'notebook' parameter (True=inline, False=window)
+            # Our 'windowed' is opposite: True=window, False=inline
+            plotter = pv.Plotter(notebook=not windowed, window_size=window_size)
+            kwargs["plotter"] = plotter
+
+        # Call the wrapped function
+        plotter = plot(*args, **kwargs)
+
+        # Show if we created the plotter and show=True
+        if plotter_created and show:
+            return plotter.show()
+
+        return plotter
 
     return _plot
 

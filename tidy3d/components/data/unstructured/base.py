@@ -1101,6 +1101,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
             key: value if isinstance(value, list) else [value] for key, value in sel_kwargs.items()
         }
         return self.updated_copy(values=self.values.isel(**sel_kwargs_only_lists))
+        # return self.updated_copy(values=self.values.isel(**sel_kwargs))
 
 
 class UnstructuredGridDataset(UnstructuredDataset, np.lib.mixins.NDArrayOperatorsMixin, ABC):

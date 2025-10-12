@@ -112,6 +112,7 @@ signac = { version = "*", optional = true }
 flax = { version = ">=0.8.2", optional = true }
 sax = { version = "^0.11", optional = true }
 vtk = { version = ">=9.2.6", optional = true }
+pyvista = { version = ">=0.43.0", optional = true }
 sphinxemoji = { version = "*", optional = true }
 devsim = { version = "*", optional = true }
 cma = { version = "*", optional = true }
@@ -167,6 +168,7 @@ dev = [
   'trimesh',
   'scikit-rf',
   'vtk',
+  'pyvista',
   'devsim',
   'cma',
   'diff-cover',
@@ -206,8 +208,9 @@ gdstk = ["gdstk"]
 scikit-rf = ["scikit-rf"]
 trimesh = ["trimesh", "networkx", "rtree"]
 vtk = ["vtk"]
+pyvista = ["pyvista"]
 ruff = ["ruff"]
-heatcharge = ["trimesh", "vtk", "devsim"]
+heatcharge = ["trimesh", "vtk", "pyvista", "devsim"]
 # plugins with extra deps
 pytorch = ["torch"]
 design = ["bayesian-optimization", "pygad", "pyswarms"]
