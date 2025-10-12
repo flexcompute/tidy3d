@@ -62,11 +62,11 @@ class TriangularSurfaceDataset(UnstructuredDataset):
     ...     values=tri_grid_values,
     ... )
     >>>
-    >>> # Visualize the surface
-    >>> tri_grid.plot()  # Opens interactive 3D plot
+    >>> # Visualize the surface (change show=False to show=True to display the plot)
+    >>> _ = tri_grid.plot(show=False)  
     >>>
-    >>> # Customize the visualization
-    >>> tri_grid.plot(cmap='plasma', grid=True, grid_color='white')
+    >>> # Customize the visualization (change show=False to show=True to display the plot)
+    >>> _ = tri_grid.plot(cmap='plasma', grid=True, grid_color='white', show=False)
     >>>
     >>> # For vector fields
     >>> vector_values = IndexedDataArray(
@@ -74,7 +74,9 @@ class TriangularSurfaceDataset(UnstructuredDataset):
     ...     coords=dict(index=np.arange(4), axis=np.arange(3)),
     ... )
     >>> vector_grid = tri_grid.updated_copy(values=vector_values)
-    >>> vector_grid.quiver(scale=0.2)  # Plot as arrow field
+    >>>
+    >>> # Plot as arrow field (change show=False to show=True to display the plot)
+    >>> _ = vector_grid.quiver(scale=0.2, show=False)  
     """
 
     points: PointDataArray = pd.Field(
@@ -264,25 +266,6 @@ class TriangularSurfaceDataset(UnstructuredDataset):
         ------
         DataError
             If nothing to plot or if multiple fields present without selection.
-
-        Examples
-        --------
-        >>> # Plot field with default settings
-        >>> dataset.plot()
-        >>>
-        >>> # Plot with grid overlay
-        >>> dataset.plot(grid=True, grid_color='white', grid_width=2)
-        >>>
-        >>> # Plot only grid without field
-        >>> dataset.plot(field=False, grid=True)
-        >>>
-        >>> # Force external window in notebook for better interactivity
-        >>> dataset.plot(windowed=True)
-        >>>
-        >>> # Customize and reuse plotter
-        >>> plotter = dataset.plot(show=False)
-        >>> plotter.camera_position = 'xy'
-        >>> plotter.show()
         """
 
         if not (field or grid):
@@ -410,21 +393,6 @@ class TriangularSurfaceDataset(UnstructuredDataset):
         ------
         DataError
             If dataset doesn't contain exactly 3 fields for vector components.
-
-        Examples
-        --------
-        >>> # Plot vector field with default settings
-        >>> dataset.quiver()
-        >>>
-        >>> # Plot with custom scale and downsampling
-        >>> dataset.quiver(scale=0.2, downsampling=2)
-        >>>
-        >>> # Plot with custom color
-        >>> dataset.quiver(color='red', cbar=False)
-        >>>
-        >>> # Combine with plot on same plotter
-        >>> plotter = dataset.plot(show=False, opacity=0.5)
-        >>> dataset.quiver(plotter=plotter, scale=0.15)
         """
 
         # Validate vector field

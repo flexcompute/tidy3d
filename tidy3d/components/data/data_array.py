@@ -232,7 +232,7 @@ class DataArray(xr.DataArray):
         sub_group = f_handle.create_group(group_path)
         sub_group[DATA_ARRAY_VALUE_NAME] = get_static(self.data)
         for key, val in self.coords.items():
-            if val.dtype == "<U1" or isinstance(val.values[0], str):
+            if val.dtype.kind == "U":
                 sub_group[key] = val.values.tolist()
             else:
                 sub_group[key] = val
@@ -714,7 +714,7 @@ class SpatialDataArray(AbstractSpatialDataArray):
 
     __slots__ = ()
 
-    def reflect(self, axis: Axis, center: float, reflection_only: bool = False) -> SpatialDataArray:
+    def reflect(self, axis: Axis, center: float, reflection_only: bool = False, symmetry: float = 1) -> SpatialDataArray:
         """Reflect data across the plane define by parameters ``axis`` and ``center`` from right to
         left. Note that the returned data is sorted with respect to spatial coordinates.
 
@@ -726,6 +726,8 @@ class SpatialDataArray(AbstractSpatialDataArray):
             Location of the reflection plane along its normal direction.
         reflection_only : bool = False
             Return only reflected data.
+        symmetry : float = 1
+            Symmetry factor of the reflection.
 
         Returns
         -------
@@ -751,7 +753,7 @@ class SpatialDataArray(AbstractSpatialDataArray):
             coords[axis] = 2 * center - coords[axis]
             coords_dict = dict(zip("xyz", coords))
 
-            tmp_arr = SpatialDataArray(sorted_self.data, coords=coords_dict)
+            tmp_arr = SpatialDataArray(sorted_self.data * symmetry, coords=coords_dict)
 
             return tmp_arr.sortby("xyz"[axis])
 
@@ -767,7 +769,7 @@ class SpatialDataArray(AbstractSpatialDataArray):
 
         new_data = np.zeros(shape)
 
-        new_data[ind_left[0], ind_left[1], ind_left[2]] = data
+        new_data[ind_left[0], ind_left[1], ind_left[2]] = data * symmetry
         new_data[ind_right[0], ind_right[1], ind_right[2]] = data
 
         new_coords = np.zeros(shape[axis])
@@ -1507,7 +1509,7 @@ class IndexedSurfaceFreqDataArray(DataArray):
     Example
     -------
     >>> surface_side_array = IndexedSurfaceFreqDataArray(
-    ...     (1+1j) * np.random.random((4,3,1)), coords=dict(index=np.arange(4), side=np.arange(3), axis=np.arange(3), f=[1e9])
+    ...     (1+1j) * np.random.random((4,2,1)), coords=dict(index=np.arange(4), side=["outside", "inside"], f=[1e9])
     ... )
     """
 
@@ -1522,7 +1524,7 @@ class IndexedSurfaceTimeDataArray(DataArray):
     Example
     -------
     >>> surface_side_array = IndexedSurfaceTimeDataArray(
-    ...     (1+1j) * np.random.random((4,3,1)), coords=dict(index=np.arange(4), side=np.arange(3), axis=np.arange(3), f=[1e9])
+    ...     (1+1j) * np.random.random((4,2,1)), coords=dict(index=np.arange(4), side=["outside", "inside"], f=[1e9])
     ... )
     """
 

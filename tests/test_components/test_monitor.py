@@ -472,3 +472,15 @@ def test_surface_monitors():
             run_time=1e-12,
             grid_spec=td.GridSpec.auto(wavelength=1),
         )
+
+    # tests warning message
+    with AssertLogLevel("WARNING"):
+        surf_mnt = td.SurfaceFieldMonitor(size=(1, 1, 1), freqs=[td.C_0], name="surface")
+
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            structures=[pec_sphere],
+            monitors=[surf_mnt],
+            run_time=1e-12,
+            grid_spec=td.GridSpec.auto(wavelength=1),
+        )

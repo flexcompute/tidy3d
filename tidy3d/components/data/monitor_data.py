@@ -1631,7 +1631,10 @@ class SurfaceFieldData(ElectromagneticSurfaceFieldData):
 
     Example
     -------
-    >>> from tidy3d import PointDataArray, IndexedFieldDataArray, TriangularSurfaceDataset, CellDataArray, ElectromagneticSurfaceFieldDataset
+    >>> from tidy3d import PointDataArray, IndexedFieldDataArray, TriangularSurfaceDataset, CellDataArray
+    >>> import tidy3d as td
+    >>> old_logging_level = td.config.logging_level
+    >>> td.config.logging_level = "ERROR"
     >>> points = PointDataArray([[0, 0, 0], [0, 1, 0], [1, 1, 1]], dims=["index", "axis"])
     >>> cells = CellDataArray([[0, 1, 2]], dims=["cell_index", "vertex_index"])
     >>> values = PointDataArray([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dims=["index", "axis"])
@@ -1642,7 +1645,7 @@ class SurfaceFieldData(ElectromagneticSurfaceFieldData):
     ...     size=(2,4,6), freqs=[1e10], name='field', fields=['E', 'H']
     ... )
     >>> data = SurfaceFieldData(monitor=monitor, E=field, H=field, normal=normal)
-
+    >>> td.config.logging_level = old_logging_level
     """
 
     monitor: SurfaceFieldMonitor = pd.Field(
@@ -1680,7 +1683,10 @@ class SurfaceFieldTimeData(ElectromagneticSurfaceFieldData):
 
     Example
     -------
-    >>> from tidy3d import PointDataArray, IndexedFieldDataArray, TriangularSurfaceDataset, CellDataArray, ElectromagneticSurfaceFieldTimeDataset
+    >>> from tidy3d import PointDataArray, IndexedFieldDataArray, TriangularSurfaceDataset, CellDataArray
+    >>> import tidy3d as td
+    >>> old_logging_level = td.config.logging_level
+    >>> td.config.logging_level = "ERROR"
     >>> points = PointDataArray([[0, 0, 0], [0, 1, 0], [1, 1, 1]], dims=["index", "axis"])
     >>> cells = CellDataArray([[0, 1, 2]], dims=["cell_index", "vertex_index"])
     >>> values = PointDataArray([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dims=["index", "axis"])
@@ -1691,6 +1697,7 @@ class SurfaceFieldTimeData(ElectromagneticSurfaceFieldData):
     ...     size=(2,4,6), interval=100, name='field', fields=['E', 'H']
     ... )
     >>> data = SurfaceFieldTimeData(monitor=monitor, E=field, H=field, normal=normal)
+    >>> td.config.logging_level = old_logging_level
     """
 
     monitor: SurfaceFieldTimeMonitor = pd.Field(

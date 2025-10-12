@@ -1600,6 +1600,18 @@ class AbstractSurfaceMonitor(Monitor, ABC):
         description="For surface monitors fields are always colocated on surface.",
     )
 
+    @pydantic.validator("fields", always=True)
+    def _warn_beta_stage(cls, val, values):
+        """Warn that surface monitors are in beta stage."""
+        
+        log.warning(
+            "Surface monitors are currently in beta stage. Please exercise caution when analyzing "
+            "surface monitor data and verify results carefully. If you encounter any issues, "
+            f"please report them to our support team.",
+            custom_loc=["fields"],
+        )
+        return val
+
 
 class SurfaceFieldMonitor(AbstractSurfaceMonitor, FreqMonitor):
     """:class:`Monitor` that records electromagnetic fields in the frequency domain on PEC surfaces.
@@ -1613,13 +1625,16 @@ class SurfaceFieldMonitor(AbstractSurfaceMonitor, FreqMonitor):
 
     Example
     -------
+    >>> import tidy3d as td
+    >>> old_logging_level = td.config.logging_level
+    >>> td.config.logging_level = "ERROR"
     >>> monitor = SurfaceFieldMonitor(
     ...     center=(1,2,3),
     ...     size=(2,2,2),
     ...     fields=['E', 'H'],
     ...     freqs=[250e12, 300e12],
     ...     name='surface_monitor')
-
+    >>> td.config.logging_level = old_logging_level
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -1677,6 +1692,9 @@ class SurfaceFieldTimeMonitor(AbstractSurfaceMonitor, TimeMonitor):
 
     Example
     -------
+    >>> import tidy3d as td
+    >>> old_logging_level = td.config.logging_level
+    >>> td.config.logging_level = "ERROR"
     >>> monitor = SurfaceFieldTimeMonitor(
     ...     center=(1,2,3),
     ...     size=(2,2,2),
@@ -1685,7 +1703,7 @@ class SurfaceFieldTimeMonitor(AbstractSurfaceMonitor, TimeMonitor):
     ...     stop=5e-13,
     ...     interval=2,
     ...     name='movie_monitor')
-
+    >>> td.config.logging_level = old_logging_level
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
