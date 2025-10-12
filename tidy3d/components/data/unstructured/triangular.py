@@ -301,7 +301,9 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # disallow reflecting along normal direction
         if axis == self.normal_axis:
             if reflection_only:
-                return self.updated_copy(values=self.values * symmetry, normal_pos=2 * center - self.normal_pos)
+                return self.updated_copy(
+                    values=self.values * symmetry, normal_pos=2 * center - self.normal_pos
+                )
             else:
                 raise DataError(
                     "Reflection in the normal direction to the grid is prohibited unless 'reflection_only=True'."
@@ -311,7 +313,9 @@ class TriangularGridDataset(UnstructuredGridDataset):
         tan_dims.remove(self.normal_axis)
         tan_axis = tan_dims.index(axis)
 
-        return super().reflect(axis=tan_axis, center=center, reflection_only=reflection_only, symmetry=symmetry)
+        return super().reflect(
+            axis=tan_axis, center=center, reflection_only=reflection_only, symmetry=symmetry
+        )
 
     """ Interpolation """
 

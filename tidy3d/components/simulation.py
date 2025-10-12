@@ -3931,7 +3931,14 @@ class Simulation(AbstractYeeGridSimulation):
         return val
 
     @classmethod
-    def _get_surface_monitor_bounds(cls, center: Coordinate, size: Coordinate, monitor: SurfaceMonitorType, medium: MediumType3D, structures: list[Structure]) -> list[Bound]:
+    def _get_surface_monitor_bounds(
+        cls,
+        center: Coordinate,
+        size: Coordinate,
+        monitor: SurfaceMonitorType,
+        medium: MediumType3D,
+        structures: list[Structure],
+    ) -> list[Bound]:
         """Intersect a surface monitor with the bounding box of each PEC structure."""
 
         sim_box = Box(center=center, size=size)
@@ -3981,10 +3988,9 @@ class Simulation(AbstractYeeGridSimulation):
                 bounds = cls._get_surface_monitor_bounds(center, size, mnt, medium, structures)
                 if len(bounds) == 0:
                     raise SetupError(
-                            f"Surface monitor {mnt.name} does not cross any PEC of LossyMetalMedium structures."
-                        )
+                        f"Surface monitor {mnt.name} does not cross any PEC of LossyMetalMedium structures."
+                    )
         return val
-        
 
     @pydantic.validator("grid_spec", always=True)
     @skip_if_fields_missing(["medium", "sources", "structures"])

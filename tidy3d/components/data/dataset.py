@@ -517,7 +517,9 @@ class ElectromagneticSurfaceFieldDataset(AbstractFieldDataset, ABC):
     def intensity(self) -> TriangularSurfaceDataset:
         """Return the sum of the squared absolute electric field components."""
         if self.E is None:
-            raise ValueError("Could not calculate intensity: the dataset does not contain E field information.")
+            raise ValueError(
+                "Could not calculate intensity: the dataset does not contain E field information."
+            )
         intensity = self.E.norm(dim="axis") ** 2
         return intensity
 

@@ -15,7 +15,10 @@ from pandas import DataFrame
 from xarray.core.types import Self
 
 from tidy3d.components.base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
-from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData, AbstractUnstructuredMonitorData
+from tidy3d.components.base_sim.data.monitor_data import (
+    AbstractMonitorData,
+    AbstractUnstructuredMonitorData,
+)
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
 from tidy3d.components.monitor import (
@@ -43,7 +46,6 @@ from tidy3d.components.source.current import CustomCurrentSource, PointDipole
 from tidy3d.components.source.field import CustomFieldSource, ModeSource, PlaneWave
 from tidy3d.components.source.time import GaussianPulse, SourceTimeType
 from tidy3d.components.types import (
-    TYPE_TAG_STR,
     ArrayFloat1D,
     ArrayFloat2D,
     Coordinate,
@@ -1542,11 +1544,12 @@ class AuxFieldTimeData(AuxFieldTimeDataset, AbstractFieldData):
     _contains_monitor_fields = enforce_monitor_fields_present()
 
 
-class ElectromagneticSurfaceFieldData(MonitorData, AbstractUnstructuredMonitorData, ElectromagneticSurfaceFieldDataset, ABC
+class ElectromagneticSurfaceFieldData(
+    MonitorData, AbstractUnstructuredMonitorData, ElectromagneticSurfaceFieldDataset, ABC
 ):
     """Collection of vector fields on a surface with some symmetry properties."""
 
-    monitor: Union[SurfaceFieldMonitor, SurfaceFieldTimeMonitor] 
+    monitor: Union[SurfaceFieldMonitor, SurfaceFieldTimeMonitor]
 
     _contains_monitor_fields = enforce_monitor_fields_present()
 
@@ -1611,7 +1614,7 @@ class ElectromagneticSurfaceFieldData(MonitorData, AbstractUnstructuredMonitorDa
             updated_dict["E"] = self._symmetry_expanded_copy_base(self.E, e_symmetry)
         if self.H is not None:
             updated_dict["H"] = self._symmetry_expanded_copy_base(self.H, h_symmetry)
-        
+
         updated_dict["normal"] = self._symmetry_expanded_copy_base(self.normal, n_symmetry)
         return updated_dict
 
@@ -1657,23 +1660,28 @@ class SurfaceFieldData(ElectromagneticSurfaceFieldData):
         """Time-averaged Poynting vector for frequency-domain data."""
 
         if self.E is None or self.H is None:
-            raise ValueError("Could not calculate poynting: the dataset does not contain E or H field information.")
+            raise ValueError(
+                "Could not calculate poynting: the dataset does not contain E or H field information."
+            )
         e_field = self.E
         h_field = self.H
 
         poynting = e_field.updated_copy(
-                    values=0.5
-                    * np.real(xr.cross(e_field.values, np.conj(h_field.values), dim="axis"))
-                )
+            values=0.5 * np.real(xr.cross(e_field.values, np.conj(h_field.values), dim="axis"))
+        )
 
         return poynting
 
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> SurfaceFieldData:
         """Return copy of self after normalization is applied using source spectrum function."""
         fields_norm = {}
-        src_amps = FreqDataArray(source_spectrum_fn(self.monitor.freqs), coords={"f": list(self.monitor.freqs)})
+        src_amps = FreqDataArray(
+            source_spectrum_fn(self.monitor.freqs), coords={"f": list(self.monitor.freqs)}
+        )
         for field_name, field_data in self.field_components.items():
-            fields_norm[field_name] = field_data.updated_copy(values=(field_data.values / src_amps).astype(field_data.values.dtype))  
+            fields_norm[field_name] = field_data.updated_copy(
+                values=(field_data.values / src_amps).astype(field_data.values.dtype)
+            )
 
         return self.copy(update=fields_norm)
 
@@ -1709,7 +1717,9 @@ class SurfaceFieldTimeData(ElectromagneticSurfaceFieldData):
         """Poynting vector for time-domain data."""
 
         if self.E is None or self.H is None:
-            raise ValueError("Could not calculate poynting: the dataset does not contain E or H field information.")
+            raise ValueError(
+                "Could not calculate poynting: the dataset does not contain E or H field information."
+            )
         e_field = self.E
         h_field = self.H
 

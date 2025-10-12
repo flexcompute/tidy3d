@@ -448,7 +448,6 @@ def test_monitor_surfaces_from_volume():
 
 
 def test_surface_monitors():
-    
     pec_sphere = td.Structure(geometry=td.Sphere(radius=0.5), medium=td.PECMedium())
 
     surf_mnt = td.SurfaceFieldMonitor(size=(1, 1, 1), freqs=[td.C_0], name="surface")
@@ -463,7 +462,9 @@ def test_surface_monitors():
 
     # monitor doesn't overlap any pec structure
     with pytest.raises(pydantic.ValidationError):
-        surf_mnt = td.SurfaceFieldMonitor(size=(0.2, 1, 1), center=(0.8, 0, 0), freqs=[td.C_0], name="surface")
+        surf_mnt = td.SurfaceFieldMonitor(
+            size=(0.2, 1, 1), center=(0.8, 0, 0), freqs=[td.C_0], name="surface"
+        )
 
         _ = td.Simulation(
             size=(2, 2, 2),

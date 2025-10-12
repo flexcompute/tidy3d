@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import copy
 from abc import ABC, abstractmethod
 from typing import Union
 
-import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base_sim.data.monitor_data import AbstractUnstructuredMonitorData
@@ -17,8 +15,7 @@ from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridD
 from tidy3d.components.tcad.types import (
     HeatChargeMonitorType,
 )
-from tidy3d.components.types import Coordinate, ScalarSymmetry, annotate_type
-from tidy3d.constants import MICROMETER
+from tidy3d.components.types import ScalarSymmetry, annotate_type
 from tidy3d.log import log
 
 FieldDataset = Union[
@@ -66,7 +63,6 @@ class HeatChargeMonitorData(AbstractUnstructuredMonitorData, ABC):
             new_field_components[field] = self._symmetry_expanded_copy_base(property=val)
 
         return self.updated_copy(symmetry=(0, 0, 0), **new_field_components)
-
 
     def _post_init_validators(self):
         """Call validators taking ``self`` that get run after init."""

@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from abc import ABC
-from typing import Union, Literal
 import copy
+from abc import ABC
+from typing import Literal, Optional, Union
+
 import numpy as np
-
-from tidy3d.components.data.data_array import SpatialDataArray
-from tidy3d.components.data.utils import UnstructuredGridDatasetType
-
 import pydantic.v1 as pd
+from xarray import DataArray as XrDataArray
 
 from tidy3d.components.base_sim.monitor import AbstractMonitor
+from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.data.dataset import Dataset
-from tidy3d.components.types import Symmetry, Coordinate
-from xarray import DataArray as XrDataArray
+from tidy3d.components.data.utils import UnstructuredGridDatasetType
+from tidy3d.components.types import Coordinate, Symmetry
+
 
 class AbstractMonitorData(Dataset, ABC):
     """Abstract base class of objects that store data pertaining to a single
@@ -50,8 +50,8 @@ class AbstractUnstructuredMonitorData(AbstractMonitorData, ABC):
     )
 
     def _symmetry_expanded_copy_base(
-        self, 
-        property: Union[UnstructuredGridDatasetType, SpatialDataArray], 
+        self,
+        property: Union[UnstructuredGridDatasetType, SpatialDataArray],
         custom_symmetry: Optional[tuple[Union[Literal[-1, 1], XrDataArray], ...]] = None,
     ) -> Union[UnstructuredGridDatasetType, SpatialDataArray]:
         """Return the property with symmetry applied."""
@@ -78,7 +78,9 @@ class AbstractUnstructuredMonitorData(AbstractMonitorData, ABC):
             # do not expand monitor with zero size along symmetry direction
             # this is done because 2d unstructured data does not support this
             if self.symmetry[dim] != 0:
-                symmetry_factor = self.symmetry[dim] if custom_symmetry is None else custom_symmetry[dim]
+                symmetry_factor = (
+                    self.symmetry[dim] if custom_symmetry is None else custom_symmetry[dim]
+                )
                 center = self.symmetry_center[dim]
 
                 if mnt_bounds[1][dim] < data_bounds[0][dim]:
@@ -90,7 +92,9 @@ class AbstractUnstructuredMonitorData(AbstractMonitorData, ABC):
                 elif mnt_bounds[0][dim] < 2 * center - data_bounds[0][dim]:
                     # expand only if monitor bounds missing data
                     # if we do expand, simply reflect symmetrically the whole data
-                    new_property = new_property.reflect(axis=dim, center=center, symmetry=symmetry_factor)
+                    new_property = new_property.reflect(
+                        axis=dim, center=center, symmetry=symmetry_factor
+                    )
 
                     # if it turns out that we expanded too much, we will trim unnecessary data later
                     if mnt_bounds[0][dim] > 2 * center - data_bounds[1][dim]:

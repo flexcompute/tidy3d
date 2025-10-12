@@ -714,7 +714,9 @@ class SpatialDataArray(AbstractSpatialDataArray):
 
     __slots__ = ()
 
-    def reflect(self, axis: Axis, center: float, reflection_only: bool = False, symmetry: float = 1) -> SpatialDataArray:
+    def reflect(
+        self, axis: Axis, center: float, reflection_only: bool = False, symmetry: float = 1
+    ) -> SpatialDataArray:
         """Reflect data across the plane define by parameters ``axis`` and ``center`` from right to
         left. Note that the returned data is sorted with respect to spatial coordinates.
 

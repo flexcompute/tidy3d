@@ -8,7 +8,8 @@ from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
-from xarray import DataArray as XrDataArray, concat as xr_concat
+from xarray import DataArray as XrDataArray
+from xarray import concat as xr_concat
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.data.data_array import (
@@ -896,7 +897,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
     @requires_vtk
     def _boundary_points_indices(self):
         """Find points that lie on open edges/faces."""
-        
+
         surface_filter = vtk["mod"].vtkDataSetSurfaceFilter()
         surface_filter.SetInputData(self._vtk_obj_empty)
         surface_filter.PassThroughPointIdsOn()  # Important for getting original indices
@@ -907,31 +908,36 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         if self._cell_num_vertices() == 3:
             feature_edges = vtk["mod"].vtkFeatureEdges()
             feature_edges.SetInputData(boundary_edges_vtk)
-            
+
             # Enable the extraction of boundary edges
             feature_edges.BoundaryEdgesOn()
-            
+
             # Disable other types of edges to get only the boundary
             feature_edges.FeatureEdgesOff()
             feature_edges.ManifoldEdgesOff()
             feature_edges.NonManifoldEdgesOff()
-            
+
             feature_edges.Update()
             boundary_edges_vtk = feature_edges.GetOutput()
-        
+
         if boundary_edges_vtk.GetNumberOfCells() == 0:
             # Mesh is watertight, no boundary
             return np.array([], dtype=int)
-        
+
         # Get the original point indices
-        original_ids_array = vtk["vtk_to_numpy"](boundary_edges_vtk.GetPointData().GetArray("vtkOriginalPointIds"))
+        original_ids_array = vtk["vtk_to_numpy"](
+            boundary_edges_vtk.GetPointData().GetArray("vtkOriginalPointIds")
+        )
         boundary_point_indices = original_ids_array.copy()
         return boundary_point_indices.astype(int)
 
-
     @requires_vtk
     def reflect(
-        self, axis: Axis, center: float, reflection_only: bool = False, symmetry: Union[Literal[-1, 1], XrDataArray] = 1
+        self,
+        axis: Axis,
+        center: float,
+        reflection_only: bool = False,
+        symmetry: Union[Literal[-1, 1], XrDataArray] = 1,
     ) -> UnstructuredDataset:
         """Reflect unstructured dataset across the plane define by parameters ``axis`` and ``center``.
         By default the original dataset is preserved, setting ``reflection_only`` to ``True`` will
@@ -973,14 +979,19 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
             reflected_points = self.points
             reflected_points.loc[{"axis": axis}] = 2 * center - self.points.sel(axis=axis)
             return self.updated_copy(points=reflected_points, values=self.values * symmetry)
-        
+
         # record number of existing points
         num_points = len(self.points)
 
         # detect points that are not on the reflection plane and on open edges
         # Those will need to be duplicated
         points_off_plane_map = np.ones(len(self.points), dtype=bool)
-        points_off_plane_map[self._boundary_points_indices] = ~np.isclose(self.points.sel(axis=axis).data[self._boundary_points_indices], center, atol=1e-4, rtol=1e-4)
+        points_off_plane_map[self._boundary_points_indices] = ~np.isclose(
+            self.points.sel(axis=axis).data[self._boundary_points_indices],
+            center,
+            atol=1e-4,
+            rtol=1e-4,
+        )
         num_new_points = np.sum(points_off_plane_map)
 
         # create new points id
@@ -996,7 +1007,9 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         new_cells = self.cells.copy()
         new_points_in_new_cells_map = points_off_plane_map[new_cells]
         new_points_in_new_cells_orig_id = new_cells.data[new_points_in_new_cells_map]
-        new_cells.data[new_points_in_new_cells_map] = new_points_id_map[new_points_in_new_cells_orig_id]
+        new_cells.data[new_points_in_new_cells_map] = new_points_id_map[
+            new_points_in_new_cells_orig_id
+        ]
 
         # create new values
         new_values = self.values.sel(index=points_off_plane_map).copy() * symmetry
@@ -1010,7 +1023,9 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         combined_values.coords["index"] = np.arange(len(combined_values))
         combined_cells.coords["cell_index"] = np.arange(len(combined_cells))
 
-        return self.updated_copy(points=combined_points, cells=combined_cells, values=combined_values)
+        return self.updated_copy(
+            points=combined_points, cells=combined_cells, values=combined_values
+        )
 
     """ Data selection """
 

@@ -5,8 +5,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ..utils import AssertLogLevel
-
 np.random.seed(4)
 
 
@@ -23,7 +21,7 @@ def _create_simple_surface():
             [1.0, 1.0, 0.0],
             [0.5, 0.5, 0.5],  # Raised center point
         ],
-        coords=dict(index=np.arange(5), axis=np.arange(3)),
+        coords={"index": np.arange(5), "axis": np.arange(3)},
     )
 
     cells = td.CellDataArray(
@@ -33,13 +31,13 @@ def _create_simple_surface():
             [3, 2, 4],
             [2, 0, 4],
         ],
-        coords=dict(cell_index=np.arange(4), vertex_index=np.arange(3)),
+        coords={"cell_index": np.arange(4), "vertex_index": np.arange(3)},
     )
 
     # Scalar field values
     values = td.IndexedDataArray(
         [1.0, 2.0, 3.0, 4.0, 5.0],
-        coords=dict(index=np.arange(5)),
+        coords={"index": np.arange(5)},
     )
 
     return td.TriangularSurfaceDataset(points=points, cells=cells, values=values)
@@ -58,7 +56,7 @@ def _create_vector_surface():
             [1.0, 1.0, 0.0],
             [0.5, 0.5, 0.5],
         ],
-        coords=dict(index=np.arange(5), axis=np.arange(3)),
+        coords={"index": np.arange(5), "axis": np.arange(3)},
     )
 
     cells = td.CellDataArray(
@@ -68,7 +66,7 @@ def _create_vector_surface():
             [3, 2, 4],
             [2, 0, 4],
         ],
-        coords=dict(cell_index=np.arange(4), vertex_index=np.arange(3)),
+        coords={"cell_index": np.arange(4), "vertex_index": np.arange(3)},
     )
 
     # Vector field (pointing outward from center)
@@ -80,7 +78,7 @@ def _create_vector_surface():
             [1.0, 1.0, 0.0],
             [0.0, 0.0, 1.0],
         ],
-        coords=dict(index=np.arange(5), axis=np.arange(3)),
+        coords={"index": np.arange(5), "axis": np.arange(3)},
     )
 
     return td.TriangularSurfaceDataset(points=points, cells=cells, values=vectors)
@@ -88,7 +86,6 @@ def _create_vector_surface():
 
 def test_surface_plot_basic(no_pyvista=False):
     """Test basic plot functionality."""
-    import tidy3d as td
     from tidy3d.exceptions import Tidy3dImportError
 
     dataset = _create_simple_surface()
@@ -106,7 +103,6 @@ def test_surface_plot_basic(no_pyvista=False):
 
 def test_surface_plot_with_grid(no_pyvista=False):
     """Test plot with grid overlay."""
-    import tidy3d as td
     from tidy3d.exceptions import Tidy3dImportError
 
     dataset = _create_simple_surface()
@@ -124,7 +120,6 @@ def test_surface_plot_with_grid(no_pyvista=False):
 
 def test_surface_plot_customization(no_pyvista=False):
     """Test plot customization options."""
-    import tidy3d as td
     from tidy3d.exceptions import Tidy3dImportError
 
     dataset = _create_simple_surface()
@@ -142,7 +137,6 @@ def test_surface_plot_customization(no_pyvista=False):
 
 def test_surface_plot_error_nothing_to_plot(no_pyvista=False):
     """Test error when both field and grid are False."""
-    import tidy3d as td
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
     dataset = _create_simple_surface()
@@ -157,7 +151,6 @@ def test_surface_plot_error_nothing_to_plot(no_pyvista=False):
 
 def test_surface_plot_grid_only(no_pyvista=False):
     """Test plot with only grid, no field."""
-    import tidy3d as td
     from tidy3d.exceptions import Tidy3dImportError
 
     dataset = _create_simple_surface()
@@ -175,7 +168,6 @@ def test_surface_plot_grid_only(no_pyvista=False):
 
 def test_surface_plot_plotter_reuse(no_pyvista=False):
     """Test reusing plotter for multiple surfaces."""
-    import tidy3d as td
     from tidy3d.exceptions import Tidy3dImportError
 
     dataset = _create_simple_surface()
@@ -203,7 +195,6 @@ def test_surface_plot_plotter_reuse(no_pyvista=False):
 
 def test_surface_quiver_basic(no_pyvista=False):
     """Test basic quiver plot."""
-    import tidy3d as td
     from tidy3d.exceptions import Tidy3dImportError
 
     dataset = _create_vector_surface()
@@ -221,7 +212,6 @@ def test_surface_quiver_basic(no_pyvista=False):
 
 def test_surface_quiver_customization(no_pyvista=False):
     """Test quiver customization options."""
-    import tidy3d as td
     from tidy3d.exceptions import Tidy3dImportError
 
     dataset = _create_vector_surface()
@@ -239,7 +229,6 @@ def test_surface_quiver_customization(no_pyvista=False):
 
 def test_surface_quiver_error_wrong_num_fields(no_pyvista=False):
     """Test error when not exactly 3 fields."""
-    import tidy3d as td
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
     # Use scalar dataset (not vector)
@@ -255,7 +244,6 @@ def test_surface_quiver_error_wrong_num_fields(no_pyvista=False):
 
 def test_surface_quiver_magnitude_coloring(no_pyvista=False):
     """Test quiver with magnitude-based coloring."""
-    import tidy3d as td
     from tidy3d.exceptions import Tidy3dImportError
 
     dataset = _create_vector_surface()
@@ -273,7 +261,6 @@ def test_surface_quiver_magnitude_coloring(no_pyvista=False):
 
 def test_surface_combined_plot_and_quiver(no_pyvista=False):
     """Test combining surface plot with vector field on same plotter."""
-    import tidy3d as td
     from tidy3d.exceptions import Tidy3dImportError
 
     dataset = _create_vector_surface()
@@ -297,7 +284,6 @@ def test_surface_combined_plot_and_quiver(no_pyvista=False):
 @pytest.mark.parametrize("windowed", [True, False, None])
 def test_surface_plot_windowed_parameter(windowed, no_pyvista=False):
     """Test windowed parameter for display mode control."""
-    import tidy3d as td
     from tidy3d.exceptions import Tidy3dImportError
 
     dataset = _create_simple_surface()
@@ -311,4 +297,3 @@ def test_surface_plot_windowed_parameter(windowed, no_pyvista=False):
         plotter = dataset.plot(windowed=windowed, show=False)
         assert isinstance(plotter, pv.Plotter)
         plotter.close()
-

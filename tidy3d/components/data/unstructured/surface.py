@@ -6,7 +6,6 @@ from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
-
 from xarray import DataArray as XrDataArray
 
 from tidy3d.components.base import cached_property
@@ -63,7 +62,7 @@ class TriangularSurfaceDataset(UnstructuredDataset):
     ... )
     >>>
     >>> # Visualize the surface (change show=False to show=True to display the plot)
-    >>> _ = tri_grid.plot(show=False)  
+    >>> _ = tri_grid.plot(show=False)
     >>>
     >>> # Customize the visualization (change show=False to show=True to display the plot)
     >>> _ = tri_grid.plot(cmap='plasma', grid=True, grid_color='white', show=False)
@@ -76,7 +75,7 @@ class TriangularSurfaceDataset(UnstructuredDataset):
     >>> vector_grid = tri_grid.updated_copy(values=vector_values)
     >>>
     >>> # Plot as arrow field (change show=False to show=True to display the plot)
-    >>> _ = vector_grid.quiver(scale=0.2, show=False)  
+    >>> _ = vector_grid.quiver(scale=0.2, show=False)
     """
 
     points: PointDataArray = pd.Field(
@@ -215,7 +214,7 @@ class TriangularSurfaceDataset(UnstructuredDataset):
         show: bool = True,
         windowed: Optional[bool] = None,
         window_size: tuple = (800, 600),
-        **mesh_kwargs
+        **mesh_kwargs,
     ):
         """Plot the surface mesh and/or associated data using PyVista.
 
@@ -316,7 +315,7 @@ class TriangularSurfaceDataset(UnstructuredDataset):
             line_width=grid_width,
             opacity=opacity,
             show_scalar_bar=False,  # We'll manually add scalar bar if cbar=True
-            **mesh_kwargs
+            **mesh_kwargs,
         )
 
         # Add scalar bar
@@ -349,7 +348,7 @@ class TriangularSurfaceDataset(UnstructuredDataset):
         show: bool = True,
         windowed: Optional[bool] = None,
         window_size: tuple = (800, 600),
-        **arrow_kwargs
+        **arrow_kwargs,
     ):
         """Plot the associated data as vector field using arrows.
 
@@ -444,12 +443,7 @@ class TriangularSurfaceDataset(UnstructuredDataset):
             n_points_per_arrow = arrows.n_points // len(points)
             arrows["magnitude"] = np.repeat(mag, n_points_per_arrow)
 
-            plotter.add_mesh(
-                arrows,
-                scalars="magnitude",
-                cmap=cmap,
-                **arrow_kwargs
-            )
+            plotter.add_mesh(arrows, scalars="magnitude", cmap=cmap, **arrow_kwargs)
 
             if cbar:
                 scalar_bar_args = {
@@ -461,11 +455,7 @@ class TriangularSurfaceDataset(UnstructuredDataset):
                 }
                 plotter.add_scalar_bar(**scalar_bar_args)
         else:
-            plotter.add_mesh(
-                arrows,
-                color=color,
-                **arrow_kwargs
-            )
+            plotter.add_mesh(arrows, color=color, **arrow_kwargs)
 
         # Set axis labels
         plotter.add_axes(xlabel="x", ylabel="y", zlabel="z")

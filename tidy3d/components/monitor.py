@@ -1603,11 +1603,11 @@ class AbstractSurfaceMonitor(Monitor, ABC):
     @pydantic.validator("fields", always=True)
     def _warn_beta_stage(cls, val, values):
         """Warn that surface monitors are in beta stage."""
-        
+
         log.warning(
             "Surface monitors are currently in beta stage. Please exercise caution when analyzing "
             "surface monitor data and verify results carefully. If you encounter any issues, "
-            f"please report them to our support team.",
+            "please report them to our support team.",
             custom_loc=["fields"],
         )
         return val

@@ -9,7 +9,9 @@ import pytest
 from ..test_data.test_unstructured_pyvista import (
     test_surface_combined_plot_and_quiver as _test_surface_combined_plot_and_quiver,
 )
-from ..test_data.test_unstructured_pyvista import test_surface_plot_basic as _test_surface_plot_basic
+from ..test_data.test_unstructured_pyvista import (
+    test_surface_plot_basic as _test_surface_plot_basic,
+)
 from ..test_data.test_unstructured_pyvista import (
     test_surface_plot_customization as _test_surface_plot_customization,
 )
@@ -113,4 +115,3 @@ def test_surface_combined_plot_and_quiver_no_pyvista():
 @pytest.mark.usefixtures("hide_pyvista")
 def test_surface_plot_windowed_parameter_no_pyvista():
     _test_surface_plot_windowed_parameter(None, no_pyvista=True)
-
