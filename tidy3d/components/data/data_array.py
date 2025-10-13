@@ -232,7 +232,7 @@ class DataArray(xr.DataArray):
         sub_group = f_handle.create_group(group_path)
         sub_group[DATA_ARRAY_VALUE_NAME] = get_static(self.data)
         for key, val in self.coords.items():
-            if val.dtype == "<U1":
+            if val.dtype.kind == "U":
                 sub_group[key] = val.values.tolist()
             else:
                 sub_group[key] = val
@@ -714,7 +714,9 @@ class SpatialDataArray(AbstractSpatialDataArray):
 
     __slots__ = ()
 
-    def reflect(self, axis: Axis, center: float, reflection_only: bool = False) -> SpatialDataArray:
+    def reflect(
+        self, axis: Axis, center: float, reflection_only: bool = False, symmetry: float = 1
+    ) -> SpatialDataArray:
         """Reflect data across the plane define by parameters ``axis`` and ``center`` from right to
         left. Note that the returned data is sorted with respect to spatial coordinates.
 
@@ -726,6 +728,8 @@ class SpatialDataArray(AbstractSpatialDataArray):
             Location of the reflection plane along its normal direction.
         reflection_only : bool = False
             Return only reflected data.
+        symmetry : float = 1
+            Symmetry factor of the reflection.
 
         Returns
         -------
@@ -751,7 +755,7 @@ class SpatialDataArray(AbstractSpatialDataArray):
             coords[axis] = 2 * center - coords[axis]
             coords_dict = dict(zip("xyz", coords))
 
-            tmp_arr = SpatialDataArray(sorted_self.data, coords=coords_dict)
+            tmp_arr = SpatialDataArray(sorted_self.data * symmetry, coords=coords_dict)
 
             return tmp_arr.sortby("xyz"[axis])
 
@@ -767,7 +771,7 @@ class SpatialDataArray(AbstractSpatialDataArray):
 
         new_data = np.zeros(shape)
 
-        new_data[ind_left[0], ind_left[1], ind_left[2]] = data
+        new_data[ind_left[0], ind_left[1], ind_left[2]] = data * symmetry
         new_data[ind_right[0], ind_right[1], ind_right[2]] = data
 
         new_coords = np.zeros(shape[axis])
@@ -1500,6 +1504,81 @@ class ImpedanceFreqModeDataArray(ImpedanceArray, FreqModeDataArray):
     __slots__ = ()
 
 
+class IndexedSurfaceFreqDataArray(DataArray):
+    """Stores indexed values of scalar fields on the sides of a surface. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated scalar data.
+
+    Example
+    -------
+    >>> surface_side_array = IndexedSurfaceFreqDataArray(
+    ...     (1+1j) * np.random.random((4,2,1)), coords=dict(index=np.arange(4), side=["outside", "inside"], f=[1e9])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "side", "f")
+
+
+class IndexedSurfaceTimeDataArray(DataArray):
+    """Stores indexed values of scalar fields on the sides of a surface. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated scalar data.
+
+    Example
+    -------
+    >>> surface_side_array = IndexedSurfaceTimeDataArray(
+    ...     (1+1j) * np.random.random((4,2,1)), coords=dict(index=np.arange(4), side=["outside", "inside"], f=[1e9])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "side", "t")
+
+
+class IndexedFieldDataArray(DataArray):
+    """Stores indexed values of vector fields in frequency domain. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated vector data.
+
+    Example
+    -------
+    >>> indexed_array = IndexedFieldDataArray(
+    ...     (1+1j) * np.random.random((4,3,1)), coords=dict(index=np.arange(4), axis=np.arange(3), f=[1e9])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "side", "axis", "f")
+
+
+class IndexedFieldTimeDataArray(DataArray):
+    """Stores indexed values of vector fields in time domain. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated vector data.
+
+    Example
+    -------
+    >>> indexed_array = IndexedFieldDataArray(
+    ...     (1+1j) * np.random.random((4,3,1)), coords=dict(index=np.arange(4), axis=np.arange(3), t=[0])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "side", "axis", "t")
+
+
+class IndexedFreqDataArray(DataArray):
+    """Stores indexed values of scalar fields in frequency domain. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated vector data.
+
+    Example
+    -------
+    >>> indexed_array = IndexedFieldDataArray(
+    ...     (1+1j) * np.random.random((4,1)), coords=dict(index=np.arange(4), f=[1e9])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "f")
+
+
 def _make_base_result_data_array(result: DataArray) -> IntegralResultTypes:
     """Helper for creating the proper base result type."""
     cls = FreqDataArray
@@ -1586,14 +1665,23 @@ DATA_ARRAY_TYPES = [
     ImpedanceFreqDataArray,
     ImpedanceTimeDataArray,
     ImpedanceFreqModeDataArray,
+    IndexedFieldDataArray,
+    IndexedFieldTimeDataArray,
+    IndexedFreqDataArray,
 ]
+
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
 
 IndexedDataArrayTypes = Union[
     IndexedDataArray,
     IndexedVoltageDataArray,
+    IndexedFieldDataArray,
+    IndexedFieldTimeDataArray,
+    IndexedFreqDataArray,
     IndexedTimeDataArray,
     IndexedFieldVoltageDataArray,
+    IndexedSurfaceFreqDataArray,
+    IndexedSurfaceTimeDataArray,
     PointDataArray,
 ]
 

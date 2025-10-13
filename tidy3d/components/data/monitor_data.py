@@ -14,8 +14,11 @@ import xarray as xr
 from pandas import DataFrame
 from xarray.core.types import Self
 
-from tidy3d.components.base import cached_property, skip_if_fields_missing
-from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
+from tidy3d.components.base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
+from tidy3d.components.base_sim.data.monitor_data import (
+    AbstractMonitorData,
+    AbstractUnstructuredMonitorData,
+)
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
 from tidy3d.components.monitor import (
@@ -35,13 +38,14 @@ from tidy3d.components.monitor import (
     ModeSolverMonitor,
     MonitorType,
     PermittivityMonitor,
+    SurfaceFieldMonitor,
+    SurfaceFieldTimeMonitor,
 )
 from tidy3d.components.source.base import Source
 from tidy3d.components.source.current import CustomCurrentSource, PointDipole
 from tidy3d.components.source.field import CustomFieldSource, ModeSource, PlaneWave
 from tidy3d.components.source.time import GaussianPulse, SourceTimeType
 from tidy3d.components.types import (
-    TYPE_TAG_STR,
     ArrayFloat1D,
     ArrayFloat2D,
     Coordinate,
@@ -86,12 +90,14 @@ from .dataset import (
     AuxFieldTimeDataset,
     Dataset,
     ElectromagneticFieldDataset,
+    ElectromagneticSurfaceFieldDataset,
     FieldDataset,
     FieldTimeDataset,
     MediumDataset,
     ModeSolverDataset,
     PermittivityDataset,
 )
+from .unstructured.surface import TriangularSurfaceDataset
 
 Coords1D = ArrayFloat1D
 
@@ -203,6 +209,8 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         PermittivityMonitor,
         ModeMonitor,
         MediumMonitor,
+        SurfaceFieldMonitor,
+        SurfaceFieldTimeMonitor,
     ]
 
     symmetry: tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
@@ -1534,6 +1542,192 @@ class AuxFieldTimeData(AuxFieldTimeDataset, AbstractFieldData):
     )
 
     _contains_monitor_fields = enforce_monitor_fields_present()
+
+
+class ElectromagneticSurfaceFieldData(
+    MonitorData, AbstractUnstructuredMonitorData, ElectromagneticSurfaceFieldDataset, ABC
+):
+    """Collection of vector fields on a surface with some symmetry properties."""
+
+    monitor: Union[SurfaceFieldMonitor, SurfaceFieldTimeMonitor]
+
+    _contains_monitor_fields = enforce_monitor_fields_present()
+
+    @property
+    def symmetry_expanded(self):
+        """Return the :class:`.ElectromagneticSurfaceFieldData` with fields expanded based on symmetry. If
+        any symmetry is nonzero (i.e. expanded), the interpolation implicitly creates a copy of the
+        data array. However, if symmetry is not expanded, the returned array contains a view of
+        the data, not a copy.
+
+        Returns
+        -------
+        :class:`ElectromagneticSurfaceFieldData`
+            A data object with the symmetry expanded fields.
+        """
+
+        if all(sym == 0 for sym in self.symmetry):
+            return self
+
+        return self._updated(self._symmetry_update_dict)
+
+    @property
+    def symmetry_expanded_copy(self) -> AbstractFieldData:
+        """Create a copy of the :class:`.ElectromagneticSurfaceFieldData` with fields expanded based on symmetry.
+
+        Returns
+        -------
+        :class:`ElectromagneticSurfaceFieldData`
+            A data object with the symmetry expanded fields.
+        """
+
+        if all(sym == 0 for sym in self.symmetry):
+            return self.copy()
+
+        return self.copy(update=self._symmetry_update_dict)
+
+    @property
+    def _symmetry_update_dict(self) -> dict:
+        """Dictionary of data fields to create data with expanded symmetry."""
+
+        h_symmetry = [
+            xr.DataArray([1, -1, -1], coords={"axis": [0, 1, 2]}) * self.symmetry[0],
+            xr.DataArray([-1, 1, -1], coords={"axis": [0, 1, 2]}) * self.symmetry[1],
+            xr.DataArray([-1, -1, 1], coords={"axis": [0, 1, 2]}) * self.symmetry[2],
+        ]
+
+        e_symmetry = [
+            xr.DataArray([-1, 1, 1], coords={"axis": [0, 1, 2]}) * self.symmetry[0],
+            xr.DataArray([1, -1, 1], coords={"axis": [0, 1, 2]}) * self.symmetry[1],
+            xr.DataArray([1, 1, -1], coords={"axis": [0, 1, 2]}) * self.symmetry[2],
+        ]
+
+        # normal field is always even under symmetry
+        n_symmetry = [
+            xr.DataArray([1, -1, -1], coords={"axis": [0, 1, 2]}),
+            xr.DataArray([-1, 1, -1], coords={"axis": [0, 1, 2]}),
+            xr.DataArray([-1, -1, 1], coords={"axis": [0, 1, 2]}),
+        ]
+
+        updated_dict = {}
+        if self.E is not None:
+            updated_dict["E"] = self._symmetry_expanded_copy_base(self.E, e_symmetry)
+        if self.H is not None:
+            updated_dict["H"] = self._symmetry_expanded_copy_base(self.H, h_symmetry)
+
+        updated_dict["normal"] = self._symmetry_expanded_copy_base(self.normal, n_symmetry)
+        return updated_dict
+
+    def _check_fields_stored(self, components: list[str]):
+        """Check that all requested field components are stored in the data."""
+        missing_comps = [comp for comp in components if comp not in self.field_components.keys()]
+        if len(missing_comps) > 0:
+            raise DataError(
+                f"Field components {missing_comps} not included in this data object. Use "
+                "the 'fields' argument of a field monitor to select which components are stored."
+            )
+
+
+class SurfaceFieldData(ElectromagneticSurfaceFieldData):
+    """
+    Data associated with a :class:`.SurfaceFieldMonitor`: E and H fields on a surface.
+
+    Example
+    -------
+    >>> from tidy3d import PointDataArray, IndexedFieldDataArray, TriangularSurfaceDataset, CellDataArray
+    >>> import tidy3d as td
+    >>> old_logging_level = td.config.logging_level
+    >>> td.config.logging_level = "ERROR"
+    >>> points = PointDataArray([[0, 0, 0], [0, 1, 0], [1, 1, 1]], dims=["index", "axis"])
+    >>> cells = CellDataArray([[0, 1, 2]], dims=["cell_index", "vertex_index"])
+    >>> values = PointDataArray([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dims=["index", "axis"])
+    >>> field_values = IndexedFieldDataArray(np.ones((3, 1, 3, 1)) + 0j, coords={"index": [0, 1, 2], "side": ["outside"],"axis": [0, 1, 2], "f": [1e10]})
+    >>> field = TriangularSurfaceDataset(points=points, cells=cells, values=field_values)
+    >>> normal = TriangularSurfaceDataset(points=points, cells=cells, values=values)
+    >>> monitor = SurfaceFieldMonitor(
+    ...     size=(2,4,6), freqs=[1e10], name='field', fields=['E', 'H']
+    ... )
+    >>> data = SurfaceFieldData(monitor=monitor, E=field, H=field, normal=normal)
+    >>> td.config.logging_level = old_logging_level
+    """
+
+    monitor: SurfaceFieldMonitor = pd.Field(
+        ..., title="Monitor", description="Frequency-domain field monitor associated with the data."
+    )
+
+    @property
+    def poynting(self) -> TriangularSurfaceDataset:
+        """Time-averaged Poynting vector for frequency-domain data."""
+
+        if self.E is None or self.H is None:
+            raise ValueError(
+                "Could not calculate poynting: the dataset does not contain E or H field information."
+            )
+        e_field = self.E
+        h_field = self.H
+
+        poynting = e_field.updated_copy(
+            values=0.5 * np.real(xr.cross(e_field.values, np.conj(h_field.values), dim="axis"))
+        )
+
+        return poynting
+
+    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> SurfaceFieldData:
+        """Return copy of self after normalization is applied using source spectrum function."""
+        fields_norm = {}
+        src_amps = FreqDataArray(
+            source_spectrum_fn(self.monitor.freqs), coords={"f": list(self.monitor.freqs)}
+        )
+        for field_name, field_data in self.field_components.items():
+            fields_norm[field_name] = field_data.updated_copy(
+                values=(field_data.values / src_amps).astype(field_data.values.dtype)
+            )
+
+        return self.copy(update=fields_norm)
+
+
+class SurfaceFieldTimeData(ElectromagneticSurfaceFieldData):
+    """
+
+    Example
+    -------
+    >>> from tidy3d import PointDataArray, IndexedFieldDataArray, TriangularSurfaceDataset, CellDataArray
+    >>> import tidy3d as td
+    >>> old_logging_level = td.config.logging_level
+    >>> td.config.logging_level = "ERROR"
+    >>> points = PointDataArray([[0, 0, 0], [0, 1, 0], [1, 1, 1]], dims=["index", "axis"])
+    >>> cells = CellDataArray([[0, 1, 2]], dims=["cell_index", "vertex_index"])
+    >>> values = PointDataArray([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dims=["index", "axis"])
+    >>> field_values = IndexedFieldDataArray(np.ones((3, 1, 3, 1)) + 0j, coords={"index": [0, 1, 2], "side": ["outside"],"axis": [0, 1, 2], "t": [1e-9]})
+    >>> field = TriangularSurfaceDataset(points=points, cells=cells, values=field_values)
+    >>> normal = TriangularSurfaceDataset(points=points, cells=cells, values=values)
+    >>> monitor = SurfaceFieldTimeMonitor(
+    ...     size=(2,4,6), interval=100, name='field', fields=['E', 'H']
+    ... )
+    >>> data = SurfaceFieldTimeData(monitor=monitor, E=field, H=field, normal=normal)
+    >>> td.config.logging_level = old_logging_level
+    """
+
+    monitor: SurfaceFieldTimeMonitor = pd.Field(
+        ..., title="Monitor", description="Time-domain field monitor associated with the data."
+    )
+
+    @property
+    def poynting(self) -> TriangularSurfaceDataset:
+        """Poynting vector for time-domain data."""
+
+        if self.E is None or self.H is None:
+            raise ValueError(
+                "Could not calculate poynting: the dataset does not contain E or H field information."
+            )
+        e_field = self.E
+        h_field = self.H
+
+        poynting = e_field.updated_copy(
+            values=np.real(xr.cross(e_field.values, np.conj(h_field.values), dim="axis"))
+        )
+
+        return poynting
 
 
 class PermittivityData(PermittivityDataset, AbstractFieldData):
@@ -3959,6 +4153,8 @@ MonitorDataTypes = (
     FieldProjectionAngleData,
     DiffractionData,
     DirectivityData,
+    SurfaceFieldData,
+    SurfaceFieldTimeData,
 )
 
 MonitorDataType = Union[MonitorDataTypes]

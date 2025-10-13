@@ -275,7 +275,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
     @requires_vtk
     def reflect(
-        self, axis: Axis, center: float, reflection_only: bool = False
+        self, axis: Axis, center: float, reflection_only: bool = False, symmetry: float = 1.0
     ) -> UnstructuredGridDataset:
         """Reflect unstructured data across the plane define by parameters ``axis`` and ``center``.
         By default the original data is preserved, setting ``reflection_only`` to ``True`` will
@@ -289,6 +289,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
             Location of the reflection plane along its normal direction.
         reflection_only : bool = False
             Return only reflected data.
+        symmetry : float = 1.0
+            Symmetry factor to apply to the data.
 
         Returns
         -------
@@ -299,13 +301,21 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # disallow reflecting along normal direction
         if axis == self.normal_axis:
             if reflection_only:
-                return self.updated_copy(normal_pos=2 * center - self.normal_pos)
+                return self.updated_copy(
+                    values=self.values * symmetry, normal_pos=2 * center - self.normal_pos
+                )
             else:
                 raise DataError(
                     "Reflection in the normal direction to the grid is prohibited unless 'reflection_only=True'."
                 )
 
-        return super().reflect(axis=axis, center=center, reflection_only=reflection_only)
+        tan_dims = [0, 1, 2]
+        tan_dims.remove(self.normal_axis)
+        tan_axis = tan_dims.index(axis)
+
+        return super().reflect(
+            axis=tan_axis, center=center, reflection_only=reflection_only, symmetry=symmetry
+        )
 
     """ Interpolation """
 

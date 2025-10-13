@@ -9,11 +9,6 @@ import pydantic.v1 as pd
 from xarray import DataArray as XrDataArray
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import (
-    CellDataArray,
-    IndexedDataArray,
-    PointDataArray,
-)
 from tidy3d.components.types import ArrayLike, Axis, Bound, Coordinate
 from tidy3d.exceptions import DataError
 from tidy3d.packaging import requires_vtk, vtk
@@ -34,6 +29,9 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
     Example
     -------
+    >>> import numpy as np
+    >>> from tidy3d.components.data.data_array import PointDataArray, CellDataArray, IndexedDataArray
+    >>>
     >>> tet_grid_points = PointDataArray(
     ...     [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
     ...     coords=dict(index=np.arange(4), axis=np.arange(3)),
@@ -86,70 +84,6 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
     def _vtk_cell_type(cls):
         """VTK cell type to use in the VTK representation."""
         return vtk["mod"].VTK_TETRA
-
-    @classmethod
-    @requires_vtk
-    def _from_vtk_obj(
-        cls,
-        vtk_obj,
-        field=None,
-        remove_degenerate_cells: bool = False,
-        remove_unused_points: bool = False,
-        values_type=IndexedDataArray,
-        expect_complex: bool = False,
-        ignore_invalid_cells: bool = False,
-    ) -> TetrahedralGridDataset:
-        """Initialize from a vtkUnstructuredGrid instance."""
-
-        # read point, cells, and values info from a vtk instance
-        cells_numpy = vtk["vtk_to_numpy"](vtk_obj.GetCells().GetConnectivityArray())
-        points_numpy = vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData())
-        values = cls._get_values_from_vtk(
-            vtk_obj, len(points_numpy), field, values_type, expect_complex
-        )
-
-        # verify cell_types
-        cells_types = vtk["vtk_to_numpy"](vtk_obj.GetCellTypesArray())
-        invalid_cells = cells_types != cls._vtk_cell_type()
-        if any(invalid_cells):
-            if ignore_invalid_cells:
-                cell_offsets = vtk["vtk_to_numpy"](vtk_obj.GetCells().GetOffsetsArray())
-                valid_cell_offsets = cell_offsets[:-1][invalid_cells == 0]
-                cells_numpy = cells_numpy[
-                    np.ravel(
-                        valid_cell_offsets[:, None]
-                        + np.arange(cls._cell_num_vertices(), dtype=int)[None, :]
-                    )
-                ]
-            else:
-                raise DataError("Only tetrahedral 'vtkUnstructuredGrid' is currently supported")
-
-        # pack point and cell information into Tidy3D arrays
-        num_cells = len(cells_numpy) // cls._cell_num_vertices()
-        cells_numpy = np.reshape(cells_numpy, (num_cells, cls._cell_num_vertices()))
-
-        cells = CellDataArray(
-            cells_numpy,
-            coords={
-                "cell_index": np.arange(num_cells),
-                "vertex_index": np.arange(cls._cell_num_vertices()),
-            },
-        )
-
-        points = PointDataArray(
-            points_numpy,
-            coords={"index": np.arange(len(points_numpy)), "axis": np.arange(cls._point_dims())},
-        )
-
-        if remove_degenerate_cells:
-            cells = cls._remove_degenerate_cells(cells=cells)
-
-        if remove_unused_points:
-            points, values, cells = cls._remove_unused_points(
-                points=points, values=values, cells=cells
-            )
-
-        return cls(points=points, cells=cells, values=values)
 
     """ Grid operations """
 

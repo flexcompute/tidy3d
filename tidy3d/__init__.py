@@ -155,7 +155,10 @@ from .components.data.data_array import (
     FluxTimeDataArray,
     HeatDataArray,
     IndexedDataArray,
+    IndexedFieldDataArray,
+    IndexedFieldTimeDataArray,
     IndexedFieldVoltageDataArray,
+    IndexedFreqDataArray,
     IndexedTimeDataArray,
     IndexedVoltageDataArray,
     ModeAmpsDataArray,
@@ -194,6 +197,7 @@ from .components.data.monitor_data import (
     PermittivityData,
 )
 from .components.data.sim_data import DATA_TYPE_MAP, SimulationData
+from .components.data.unstructured.surface import TriangularSurfaceDataset
 from .components.data.utils import (
     TetrahedralGridDataset,
     TriangularGridDataset,
@@ -323,6 +327,8 @@ from .components.monitor import (
     ModeSolverMonitor,
     Monitor,
     PermittivityMonitor,
+    SurfaceFieldMonitor,
+    SurfaceFieldTimeMonitor,
 )
 from .components.parameter_perturbation import (
     CustomChargePerturbation,
@@ -605,7 +611,10 @@ __all__ = [
     "HuraySurfaceRoughness",
     "IndexPerturbation",
     "IndexedDataArray",
+    "IndexedFieldDataArray",
+    "IndexedFieldTimeDataArray",
     "IndexedFieldVoltageDataArray",
+    "IndexedFreqDataArray",
     "IndexedTimeDataArray",
     "IndexedVoltageDataArray",
     "InsulatingBC",
@@ -722,6 +731,8 @@ __all__ = [
     "StructureSimulationBoundary",
     "StructureStructureInterface",
     "SubpixelSpec",
+    "SurfaceFieldMonitor",
+    "SurfaceFieldTimeMonitor",
     "SurfaceImpedance",
     "SurfaceImpedanceFitterParam",
     "TemperatureBC",
@@ -731,6 +742,7 @@ __all__ = [
     "Transformed",
     "TriangleMesh",
     "TriangularGridDataset",
+    "TriangularSurfaceDataset",
     "TwoPhotonAbsorption",
     "UniformCurrentSource",
     "UniformGrid",

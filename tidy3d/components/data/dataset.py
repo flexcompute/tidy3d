@@ -29,6 +29,7 @@ from .data_array import (
     TimeDataArray,
     TriangleMeshDataArray,
 )
+from .unstructured.surface import TriangularSurfaceDataset
 from .zbf import ZBFData
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
@@ -480,6 +481,88 @@ class AuxFieldTimeDataset(AuxFieldDataset):
         description="Spatial distribution of the free carrier density for polarization "
         "in the z-direction.",
     )
+
+
+class ElectromagneticSurfaceFieldDataset(AbstractFieldDataset, ABC):
+    """Stores a collection of E and H fields with x, y, z components on one side of the surface."""
+
+    E: Optional[TriangularSurfaceDataset] = pd.Field(
+        None,
+        title="E",
+        description="Spatial distribution of the electric field on the one side of the surface.",
+    )
+
+    H: Optional[TriangularSurfaceDataset] = pd.Field(
+        None,
+        title="H",
+        description="Spatial distribution of the magnetic field on the one side of the surface.",
+    )
+
+    normal: TriangularSurfaceDataset = pd.Field(
+        ...,
+        title="Normal",
+        description="Normal direction of the surface oriented outward from the surface.",
+    )
+
+    @property
+    def field_components(self) -> dict[str, DataArray]:
+        """Maps the field components to their associated data."""
+        fields = {
+            "E": self.E,
+            "H": self.H,
+        }
+        return {field_name: field for field_name, field in fields.items() if field is not None}
+
+    @property
+    def intensity(self) -> TriangularSurfaceDataset:
+        """Return the sum of the squared absolute electric field components."""
+        if self.E is None:
+            raise ValueError(
+                "Could not calculate intensity: the dataset does not contain E field information."
+            )
+        intensity = self.E.norm(dim="axis") ** 2
+        return intensity
+
+    @property
+    def current_density(self) -> TriangularSurfaceDataset:
+        """Surface current density."""
+
+        h_diff = 0
+        template = None
+        # we assume that is data is None it means field is zero on that side (e.g. PEC)
+        H_inside = self.H.sel(side="inside", drop=True) if "inside" in self.H.side else None
+        H_outside = self.H.sel(side="outside", drop=True) if "outside" in self.H.side else None
+        if H_inside is not None:
+            h_diff += H_inside.values
+            template = H_inside
+        if H_outside is not None:
+            h_diff -= H_outside.values
+            template = H_outside
+
+        if template is None:
+            raise ValueError(
+                "Could not calculate current density: the dataset does not contain H field information."
+            )
+
+        return template.updated_copy(values=xr.cross(h_diff, self.normal.values, dim="axis"))
+
+    @property
+    def grid_locations(self) -> dict[str, str]:
+        """Maps field components to the string key of their grid locations on the yee lattice."""
+        raise RuntimeError("Function 'grid_location' does not apply to surface monitors.")
+
+    @property
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
+        """Maps field components to their (positive) symmetry eigenvalues."""
+
+        return {
+            "Ex": lambda dim: -1 if (dim == 0) else +1,
+            "Ey": lambda dim: -1 if (dim == 1) else +1,
+            "Ez": lambda dim: -1 if (dim == 2) else +1,
+            "Hx": lambda dim: +1 if (dim == 0) else -1,
+            "Hy": lambda dim: +1 if (dim == 1) else -1,
+            "Hz": lambda dim: +1 if (dim == 2) else -1,
+        }
 
 
 class ModeSolverDataset(ElectromagneticFieldDataset):
