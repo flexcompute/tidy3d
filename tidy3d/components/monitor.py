@@ -1608,7 +1608,7 @@ class AbstractSurfaceMonitor(Monitor, ABC):
             "Surface monitors are currently in beta stage. Please exercise caution when analyzing "
             "surface monitor data and verify results carefully. If you encounter any issues, "
             "please report them to our support team.",
-            custom_loc=["fields"],
+            log_once=True,
         )
         return val
 
