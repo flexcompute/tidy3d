@@ -97,7 +97,7 @@ def run(
     simulation: RunInput,
     task_name: typing.Optional[str] = None,
     folder_name: str = "default",
-    path: str = "simulation_data",
+    path: str = "simulation_data.hdf5.gz",
     callback_url: typing.Optional[str] = None,
     verbose: bool = True,
     progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
