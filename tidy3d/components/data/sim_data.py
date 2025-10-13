@@ -26,7 +26,6 @@ from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.constants import C_0, inf
 from tidy3d.exceptions import DataError, FileError, SetupError, Tidy3dKeyError
 from tidy3d.log import log
 
@@ -1175,7 +1174,16 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         adj_srcs_process_fwidth = self._adjoint_src_width_single(adj_srcs)
 
-        tmp_src_time = GaussianPulse(freq0=C_0, fwidth=inf)
+        min_freq_tmp_src = np.maximum(
+            0, np.min([src.source_time.freq0 - src.source_time.fwidth for src in adj_srcs])
+        )
+        max_freq_tmp_src = np.max(
+            [src.source_time.freq0 + src.source_time.fwidth for src in adj_srcs]
+        )
+        tmp_src_f0 = 0.5 * (min_freq_tmp_src + max_freq_tmp_src)
+        tmp_src_fwidth = max_freq_tmp_src - min_freq_tmp_src
+
+        tmp_src_time = GaussianPulse(freq0=tmp_src_f0, fwidth=tmp_src_fwidth)
         for src in adj_srcs_process_fwidth:
             tmp_src = src.updated_copy(source_time=tmp_src_time)
             tmp_src_hash = tmp_src._hash_self()
