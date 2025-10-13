@@ -761,7 +761,7 @@ class BatchTask:
             # TODO PROPERLY FIXME
             # Disable non critical logs due to check for resourceId, until we have a dedicated API for this
             resp = http.get(
-                f"tidy3d/tasks/{resource_id}/batch-detail",
+                f"tidy3d/batch/{resource_id}/detail",
                 params={"batchType": batch_type},
                 suppress_404=True,
             )
@@ -784,7 +784,7 @@ class BatchTask:
             An object containing the batch's latest data.
         """
         resp = http.get(
-            f"tidy3d/tasks/{self.batch_id}/batch-detail",
+            f"tidy3d/batch/{self.batch_id}/detail",
             params={"batchType": batch_type},
         )
         # Some backends may return null for collection fields; coerce to sensible defaults
@@ -808,7 +808,7 @@ class BatchTask:
         protocol_version : Optional[str], default=None
             The data protocol version. Defaults to the current version.
         batch_type : str, default=""
-            The type of the batch (e.g., "RF_SWEEP").
+            The type of the batch (eg., "RF_SWEEP").
 
         Returns
         -------
@@ -818,7 +818,7 @@ class BatchTask:
         if protocol_version is None:
             protocol_version = _get_protocol_version()
         return http.post(
-            f"tidy3d/projects/{self.batch_id}/batch-check",
+            f"tidy3d/batch/{self.batch_id}/check",
             {
                 "batchType": batch_type,
                 "solverVersion": solver_version,
@@ -854,7 +854,7 @@ class BatchTask:
         if protocol_version is None:
             protocol_version = _get_protocol_version()
         return http.post(
-            f"tidy3d/projects/{self.batch_id}/batch-submit",
+            f"tidy3d/batch/{self.batch_id}/submit",
             {
                 "batchType": batch_type,
                 "solverVersion": solver_version,
@@ -891,7 +891,7 @@ class BatchTask:
         if protocol_version is None:
             protocol_version = _get_protocol_version()
         return http.post(
-            f"tidy3d/projects/{self.batch_id}/postprocess",
+            f"tidy3d/batch/{self.batch_id}/postprocess",
             {
                 "batchType": batch_type,
                 "solverVersion": solver_version,

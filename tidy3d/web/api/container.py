@@ -20,6 +20,16 @@ from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.exceptions import DataError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api import webapi as web
+from tidy3d.web.api.states import (
+    COMPLETED_PERCENT,
+    COMPLETED_STATES,
+    END_STATES,
+    ERROR_STATES,
+    PRE_ERROR_STATES,
+    PRE_VALIDATE_STATES,
+    RUNNING_STATES,
+    STATE_PROGRESS_PERCENTAGE,
+)
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 from tidy3d.web.core.constants import TaskId, TaskName
 from tidy3d.web.core.task_core import Folder
@@ -298,13 +308,37 @@ class Job(WebContainer):
         :class:`TaskInfo`
             :class:`TaskInfo` object containing info about status, size, credits of task and others.
         """
-
         return web.get_info(task_id=self.task_id)
 
     @property
     def status(self):
         """Return current status of :class:`Job`."""
-        return self.get_info().status
+        if web._is_modeler_batch(self.task_id):
+            detail = self.get_info()
+            status = detail.totalStatus.value
+            if status == "run_success":
+                postprocess_status = detail.postprocessStatus
+                if postprocess_status in COMPLETED_STATES:
+                    # TODO fix catch errors
+                    status = postprocess_status
+                else:
+                    status = "postprocess"
+            return status
+        else:
+            return self.get_info().status
+
+    @property
+    def postprocess_status(self):
+        """Return current postprocess status of :class:`Job` if it is a Component Modeler."""
+        if web._is_modeler_batch(self.task_id):
+            detail = self.get_info()
+            return detail.postprocessStatus
+        else:
+            log.warning(
+                f"Task ID '{self.task_id}' is not a modeler batch job. "
+                "'postprocess_start' is only applicable to Component Modelers"
+            )
+            return
 
     def start(self, priority: Optional[int] = None) -> None:
         """Start running a :class:`Job`.
@@ -418,6 +452,37 @@ class Job(WebContainer):
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
         """
         return web.estimate_cost(self.task_id, verbose=verbose, solver_version=self.solver_version)
+
+    def postprocess_start(self, worker_group: Optional[str] = None, verbose: bool = True) -> None:
+        """
+        If the job is a modeler batch, checks if the run is complete and starts
+        the postprocess phase.
+
+        This function does not wait for postprocessing to finish and is only
+        applicable to Component Modeler batch jobs.
+
+        Parameters
+        ----------
+        worker_group : Optional[str] = None
+            The specific worker group to run the postprocessing task on.
+        verbose : bool = True
+            Whether to print info messages. This overrides the Job's 'verbose' setting for this call.
+        """
+        # First, confirm that the task is a modeler batch job.
+        if not web._is_modeler_batch(self.task_id):
+            # If not, inform the user and exit.
+            # This warning is important and should not be suppressed.
+            log.warning(
+                f"Task ID '{self.task_id}' is not a modeler batch job. "
+                "'postprocess_start' is only applicable to Component Modelers"
+            )
+            return
+
+        # If it is a modeler batch, call the dedicated function to start postprocessing.
+        # The verbosity is a combination of the job's setting and the method's parameter.
+        web.postprocess_start(
+            batch_id=self.task_id, verbose=(self.verbose and verbose), worker_group=worker_group
+        )
 
     @staticmethod
     def _check_path_dir(path: str) -> None:
@@ -836,8 +901,61 @@ class Batch(WebContainer):
             run_info_dict[task_name] = run_info
         return run_info_dict
 
+    def postprocess_start(self, worker_group: Optional[str] = None, verbose: bool = True) -> None:
+        """
+        Starts the postprocess phase for all applicable jobs within the batch.
+
+        This function iterates through each job in the batch and calls its
+        'postprocess_start' method. The check for whether a job is a
+        Component Modeler task is handled within the individual Job's method.
+
+        This function does not wait for postprocessing to finish.
+
+        Parameters
+        ----------
+        worker_group : Optional[str] = None
+            The specific worker group to run the postprocessing tasks on.
+        verbose : bool = True
+            Whether to print info messages.
+        """
+        if self.verbose and verbose:
+            console = get_logging_console()
+            console.log("Attempting to start postprocessing for jobs in the batch.")
+
+        for job in self.jobs.values():
+            job.postprocess_start(worker_group=worker_group, verbose=verbose)
+
     def monitor(self) -> None:
-        """Monitor progress of each of the running tasks."""
+        """
+        Monitor progress of each of the running tasks.
+
+        For Component Modeler jobs, this method will automatically trigger the
+        post-processing step as soon as the run phase is complete.
+        """
+
+        def check_continue_condition(job) -> bool:
+            """
+            Determines if a job still needs monitoring.
+            Returns True if monitoring should continue, False if the job is finished.
+            """
+            status = job.status
+            if not web._is_modeler_batch(job.task_id):
+                # For regular jobs, finish when the status is in an end state.
+                return status not in END_STATES
+
+            # For modeler jobs, the logic is more complex.
+            if status not in END_STATES:
+                return True  # Still running, definitely continue.
+
+            if status == "run_success":
+                # 'run_success' is an end state for the run, but not for the whole job.
+                # We must wait for postprocessing to finish.
+                detail = job.get_info()
+                postprocess_status = detail.postprocessStatus
+                return postprocess_status not in END_STATES
+
+            # If status is a final end state (e.g., 'success', 'error'), we are done.
+            return False
 
         def pbar_description(
             task_name: str, status: str, max_name_length: int, status_width: int
@@ -850,46 +968,24 @@ class Batch(WebContainer):
             # right-align status
             task_part = f"{task_name:<{max_name_length}}"
 
-            if "error" in status or "diverge" in status or "aborted" in status:
+            if status in ERROR_STATES:
                 status_part = f"→ [red]{status:<{status_width}}"
-            elif status == "success":
+            elif status in COMPLETED_STATES:
                 status_part = f"→ [green]{status:<{status_width}}"
-            elif status == "queued" or status == "queued_solver" or status == "aborting":
+            elif status in (PRE_ERROR_STATES | PRE_VALIDATE_STATES):
                 status_part = f"→ [yellow]{status:<{status_width}}"
-            elif status in ["preprocess", "postprocess", "running"]:
+            elif status in RUNNING_STATES:
                 status_part = f"→ [blue]{status:<{status_width}}"
             else:
                 status_part = f"→ {status:<{status_width}}"
 
             return f"{task_part} {status_part}"
 
-        run_statuses = [
-            "draft",
-            "queued",
-            "preprocess",
-            "queued_solver",
-            "running",
-            "postprocess",
-            "visualize",
-            "success",
-            "aborting",
-        ]
-        end_statuses = (
-            "success",
-            "error",
-            "errored",
-            "diverged",
-            "diverge",
-            "deleted",
-            "draft",
-            "aborted",
-        )
-
         max_task_name = max(len(task_name) for task_name in self.jobs.keys())
         max_name_length = min(30, max(max_task_name, 15))
-        status_width = max(
-            max(len(status) for status in run_statuses), max(len(status) for status in end_statuses)
-        )
+
+        # Keep track of modeler jobs that have had postprocessing started.
+        postprocess_started_tasks = set()
 
         if self.verbose:
             console = get_logging_console()
@@ -908,60 +1004,58 @@ class Batch(WebContainer):
             )
 
             with Progress(*progress_columns, console=console, transient=False) as progress:
-                # create progress bars
+                # Create progress bars
                 pbar_tasks = {}
                 for task_name, job in self.jobs.items():
                     status = job.status
-                    description = pbar_description(task_name, status, max_name_length, status_width)
-                    completed = run_statuses.index(status) if status in run_statuses else 0
+                    description = pbar_description(task_name, status, max_name_length, 0)
+                    completed = STATE_PROGRESS_PERCENTAGE[status]
                     pbar = progress.add_task(
-                        description, total=len(run_statuses) - 1, completed=completed
+                        description, total=COMPLETED_PERCENT, completed=completed
                     )
                     pbar_tasks[task_name] = pbar
 
-                while any(job.status not in end_statuses for job in self.jobs.values()):
-                    updates = []
+                while any(check_continue_condition(job) for job in self.jobs.values()):
                     for task_name, job in self.jobs.items():
                         status = job.status
-                        if status in run_statuses:
-                            updates.append(
-                                (
-                                    pbar_tasks[task_name],
-                                    pbar_description(
-                                        task_name, status, max_name_length, status_width
-                                    ),
-                                    run_statuses.index(status),
-                                )
-                            )
+                        if (
+                            web._is_modeler_batch(job.task_id)
+                            and job.status in {"run_success", "postprocess"}
+                            and job.task_id not in postprocess_started_tasks
+                        ):
+                            job.postprocess_start(verbose=False)
+                            postprocess_started_tasks.add(job.task_id)
 
-                    for pbar, description, completed in updates:
-                        progress.update(
-                            pbar, description=description, completed=completed, refresh=False
-                        )
+                        # Update progress bar
+                        pbar = pbar_tasks[task_name]
+                        description = pbar_description(task_name, status, max_name_length, 0)
+                        completed_percent = STATE_PROGRESS_PERCENTAGE[status]
+                        progress.update(pbar, description=description, completed=completed_percent)
 
-                    progress.refresh()
                     time.sleep(BATCH_MONITOR_PROGRESS_REFRESH_TIME)
 
-                updates = []
+                # Final update to ensure all bars show their terminal state
                 for task_name, job in self.jobs.items():
-                    updates.append(
-                        (
-                            pbar_tasks[task_name],
-                            pbar_description(task_name, job.status, max_name_length, status_width),
-                            len(run_statuses) - 1,
-                        )
-                    )
+                    status = job.status
+                    pbar = pbar_tasks[task_name]
+                    description = pbar_description(task_name, status, max_name_length, 0)
+                    final_percent = STATE_PROGRESS_PERCENTAGE[status]
+                    progress.update(pbar, description=description, completed=final_percent)
 
-                for pbar, description, completed in updates:
-                    progress.update(
-                        pbar, description=description, completed=completed, refresh=False
-                    )
-
-                progress.refresh()
                 console.log("Batch complete.")
 
         else:
-            while any(job.status not in end_statuses for job in self.jobs.values()):
+            # Non-verbose path
+            while any(check_continue_condition(job) for job in self.jobs.values()):
+                for job in self.jobs.values():
+                    # If a modeler job is done running, start its postprocessing once.
+                    if (
+                        web._is_modeler_batch(job.task_id)
+                        and job.status == "run_success"
+                        and job.task_id not in postprocess_started_tasks
+                    ):
+                        job.postprocess_start(verbose=False)
+                        postprocess_started_tasks.add(job.task_id)
                 time.sleep(web.REFRESH_TIME)
 
     @staticmethod
