@@ -83,7 +83,7 @@ from .viz import (
 MAX_NUM_MEDIUMS = 65530
 
 # maximum geometry count in a single structure
-MAX_GEOMETRY_COUNT = 100
+MAX_GEOMETRY_COUNT = 5000
 
 # warn and error out if the same medium is present in too many structures
 WARN_STRUCTURES_PER_MEDIUM = 200
