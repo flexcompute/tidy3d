@@ -1450,7 +1450,10 @@ class Scene(Tidy3dBaseModel):
             if norm is not None:
                 # Use the same normalization as the colorbar for consistency
                 color = norm(eps_medium)
-                if reverse:
+                # TODO: This is a hack to ensure color consistency with the colorbar.
+                # It should be removed once we establish a proper color mapping where
+                # eps_min maps to 0 and eps_max maps to 1 for 'reverse=False'.
+                if not reverse:
                     color = 1 - color
                 color = min(1, max(color, 0))  # clip in case of custom eps limits
             else:
