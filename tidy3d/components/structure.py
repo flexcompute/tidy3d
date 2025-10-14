@@ -453,7 +453,7 @@ class Structure(AbstractStructure):
                     full_paths = [(med_or_geo, *path) for path in paths]
                     info = derivative_info.updated_copy(paths=full_paths, deep=False)
 
-                    vjp = vjp_fns[full_path](med_or_geo_field, info)
+                    vjp = vjp_fns[full_path](med_or_geo_field, derivative_info=info)
                     vjp_strip_med_or_geo = {key[1:]: val for key, val in vjp.items()}
 
                     derivative_values_map.update(vjp_strip_med_or_geo)

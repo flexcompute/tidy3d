@@ -39,7 +39,7 @@ from tidy3d.plugins.smatrix.run import _run_local
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd import autograd as autograd_module
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom
-from tidy3d.web.api.autograd.types import CustomVJPConfig
+from tidy3d.web.api.autograd.types import CustomVJPConfig, NumericalStructureConfig
 
 from ...utils import SIM_FULL, AssertLogLevel, custom_poleresidue_u, run_emulated, tracer_arr
 
@@ -805,6 +805,43 @@ def make_polyslab_custom_vjp(custom_vjp_val):
     return polyslab_custom_vjp
 
 
+def make_polyslab_numerical_vjp(numerical_val):
+    def polyslab_numerical_vjp(parameters, derivative_info):
+        vjps = {}
+        for path in derivative_info.paths:
+            vjps[path] = numerical_val
+        return vjps
+
+    return polyslab_numerical_vjp
+
+
+def make_polyslab_from_params(parameters, polyslab_axis):
+    params_arr = np.array(parameters)
+    return make_structures(params_arr, polyslab_axis=polyslab_axis)["polyslab"]
+
+
+def test_run_custom_rejects_numerical_structures_for_unsupported_workflow_type():
+    numerical_structure = NumericalStructureConfig(
+        create=lambda params: td.Structure(
+            geometry=td.Box(size=(1, 1, 1)),
+            medium=td.Medium(permittivity=1.0),
+        ),
+        compute_derivatives=lambda parameters, derivative_info: {},
+        parameters=np.array([0.1]),
+    )
+
+    with pytest.raises(
+        td.exceptions.AdjointError,
+        match="numerical_structures is only supported for 'Simulation' and ComponentModeler workflows",
+    ):
+        run_custom(
+            simulation=object(),
+            task_name="unsupported_numerical_structures",
+            numerical_structures=numerical_structure,
+            local_gradient=True,
+        )
+
+
 @pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
 @pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
 @pytest.mark.parametrize("use_run_async", [True, False])
@@ -910,6 +947,175 @@ def test_autograd_custom_vjp(
         assert np.isclose(
             np.sum(np.abs(grad * (custom_vjp_val_scale / custom_vjp_val) - grad_scale)), 0.0
         ), "Gradients were not set by the user vjp"
+
+
+@pytest.mark.parametrize("error_type", ["create_num_args", "vjp_num_args", "vjp_arg_name"])
+def test_numerical_structure_signature_validation(error_type):
+    def create_ok(parameters):
+        return td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=1.0))
+
+    def vjp_ok(parameters, derivative_info):
+        return {}
+
+    def create_bad_num_args(parameters, extra_arg):
+        return create_ok(parameters)
+
+    def vjp_bad_num_args(parameters, derivative_info, extra_arg):
+        return {}
+
+    def vjp_bad_arg_name(parameters, d_info):
+        return {}
+
+    create_fn = create_ok
+    vjp_fn = vjp_ok
+    expected_error = ""
+
+    if error_type == "create_num_args":
+        create_fn = create_bad_num_args
+        expected_error = (
+            "NumericalStructureConfig.create should accept one argument "
+            r"\(the parameters vector used for structure creation\), and it currently "
+            "accepts 2 arguments."
+        )
+    elif error_type == "vjp_num_args":
+        vjp_fn = vjp_bad_num_args
+        expected_error = (
+            "NumericalStructureConfig.compute_derivatives should accept two arguments "
+            r"\(parameters, derivative_info\), and it currently accepts 3 arguments."
+        )
+    else:
+        vjp_fn = vjp_bad_arg_name
+        expected_error = (
+            "NumericalStructureConfig.compute_derivatives second argument name is d_info "
+            "but it should be derivative_info."
+        )
+
+    with pytest.raises(td.exceptions.AdjointError, match=expected_error):
+        NumericalStructureConfig(
+            create=create_fn,
+            compute_derivatives=vjp_fn,
+            parameters=np.array([0.1]),
+        )
+
+
+@pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
+@pytest.mark.parametrize("use_run_async", [True, False])
+def test_autograd_numerical_structures(
+    use_emulated_run,
+    polyslab_axis,
+    use_run_async,
+    redirect_stdout_to_stderr,
+):
+    """Test that numerical_structures can override gradients for traced parameters."""
+
+    structure_key = "polyslab"
+    monitor_key = "mode"
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def make_objective(numerical_val):
+        polyslab_numerical_vjp = make_polyslab_numerical_vjp(numerical_val)
+
+        def objective(*args):
+            static_args = [get_static(arg) for arg in args]
+            base_sim = make_sim(*static_args, polyslab_axis=polyslab_axis)
+            structures = [
+                structure
+                for structure in base_sim.structures
+                if not isinstance(structure.geometry, td.PolySlab)
+            ]
+            sim_strip_structure = base_sim.updated_copy(structures=structures)
+
+            numerical_structure = NumericalStructureConfig(
+                create=lambda params: make_polyslab_from_params(params, polyslab_axis),
+                compute_derivatives=polyslab_numerical_vjp,
+                parameters=np.array(args).flatten(),
+            )
+
+            batch_data = {}
+            if use_run_async:
+                sims = {"test_a": sim_strip_structure}
+                numerical_structures = {"test_a": numerical_structure}
+                batch_data = run_async_custom(
+                    sims,
+                    numerical_structures=numerical_structures,
+                    local_gradient=True,
+                )
+            else:
+                batch_data["test_a"] = run_custom(
+                    sim_strip_structure,
+                    numerical_structures=numerical_structure,
+                    local_gradient=True,
+                )
+
+            value = 0.0
+            for _, sim_data in batch_data.items():
+                value += postprocess(sim_data)
+            return value
+
+        return objective
+
+    numerical_val = 1.0
+    numerical_val_scale = 10.0 * numerical_val
+
+    val, grad = ag.value_and_grad(make_objective(numerical_val))(params0)
+    val_scale, grad_scale = ag.value_and_grad(make_objective(numerical_val_scale))(params0)
+
+    assert np.isclose(
+        np.sum(np.abs(grad * (numerical_val_scale / numerical_val) - grad_scale)), 0.0
+    ), "Gradients were not set by numerical_structures"
+
+
+@pytest.mark.parametrize("use_run_async", [True, False])
+def test_autograd_numerical_structures_remote_gradient_unsupported(
+    use_emulated_run,
+    use_run_async,
+):
+    """numerical_structures should raise when local_gradient=False."""
+
+    fn_dict = get_functions("polyslab", "mode")
+    make_sim = fn_dict["sim"]
+
+    polyslab_axis = 0
+    polyslab_numerical_vjp = make_polyslab_numerical_vjp(1.0)
+
+    def objective(*args):
+        static_args = [get_static(arg) for arg in args]
+        base_sim = make_sim(*static_args, polyslab_axis=polyslab_axis)
+        structures = [
+            structure
+            for structure in base_sim.structures
+            if not isinstance(structure.geometry, td.PolySlab)
+        ]
+        sim_strip_structure = base_sim.updated_copy(structures=structures)
+
+        numerical_structure = NumericalStructureConfig(
+            create=lambda params: make_polyslab_from_params(params, polyslab_axis),
+            compute_derivatives=polyslab_numerical_vjp,
+            parameters=np.array(args).flatten(),
+        )
+
+        if use_run_async:
+            run_async_custom(
+                {"test_a": sim_strip_structure},
+                numerical_structures={"test_a": numerical_structure},
+                local_gradient=False,
+            )
+        else:
+            run_custom(
+                sim_strip_structure,
+                numerical_structures=numerical_structure,
+                local_gradient=False,
+            )
+
+        return 0.0
+
+    with pytest.raises(
+        td.exceptions.AdjointError,
+        match="numerical_structures specified for a remote gradient not supported.",
+    ):
+        ag.value_and_grad(objective)(params0)
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
@@ -1144,23 +1350,33 @@ def test_autograd_error_custom_vjp_indices_and_paths(
     val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
-@pytest.mark.parametrize("use_run_async", [True, False])
-@pytest.mark.parametrize("error_type", ["num_args", "arg_name"])
-def test_autograd_error_custom_vjp_function(
-    use_emulated_run,
-    structure_key,
-    monitor_key,
-    use_run_async,
-    error_type,
-):
-    """Test error checking for custom_vjp when compute_derivatives function signature is wrong."""
+def test_custom_vjp_rejects_numerical_namespace_structure_indices():
+    """Custom VJP indices must come from original structures namespace only."""
 
-    fn_dict = get_functions(structure_key, monitor_key)
-    make_sim = fn_dict["sim"]
-    postprocess = fn_dict["postprocess"]
+    def custom_vjp_fn(target, derivative_info):
+        return {}
 
-    task_names = ["test_a", "adjoint", "_test"]
+    traced_fields = {
+        ("structures", 0, "geometry", "vertices"): 1.0,
+        ("numerical", 1, 0): 2.0,
+    }
+    custom_vjp = (
+        CustomVJPConfig(
+            structure=1,  # present only in numerical namespace
+            compute_derivatives=custom_vjp_fn,
+            path_key=None,
+        ),
+    )
+
+    with pytest.raises(
+        td.exceptions.AdjointError,
+        match="CustomVJPConfig structure index 1 not in traced structure indices.",
+    ):
+        autograd_module.verify_custom_vjp(custom_vjp, traced_fields)
+
+
+def test_autograd_error_custom_vjp_function():
+    """Test construction-time error checking for custom_vjp signature."""
 
     def polyslab_custom_vjp_bad_num_args(polyslab, derivative_info, extra_arg):
         return {}
@@ -1168,55 +1384,26 @@ def test_autograd_error_custom_vjp_function(
     def polyslab_custom_vjp_bad_arg_name(polyslab, d_info):
         return {}
 
-    choose_compute_derivatives = (
-        polyslab_custom_vjp_bad_num_args
-        if (error_type == "num_args")
-        else polyslab_custom_vjp_bad_arg_name
-    )
-    error_msg = (
-        (
-            "CustomVJPConfig compute_derivatives function should accept two arguments and it currently accepts 3 arguments."
-        )
-        if (error_type == "num_args")
-        else (
-            "CustomVJPConfig compute_derivatives function second argument name is d_info but it should be derivative_info."
-        )
-    )
-
-    def make_objective(custom_vjp_val):
-        polyslab_custom_vjp = make_polyslab_custom_vjp(custom_vjp_val)
-
-        custom_vjp = CustomVJPConfig(
-            structure=td.PolySlab, compute_derivatives=choose_compute_derivatives
+    with pytest.raises(
+        td.exceptions.AdjointError,
+        match="CustomVJPConfig compute_derivatives function should accept two arguments and it currently accepts 3 arguments.",
+    ):
+        CustomVJPConfig(
+            structure=td.PolySlab,
+            compute_derivatives=polyslab_custom_vjp_bad_num_args,
         )
 
-        def objective(*args):
-            sims = {task_name: make_sim(*args, polyslab_axis=0) for task_name in task_names}
-
-            batch_data = {}
-            if use_run_async:
-                with pytest.raises(td.exceptions.AdjointError, match=error_msg):
-                    batch_data = run_async_custom(sims, custom_vjp=custom_vjp, local_gradient=True)
-            else:
-                for task_name, sim in sims.items():
-                    with pytest.raises(td.exceptions.AdjointError, match=error_msg):
-                        batch_data[task_name] = run_custom(
-                            sim,
-                            task_name,
-                            custom_vjp=custom_vjp,
-                            local_gradient=True,
-                        )
-
-            value = 0.0
-
-            for _, sim_data in batch_data.items():
-                value += postprocess(sim_data)
-            return value
-
-        return objective
-
-    custom_vjp_val = 1.0
-    val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+    with pytest.raises(
+        td.exceptions.AdjointError,
+        match=(
+            "CustomVJPConfig compute_derivatives function second argument name is d_info "
+            "but it should be derivative_info."
+        ),
+    ):
+        CustomVJPConfig(
+            structure=td.PolySlab,
+            compute_derivatives=polyslab_custom_vjp_bad_arg_name,
+        )
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import xarray as xr
@@ -17,14 +17,14 @@ from tidy3d.packaging import disable_local_subpixel
 from .utils import E_to_D, get_derivative_maps
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Optional, Union
+    from typing import Callable, Optional, Union
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
     from tidy3d.components.geometry.base import Box
     from tidy3d.components.geometry.utils import GeometryType
 
-    from .types import CustomVJPConfig
+    from .types import CustomVJPConfig, NumericalStructureConfig
 
 
 def setup_adj(
@@ -130,18 +130,17 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
+    numerical_structure_map: Optional[dict[int, NumericalStructureConfig]] = None,
     custom_vjp: Optional[tuple[CustomVJPConfig, ...]] = None,
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
     def get_all_paths(match_structure_index: int) -> tuple[tuple[str, str, int]]:
-        """Get all the paths that may appear in autograd for this structure index. This allows a
-        custom_vjp to be called for all autograd paths for the structure.
-        """
+        """Get all autograd paths for a structure index for custom_vjp path matching."""
         all_paths = tuple(
             tuple(structure_path)
             for namespace, structure_index_, *structure_path in sim_fields_keys
-            if structure_index_ == match_structure_index
+            if (namespace == "structures") and (structure_index_ == match_structure_index)
         )
 
         return all_paths
@@ -159,19 +158,56 @@ def postprocess_adj(
             else:
                 custom_vjp_lookup.setdefault(structure_index, {})[path] = vjp_fn
 
-    # map of index into 'structures' to the paths we need VJPs for
+    # map of index into 'structures' and 'numerical' to the paths we need VJPs for
     sim_vjp_map: defaultdict[int, list[tuple[Any, ...]]] = defaultdict(list)
+    numerical_vjp_map: defaultdict[int, list[tuple[Any, ...]]] = defaultdict(list)
     for namespace, structure_index, *structure_path in sim_fields_keys:
         structure_path = tuple(structure_path)
         if namespace == "structures":
             sim_vjp_map[structure_index].append(structure_path)
+        elif namespace == "numerical":
+            numerical_vjp_map[structure_index].append(structure_path)
+
+    numerical_structure_map = numerical_structure_map or {}
+
+    def lookup_numerical_structure(structure_index: int) -> NumericalStructureConfig:
+        numerical_structure = numerical_structure_map.get(structure_index)
+        if numerical_structure is None:
+            raise AdjointError(
+                "No NumericalStructureConfig found for numerical structure index "
+                f"{structure_index}. Available indices: {sorted(numerical_structure_map.keys())}."
+            )
+        return numerical_structure
 
     # store the derivative values given the forward and adjoint data
     sim_fields_vjp = {}
-    all_structure_indices = sorted(set(sim_vjp_map.keys()))
+    all_structure_indices = tuple(dict.fromkeys((*sim_vjp_map.keys(), *numerical_vjp_map.keys())))
 
     for structure_index in all_structure_indices:
         structure_paths = tuple(sim_vjp_map.get(structure_index, ()))
+
+        use_numerical_vjp = structure_index in numerical_vjp_map
+        if structure_paths and use_numerical_vjp:
+            raise AdjointError(
+                "Invalid autograd field mapping: structure index "
+                f"{structure_index} has both 'structures' and 'numerical' traced paths. "
+                "A structure index must be handled by exactly one VJP path."
+            )
+
+        numerical_paths_raw = numerical_vjp_map.get(structure_index, ())
+        numerical_paths_ordered: tuple[tuple, ...] = ()
+        numerical_value_map: dict[tuple, Any] = {}
+        numerical_vjp_fn = None
+        numerical_params_static: Any = ()
+
+        if use_numerical_vjp:
+            numerical_structure = lookup_numerical_structure(structure_index)
+
+            numerical_vjp_fn = numerical_structure.compute_derivatives
+            numerical_params_static = np.asarray(
+                [get_static(param) for param in numerical_structure.parameters]
+            )
+            numerical_paths_ordered = tuple(numerical_paths_raw)
 
         # grab the forward and adjoint data
         fld_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
@@ -430,10 +466,9 @@ def postprocess_adj(
                 updated_epsilon_full=updated_epsilon_full,
             )
 
-            if structure_paths:
-                # create derivative info with sliced data
-                derivative_info_struct = DerivativeInfo(
-                    paths=structure_paths,
+            if structure_paths or use_numerical_vjp:
+                derivative_info = DerivativeInfo(
+                    paths=structure_paths if structure_paths else numerical_paths_ordered,
                     E_der_map=E_der_map_chunk,
                     D_der_map=D_der_map_chunk,
                     H_der_map=H_der_map_chunk,
@@ -456,8 +491,10 @@ def postprocess_adj(
                     and structure.background_medium.is_pec,
                 )
 
+            if structure_paths:
+                # create derivative info with sliced data
                 vjp_fns = custom_vjp_lookup.get(structure_index)
-                vjp_chunk = structure._compute_derivatives(derivative_info_struct, vjp_fns=vjp_fns)
+                vjp_chunk = structure._compute_derivatives(derivative_info, vjp_fns=vjp_fns)
 
                 for path, value in vjp_chunk.items():
                     if path in vjp_value_map:
@@ -471,9 +508,48 @@ def postprocess_adj(
                     else:
                         vjp_value_map[path] = value
 
+            if use_numerical_vjp:
+                gradients = numerical_vjp_fn(
+                    numerical_params_static, derivative_info=derivative_info
+                )
+
+                if not isinstance(gradients, dict):
+                    raise AdjointError(
+                        "Numerical structure VJP function must return a dict mapping paths to gradients."
+                    )
+
+                missing_paths = set(numerical_paths_ordered) - set(gradients.keys())
+                if missing_paths:
+                    raise AdjointError(
+                        "Numerical structure VJP function did not return gradients for paths: "
+                        f"{sorted(missing_paths)}."
+                    )
+
+                gradient_items = ((path, gradients.get(path)) for path in numerical_paths_ordered)
+
+                for path, grad_value in gradient_items:
+                    if grad_value is None:
+                        continue
+                    if path in numerical_value_map:
+                        existing = numerical_value_map[path]
+                        if isinstance(existing, (list, tuple)) and isinstance(
+                            grad_value, (list, tuple)
+                        ):
+                            numerical_value_map[path] = type(existing)(
+                                x + y for x, y in zip(existing, grad_value)
+                            )
+                        else:
+                            numerical_value_map[path] = existing + grad_value
+                    else:
+                        numerical_value_map[path] = grad_value
+
         # store vjps in output map
         for structure_path, vjp_value in vjp_value_map.items():
             sim_path = ("structures", structure_index, *list(structure_path))
             sim_fields_vjp[sim_path] = vjp_value
+
+        for numerical_path, gradient_value in numerical_value_map.items():
+            sim_path = ("numerical", structure_index, *list(numerical_path))
+            sim_fields_vjp[sim_path] = gradient_value
 
     return sim_fields_vjp

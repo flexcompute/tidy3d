@@ -10,6 +10,7 @@ from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponent
 from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.web import Batch
+from tidy3d.web.api.autograd.types import CustomVJPConfig, NumericalStructureConfig
 
 if TYPE_CHECKING:
     from typing import Optional, Union
@@ -17,7 +18,6 @@ if TYPE_CHECKING:
     from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
     from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
     from tidy3d.web import BatchData
-    from tidy3d.web.api.autograd.types import CustomVJPConfig
 
 DEFAULT_DATA_DIR = "."
 
@@ -121,7 +121,10 @@ def create_batch(
 def _run_local(
     modeler: ComponentModelerType,
     path_dir: str = DEFAULT_DATA_DIR,
-    custom_vjp: Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig]]] = None,
+    numerical_structures: Optional[
+        Union[NumericalStructureConfig, tuple[NumericalStructureConfig, ...]]
+    ] = None,
+    custom_vjp: Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig, ...]]] = None,
     **kwargs: Any,
 ) -> ComponentModelerDataType:
     """Execute the full simulation workflow for a given component modeler.
@@ -137,7 +140,10 @@ def _run_local(
         The component modeler defining the simulations to be run.
     path_dir : str, optional
         The directory where the batch file will be saved. Defaults to ".".
-    custom_vjp : Union[CustomVJPConfig, tuple[CustomVJPConfig]] = None
+    numerical_structures : Union[NumericalStructureConfig, tuple[NumericalStructureConfig, ...]] = None
+        Specification of additional structures to add to the base simulation that can be traced via
+        autograd. This can be a single structure or multiple structures specified in a tuple.
+    custom_vjp : Union[CustomVJPConfig, tuple[CustomVJPConfig, ...]] = None
         Specification of alternate gradient function for certain structures in the simulation.
         This can be a single vjp configuration or multiple specified in a tuple.
     **kwargs
@@ -152,12 +158,18 @@ def _run_local(
 
     # autograd path if any sim is valid for autograd
     from tidy3d.web.api.autograd import autograd as web_ag
-    from tidy3d.web.api.autograd.autograd import expand_custom_vjp
-    from tidy3d.web.api.autograd.types import CustomVJPConfig
 
     sims = modeler.sim_dict
 
-    should_use_autograd = any(web_ag.is_valid_for_autograd(sim) for sim in sims.values())
+    if isinstance(numerical_structures, NumericalStructureConfig):
+        numerical_structures = (numerical_structures,)
+
+    traced_numerical_structures = numerical_structures and web_ag.has_traced_numerical_structures(
+        numerical_structures
+    )
+    should_use_autograd = traced_numerical_structures or any(
+        web_ag.is_valid_for_autograd(sim) for sim in sims.values()
+    )
 
     if should_use_autograd:
         if len(modeler.element_mappings) > 0:
@@ -169,7 +181,7 @@ def _run_local(
                 log_once=True,
             )
 
-        from tidy3d.web.api.autograd.autograd import _run_async
+        from tidy3d.web.api.autograd.autograd import _run_async, expand_custom_vjp
 
         kwargs.setdefault("folder_name", "default")
         kwargs.setdefault("simulation_type", "tidy3d_autograd_async")
@@ -181,10 +193,15 @@ def _run_local(
             if custom_vjp is not None:
                 raise AdjointError("custom_vjp specified for a remote gradient not supported.")
 
+            if traced_numerical_structures:
+                raise AdjointError(
+                    "ComponentModeler autograd with traced numerical structures requires local_gradient=True."
+                )
+
+        expanded_custom_vjp_dict = None
         if isinstance(custom_vjp, CustomVJPConfig):
             custom_vjp = (custom_vjp,)
 
-        expanded_custom_vjp_dict = None
         if custom_vjp:
             custom_vjp = dict.fromkeys(sims, custom_vjp)
             expanded_custom_vjp_dict = {}
@@ -193,13 +210,25 @@ def _run_local(
                     custom_vjp_entry, sims[sim_key]
                 )
 
+        if numerical_structures:
+            web_ag.validate_numerical_structure_parameters(numerical_structures)
+            numerical_structures = dict.fromkeys(sims, numerical_structures)
+
         sim_data_map = _run_async(
             simulations=sims,
+            numerical_structures=numerical_structures,
             custom_vjp=expanded_custom_vjp_dict,
             **kwargs,
         )
 
         return compose_modeler_data_from_batch_data(modeler=modeler, batch_data=sim_data_map)
+
+    if numerical_structures is not None:
+        modeler = modeler.updated_copy(
+            simulation=web_ag.insert_numerical_structures_static(
+                simulation=modeler.simulation, numerical_structures=numerical_structures
+            )
+        )
 
     # Filter kwargs to only include valid Batch parameters
     batch_kwargs = {

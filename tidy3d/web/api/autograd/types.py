@@ -1,28 +1,136 @@
 from __future__ import annotations
 
+import inspect
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, NamedTuple, Optional, Union
+
+import numpy as np
+
+from tidy3d.exceptions import AdjointError
 
 if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.medium import MediumType
     from tidy3d.components.simulation import Simulation
+    from tidy3d.components.types import ArrayLike
+
+
+@dataclass
+class NumericalStructureConfig:
+    """Configuration for numerical structure insertion and custom numerical gradients.
+
+    Example
+    -------
+    .. code-block:: python
+
+        import numpy as np
+        import tidy3d as td
+        from tidy3d.web.api.autograd.types import NumericalStructureConfig
+
+        def create_cylinder(parameters):
+            radius, length = parameters
+            geometry = td.Cylinder(center=(0, 0, 0), radius=radius, length=length, axis=2)
+            return td.Structure(geometry=geometry, medium=td.Medium(permittivity=2.25))
+
+        def cylinder_vjp(parameters, derivative_info):
+            # Return gradient values keyed by derivative paths in derivative_info.paths.
+            return {path: 0.0 for path in derivative_info.paths}
+
+        numerical_structure = NumericalStructureConfig(
+            create=create_cylinder,
+            compute_derivatives=cylinder_vjp,
+            parameters=np.array([0.5, 0.2]),
+        )
+    """
+
+    create: Callable
+    """Function that creates the structure from static ``parameters``."""
+
+    compute_derivatives: Callable
+    """Function that computes numerical gradients for ``("numerical", index, param_i)`` paths.
+    Signature: ``compute_derivatives(parameters, derivative_info) -> dict[path, gradient]``.
+    """
+
+    parameters: ArrayLike
+    """1D parameter vector consumed by ``create`` and ``compute_derivatives``."""
+
+    def __post_init__(self) -> None:
+        if not callable(self.create):
+            raise AdjointError("NumericalStructureConfig.create must be callable.")
+        if not callable(self.compute_derivatives):
+            raise AdjointError("NumericalStructureConfig.compute_derivatives must be callable.")
+
+        create_sig = inspect.signature(self.create)
+        create_arg_names = list(create_sig.parameters.keys())
+        if len(create_arg_names) != 1:
+            raise AdjointError(
+                "NumericalStructureConfig.create should accept one argument "
+                "(the parameters vector used for structure creation), and it currently "
+                f"accepts {len(create_arg_names)} arguments."
+            )
+
+        vjp_sig = inspect.signature(self.compute_derivatives)
+        vjp_arg_names = list(vjp_sig.parameters.keys())
+        if len(vjp_arg_names) != 2:
+            raise AdjointError(
+                "NumericalStructureConfig.compute_derivatives should accept two arguments "
+                "(parameters, derivative_info), and it currently accepts "
+                f"{len(vjp_arg_names)} arguments. The parameters were the values used for "
+                "strucure creation and the derivative_info contains relevant information for "
+                "computing the vjp."
+            )
+        if vjp_arg_names[1] != "derivative_info":
+            raise AdjointError(
+                "NumericalStructureConfig.compute_derivatives second argument name is "
+                f"{vjp_arg_names[1]} but it should be derivative_info."
+            )
+
+        try:
+            array_params = np.asarray(self.parameters)
+        except Exception as exc:
+            raise AdjointError(
+                "NumericalStructureConfig.parameters must be array-like (e.g., list, tuple, "
+                "numpy array, or compatible autograd array-like)."
+            ) from exc
+
+        if array_params.ndim != 1:
+            raise AdjointError("Parameters for each numerical structure must be 1D array-like.")
 
 
 @dataclass
 class CustomVJPConfig:
+    """Configuration for overriding gradients on existing traced structure paths.
+
+    Example
+    -------
+    .. code-block:: python
+
+        import tidy3d as td
+        from tidy3d.web.api.autograd.types import CustomVJPConfig
+
+        def polyslab_vjp(polyslab, derivative_info):
+            # Return gradient values keyed by derivative paths in derivative_info.paths.
+            return {path: 0.0 for path in derivative_info.paths}
+
+        custom_vjp = CustomVJPConfig(
+            structure=1,
+            compute_derivatives=polyslab_vjp,
+            path_key=("geometry", "vertices"),
+        )
+    """
+
     structure: Union[int, type[GeometryType], type[MediumType]]
-    """Index for structure to replace vjp or specification of geometry or medium type. If a type is provided,
-    the custom vjp will be applied to all structures in the simulation with the geometry or medium type.
+    """Target existing traced structure(s) in ``("structures", ...)`` namespace.
+    Can be an index or a geometry/medium type (expanded to matching indices).
     """
 
     compute_derivatives: Callable
     """Function for computing the targeted vjp value. The function should accept the geometry or medium in the
     structure depending on if this is a geometry or medium path (see path_key) as the first argument. The second
-    argument should be named derivative_info and accept a DerivativeInfo object that contains important for computing
-    the gradient. The function should return a dict object that maps the path to the computed gradient value.
+    argument should accept a DerivativeInfo object that contains important for computing the gradient. The function
+    should return a dict object that maps the path to the computed gradient value.
     """
 
     path_key: Optional[tuple[str, ...]] = None
@@ -31,6 +139,23 @@ class CustomVJPConfig:
     (i.e. - ('medium', 'permittivity') will target the permittivity variable in the structure's medium). If not
     specified or set to None, the supplied function applies for all possible vjp paths.
     """
+
+    def __post_init__(self) -> None:
+        if not callable(self.compute_derivatives):
+            raise AdjointError("CustomVJPConfig.compute_derivatives must be callable.")
+
+        vjp_sig = inspect.signature(self.compute_derivatives)
+        vjp_arg_names = list(vjp_sig.parameters.keys())
+        if len(vjp_arg_names) != 2:
+            raise AdjointError(
+                "CustomVJPConfig compute_derivatives function should accept two arguments "
+                f"and it currently accepts {len(vjp_arg_names)} arguments."
+            )
+        if vjp_arg_names[1] != "derivative_info":
+            raise AdjointError(
+                "CustomVJPConfig compute_derivatives function second argument name is "
+                f"{vjp_arg_names[1]} but it should be derivative_info."
+            )
 
 
 CustomVJPSpec = Union[
@@ -45,3 +170,4 @@ CustomVJPSpec = Union[
 class SetupRunResult(NamedTuple):
     sim_fields: AutogradFieldMap
     simulation: Simulation
+    numerical_structure_map: dict[int, NumericalStructureConfig]
