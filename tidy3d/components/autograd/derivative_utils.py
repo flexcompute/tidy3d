@@ -132,6 +132,9 @@ class DerivativeInfo:
     frequencies: ArrayLike
     """Frequencies at which the adjoint gradient should be computed."""
 
+    updated_epsilon: Callable
+    """Function to return the permittivity upon geometry replacement in the simulation."""
+
     # Optional fields with defaults
 
     H_der_map: Optional[FieldDataDict] = None

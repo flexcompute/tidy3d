@@ -25,6 +25,9 @@ def _make_derivative_info(freqs, paths):
         bounds=((-1, -1, -1), (1, 1, 1)),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0 for f in freqs]]]], coords={"x": [0], "y": [0], "z": [0], "f": list(freqs)}
+        ),
     )
 
 
