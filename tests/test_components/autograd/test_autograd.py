@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import cProfile
+import re
 import typing
 import warnings
 from contextlib import nullcontext
@@ -33,8 +34,12 @@ from tidy3d.components.geometry.primitives import discretization_wavelength
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
 from tidy3d.plugins.polyslab import ComplexPolySlab
+from tidy3d.plugins.smatrix import ComponentModeler, Port
+from tidy3d.plugins.smatrix.run import _run_local
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd import autograd as autograd_module
+from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom
+from tidy3d.web.api.autograd.types import CustomVJPConfig
 
 from ...utils import SIM_FULL, AssertLogLevel, custom_poleresidue_u, run_emulated, tracer_arr
 
@@ -117,6 +122,9 @@ def _make_di(paths, freq):
         ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
     )
 
 
@@ -132,6 +140,7 @@ LZ = 7.0 * WVL
 
 IS_3D = False
 POLYSLAB_AXIS = 2
+POLYSLAB_SELECT_VERTICES = 0
 
 # angle of the measurement waveguide
 ROT_ANGLE_WG = 0 * np.pi / 4
@@ -255,7 +264,6 @@ def use_emulated_run(monkeypatch):
 
         def emulated_run_bwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d_bwd``."""
-
             task_name_fwd = "".join(task_name.partition("_adjoint")[:-2])
 
             # run the adjoint sim
@@ -275,6 +283,7 @@ def use_emulated_run(monkeypatch):
                 sim_data_orig=sim_data_orig,
                 sim_data_fwd=sim_data_fwd,
                 sim_fields_keys=sim_fields_keys,
+                custom_vjp=None,
             )
 
             return traced_fields_vjp
@@ -322,7 +331,9 @@ def use_emulated_run(monkeypatch):
         return emulated_run_fwd, emulated_run_bwd
 
 
-def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
+def make_structures(
+    params: anp.ndarray, polyslab_axis: int = POLYSLAB_AXIS
+) -> dict[str, td.Structure]:
     """Make a dictionary of the structures given the parameters."""
 
     np.random.seed(0)
@@ -422,8 +433,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     matrix = np.random.random((N_PARAMS,)) - 0.5
     params_01 = 0.5 * (anp.tanh(matrix @ params / 3) + 1)
 
-    free_param = "vertices" if POLYSLAB_AXIS == 0 else "slab_bounds"
-
+    free_param = "vertices" if polyslab_axis == POLYSLAB_SELECT_VERTICES else "slab_bounds"
     if free_param == "vertices":
         radii = 0.5 + 0.5 * params_01
         slab_bounds = (-0.5, 0.5)
@@ -431,8 +441,6 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         radii = 1.0
         shift = 0.1 * params_01
         slab_bounds = (-0.5 + shift, 0.5 + shift)
-        # slab_bounds = (-0.5 + shift, 0.5)
-        # slab_bounds = (-0.5, 0.5 + shift)
 
     phis = 2 * anp.pi * anp.linspace(0, 1, NUM_VERTICES + 1)[:NUM_VERTICES]
     xs = radii * anp.cos(phis)
@@ -443,7 +451,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         geometry=td.PolySlab(
             vertices=vertices,
             slab_bounds=slab_bounds,
-            axis=POLYSLAB_AXIS,
+            axis=polyslab_axis,
             sidewall_angle=0.00,
             dilation=0.00,
         ),
@@ -454,7 +462,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         geometry=td.PolySlab(
             vertices=vertices,
             slab_bounds=slab_bounds,
-            axis=POLYSLAB_AXIS,
+            axis=polyslab_axis,
             sidewall_angle=0.00,
             dilation=0.00,
         ),
@@ -714,9 +722,6 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-# args = [("polyslab", "mode")]
-
-
 def get_functions(structure_key: str, monitor_key: str) -> dict[str, typing.Callable]:
     if structure_key == ALL_KEY:
         structure_keys = structure_keys_
@@ -737,10 +742,10 @@ def get_functions(structure_key: str, monitor_key: str) -> dict[str, typing.Call
         monitors.append(monitor_traced)
         monitor_pp_fns[monitor_key] = monitor_pp_fn
 
-    def make_sim(*args) -> td.Simulation:
+    def make_sim(*args, polyslab_axis=POLYSLAB_AXIS) -> td.Simulation:
         """Make the simulation with all of the fields."""
 
-        structures_traced_dict = make_structures(*args)
+        structures_traced_dict = make_structures(*args, polyslab_axis=polyslab_axis)
 
         structures = list(SIM_BASE.structures)
         for structure_key in structure_keys:
@@ -781,6 +786,536 @@ def test_polyslab_axis_ops(axis):
     edges = vertices_next - vertices
 
     basis_vecs = p.edge_basis_vectors(edges=edges)
+
+
+def make_polyslab_custom_vjp(custom_vjp_val):
+    def polyslab_custom_vjp(polyslab, derivative_info):
+        vjps = {}
+
+        for path in derivative_info.paths:
+            if path[0:2] == ("geometry", "vertices"):
+                vjps[path] = custom_vjp_val * np.ones(polyslab.vertices.shape)
+            elif path[0:2] == ("geometry", "slab_bounds"):
+                if len(path) == 3:
+                    vjps[path] = (custom_vjp_val, custom_vjp_val)[path[2]]
+                else:
+                    vjps[path] = (custom_vjp_val, custom_vjp_val)
+
+        return vjps
+
+    return polyslab_custom_vjp
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
+@pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
+@pytest.mark.parametrize("use_run_async", [True, False])
+@pytest.mark.parametrize("use_task_names", [True, False])
+@pytest.mark.parametrize("use_single_custom_vjp", [True, False])
+@pytest.mark.parametrize("specify_custom_vjp_by_type", [True, False])
+@pytest.mark.parametrize("local_gradient", [True, False])
+def test_autograd_custom_vjp(
+    use_emulated_run,
+    structure_key,
+    monitor_key,
+    polyslab_axis,
+    use_run_async,
+    use_task_names,
+    use_single_custom_vjp,
+    specify_custom_vjp_by_type,
+    local_gradient,
+):
+    """Test that we can override a vjp with a user defined function."""
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    task_names = ["test_a", "adjoint", "_test"]
+
+    def make_objective(custom_vjp_val):
+        polyslab_custom_vjp = make_polyslab_custom_vjp(custom_vjp_val)
+
+        structure_index = td.PolySlab if specify_custom_vjp_by_type else 1
+
+        path_key = (
+            "geometry",
+            "vertices" if polyslab_axis == POLYSLAB_SELECT_VERTICES else "slab_bounds",
+        )
+
+        custom_vjp_tuple = (
+            CustomVJPConfig(
+                structure=structure_index,
+                compute_derivatives=polyslab_custom_vjp,
+                path_key=path_key,
+            ),
+        )
+
+        custom_vjp_single = CustomVJPConfig(
+            structure=structure_index,
+            compute_derivatives=polyslab_custom_vjp,
+        )
+
+        custom_vjp_element = custom_vjp_single if use_single_custom_vjp else custom_vjp_tuple
+
+        def objective(*args):
+            if use_task_names:
+                sims = {
+                    task_name: make_sim(*args, polyslab_axis=polyslab_axis)
+                    for task_name in task_names
+                }
+                custom_vjp = dict.fromkeys(sims.keys(), custom_vjp_element)
+            else:
+                sims = [make_sim(*args, polyslab_axis=polyslab_axis)] * len(task_names)
+                custom_vjp = [custom_vjp_element] * len(task_names)
+            batch_data = {}
+            if use_run_async:
+                batch_data = run_async_custom(
+                    sims, custom_vjp=custom_vjp, local_gradient=local_gradient
+                )
+            else:
+                if use_task_names:
+                    for task_name, sim in sims.items():
+                        batch_data[task_name] = run_custom(
+                            sim,
+                            task_name,
+                            custom_vjp=custom_vjp[task_name],
+                            local_gradient=local_gradient,
+                        )
+                else:
+                    for idx, sim in enumerate(sims):
+                        batch_data[idx] = run_custom(
+                            sim, custom_vjp=custom_vjp[idx], local_gradient=local_gradient
+                        )
+
+            value = 0.0
+
+            for _, sim_data in batch_data.items():
+                value += postprocess(sim_data)
+            return value
+
+        return objective
+
+    custom_vjp_val = 1.0
+    custom_vjp_val_scale = 10.0 * custom_vjp_val
+
+    if not local_gradient:
+        with pytest.raises(
+            td.exceptions.AdjointError,
+            match="custom_vjp specified for a remote gradient not supported.",
+        ):
+            val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+    else:
+        val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+        val_scale, grad_scale = ag.value_and_grad(make_objective(custom_vjp_val_scale))(params0)
+
+        assert np.isclose(
+            np.sum(np.abs(grad * (custom_vjp_val_scale / custom_vjp_val) - grad_scale)), 0.0
+        ), "Gradients were not set by the user vjp"
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
+@pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
+@pytest.mark.parametrize("use_run_async", [True, False])
+@pytest.mark.parametrize("use_task_names", [True, False])
+@pytest.mark.parametrize("use_single_custom_vjp", [True, False])
+def test_autograd_custom_vjp_selective(
+    use_emulated_run,
+    structure_key,
+    monitor_key,
+    polyslab_axis,
+    use_run_async,
+    use_task_names,
+    use_single_custom_vjp,
+):
+    """Test that we can selectively override a vjp with a user defined function that covers some of, but not all, gradient keys."""
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    task_names = ["test_a", "adjoint", "_test"]
+
+    def make_objective(custom_vjp_val):
+        polyslab_custom_vjp = make_polyslab_custom_vjp(custom_vjp_val)
+
+        custom_vjp_tuple = (
+            CustomVJPConfig(
+                structure=1,
+                compute_derivatives=polyslab_custom_vjp,
+                path_key=(
+                    (
+                        "geometry",
+                        "vertices",
+                    )
+                ),
+            ),
+        )
+
+        custom_vjp_single = CustomVJPConfig(
+            structure=1,
+            compute_derivatives=polyslab_custom_vjp,
+            path_key=(
+                (
+                    "geometry",
+                    "vertices",
+                )
+            ),
+        )
+
+        custom_vjp_element = custom_vjp_single if use_single_custom_vjp else custom_vjp_tuple
+        if not (polyslab_axis == POLYSLAB_SELECT_VERTICES):
+            custom_vjp_element = None
+
+        def objective(*args):
+            if custom_vjp_element:
+                if use_task_names:
+                    custom_vjp = dict.fromkeys(task_names, custom_vjp_element)
+                else:
+                    sims = [make_sim(*args, polyslab_axis=polyslab_axis)] * len(task_names)
+                    custom_vjp = [custom_vjp_element] * len(task_names)
+            else:
+                custom_vjp = None
+
+            if use_task_names:
+                sims = {
+                    task_name: make_sim(*args, polyslab_axis=polyslab_axis)
+                    for task_name in task_names
+                }
+            else:
+                sims = [make_sim(*args, polyslab_axis=polyslab_axis)] * len(task_names)
+
+            batch_data = {}
+            if use_run_async:
+                batch_data = run_async_custom(sims, custom_vjp=custom_vjp, local_gradient=True)
+            else:
+                if use_task_names:
+                    for task_name, sim in sims.items():
+                        batch_data[task_name] = run_custom(
+                            sim,
+                            task_name,
+                            custom_vjp=custom_vjp and custom_vjp[task_name],
+                            local_gradient=True,
+                        )
+                else:
+                    for idx, sim in enumerate(sims):
+                        batch_data[idx] = run_custom(
+                            sim, custom_vjp=custom_vjp and custom_vjp[idx], local_gradient=True
+                        )
+
+            value = 0.0
+
+            for _, sim_data in batch_data.items():
+                value += postprocess(sim_data)
+            return value
+
+        return objective
+
+    custom_vjp_val = 1.0
+    custom_vjp_val_scale = 10.0 * custom_vjp_val
+
+    val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+    val_scale, grad_scale = ag.value_and_grad(make_objective(custom_vjp_val_scale))(params0)
+
+    if polyslab_axis == POLYSLAB_SELECT_VERTICES:
+        assert np.isclose(
+            np.sum(np.abs(grad * (custom_vjp_val_scale / custom_vjp_val) - grad_scale)), 0.0
+        ), "Gradients were not set by the user vjp when they should have been"
+    else:
+        assert not np.isclose(
+            np.sum(np.abs(grad * (custom_vjp_val_scale / custom_vjp_val) - grad_scale)), 0.0
+        ), "Gradients were set by the user vjp when they should not have been"
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
+@pytest.mark.parametrize("use_run_async", [True, False])
+def test_autograd_error_custom_vjp_indices_and_paths(
+    use_emulated_run,
+    structure_key,
+    monitor_key,
+    use_run_async,
+):
+    """Test error checking for custom_vjp when structure index or path does not
+    exist in traced vjp structure paths.
+    """
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    task_names = ["test_a", "adjoint", "_test"]
+    custom_vjp_paths = {
+        "test_a": ("geometry", "vertices"),
+        "adjoint": ("geometry", "vertices"),
+        "_test": ("geometry", "verslab"),
+    }
+    custom_vjp_structure_indices = {"test_a": 1, "adjoint": 5, "_test": 1}
+
+    def make_objective(custom_vjp_val):
+        polyslab_custom_vjp = make_polyslab_custom_vjp(custom_vjp_val)
+
+        custom_vjp_dict = {}
+        custom_vjp_dict_bad_structure_index = {}
+        custom_vjp_dict_bad_structure_path = {}
+        for task_name in task_names:
+            custom_vjp_dict[task_name] = CustomVJPConfig(
+                structure=custom_vjp_structure_indices[task_name],
+                compute_derivatives=polyslab_custom_vjp,
+                path_key=custom_vjp_paths[task_name],
+            )
+
+            custom_vjp_dict_bad_structure_index[task_name] = CustomVJPConfig(
+                structure=custom_vjp_structure_indices[task_name],
+                compute_derivatives=polyslab_custom_vjp,
+                path_key=("geometry", "vertices"),
+            )
+
+            custom_vjp_dict_bad_structure_path[task_name] = CustomVJPConfig(
+                structure=1,
+                compute_derivatives=polyslab_custom_vjp,
+                path_key=custom_vjp_paths[task_name],
+            )
+
+        def objective(*args):
+            sims = {task_name: make_sim(*args, polyslab_axis=0) for task_name in task_names}
+
+            batch_data = {}
+            if use_run_async:
+                with pytest.raises(
+                    td.exceptions.AdjointError,
+                    match=f"CustomVJPConfig structure index {custom_vjp_structure_indices['adjoint']} not in traced structure indices.",
+                ):
+                    batch_data = run_async_custom(
+                        sims, custom_vjp=custom_vjp_dict_bad_structure_index, local_gradient=True
+                    )
+                with pytest.raises(
+                    td.exceptions.AdjointError,
+                    match=re.escape(
+                        f"CustomVJPConfig path {custom_vjp_paths['_test']} not in traced structure paths"
+                    )
+                    + r".*",
+                ):
+                    batch_data = run_async_custom(
+                        sims, custom_vjp=custom_vjp_dict_bad_structure_path, local_gradient=True
+                    )
+            else:
+                for task_name, sim in sims.items():
+                    if task_name == "adjoint":
+                        with pytest.raises(
+                            td.exceptions.AdjointError,
+                            match=f"CustomVJPConfig structure index {custom_vjp_structure_indices[task_name]} not in traced structure indices.",
+                        ):
+                            batch_data[task_name] = run_custom(
+                                sim,
+                                task_name,
+                                custom_vjp=custom_vjp_dict[task_name],
+                                local_gradient=True,
+                            )
+
+                    elif task_name == "_test":
+                        with pytest.raises(
+                            td.exceptions.AdjointError,
+                            match=re.escape(
+                                f"CustomVJPConfig path {custom_vjp_paths[task_name]} not in traced structure paths"
+                            )
+                            + r".*",
+                        ):
+                            batch_data[task_name] = run_custom(
+                                sim,
+                                task_name,
+                                custom_vjp=custom_vjp_dict[task_name],
+                                local_gradient=True,
+                            )
+                    else:
+                        batch_data[task_name] = run_custom(
+                            sim,
+                            task_name,
+                            custom_vjp=custom_vjp_dict[task_name],
+                            local_gradient=True,
+                        )
+
+            value = 0.0
+
+            for _, sim_data in batch_data.items():
+                value += postprocess(sim_data)
+            return value
+
+        return objective
+
+    custom_vjp_val = 1.0
+    val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
+@pytest.mark.parametrize("use_run_async", [True, False])
+@pytest.mark.parametrize("error_type", ["num_args", "arg_name"])
+def test_autograd_error_custom_vjp_function(
+    use_emulated_run,
+    structure_key,
+    monitor_key,
+    use_run_async,
+    error_type,
+):
+    """Test error checking for custom_vjp when compute_derivatives function signature is wrong."""
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    task_names = ["test_a", "adjoint", "_test"]
+
+    def polyslab_custom_vjp_bad_num_args(polyslab, derivative_info, extra_arg):
+        return {}
+
+    def polyslab_custom_vjp_bad_arg_name(polyslab, d_info):
+        return {}
+
+    choose_compute_derivatives = (
+        polyslab_custom_vjp_bad_num_args
+        if (error_type == "num_args")
+        else polyslab_custom_vjp_bad_arg_name
+    )
+    error_msg = (
+        (
+            "CustomVJPConfig compute_derivatives function should accept two arguments and it currently accepts 3 arguments."
+        )
+        if (error_type == "num_args")
+        else (
+            "CustomVJPConfig compute_derivatives function second argument name is d_info but it should be derivative_info."
+        )
+    )
+
+    def make_objective(custom_vjp_val):
+        polyslab_custom_vjp = make_polyslab_custom_vjp(custom_vjp_val)
+
+        custom_vjp = CustomVJPConfig(
+            structure=td.PolySlab, compute_derivatives=choose_compute_derivatives
+        )
+
+        def objective(*args):
+            sims = {task_name: make_sim(*args, polyslab_axis=0) for task_name in task_names}
+
+            batch_data = {}
+            if use_run_async:
+                with pytest.raises(td.exceptions.AdjointError, match=error_msg):
+                    batch_data = run_async_custom(sims, custom_vjp=custom_vjp, local_gradient=True)
+            else:
+                for task_name, sim in sims.items():
+                    with pytest.raises(td.exceptions.AdjointError, match=error_msg):
+                        batch_data[task_name] = run_custom(
+                            sim,
+                            task_name,
+                            custom_vjp=custom_vjp,
+                            local_gradient=True,
+                        )
+
+            value = 0.0
+
+            for _, sim_data in batch_data.items():
+                value += postprocess(sim_data)
+            return value
+
+        return objective
+
+    custom_vjp_val = 1.0
+    val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
+@pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
+@pytest.mark.parametrize("run_function", [_run_local, run_custom])
+@pytest.mark.parametrize("use_single_custom_vjp", [True, False])
+@pytest.mark.parametrize("specify_custom_vjp_by_type", [True, False])
+@pytest.mark.parametrize("local_gradient", [True, False])
+def test_autograd_cm_custom_vjp(
+    use_emulated_run,
+    structure_key,
+    monitor_key,
+    polyslab_axis,
+    run_function,
+    use_single_custom_vjp,
+    specify_custom_vjp_by_type,
+    local_gradient,
+):
+    """Test that we can override a vjp with a user defined function in component modeler simulations."""
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def make_objective(custom_vjp_val):
+        polyslab_custom_vjp = make_polyslab_custom_vjp(custom_vjp_val)
+
+        structure_index = td.PolySlab if specify_custom_vjp_by_type else 1
+
+        path_key = (
+            "geometry",
+            "vertices" if polyslab_axis == POLYSLAB_SELECT_VERTICES else "slab_bounds",
+        )
+
+        custom_vjp_tuple = (
+            CustomVJPConfig(
+                structure=structure_index,
+                compute_derivatives=polyslab_custom_vjp,
+                path_key=path_key,
+            ),
+        )
+
+        custom_vjp_single = CustomVJPConfig(
+            structure=structure_index,
+            compute_derivatives=polyslab_custom_vjp,
+        )
+
+        custom_vjp_element = custom_vjp_single if use_single_custom_vjp else custom_vjp_tuple
+
+        def objective(*args):
+            base_sim = make_sim(*args, polyslab_axis=polyslab_axis)
+            find_mode_monitors = [
+                monitor for monitor in base_sim.monitors if isinstance(monitor, td.ModeMonitor)
+            ]
+
+            select_mode_monitor = find_mode_monitors[0]
+
+            stripped_sim = base_sim.updated_copy(sources=[], monitors=[])
+
+            input_port = Port(
+                center=select_mode_monitor.center,
+                size=select_mode_monitor.size,
+                mode_spec=select_mode_monitor.mode_spec,
+                direction="-",
+                name="input_port",
+            )
+
+            modeler = ComponentModeler(
+                simulation=stripped_sim,
+                ports=[input_port],
+                freqs=select_mode_monitor.freqs,
+            )
+
+            smatrix = run_function(
+                modeler,
+                custom_vjp=custom_vjp_element,
+                local_gradient=local_gradient,
+            )
+            return np.sum(np.abs(smatrix.smatrix().values) ** 2)
+
+        return objective
+
+    custom_vjp_val = 1.0
+    custom_vjp_val_scale = 10.0 * custom_vjp_val
+
+    if not local_gradient:
+        with pytest.raises(
+            td.exceptions.AdjointError,
+            match="custom_vjp specified for a remote gradient not supported.",
+        ):
+            val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+    else:
+        val, grad = ag.value_and_grad(make_objective(custom_vjp_val))(params0)
+        val_scale, grad_scale = ag.value_and_grad(make_objective(custom_vjp_val_scale))(params0)
+
+        assert np.isclose(
+            np.sum(np.abs(grad * (custom_vjp_val_scale / custom_vjp_val) - grad_scale)), 0.0
+        ), "Gradients were not set by the user vjp"
 
 
 @pytest.mark.skipif(not RUN_NUMERICAL, reason="Numerical gradient tests runs through web API.")
@@ -1908,6 +2443,9 @@ def test_pole_residue(monkeypatch):
         ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        ),
     )
 
     grads_computed = pr._compute_derivatives(derivative_info=info)
@@ -1959,6 +2497,9 @@ def test_adaptive_spacing(eps_real):
         bounds=((-1, -1, -1), (1, 1, 1)),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
     )
 
     with AssertLogLevel("WARNING", contains_str="Based on the material, the adaptive spacing"):
@@ -2038,6 +2579,9 @@ def test_adaptive_spacing_cache(rng, redirect_stdout_to_stderr, monkeypatch):
         ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            eps_out_data, coords={"x": xcoord, "y": ycoord, "z": zcoord, "f": [freq]}
+        ),
     )
 
     vjp_with_cache = geometry._compute_derivatives(derivative_info)
@@ -2088,6 +2632,9 @@ def test_cylinder_discretization(eps_real):
         bounds=((-1, -1, -1), (1, 1, 1)),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
     )
 
     with AssertLogLevel(
@@ -2168,6 +2715,9 @@ def test_custom_pole_residue(monkeypatch):
         ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
     )
 
     grads_computed = pr._compute_derivatives(derivative_info=info)
@@ -2226,6 +2776,9 @@ def test_custom_pole_residue_unstructured_derivatives():
         ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [3e8]}
+        ),
     )
 
     with pytest.raises(NotImplementedError, match="unstructured"):
