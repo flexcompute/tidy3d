@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import copy
 import json
 from os import PathLike
 from typing import Any
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.index import SimulationDataMap
+from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
@@ -14,6 +16,10 @@ from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.web import Batch, BatchData
+from tidy3d.web.api.autograd import (
+    has_traced_numerical_structures,
+    insert_numerical_structures_static,
+)
 
 DEFAULT_DATA_DIR = "."
 
@@ -154,6 +160,8 @@ def create_batch(
 def _run_local(
     modeler: ComponentModelerType,
     path_dir: str = DEFAULT_DATA_DIR,
+    numerical_structures=None,
+    user_vjp=None,
     **kwargs: Any,
 ) -> ComponentModelerDataType:
     """Execute the full simulation workflow for a given component modeler.
@@ -183,7 +191,19 @@ def _run_local(
     from tidy3d.web.api.autograd import autograd as web_ag
 
     sims = modeler.sim_dict
-    if any(web_ag.is_valid_for_autograd(sim) for sim in sims.values()):
+
+    numerical_structures_modeler = numerical_structures or {}
+    user_vjp_modeler = user_vjp
+    user_vjp_modeler_normalized = None
+    if user_vjp_modeler is not None:
+        user_vjp_modeler_normalized = web_ag.normalize_user_vjp_spec(user_vjp_modeler)
+
+    should_use_autograd = any(web_ag.is_valid_for_autograd(sim) for sim in sims.values())
+
+    if not should_use_autograd and has_traced_numerical_structures(numerical_structures_modeler):
+        should_use_autograd = True
+
+    if should_use_autograd:
         if len(modeler.element_mappings) > 0:
             log.warning(
                 "Element mappings are used to populate S-matrix values, but autograd gradients "
@@ -199,9 +219,50 @@ def _run_local(
         kwargs.setdefault("simulation_type", "tidy3d_autograd_async")
         kwargs.setdefault("path_dir", path_dir)
 
-        sim_data_map = _run_async(simulations=sims, **kwargs)
+        local_gradient = kwargs.get("local_gradient", True)
+
+        if (user_vjp is not None) and (not local_gradient):
+            raise AdjointError("User VJP specified for a remote gradient not supported.")
+
+        if (not local_gradient) and has_traced_numerical_structures(numerical_structures_modeler):
+            raise AdjointError(
+                "ComponentModeler autograd with traced numerical structures requires local_gradient=True."
+            )
+
+        if numerical_structures_modeler:
+            first_sim = next(iter(sims.values()))
+            web_ag.validate_numerical_structures(
+                numerical_structures=numerical_structures_modeler,
+                user_vjp=user_vjp_modeler_normalized,
+                simulation=first_sim,
+            )
+
+            numerical_structures_broadcast = {
+                key: copy.deepcopy(numerical_structures_modeler) for key in sims
+            }
+        else:
+            numerical_structures_broadcast = None
+
+        if user_vjp_modeler_normalized is not None:
+            user_vjp_broadcast = dict.fromkeys(sims, user_vjp_modeler_normalized)
+        else:
+            user_vjp_broadcast = None
+
+        sim_data_map = _run_async(
+            simulations=sims,
+            numerical_structures=numerical_structures_broadcast,
+            user_vjp=user_vjp_broadcast,
+            **kwargs,
+        )
 
         return compose_modeler_data_from_batch_data(modeler=modeler, batch_data=sim_data_map)
+
+    if numerical_structures is not None:
+        modeler = modeler.updated_copy(
+            simulation=insert_numerical_structures_static(
+                simulation=modeler.simulation, numerical_structures=numerical_structures
+            )
+        )
 
     # Filter kwargs to only include valid Batch parameters
     batch_kwargs = {

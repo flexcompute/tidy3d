@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import typing
+from dataclasses import dataclass
 
 import pydantic.v1 as pd
 from autograd.builtins import dict as dict_ag
@@ -40,13 +41,27 @@ TracedPoleAndResidue = tuple[TracedComplex, TracedComplex]
 # The data type that we pass in and out of the web.run() @autograd.primitive
 AutogradTraced = typing.Union[Box, ArrayLike]
 PathType = tuple[typing.Union[int, str], ...]
+CustomVJPPathType = tuple[typing.Union[int, str, typing.Callable], ...]
 AutogradFieldMap = dict_ag[PathType, AutogradTraced]
 
 InterpolationType = typing.Literal["nearest", "linear"]
 
+
+@dataclass(frozen=True)
+class NumericalStructureInfo:
+    """Metadata describing a user-supplied numerical structure insertion."""
+
+    index: int
+    parameters: typing.Any
+    function: typing.Callable[..., typing.Any]
+    structure: typing.Any
+    vjp: typing.Callable[..., typing.Any]
+
+
 __all__ = [
     "AutogradFieldMap",
     "AutogradTraced",
+    "NumericalStructureInfo",
     "TracedCoordinate",
     "TracedFloat",
     "TracedSize",

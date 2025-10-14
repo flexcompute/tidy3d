@@ -346,7 +346,9 @@ class Structure(AbstractStructure):
 
         return mnt_fld, mnt_eps
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(
+        self, derivative_info: DerivativeInfo, vjp_fns=None
+    ) -> AutogradFieldMap:
         """Compute adjoint gradients given the forward and adjoint fields"""
 
         # generate a mapping from the 'medium', or 'geometry' tag to the list of fields for VJP
@@ -366,11 +368,28 @@ class Structure(AbstractStructure):
 
         # loop through sub fields, compute VJPs, and store in the derivative map {path -> vjp_value}
         derivative_map = {}
+        # the first level of integration would be to
         for med_or_geo, field_paths in structure_fields_map.items():
             # grab derivative values {field_name -> vjp_value}
             med_or_geo_field = self.medium if med_or_geo == "medium" else self.geometry
-            info = derivative_info.updated_copy(paths=field_paths, deep=False)
-            derivative_values_map = med_or_geo_field._compute_derivatives(derivative_info=info)
+
+            collect_paths_by_keys = {}
+            for path in field_paths:
+                if path[0] in collect_paths_by_keys:
+                    collect_paths_by_keys[path[0]].append(path)
+                else:
+                    collect_paths_by_keys[path[0]] = [path]
+
+            derivative_values_map = {}
+            for path_key, paths in collect_paths_by_keys.items():
+                info = derivative_info.updated_copy(paths=paths, deep=False)
+
+                if (vjp_fns is not None) and (path_key in vjp_fns):
+                    derivative_values_map.update(vjp_fns[path_key](med_or_geo_field, info))
+                else:
+                    derivative_values_map.update(
+                        med_or_geo_field._compute_derivatives(derivative_info=info)
+                    )
 
             # construct map of {field path -> derivative value}
             for field_path, derivative_value in derivative_values_map.items():

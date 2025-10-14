@@ -42,6 +42,13 @@ class Sphere(base.Centered, base.Circular):
     >>> b = Sphere(center=(1,2,3), radius=2)
     """
 
+    radius: TracedSize1D = pydantic.Field(
+        ...,
+        title="Radius",
+        description="Radius of geometry at the ``reference_plane``.",
+        units=MICROMETER,
+    )
+
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
     ) -> np.ndarray[bool]:

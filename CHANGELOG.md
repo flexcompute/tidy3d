@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added support for `nonlinear_spec` in `CustomMedium` and `CustomDispersiveMedium`.
 - `tidy3d.plugins.design.DesignSpace.run(..., fn_post=...)` now accepts a `priority` keyword to propagate vGPU queue priority to all automatically batched simulations.
 - Introduced `BroadbandPulse` for exciting simulations across a wide frequency spectrum.
+- Added `user_vjp` and `numerical_structures` to new custom run functions that provide hooks into adjoint for user-defined gradient calculations.
 
 ### Breaking Changes
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.
