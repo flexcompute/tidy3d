@@ -15,7 +15,7 @@ from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 from tidy3d.config import config
-from tidy3d.constants import LARGE_NUMBER, MICROMETER
+from tidy3d.constants import C_0, LARGE_NUMBER, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
@@ -176,6 +176,30 @@ class Sphere(base.Centered, base.Circular):
                 area *= 0.5
 
         return area
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        max_frequency = np.max(derivative_info.frequencies)
+        min_wvl = C_0 / max_frequency
+
+        step_size = min_wvl / 20.0
+
+        vjps = {}
+
+        for path in derivative_info.paths:
+            if path == ("radius",):
+                sphere_up = self.updated_copy(radius=self.radius + step_size)
+                sphere_down = self.updated_copy(radius=self.radius - step_size)
+
+                eps_up = derivative_info.updated_epsilon(sphere_up)
+                eps_down = derivative_info.updated_epsilon(sphere_down)
+
+                eps_grad = (eps_up - eps_down) / (2 * step_size)
+
+                total_grad = (eps_grad * derivative_info.E_der_map).sum().data
+
+                vjps[path] = total_grad
+
+        return vjps
 
 
 class Cylinder(base.Centered, base.Circular, base.Planar):

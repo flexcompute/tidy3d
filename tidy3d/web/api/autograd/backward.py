@@ -277,6 +277,32 @@ def postprocess_adj(
                 else None
             )
 
+            def updated_epsilon(
+                replacement_structure,
+                structure_index=structure_index,
+                eps_fwd=eps_fwd,
+                select_adjoint_freqs=select_adjoint_freqs,
+            ):
+                sim_orig = sim_data_orig.simulation
+                orig_structures = list(sim_orig.structures)
+                orig_structures[structure_index] = replacement_structure
+
+                update_sim = sim_orig.updated_copy(
+                    structures=[
+                        replacement_structure
+                        if (idx == structure_index)
+                        else sim_orig.structures[idx]
+                        for idx in range(len(sim_orig.structures))
+                    ]
+                )
+
+                eps_by_f = [
+                    update_sim.epsilon(box=eps_fwd.monitor.geometry, coord_key="centers", freq=f)
+                    for f in select_adjoint_freqs
+                ]
+
+                return xr.concat(eps_by_f, dim="f").assign_coords(f=select_adjoint_freqs)
+
             # create derivative info with sliced data
             derivative_info = DerivativeInfo(
                 paths=structure_paths,
@@ -294,6 +320,7 @@ def postprocess_adj(
                 eps_out=eps_out_chunk,
                 eps_background=eps_background_chunk,
                 frequencies=select_adjoint_freqs,  # only chunk frequencies
+                updated_epsilon=updated_epsilon,
                 eps_no_structure=eps_no_structure_chunk,
                 eps_inf_structure=eps_inf_structure_chunk,
                 bounds=struct_bounds,

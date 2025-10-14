@@ -115,6 +115,9 @@ class DerivativeInfo:
     frequencies: ArrayLike
     """Frequencies at which the adjoint gradient should be computed."""
 
+    updated_epsilon: Callable
+    """Function to return the permittivity upon structure replacement."""
+
     H_der_map: Optional[FieldData] = None
     """Magnetic field gradient map.
     Dataset where the field components ("Hx", "Hy", "Hz") store the multiplication
