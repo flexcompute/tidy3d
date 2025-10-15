@@ -7,13 +7,12 @@ Radiation & Scattering
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.DirectivityMonitor
-   tidy3d.plugins.smatrix.DirectivityMonitorSpec
-   tidy3d.plugins.microwave.RectangularAntennaArrayCalculator
-   tidy3d.plugins.microwave.LobeMeasurer
-   tidy3d.AntennaMetricsData
+   tidy3d.rf.DirectivityMonitor
+   tidy3d.rf.DirectivityMonitorSpec
+   tidy3d.rf.RectangularAntennaArrayCalculator
+   tidy3d.rf.LobeMeasurer
 
-When modeling antennas or scattering problems, it is vital to analyze the radiated far-field. For such applications, the :class:`.DirectivityMonitor` should be used.
+When modeling antennas or scattering problems, it is vital to analyze the radiated far-field. For such applications, the :class:`~tidy3d.rf.DirectivityMonitor` should be used.
 
 .. code-block:: python
 
@@ -33,16 +32,16 @@ When modeling antennas or scattering problems, it is vital to analyze the radiat
        name='My radiation monitor',
    )
 
-The :class:`.DirectivityMonitor` should completely surround the structure of interest.
+The :class:`~tidy3d.rf.DirectivityMonitor` should completely surround the structure of interest.
 
-Alternatively, a :class:`.DirectivityMonitorSpec` can be used to create a specification for automatic generation of a :class:`.DirectivityMonitor` in the :class:`.TerminalComponentModeler`.
+Alternatively, a :class:`~tidy3d.rf.DirectivityMonitorSpec` can be used to create a specification for automatic generation of a :class:`~tidy3d.rf.DirectivityMonitor` in the :class:`~tidy3d.rf.TerminalComponentModeler`.
 
 .. code-block:: python
 
    # Define directivity monitor spec
    my_directivity_monitor_spec = DirectivityMonitorSpec()
 
-Once the monitor or monitor spec is defined, it should be added to the ``radiation_monitors`` option of the :class:`.TerminalComponentModeler`.
+Once the monitor or monitor spec is defined, it should be added to the ``radiation_monitors`` option of the :class:`~tidy3d.rf.TerminalComponentModeler`.
 
 .. code-block:: python
 
@@ -52,7 +51,7 @@ Once the monitor or monitor spec is defined, it should be added to the ``radiati
        radiation_monitors=[my_directivity_monitor, my_directivity_monitor_spec],
    )
 
-Once the simulation is completed, the ``get_antenna_metrics_data()`` method of the :class:`.TerminalComponentModelerData` object is used to obtain the radiation metrics.
+Once the simulation is completed, the ``get_antenna_metrics_data()`` method of the :class:`~tidy3d.rf.TerminalComponentModelerData` object is used to obtain the radiation metrics.
 
 .. code-block:: python
 
@@ -74,7 +73,7 @@ Once the simulation is completed, the ``get_antenna_metrics_data()`` method of t
 
 Each metric is in the form of an ``xarray.DataArray`` object that can be used for plotting, export, and further analysis. For examples of how these datasets can be manipulated, please refer to the notebooks in the "See also" section below.
 
-The :class:`.LobeMeasurer` utility class can be used to analyze radiation pattern lobes.
+The :class:`~tidy3d.rf.LobeMeasurer` utility class can be used to analyze radiation pattern lobes.
 
 .. code-block:: python
 

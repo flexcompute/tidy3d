@@ -1,12 +1,13 @@
 .. _microwave_migration:
 
-v2.10 Refactor Migration Guide
+v2.10 RF Refactor Migration Guide
 -------------------------------
 
-In version ``v2.10.0``, the microwave and RF simulation capabilities underwent significant refactoring to improve consistency, clarity, and functionality. This guide covers two major sets of breaking changes:
+In version ``v2.10.0``, the microwave and RF simulation capabilities underwent significant refactoring to improve consistency, clarity, and functionality. This guide covers three major sets of breaking changes:
 
 1. **Path Integral Class Renames** - Classes were renamed for consistency
 2. **WavePort API Changes** - WavePort was refactored to support multiple modes with cleaner impedance specification
+3. **Component Modeler Refactor** - ComponentModeler classes were refactored for improved web support
 
 This guide helps you update your scripts to work with v2.10+.
 
@@ -18,7 +19,7 @@ Path integral classes were renamed for improved consistency and clarity. Additio
 **Key changes:**
 
 *   **Renamed Classes**: Path integral classes have been renamed to follow a consistent naming pattern.
-*   **New Import Path (simplified)**: The path integral classes and impedance calculator are now exported at the top level. Prefer importing directly from ``tidy3d`` (e.g., ``from tidy3d import AxisAlignedVoltageIntegral, ImpedanceCalculator``). Existing plugin imports continue to work for backwards compatibility where applicable.
+*   **New Import Path (simplified)**: The path integral classes and impedance calculator are now exported at the 'tidy3d.rf' sub-package . Prefer importing directly from ``tidy3d.rf`` (e.g., ``from tidy3d.rf import AxisAlignedVoltageIntegral, ImpedanceCalculator``). Existing plugin imports continue to work for backwards compatibility where applicable.
 
 Class Name Changes
 ^^^^^^^^^^^^^^^^^^
@@ -67,7 +68,7 @@ Migration Examples
 
 .. code-block:: python
 
-    from tidy3d import (
+    from tidy3d.rf import (
         AxisAlignedVoltageIntegral,
         AxisAlignedCurrentIntegral,
     )
@@ -114,7 +115,7 @@ Custom 2D Path Integrals
 
 .. code-block:: python
 
-    from tidy3d import (
+    from tidy3d.rf import (
         Custom2DVoltageIntegral,
         Custom2DCurrentIntegral,
     )
@@ -136,7 +137,7 @@ Custom 2D Path Integrals
 Summary
 ^^^^^^^
 
-All functionality remains the same—only class names and preferred import paths have changed. Update your imports to the top level (``from tidy3d import ...``) and class names according to the table above, and your code will work with v2.10. For impedance calculations, import ``ImpedanceCalculator`` directly via ``from tidy3d import ImpedanceCalculator``.
+All functionality remains the same—only class names and preferred import paths have changed. Update your imports to the top level (``from tidy3d.rf import ...``) and class names according to the table above, and your code will work with v2.10.
 
 2. WavePort API Changes for Multimodal Support
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -185,17 +186,14 @@ Single-Mode WavePort
 
 .. code-block:: python
 
-    import tidy3d as td
-    from tidy3d.plugins.smatrix import WavePort
-
     # Define path integrals
-    voltage_path = td.AxisAlignedVoltageIntegralSpec(
+    voltage_path = AxisAlignedVoltageIntegralSpec(
         center=(0, 0, 0),
         size=(1.0, 0, 0),
         sign="+",
     )
 
-    current_path = td.Custom2DCurrentIntegralSpec.from_circular_path(
+    current_path = Custom2DCurrentIntegralSpec.from_circular_path(
         center=(0, 0, 0),
         radius=0.5,
         num_points=21,
@@ -208,7 +206,7 @@ Single-Mode WavePort
         center=(0, 0, -5),
         size=(2, 2, 0),
         direction="+",
-        mode_spec=td.ModeSpec(num_modes=1),  # Generic ModeSpec
+        mode_spec=ModeSpec(num_modes=1),  # Generic ModeSpec
         mode_index=0,  # Which mode to excite
         voltage_integral=voltage_path,  # Attached to port
         current_integral=current_path,  # Attached to port
@@ -219,17 +217,14 @@ Single-Mode WavePort
 
 .. code-block:: python
 
-    import tidy3d as td
-    from tidy3d.plugins.smatrix import WavePort
-
     # Define path integrals (same as before)
-    voltage_path = td.AxisAlignedVoltageIntegralSpec(
+    voltage_path = AxisAlignedVoltageIntegralSpec(
         center=(0, 0, 0),
         size=(1.0, 0, 0),
         sign="+",
     )
 
-    current_path = td.Custom2DCurrentIntegralSpec.from_circular_path(
+    current_path = Custom2DCurrentIntegralSpec.from_circular_path(
         center=(0, 0, 0),
         radius=0.5,
         num_points=21,
@@ -242,9 +237,9 @@ Single-Mode WavePort
         center=(0, 0, -5),
         size=(2, 2, 0),
         direction="+",
-        mode_spec=td.MicrowaveModeSpec(  # Use MicrowaveModeSpec
+        mode_spec=MicrowaveModeSpec(  # Use MicrowaveModeSpec
             num_modes=1,
-            impedance_specs=td.CustomImpedanceSpec(
+            impedance_specs=CustomImpedanceSpec(
                 voltage_spec=voltage_path,  # Moved to impedance_specs
                 current_spec=current_path
             )
@@ -254,7 +249,7 @@ Single-Mode WavePort
     )
 
     # Mode selection now happens at source creation
-    source_time = td.GaussianPulse(freq0=10e9, fwidth=1e9)
+    source_time = GaussianPulse(freq0=10e9, fwidth=1e9)
     source = port.to_source(source_time, mode_index=0)  # Mode selected here
 
 Multi-Mode WavePort (New Feature!)
@@ -264,23 +259,20 @@ The new API enables WavePorts to support multiple modes simultaneously:
 
 .. code-block:: python
 
-    import tidy3d as td
-    from tidy3d.plugins.smatrix import WavePort
-
     # Create a 3-mode WavePort
     port = WavePort(
         center=(0, 0, -5),
         size=(4, 4, 0),
         direction="+",
-        mode_spec=td.MicrowaveModeSpec(
+        mode_spec=MicrowaveModeSpec(
             num_modes=3,  # Solve for 3 modes
-            impedance_specs=td.AutoImpedanceSpec()  # Auto-compute impedance for all modes
+            impedance_specs=AutoImpedanceSpec()  # Auto-compute impedance for all modes
         ),
         name="multimode_port"
     )
 
     # Create sources for different modes
-    source_time = td.GaussianPulse(freq0=10e9, fwidth=1e9)
+    source_time = GaussianPulse(freq0=10e9, fwidth=1e9)
     source_mode0 = port.to_source(source_time, mode_index=0)  # Excite mode 0
     source_mode1 = port.to_source(source_time, mode_index=1)  # Excite mode 1
     source_mode2 = port.to_source(source_time, mode_index=2)  # Excite mode 2
@@ -297,15 +289,15 @@ For advanced use cases, you can specify different impedance calculation methods 
         center=(0, 0, -5),
         size=(4, 4, 0),
         direction="+",
-        mode_spec=td.MicrowaveModeSpec(
+        mode_spec=MicrowaveModeSpec(
             num_modes=3,
             impedance_specs=(
-                td.CustomImpedanceSpec(
+                CustomImpedanceSpec(
                     voltage_spec=custom_voltage_path,
                     current_spec=custom_current_path
                 ),  # Mode 0 uses custom specs
-                td.AutoImpedanceSpec(),  # Mode 1 uses auto
-                td.AutoImpedanceSpec(),  # Mode 2 uses auto
+                AutoImpedanceSpec(),  # Mode 1 uses auto
+                AutoImpedanceSpec(),  # Mode 2 uses auto
             )
         ),
         name="mixed_impedance_port"
@@ -374,9 +366,9 @@ For most cases, you can use ``AutoImpedanceSpec`` which automatically computes v
         center=(0, 0, -5),
         size=(2, 2, 0),
         direction="+",
-        mode_spec=td.MicrowaveModeSpec(
+        mode_spec=MicrowaveModeSpec(
             num_modes=2,
-            impedance_specs=td.AutoImpedanceSpec()  # Works for all modes
+            impedance_specs=AutoImpedanceSpec()  # Works for all modes
         ),
         name="simple_port"
     )
@@ -448,3 +440,15 @@ The new ``mode_selection`` field replaces ``mode_index`` for selecting modes:
 *   ``mode_selection: Optional[tuple[int, ...]]`` - New field that accepts a tuple of mode indices (e.g., ``(0, 2)`` to use modes 0 and 2)
 *   When ``None`` (default), all modes from ``mode_spec.num_modes`` are used
 *   **Note**: ``mode_index`` accepts only a single ``int``, while ``mode_selection`` accepts a tuple for multiple modes
+
+3. Component Modeler Refactor
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``smatrix`` plugin classes (``ComponentModeler``, ``TerminalComponentModeler``, etc.) were refactored to improve web and GUI support for RF capabilities. This section helps you update your scripts to the new, more robust API.
+
+.. note::
+
+   This content is also available as a standalone guide: :ref:`smatrix_migration`
+
+.. include:: /api/plugins/smatrix_migration.rst
+   :start-line: 12

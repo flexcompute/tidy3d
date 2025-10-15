@@ -7,10 +7,11 @@ Wave Port
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.smatrix.WavePort
-   tidy3d.ModeSpec
+   tidy3d.rf.WavePort
 
-The :class:`.WavePort` represents a modal source port. The port mode is first calculated in the 2D mode solver, then injected into the 3D simulation. The :class:`.WavePort` is also automatically terminated with a modal absorbing boundary :class:`.ModeABCBoundary` that perfectly absorbs the outgoing mode. Any non-matching modes are subject to PEC reflection.
+The :class:`~tidy3d.rf.WavePort` represents a modal source port for RF and microwave simulations. The port mode is first calculated in the 2D mode solver with automatic characteristic impedance calculation, then injected into the 3D simulation. The :class:`~tidy3d.rf.WavePort` is also automatically terminated with a modal absorbing boundary :class:`~tidy3d.ModeABCBoundary` that perfectly absorbs the outgoing mode. Any non-matching modes are subject to PEC reflection.
+
+**Basic Usage**
 
 .. code-block:: python
 
@@ -19,18 +20,67 @@ The :class:`.WavePort` represents a modal source port. The port mode is first ca
        size=(port_width, port_height, 0),
        name='My Wave Port 1',
        direction='+',  # direction of signal
-       mode_spec=ModeSpec(target_neff=1.5),  # specification for mode solver
-       current_integral=my_current_integral,  # current integration curve for port impedance calculation
+       mode_spec=MicrowaveModeSpec(
+           num_modes=1,
+           target_neff=1.5,
+           impedance_specs=AutoImpedanceSpec()  # automatic impedance calculation
+       ),
    )
 
-Most fields are self explanatory. Some additional notes:
+Key parameters:
 
-* ``mode_spec`` is used to specify the effective index search value for the mode solver
-* ``current_integral`` and/or ``voltage_integral`` are used to specify the integration paths for port impedance calculation. If only one of the two is specified, then the port power is also used (automatically determined).
+* ``mode_spec`` uses :class:`~tidy3d.rf.MicrowaveModeSpec` to specify mode solver settings and impedance calculation
+* ``impedance_specs`` within :class:`~tidy3d.rf.MicrowaveModeSpec` defines how voltage, current, and characteristic impedance are computed. Use :class:`~tidy3d.rf.AutoImpedanceSpec` for automatic calculation (recommended) or :class:`~tidy3d.rf.CustomImpedanceSpec` for manual control.
 
-If it is desired to only solve for the 2D port mode, one can use the ``to_mode_solver()`` convenience method to generate a :class:`.ModeSolver` simulation object.
+
+**Multimode WavePort Support**
+
+WavePorts can support multiple modes simultaneously. This is useful for multimode waveguides and transmission lines.
 
 .. code-block:: python
+
+   # Create a WavePort that solves for 3 modes
+   multimode_port = WavePort(
+       center=(0, 0, 0),
+       size=(4, 4, 0),
+       direction='+',
+       mode_spec=MicrowaveModeSpec(
+           num_modes=3,  # solve for 3 modes
+           impedance_specs=AutoImpedanceSpec()  # applied to all modes
+       ),
+       name='multimode_port'
+   )
+
+When creating sources from a multimode port, specify which mode to excite:
+
+.. code-block:: python
+
+   source_time = GaussianPulse(freq0=10e9, fwidth=1e9)
+
+   # Create sources for different modes
+   source_mode0 = multimode_port.to_source(source_time, mode_index=0)
+   source_mode1 = multimode_port.to_source(source_time, mode_index=1)
+   source_mode2 = multimode_port.to_source(source_time, mode_index=2)
+
+You can also specify different impedance calculations for each mode:
+
+.. code-block:: python
+
+   mode_spec = MicrowaveModeSpec(
+       num_modes=2,
+       impedance_specs=(
+           CustomImpedanceSpec(...),  # custom for mode 0
+           AutoImpedanceSpec(),       # auto for mode 1
+       )
+   )
+
+**Mode Solver**
+
+If you need to solve for the 2D port mode without running a full 3D simulation, use the ``to_mode_solver()`` convenience method:
+
+.. code-block:: python
+
+   import tidy3d.web as web
 
    # Define a mode solver from the wave port
    my_mode_solver = my_wave_port_1.to_mode_solver(
@@ -41,61 +91,42 @@ If it is desired to only solve for the 2D port mode, one can use the ``to_mode_s
    # Execute mode solver
    my_mode_data = web.run(my_mode_solver, task_name='mode solver')
 
+The resulting ``my_mode_data`` will be :class:`~tidy3d.rf.MicrowaveModeSolverData` containing mode fields and transmission line parameters (characteristic impedance, voltage/current coefficients).
 
-.. autosummary::
-   :toctree: ../_autosummary/
-   :template: module.rst
+**Accessing Transmission Line Data**
 
-   tidy3d.plugins.microwave.AxisAlignedVoltageIntegral
-   tidy3d.plugins.microwave.AxisAlignedCurrentIntegral
-   tidy3d.plugins.microwave.Custom2DVoltageIntegral
-   tidy3d.plugins.microwave.Custom2DCurrentIntegral
-   tidy3d.plugins.microwave.AxisAlignedPathIntegral
-   tidy3d.plugins.microwave.Custom2DPathIntegral
-   tidy3d.plugins.microwave.ImpedanceCalculator
-
-The classes above are used to define the voltage/current integration paths for impedance calculation.
+After running a simulation with :class:`~tidy3d.rf.WavePort`, you can access the transmission line characteristics from the mode data:
 
 .. code-block:: python
 
-   # Define voltage integration line
-   my_voltage_integral = AxisAlignedVoltageIntegral(
-       center=(0,0,0),  # center of integration line
-       size=(5, 0, 0),  # length of integration line
-       sign='+',  # sign of integral
-   )
+   # Get mode data from TerminalComponentModeler results
+   mode_data = tcm_data.data['port1']['mode_monitor']
 
-   # Define current integration loop
-   my_current_integral = AxisAlignedCurrentIntegral(
-       center=(0,0,0),  # center of integration loop
-       size=(20, 20, 0),  # size of integration loop
-       sign='+', # sign of integral (should match wave port direction)
-   )
+   # Access characteristic impedance for each mode
+   Z0_mode0 = mode_data.transmission_line_data.Z0.sel(mode_index=0)
 
-In addition to being used in the :class:`.WavePort` definition, the current/voltage integration objects can also be applied to arbitrary EM field data (2D and 3D). This is most commonly used in conjunction with the ``ImpedanceCalculator`` to calculate the line impedance of a 2D mode.
+   # Get voltage and current coefficients
+   voltage_coeff = mode_data.transmission_line_data.voltage_coeffs.sel(mode_index=0)
+   current_coeff = mode_data.transmission_line_data.current_coeffs.sel(mode_index=0)
+
+Alternatively, use the port's ``get_port_impedance()`` method:
 
 .. code-block:: python
 
-   # Define impedance calculator
-   my_Z_calculator = ImpedanceCalculator(
-       voltage_integral = my_voltage_integral,
-       current_integral = my_current_integral,
-   )
-
-   # Calculate impedance of 2D mode
-   Z_mode = my_Z_calculator.compute_impedance(my_mode_data)
-
-As before, only one of the two integration paths (voltage or current) are strictly necessary. This determines the convention used to calculate the impedance (PI, PV, or VI).
+   # Get impedance directly from port
+   Z0 = my_wave_port_1.get_port_impedance(mode_data, mode_index=0)
 
 .. seealso::
 
-   For more information, please see the following articles:
+   **Related Documentation:**
 
-   + `Computing the characteristic impedance of transmission lines <../../notebooks/CharacteristicImpedanceCalculator.html>`_
+   + :ref:`microwave_mode_solver` - MicrowaveModeSpec and transmission line mode analysis
+   + :ref:`microwave_migration` - Migration guide for API changes
 
-   Example applications:
+   **Tutorials and Examples:**
 
    + `Differential stripline benchmark <../../notebooks/DifferentialStripline.html>`_
-
+   + `Coplanar waveguide RF photonics <../../notebooks/CPWRFPhotonics1.html>`_
+   + `Through silicon via <../../notebooks/ThroughSiliconVia.html>`_
 
 ~~~~

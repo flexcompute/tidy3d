@@ -7,8 +7,8 @@ Lumped Port & Elements
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.smatrix.LumpedPort
-   tidy3d.plugins.smatrix.CoaxialLumpedPort
+   tidy3d.rf.LumpedPort
+   tidy3d.rf.CoaxialLumpedPort
 
 The :class:`LumpedPort` feature represents a planar, uniform current excitation with a fixed impedance termination.
 
@@ -27,7 +27,7 @@ The :class:`LumpedPort` can be 1D (line) or 2D (plane). For 2D, only axis-aligne
 
 .. note::
 
-   Lumped ports and elements are fundamentally approximations and thus should only be used when the port/element size is much smaller than the wavelength of interest (typically ``lambda/10``). For more accurate results, especially when the port is adjacent to an intentional waveguide or transmission line, consider using the :class:`.WavePort` excitation instead.
+   Lumped ports and elements are fundamentally approximations and thus should only be used when the port/element size is much smaller than the wavelength of interest (typically ``lambda/10``). For more accurate results, especially when the port is adjacent to an intentional waveguide or transmission line, consider using the :class:`~tidy3d.rf.WavePort` excitation instead.
 
 The ``CoaxialLumpedPort`` represents an analytical coaxial field source.
 
@@ -52,11 +52,11 @@ The ``CoaxialLumpedPort`` represents an analytical coaxial field source.
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.LumpedResistor
-   tidy3d.CoaxialLumpedResistor
-   tidy3d.LinearLumpedElement
-   tidy3d.RLCNetwork
-   tidy3d.AdmittanceNetwork
+   tidy3d.rf.LumpedResistor
+   tidy3d.rf.CoaxialLumpedResistor
+   tidy3d.rf.LinearLumpedElement
+   tidy3d.rf.RLCNetwork
+   tidy3d.rf.AdmittanceNetwork
 
 For a simple resistive lumped element, use ``LumpedResistor``.
 
@@ -82,7 +82,7 @@ For more complicated RLC networks, use the general ``LinearLumpedElement`` class
        network=RLCNetwork(resistance=50, inductance=1e-9)  # RLC network
    )
 
-All lumped elements should be added to the ``lumped_elements`` field of the base :class:`.Simulation` instance.
+All lumped elements should be added to the ``lumped_elements`` field of the base :class:`~tidy3d.Simulation` instance.
 
 .. code-block:: python
 

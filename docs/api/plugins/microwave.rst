@@ -5,7 +5,7 @@ Microwave
 
 .. warning::
 
-    RF simulations are subject to new license requirements in the future. These components are within the RF scope.
+    RF simulations and functionality will require new license requirements in an upcoming release. All RF-specific classes are now available within the sub-package 'tidy3d.rf'. These classes are included.
 
 
 .. autosummary::

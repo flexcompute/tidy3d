@@ -7,7 +7,7 @@ RF Materials Library
 
 The RF material library is a dictionary containing various dispersive models for real-world RF materials. To use the materials in the library, import it first by:
 
->>> from tidy3d.plugins.microwave import rf_material_library
+>>> from tidy3d.rf import rf_material_library
 
 The key of the dictionary is the abbreviated material name.
 
