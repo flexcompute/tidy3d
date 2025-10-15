@@ -7,7 +7,9 @@ repos:
     hooks:
      - id: ruff-check
        args: [ --fix ]
+       stages: [pre-commit]
      - id: ruff-format
+       stages: [pre-commit]
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
     rev: v9.22.0
     hooks:
