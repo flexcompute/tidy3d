@@ -317,3 +317,39 @@ class BatchDetail(TaskBase):
     message: str = None
     tasks: list[BatchMember] = []
     validateErrors: dict = None
+
+
+class AsyncJobDetail(TaskBase):
+    """
+    Provides a detailed view of an asynchronous job and its sub-tasks.
+
+    This model represents a long-running operation. The 'result' attribute holds
+    the output of a completed job, which for orchestration jobs, is often a
+    JSON string mapping sub-task names to their unique IDs.
+
+    Attributes:
+        asyncId: The unique identifier for the asynchronous job.
+        status: The current overall status of the job (e.g., 'RUNNING', 'COMPLETED').
+        progress: The completion percentage of the job (from 0.0 to 100.0).
+        createdAt: The timestamp when the job was created.
+        completedAt: The timestamp when the job finished (successfully or not).
+        tasks: A dictionary mapping logical task keys to their unique task IDs.
+               This is often populated by parsing the 'result' of an orchestration task.
+        result: The raw string output of the completed job. If the job spawns other
+                tasks, this is expected to be a JSON string detailing those tasks.
+        taskBlockInfo: Information on any dependencies blocking the job from running.
+        message: A human-readable message about the job's status.
+    """
+
+    asyncId: str
+    status: str
+    progress: Optional[float] = None
+    createdAt: Optional[datetime] = None
+    completedAt: Optional[datetime] = None
+    tasks: Optional[dict[str, str]] = None
+    result: Optional[str] = None
+    taskBlockInfo: Optional[TaskBlockInfo] = None
+    message: Optional[str] = None
+
+
+AsyncJobDetail.update_forward_refs()
