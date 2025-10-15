@@ -308,7 +308,6 @@ def make_antenna_sim():
         name="directivity",
         phi=list(phi),
         theta=list(theta),
-        far_field_approx=False,
     )
 
     # Create the simulation object
@@ -628,7 +627,6 @@ def test_rectangular_array_calculator_monitor_data_from_array_factor():
         name="radiation",
         phi=list(np.linspace(0, 2 * np.pi, 10)),
         theta=list(np.linspace(0, np.pi, 10)),
-        far_field_approx=False,
     )
     coords_under_sampled = {
         "r": [monitor_directivity_under_sampled.proj_distance],

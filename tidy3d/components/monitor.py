@@ -1237,7 +1237,26 @@ class DirectivityMonitor(MicrowaveBaseModel, FieldProjectionAngleMonitor, FluxMo
 
         Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
         John Wiley & Sons, Chapter 2.12 (2016).
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> monitor = DirectivityMonitor(  # doctest: +SKIP
+    ...     center=(0, 0, 0),
+    ...     size=(2, 2, 2),
+    ...     freqs=[1e9, 2e9, 3e9],
+    ...     name='directivity_monitor',
+    ...     theta=np.linspace(0, np.pi, 10),
+    ...     phi=np.linspace(0, 2*np.pi, 20),
+    ... )
     """
+
+    far_field_approx: Literal[True] = pydantic.Field(
+        True,
+        title="Far Field Approximation",
+        description="Directivity calculations require the far field approximation. "
+        "This field is hard-coded to be ``True`` and cannot be changed.",
+    )
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
