@@ -1,12 +1,26 @@
 Microwave & RF |:satellite:|
 ==============================
 
+.. toctree::
+    :hidden:
+
+    component_modeler
+    material
+    rf_material_library
+    path_integrals
+    impedance_calculator
+    mode_solver
+    ports/lumped
+    ports/wave
+    radiation_scattering
+    output_data
+
 Overview
 --------
 
 .. warning::
 
-   RF simulations will be subject to new license requirements in the future.
+   RF simulations and functionality will require new license requirements in an upcoming release. All RF-specific classes are now available within the sub-package 'tidy3d.rf'.
 
 .. warning::
 
@@ -22,9 +36,13 @@ The following sections discuss:
 * `RF Materials Models`_: Typical material types in microwave/RF simulation
 * `RF Materials Library`_: The RF material library contains various dispersive models for real-world RF materials.
 * `Layer-based Grid Refinement`_: Automated grid refinement strategy for planar structures (e.g. printed circuit boards)
+* `Path Integrals`_: Tools for computing voltage and current from electromagnetic fields
+* `Impedance Calculator`_: Post-processing tool for impedance calculation from electromagnetic fields
+* `RF Mode Analysis`_: Performing RF-specific mode analysis, like computing the characteristic impedance of transmission line modes
 * `Lumped Port & Elements`_: Lumped excitations and circuit elements
 * `Wave Port`_: Port excitation based on modal fields
 * `Radiation & Scattering`_: Useful features for antenna and scattering problems
+* `RF Output Data`_: Data containers for microwave simulation results
 
 .. seealso::
 
@@ -38,6 +56,10 @@ The following sections discuss:
 .. include:: /api/microwave/material.rst
 .. include:: /api/microwave/rf_material_library.rst
 .. include:: /api/discretization/layer.rst
+.. include:: /api/microwave/path_integrals.rst
+.. include:: /api/microwave/impedance_calculator.rst
+.. include:: /api/microwave/mode_solver.rst
 .. include:: /api/microwave/ports/lumped.rst
 .. include:: /api/microwave/ports/wave.rst
 .. include:: /api/microwave/radiation_scattering.rst
+.. include:: /api/microwave/output_data.rst

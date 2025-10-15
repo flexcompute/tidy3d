@@ -7,13 +7,13 @@ TerminalComponentModeler
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.smatrix.TerminalComponentModeler
-   tidy3d.plugins.smatrix.TerminalComponentModelerData
-   tidy3d.plugins.smatrix.MicrowaveSMatrixData
-   tidy3d.plugins.smatrix.TerminalPortDataArray
-   tidy3d.plugins.smatrix.PortDataArray
+   tidy3d.rf.TerminalComponentModeler
+   tidy3d.rf.TerminalComponentModelerData
+   tidy3d.rf.MicrowaveSMatrixData
+   tidy3d.rf.TerminalPortDataArray
+   tidy3d.rf.PortDataArray
 
-The :class:`.TerminalComponentModeler` is the core simulation object for 3D RF/microwave simulations in Tidy3D. Its primary function is to simulate the system over ``N`` number of ports and ``M`` number of frequency points, with the end result being a ``MxNxN`` S-parameter matrix.
+The :class:`~tidy3d.rf.TerminalComponentModeler` is the core simulation object for 3D RF/microwave simulations in Tidy3D. Its primary function is to simulate the system over ``N`` number of ports and ``M`` number of frequency points, with the end result being a ``MxNxN`` S-parameter matrix.
 
 .. code-block:: python
 
@@ -24,45 +24,52 @@ The :class:`.TerminalComponentModeler` is the core simulation object for 3D RF/m
        ...
    )
 
-The key parts of a :class:`.TerminalComponentModeler` are:
+The key parts of a :class:`~tidy3d.rf.TerminalComponentModeler` are:
 
-* The :class:`.Simulation` field defines the underlying Tidy3D `Simulation object <../simulation.html>`_. This base :class:`.Simulation` object contains information about the simulation domain such as structures, boundary conditions, grid specifications, and monitors. Note that sources should not be included in the base simulation, but rather in the ``ports`` field instead.
-* The ``ports`` field defines the list of source excitations. These are commonly of type :class:`LumpedPort` or :class:`.WavePort`. The number of ports determines the number of batch jobs in the :class:`.TerminalComponentModeler` and the dimensionality of the S-parameter matrix.
+* The :class:`~tidy3d.Simulation` field defines the underlying Tidy3D `Simulation object <../simulation.html>`_. This base :class:`~tidy3d.Simulation` object contains information about the simulation domain such as structures, boundary conditions, grid specifications, and monitors. Note that sources should not be included in the base simulation, but rather in the ``ports`` field instead.
+* The ``ports`` field defines the list of source excitations. These are commonly of type :class:`~tidy3d.rf.LumpedPort` or :class:`~tidy3d.rf.WavePort`. The number of ports determines the number of batch jobs in the :class:`~tidy3d.rf.TerminalComponentModeler` and the dimensionality of the S-parameter matrix. **Note:** Port names cannot contain the '@' symbol (reserved for internal indexing).
 * The ``freqs`` field defines the list of frequency points for the simulation.
 
-More information and explanation for additional fields can be found in the documentation page for the :class:`.TerminalComponentModeler`. In order to submit the simulation, use ``tidy3d.web.upload()``, ``tidy3d.web.start()``, ``tidy3d.web.monitor()``, and ``tidy3d.web.load()``.
+More information and explanation for additional fields can be found in the documentation page for the :class:`~tidy3d.rf.TerminalComponentModeler`.
+
+Workflow
+~~~~~~~~
+
+In order to submit the simulation, use ``web.upload()``, ``web.start()``, ``web.monitor()``, and ``web.load()``.
 
 .. code-block:: python
+   import tidy3d.web as web
 
    # Upload simulation and get cost estimate
-   my_task_id = tidy3d.web.upload(my_tcm, task_name='my_task_name')
+   my_task_id = web.upload(my_tcm, task_name='my_task_name')
 
    # Run simulation
-   tidy3d.web.start(my_task_id)
+   web.start(my_task_id)
 
    # Monitor simulation
-   tidy3d.web.monitor(my_task_id)
+   web.monitor(my_task_id)
 
    # Load results after completion
-   my_tcm_data = tidy3d.web.load(my_task_id)
+   my_tcm_data = web.load(my_task_id)
 
    
-Alternatively, use the ``tidy3d.web.run()`` method to perform all of the above in one single step.
+Alternatively, use the ``web.run()`` method to perform all of the above in one single step.
 
 
 .. code-block:: python
+   import tidy3d.web as web
 
    # Upload, run simulation, and download data
-   my_tcm_data = tidy3d.web.run(my_tcm, task_name='my_task_name', path='my/local/download/path')
+   my_tcm_data = web.run(my_tcm, task_name='my_task_name', path='my/local/download/path')
 
-To get the S-matrix from the results, use the ``smatrix()`` method of the :class:`.TerminalComponentModelerData` object.
+To get the S-matrix from the results, use the ``smatrix()`` method of the :class:`~tidy3d.rf.TerminalComponentModelerData` object.
 
 .. code-block:: python
 
    # Get S-matrix from results
    my_s_matrix = my_tcm_data.smatrix()
 
-The S-matrix is stored as a :class:`.MicrowaveSMatrixData` whose ``data`` property contains a :class:`.TerminalPortDataArray` instance. To obtain a specific ``S_ij`` value, use the ``port_in`` and ``port_out`` coordinates with the corresponding port name. To obtain a specific frequency, use the ``f`` coordinate.
+The S-matrix is stored as a :class:`~tidy3d.rf.MicrowaveSMatrixData` whose ``data`` property contains a :class:`~tidy3d.rf.TerminalPortDataArray` instance. To obtain a specific ``S_ij`` value, use the ``port_in`` and ``port_out`` coordinates with the corresponding port name. To obtain a specific frequency, use the ``f`` coordinate.
 
 .. code-block:: python
 
@@ -71,19 +78,7 @@ The S-matrix is stored as a :class:`.MicrowaveSMatrixData` whose ``data`` proper
 
 .. note::
 
-   At this moment, Tidy3D uses the physics phase convention :math:`e^{-i\omega t}`. Other RF simulation software and texts may use the electrical engineering convention :math:`e^{i\omega t}`. This affects the calculated S-parameters and impedance values. To convert between the two, simply use the complex conjugation operation, e.g. ``np.conjugate()``.
-
-To access simulation data for a given port excitation, use the ``data`` attribute of the :class:`.TerminalComponentModelerData`.
-
-.. code-block:: python
-
-   # Get simulation data for a given port "my_port"
-   sim_data = my_tcm_data.data["my_port"]
-
-   # Get monitor data from a given monitor "my_monitor"
-   my_monitor_data = sim_data["my_monitor"]
-
-The ``data`` attribute holds the simulation data in a dictionary with the respective port name as keys. The data for each monitor can then be accessed from the simulation data object using the monitor name as the dictionary key.
+   At this moment, Tidy3D uses the physics phase convention :math:`e^{-i\omega t}`. Other RF simulation software and texts may use the electrical engineering convention :math:`e^{i\omega t}`. This affects the sign of the imaginary part of calculated S-parameters and impedance values. To convert between the two, simply use the complex conjugation operation, e.g. ``np.conjugate()``.
 
 .. seealso::
 
@@ -97,7 +92,7 @@ The ``data`` attribute holds the simulation data in a dictionary with the respec
    + `Performing visualization of simulation data <../../notebooks/VizData.html>`_
    + `Advanced monitor data manipulation and visualization <../../notebooks/XarrayTutorial.html>`_
 
-   Please refer to the following example models to see the :class:`.TerminalComponentModeler` in action:
+   Please refer to the following example models to see the :class:`~tidy3d.rf.TerminalComponentModeler` in action:
 
    + `Differential stripline benchmark <../../notebooks/DifferentialStripline.html>`_
    + `Edge feed patch antenna benchmark <../../notebooks/EdgeFeedPatchAntennaBenchmark.html>`_

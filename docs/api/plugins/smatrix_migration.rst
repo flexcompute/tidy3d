@@ -5,6 +5,10 @@ v2.10 Refactor Migration
 
 In version ``v2.10.0rc1``, ``smatrix`` plugin classes were refactored to improve web and GUI support for RF capabilities. This guide helps you update your scripts to the new, more robust API.
 
+.. seealso::
+
+   This guide is also included as part of the comprehensive :ref:`microwave_migration` guide, which covers all v2.10 RF/microwave breaking changes.
+
 Key Changes
 ~~~~~~~~~~~
 
@@ -40,10 +44,11 @@ The new workflow is more explicit and aligns with the general ``tidy3d`` API.
 .. code-block:: python
 
     import tidy3d.web as web
-    import tidy3d.plugins.smatrix as sm
+    # Rf classes now found in tidy3d.rf
+    import tidy3d.rf as rf
 
     # Modeler class is now immutable and cleaner
-    tcm = sm.TerminalComponentModeler(
+    tcm = rf.TerminalComponentModeler(
         simulation=sim,
         ports=[LP1, LP2],
         freqs=my_freqs,
@@ -81,8 +86,8 @@ Data Handling
 
 The new API introduces immutable data containers for simulation results, ensuring that your data is more predictable and easier to manage.
 
-*   :class:`.TerminalComponentModeler` returns a :class:`.TerminalComponentModelerData` object.
-*   ``ModalComponentModeler`` returns a ``ModalComponentModelerData`` object.
+*   :class:`tidy3d.rf.TerminalComponentModeler` returns a :class:`tidy3d.rf.TerminalComponentModelerData` object.
+*   :class:`.ModalComponentModeler` returns a :class:`.ModalComponentModelerData` object.
 
 These data objects contain the S-matrix, port impedance, and other relevant results.
 
@@ -145,8 +150,8 @@ For more details, see the API documentation for the new classes and functions:
 
    tidy3d.plugins.smatrix.ModalComponentModeler
    tidy3d.plugins.smatrix.ModalComponentModelerData
-   tidy3d.plugins.smatrix.TerminalComponentModeler
-   tidy3d.plugins.smatrix.TerminalComponentModelerData
+   tidy3d.rf.TerminalComponentModeler
+   tidy3d.rf.TerminalComponentModelerData
    tidy3d.SimulationMap
    tidy3d.SimulationDataMap
    tidy3d.plugins.smatrix.run.create_batch
