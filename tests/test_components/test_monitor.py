@@ -445,3 +445,26 @@ def test_monitor_surfaces_from_volume():
     # z+ surface
     assert monitor_surfaces[5].center == (center[0], center[1], center[2] + size[2] / 2.0)
     assert monitor_surfaces[5].size == (size[0], size[1], 0.0)
+
+
+def test_directivity_monitor():
+    """Check validation of directivity monitor."""
+    size = (1, 2, 3)
+    center = (1, 2, 3)
+
+    pd = np.atleast_1d(40000)
+    thetas = np.linspace(0, 2 * np.pi, 100)
+    phis = np.linspace(0, np.pi, 100)
+
+    # far_field_approx cannot be set to False
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.DirectivityMonitor(
+            size=size,
+            center=center,
+            theta=thetas,
+            phi=phis,
+            proj_distance=pd,
+            freqs=FREQS,
+            name="directivity",
+            far_field_approx=False,
+        )

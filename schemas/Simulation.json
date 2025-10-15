@@ -5379,6 +5379,9 @@
         },
         "far_field_approx": {
           "default": true,
+          "enum": [
+            true
+          ],
           "type": "boolean"
         },
         "freqs": {
