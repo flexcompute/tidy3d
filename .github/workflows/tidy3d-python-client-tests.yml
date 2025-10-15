@@ -33,6 +33,8 @@ jobs:
       github.ref == 'refs/heads/develop' ||
       github.event_name == 'workflow_dispatch'
     outputs:
+      code_quality_tests: ${{ steps.determine-test-type.outputs.code_quality_tests }}
+      pr_review_tests: ${{ steps.determine-test-type.outputs.pr_review_tests }}
       local_tests: ${{ steps.determine-test-type.outputs.local_tests }}
       remote_tests: ${{ steps.determine-test-type.outputs.remote_tests }}
       pr_approval_state: ${{ steps.approval.outputs.approved }}
@@ -95,9 +97,12 @@ jobs:
 
           remote_tests=false
           local_tests=false
+          code_quality_tests=false
+          pr_review_tests=false
+          
           # Workflow_dispatch input override
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-
+            code_quality_tests=true
             # Each option is self contained
             if [[ "$INPUT_REMOTE" == "true" ]]; then
               remote_tests=true
@@ -111,22 +116,24 @@ jobs:
           # All PRs that have been triggered need local tests and approved ones need to re-run the remote tests
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
               local_tests=true
+              code_quality_tests=true
+              pr_review_tests=true
               [[ "$APPROVED" == "true" ]] && remote_tests=true
           fi
 
           if [[ "$EVENT_NAME" == "merge_group" ]]; then
               local_tests=true
               remote_tests=true
+              code_quality_tests=true
           fi
           
           # If triggered by PR review and approved
           if [[ "$EVENT_NAME" == "pull_request_review" ]]; then
             if [[ "$REVIEW_STATE" == "approved" ]]; then
+              code_quality_tests=true
+              pr_review_tests=true
               local_tests=true
               remote_tests=true
-            else
-              local_tests=false
-              remote_tests=false
             fi
           fi
 
@@ -134,16 +141,21 @@ jobs:
           if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/develop" ]]; then
             local_tests=true
             remote_tests=true
+            code_quality_tests=true
           fi
 
           echo "local_tests=$local_tests" >> $GITHUB_OUTPUT
           echo "remote_tests=$remote_tests" >> $GITHUB_OUTPUT
+          echo "code_quality_tests=$code_quality_tests" >> $GITHUB_OUTPUT
+          echo "pr_review_tests=$pr_review_tests" >> $GITHUB_OUTPUT
+          echo "code_quality_tests=$code_quality_tests"
+          echo "pr_review_tests=$pr_review_tests"
           echo "local_tests=$local_tests"
           echo "remote_tests=$remote_tests"
 
   lint:
     needs: determine-test-scope
-    if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
+    if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
     name: verify-linting
     runs-on: ubuntu-latest 
     container: ghcr.io/astral-sh/uv:debian
@@ -163,6 +175,8 @@ jobs:
   zizmor:
     name: Run zizmor 🌈
     runs-on: ubuntu-latest
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
     permissions:
       security-events: write
     steps:
@@ -177,10 +191,10 @@ jobs:
   lint-branch-name:
     needs: determine-test-scope
     runs-on: ubuntu-latest
+    if: needs.determine-test-scope.outputs.pr_review_tests == 'true'
     name: lint-branch-name
     env:
       PR_TITLE: ${{ github.event.pull_request.title }}
-    if: github.event_name == 'pull_request'
     steps:
       - name: extract-branch-name
         id: extract-branch-name
@@ -225,6 +239,7 @@ jobs:
   lint-commit-messages:
     needs: determine-test-scope
     runs-on: ubuntu-latest
+    if: needs.determine-test-scope.outputs.pr_review_tests == 'true'
     name: lint-commit-messages
     steps:
       - name: Check out source code
@@ -260,9 +275,7 @@ jobs:
   verify-schema-change:
     name: verify-schema-change
     needs: determine-test-scope
-    if: |
-      (( needs.determine-test-scope.outputs.local_tests == 'true' ) || 
-      ( needs.determine-test-scope.outputs.remote_tests == 'true' )) 
+    if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
     runs-on: ubuntu-latest
     container: ghcr.io/astral-sh/uv:debian
     defaults:
@@ -568,42 +581,67 @@ jobs:
         maxColorRange: 95
         valColorRange: ${{ env.total }}
         style: "for-the-badge"
-
+  
   pr-requirements-pass:
     name: pr-requirements-pass
     if: |
       always() &&
-      ((github.event_name == 'pull_request') || (github.event_name == 'pull_request_review') || (github.event_name == 'merge_group' ))  && 
-      (( needs.determine-test-scope.outputs.pr_approval_state == 'true' ) && 
-      ( needs.determine-test-scope.outputs.local_tests == 'true' ) || 
-      ( needs.determine-test-scope.outputs.remote_tests == 'true' ))
-    needs: [local-tests, remote-tests, lint, verify-schema-change, lint-commit-messages, lint-branch-name, zizmor]
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'merge_group') && 
+      ((needs.determine-test-scope.outputs.pr_approval_state == 'true' && needs.determine-test-scope.outputs.local_tests == 'true') || needs.determine-test-scope.outputs.remote_tests == 'true')
+    needs:
+      - determine-test-scope
+      - local-tests
+      - remote-tests
+      - lint
+      - verify-schema-change
+      - lint-commit-messages
+      - lint-branch-name
+      - zizmor
     runs-on: ubuntu-latest
     steps:
-      - name: check-passing-remote-tests
+      - name: check-linting-result
+        if: ${{ needs.lint.result != 'success' }}
         run: |
-          echo "Local tests result: ${{ needs.local-tests.result }}"
-          echo "Remote tests result: ${{ needs.remote-tests.result }}"
+          echo "❌ Linting failed."
+          exit 1
 
-          if [[ "${{ needs.lint.result }}" != 'success' ]]; then
-            echo "❌ Linting failed or was skipped."
-            exit 1
-          elif [[ "${{ needs.verify-schema-change.result }}" != 'success' ]]; then
-            echo "❌ verify-schema-change failed or was skipped."
-            exit 1
-          elif [[ "${{ needs.remote-tests.result }}" != 'success' ]]; then
-            echo "❌ remote-tests failed or were skipped."
-            exit 1 # Given remote-tests always run after a PR is approved
-          elif [[ "${{ needs.local-tests.result }}" != 'success' ]]; then
-            echo "❌ local-tests failed or were skipped."
-          elif [[ "${{ github.event_name }}" == 'merge_group' && "${{ needs.lint-commit-messages.result }}" != 'success' ]]; then
-            echo "❌ Linting of commit messages failed or was skipped."
-            exit 1
-          elif [[ "${{ github.event_name }}" == 'pull_request' && "${{ needs.lint-branch-name.result }}" != 'success' ]]; then
-            echo "❌ Linting of branch name failed."
-            exit 1
-          elif [[ "${{ needs.zizmor.result }}" != 'success' ]]; then
-            echo "❌ Static check of github actions with zizmor failed."
-            exit 1
-          fi
-          echo "✅ All required test jobs passed!"
+      - name: check-schema-change-verification
+        if: ${{ needs.verify-schema-change.result != 'success' }}
+        run: |
+          echo "❌ Schema change verification failed."
+          exit 1
+
+      - name: check-local-tests-result
+        if: ${{ needs.local-tests.result != 'success' }}
+        run: |
+          echo "❌ Local tests failed."
+          exit 1
+
+      - name: check-remote-tests-result
+        if: ${{ needs.remote-tests.result != 'success' }}
+        run: |
+          echo "❌ Remote tests failed."
+          exit 1
+
+      - name: check-commit-message-linting
+        if: ${{ github.event_name == 'merge_group' && needs.lint-commit-messages.result != 'success' }}
+        run: |
+          echo "❌ Commit message linting failed."
+          exit 1
+
+      - name: check-branch-name-linting
+        if: ${{ needs.determine-test-scope.outputs.pr_review_tests == 'true' && needs.lint-branch-name.result != 'success' }}
+        run: |
+          echo "❌ Branch name linting failed."
+          exit 1
+
+      - name: check-zizmor-static-analysis
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.zizmor.result != 'success' }}
+        run: |
+          echo "❌ Zizmor static analysis failed."
+          exit 1
+
+      - name: all-checks-passed
+        if: ${{ success() }}
+        run: echo "✅ All required jobs passed!"
+
