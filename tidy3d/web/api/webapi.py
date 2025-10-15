@@ -41,7 +41,7 @@ from tidy3d.web.core.exceptions import WebNotFoundError
 from tidy3d.web.core.http_util import get_version as _get_protocol_version
 from tidy3d.web.core.http_util import http
 from tidy3d.web.core.task_core import BatchDetail, BatchTask, Folder, SimulationTask
-from tidy3d.web.core.task_info import ChargeType, TaskInfo
+from tidy3d.web.core.task_info import AsyncJobDetail, ChargeType, TaskInfo
 from tidy3d.web.core.types import PayType
 
 from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
@@ -95,6 +95,206 @@ def _batch_detail(resource_id: str):
     return BatchTask(resource_id).detail(batch_type="RF_SWEEP")
 
 
+def _batch_detail_error(resource_id: str) -> Optional[WebError]:
+    """Processes a failed batch job to generate a detailed error.
+
+    This function inspects the status of a batch detail object. If the status
+    indicates an error, it logs the failure and constructs a specific `WebError`
+    object to be returned. For validation failures, it parses and aggregates
+    detailed error messages from each subtask.
+
+    Args:
+        resource_id (str): The identifier of the batch resource that failed.
+
+    Returns:
+        An instance of `WebError` if the batch failed, otherwise `None`.
+    """
+    try:
+        batch_detail = BatchTask(batch_id=resource_id).detail(batch_type="RF_SWEEP")
+        status = batch_detail.totalStatus.value
+    except Exception as e:
+        log.error(f"Could not retrieve batch details for '{resource_id}': {e}")
+        return WebError(f"Failed to retrieve status for batch '{resource_id}'.")
+
+    if status not in ERROR_STATES:
+        return None
+
+    log.error(f"The ComponentModeler batch '{resource_id}' has failed with status: {status}")
+
+    if (
+        status == "validate_fail"
+        and hasattr(batch_detail, "validateErrors")
+        and batch_detail.validateErrors
+    ):
+        error_details = []
+        for key, error_str in batch_detail.validateErrors.items():
+            try:
+                error_dict = json.loads(error_str)
+                validation_error = error_dict.get("validation_error", "Unknown validation error.")
+                msg = f"- Subtask '{key}' failed: {validation_error}"
+                log.error(msg)
+                error_details.append(msg)
+            except (json.JSONDecodeError, TypeError):
+                # Handle cases where the error string isn't valid JSON
+                log.error(f"Could not parse validation error for subtask '{key}'.")
+                error_details.append(f"- Subtask '{key}': Could not parse error details.")
+
+        details_string = "\n".join(error_details)
+        full_error_msg = (
+            "One or more subtasks failed validation. Please fix the component modeler configuration.\n"
+            f"Details:\n{details_string}"
+        )
+        return WebError(full_error_msg)
+
+    # Handle all other generic error states
+    else:
+        error_msg = (
+            f"Batch '{resource_id}' failed with status '{status}'. Check server "
+            "logs for details or contact customer support."
+        )
+        return WebError(error_msg)
+
+
+def _upload_component_modeler_subtasks(
+    resource_id: str, verbose: bool = True, solver_version: Optional[str] = None
+):
+    """Kicks off and monitors the split and validation of component modeler tasks.
+
+    This function orchestrates a two-phase process. First, it initiates a
+    server-side asynchronous job to split the components of a modeler batch.
+    It monitors this job's progress by polling the API and parsing the
+    response into an `AsyncJobDetail` model until the job completes or fails.
+
+    If the split is successful, the function proceeds to the second phase:
+    triggering a batch validation via `batch.check()`. It then monitors this
+    validation process by polling for `BatchDetail` updates. The progress bar,
+    if verbose, reflects the status according to a predefined state mapping.
+
+    Finally, it processes the terminal state of the validation. If a
+    'validate_fail' status occurs, it parses detailed error messages for each
+    failed subtask and includes them in the raised exception.
+
+    Args:
+        resource_id (str): The identifier for the batch resource to be processed.
+        verbose (bool): If True, displays progress bars and logs detailed
+            status messages to the console during the operation.
+        solver_version (str): Solver version in which to run validation.
+
+    Raises:
+        RuntimeError: If the initial asynchronous split job fails.
+        WebError: If the subsequent batch validation fails, ends in an
+            unexpected state, or if a 'validate_fail' status is encountered.
+    """
+    console = get_logging_console() if verbose else None
+    final_error = None
+    batch_type = "RF_SWEEP"
+
+    split_path = "tidy3d/async-biz/component-modeler-split"
+    payload = {
+        "batchType": batch_type,
+        "batchId": resource_id,
+        "fileName": "modeler.hdf5.gz",
+        "protocolVersion": _get_protocol_version(),
+    }
+
+    if verbose:
+        console.log("Starting Modeler and Subtasks Validation...")
+
+    initial_resp = http.post(split_path, payload)
+    split_job_detail = AsyncJobDetail(**initial_resp)
+    monitor_split_path = f"{split_path}?asyncId={split_job_detail.asyncId}"
+
+    if verbose:
+        progress_bar = Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            console=console,
+        )
+
+        with progress_bar as progress:
+            description = "Upload Subtasks"
+            pbar = progress.add_task(description, completed=split_job_detail.progress, total=100)
+            while True:
+                split_job_raw_result = http.get(monitor_split_path)
+                split_job_detail = AsyncJobDetail(**split_job_raw_result)
+
+                progress.update(
+                    pbar, completed=split_job_detail.progress, description=f"[blue]{description}"
+                )
+
+                if split_job_detail.status in END_STATES:
+                    progress.update(
+                        pbar,
+                        completed=split_job_detail.progress,
+                        description=f"[green]{description}",
+                    )
+                    break
+                time.sleep(RUN_REFRESH_TIME)
+
+            if split_job_detail.status in ERROR_STATES:
+                msg = split_job_detail.message or "An unknown error occurred."
+                final_error = WebError(f"Component modeler split job failed: {msg}")
+
+            if not final_error:
+                description = "Validating"
+                pbar = progress.add_task(
+                    completed=10, total=100, description=f"[blue]{description}"
+                )
+                batch = BatchTask(resource_id)
+                batch.check(solver_version=solver_version, batch_type=batch_type)
+
+                while True:
+                    batch_detail = batch.detail(batch_type=batch_type)
+                    status = batch_detail.totalStatus
+                    progress_percent = STATE_PROGRESS_PERCENTAGE.get(status, 0)
+                    progress.update(
+                        pbar, completed=progress_percent, description=f"[blue]{description}"
+                    )
+
+                    if status in POST_VALIDATE_STATES:
+                        progress.update(pbar, completed=100, description=f"[green]{description}")
+                        task_mapping = json.loads(split_job_detail.result)
+                        console.log(
+                            f"Uploaded Subtasks: \n{_task_dict_to_url_bullet_list(task_mapping)}"
+                        )
+                        progress.refresh()
+                        break
+                    elif status in ERROR_STATES:
+                        progress.update(pbar, completed=0, description=f"[red]{description}")
+                        progress.refresh()
+                        break
+                    time.sleep(RUN_REFRESH_TIME)
+
+    else:
+        # Non-verbose mode: Poll for split job completion.
+        while True:
+            split_job_raw_result = http.get(monitor_split_path)
+            split_job_detail = AsyncJobDetail(**split_job_raw_result)
+            if split_job_detail.status in END_STATES:
+                break
+            time.sleep(RUN_REFRESH_TIME)
+
+        # Check for split job failure.
+        if split_job_detail.status in ERROR_STATES:
+            msg = split_job_detail.message or "An unknown error occurred."
+            final_error = WebError(f"Component modeler split job failed: {msg}")
+
+        # If split succeeded, poll for validation completion.
+        if not final_error:
+            batch = BatchTask(resource_id)
+            batch.check(solver_version=solver_version, batch_type=batch_type)
+            while True:
+                batch_detail = batch.detail(batch_type=batch_type)
+                status = batch_detail.totalStatus
+                if status in POST_VALIDATE_STATES or status in END_STATES:
+                    break
+                time.sleep(RUN_REFRESH_TIME)
+
+    return _batch_detail_error(resource_id=resource_id)
+
+
 def _task_dict_to_url_bullet_list(data_dict: dict) -> str:
     """
     Converts a dictionary into a string formatted as a bullet point list.
@@ -107,6 +307,8 @@ def _task_dict_to_url_bullet_list(data_dict: dict) -> str:
     """
     # Use a list comprehension to format each key-value pair
     # and then join them together with newline characters.
+    if data_dict is None:
+        raise WebError("Error in subtask dictionary data.")
     return "\n".join([f"- {key}: '{value}'" for key, value in data_dict.items()])
 
 
@@ -391,26 +593,7 @@ def upload(
     )
 
     if task_type == "RF":
-        split_path = "tidy3d/projects/component-modeler-split"
-        payload = {
-            "batchType": "RF_SWEEP",
-            "batchId": resource_id,
-            "fileName": "modeler.hdf5.gz",
-            "protocolVersion": _get_protocol_version(),
-        }
-        resp = http.post(split_path, payload)
-        if verbose:
-            console = get_logging_console()
-            console.log(
-                f"Child simulation subtasks are being uploaded to \n{_task_dict_to_url_bullet_list(resp)}"
-            )
-        # split (modeler-specific)
-        batch = BatchTask(resource_id)
-        # Kick off server-side validation for the RF batch.
-        batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
-        if verbose:
-            # Validation phase
-            console.log("Validating component modeler and subtask simulations...")
+        _upload_component_modeler_subtasks(resource_id=resource_id, verbose=verbose)
 
     estimate_cost(task_id=resource_id, solver_version=solver_version, verbose=verbose)
 
@@ -555,7 +738,7 @@ def start(
             solver_version=solver_version, batch_type="RF_SWEEP", worker_group=worker_group
         )
         if verbose:
-            console.log(f"Component Modeler '{task_id}' validation succeeded. Starting to solve...")
+            console.log(f"Component Modeler '{task_id}' validated. Solving...")
         return
 
     if priority is not None and (priority < 1 or priority > 10):
@@ -1407,20 +1590,7 @@ def estimate_cost(
             return est_flex_unit
 
         elif status in ERROR_STATES:
-            log.error(f"The ComponentModeler '{task_id}' has failed: {status}")
-
-            if status == "validate_fail":
-                assert d.validateErrors is not None
-                for key, error in d.validateErrors.items():
-                    # I don't like this ideally but would like to control the endpoint to make this better
-                    error_dict = json.loads(error)
-                    validation_error = error_dict["validation_error"]
-                    log.error(
-                        f"Subtask '{key}' has failed to validate:"
-                        f" \n {validation_error} \n "
-                        f"Fix your component modeler configuration. "
-                        f"Generate subtask simulations locally using `ComponentModelerType.sim_dict`."
-                    )
+            return _batch_detail_error(resource_id=task_id)
 
         raise WebError("Could not get estimated cost!")
 
