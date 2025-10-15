@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pd
@@ -9,6 +10,7 @@ import pytest
 
 import tidy3d as td
 from tidy3d.components.scene import MAX_GEOMETRY_COUNT, MAX_NUM_MEDIUMS
+from tidy3d.components.viz import STRUCTURE_EPS_CMAP, STRUCTURE_EPS_CMAP_R
 from tidy3d.exceptions import SetupError
 
 from ..utils import SIM_FULL, cartesian_to_unstructured
@@ -142,9 +144,60 @@ def test_get_structure_plot_params():
     pp = SCENE_FULL._get_structure_eps_plot_params(
         medium=SCENE_FULL.medium, freq=1, eps_min=1, eps_max=2
     )
-    assert float(pp.facecolor) == 1.0
+    expected_color = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP)(0.0)
+    assert np.allclose(pp.facecolor, expected_color)
     pp = SCENE_FULL._get_structure_eps_plot_params(medium=td.PEC, freq=1, eps_min=1, eps_max=2)
     assert pp.facecolor == "gold"
+
+
+def test_structure_eps_color_mapping():
+    medium_min = td.Medium(permittivity=1.0)
+    medium_max = td.Medium(permittivity=5.0)
+    norm = mpl.colors.Normalize(vmin=1.0, vmax=5.0)
+
+    pp_min = SCENE_FULL._get_structure_eps_plot_params(
+        medium=medium_min,
+        freq=1,
+        eps_min=1.0,
+        eps_max=5.0,
+        norm=norm,
+        reverse=False,
+    )
+    expected_min = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP)(norm(1.0))
+    assert np.allclose(pp_min.facecolor, expected_min)
+
+    pp_max = SCENE_FULL._get_structure_eps_plot_params(
+        medium=medium_max,
+        freq=1,
+        eps_min=1.0,
+        eps_max=5.0,
+        norm=norm,
+        reverse=False,
+    )
+    expected_max = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP)(norm(5.0))
+    assert np.allclose(pp_max.facecolor, expected_max)
+
+    pp_min_reverse = SCENE_FULL._get_structure_eps_plot_params(
+        medium=medium_min,
+        freq=1,
+        eps_min=1.0,
+        eps_max=5.0,
+        norm=norm,
+        reverse=True,
+    )
+    expected_min_reverse = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP_R)(norm(1.0))
+    assert np.allclose(pp_min_reverse.facecolor, expected_min_reverse)
+
+    pp_max_reverse = SCENE_FULL._get_structure_eps_plot_params(
+        medium=medium_max,
+        freq=1,
+        eps_min=1.0,
+        eps_max=5.0,
+        norm=norm,
+        reverse=True,
+    )
+    expected_max_reverse = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP_R)(norm(5.0))
+    assert np.allclose(pp_max_reverse.facecolor, expected_max_reverse)
 
 
 def test_num_mediums():

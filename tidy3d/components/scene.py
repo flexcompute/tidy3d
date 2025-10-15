@@ -90,6 +90,10 @@ WARN_STRUCTURES_PER_MEDIUM = 200
 MAX_STRUCTURES_PER_MEDIUM = 1_000
 
 
+def _get_colormap(reverse: bool = False):
+    return STRUCTURE_EPS_CMAP_R if reverse else STRUCTURE_EPS_CMAP
+
+
 class Scene(Tidy3dBaseModel):
     """Contains generic information about the geometry and medium properties common to all types of
     simulations.
@@ -1200,7 +1204,7 @@ class Scene(Tidy3dBaseModel):
             vmin=eps_min,
             vmax=eps_max,
             label=r"$\epsilon_r$",
-            cmap=STRUCTURE_EPS_CMAP if not reverse else STRUCTURE_EPS_CMAP_R,
+            cmap=_get_colormap(reverse=reverse),
             ax=ax,
             norm=norm,
         )
@@ -1314,16 +1318,14 @@ class Scene(Tidy3dBaseModel):
                         # extract slice if volumetric unstructured data
                         eps = eps.plane_slice(axis=normal_axis_ind, pos=normal_position)
 
-                    if reverse:
-                        eps = eps_min + eps_max - eps
-
                     # at this point eps_mean is TriangularGridDataset and we just plot it directly
                     # with applying shape mask
+                    cmap_name = _get_colormap(reverse=reverse)
                     eps.plot(
                         grid=False,
                         ax=ax,
                         cbar=False,
-                        cmap=STRUCTURE_EPS_CMAP,
+                        cmap=cmap_name,
                         vmin=eps_min,
                         vmax=eps_max,
                         pcolor_kwargs={
@@ -1395,18 +1397,15 @@ class Scene(Tidy3dBaseModel):
 
         # remove the normal_axis and take real part
         eps_shape = eps_shape.real.mean(axis=normal_axis_ind)
-        # reverse
-        if reverse:
-            eps_shape = eps_min + eps_max - eps_shape
-
         # pcolormesh
         plane_xp, plane_yp = np.meshgrid(plane_coord[0], plane_coord[1], indexing="ij")
+        cmap_name = _get_colormap(reverse=reverse)
         ax.pcolormesh(
             plane_xp,
             plane_yp,
             eps_shape,
             clip_path=(polygon_path(shape), ax.transData),
-            cmap=STRUCTURE_EPS_CMAP,
+            cmap=cmap_name,
             alpha=alpha,
             clip_box=ax.bbox,
             norm=norm,
@@ -1447,23 +1446,15 @@ class Scene(Tidy3dBaseModel):
             plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
         else:
             eps_medium = medium._eps_plot(frequency=freq, eps_component=eps_component)
-            if norm is not None:
-                # Use the same normalization as the colorbar for consistency
-                color = norm(eps_medium)
-                # TODO: This is a hack to ensure color consistency with the colorbar.
-                # It should be removed once we establish a proper color mapping where
-                # eps_min maps to 0 and eps_max maps to 1 for 'reverse=False'.
-                if not reverse:
-                    color = 1 - color
-                color = min(1, max(color, 0))  # clip in case of custom eps limits
-            else:
-                # Fallback to linear mapping for backward compatibility
-                delta_eps = eps_medium - eps_min
-                delta_eps_max = eps_max - eps_min + 1e-5
-                eps_fraction = delta_eps / delta_eps_max
-                color = eps_fraction if reverse else 1 - eps_fraction
-                color = min(1, max(color, 0))  # clip in case of custom eps limits
-            plot_params = plot_params.copy(update={"facecolor": str(color)})
+            active_norm = (
+                norm if norm is not None else mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
+            )
+            color_value = float(active_norm(eps_medium))
+            color_value = min(1.0, max(0.0, color_value))
+            cmap_name = _get_colormap(reverse=reverse)
+            cmap = mpl.cm.get_cmap(cmap_name)
+            rgba = tuple(float(component) for component in cmap(color_value))
+            plot_params = plot_params.copy(update={"facecolor": rgba})
 
         return plot_params
 
