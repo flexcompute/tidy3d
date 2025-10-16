@@ -239,7 +239,7 @@ jobs:
   lint-commit-messages:
     needs: determine-test-scope
     runs-on: ubuntu-latest
-    if: needs.determine-test-scope.outputs.pr_review_tests == 'true'
+    if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
     name: lint-commit-messages
     steps:
       - name: Check out source code
@@ -624,7 +624,7 @@ jobs:
           exit 1
 
       - name: check-commit-message-linting
-        if: ${{ github.event_name == 'merge_group' && needs.lint-commit-messages.result != 'success' }}
+        if: ${{  needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.lint-commit-messages.result != 'success' }}
         run: |
           echo "❌ Commit message linting failed."
           exit 1
