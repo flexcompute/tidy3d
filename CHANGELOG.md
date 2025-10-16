@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `CustomCurrentIntegral2D` → `Custom2DCurrentIntegral`
   - Path integral and impedance calculator classes have been refactored and moved from `tidy3d.plugins.microwave` to `tidy3d.components.microwave`. They are now publicly exported via the top-level package `__init__.py`, so you can import them directly, e.g. `from tidy3d import ImpedanceCalculator, AxisAlignedVoltageIntegral, AxisAlignedCurrentIntegral, Custom2DVoltageIntegral, Custom2DCurrentIntegral, Custom2DPathIntegral`.
 - `DirectivityMonitor` now forces `far_field_approx` to `True`, which was previously configurable.
+- Unified run submission API: `web.run(...)` is now a container-aware wrapper that accepts a single simulation or arbitrarily nested containers (`list`, `tuple`, `dict` values) and returns results in the same shape.
+- `web.Batch(ComponentModeler)` and `web.Job(ComponentModeler)` native support
 
 ### Fixed
 - More robust `Sellmeier` and `Debye` material model, and prevent very large pole parameters in `PoleResidue` material model.
