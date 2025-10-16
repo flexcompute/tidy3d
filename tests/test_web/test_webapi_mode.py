@@ -73,12 +73,6 @@ def set_api_key(monkeypatch):
 
 
 @pytest.fixture
-def mock_is_modeler_batch(monkeypatch):
-    """Mock _is_modeler_batch to return False for regular tasks."""
-    monkeypatch.setattr("tidy3d.web.api.webapi._is_modeler_batch", lambda x: False)
-
-
-@pytest.fixture
 def mock_upload(monkeypatch, set_api_key):
     """Mocks webapi.upload."""
     responses.add(
@@ -123,30 +117,10 @@ def mock_upload(monkeypatch, set_api_key):
     def mock_upload_file(*args, **kwargs):
         pass
 
-    def mock_simulation_task_get(*args, **kwargs):
-        from tidy3d.web.core.task_core import SimulationTask
-
-        return SimulationTask(
-            taskId=TASK_ID,
-            taskName=TASK_NAME,
-            createdAt=CREATED_AT,
-            realFlexUnit=FLEX_UNIT,
-            estFlexUnit=EST_FLEX_UNIT,
-            taskType=TaskType.MODE_SOLVER.name,
-            metadataStatus="processed",
-            status="success",
-            s3Storage=1.0,
-        )
-
-    def mock_estimate_cost(*args, **kwargs):
-        return EST_FLEX_UNIT
-
     monkeypatch.setattr(
         "tidy3d.web.core.task_core.SimulationTask.upload_simulation", mock_upload_simulation
     )
     monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_upload_file)
-    monkeypatch.setattr("tidy3d.web.core.task_core.SimulationTask.get", mock_simulation_task_get)
-    monkeypatch.setattr("tidy3d.web.api.webapi.estimate_cost", mock_estimate_cost)
 
     return uploaded_stub
 
@@ -294,20 +268,13 @@ def mock_get_run_info(monkeypatch, set_api_key):
 
 @pytest.fixture
 def mock_webapi(
-    mock_upload,
-    mock_metadata,
-    mock_get_info,
-    mock_start,
-    mock_monitor,
-    mock_download,
-    mock_load,
-    mock_is_modeler_batch,
+    mock_upload, mock_metadata, mock_get_info, mock_start, mock_monitor, mock_download, mock_load
 ):
     """Mocks all webapi operation."""
 
 
 @responses.activate
-def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata, mock_is_modeler_batch):
+def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata):
     sim = make_mode_sim()
     assert sim != get_reduced_simulation(sim, reduce_simulation=True)
     assert upload(sim, TASK_NAME, PROJECT_NAME, reduce_simulation=True)
@@ -316,7 +283,7 @@ def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata, mock_is_
 @pytest.mark.parametrize("reduce_simulation", [True, False])
 @responses.activate
 def test_upload_with_reduction_parameter(
-    monkeypatch, mock_upload, mock_get_info, mock_metadata, mock_is_modeler_batch, reduce_simulation
+    monkeypatch, mock_upload, mock_get_info, mock_metadata, reduce_simulation
 ):
     """Test that simulation reduction is properly applied before upload based on reduce_simulation parameter."""
     sim = make_mode_sim()
@@ -334,23 +301,23 @@ def test_upload_with_reduction_parameter(
 
 
 @responses.activate
-def test_get_info(mock_get_info, mock_is_modeler_batch):
+def test_get_info(mock_get_info):
     assert get_info(TASK_ID).taskId == TASK_ID
     assert get_info(TASK_ID).taskType == "MODE_SOLVER"
 
 
 @responses.activate
-def test_get_run_info(mock_get_run_info, mock_is_modeler_batch):
+def test_get_run_info(mock_get_run_info):
     assert get_run_info(TASK_ID) == (100, 0)
 
 
 @responses.activate
-def test_estimate_cost(set_api_key, mock_get_info, mock_metadata, mock_is_modeler_batch):
+def test_estimate_cost(set_api_key, mock_get_info, mock_metadata):
     assert estimate_cost(TASK_ID) == EST_FLEX_UNIT
 
 
 @responses.activate
-def test_download_json(monkeypatch, mock_get_info, tmp_path, mock_is_modeler_batch):
+def test_download_json(monkeypatch, mock_get_info, tmp_path):
     sim = make_mode_sim()
 
     def mock_download(*args, **kwargs):
@@ -368,7 +335,7 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path, mock_is_modeler_bat
 
 
 @responses.activate
-def test_load_simulation(monkeypatch, mock_get_info, tmp_path, mock_is_modeler_batch):
+def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
     def mock_download(*args, **kwargs):
         make_mode_sim().to_file(args[1])
 
@@ -378,7 +345,7 @@ def test_load_simulation(monkeypatch, mock_get_info, tmp_path, mock_is_modeler_b
 
 
 @responses.activate
-def test_run(mock_webapi, monkeypatch, tmp_path, mock_is_modeler_batch):
+def test_run(mock_webapi, monkeypatch, tmp_path):
     sim = make_mode_sim()
     monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
     assert run(
@@ -390,7 +357,7 @@ def test_run(mock_webapi, monkeypatch, tmp_path, mock_is_modeler_batch):
 
 
 @responses.activate
-def test_abort_task(set_api_key, mock_get_info, mock_is_modeler_batch):
+def test_abort_task(set_api_key, mock_get_info):
     responses.add(
         responses.PUT,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/abort",

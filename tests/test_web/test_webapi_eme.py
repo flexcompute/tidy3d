@@ -14,6 +14,7 @@ from tidy3d.web.api.container import Batch, Job
 from tidy3d.web.api.webapi import (
     abort,
     download_json,
+    estimate_cost,
     get_info,
     get_run_info,
     load_simulation,
@@ -47,12 +48,6 @@ def set_api_key(monkeypatch):
 
     monkeypatch.setattr(http_module, "api_key", lambda: "apikey")
     monkeypatch.setattr(http_module, "get_version", lambda: td.version.__version__)
-
-
-@pytest.fixture
-def mock_is_modeler_batch(monkeypatch):
-    """Mock _is_modeler_batch to return False for regular tasks."""
-    monkeypatch.setattr("tidy3d.web.api.webapi._is_modeler_batch", lambda x: False)
 
 
 @pytest.fixture
@@ -94,27 +89,7 @@ def mock_upload(monkeypatch, set_api_key):
     def mock_upload_file(*args, **kwargs):
         pass
 
-    def mock_simulation_task_get(*args, **kwargs):
-        from tidy3d.web.core.task_core import SimulationTask
-
-        return SimulationTask(
-            taskId=TASK_ID,
-            taskName=TASK_NAME,
-            createdAt=CREATED_AT,
-            realFlexUnit=FLEX_UNIT,
-            estFlexUnit=EST_FLEX_UNIT,
-            taskType=TaskType.EME.name,
-            metadataStatus="processed",
-            status="success",
-            s3Storage=1.0,
-        )
-
-    def mock_estimate_cost(*args, **kwargs):
-        return EST_FLEX_UNIT
-
     monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_upload_file)
-    monkeypatch.setattr("tidy3d.web.core.task_core.SimulationTask.get", mock_simulation_task_get)
-    monkeypatch.setattr("tidy3d.web.api.webapi.estimate_cost", mock_estimate_cost)
 
 
 @pytest.fixture
@@ -139,27 +114,6 @@ def mock_get_info(monkeypatch, set_api_key):
         },
         status=200,
     )
-
-    def mock_estimate_cost(*args, **kwargs):
-        return EST_FLEX_UNIT
-
-    def mock_simulation_task_get(*args, **kwargs):
-        from tidy3d.web.core.task_core import SimulationTask
-
-        return SimulationTask(
-            taskId=TASK_ID,
-            taskName=TASK_NAME,
-            createdAt=CREATED_AT,
-            realFlexUnit=FLEX_UNIT,
-            estFlexUnit=EST_FLEX_UNIT,
-            taskType=TaskType.EME.name,
-            metadataStatus="processed",
-            status="success",
-            s3Storage=1.0,
-        )
-
-    monkeypatch.setattr("tidy3d.web.api.webapi.estimate_cost", mock_estimate_cost)
-    monkeypatch.setattr("tidy3d.web.core.task_core.SimulationTask.get", mock_simulation_task_get)
 
 
 @pytest.fixture
@@ -287,50 +241,36 @@ def mock_webapi(
 
 
 @responses.activate
-def test_preupload_validation(mock_upload, mock_is_modeler_batch):
+def test_preupload_validation(mock_upload):
     sim = make_eme_sim().updated_copy(size=(1000, 1000, 1000))
     with pytest.raises(SetupError):
         upload(sim, TASK_NAME, PROJECT_NAME)
 
 
 @responses.activate
-def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata, mock_is_modeler_batch):
+def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata):
     sim = make_eme_sim()
     assert upload(sim, TASK_NAME, PROJECT_NAME)
 
 
 @responses.activate
-def test_get_info(mock_get_info, mock_is_modeler_batch):
+def test_get_info(mock_get_info):
     assert get_info(TASK_ID).taskId == TASK_ID
     assert get_info(TASK_ID).taskType == "EME"
 
 
 @responses.activate
-def test_get_run_info(mock_get_run_info, mock_is_modeler_batch):
+def test_get_run_info(mock_get_run_info):
     assert get_run_info(TASK_ID) == (100, 0)
 
 
 @responses.activate
-def test_estimate_cost(set_api_key, mock_get_info, mock_metadata, mock_is_modeler_batch):
-    # Mock the estimate_cost function to avoid HTTP calls
-    def mock_estimate_cost(*args, **kwargs):
-        return EST_FLEX_UNIT
-
-    import tidy3d.web.api.webapi as webapi
-
-    original_estimate_cost = webapi.estimate_cost
-    webapi.estimate_cost = mock_estimate_cost
-
-    try:
-        # Call the mocked function directly
-        result = webapi.estimate_cost(TASK_ID)
-        assert result == EST_FLEX_UNIT
-    finally:
-        webapi.estimate_cost = original_estimate_cost
+def test_estimate_cost(set_api_key, mock_get_info, mock_metadata):
+    assert estimate_cost(TASK_ID) == EST_FLEX_UNIT
 
 
 @responses.activate
-def test_download_json(monkeypatch, mock_get_info, tmp_path, mock_is_modeler_batch):
+def test_download_json(monkeypatch, mock_get_info, tmp_path):
     sim = make_eme_sim()
 
     def mock_download(*args, **kwargs):
@@ -348,7 +288,7 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path, mock_is_modeler_bat
 
 
 @responses.activate
-def test_load_simulation(monkeypatch, mock_get_info, tmp_path, mock_is_modeler_batch):
+def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
     def mock_download(*args, **kwargs):
         make_eme_sim().to_file(args[1])
 
@@ -358,7 +298,7 @@ def test_load_simulation(monkeypatch, mock_get_info, tmp_path, mock_is_modeler_b
 
 
 @responses.activate
-def test_run(mock_webapi, monkeypatch, tmp_path, mock_is_modeler_batch):
+def test_run(mock_webapi, monkeypatch, tmp_path):
     sim = make_eme_sim()
     monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
     assert run(
@@ -370,18 +310,18 @@ def test_run(mock_webapi, monkeypatch, tmp_path, mock_is_modeler_batch):
 
 
 @responses.activate
-def test_monitor(mock_get_info, mock_monitor, mock_is_modeler_batch):
+def test_monitor(mock_get_info, mock_monitor):
     monitor(TASK_ID, verbose=True)
     monitor(TASK_ID, verbose=False)
 
 
 @responses.activate
-def test_real_cost(mock_get_info, mock_is_modeler_batch):
+def test_real_cost(mock_get_info):
     assert real_cost(TASK_ID) == FLEX_UNIT
 
 
 @responses.activate
-def test_abort_task(set_api_key, mock_get_info, mock_is_modeler_batch):
+def test_abort_task(set_api_key, mock_get_info):
     responses.add(
         responses.PUT,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/abort",
