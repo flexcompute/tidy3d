@@ -42,10 +42,11 @@ def read_simulation_from_hdf5_gz(file_name: str) -> str:
     """read simulation str from hdf5.gz"""
 
     hdf5_file, hdf5_file_path = tempfile.mkstemp(".hdf5")
-    os.close(hdf5_file_path)
+    os.close(hdf5_file)
     try:
         extract_gzip_file(file_name, hdf5_file_path)
-        json_str = read_simulation_from_hdf5(file_name)
+        # Pass the uncompressed temporary file path to the reader
+        json_str = read_simulation_from_hdf5(hdf5_file_path)
     finally:
         os.unlink(hdf5_file_path)
     return json_str

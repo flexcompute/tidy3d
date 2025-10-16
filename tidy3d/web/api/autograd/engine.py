@@ -10,7 +10,7 @@ from .io_utils import get_vjp_traced_fields, upload_sim_fields_keys
 
 def parse_run_kwargs(**run_kwargs):
     """Parse the ``run_kwargs`` to extract what should be passed to the ``Job``/``Batch`` init."""
-    job_fields = [*list(Job._upload_fields), "solver_version", "pay_type"]
+    job_fields = [*list(Job._upload_fields), "solver_version", "pay_type", "lazy"]
     job_init_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
     return job_init_kwargs
 

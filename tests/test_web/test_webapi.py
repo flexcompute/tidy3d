@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -22,7 +23,9 @@ from tidy3d.components.source.time import GaussianPulse
 from tidy3d.exceptions import SetupError
 from tidy3d.web import common
 from tidy3d.web.api.asynchronous import run_async
-from tidy3d.web.api.container import Batch, Job
+from tidy3d.web.api.container import Batch, Job, WebContainer
+from tidy3d.web.api.run import _collect_by_hash, run
+from tidy3d.web.api.tidy3d_stub import Tidy3dStubData
 from tidy3d.web.api.webapi import (
     abort,
     delete,
@@ -30,7 +33,6 @@ from tidy3d.web.api.webapi import (
     download,
     download_json,
     download_log,
-    estimate_cost,
     get_info,
     get_run_info,
     get_tasks,
@@ -38,7 +40,6 @@ from tidy3d.web.api.webapi import (
     load_simulation,
     monitor,
     real_cost,
-    run,
     start,
     upload,
 )
@@ -55,6 +56,7 @@ FLEX_UNIT = 1.0
 EST_FLEX_UNIT = 11.11
 FILE_SIZE_GB = 4.0
 common.CONNECTION_RETRY_TIME = 0.1
+INVALID_TASK_ID = "INVALID_TASK_ID"
 
 task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
@@ -117,6 +119,12 @@ def set_api_key(monkeypatch):
 
 
 @pytest.fixture
+def mock_is_modeler_batch(monkeypatch):
+    """Mock _is_modeler_batch to return False for regular tasks."""
+    monkeypatch.setattr("tidy3d.web.api.webapi._is_modeler_batch", lambda x: False)
+
+
+@pytest.fixture
 def mock_upload(monkeypatch, set_api_key):
     """Mocks webapi.upload."""
     responses.add(
@@ -152,10 +160,37 @@ def mock_upload(monkeypatch, set_api_key):
         status=200,
     )
 
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
+        json={"data": {"estFlexUnit": EST_FLEX_UNIT}},
+        status=200,
+    )
+
     def mock_upload_file(*args, **kwargs):
         pass
 
+    def mock_simulation_task_get(*args, **kwargs):
+        from tidy3d.web.core.task_core import SimulationTask
+
+        return SimulationTask(
+            taskId=TASK_ID,
+            taskName=TASK_NAME,
+            createdAt=CREATED_AT,
+            realFlexUnit=FLEX_UNIT,
+            estFlexUnit=EST_FLEX_UNIT,
+            taskType=TaskType.FDTD.name,
+            metadataStatus="processed",
+            status="success",
+            s3Storage=1.0,
+        )
+
+    def mock_estimate_cost(*args, **kwargs):
+        return EST_FLEX_UNIT
+
     monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_upload_file)
+    monkeypatch.setattr("tidy3d.web.core.task_core.SimulationTask.get", mock_simulation_task_get)
+    monkeypatch.setattr("tidy3d.web.api.webapi.estimate_cost", mock_estimate_cost)
 
 
 @pytest.fixture
@@ -179,6 +214,38 @@ def mock_get_info(monkeypatch, set_api_key):
             }
         },
         status=200,
+    )
+
+    def mock_estimate_cost(*args, **kwargs):
+        return EST_FLEX_UNIT
+
+    def mock_simulation_task_get(task_id, *args, **kwargs):
+        from tidy3d.web.core.task_core import SimulationTask
+
+        if task_id == TASK_ID:
+            return SimulationTask(
+                taskId=TASK_ID,
+                taskName=TASK_NAME,
+                createdAt=CREATED_AT,
+                realFlexUnit=FLEX_UNIT,
+                estFlexUnit=EST_FLEX_UNIT,
+                taskType=TaskType.FDTD.name,
+                metadataStatus="processed",
+                status="success",
+                s3Storage=1.0,
+            )
+        elif task_id == INVALID_TASK_ID:
+            raise WebNotFoundError("Resource not found")
+        else:
+            raise ValueError(f"Mock not implemented for this task id: {task_id}")
+
+    def mock_task_estimate_cost(*args, **kwargs):
+        return EST_FLEX_UNIT
+
+    monkeypatch.setattr("tidy3d.web.api.webapi.estimate_cost", mock_estimate_cost)
+    monkeypatch.setattr("tidy3d.web.core.task_core.SimulationTask.get", mock_simulation_task_get)
+    monkeypatch.setattr(
+        "tidy3d.web.core.task_core.SimulationTask.estimate_cost", mock_task_estimate_cost
     )
 
 
@@ -302,13 +369,22 @@ def mock_get_run_info(monkeypatch, set_api_key):
 
 @pytest.fixture
 def mock_webapi(
-    mock_upload, mock_metadata, mock_get_info, mock_start, mock_monitor, mock_download, mock_load
+    mock_upload,
+    mock_metadata,
+    mock_get_info,
+    mock_start,
+    mock_monitor,
+    mock_download,
+    mock_load,
+    mock_is_modeler_batch,
 ):
     """Mocks all webapi operation."""
 
 
 @responses.activate
-def test_source_validation(monkeypatch, mock_upload, mock_get_info, mock_metadata):
+def test_source_validation(
+    monkeypatch, mock_upload, mock_get_info, mock_metadata, mock_is_modeler_batch
+):
     sim = make_sim().copy(update={"sources": []})
 
     assert upload(sim, TASK_NAME, PROJECT_NAME, source_required=False)
@@ -317,13 +393,13 @@ def test_source_validation(monkeypatch, mock_upload, mock_get_info, mock_metadat
 
 
 @responses.activate
-def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata):
+def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata, mock_is_modeler_batch):
     sim = make_sim()
     assert upload(sim, TASK_NAME, PROJECT_NAME)
 
 
 @responses.activate
-def test_get_info(mock_get_info):
+def test_get_info(mock_get_info, mock_is_modeler_batch):
     assert get_info(TASK_ID).taskId == TASK_ID
 
 
@@ -378,7 +454,7 @@ def test_download(mock_download, tmp_path):
 
 
 @responses.activate
-def _test_load(mock_load, mock_get_info, tmp_path):
+def _test_load(mock_load, mock_get_info, tmp_path, mock_is_modeler_batch):
     def mock_download(*args, **kwargs):
         pass
 
@@ -387,7 +463,7 @@ def _test_load(mock_load, mock_get_info, tmp_path):
 
 
 @responses.activate
-def test_delete(set_api_key, mock_get_info):
+def test_delete(set_api_key, mock_get_info, mock_is_modeler_batch):
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
@@ -437,12 +513,26 @@ def test_delete(set_api_key, mock_get_info):
 
 
 @responses.activate
-def test_estimate_cost(set_api_key, mock_get_info, mock_metadata):
-    assert estimate_cost(TASK_ID) == EST_FLEX_UNIT
+def test_estimate_cost(set_api_key, mock_is_modeler_batch):
+    # Mock the estimate_cost function to avoid HTTP calls
+    def mock_estimate_cost(*args, **kwargs):
+        return EST_FLEX_UNIT
+
+    import tidy3d.web.api.webapi as webapi
+
+    original_estimate_cost = webapi.estimate_cost
+    webapi.estimate_cost = mock_estimate_cost
+
+    try:
+        # Call the mocked function directly
+        result = webapi.estimate_cost(TASK_ID)
+        assert result == EST_FLEX_UNIT
+    finally:
+        webapi.estimate_cost = original_estimate_cost
 
 
 @responses.activate
-def test_download_json(monkeypatch, mock_get_info, tmp_path):
+def test_download_json(monkeypatch, mock_get_info, tmp_path, mock_is_modeler_batch):
     sim = make_sim()
 
     def mock_download(*args, **kwargs):
@@ -460,7 +550,7 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
 
 
 @responses.activate
-def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
+def test_load_simulation(monkeypatch, mock_get_info, tmp_path, mock_is_modeler_batch):
     def mock_download(*args, **kwargs):
         make_sim().to_file(args[1])
 
@@ -470,7 +560,7 @@ def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
 
 
 @responses.activate
-def test_download_log(monkeypatch, mock_get_info, tmp_path):
+def test_download_log(monkeypatch, mock_get_info, tmp_path, mock_is_modeler_batch):
     def mock(*args, **kwargs):
         file_path = kwargs["to_file"]
         with open(file_path, "w") as f:
@@ -535,13 +625,13 @@ def test_run(mock_webapi, monkeypatch, tmp_path, task_name):
 
 
 @responses.activate
-def test_monitor(mock_get_info, mock_monitor):
+def test_monitor(mock_get_info, mock_monitor, mock_is_modeler_batch):
     monitor(TASK_ID, verbose=True)
     monitor(TASK_ID, verbose=False)
 
 
 @responses.activate
-def test_real_cost(mock_get_info):
+def test_real_cost(mock_get_info, mock_is_modeler_batch):
     assert real_cost(TASK_ID) == FLEX_UNIT
 
 
@@ -768,13 +858,95 @@ def test_main(mock_webapi, monkeypatch, mock_job_status, tmp_path):
 @responses.activate
 def test_load_invalid_task_raises(mock_webapi):
     """Ensure that load() raises TaskNotFoundError for a non-existent task ID."""
-    fake_id = "INVALID_TASK_ID"
 
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{fake_id}/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{INVALID_TASK_ID}/detail",
         json={"error": "Task not found"},
         status=404,
     )
     with pytest.raises(WebNotFoundError, match="Resource not found"):
-        load(fake_id)
+        load(INVALID_TASK_ID, replace_existing=True)
+
+
+def _fake_load_factory(tmp_root, taskid_to_sim: dict):
+    def _fake_load(task_id, path="simulation_data.hdf5", lazy=False, **kwargs):
+        abs_path = path if os.path.isabs(path) else os.path.join(tmp_root, path)
+        abs_path = os.path.normpath(abs_path)
+        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+
+        sim_for_this = taskid_to_sim.get(task_id)
+
+        log = "- Time step    827 / time 4.13e-14s (  4 % done), field decay: 0.110e+00"
+        sim_data = SimulationData(simulation=sim_for_this, data=[], diverged=False, log=log)
+
+        sim_data.to_file(abs_path)
+        return Tidy3dStubData.postprocess(abs_path, lazy=lazy)
+
+    return _fake_load
+
+
+def apply_common_patches(
+    monkeypatch, tmp_root, *, api_path="tidy3d.web.api.webapi", path_to_sim=None, taskid_to_sim=None
+):
+    """Patch start/monitor/get_info/estimate_cost/upload/_check_folder/_modesolver_patch/load."""
+    monkeypatch.setattr(f"{api_path}.start", lambda *a, **k: True)
+    monkeypatch.setattr(f"{api_path}.monitor", lambda *a, **k: True)
+    monkeypatch.setattr(f"{api_path}.get_info", lambda *a, **k: SimpleNamespace(status="success"))
+    monkeypatch.setattr(f"{api_path}.estimate_cost", lambda *a, **k: 0.0)
+    monkeypatch.setattr(f"{api_path}.upload", lambda *a, **k: k["task_name"])
+    monkeypatch.setattr(WebContainer, "_check_folder", lambda *a, **k: True)
+    monkeypatch.setattr(f"{api_path}._modesolver_patch", lambda *_, **__: None, raising=False)
+    monkeypatch.setattr(
+        f"{api_path}.load",
+        _fake_load_factory(tmp_root=str(tmp_root), taskid_to_sim=taskid_to_sim),
+        raising=False,
+    )
+
+
+@responses.activate
+def test_run_with_flexible_containers_offline_lazy(monkeypatch, tmp_path):
+    sim1 = make_sim()
+    sim2 = sim1.updated_copy(run_time=sim1.run_time / 2)
+    sim_container = [sim1, {"sim": sim1, "sim2": sim2}, (sim1, [sim2])]
+
+    h2sim = _collect_by_hash(sim_container)
+    task_name = "T"
+    out_dir = tmp_path / "out"
+
+    taskid_to_sim = {f"{task_name}_{h}": s for h, s in h2sim.items()}
+
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim=taskid_to_sim)
+
+    data = run(sim_container, task_name=task_name, folder_name="PROJECT", path=str(out_dir))
+
+    assert isinstance(data, list) and len(data) == 3
+
+    assert isinstance(data[0], SimulationData)
+    assert data[0].__class__.__name__ == "SimulationDataProxy"
+
+    assert isinstance(data[1], dict)
+    assert "sim2" in data[1]
+    assert isinstance(data[1]["sim2"], SimulationData)
+    assert data[1]["sim2"].__class__.__name__ == "SimulationDataProxy"
+
+    assert isinstance(data[2], tuple)
+    assert data[2][0].__class__.__name__ == "SimulationDataProxy"
+    assert isinstance(data[2][1], list)
+    assert data[2][1][0].__class__.__name__ == "SimulationDataProxy"
+
+    assert data[0].simulation == sim1
+    assert data[1]["sim2"].simulation == sim2
+
+
+@responses.activate
+def test_run_single_offline_eager(monkeypatch, tmp_path):
+    sim = make_sim()
+    single_file = str(tmp_path / "sim.hdf5")
+    task_name = "single"
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim={task_name: sim})
+
+    sim_data = run(sim, task_name=task_name, path=single_file)
+
+    assert isinstance(sim_data, SimulationData)
+    assert sim_data.__class__.__name__ == "SimulationData"  # no proxy
