@@ -24,6 +24,7 @@ def run_async(
     reduce_simulation: Literal["auto", True, False] = "auto",
     pay_type: Union[PayType, str] = PayType.AUTO,
     priority: Optional[int] = None,
+    lazy: bool = False,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -56,6 +57,10 @@ def run_async(
     priority: int = None
         Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
         It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
+    lazy : bool = False
+        Whether to load the actual data (``lazy=False``) or return a proxy that loads
+        the data when accessed (``lazy=True``).
+
     Returns
     ------
     :class:`BatchData`
@@ -91,6 +96,7 @@ def run_async(
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
+        lazy=lazy,
     )
 
     batch_data = batch.run(path_dir=path_dir, priority=priority)
