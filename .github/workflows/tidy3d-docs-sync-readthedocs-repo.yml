@@ -18,6 +18,9 @@ on:
       - 'v*'
       - 'demo/*'
 
+permissions:
+  contents: read
+
 jobs:
   extract_branch_or_tag:
     outputs:
@@ -46,6 +49,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           fetch-tags: true
+          persist-credentials: true
 
       - name: push-mirror-repo
         env:
