@@ -742,8 +742,8 @@ class Batch(WebContainer):
             self.start()
         else:
             self.start(priority=priority)
-        self.monitor()
-        return self.load(path_dir=path_dir)
+        self.monitor(path_dir=path_dir, download_on_success=True)
+        return self.load(path_dir=path_dir, skip_download=True)
 
     @cached_property
     def jobs(self) -> dict[TaskName, Job]:
@@ -896,20 +896,11 @@ class Batch(WebContainer):
 
     def postprocess_start(self, worker_group: Optional[str] = None, verbose: bool = True) -> None:
         """
-        Starts the postprocess phase for all applicable jobs within the batch.
+        Start the postprocess phase for all applicable jobs in the batch.
 
-        This function iterates through each job in the batch and calls its
-        'postprocess_start' method. The check for whether a job is a
-        Component Modeler task is handled within the individual Job's method.
-
-        This function does not wait for postprocessing to finish.
-
-        Parameters
-        ----------
-        worker_group : Optional[str] = None
-            The specific worker group to run the postprocessing tasks on.
-        verbose : bool = True
-            Whether to print info messages.
+        This simply forwards to each Job's `postprocess_start(...)`. The Job decides
+        whether it's a Component Modeler task and whether it can/should start now.
+        This method does not wait for postprocessing to finish.
         """
         if self.verbose and verbose:
             console = get_logging_console()
@@ -918,44 +909,86 @@ class Batch(WebContainer):
         for job in self.jobs.values():
             job.postprocess_start(worker_group=worker_group, verbose=verbose)
 
-    def monitor(self) -> None:
+    def monitor(
+        self,
+        *,
+        download_on_success: bool = False,
+        path_dir: str = DEFAULT_DATA_DIR,
+        replace_existing: bool = False,
+        postprocess_worker_group: Optional[str] = None,
+    ) -> None:
         """
-        Monitor progress of each of the running tasks.
+        Monitor progress of each running task.
 
-        For Component Modeler jobs, this method will automatically trigger the
-        post-processing step as soon as the run phase is complete.
+        - For Component Modeler jobs, automatically triggers postprocessing once run finishes.
+        - Optionally downloads results as soon as a job reaches final success.
+        - Rich progress bars in verbose mode; quiet polling otherwise.
+
+
+        Parameters
+        ----------
+        download_on_success : bool = False
+            If ``True``, automatically start downloading the results for a job as soon as it reaches
+            ``success``.
+        path_dir : str = './'
+            Base directory where data will be downloaded, by default the current working directory.
+            Only used when ``download_on_success`` is ``True``.
+        replace_existing : bool = False
+            Downloads the data even if path exists (overwriting the existing). Only used when
+            ``download_on_success`` is ``True``.
         """
+        # ----- download scheduling ---------------------------------------------------
+        downloads_started: set[str] = set()
+        download_futures: dict[TaskId, concurrent.futures.Future] = {}
+        download_executor: Optional[ThreadPoolExecutor] = None
 
-        def check_continue_condition(job) -> bool:
-            """
-            Determines if a job still needs monitoring.
-            Returns True if monitoring should continue, False if the job is finished.
-            """
+        if download_on_success:
+            self._check_path_dir(path_dir=path_dir)
+            download_executor = ThreadPoolExecutor(max_workers=self.num_workers)
+
+        def _should_download(job) -> bool:
             status = job.status
             if not web._is_modeler_batch(job.task_id):
-                # For regular jobs, finish when the status is in an end state.
+                return status == "success"
+            if status == "success":
+                return True
+            return status == "run_success" and getattr(job, "postprocess_status", None) == "success"
+
+        def schedule_download(job) -> None:
+            if download_executor is None or not _should_download(job):
+                return
+            task_id = job.task_id
+            if task_id in downloads_started:
+                return
+
+            job_path_str = self._job_data_path(task_id=task_id, path_dir=path_dir)
+            if os.path.exists(job_path_str):
+                if not replace_existing:
+                    downloads_started.add(task_id)
+                    log.info(
+                        f"File '{job_path_str}' already exists. Skipping download "
+                        "(set `replace_existing=True` to overwrite)."
+                    )
+                    return
+                log.info(f"File '{job_path_str}' already exists. Overwriting.")
+
+            downloads_started.add(task_id)
+            download_futures[task_id] = download_executor.submit(job.download, job_path_str)
+
+        # ----- continue condition & status formatting -------------------------------
+        def check_continue_condition(job) -> bool:
+            status = job.status
+            if not web._is_modeler_batch(job.task_id):
                 return status not in END_STATES
-
-            # For modeler jobs, the logic is more complex.
             if status == "run_success":
-                condition = job.postprocess_status not in END_STATES
-                return condition
-
-            if status not in END_STATES:
-                return True  # Still running, definitely continue.
-
-            # If status is a final end state (e.g., 'success', 'error'), we are done.
-            return False
+                return job.postprocess_status not in END_STATES
+            return status not in END_STATES
 
         def pbar_description(
             task_name: str, status: str, max_name_length: int, status_width: int
         ) -> str:
-            """Make a progressbar description based on the status."""
-            # if task name too long, truncate and add ...
-            if len(task_name) > max_name_length - 3:  # -3 to leave room for ...
+            if len(task_name) > max_name_length - 3:
                 task_name = task_name[: (max_name_length - 3)] + "..."
-
-            # right-align status
             task_part = f"{task_name:<{max_name_length}}"
 
             if status in ERROR_STATES:
@@ -968,106 +1001,125 @@ class Batch(WebContainer):
                 status_part = f"→ [blue]{status:<{status_width}}"
             else:
                 status_part = f"→ {status:<{status_width}}"
-
             return f"{task_part} {status_part}"
 
         max_task_name = max(len(task_name) for task_name in self.jobs.keys())
         max_name_length = min(30, max(max_task_name, 15))
 
-        # Keep track of modeler jobs that have had postprocessing started.
-        postprocess_started_tasks = set()
+        # track which modeler jobs we've already kicked into postprocess
+        postprocess_started_tasks: set[str] = set()
 
-        if self.verbose:
-            console = get_logging_console()
+        try:
+            if self.verbose:
+                console = get_logging_console()
+                self.estimate_cost()
+                console.log(
+                    "Use 'Batch.real_cost()' to get the billed FlexCredit cost after completion."
+                )
 
-            self.estimate_cost()
-            console.log(
-                "Use 'Batch.real_cost()' to "
-                "get the billed FlexCredit cost after the Batch has completed."
-            )
+                progress_columns = (
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(bar_width=25),
+                    TaskProgressColumn(),
+                    TimeElapsedColumn(),
+                )
 
-            progress_columns = (
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(bar_width=25),
-                TaskProgressColumn(),
-                TimeElapsedColumn(),
-            )
-
-            with Progress(*progress_columns, console=console, transient=False) as progress:
-                # Create progress bars
-                pbar_tasks = {}
-                for task_name, job in self.jobs.items():
-                    status = job.status
-                    description = pbar_description(task_name, status, max_name_length, 0)
-                    completed = STATE_PROGRESS_PERCENTAGE[status]
-                    pbar = progress.add_task(
-                        description, total=COMPLETED_PERCENT, completed=completed
-                    )
-                    pbar_tasks[task_name] = pbar
-
-                while any(check_continue_condition(job) for job in self.jobs.values()):
+                with Progress(*progress_columns, console=console, transient=False) as progress:
+                    pbar_tasks: dict[str, int] = {}
                     for task_name, job in self.jobs.items():
+                        schedule_download(job)
                         status = job.status
-                        if (
-                            web._is_modeler_batch(job.task_id)
-                            and status == "run_success"
-                            and job.task_id not in postprocess_started_tasks
-                        ):
-                            job.postprocess_start(verbose=True)
-                            postprocess_started_tasks.add(job.task_id)
+                        completed = STATE_PROGRESS_PERCENTAGE.get(status, 0)
+                        desc = pbar_description(task_name, status, max_name_length, 0)
+                        pbar_tasks[task_name] = progress.add_task(
+                            desc, total=COMPLETED_PERCENT, completed=completed
+                        )
 
-                        # Update progress bar
-                        pbar = pbar_tasks[task_name]
-                        if status != "run_success":
-                            completed_percent = STATE_PROGRESS_PERCENTAGE[status]
-                        elif status == "run_success":
-                            postprocess_status = job.postprocess_status
-                            if postprocess_status in END_STATES:
-                                status = postprocess_status
-                                completed_percent = STATE_PROGRESS_PERCENTAGE[postprocess_status]
+                    while any(check_continue_condition(job) for job in self.jobs.values()):
+                        for task_name, job in self.jobs.items():
+                            status = job.status
+
+                            # auto-start postprocess for modeler jobs when run finishes
+                            if (
+                                web._is_modeler_batch(job.task_id)
+                                and status == "run_success"
+                                and job.task_id not in postprocess_started_tasks
+                            ):
+                                job.postprocess_start(
+                                    worker_group=postprocess_worker_group, verbose=True
+                                )
+                                postprocess_started_tasks.add(job.task_id)
+
+                            schedule_download(job)
+
+                            # choose display status & percent
+                            if status != "run_success":
+                                display_status = status
+                                pct = STATE_PROGRESS_PERCENTAGE.get(status, 0)
                             else:
-                                status = "postprocess"
-                                completed_percent = STATE_PROGRESS_PERCENTAGE["postprocess"]
-                        description = pbar_description(task_name, status, max_name_length, 0)
-                        progress.update(pbar, description=description, completed=completed_percent)
+                                post_st = getattr(job, "postprocess_status", None)
+                                if post_st in END_STATES:
+                                    display_status = post_st
+                                    pct = STATE_PROGRESS_PERCENTAGE.get(post_st, 0)
+                                else:
+                                    display_status = "postprocess"
+                                    pct = STATE_PROGRESS_PERCENTAGE.get("postprocess", 0)
+
+                            pbar = pbar_tasks[task_name]
+                            desc = pbar_description(task_name, display_status, max_name_length, 0)
+                            progress.update(pbar, description=desc, completed=pct)
+
+                        progress.refresh()
+                        time.sleep(BATCH_MONITOR_PROGRESS_REFRESH_TIME)
+
+                    # final render to terminal state for all bars
+                    for task_name, job in self.jobs.items():
+                        schedule_download(job)
+                        status = job.status
+                        if status != "run_success":
+                            display_status = status
+                            pct = STATE_PROGRESS_PERCENTAGE.get(status, COMPLETED_PERCENT)
+                        else:
+                            post_st = getattr(job, "postprocess_status", None)
+                            if post_st in END_STATES:
+                                display_status = post_st
+                                pct = STATE_PROGRESS_PERCENTAGE.get(post_st, COMPLETED_PERCENT)
+                            else:
+                                display_status = "postprocess"
+                                pct = STATE_PROGRESS_PERCENTAGE.get(
+                                    "postprocess", COMPLETED_PERCENT
+                                )
+
+                        pbar = pbar_tasks[task_name]
+                        desc = pbar_description(task_name, display_status, max_name_length, 0)
+                        progress.update(pbar, description=desc, completed=pct)
 
                     progress.refresh()
-                    time.sleep(BATCH_MONITOR_PROGRESS_REFRESH_TIME)
+                    console.log("Batch complete.")
+            else:
+                # quiet mode
+                while any(check_continue_condition(job) for job in self.jobs.values()):
+                    for job in self.jobs.values():
+                        if (
+                            web._is_modeler_batch(job.task_id)
+                            and job.status == "run_success"
+                            and job.task_id not in postprocess_started_tasks
+                        ):
+                            job.postprocess_start(
+                                worker_group=postprocess_worker_group, verbose=False
+                            )
+                            postprocess_started_tasks.add(job.task_id)
 
-                # Final update to ensure all bars show their terminal state
-                for task_name, job in self.jobs.items():
-                    status = job.status
-                    if status != "run_success":
-                        completed_percent = STATE_PROGRESS_PERCENTAGE[status]
-                    elif status == "run_success":
-                        postprocess_status = job.postprocess_status
-                        if postprocess_status in END_STATES:
-                            status = postprocess_status
-                            completed_percent = STATE_PROGRESS_PERCENTAGE[postprocess_status]
-                        else:
-                            status = "postprocess"
-                            completed_percent = STATE_PROGRESS_PERCENTAGE["postprocess"]
-                    pbar = pbar_tasks[task_name]
-                    description = pbar_description(task_name, status, max_name_length, 0)
+                        schedule_download(job)
 
-                    progress.update(pbar, description=description, completed=completed_percent)
-
-                progress.refresh()
-                console.log("Batch complete.")
-
-        else:
-            # Non-verbose path
-            while any(check_continue_condition(job) for job in self.jobs.values()):
-                for job in self.jobs.values():
-                    # If a modeler job is done running, start its postprocessing once.
-                    if (
-                        web._is_modeler_batch(job.task_id)
-                        and job.status == "run_success"
-                        and job.task_id not in postprocess_started_tasks
-                    ):
-                        job.postprocess_start(verbose=False)
-                        postprocess_started_tasks.add(job.task_id)
-                time.sleep(web.REFRESH_TIME)
+                    time.sleep(web.REFRESH_TIME)
+        finally:
+            if download_executor is not None:
+                try:
+                    for fut in concurrent.futures.as_completed(download_futures.values()):
+                        fut.result()
+                finally:
+                    download_executor.shutdown(wait=True)
 
     @staticmethod
     def _job_data_path(task_id: TaskId, path_dir: str = DEFAULT_DATA_DIR):
@@ -1176,7 +1228,12 @@ class Batch(WebContainer):
                         completed += 1
                         progress.update(pbar, completed=completed)
 
-    def load(self, path_dir: str = DEFAULT_DATA_DIR, replace_existing: bool = False) -> BatchData:
+    def load(
+        self,
+        path_dir: str = DEFAULT_DATA_DIR,
+        replace_existing: bool = False,
+        skip_download: bool = False,
+    ) -> BatchData:
         """Download results and load them into :class:`.BatchData` object.
 
         Parameters
@@ -1185,6 +1242,8 @@ class Batch(WebContainer):
             Base directory where data will be downloaded, by default current working directory.
         replace_existing : bool = False
             Downloads the data even if path exists (overwriting the existing).
+        skip_download : bool = False
+            Does not trigger download. Should be True if already downloaded.
 
         Returns
         ------
@@ -1218,8 +1277,8 @@ class Batch(WebContainer):
             if isinstance(job.simulation, ModeSolver):
                 job_data = data[task_name]
                 job.simulation._patch_data(data=job_data)
-
-        self.download(path_dir=path_dir, replace_existing=replace_existing)
+        if not skip_download:
+            self.download(path_dir=path_dir, replace_existing=replace_existing)
 
         return data
 
