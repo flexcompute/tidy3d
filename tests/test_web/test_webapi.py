@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from concurrent.futures import Future
 from types import SimpleNamespace
 
 import numpy as np
@@ -25,7 +26,7 @@ from tidy3d.web import common
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job, WebContainer
 from tidy3d.web.api.run import _collect_by_hash, run
-from tidy3d.web.api.tidy3d_stub import Tidy3dStubData
+from tidy3d.web.api.tidy3d_stub import Tidy3dStubData, task_type_name_of
 from tidy3d.web.api.webapi import (
     abort,
     delete,
@@ -63,6 +64,24 @@ task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
 
 Env.dev.active()
+
+
+class ImmediateExecutor:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def submit(self, fn, *args, **kwargs):
+        future = Future()
+        try:
+            result = fn(*args, **kwargs)
+        except Exception as err:  # pragma: no cover - defensive
+            future.set_exception(err)
+        else:
+            future.set_result(result)
+        return future
+
+    def shutdown(self, wait=True):
+        pass
 
 
 def make_sim():
@@ -703,6 +722,106 @@ def test_batch_run_saves_file_after_upload(mock_webapi, mock_job_status, tmp_pat
         batch.run(path_dir=str(tmp_path))
 
 
+def test_batch_monitor_downloads_on_success(monkeypatch, tmp_path):
+    events = []
+
+    class FakeJob:
+        def __init__(self, task_id: str, statuses: list[str]):
+            self.task_id = task_id
+            self._statuses = statuses
+            self._idx = 0
+
+        @property
+        def status(self):
+            status = self._statuses[self._idx]
+            if self._idx < len(self._statuses) - 1:
+                self._idx += 1
+            events.append((self.task_id, "status", status))
+            return status
+
+        def download(self, path: str):
+            events.append((self.task_id, "download", path))
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+
+    sims = {"task_a": make_sim(), "task_b": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    fake_jobs = {
+        "task_a": FakeJob("task_a_id", ["running", "success", "success"]),
+        "task_b": FakeJob("task_b_id", ["running", "running", "success"]),
+    }
+    batch._cached_properties["jobs"] = fake_jobs
+
+    batch.monitor(download_on_success=True, path_dir=str(tmp_path))
+
+    downloads = [event for event in events if event[1] == "download"]
+    assert len(downloads) == 2
+    assert {event[0] for event in downloads} == {"task_a_id", "task_b_id"}
+
+    expected_paths = {
+        "task_a_id": os.path.join(str(tmp_path), "task_a_id.hdf5"),
+        "task_b_id": os.path.join(str(tmp_path), "task_b_id.hdf5"),
+    }
+
+    for task_id, _, path in downloads:
+        assert path == expected_paths[task_id]
+
+    job1_download_idx = next(
+        i
+        for i, event in enumerate(events)
+        if event == ("task_a_id", "download", expected_paths["task_a_id"])
+    )
+    job2_success_idx = next(
+        i for i, event in enumerate(events) if event == ("task_b_id", "status", "success")
+    )
+
+    assert job1_download_idx < job2_success_idx, "Download should start before other jobs finish"
+
+
+def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
+    events = []
+
+    class FakeJob:
+        def __init__(self, task_id: str, statuses: list[str]):
+            self.task_id = task_id
+            self._statuses = statuses
+            self._idx = 0
+
+        @property
+        def status(self):
+            status = self._statuses[self._idx]
+            if self._idx < len(self._statuses) - 1:
+                self._idx += 1
+            events.append((self.task_id, "status", status))
+            return status
+
+        def download(self, path: str):
+            events.append((self.task_id, "download", path))
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+
+    sims = {"task_a": make_sim(), "task_b": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    fake_jobs = {
+        "task_a": FakeJob("task_a_id", ["success", "success"]),
+        "task_b": FakeJob("task_b_id", ["running", "success"]),
+    }
+    batch._cached_properties["jobs"] = fake_jobs
+
+    existing_path = os.path.join(str(tmp_path), "task_a_id.hdf5")
+    with open(existing_path, "w", encoding="utf8") as handle:
+        handle.write("cached")
+
+    batch.monitor(download_on_success=True, path_dir=str(tmp_path))
+
+    downloads = [event for event in events if event[1] == "download"]
+    assert downloads == [("task_b_id", "download", os.path.join(str(tmp_path), "task_b_id.hdf5"))]
+
+
 """ Async """
 
 
@@ -800,16 +919,30 @@ def _fake_load_factory(tmp_root, taskid_to_sim: dict):
 
 
 def apply_common_patches(
-    monkeypatch, tmp_root, *, api_path="tidy3d.web.api.webapi", path_to_sim=None, taskid_to_sim=None
+    monkeypatch,
+    tmp_root,
+    *,
+    api_path="tidy3d.web.api.webapi",
+    taskid_to_sim=None,
 ):
     """Patch start/monitor/get_info/estimate_cost/upload/_check_folder/_modesolver_patch/load."""
     monkeypatch.setattr(f"{api_path}.start", lambda *a, **k: True)
     monkeypatch.setattr(f"{api_path}.monitor", lambda *a, **k: True)
-    monkeypatch.setattr(f"{api_path}.get_info", lambda *a, **k: SimpleNamespace(status="success"))
+
+    # --- make get_info return also task type ---
+    def _fake_get_info(task_id: str, *_, **__):
+        sim = taskid_to_sim.get(task_id) if taskid_to_sim else None
+        task_type = task_type_name_of(sim) if sim is not None else None
+        return SimpleNamespace(status="success", taskType=task_type)
+
+    monkeypatch.setattr(f"{api_path}.get_info", _fake_get_info)
+
+    # other patches
     monkeypatch.setattr(f"{api_path}.estimate_cost", lambda *a, **k: 0.0)
     monkeypatch.setattr(f"{api_path}.upload", lambda *a, **k: k["task_name"])
     monkeypatch.setattr(WebContainer, "_check_folder", lambda *a, **k: True)
     monkeypatch.setattr(f"{api_path}._modesolver_patch", lambda *_, **__: None, raising=False)
+    monkeypatch.setattr(f"{api_path}.download", lambda *_, **__: None, raising=False)
     monkeypatch.setattr(
         f"{api_path}.load",
         _fake_load_factory(tmp_root=str(tmp_root), taskid_to_sim=taskid_to_sim),

@@ -49,6 +49,25 @@ from tidy3d.web.core.file_util import (
 from tidy3d.web.core.stub import TaskStub, TaskStubData
 from tidy3d.web.core.types import TaskType
 
+TYPE_MAP: dict[type, TaskType] = {
+    Simulation: TaskType.FDTD,
+    ModeSolver: TaskType.MODE_SOLVER,
+    HeatSimulation: TaskType.HEAT,
+    HeatChargeSimulation: TaskType.HEAT_CHARGE,
+    EMESimulation: TaskType.EME,
+    ModeSimulation: TaskType.MODE,
+    VolumeMesher: TaskType.VOLUME_MESH,
+    ModalComponentModeler: TaskType.COMPONENT_MODELER,
+    TerminalComponentModeler: TaskType.TERMINAL_COMPONENT_MODELER,
+}
+
+
+def task_type_name_of(simulation: WorkflowType) -> str:
+    for cls, ttype in TYPE_MAP.items():
+        if isinstance(simulation, cls):
+            return ttype.name
+    raise TypeError(f"Could not find task type for: {type(simulation).__name__}")
+
 
 class Tidy3dStub(BaseModel, TaskStub):
     simulation: WorkflowType = pd.Field(discriminator="type")
@@ -153,24 +172,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         :class:`TaskType`
             An instance Type of the component class calling ``load``.
         """
-        if isinstance(self.simulation, Simulation):
-            return TaskType.FDTD.name
-        if isinstance(self.simulation, ModeSolver):
-            return TaskType.MODE_SOLVER.name
-        if isinstance(self.simulation, HeatSimulation):
-            return TaskType.HEAT.name
-        if isinstance(self.simulation, HeatChargeSimulation):
-            return TaskType.HEAT_CHARGE.name
-        if isinstance(self.simulation, EMESimulation):
-            return TaskType.EME.name
-        if isinstance(self.simulation, ModeSimulation):
-            return TaskType.MODE.name
-        elif isinstance(self.simulation, VolumeMesher):
-            return TaskType.VOLUME_MESH.name
-        elif isinstance(self.simulation, ModalComponentModeler):
-            return TaskType.COMPONENT_MODELER.name
-        elif isinstance(self.simulation, TerminalComponentModeler):
-            return TaskType.TERMINAL_COMPONENT_MODELER.name
+        return task_type_name_of(self.simulation)
 
     def validate_pre_upload(self, source_required) -> None:
         """Perform some pre-checks on instances of component"""
