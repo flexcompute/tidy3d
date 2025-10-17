@@ -8422,7 +8422,7 @@
           "type": "object"
         },
         "edge_singularity_correction": {
-          "default": false,
+          "default": true,
           "type": "boolean"
         },
         "timestep_reduction": {
@@ -10922,7 +10922,7 @@
         "lossy_metal": {
           "default": {
             "attrs": {},
-            "edge_singularity_correction": false,
+            "edge_singularity_correction": true,
             "timestep_reduction": 0.0,
             "type": "SurfaceImpedance"
           },
@@ -10970,7 +10970,7 @@
         "pec": {
           "default": {
             "attrs": {},
-            "edge_singularity_correction": false,
+            "edge_singularity_correction": true,
             "timestep_reduction": 0.3,
             "type": "PECConformal"
           },
@@ -11033,7 +11033,7 @@
           "type": "object"
         },
         "edge_singularity_correction": {
-          "default": false,
+          "default": true,
           "type": "boolean"
         },
         "timestep_reduction": {
@@ -12297,7 +12297,7 @@
         },
         "lossy_metal": {
           "attrs": {},
-          "edge_singularity_correction": false,
+          "edge_singularity_correction": true,
           "timestep_reduction": 0.0,
           "type": "SurfaceImpedance"
         },
@@ -12307,7 +12307,7 @@
         },
         "pec": {
           "attrs": {},
-          "edge_singularity_correction": false,
+          "edge_singularity_correction": true,
           "timestep_reduction": 0.3,
           "type": "PECConformal"
         },
