@@ -6,18 +6,18 @@ on:
     - cron: '0 5 * * *' # Runs at 5am UTC
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   update-lockfile:
     uses: ./.github/workflows/tidy3d-python-client-update-lockfile.yml
+    permissions:
+      contents: write
+      pull-requests: write
     with:
       run-workflow: true
-    secrets: inherit
 
   submodule-tests:
     uses: ./.github/workflows/tidy3d-python-client-submodules-test.yml
     with:
       run-workflow: true
-    secrets: inherit
