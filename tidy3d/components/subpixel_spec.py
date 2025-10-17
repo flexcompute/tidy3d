@@ -121,7 +121,7 @@ class PECConformal(AbstractSubpixelAveragingMethod):
     )
 
     edge_singularity_correction: bool = pd.Field(
-        False,
+        True,
         title="Apply Singularity Model At Metal Edges",
         description="Apply field correction model at metallic edges where field singularity occurs. "
         "The edges should be straight, and aligned with the primal grids; and the wedge angle is either "
