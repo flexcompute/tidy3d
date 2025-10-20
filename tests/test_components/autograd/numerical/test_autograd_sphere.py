@@ -15,12 +15,12 @@ import tidy3d.web as web
 
 PLOT_FD_ADJ_COMPARISON = False
 NUM_FINITE_DIFFERENCE = 10
-SAVE_FD_ADJ_DATA = True
+SAVE_FD_ADJ_DATA = False
 SAVE_FD_LOC = 0
 SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = False
 VERBOSE = False
-NUMERICAL_RESULTS_DATA_DIR = "./numerical_periodic_test/"
+NUMERICAL_RESULTS_DATA_DIR = "./numerical_field_test/"
 SHOW_PRINT_STATEMENTS = False
 
 RMS_THRESHOLD = 0.25
@@ -39,24 +39,26 @@ MESH_FACTOR_DESIGN = 30.0
 
 
 def get_sim_geometry(mesh_wvl_um):
-    return td.Box(
-        size=(3.5 * mesh_wvl_um, 3.5 * mesh_wvl_um, 7 * mesh_wvl_um),
-        center=(3.5 * mesh_wvl_um / 4.0, 0, 0),
-    )
+    return td.Box(size=(5 * mesh_wvl_um, 5 * mesh_wvl_um, 7 * mesh_wvl_um), center=(0, 0, 0))
 
 
 def make_base_sim(
     mesh_wvl_um,
     adj_wvl_um,
+    monitor_size_wvl,
     box_for_override,
-    pw_angle_deg,
-    grating_mode,
     monitor_bg_index=1.0,
     run_time=1e-11,
 ):
     sim_geometry = get_sim_geometry(mesh_wvl_um)
     sim_size_um = sim_geometry.size
     sim_center_um = sim_geometry.center
+
+    boundary_spec = td.BoundarySpec(
+        x=td.Boundary.pml(),
+        y=td.Boundary.pml(),
+        z=td.Boundary.pml(),
+    )
 
     dl_design = mesh_wvl_um / MESH_FACTOR_DESIGN
 
@@ -79,59 +81,22 @@ def make_base_sim(
     freq0 = td.C_0 / adj_wvl_um
 
     pulse = td.GaussianPulse(freq0=freq0, fwidth=fwidth_src)
-
     src = td.PlaneWave(
-        center=(1.0, 0, -0.25 * sim_size_um[2]),
-        size=[td.inf, td.inf, 0],
+        center=(0, 0, -2 * mesh_wvl_um),
+        size=src_size,
         source_time=pulse,
         direction="+",
-        angle_theta=(pw_angle_deg * np.pi / 180.0),
     )
 
-    bloch_x = td.Boundary.bloch_from_source(
-        source=src,
-        domain_size=sim_size_um[0],
-        axis=0,
+    field_monitor = td.FieldMonitor(
+        center=(0, 0, 0.25 * sim_size_um[2]),
+        size=tuple(dim * mesh_wvl_um for dim in monitor_size_wvl),
+        name="monitor_fields",
+        freqs=[freq0],
     )
-    bloch_y = td.Boundary.bloch_from_source(
-        source=src,
-        domain_size=sim_size_um[1],
-        axis=1,
-    )
-
-    boundary_spec = td.BoundarySpec(
-        x=bloch_x,
-        y=bloch_y,
-        z=td.Boundary.pml(num_layers=48),
-    )
-
-    assert (grating_mode == "transmission") or (grating_mode == "reflection"), (
-        "Unknown grating mode specified!"
-    )
-    if grating_mode == "transmission":
-        diffraction_monitor = td.DiffractionMonitor(
-            center=(
-                0,
-                sim_center_um[1],
-                0.25 * sim_size_um[2],
-            ),
-            size=(np.inf, np.inf, 0),
-            name="monitor_diffraction",
-            freqs=[freq0],
-            normal_dir="+",
-        )
-    else:
-        diffraction_monitor = td.DiffractionMonitor(
-            # center=(0, 0, -0.35 * sim_size_um[2]),
-            center=(sim_center_um[0], sim_center_um[1], -0.35 * sim_size_um[2]),
-            size=(np.inf, np.inf, 0),
-            name="monitor_diffraction",
-            freqs=[freq0],
-            normal_dir="-",
-        )
 
     monitor_index_block = td.Box(
-        center=(sim_center_um[0], sim_center_um[1], 0.25 * sim_size_um[2] + mesh_wvl_um),
+        center=(0, 0, 0.25 * sim_size_um[2] + mesh_wvl_um),
         size=(*tuple(2 * size for size in sim_size_um[0:2]), mesh_wvl_um + 0.5 * sim_size_um[2]),
     )
     monitor_index_block_structure = td.Structure(
@@ -148,7 +113,7 @@ def make_base_sim(
         ),
         structures=[monitor_index_block_structure],
         sources=[src],
-        monitors=[diffraction_monitor],
+        monitors=[field_monitor],
         run_time=run_time,
         boundary_spec=boundary_spec,
         subpixel=True,
@@ -172,7 +137,7 @@ def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir):
                 structures=(*sim_base.structures, block_structure)
             )
 
-            simulation_dict[f"numerical_periodic_testing_{idx}"] = sim_with_block.copy()
+            simulation_dict[f"numerical_field_testing_{idx}"] = sim_with_block.copy()
 
         sim_data = web.run_async(
             simulation_dict, path_dir=sim_path_dir, local_gradient=LOCAL_GRADIENT, verbose=VERBOSE
@@ -180,7 +145,7 @@ def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir):
 
         objective_vals = []
         for idx in range(len(perm_arrays)):
-            objective_vals.append(eval_fn(sim_data[f"numerical_periodic_testing_{idx}"]))
+            objective_vals.append(eval_fn(sim_data[f"numerical_field_testing_{idx}"]))
 
         if len(perm_arrays) == 1:
             return objective_vals[0]
@@ -190,146 +155,124 @@ def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir):
     return objective
 
 
-def make_eval_fns(orders_x, orders_y, polarization):
-    def transmission_order_pol_amp_sq(sim_data):
+def make_eval_fns(monitor_size_wvl):
+    num_nonzero_spatial_dims = 3 - np.sum(np.isclose(monitor_size_wvl, 0))
+
+    def intensity(sim_data):
+        field_data = sim_data["monitor_fields"]
+        shape_x, shape_y, shape_z, *_ = field_data.Ex.values.shape
+
         total = 0.0
+        return np.sum(
+            np.abs(field_data.Ex.values[shape_x // 2, shape_y // 2, shape_z // 2]) ** 2
+            + np.abs(field_data.Ey.values[shape_x // 2, shape_y // 2, shape_z // 2]) ** 2
+            + np.abs(field_data.Ez.values[shape_x // 2, shape_y // 2, shape_z // 2]) ** 2
+        )
 
-        for order_x_val in orders_x:
-            for order_y_val in orders_y:
-                total += np.sum(
-                    np.abs(
-                        sim_data["monitor_diffraction"]
-                        .amps.sel(
-                            polarization=polarization, orders_x=order_x_val, orders_y=order_y_val
-                        )
-                        .data
-                    )
-                    ** 2
-                )
+    eval_fns = [intensity]
+    eval_fn_names = ["intensity"]
 
-        return total
+    if num_nonzero_spatial_dims == 2:
 
-    eval_fns = [transmission_order_pol_amp_sq]
-    eval_fn_names = [f"transmission_order_pol_amp_sq_{orders_x}_{orders_y}_{polarization}"]
+        def flux(sim_data):
+            field_data = sim_data["monitor_fields"]
+
+            return np.sum(field_data.flux.values)
+
+        eval_fns.append(flux)
+        eval_fn_names.append("flux")
 
     return eval_fns, eval_fn_names
 
 
 background_indices = [1.0, 1.5]
-mesh_wvls_um = [1.55]
-adj_wvls_um = [1.55]
+mesh_wvls_um = [1.55, 1.55, 10 * 1.55, 10 * 1.55]
+adj_wvls_um = [1.55, 2.2, 10 * 1.55, 10 * 2.2]
+monitor_sizes_3d_wvl = [(0.5, 0.5, 0), (0.5, 0.5, 0.5), (0.5, 0, 0), (0, 0.5, 0), (0, 0, 0)]
 
-orders_x = [(0,), (1,), (2,), (1, 2)]
-orders_y = [(0,), (0,), (0,), (1,)]
-polarizations = ["p", "p", "p", "s"]
-
-grating_modes = ["transmission", "reflection"]
-
-pw_angles_deg = [0.0, 10.0]
-
-periodic_test_parameters = []
+field_data_test_parameters = []
 
 test_number = 0
 for idx in range(len(mesh_wvls_um)):
     mesh_wvl_um = mesh_wvls_um[idx]
     adj_wvl_um = adj_wvls_um[idx]
 
-    for grating_mode in grating_modes:
-        for order_idx in range(len(orders_x)):
-            eval_fns, eval_fn_names = make_eval_fns(
-                orders_x=orders_x[order_idx],
-                orders_y=orders_y[order_idx],
-                polarization=polarizations[order_idx],
-            )
+    for monitor_size_wvl in monitor_sizes_3d_wvl:
+        eval_fns, eval_fn_names = make_eval_fns(monitor_size_wvl)
 
-            for pw_angle_deg in pw_angles_deg:
-                for monitor_bg_index in background_indices:
-                    for eval_fn_idx, eval_fn in enumerate(eval_fns):
-                        periodic_test_parameters.append(
-                            {
-                                "mesh_wvl_um": mesh_wvl_um,
-                                "adj_wvl_um": adj_wvl_um,
-                                "monitor_bg_index": monitor_bg_index,
-                                "pw_angle_deg": pw_angle_deg,
-                                "order_x": orders_x[order_idx],
-                                "order_y": orders_y[order_idx],
-                                "polarization": polarizations[order_idx],
-                                "grating_mode": grating_mode,
-                                "eval_fn": eval_fn,
-                                "eval_fn_name": eval_fn_names[eval_fn_idx],
-                                "test_number": test_number,
-                            }
-                        )
+        for monitor_bg_index in background_indices:
+            for eval_fn_idx, eval_fn in enumerate(eval_fns):
+                field_data_test_parameters.append(
+                    {
+                        "mesh_wvl_um": mesh_wvl_um,
+                        "adj_wvl_um": adj_wvl_um,
+                        "monitor_size_wvl": monitor_size_wvl,
+                        "monitor_bg_index": monitor_bg_index,
+                        "eval_fn": eval_fn,
+                        "eval_fn_name": eval_fn_names[eval_fn_idx],
+                        "test_number": test_number,
+                    }
+                )
 
-                        test_number += 1
+                test_number += 1
 
 
 @pytest.mark.numerical
 @pytest.mark.parametrize(
-    "periodic_test_parameters, dir_name",
+    "field_data_test_parameters, dir_name",
     zip(
-        periodic_test_parameters,
+        field_data_test_parameters,
         ([NUMERICAL_RESULTS_DATA_DIR] if SAVE_FD_ADJ_DATA else [None])
-        * len(periodic_test_parameters),
+        * len(field_data_test_parameters),
     ),
     indirect=["dir_name"],
 )
-def test_finite_difference_diffraction_data(
-    periodic_test_parameters, rng, tmp_path, create_directory
-):
-    """Test a variety of autograd permittivity gradients for DiffractionData by"""
+def test_finite_difference_field_data(field_data_test_parameters, rng, tmp_path, create_directory):
+    """Test a variety of autograd permittivity gradients for FieldData by"""
     """comparing them to numerical finite difference."""
+
+    num_tests = 0
+    for monitor_size_wvl in monitor_sizes_3d_wvl:
+        eval_fns, _ = make_eval_fns(monitor_size_wvl)
+        num_tests += len(eval_fns) * len(background_indices) * len(mesh_wvls_um)
 
     test_results = np.zeros((2, NUM_FINITE_DIFFERENCE))
 
-    test_number = periodic_test_parameters["test_number"]
+    test_number = field_data_test_parameters["test_number"]
 
     (
         mesh_wvl_um,
         adj_wvl_um,
+        monitor_size_wvl,
         monitor_bg_index,
-        pw_angle_deg,
-        order_x,
-        order_y,
-        polarization,
-        grating_mode,
         eval_fn,
         eval_fn_name,
         test_number,
     ) = operator.itemgetter(
         "mesh_wvl_um",
         "adj_wvl_um",
+        "monitor_size_wvl",
         "monitor_bg_index",
-        "pw_angle_deg",
-        "order_x",
-        "order_y",
-        "polarization",
-        "grating_mode",
         "eval_fn",
         "eval_fn_name",
         "test_number",
-    )(periodic_test_parameters)
-
-    sim_geometry = get_sim_geometry(mesh_wvl_um)
+    )(field_data_test_parameters)
 
     dim_um = mesh_wvl_um
+    dim_um = mesh_wvl_um
     thickness_um = 0.5 * mesh_wvl_um
-    block = td.Box(
-        center=(sim_geometry.center[0], sim_geometry.center[1], 0),
-        size=(dim_um, dim_um, thickness_um),
-    )
+    block = td.Box(center=(0, 0, 0), size=(dim_um, dim_um, thickness_um))
 
     dim = 1 + int(dim_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
     Nz = 1 + int(thickness_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
 
+    sim_geometry = get_sim_geometry(mesh_wvl_um)
+
     box_for_override = td.Box(
-        center=(sim_geometry.center[0], sim_geometry.center[1], 0),
-        size=sim_geometry.size[0:2] + (thickness_um + mesh_wvl_um,),
+        center=(0, 0, 0), size=sim_geometry.size[0:2] + (thickness_um + mesh_wvl_um,)
     )
 
-    eval_fns, eval_fn_names = make_eval_fns(
-        orders_x=order_x, orders_y=order_y, polarization=polarization
-    )
+    eval_fns, eval_fn_names = make_eval_fns(monitor_size_wvl)
 
     sim_path_dir = tmp_path / f"test{test_number}"
     sim_path_dir.mkdir()
@@ -338,15 +281,13 @@ def test_finite_difference_diffraction_data(
         block,
         lambda mesh_wvl_um=mesh_wvl_um,
         adj_wvl_um=adj_wvl_um,
+        monitor_size_wvl=monitor_size_wvl,
         box_for_override=box_for_override,
-        pw_angle_deg=pw_angle_deg,
-        grating_mode=grating_mode,
         monitor_bg_index=monitor_bg_index: make_base_sim(
             mesh_wvl_um=mesh_wvl_um,
             adj_wvl_um=adj_wvl_um,
+            monitor_size_wvl=monitor_size_wvl,
             box_for_override=box_for_override,
-            pw_angle_deg=pw_angle_deg,
-            grating_mode=grating_mode,
             monitor_bg_index=monitor_bg_index,
         ),
         eval_fn,
@@ -391,7 +332,6 @@ def test_finite_difference_diffraction_data(
     rms_error = np.linalg.norm(fd_grad - pattern_dot_adj_gradient)
     fd_mag = np.linalg.norm(fd_grad)
     adj_mag = np.linalg.norm(pattern_dot_adj_gradient)
-
     percentage_error = 100.0 * np.mean(
         np.abs(fd_grad - pattern_dot_adj_gradient) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
     )
@@ -400,8 +340,7 @@ def test_finite_difference_diffraction_data(
     print("-" * 20)
     print(f"Numerical test #{test_number}")
     print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-    print(f"Input plane wave angle (deg): {pw_angle_deg}")
-    print(f"(X, Y) order, polarization: ({order_x}, {order_y}), {polarization}")
+    print(f"Monitor size: {monitor_size_wvl}")
     print(f"Background index for monitor: {monitor_bg_index}")
     print(f"Eval function: {eval_fn_name}")
     print(f"RMS Error: {rms_error}")
@@ -424,6 +363,7 @@ def test_finite_difference_diffraction_data(
         plt.legend(["Finite difference", "Adjoint"])
         plt.xlabel("Sample number")
         plt.ylabel("Gradient value")
+        plt.legend()
         plt.show()
 
     if SAVE_FD_ADJ_DATA:

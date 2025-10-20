@@ -9,6 +9,7 @@ import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 import shapely
+import xarray as xr
 
 from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
@@ -40,6 +41,13 @@ class Sphere(base.Centered, base.Circular):
     -------
     >>> b = Sphere(center=(1,2,3), radius=2)
     """
+
+    radius: TracedSize1D = pydantic.Field(
+        ...,
+        title="Radius",
+        description="Radius of geometry at the ``reference_plane``.",
+        units=MICROMETER,
+    )
 
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
@@ -183,8 +191,22 @@ class Sphere(base.Centered, base.Circular):
 
         step_size = min_wvl / 20.0
 
-        vjps = {}
+        ps_paths = set()
+        # for path in derivative_info.paths:
+        ps_paths.update({("permittivity",)})
 
+        # pass interpolators to PolySlab if available to avoid redundant conversions
+        update_kwargs = {
+            "paths": list(ps_paths),
+            "deep": False,
+        }
+        derivative_info_custom_medium = derivative_info.updated_copy(**update_kwargs)
+
+        from tidy3d.components.medium import CustomMedium
+
+        print(f"inside compute derivatives and working on {derivative_info.paths}")
+
+        vjps = {}
         for path in derivative_info.paths:
             if path == ("radius",):
                 sphere_up = self.updated_copy(radius=self.radius + step_size)
@@ -195,9 +217,56 @@ class Sphere(base.Centered, base.Circular):
 
                 eps_grad = (eps_up - eps_down) / (2 * step_size)
 
-                total_grad = (eps_grad * derivative_info.E_der_map).sum().data
+                custom_medium = CustomMedium(
+                    permittivity=xr.ones_like(eps_grad.isel(f=0, drop=True))
+                )
+                vjps_custom_medium = custom_medium._compute_derivatives(
+                    derivative_info_custom_medium
+                )
+                print(f"vjps custom medium = {list(vjps_custom_medium.keys())}")
+
+                total_grad = np.real(
+                    np.sum(eps_grad.sum("f").data * vjps_custom_medium[("permittivity",)])
+                )
 
                 vjps[path] = total_grad
+            elif "center" in path:
+                if len(path) == 1:
+                    center_indices = (0, 1, 2)
+                else:
+                    _, center_index = path
+                    center_indices = [center_index]
+
+                vjp_result = []
+                for center_index in center_indices:
+                    center_up = list(self.center)
+                    center_down = list(self.center)
+
+                    center_up[center_index] += step_size
+                    center_down[center_index] -= step_size
+
+                    sphere_up = self.updated_copy(center=center_up)
+                    sphere_down = self.updated_copy(center=center_down)
+
+                    eps_up = derivative_info.updated_epsilon(sphere_up)
+                    eps_down = derivative_info.updated_epsilon(sphere_down)
+
+                    eps_grad = (eps_up - eps_down) / (2 * step_size)
+
+                    custom_medium = CustomMedium(
+                        permittivity=xr.ones_like(eps_grad.isel(f=0, drop=True))
+                    )
+                    vjps_custom_medium = custom_medium._compute_derivatives(
+                        derivative_info_custom_medium
+                    )
+
+                    total_grad = np.real(
+                        np.sum(eps_grad.sum("f").data * vjps_custom_medium[("permittivity",)])
+                    )
+
+                    vjp_result.append(total_grad)
+
+                vjps[path] = vjp_result if len(path) == 1 else vjp_result[0]
 
         return vjps
 
@@ -347,12 +416,18 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             elif path == ("radius",):
                 ps_paths.add(("vertices",))
             elif "center" in path:
-                _, center_index = path
-                _, (index_x, index_y) = self.pop_axis((0, 1, 2), axis=self.axis)
-                if center_index in (index_x, index_y):
-                    ps_paths.add(("vertices",))
+                if len(path) == 1:
+                    center_indices = (0, 1, 2)
                 else:
-                    ps_paths.update({("slab_bounds", 0), ("slab_bounds", 1)})
+                    _, center_index = path
+                    center_indices = [center_index]
+
+                for center_index in center_indices:
+                    _, (index_x, index_y) = self.pop_axis((0, 1, 2), axis=self.axis)
+                    if center_index in (index_x, index_y):
+                        ps_paths.add(("vertices",))
+                    else:
+                        ps_paths.update({("slab_bounds", 0), ("slab_bounds", 1)})
             elif path == ("sidewall_angle",):
                 ps_paths.add(("sidewall_angle",))
 
@@ -386,24 +461,33 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
                     vjps[path] = vjp_xs + vjp_ys
 
             elif "center" in path:
-                _, center_index = path
-                _, (index_x, index_y) = self.pop_axis((0, 1, 2), axis=self.axis)
-                if center_index == index_x:
-                    if ("vertices",) not in vjps_polyslab:
-                        vjps[path] = 0.0
-                    else:
-                        vjps_vertices_xs = vjps_polyslab[("vertices",)][:, 0]
-                        vjps[path] = np.sum(vjps_vertices_xs)
-                elif center_index == index_y:
-                    if ("vertices",) not in vjps_polyslab:
-                        vjps[path] = 0.0
-                    else:
-                        vjps_vertices_ys = vjps_polyslab[("vertices",)][:, 1]
-                        vjps[path] = np.sum(vjps_vertices_ys)
+                if len(path) == 1:
+                    center_indices = (0, 1, 2)
                 else:
-                    vjp_top = vjps_polyslab.get(("slab_bounds", 0), 0.0)
-                    vjp_bot = vjps_polyslab.get(("slab_bounds", 1), 0.0)
-                    vjps[path] = vjp_top + vjp_bot
+                    _, center_index = path
+                    center_indices = [center_index]
+
+                vjp_result = []
+                for center_index in center_indices:
+                    _, (index_x, index_y) = self.pop_axis((0, 1, 2), axis=self.axis)
+                    if center_index == index_x:
+                        if ("vertices",) not in vjps_polyslab:
+                            vjp_result.append(0.0)
+                        else:
+                            vjps_vertices_xs = vjps_polyslab[("vertices",)][:, 0]
+                            vjp_result.append(np.sum(vjps_vertices_xs))
+                    elif center_index == index_y:
+                        if ("vertices",) not in vjps_polyslab:
+                            vjp_result.append(0.0)
+                        else:
+                            vjps_vertices_ys = vjps_polyslab[("vertices",)][:, 1]
+                            vjp_result.append(np.sum(vjps_vertices_ys))
+                    else:
+                        vjp_top = vjps_polyslab.get(("slab_bounds", 0), 0.0)
+                        vjp_bot = vjps_polyslab.get(("slab_bounds", 1), 0.0)
+                        vjp_result.append(vjp_top + vjp_bot)
+
+                vjps[path] = vjp_result if len(path) == 1 else vjp_result[0]
 
             elif path == ("sidewall_angle",):
                 # direct mapping: cylinder angle equals polyslab angle

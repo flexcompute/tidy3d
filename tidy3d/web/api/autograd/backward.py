@@ -105,6 +105,7 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
+    user_vjp,
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
@@ -278,22 +279,23 @@ def postprocess_adj(
             )
 
             def updated_epsilon(
-                replacement_structure,
+                replacement_geometry,
                 structure_index=structure_index,
                 eps_fwd=eps_fwd,
                 select_adjoint_freqs=select_adjoint_freqs,
             ):
                 sim_orig = sim_data_orig.simulation
-                orig_structures = list(sim_orig.structures)
-                orig_structures[structure_index] = replacement_structure
+
+                sim_orig_grid_spec = td.components.grid.grid_spec.GridSpec.from_grid(sim_orig.grid)
 
                 update_sim = sim_orig.updated_copy(
                     structures=[
-                        replacement_structure
+                        sim_orig.structures[idx].updated_copy(geometry=replacement_geometry)
                         if (idx == structure_index)
                         else sim_orig.structures[idx]
                         for idx in range(len(sim_orig.structures))
-                    ]
+                    ],
+                    grid_spec=sim_orig_grid_spec,
                 )
 
                 eps_by_f = [
@@ -329,8 +331,12 @@ def postprocess_adj(
                 is_medium_pec=structure.medium.is_pec,
             )
 
+            vjp_fns = None
+            if (user_vjp is not None) and (structure_index in user_vjp):
+                vjp_fns = user_vjp[structure_index]
+
             # compute derivatives for chunk
-            vjp_chunk = structure._compute_derivatives(derivative_info)
+            vjp_chunk = structure._compute_derivatives(derivative_info, vjp_fns=vjp_fns)
 
             # accumulate results
             for path, value in vjp_chunk.items():

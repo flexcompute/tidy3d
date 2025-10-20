@@ -118,6 +118,7 @@ def run(
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
     lazy: typing.Optional[bool] = None,
+    user_vjp=None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -223,6 +224,9 @@ def run(
         stub = Tidy3dStub(simulation=simulation)
         task_name = stub.get_default_task_name()
 
+    if (user_vjp is not None) and (not local_gradient):
+        raise AdjointError("User VJP specified for a remote gradient not supported.")
+
     # component modeler path: route autograd-valid modelers to local run
     from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
 
@@ -262,6 +266,7 @@ def run(
             parent_tasks=parent_tasks,
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+            user_vjp=user_vjp,
             pay_type=pay_type,
             priority=priority,
             lazy=lazy,
@@ -422,10 +427,15 @@ def _run(
     task_name: str,
     local_gradient: bool = False,
     max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    user_vjp=None,
     **run_kwargs: Any,
 ) -> td.SimulationData:
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
 
+    # need to make sure the structures get traced that are associated with numerical derivatives
+    # and then we need to insert the user vjp for them to get a derivative back to the original
+    # parameters and associate them with the numerical ones which need to come in as a traced argument
+    # into the run primitive
     traced_fields_sim = setup_run(simulation=simulation)
 
     # if we register this as not needing adjoint at all (no tracers), call regular run function
@@ -448,6 +458,7 @@ def _run(
         sim_original.attrs[TRACED_FIELD_KEYS_ATTR] = payload
 
     # run our custom @primitive, passing the traced fields first to register with autograd
+    # let's put another path into traced_fields_data
     traced_fields_data = _run_primitive(
         traced_fields_sim,  # if you pass as a kwarg it will not trace :/
         sim_original=sim_original,
@@ -455,6 +466,7 @@ def _run(
         aux_data=aux_data,
         local_gradient=local_gradient,
         max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+        user_vjp=user_vjp,
         **run_kwargs,
     )
 
@@ -536,6 +548,7 @@ def _run_primitive(
     aux_data: dict,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
+    user_vjp,
     **run_kwargs: Any,
 ) -> AutogradFieldMap:
     """Autograd-traced 'run()' function: runs simulation, strips tracer data, caches fwd data."""
@@ -694,6 +707,7 @@ def _run_bwd(
     aux_data: dict,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
+    user_vjp,
     **run_kwargs: Any,
 ) -> typing.Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulations, computes grad."""
@@ -768,6 +782,7 @@ def _run_bwd(
                     sim_data_orig=sim_data_orig,
                     sim_data_fwd=sim_data_fwd,
                     sim_fields_keys=sim_fields_keys,
+                    user_vjp=user_vjp,
                 )
         else:
             td.log.info("Starting server-side batch of adjoint simulations ...")
@@ -974,6 +989,7 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
+    user_vjp,
 ) -> AutogradFieldMap:
     """Postprocess adjoint results into VJPs (delegated)."""
     return _postprocess_adj_impl(
@@ -981,6 +997,7 @@ def postprocess_adj(
         sim_data_orig=sim_data_orig,
         sim_data_fwd=sim_data_fwd,
         sim_fields_keys=sim_fields_keys,
+        user_vjp=user_vjp,
     )
 
 
