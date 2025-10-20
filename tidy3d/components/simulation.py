@@ -4818,9 +4818,24 @@ class Simulation(AbstractYeeGridSimulation):
         """Get lists of field and permittivity monitors for this simulation."""
 
         index_to_keys = defaultdict(list)
+        numerical_indices = set()
 
-        for _, index, *fields in sim_fields_keys:
-            index_to_keys[index].append(fields)
+        for namespace, index, *fields in sim_fields_keys:
+            if namespace not in {"structures", "numerical"}:
+                log.warning(
+                    "Encountered unknown namespace '%s' while creating adjoint monitors; ignoring.",
+                    namespace,
+                )
+                continue
+
+            if namespace == "structures":
+                index_to_keys[index].append(fields)
+            elif namespace == "numerical":
+                numerical_indices.add(index)
+
+        for index in numerical_indices:
+            if not index_to_keys[index]:
+                index_to_keys[index].append([])
 
         freqs = self._freqs_adjoint
 

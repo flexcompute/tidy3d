@@ -5,6 +5,11 @@ import typing
 from os import PathLike
 from pathlib import Path
 from typing import Any
+from collections.abc import Hashable
+from dataclasses import dataclass
+from os.path import dirname
+from pathlib import Path
+from typing import NamedTuple
 
 from autograd.builtins import dict as dict_ag
 from autograd.extend import defvjp, primitive
@@ -26,6 +31,7 @@ from .backward import postprocess_adj as _postprocess_adj_impl
 from .backward import setup_adj as _setup_adj_impl
 from .constants import (
     AUX_KEY_FWD_TASK_ID,
+    AUX_KEY_NUMERICAL_STRUCTURES,
     AUX_KEY_SIM_DATA_FWD,
     AUX_KEY_SIM_DATA_ORIGINAL,
 )
@@ -56,6 +62,143 @@ def _resolve_local_gradient(value: typing.Optional[bool]) -> bool:
         return bool(value)
 
     return bool(config.adjoint.local_gradient)
+
+
+@dataclass(frozen=True)
+class NumericalStructureInfo:
+    """Metadata describing a user-supplied numerical structure insertion."""
+
+    index: int
+    parameter_names: tuple[Hashable, ...]
+    parameters: tuple[typing.Any, ...]
+    function: typing.Callable[..., td.Structure]
+    structure: td.Structure
+
+
+class SetupRunResult(NamedTuple):
+    sim_fields: AutogradFieldMap
+    simulation: td.Simulation
+    numerical_info: dict[int, NumericalStructureInfo]
+
+
+def _validate_numerical_structures(
+    numerical_structures: dict[int, dict[str, typing.Any]],
+    user_vjp,
+    simulation: td.Simulation,
+) -> dict[int, dict[str, typing.Any]]:
+    """Validate and normalize user-supplied numerical structure configuration."""
+
+    if not isinstance(numerical_structures, dict):
+        raise AdjointError(
+            "'numerical_structures' must be a dictionary mapping indices to configuration dicts."
+        )
+
+    normalized: dict[int, dict[str, typing.Any]] = {}
+    indices_seen: set[int] = set()
+
+    for index, config in numerical_structures.items():
+        if not isinstance(index, int) or index < 0:
+            raise AdjointError(
+                "'numerical_structures' keys must be non-negative integers corresponding to indices."
+            )
+
+        if index in indices_seen:
+            raise AdjointError(
+                f"Duplicate structure index {index} detected in 'numerical_structures'."
+            )
+        indices_seen.add(index)
+
+        if not isinstance(config, dict):
+            raise AdjointError(
+                "Each entry in 'numerical_structures' must be a dictionary with configuration values."
+            )
+
+        if "function" not in config:
+            raise AdjointError(
+                f"Numerical structure index {index} missing required 'function' entry."
+            )
+
+        func = config["function"]
+        if not callable(func):
+            raise AdjointError(
+                f"'function' for numerical structure index {index} must be callable."
+            )
+
+        if "parameters" not in config:
+            raise AdjointError(
+                f"Numerical structure index {index} missing required 'parameters' entry."
+            )
+
+        params = config["parameters"]
+
+        param_names: list[Hashable]
+        param_values: list[typing.Any]
+
+        if isinstance(params, dict):
+            # preserve user-provided keys
+            param_names = list(params.keys())
+            param_values = list(params.values())
+        elif isinstance(params, (list, tuple)):
+            param_names = list(range(len(params)))
+            param_values = list(params)
+        else:
+            # treat scalar/array value as a single parameter
+            param_names = [0]
+            param_values = [params]
+
+        normalized[index] = {
+            "function": func,
+            "parameters": tuple(param_values),
+            "parameter_names": tuple(param_names),
+        }
+
+    if normalized and user_vjp is None:
+        raise AdjointError(
+            "A 'user_vjp' mapping must be provided when using 'numerical_structures'."
+        )
+
+    if user_vjp is not None:
+        if not isinstance(user_vjp, dict):
+            raise AdjointError("'user_vjp' must be a dictionary when using 'numerical_structures'.")
+        missing = [idx for idx in normalized if idx not in user_vjp]
+        if missing:
+            raise AdjointError(
+                "Missing user VJP entries for numerical structure indices: "
+                + ", ".join(str(i) for i in missing)
+            )
+        for idx in normalized:
+            vjp_entry = user_vjp[idx]
+            if callable(vjp_entry):
+                continue
+            if isinstance(vjp_entry, dict):
+                # Accept either explicit "parameters" key or a single callable value.
+                if "parameters" in vjp_entry:
+                    if callable(vjp_entry["parameters"]):
+                        continue
+                    raise AdjointError(
+                        f"The 'parameters' entry for numerical structure index {idx} must be callable."
+                    )
+
+                callable_values = [val for val in vjp_entry.values() if callable(val)]
+                if len(callable_values) == 1:
+                    continue
+
+            raise AdjointError(
+                "Each entry in 'user_vjp' for numerical structures must be either a callable or a "
+                "dictionary containing a single callable (optionally under the key 'parameters')."
+            )
+
+    # Ensure insertion indices are valid when accounting for prior insertions
+    num_structs = len(simulation.structures)
+    for idx in sorted(normalized):
+        if idx > num_structs:
+            raise AdjointError(
+                f"Numerical structure index {idx} is out of bounds for simulation with "
+                f"{num_structs} structures."
+            )
+        num_structs += 1
+
+    return normalized
 
 
 def is_valid_for_autograd(simulation: td.Simulation) -> bool:
@@ -101,6 +244,7 @@ def is_valid_for_autograd_async(simulations: dict[str, td.Simulation]) -> bool:
 
 def run(
     simulation: WorkflowType,
+    numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]] = None,
     task_name: typing.Optional[str] = None,
     folder_name: str = "default",
     path: PathLike = "simulation_data.hdf5",
@@ -227,6 +371,21 @@ def run(
     if (user_vjp is not None) and (not local_gradient):
         raise AdjointError("User VJP specified for a remote gradient not supported.")
 
+    if numerical_structures is not None and not local_gradient:
+        raise AdjointError("'numerical_structures' is only supported when local_gradient=True.")
+
+    numerical_structures_validated = None
+    if isinstance(simulation, td.Simulation) and numerical_structures is not None:
+        numerical_structures_validated = _validate_numerical_structures(
+            numerical_structures=numerical_structures,
+            user_vjp=user_vjp,
+            simulation=simulation,
+        )
+    elif isinstance(simulation, td.Simulation):
+        numerical_structures_validated = {}
+
+    numerical_vjp_map = user_vjp
+
     # component modeler path: route autograd-valid modelers to local run
     from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
 
@@ -253,6 +412,7 @@ def run(
     if isinstance(simulation, td.Simulation) and is_valid_for_autograd(simulation):
         return _run(
             simulation=simulation,
+            numerical_structures=numerical_structures_validated,
             task_name=task_name,
             folder_name=folder_name,
             path=path,
@@ -266,7 +426,7 @@ def run(
             parent_tasks=parent_tasks,
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
-            user_vjp=user_vjp,
+            user_vjp=numerical_vjp_map,
             pay_type=pay_type,
             priority=priority,
             lazy=lazy,
@@ -425,6 +585,7 @@ def run_async(
 def _run(
     simulation: td.Simulation,
     task_name: str,
+    numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]] = None,
     local_gradient: bool = False,
     max_num_adjoint_per_fwd: typing.Optional[int] = None,
     user_vjp=None,
@@ -436,7 +597,13 @@ def _run(
     # and then we need to insert the user vjp for them to get a derivative back to the original
     # parameters and associate them with the numerical ones which need to come in as a traced argument
     # into the run primitive
-    traced_fields_sim = setup_run(simulation=simulation)
+    setup_result = setup_run(
+        simulation=simulation,
+        numerical_structures=numerical_structures,
+        user_vjp=user_vjp,
+    )
+    traced_fields_sim = setup_result.sim_fields
+    simulation = setup_result.simulation
 
     # if we register this as not needing adjoint at all (no tracers), call regular run function
     if not traced_fields_sim:
@@ -469,6 +636,9 @@ def _run(
         user_vjp=user_vjp,
         **run_kwargs,
     )
+
+    if setup_result.numerical_info:
+        aux_data[AUX_KEY_NUMERICAL_STRUCTURES] = setup_result.numerical_info
 
     return postprocess_run(traced_fields_data=traced_fields_data, aux_data=aux_data)
 
@@ -520,12 +690,66 @@ def _run_async(
     return sim_data_dict
 
 
-def setup_run(simulation: td.Simulation) -> AutogradFieldMap:
-    """Process a user-supplied ``Simulation`` into inputs to ``_run_primitive``."""
+def setup_run(
+    simulation: td.Simulation,
+    numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]] = None,
+    user_vjp=None,
+) -> SetupRunResult:
+    """Prepare simulation and traced fields, including numerical structure insertions."""
 
-    # get a mapping of all the traced fields in the provided simulation
-    return simulation._strip_traced_fields(
+    numerical_info: dict[int, NumericalStructureInfo] = {}
+    sim_prepared = simulation
+
+    if numerical_structures:
+        structures = list(simulation.structures)
+        td.log.info(
+            "Inserting %d numerical structures via autograd local gradient path.",
+            len(numerical_structures),
+        )
+        for index in sorted(numerical_structures):
+            config = numerical_structures[index]
+            func = config["function"]
+            params = config["parameters"]
+            param_names = config["parameter_names"]
+
+            try:
+                structure = func(*params)
+            except Exception as exc:  # pragma: no cover - defensive
+                raise AdjointError(
+                    f"Failed to construct numerical structure at index {index}: {exc}"
+                ) from exc
+
+            if not isinstance(structure, td.Structure):
+                raise AdjointError(
+                    "Numerical structure creation functions must return a tidy3d.Structure instance."
+                )
+
+            structures.insert(index, structure)
+            numerical_info[index] = NumericalStructureInfo(
+                index=index,
+                parameter_names=param_names,
+                parameters=tuple(params),
+                function=func,
+                structure=structure,
+            )
+
+        sim_prepared = simulation.copy(update={"structures": structures})
+
+    sim_fields_map = sim_prepared._strip_traced_fields(
         include_untraced_data_arrays=False, starting_path=("structures",)
+    )
+
+    if numerical_info:
+        sim_fields_dict = dict(sim_fields_map.items())
+        for index, info in numerical_info.items():
+            for name, param in zip(info.parameter_names, info.parameters):
+                sim_fields_dict[("numerical", index, name)] = param
+        sim_fields_map = dict_ag(sim_fields_dict)
+
+    return SetupRunResult(
+        sim_fields=sim_fields_map,
+        simulation=sim_prepared,
+        numerical_info=numerical_info,
     )
 
 
@@ -783,6 +1007,7 @@ def _run_bwd(
                     sim_data_fwd=sim_data_fwd,
                     sim_fields_keys=sim_fields_keys,
                     user_vjp=user_vjp,
+                    numerical_info=aux_data.get(AUX_KEY_NUMERICAL_STRUCTURES, {}),
                 )
         else:
             td.log.info("Starting server-side batch of adjoint simulations ...")
@@ -924,6 +1149,7 @@ def _run_async_bwd(
                     sim_data_orig=sim_data_orig,
                     sim_data_fwd=sim_data_fwd,
                     sim_fields_keys=sim_fields_keys,
+                    numerical_info=aux_data_dict[task_name].get(AUX_KEY_NUMERICAL_STRUCTURES, {}),
                 )
         else:
             # Set up parent tasks mapping for all adjoint simulations
@@ -990,6 +1216,7 @@ def postprocess_adj(
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
     user_vjp,
+    numerical_info: dict[int, NumericalStructureInfo],
 ) -> AutogradFieldMap:
     """Postprocess adjoint results into VJPs (delegated)."""
     return _postprocess_adj_impl(
@@ -998,6 +1225,7 @@ def postprocess_adj(
         sim_data_fwd=sim_data_fwd,
         sim_fields_keys=sim_fields_keys,
         user_vjp=user_vjp,
+        numerical_info=numerical_info,
     )
 
 

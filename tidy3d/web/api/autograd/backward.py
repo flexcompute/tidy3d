@@ -7,7 +7,7 @@ import xarray as xr
 
 import tidy3d as td
 from tidy3d import Medium
-from tidy3d.components.autograd import AutogradFieldMap, get_static
+from tidy3d.components.autograd import AutogradFieldMap, NumericalStructureInfo, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.config import config
@@ -106,17 +106,23 @@ def postprocess_adj(
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
     user_vjp,
+    numerical_info: dict[int, NumericalStructureInfo],
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
     # map of index into 'structures' to the list of paths we need vjps for
     sim_vjp_map = defaultdict(list)
-    for _, structure_index, *structure_path in sim_fields_keys:
-        structure_path = tuple(structure_path)
-        sim_vjp_map[structure_index].append(structure_path)
+    numerical_vjp_map = {}
+
+    for namespace, structure_index, *structure_path in sim_fields_keys:
+        if namespace == "structures":
+            sim_vjp_map[structure_index].append(tuple(structure_path))
+        elif namespace == "numerical":
+            numerical_vjp_map.setdefault(structure_index, set()).add(tuple(structure_path))
 
     # store the derivative values given the forward and adjoint data
     sim_fields_vjp = {}
+
     for structure_index, structure_paths in sim_vjp_map.items():
         # grab the forward and adjoint data
         fld_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
@@ -353,5 +359,63 @@ def postprocess_adj(
         for structure_path, vjp_value in vjp_value_map.items():
             sim_path = ("structures", structure_index, *list(structure_path))
             sim_fields_vjp[sim_path] = vjp_value
+
+    # handle numerical structures by dispatching to user-defined VJP functions
+    if numerical_vjp_map:
+        if user_vjp is None:
+            raise AdjointError("Numerical structures detected but no 'user_vjp' provided.")
+
+        for structure_index, param_names in numerical_vjp_map.items():
+            info = numerical_info.get(structure_index)
+            if info is None:
+                raise AdjointError(
+                    f"Missing numerical structure metadata for index {structure_index}."
+                )
+
+            vjp_fn_entry = user_vjp.get(structure_index)
+            if vjp_fn_entry is None:
+                raise AdjointError(
+                    f"Missing user VJP for numerical structure index {structure_index}."
+                )
+
+            if callable(vjp_fn_entry):
+                vjp_fn = vjp_fn_entry
+            elif isinstance(vjp_fn_entry, dict):
+                if "parameters" in vjp_fn_entry and callable(vjp_fn_entry["parameters"]):
+                    vjp_fn = vjp_fn_entry["parameters"]
+                else:
+                    callables = [val for val in vjp_fn_entry.values() if callable(val)]
+                    if len(callables) != 1:
+                        raise AdjointError(
+                            f"Numerical structure index {structure_index} requires exactly one callable in its user VJP entry."
+                        )
+                    vjp_fn = callables[0]
+            else:
+                raise AdjointError(
+                    f"Invalid user VJP entry for numerical structure index {structure_index}."
+                )
+
+            gradients = vjp_fn(
+                structure=info.structure,
+                parameters=info.parameters,
+                parameter_names=info.parameter_names,
+                structure_index=structure_index,
+            )
+
+            if len(gradients) != len(info.parameters):
+                raise AdjointError(
+                    f"User VJP for numerical structure index {structure_index} returned {len(gradients)} gradients, "
+                    f"expected {len(info.parameters)}."
+                )
+
+            expected_names = list(param_names)
+
+            for name, grad in zip(info.parameter_names, gradients):
+                if name not in expected_names:
+                    raise AdjointError(
+                        f"User VJP for numerical structure index {structure_index} returned gradient for unknown parameter '{name}'."
+                    )
+                expected_names.remove(name)
+                sim_fields_vjp[("numerical", structure_index, name)] = grad
 
     return sim_fields_vjp
