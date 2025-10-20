@@ -216,6 +216,10 @@ jobs:
         id: extract-branch-name
         run: |
           BRANCH_NAME="${GITHUB_HEAD_REF}"
+          if [[ -z "$BRANCH_NAME" ]]; then
+            BRANCH_NAME="${GITHUB_REF_NAME:-${GITHUB_REF#refs/heads/}}"
+            echo "(fallback) Using ref-derived branch name: $BRANCH_NAME"
+          fi
           echo "Branch name: $BRANCH_NAME"
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
@@ -226,7 +230,10 @@ jobs:
         run: |
           BRANCH_NAME="${STEPS_EXTRACT_BRANCH_NAME_OUTPUTS_BRANCH_NAME}"
           echo $BRANCH_NAME
-          JIRA_PATTERN='[A-Z]{2,}-[0-9]+'
+          # Allow only Jira keys from known projects, even if the branch has an author prefix
+          ALLOWED_JIRA_PROJECTS=("FXC" "SCEM")
+          JIRA_PROJECT_PATTERN=$(IFS='|'; echo "${ALLOWED_JIRA_PROJECTS[*]}")
+          JIRA_PATTERN="(${JIRA_PROJECT_PATTERN})-[0-9]+"
 
           # List of exempt prefixes (case-insensitive)
           EXEMPT_PREFIXES=("chore" "hotfix" "daily-chore")
@@ -250,6 +257,7 @@ jobs:
                 echo "✅ Jira key found in PR-title: ${BASH_REMATCH[0]}"
               else
                 echo "❌ No Jira key found in branch name and PR title"
+                echo "ℹ️  Expected Jira key prefixes: ${ALLOWED_JIRA_PROJECTS[*]}"
                 exit 1
               fi
           fi
@@ -684,4 +692,3 @@ jobs:
       - name: all-checks-passed
         if: ${{ success() }}
         run: echo "✅ All required jobs passed!"
-
