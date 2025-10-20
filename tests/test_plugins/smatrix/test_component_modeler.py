@@ -12,7 +12,7 @@ from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.plugins.smatrix import ModalComponentModeler, ModalComponentModelerData, Port
 from tidy3d.web.api.container import Batch
 
-from ...utils import run_emulated
+from ...utils import AssertLogStr, run_emulated
 
 # Waveguide height
 wg_height = 0.22
@@ -445,3 +445,37 @@ def test_get_task_name():
     # Test with invalid format
     with pytest.raises(ValueError):
         ModalComponentModeler.get_task_name(port=port, format="invalid")
+
+
+def test_custom_source_time(monkeypatch):
+    """Test that custom_source_time is properly used in the component modeler."""
+    modeler = make_component_modeler()
+    freqs = modeler.freqs
+    custom_source = td.GaussianPulse.from_frequency_range(fmin=min(freqs), fmax=max(freqs))
+
+    # Create modeler with custom source time
+    with AssertLogStr(
+        log_level_expected="WARNING", excludes_str="Custom source time does not cover all"
+    ):
+        modeler = make_component_modeler(custom_source_time=custom_source)
+
+    # Run the modeler and verify it works with custom source time
+    modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
+
+    # Verify that simulations were created and run successfully
+    s_matrix = modeler_data.smatrix()
+    assert s_matrix is not None
+
+    # Verify that the simulations in sim_dict use the custom source time
+    for sim in modeler.sim_dict.values():
+        # Each simulation should have sources with the custom source time
+        assert len(sim.sources) > 0
+        for source in sim.sources:
+            assert source.source_time.freq0 == custom_source.freq0
+            assert source.source_time.fwidth == custom_source.fwidth
+
+    with AssertLogStr(
+        log_level_expected="WARNING", contains_str="Custom source time does not cover all"
+    ):
+        custom_source = td.GaussianPulse(freq0=td.C_0, fwidth=1e12)
+        modeler = make_component_modeler(custom_source_time=custom_source)

@@ -18180,6 +18180,19 @@
       "default": {},
       "type": "object"
     },
+    "custom_source_time": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ContinuousWave"
+        },
+        {
+          "$ref": "#/definitions/CustomSourceTime"
+        },
+        {
+          "$ref": "#/definitions/GaussianPulse"
+        }
+      ]
+    },
     "element_mappings": {
       "default": [],
       "items": {

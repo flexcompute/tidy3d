@@ -1778,3 +1778,29 @@ def test_wave_port_extrusion_differential_stripline():
     # make sure that the error is triggered even when ports are reshuffled
     with pytest.raises(SetupError):
         sim = tcm.base_sim
+
+
+def test_custom_source_time(monkeypatch, tmp_path):
+    """Test that custom_source_time is properly used in the terminal component modeler."""
+    # Create a custom source time
+    custom_source = td.GaussianPulse(freq0=2e9, fwidth=1e8)
+
+    # Create modeler with custom source time
+    modeler = make_component_modeler(
+        planar_pec=True, port_refinement=False, custom_source_time=custom_source
+    )
+
+    # Run the modeler and verify it works with custom source time
+    modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
+
+    # Verify that simulations were created and run successfully
+    s_matrix = modeler_data.smatrix()
+    assert s_matrix is not None
+
+    # Verify that the simulations in sim_dict use the custom source time
+    for sim in modeler.sim_dict.values():
+        # Each simulation should have sources with the custom source time
+        assert len(sim.sources) > 0
+        for source in sim.sources:
+            assert source.source_time.freq0 == custom_source.freq0
+            assert source.source_time.fwidth == custom_source.fwidth
