@@ -211,11 +211,16 @@ jobs:
     name: lint-branch-name
     env:
       PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_BRANCH: ${{ github.event.pull_request.head.ref }}
     steps:
       - name: extract-branch-name
         id: extract-branch-name
         run: |
           BRANCH_NAME="${GITHUB_HEAD_REF}"
+          if [[ -z "$BRANCH_NAME" && -n "$PR_BRANCH" ]]; then
+            BRANCH_NAME="$PR_BRANCH"
+            echo "(fallback) Using PR head branch name: $BRANCH_NAME"
+          fi
           if [[ -z "$BRANCH_NAME" ]]; then
             BRANCH_NAME="${GITHUB_REF_NAME:-${GITHUB_REF#refs/heads/}}"
             echo "(fallback) Using ref-derived branch name: $BRANCH_NAME"
