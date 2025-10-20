@@ -18,4 +18,10 @@ repos:
         stages: [commit-msg]
         verbose: true
         entry: bash -c 'commitlint --edit || exit 0'
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    # Zizmor version.
+    rev: v1.15.2
+    hooks:
+      - id: zizmor
+        stages: [pre-commit]
 
