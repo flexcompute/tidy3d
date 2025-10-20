@@ -24,6 +24,13 @@ from .method import (
 from .parameter import ParameterAny, ParameterInt, ParameterType
 from .result import Result
 
+try:
+    from tidy3d_pipeline.run import run_batch
+
+    TIDY3D_LOCAL_RUN = True
+except ImportError:
+    TIDY3D_LOCAL_RUN = False
+
 
 class DesignSpace(Tidy3dBaseModel):
     """Manages all exploration of a parameter space within specified parameters using a supplied search method.
@@ -387,16 +394,23 @@ class DesignSpace(Tidy3dBaseModel):
             console.log(f"Running {run_statement}")
 
         # Running simulations and batches
-        sims_out = Batch(
+        batch_named_sims = Batch(
             simulations=named_sims,
             folder_name=self.folder_name,
             simulation_type="tidy3d_design",
             verbose=False,  # Using a custom output instead of Batch.monitor updates
-        ).run(path_dir=self.path_dir)
+        )
+        if TIDY3D_LOCAL_RUN:
+            sims_out = run_batch(batch_named_sims, path_dir=self.path_dir)
+        else:
+            sims_out = batch_named_sims.run(path_dir=self.path_dir)
 
         batch_results = {}
         for batch_key, batch in batches.items():
-            batch_out = batch.run(path_dir=self.path_dir)
+            if TIDY3D_LOCAL_RUN:
+                batch_out = run_batch(batch, path_dir=self.path_dir)
+            else:
+                batch_out = batch.run(path_dir=self.path_dir)
             batch_results[batch_key] = batch_out
 
         def _return_to_dict(return_dict: dict, key: str, return_obj: Any) -> None:
@@ -502,6 +516,9 @@ class DesignSpace(Tidy3dBaseModel):
             Estimated maximum cost for the ``DesignSpace.run``.
 
         """
+        if TIDY3D_LOCAL_RUN:
+            return 0.0
+
         # Get output fn_pre for paramters at the lowest span / default
         arg_dict = {}
         for param in self.parameters:
