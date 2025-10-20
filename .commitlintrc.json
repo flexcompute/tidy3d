@@ -1,8 +1,23 @@
 {
+  "parserPreset": {
+    "parserOpts": {
+      "headerPattern": "^([^\\(\\s:!]+)(?:\\(([^)]+)\\))?(!)?: (.+)$",
+      "headerCorrespondence": [
+        "type",
+        "scope",
+        "breaking",
+        "subject"
+      ],
+      "noteKeywords": [
+        "BREAKING CHANGE",
+        "BREAKING CHANGES"
+      ]
+    }
+  },
   "rules": {
     "header-min-length": [2, "always", 12],
-    "header-max-length": [2, "always", 72],
-    "footer-max-line-length": [2, "always", 72],
+    "header-max-length": [2, "always", 120],
+    "footer-max-line-length": [2, "always", 120],
     "type-empty": [2, "never"],
     "type-enum": [2, "always", [
       "feat",
@@ -17,7 +32,7 @@
       "chore",
       "revert"
     ]],
-    "body-max-line-length": [2, "always", 72],
-    "scope-case": [2, "always", "lower-case"]
+    "body-max-line-length": [2, "always", 120],
+    "scope-case": [0]
   }
 }
