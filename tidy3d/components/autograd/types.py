@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import copy
 import typing
+from collections.abc import Hashable
+from dataclasses import dataclass
 
 import pydantic.v1 as pd
 from autograd.builtins import dict as dict_ag
@@ -44,9 +46,22 @@ AutogradFieldMap = dict_ag[PathType, AutogradTraced]
 
 InterpolationType = typing.Literal["nearest", "linear"]
 
+
+@dataclass(frozen=True)
+class NumericalStructureInfo:
+    """Metadata describing a user-supplied numerical structure insertion."""
+
+    index: int
+    parameter_names: tuple[Hashable, ...]
+    parameters: tuple[typing.Any, ...]
+    function: typing.Callable[..., typing.Any]
+    structure: typing.Any
+
+
 __all__ = [
     "AutogradFieldMap",
     "AutogradTraced",
+    "NumericalStructureInfo",
     "TracedCoordinate",
     "TracedFloat",
     "TracedSize",

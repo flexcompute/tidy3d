@@ -5,6 +5,7 @@ from .functions import interpn
 from .types import (
     AutogradFieldMap,
     AutogradTraced,
+    NumericalStructureInfo,
     TracedCoordinate,
     TracedFloat,
     TracedSize,
@@ -16,6 +17,7 @@ from .utils import get_static, is_tidy_box, split_list
 __all__ = [
     "AutogradFieldMap",
     "AutogradTraced",
+    "NumericalStructureInfo",
     "TidyArrayBox",
     "TracedCoordinate",
     "TracedFloat",

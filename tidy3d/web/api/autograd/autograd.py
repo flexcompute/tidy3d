@@ -9,7 +9,6 @@ from collections.abc import Hashable
 from dataclasses import dataclass
 from os.path import dirname
 from pathlib import Path
-from typing import NamedTuple
 
 from autograd.builtins import dict as dict_ag
 from autograd.extend import defvjp, primitive
@@ -17,6 +16,7 @@ from autograd.extend import defvjp, primitive
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
+from tidy3d.components.autograd.types import NumericalStructureInfo
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
@@ -64,18 +64,7 @@ def _resolve_local_gradient(value: typing.Optional[bool]) -> bool:
     return bool(config.adjoint.local_gradient)
 
 
-@dataclass(frozen=True)
-class NumericalStructureInfo:
-    """Metadata describing a user-supplied numerical structure insertion."""
-
-    index: int
-    parameter_names: tuple[Hashable, ...]
-    parameters: tuple[typing.Any, ...]
-    function: typing.Callable[..., td.Structure]
-    structure: td.Structure
-
-
-class SetupRunResult(NamedTuple):
+class SetupRunResult(typing.NamedTuple):
     sim_fields: AutogradFieldMap
     simulation: td.Simulation
     numerical_info: dict[int, NumericalStructureInfo]
@@ -131,7 +120,7 @@ def _validate_numerical_structures(
 
         params = config["parameters"]
 
-        param_names: list[Hashable]
+        param_names: list[typing.Hashable]
         param_values: list[typing.Any]
 
         if isinstance(params, dict):
