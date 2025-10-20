@@ -595,7 +595,7 @@ jobs:
       cancel-in-progress: true
     strategy:
       matrix:
-        python-version: ['3.10', '3.13']
+        python-version: ['3.10', '3.14']
     defaults:
       run:
         shell: bash
@@ -659,7 +659,7 @@ jobs:
 
     - name: diff-coverage-report
       if: >- 
-        matrix.python-version == '3.13' &&
+        matrix.python-version == '3.14' &&
         github.event_name == 'pull_request' &&
         !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage')
       env:
@@ -673,7 +673,7 @@ jobs:
 
     - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
       if: >- 
-        matrix.python-version == '3.13' &&
+        matrix.python-version == '3.14' &&
         github.event_name == 'pull_request' &&
         !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage') &&
         github.event.pull_request.head.repo.fork == false
@@ -720,7 +720,7 @@ jobs:
       cancel-in-progress: true
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
         platform: [windows-latest, ubuntu-latest, macos-latest]
     defaults:
       run:
