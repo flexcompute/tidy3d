@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING, Literal, Optional, Union
 import pydantic.v1 as pd
 
 from tidy3d.components.autograd.constants import MAX_NUM_ADJOINT_PER_FWD
-from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.geometry.utils import _shift_value_signed
 from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.time import SourceTimeType
 from tidy3d.components.types import Complex, FreqArray
 from tidy3d.components.validators import (
     assert_unique_names,
@@ -94,6 +95,12 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "matrix element. If all elements of a given column of the scattering matrix are defined "
         "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
     )
+    custom_source_time: Optional[SourceTimeType] = pd.Field(
+        None,
+        title="Custom Source Time",
+        description="If provided, this will be used as specification of the source time-dependence in simulations. "
+        "Otherwise, a default source time will be constructed.",
+    )
 
     @pd.validator("simulation", always=True)
     def _sim_has_no_sources(cls, val):
@@ -129,6 +136,21 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
     _freqs_unique = validate_freqs_unique()
+
+    @pd.validator("custom_source_time", always=True)
+    @skip_if_fields_missing(["freqs"])
+    def _freqs_in_custom_source_time(cls, val, values):
+        """Make sure freqs is in the range of the custom source time."""
+        if val is None:
+            return val
+        freq_range = val._frequency_range_sigma_cached
+        freqs = values["freqs"]
+
+        if freq_range[0] > min(freqs) or max(freqs) > freq_range[1]:
+            log.warning(
+                "Custom source time does not cover all 'freqs'.",
+            )
+        return val
 
     @staticmethod
     def get_task_name(

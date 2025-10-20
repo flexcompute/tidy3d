@@ -413,6 +413,8 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     @cached_property
     def _source_time(self):
         """Helper to create a time domain pulse for the frequency range of interest."""
+        if self.custom_source_time is not None:
+            return self.custom_source_time
         if len(self.freqs) == 1:
             freq0 = self.freqs[0]
             return GaussianPulse(freq0=self.freqs[0], fwidth=freq0 * FWIDTH_FRAC)

@@ -191,7 +191,9 @@ class ModalComponentModeler(AbstractComponentModeler):
         return ModeSource(
             center=port.center,
             size=port.size,
-            source_time=GaussianPulse(freq0=freq0, fwidth=fwidth),
+            source_time=self.custom_source_time
+            if self.custom_source_time is not None
+            else GaussianPulse(freq0=freq0, fwidth=fwidth),
             mode_spec=port.mode_spec,
             mode_index=mode_index,
             direction=port.direction,

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added voltage integral specification classes: `AxisAlignedVoltageIntegralSpec` and `Custom2DVoltageIntegralSpec`.
 - Added current integral specification classes: `AxisAlignedCurrentIntegralSpec`, `CompositeCurrentIntegralSpec`, and `Custom2DCurrentIntegralSpec`.
 - `sort_spec` in `ModeSpec` allows for fine-grained filtering and sorting of modes. This also deprecates `filter_pol`. The equivalent usage for example to `filter_pol="te"` is `sort_spec=ModeSortSpec(filter_key="TE_polarization", filter_reference=0.5)`. `ModeSpec.track_freq` has also been deprecated and moved to `ModeSortSpec.track_freq`.
+- Added `custom_source_time` parameter to `ComponentModeler` classes (`ModalComponentModeler` and `TerminalComponentModeler`), allowing specification of custom source time dependence.
 
 ### Changed
 - Improved performance of antenna metrics calculation by utilizing cached wave amplitude calculations instead of recomputing wave amplitudes for each port excitation in the `TerminalComponentModelerData`.
