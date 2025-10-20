@@ -2227,11 +2227,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         try:
             _ = self._finalized
-        except Exception:
-            log.error(
+        except Exception as e:
+            raise Tidy3dError(
                 "Simulation fails after requested mode source PEC frames are added. "
                 "Please inspect '._finalized'."
-            )
+            ) from e
 
 
 class Simulation(AbstractYeeGridSimulation):

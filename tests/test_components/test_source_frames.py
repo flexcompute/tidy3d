@@ -68,5 +68,5 @@ def test_source_absorber_frames():
             )
         ],
     )
-    with pytest.raises(pydantic.ValidationError):
-        _ = bad_sim._finalized
+    with pytest.raises(td.exceptions.Tidy3dError):
+        _ = bad_sim._validate_finalized()
