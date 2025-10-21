@@ -201,7 +201,24 @@ def _run_local(
 
         return compose_modeler_data_from_batch_data(modeler=modeler, batch_data=sim_data_map)
 
-    batch = create_batch(modeler=modeler)
+    # Filter kwargs to only include valid Batch parameters
+    batch_kwargs = {
+        k: v
+        for k, v in kwargs.items()
+        if k
+        in {
+            "solver_version",
+            "folder_name",
+            "verbose",
+            "callback_url",
+            "simulation_type",
+            "parent_tasks",
+            "num_workers",
+            "reduce_simulation",
+            "pay_type",
+        }
+    }
+    batch = create_batch(modeler=modeler, **batch_kwargs)
     priority = kwargs.get("priority")
     if priority is None:
         batch_data = batch.run(path_dir=path_dir)
