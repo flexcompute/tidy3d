@@ -8,8 +8,6 @@ import pytest
 
 import tidy3d as td
 
-td.config.use_local_subpixel = False
-
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.smatrix.ports.wave import DEFAULT_WAVE_PORT_INTERP_SPEC
 
