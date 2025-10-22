@@ -479,3 +479,31 @@ def test_custom_source_time(monkeypatch):
     ):
         custom_source = td.GaussianPulse(freq0=td.C_0, fwidth=1e12)
         modeler = make_component_modeler(custom_source_time=custom_source)
+
+
+def test_validate_run_only_uniqueness_modal():
+    """Test that run_only validator rejects duplicate entries for ModalComponentModeler."""
+    modeler = make_component_modeler()
+
+    # Get valid matrix indices (port_name, mode_index)
+    port0_idx = (modeler.ports[0].name, 0)
+    port1_idx = (modeler.ports[1].name, 0)
+
+    # Test with duplicate entries - should raise ValidationError
+    with pytest.raises(pydantic.ValidationError, match="duplicate entries"):
+        modeler.updated_copy(run_only=(port0_idx, port0_idx, port1_idx))
+
+
+def test_validate_run_only_membership_modal():
+    """Test that run_only validator rejects invalid indices for ModalComponentModeler."""
+    modeler = make_component_modeler()
+
+    # Test with invalid port name
+    with pytest.raises(pydantic.ValidationError, match="not present in"):
+        modeler.updated_copy(run_only=(("invalid_port", 0),))
+
+    # Test with invalid mode index
+    port0_name = modeler.ports[0].name
+    invalid_mode = modeler.ports[0].mode_spec.num_modes + 1
+    with pytest.raises(pydantic.ValidationError, match="not present in"):
+        modeler.updated_copy(run_only=((port0_name, invalid_mode),))

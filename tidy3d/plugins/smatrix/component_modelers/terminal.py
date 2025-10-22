@@ -256,16 +256,34 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             network_dict[key] = (port, mode_index)
         return network_dict
 
+    @staticmethod
+    def _construct_matrix_indices_monitor(
+        ports: tuple[TerminalPortType, ...],
+    ) -> tuple[NetworkIndex, ...]:
+        """Construct matrix indices for monitoring from terminal ports.
+
+        Parameters
+        ----------
+        ports : tuple[TerminalPortType, ...]
+            Tuple of terminal port objects (LumpedPort, CoaxialLumpedPort, or WavePort).
+
+        Returns
+        -------
+        tuple[NetworkIndex, ...]
+            Tuple of network index strings.
+        """
+        matrix_indices = []
+        for port in ports:
+            if isinstance(port, WavePort):
+                matrix_indices.append(TerminalComponentModeler.network_index(port, port.mode_index))
+            else:
+                matrix_indices.append(TerminalComponentModeler.network_index(port))
+        return tuple(matrix_indices)
+
     @cached_property
     def matrix_indices_monitor(self) -> tuple[NetworkIndex, ...]:
         """Tuple of all the possible matrix indices."""
-        matrix_indices = []
-        for port in self.ports:
-            if isinstance(port, WavePort):
-                matrix_indices.append(self.network_index(port, port.mode_index))
-            else:
-                matrix_indices.append(self.network_index(port))
-        return tuple(matrix_indices)
+        return self._construct_matrix_indices_monitor(self.ports)
 
     @cached_property
     def matrix_indices_source(self) -> tuple[NetworkIndex, ...]:

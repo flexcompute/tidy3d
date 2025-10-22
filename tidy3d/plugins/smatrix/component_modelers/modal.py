@@ -87,6 +87,26 @@ class ModalComponentModeler(AbstractComponentModeler):
             sim_dict[task_name] = sim_copy
         return SimulationMap(keys=tuple(sim_dict.keys()), values=tuple(sim_dict.values()))
 
+    @staticmethod
+    def _construct_matrix_indices_monitor(ports: tuple[Port, ...]) -> tuple[MatrixIndex, ...]:
+        """Construct matrix indices for monitoring from modal ports.
+
+        Parameters
+        ----------
+        ports : tuple[Port, ...]
+            Tuple of Port objects.
+
+        Returns
+        -------
+        tuple[MatrixIndex, ...]
+            Tuple of (port_name, mode_index) pairs.
+        """
+        matrix_indices = []
+        for port in ports:
+            for mode_index in range(port.mode_spec.num_modes):
+                matrix_indices.append((port.name, mode_index))
+        return tuple(matrix_indices)
+
     @cached_property
     def matrix_indices_monitor(self) -> tuple[MatrixIndex, ...]:
         """Returns a tuple of all possible matrix indices for monitoring.
@@ -98,11 +118,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         Tuple[MatrixIndex, ...]
             A tuple of all possible matrix indices for the monitoring ports.
         """
-        matrix_indices = []
-        for port in self.ports:
-            for mode_index in range(port.mode_spec.num_modes):
-                matrix_indices.append((port.name, mode_index))
-        return tuple(matrix_indices)
+        return self._construct_matrix_indices_monitor(self.ports)
 
     @cached_property
     def matrix_indices_source(self) -> tuple[MatrixIndex, ...]:

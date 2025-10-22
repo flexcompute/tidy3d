@@ -133,6 +133,35 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
             )
         return element_mappings
 
+    @pd.validator("run_only", always=True)
+    @skip_if_fields_missing(["ports"])
+    def _validate_run_only(cls, val, values):
+        """Validate that run_only entries are unique and exist in matrix_indices_monitor."""
+        if val is None:
+            return val
+
+        # Check uniqueness
+        if len(val) != len(set(val)):
+            duplicates = [idx for idx in set(val) if val.count(idx) > 1]
+            raise SetupError(
+                f"'run_only' contains duplicate entries: {duplicates}. "
+                "Each index must appear only once."
+            )
+
+        # Check membership - use the helper method to get valid indices
+        ports = values["ports"]
+
+        valid_indices = set(cls._construct_matrix_indices_monitor(ports))
+        invalid_indices = [idx for idx in val if idx not in valid_indices]
+
+        if invalid_indices:
+            raise SetupError(
+                f"'run_only' contains indices {invalid_indices} that are not present in "
+                f"'matrix_indices_monitor'. Valid indices are: {sorted(valid_indices)}"
+            )
+
+        return val
+
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
     _freqs_unique = validate_freqs_unique()
@@ -205,6 +234,25 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         if len(ports) == 0:
             raise Tidy3dKeyError(f'Port "{port_name}" not found.')
         return ports[0]
+
+    @staticmethod
+    @abstractmethod
+    def _construct_matrix_indices_monitor(ports: tuple) -> tuple[IndexType, ...]:
+        """Construct matrix indices for monitoring from ports.
+
+        This helper method is used by both the matrix_indices_monitor property
+        and the run_only validator to ensure consistency.
+
+        Parameters
+        ----------
+        ports : tuple
+            Tuple of port objects.
+
+        Returns
+        -------
+        tuple[IndexType, ...]
+            Tuple of matrix indices for monitoring.
+        """
 
     @property
     @abstractmethod
