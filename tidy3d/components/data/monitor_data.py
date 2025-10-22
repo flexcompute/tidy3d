@@ -18,7 +18,7 @@ from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
-from tidy3d.components.mode_spec import ModeSortSpec
+from tidy3d.components.mode_spec import ModeInterpSpec, ModeSortSpec
 from tidy3d.components.monitor import (
     AuxFieldTimeMonitor,
     DiffractionMonitor,
@@ -103,6 +103,7 @@ AXIAL_RATIO_CAP = 100
 # At this sampling rate, the computed area of a sphere is within ~1% of the true value.
 MIN_ANGULAR_SAMPLES_SPHERE = 10
 MODE_INTERP_EXTRAPOLATION_TOLERANCE = 1e-2
+CHEB_NODES_TOLERANCE = 1e-5
 
 
 class MonitorData(AbstractMonitorData, ABC):
@@ -2390,10 +2391,44 @@ class ModeSolverData(ModeData):
         """Return copy of self after normalization is applied using source spectrum function."""
         return self.copy()
 
+    @staticmethod
+    def _validate_cheb_nodes(freqs: np.ndarray) -> None:
+        """Validate that frequencies are approximately at Chebyshev nodes.
+
+        Parameters
+        ----------
+        freqs : np.ndarray
+            Frequency array to validate.
+
+        Raises
+        ------
+        DataError
+            If frequencies are not close to Chebyshev nodes.
+        """
+
+        mode_interp_spec = ModeInterpSpec(method="cheb", num_points=len(freqs))
+        expected_freqs = mode_interp_spec.sampling_points(freqs)
+        
+        # Sort both arrays for comparison (Chebyshev nodes are naturally sorted in descending order)
+        freqs_sorted = np.sort(freqs)
+        expected_sorted = np.sort(expected_freqs)
+            
+        # Check relative error
+        freq_range = np.abs(expected_freqs[-1] - expected_freqs[0])
+        max_error = np.max(np.abs(freqs_sorted - expected_sorted)) / freq_range
+        
+        if max_error > CHEB_NODES_TOLERANCE:
+            raise DataError(
+                f"For Chebyshev interpolation ('cheb'), source frequencies must be at "
+                f"Chebyshev nodes of the second kind. Maximum relative error: {max_error:.2e}, "
+                f"tolerance: {CHEB_NODES_TOLERANCE:.2e}. Use ModeInterpSpec.sampling_points() to generate "
+                f"appropriate frequencies."
+            )
+
     def interp(
         self,
         freqs: FreqArray,
-        method: Literal["linear", "cubic"] = "linear",
+        method: Literal["linear", "cubic", "cheb"] = "linear",
     ) -> ModeSolverData:
         """Interpolate mode data to new frequency points.
 
@@ -2407,11 +2442,12 @@ class ModeSolverData(ModeData):
         freqs : FreqArray
             New frequency points to interpolate to. Should generally span a similar range
             as the original frequencies to avoid extrapolation.
-        method : Literal["linear", "cubic"]
+        method : Literal["linear", "cubic", "cheb"]
             Interpolation method. ``"linear"`` for linear interpolation (requires 2+ source
             frequencies), ``"cubic"`` for cubic spline interpolation (requires 4+ source
-            frequencies). For complex-valued data, real and imaginary parts are interpolated
-            independently.
+            frequencies), ``"cheb"`` for Chebyshev polynomial interpolation using barycentric
+            formula (requires 3+ source frequencies at Chebyshev nodes).
+            For complex-valued data, real and imaginary parts are interpolated independently.
 
         Returns
         -------
@@ -2422,13 +2458,16 @@ class ModeSolverData(ModeData):
         ------
         DataError
             If interpolation parameters are invalid (e.g., too few source frequencies for the
-            chosen method).
+            chosen method, or source frequencies not at Chebyshev nodes for 'cheb' method).
 
         Note
         ----
             Interpolation assumes modes vary smoothly with frequency. Results may be inaccurate
             near mode crossings or regions of rapid mode variation. Use frequency tracking
             (``mode_spec.sort_spec.track_freq``) to help maintain mode ordering consistency.
+            
+            For Chebyshev interpolation, source frequencies must be at Chebyshev nodes of the
+            second kind within the frequency range.
 
         Example
         -------
@@ -2446,15 +2485,26 @@ class ModeSolverData(ModeData):
         if len(freqs) < 2:
             raise DataError("Cannot interpolate to fewer than 2 frequency points.")
 
-        source_freqs = self.monitor.freqs
+        source_freqs = np.array(self.monitor.freqs)
+        
+        # Validate method-specific requirements
         if method == "cubic" and len(source_freqs) < 4:
             raise DataError(
                 f"Cubic interpolation requires at least 4 source frequency points. "
                 f"Got {len(source_freqs)}. Use method='linear' instead."
             )
+        
+        if method == "cheb":
+            if len(source_freqs) < 3:
+                raise DataError(
+                    f"Chebyshev interpolation requires at least 3 source frequency points. "
+                    f"Got {len(source_freqs)}. Use method='linear' instead."
+                )
+            # Validate that source frequencies are approximately Chebyshev nodes
+            self._validate_cheb_nodes(source_freqs)
 
-        if method not in ["linear", "cubic"]:
-            raise DataError(f"Invalid interpolation method '{method}'. Use 'linear' or 'cubic'.")
+        if method not in ["linear", "cubic", "cheb"]:
+            raise DataError(f"Invalid interpolation method '{method}'. Use 'linear', 'cubic', or 'cheb'.")
 
         # Build update dictionary
         update_dict = {}
@@ -2514,16 +2564,20 @@ class ModeSolverData(ModeData):
         freqs : FreqArray
             New frequency points.
         method : str
-            Interpolation method (``"linear"`` or ``"cubic"``).
+            Interpolation method (``"linear"``, ``"cubic"``, or ``"cheb"``).
+            For ``"cheb"``, uses barycentric formula for Chebyshev interpolation.
 
         Returns
         -------
         DataArray
             Interpolated data array with the same structure but new frequency points.
         """
+        # Map 'cheb' to xarray's 'barycentric' method
+        xr_method = "barycentric" if method == "cheb" else method
+        
         # Use xarray's built-in interpolation
         # For complex data, this automatically interpolates real and imaginary parts
-        interp_kwargs = {"method": method}
+        interp_kwargs = {"method": xr_method}
 
         # Check if we're extrapolating significantly and warn
         freq_min, freq_max = float(data.coords["f"].min()), float(data.coords["f"].max())

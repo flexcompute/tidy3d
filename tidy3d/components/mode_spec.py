@@ -7,6 +7,7 @@ from math import isclose
 from typing import Literal, Optional, Union
 
 import numpy as np
+from numpy.typing import ArrayLike
 import pydantic.v1 as pd
 
 from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
@@ -121,31 +122,80 @@ class ModeInterpSpec(Tidy3dBaseModel):
         title="Number of Frequency Points",
         description="Number of frequency points at which to actually compute modes. "
         "Must be at least 2 and less than the total number of frequencies requested. "
-        "The mode solver will compute modes at this many uniformly-spaced frequencies "
-        "and interpolate to obtain results at all requested frequencies.",
+        "The mode solver will compute modes at these sampling frequencies "
+        "and interpolate to obtain results at all requested frequencies. "
+        "For 'linear' and 'cubic' methods, points are uniformly spaced. "
+        "For 'cheb' method, Chebyshev nodes are used.",
         ge=2,
     )
 
-    method: Literal["linear", "cubic"] = pd.Field(
+    method: Literal["linear", "cubic", "cheb"] = pd.Field(
         "linear",
         title="Interpolation Method",
         description="Method for interpolating mode data between computed frequencies. "
         "'linear' uses linear interpolation (faster, requires 2+ points). "
         "'cubic' uses cubic spline interpolation (smoother, more accurate, requires 4+ points). "
+        "'cheb' uses Chebyshev polynomial interpolation with barycentric formula "
+        "(optimal for smooth functions, requires 3+ points, samples at Chebyshev nodes). "
         "For complex-valued data, real and imaginary parts are interpolated independently.",
     )
 
     @pd.validator("method", always=True)
     @skip_if_fields_missing(["num_points"])
-    def _validate_cubic_needs_points(cls, val, values):
-        """Cubic interpolation requires at least 4 points."""
-        if val == "cubic" and values.get("num_points", 0) < 4:
+    def _validate_method_needs_points(cls, val, values):
+        """Validate that the method has enough points."""
+        num_points = values.get("num_points", 0)
+        if val == "cubic" and num_points < 4:
             raise ValidationError(
                 "Cubic interpolation requires at least 4 frequency points. "
-                f"Got num_points={values.get('num_points')}. "
+                f"Got num_points={num_points}. "
+                "Use method='linear' or increase num_points."
+            )
+        if val == "cheb" and num_points < 3:
+            raise ValidationError(
+                "Chebyshev interpolation requires at least 3 frequency points. "
+                f"Got num_points={num_points}. "
                 "Use method='linear' or increase num_points."
             )
         return val
+
+    def sampling_points(self, freqs: ArrayLike) -> np.ndarray:
+        """Compute frequency sampling points based on the interpolation method.
+
+        Parameters
+        ----------
+        freqs : ArrayLike
+            Target frequency array. The sampling points will span from min(freqs) to max(freqs).
+
+        Returns
+        -------
+        np.ndarray
+            Array of ``num_points`` frequency sampling points.
+            For 'linear' and 'cubic' methods: uniformly spaced points.
+            For 'cheb' method: Chebyshev nodes of the second kind.
+
+        Example
+        -------
+        >>> import numpy as np
+        >>> freqs = np.linspace(1e14, 2e14, 100)
+        >>> interp_spec = ModeInterpSpec(num_points=10, method='cheb')
+        >>> sampling_freqs = interp_spec.sampling_points(freqs)
+        """
+        freqs_array = np.asarray(freqs)
+        f_min, f_max = float(freqs_array.min()), float(freqs_array.max())
+
+        if self.method in ("linear", "cubic"):
+            # Uniformly spaced points
+            return np.linspace(f_min, f_max, self.num_points)
+        elif self.method == "cheb":
+            # Chebyshev nodes of the second kind: x_k = cos(k*pi/(n-1)) for k=0,...,n-1
+            # Map from [-1, 1] to [f_min, f_max]
+            k = np.arange(self.num_points)
+            nodes_normalized = np.cos(k * np.pi / (self.num_points - 1))
+            # Map from [-1, 1] to [f_min, f_max]
+            return 0.5 * (f_min + f_max) + 0.5 * (f_max - f_min) * nodes_normalized
+        else:
+            raise ValueError(f"Unknown interpolation method: {self.method}")
 
 
 class AbstractModeSpec(Tidy3dBaseModel, ABC):

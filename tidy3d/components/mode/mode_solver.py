@@ -555,12 +555,8 @@ class ModeSolver(Tidy3dBaseModel):
             specified by ``interp_spec.num_points`` and interpolated to the original frequencies.
         """
 
-        # Create reduced frequency set uniformly spaced over the original range
-        freqs_reduced = np.linspace(
-            self.freqs[0],
-            self.freqs[-1],
-            self.interp_spec.num_points
-        )
+        # Create reduced frequency set based on interpolation method
+        freqs_reduced = self.interp_spec.sampling_points(self.freqs)
 
         # Create a copy of the mode solver with reduced frequencies and no interp_spec
         # (to prevent recursion)

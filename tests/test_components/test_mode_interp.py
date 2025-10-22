@@ -12,6 +12,8 @@ td.config.use_local_subpixel = False
 from ..test_data.test_data_arrays import FS, MODE_SPEC, SIZE_2D
 from ..utils import AssertLogLevel
 from tidy3d.plugins.mode import ModeSolver
+from tidy3d.plugins.smatrix.ports.wave import DEFAULT_WAVE_PORT_INTERP_SPEC
+
 
 # Shared test constants
 FREQS_DENSE = np.linspace(1e14, 2e14, 20)
@@ -46,6 +48,52 @@ def test_interp_spec_cubic_needs_4_points():
     """Test that cubic interpolation requires at least 4 points."""
     with pytest.raises(pydantic.ValidationError, match="Cubic interpolation requires at least 4"):
         td.ModeInterpSpec(num_points=3, method="cubic")
+
+
+def test_interp_spec_valid_cheb():
+    """Test creating valid ModeInterpSpec with Chebyshev interpolation."""
+    spec = td.ModeInterpSpec(num_points=10, method="cheb")
+    assert spec.num_points == 10
+    assert spec.method == "cheb"
+
+
+def test_interp_spec_cheb_needs_3_points():
+    """Test that Chebyshev interpolation requires at least 3 points."""
+    with pytest.raises(pydantic.ValidationError, match="Chebyshev interpolation requires at least 3"):
+        td.ModeInterpSpec(num_points=2, method="cheb")
+
+
+def test_interp_spec_sampling_points_linear():
+    """Test sampling_points for linear interpolation."""
+    spec = td.ModeInterpSpec(num_points=5, method="linear")
+    freqs = np.linspace(1e14, 2e14, 100)
+    sampling = spec.sampling_points(freqs)
+    
+    assert len(sampling) == 5
+    assert np.isclose(sampling[0], 1e14)
+    assert np.isclose(sampling[-1], 2e14)
+    # Check uniform spacing
+    diffs = np.diff(sampling)
+    assert np.allclose(diffs, diffs[0])
+
+
+def test_interp_spec_sampling_points_cheb():
+    """Test sampling_points for Chebyshev interpolation."""
+    spec = td.ModeInterpSpec(num_points=5, method="cheb")
+    freqs = np.linspace(1e14, 2e14, 100)
+    sampling = spec.sampling_points(freqs)
+    
+    assert len(sampling) == 5
+    # Chebyshev nodes should include endpoints
+    assert np.isclose(sampling.min(), 1e14)
+    assert np.isclose(sampling.max(), 2e14)
+    
+    # Verify they are Chebyshev nodes
+    f_min, f_max = 1e14, 2e14
+    k = np.arange(5)
+    expected_normalized = np.cos(k * np.pi / 4)
+    expected = 0.5 * (f_min + f_max) + 0.5 * (f_max - f_min) * expected_normalized
+    assert np.allclose(np.sort(sampling), np.sort(expected))
 
 
 def test_interp_spec_min_2_points():
@@ -380,6 +428,107 @@ def test_mode_solver_data_interp_cubic():
     assert data_interp.n_complex.shape[0] == 20
 
 
+def test_mode_solver_data_interp_cheb():
+    """Test Chebyshev interpolation on ModeSolverData."""
+    # Create data with frequencies at Chebyshev nodes
+    interp_spec = td.ModeInterpSpec(num_points=5, method="cheb")
+    freqs_all = np.linspace(1e14, 2e14, 50)
+    freqs_cheb = interp_spec.sampling_points(freqs_all)
+    
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+    monitor = td.ModeSolverMonitor(
+        center=(0, 0, 0),
+        size=SIZE_2D,
+        freqs=freqs_cheb,
+        mode_spec=mode_spec,
+        name="test_cheb",
+    )
+
+    from ..test_data.test_data_arrays import make_scalar_mode_field_data_array
+    from ..test_data.test_monitor_data import N_COMPLEX
+
+    mode_data = td.ModeSolverData(
+        monitor=monitor,
+        Ex=make_scalar_mode_field_data_array("Ex"),
+        Ey=make_scalar_mode_field_data_array("Ey"),
+        Ez=make_scalar_mode_field_data_array("Ez"),
+        Hx=make_scalar_mode_field_data_array("Hx"),
+        Hy=make_scalar_mode_field_data_array("Hy"),
+        Hz=make_scalar_mode_field_data_array("Hz"),
+        n_complex=N_COMPLEX.copy(),
+        symmetry=(0, 0, 0),
+        symmetry_center=(0, 0, 0),
+        grid_expanded=td.Grid(boundaries=td.Coords(x=[0, 1], y=[0, 1], z=[0, 1])),
+    )
+
+    # Interpolate to 50 frequencies
+    data_interp = mode_data.interp(freqs=freqs_all, method="cheb")
+
+    # Check frequency dimension
+    assert len(data_interp.monitor.freqs) == 50
+    assert data_interp.n_complex.shape[0] == 50
+
+
+def test_mode_solver_data_interp_cheb_needs_3_source():
+    """Test that Chebyshev interpolation fails with too few source frequencies."""
+    # Create data with only 2 frequencies
+    freqs = np.linspace(1e14, 2e14, 2)
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+    monitor = td.ModeSolverMonitor(
+        center=(0, 0, 0),
+        size=SIZE_2D,
+        freqs=freqs,
+        mode_spec=mode_spec,
+        name="test",
+    )
+
+    from ..test_data.test_data_arrays import make_scalar_mode_field_data_array
+    from ..test_data.test_monitor_data import N_COMPLEX
+
+    mode_data = td.ModeSolverData(
+        monitor=monitor,
+        Ex=make_scalar_mode_field_data_array("Ex"),
+        n_complex=N_COMPLEX.copy(),
+        symmetry=(0, 0, 0),
+        symmetry_center=(0, 0, 0),
+        grid_expanded=td.Grid(boundaries=td.Coords(x=[0, 1], y=[0, 1], z=[0, 1])),
+    )
+
+    freqs_dense = np.linspace(1e14, 2e14, 10)
+    with pytest.raises(td.exceptions.DataError, match="at least 3 source"):
+        mode_data.interp(freqs=freqs_dense, method="cheb")
+
+
+def test_mode_solver_data_interp_cheb_validates_nodes():
+    """Test that Chebyshev interpolation validates source frequencies are Chebyshev nodes."""
+    # Create data with uniform (not Chebyshev) nodes
+    freqs_uniform = np.linspace(1e14, 2e14, 5)
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+    monitor = td.ModeSolverMonitor(
+        center=(0, 0, 0),
+        size=SIZE_2D,
+        freqs=freqs_uniform,
+        mode_spec=mode_spec,
+        name="test",
+    )
+
+    from ..test_data.test_data_arrays import make_scalar_mode_field_data_array
+    from ..test_data.test_monitor_data import N_COMPLEX
+
+    mode_data = td.ModeSolverData(
+        monitor=monitor,
+        Ex=make_scalar_mode_field_data_array("Ex"),
+        n_complex=N_COMPLEX.copy(),
+        symmetry=(0, 0, 0),
+        symmetry_center=(0, 0, 0),
+        grid_expanded=td.Grid(boundaries=td.Coords(x=[0, 1], y=[0, 1], z=[0, 1])),
+    )
+
+    freqs_dense = np.linspace(1e14, 2e14, 10)
+    with pytest.raises(td.exceptions.DataError, match="must be at Chebyshev nodes"):
+        mode_data.interp(freqs=freqs_dense, method="cheb")
+
+
 def test_mode_solver_data_interp_preserves_modes():
     """Test that interpolation preserves mode count."""
     mode_data = get_mode_solver_data()
@@ -573,6 +722,32 @@ def test_mode_solver_interp_cubic():
     assert data.n_complex.shape[0] == 10
 
 
+def test_mode_solver_interp_cheb():
+    """Test that ModeSolver works with Chebyshev interpolation."""
+    sim = get_simple_sim()
+    
+    freqs = np.linspace(1e14, 2e14, 20)
+    mode_spec = td.ModeSpec(
+        num_modes=2,
+        sort_spec=td.ModeSortSpec(track_freq="central")
+    )
+    
+    # Chebyshev interpolation requires at least 3 points
+    interp_spec = td.ModeInterpSpec(num_points=5, method="cheb")
+    
+    solver = ModeSolver(
+        simulation=sim,
+        plane=td.Box(center=(0, 0, 0), size=SIZE_2D),
+        freqs=freqs,
+        mode_spec=mode_spec,
+        interp_spec=interp_spec,
+    )
+    
+    data = solver.data_raw
+    assert len(data.monitor.freqs) == 20
+    assert data.n_complex.shape[0] == 20
+
+
 def test_mode_solver_without_interp_returns_full_data():
     """Test that solver without interp_spec computes at all frequencies."""
     sim = get_simple_sim()
@@ -752,6 +927,74 @@ def test_mode_monitor_interp_spec_none():
         name="test",
     )
     
+    assert monitor.interp_spec is None
+
+
+# ============================================================================
+# WavePort interp_spec Tests
+# ============================================================================
+
+def make_wave_port():
+    """Make a WavePort."""
+    from tidy3d.plugins.smatrix.ports.wave import WavePort
+    from tidy3d.components.microwave.path_integrals.integrals.current import AxisAlignedCurrentIntegral
+    return WavePort(
+        center=(0, 0, 0),
+        size=(1, 1, 0),
+        direction="+",
+        name="port1",
+        current_integral=AxisAlignedCurrentIntegral(
+            center=(0, 0, 0),
+            size=(1, 1, 0),
+            sign="+",
+            extrapolate_to_endpoints=True,
+            snap_contour_to_grid=True,
+        )
+    )
+
+
+def test_wave_port_to_monitors_propagates_default_interp_spec():
+    """Test that WavePort.to_monitors() propagates default interp_spec to ModeMonitor."""
+    
+    port = make_wave_port()
+    
+    freqs = np.linspace(1e14, 2e14, 20)
+    monitors = port.to_monitors(freqs=freqs)
+    
+    assert len(monitors) == 1
+    monitor = monitors[0]
+    assert isinstance(monitor, td.ModeMonitor)
+    assert monitor.interp_spec is not None
+    assert monitor.interp_spec.num_points == DEFAULT_WAVE_PORT_INTERP_SPEC.num_points
+    assert monitor.interp_spec.method == DEFAULT_WAVE_PORT_INTERP_SPEC.method
+
+
+def test_wave_port_to_monitors_propagates_custom_interp_spec():
+    """Test that WavePort.to_monitors() propagates custom interp_spec to ModeMonitor."""
+    custom_interp = td.ModeInterpSpec(num_points=8, method="cheb")
+    port = make_wave_port().updated_copy(interp_spec=custom_interp)
+    
+    freqs = np.linspace(1e14, 2e14, 50)
+    monitors = port.to_monitors(freqs=freqs)
+    
+    assert len(monitors) == 1
+    monitor = monitors[0]
+    assert isinstance(monitor, td.ModeMonitor)
+    assert monitor.interp_spec is not None
+    assert monitor.interp_spec.num_points == 8
+    assert monitor.interp_spec.method == "cheb"
+
+
+def test_wave_port_to_monitors_propagates_none_interp_spec():
+    """Test that WavePort.to_monitors() propagates interp_spec=None to ModeMonitor."""
+    port = make_wave_port().updated_copy(interp_spec=None)
+    
+    freqs = np.linspace(1e14, 2e14, 20)
+    monitors = port.to_monitors(freqs=freqs)
+    
+    assert len(monitors) == 1
+    monitor = monitors[0]
+    assert isinstance(monitor, td.ModeMonitor)
     assert monitor.interp_spec is None
 
 
