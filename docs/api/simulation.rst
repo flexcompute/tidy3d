@@ -61,7 +61,8 @@ Logging
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.config.logging_level
-   tidy3d.set_logging_file
+   tidy3d.log.set_logging_level
+   tidy3d.log.set_log_suppression
+   tidy3d.log.set_logging_file
 
 ~~~~

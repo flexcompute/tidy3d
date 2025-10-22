@@ -18,6 +18,7 @@ API |:computer:|
     output_data
     analytic_beams
     utilities
+    configuration
     mesh/index
     heat/index
     charge/index

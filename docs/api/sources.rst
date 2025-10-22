@@ -6,7 +6,7 @@ Sources
 Overview
 --------
 
-Sources in Tidy3D provide the necessary excitation to investigate the EM behaviour of the structures under simulation. The type of source used in a simulation tends to be very application-specific. For instance, a ``PlaneWave`` source may be used for a unit cell simulation in a metalens; whereas a ``ModeSource`` would be more appropriate for a waveguide crossing problem.
+Sources in Tidy3D provide the necessary excitation to investigate the EM behavior of the structures under simulation. The type of source used in a simulation tends to be very application-specific. For instance, a ``PlaneWave`` source may be used for a unit cell simulation in a metalens; whereas a ``ModeSource`` would be more appropriate for a waveguide crossing problem.
 
 A generic source can be thought of as composed of two parts: a spatial profile and a temporal profile. The former dictates the field distribution in space, whereas the latter determines the frequency band covered by the source, and by extension, the overall simulation.
 

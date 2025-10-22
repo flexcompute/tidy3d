@@ -57,14 +57,20 @@ with subpixel averaging is used whenever the mode solver is run locally.
 
 Sometimes, you may want to change this behavior, for example to speed up
 permittivity computation. In this case, you can temporarily disable these
-features by setting the config variable::
+features through the configuration manager::
 
-   tidy3d.config.use_local_subpixel = False
+   from tidy3d import config
 
-This can also be set to ``True`` to ensure that subpixel averaging is used.
+   config.simulation.use_local_subpixel = False
+
+Set the value to ``True`` to ensure that subpixel averaging is used, then call
+``config.save()`` if you would like the change to persist across sessions.
 You can check whether local subpixel averaging is turned on::
 
    tidy3d.packaging.tidy3d_extras["use_local_subpixel"]
+
+For a broader overview of configuration options and how they are stored, see
+:doc:`../configuration/index`.
 
 Licenses
 --------
