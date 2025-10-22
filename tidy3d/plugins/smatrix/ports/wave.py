@@ -108,6 +108,11 @@ class WavePort(AbstractTerminalPort, Box):
         description="Extrudes structures that intersect the wave port plane by a few grid cells when ``True``, improving mode injection accuracy.",
     )
 
+    num_freqs: int = pd.Field(
+        1,
+        title="Number of frequencies",
+    )
+
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
         """Calculates scaling coefficients to convert mode amplitudes
         to the total port voltage.
@@ -166,6 +171,7 @@ class WavePort(AbstractTerminalPort, Box):
             direction=self.direction,
             name=self.name,
             frame=self.frame,
+            num_freqs=self.num_freqs,
         )
 
     def to_monitors(
