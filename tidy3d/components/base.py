@@ -23,6 +23,7 @@ from autograd.builtins import dict as dict_ag
 from autograd.tracer import isbox
 from pydantic.v1.fields import ModelField
 from pydantic.v1.json import custom_pydantic_encoder
+from typing_extensions import Self
 
 from tidy3d.exceptions import FileError
 from tidy3d.log import log
@@ -271,7 +272,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
-    def copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
+    def copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Self:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` and ``validate=True`` as default."""
         kwargs.update(deep=deep)
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
@@ -284,7 +285,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     def updated_copy(
         self, path: Optional[str] = None, deep: bool = True, validate: bool = True, **kwargs
-    ) -> Tidy3dBaseModel:
+    ) -> Self:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
 
         Note
@@ -342,7 +343,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return self._updated_copy(deep=deep, validate=validate, **{field_name: new_component})
 
-    def _updated_copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
+    def _updated_copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Self:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
         return self.copy(update=kwargs, deep=deep, validate=validate)
 
@@ -368,7 +369,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         lazy: bool = False,
         on_load: Optional[Callable] = None,
         **parse_obj_kwargs,
-    ) -> Tidy3dBaseModel:
+    ) -> Self:
         """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
 
         Parameters
@@ -391,7 +392,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Returns
         -------
-        :class:`Tidy3dBaseModel`
+        Self
             An instance of the component class calling ``load``.
 
         Example
@@ -469,7 +470,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return converter(fname=fname)
 
     @classmethod
-    def from_json(cls, fname: str, **parse_obj_kwargs) -> Tidy3dBaseModel:
+    def from_json(cls, fname: str, **parse_obj_kwargs) -> Self:
         """Load a :class:`Tidy3dBaseModel` from .json file.
 
         Parameters
@@ -479,7 +480,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Returns
         -------
-        :class:`Tidy3dBaseModel`
+        Self
             An instance of the component class calling `load`.
         **parse_obj_kwargs
             Keyword arguments passed to pydantic's ``parse_obj`` method.
@@ -532,7 +533,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             file_handle.write(json_string)
 
     @classmethod
-    def from_yaml(cls, fname: str, **parse_obj_kwargs) -> Tidy3dBaseModel:
+    def from_yaml(cls, fname: str, **parse_obj_kwargs) -> Self:
         """Loads :class:`Tidy3dBaseModel` from .yaml file.
 
         Parameters
@@ -544,7 +545,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Returns
         -------
-        :class:`Tidy3dBaseModel`
+        Self
             An instance of the component class calling `from_yaml`.
 
         Example
@@ -747,7 +748,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         group_path: str = "",
         custom_decoders: Optional[list[Callable]] = None,
         **parse_obj_kwargs,
-    ) -> Tidy3dBaseModel:
+    ) -> Self:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
@@ -882,7 +883,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         group_path: str = "",
         custom_decoders: Optional[list[Callable]] = None,
         **parse_obj_kwargs,
-    ) -> Tidy3dBaseModel:
+    ) -> Self:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
 
         Parameters
@@ -1084,7 +1085,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # convert the resulting field_mapping to an autograd-traced dictionary
         return dict_ag(field_mapping)
 
-    def _insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Tidy3dBaseModel:
+    def _insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Self:
         """Recursively insert a map of paths to autograd-traced fields into a copy of this obj."""
 
         self_dict = self.dict()
@@ -1129,7 +1130,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         tracer_keys = TracerKeys.from_field_mapping(field_mapping)
         return tracer_keys.json(separators=(",", ":"), ensure_ascii=True)
 
-    def to_static(self) -> Tidy3dBaseModel:
+    def to_static(self) -> Self:
         """Version of object with all autograd-traced fields removed."""
 
         # get dictionary of all traced fields

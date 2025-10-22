@@ -46,6 +46,7 @@ pyjwt = "*"
 click = "^8.1.0"
 responses = "*"
 joblib = "*"
+typing-extensions = "*"
 ### END NOT CORE
 
 ### Optional dependencies ###

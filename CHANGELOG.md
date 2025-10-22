@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In `Tidy3dBaseModel` the hash (and cached `.json_string`) are now sensitive to changes in `.attrs`.
 - More accurate frequency range for ``GaussianPulse`` when DC is removed.
 - Bug in `TerminalComponentModelerData.get_antenna_metrics_data()` where `WavePort` mode indices were not properly handled. Improved docstrings and type hints to make the usage clearer.
+- Improved type hints for `Tidy3dBaseModel`, so that all derived classes will have more accurate return types.
 
 ## [v2.10.0rc2] - 2025-10-01
 
