@@ -47,6 +47,7 @@ from tidy3d.components.types import (
     Coordinate,
     EMField,
     EpsSpecType,
+    FreqArray,
     Numpy,
     PolarizationBasis,
     Size,
@@ -101,6 +102,7 @@ SHIFT_VALUE_ADJ_FLD_SRC = 1e-5
 AXIAL_RATIO_CAP = 100
 # At this sampling rate, the computed area of a sphere is within ~1% of the true value.
 MIN_ANGULAR_SAMPLES_SPHERE = 10
+MODE_INTERP_EXTRAPOLATION_TOLERANCE = 1e-2
 
 
 class MonitorData(AbstractMonitorData, ABC):
@@ -2387,6 +2389,159 @@ class ModeSolverData(ModeData):
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> ModeSolverData:
         """Return copy of self after normalization is applied using source spectrum function."""
         return self.copy()
+
+    def interp(
+        self,
+        freqs: FreqArray,
+        method: Literal["linear", "cubic"] = "linear",
+    ) -> ModeSolverData:
+        """Interpolate mode data to new frequency points.
+
+        Interpolates all stored mode data (effective indices, field components, group indices,
+        and dispersion) from the current frequency grid to a new set of frequencies. This is
+        useful for obtaining mode data at many frequencies from computations at fewer frequencies,
+        when modes vary smoothly with frequency.
+
+        Parameters
+        ----------
+        freqs : FreqArray
+            New frequency points to interpolate to. Should generally span a similar range
+            as the original frequencies to avoid extrapolation.
+        method : Literal["linear", "cubic"]
+            Interpolation method. ``"linear"`` for linear interpolation (requires 2+ source
+            frequencies), ``"cubic"`` for cubic spline interpolation (requires 4+ source
+            frequencies). For complex-valued data, real and imaginary parts are interpolated
+            independently.
+
+        Returns
+        -------
+        ModeSolverData
+            New :class:`ModeSolverData` object with data interpolated to the requested frequencies.
+
+        Raises
+        ------
+        DataError
+            If interpolation parameters are invalid (e.g., too few source frequencies for the
+            chosen method).
+
+        Note
+        ----
+            Interpolation assumes modes vary smoothly with frequency. Results may be inaccurate
+            near mode crossings or regions of rapid mode variation. Use frequency tracking
+            (``mode_spec.sort_spec.track_freq``) to help maintain mode ordering consistency.
+
+        Example
+        -------
+        >>> # Compute modes at 5 frequencies
+        >>> import numpy as np
+        >>> freqs_sparse = np.linspace(1e14, 2e14, 5)
+        >>> # ... create mode_solver and compute modes ...
+        >>> # mode_data = mode_solver.solve()
+        >>> # Interpolate to 50 frequencies
+        >>> freqs_dense = np.linspace(1e14, 2e14, 50)
+        >>> # mode_data_interp = mode_data.interp(freqs=freqs_dense, method='linear')
+        """
+        # Validate input
+        freqs = np.array(freqs)
+        if len(freqs) < 2:
+            raise DataError("Cannot interpolate to fewer than 2 frequency points.")
+
+        source_freqs = self.monitor.freqs
+        if method == "cubic" and len(source_freqs) < 4:
+            raise DataError(
+                f"Cubic interpolation requires at least 4 source frequency points. "
+                f"Got {len(source_freqs)}. Use method='linear' instead."
+            )
+
+        if method not in ["linear", "cubic"]:
+            raise DataError(f"Invalid interpolation method '{method}'. Use 'linear' or 'cubic'.")
+
+        # Build update dictionary
+        update_dict = {}
+
+        # Interpolate n_complex (required field)
+        update_dict["n_complex"] = self._interp_dataarray(
+            self.n_complex, freqs, method
+        )
+
+        # Interpolate field components if present
+        for field_name, field_data in self.field_components.items():
+            if field_data is not None:
+                update_dict[field_name] = self._interp_dataarray(
+                    field_data, freqs, method
+                )
+
+        # Interpolate n_group_raw if present
+        if self.n_group_raw is not None:
+            update_dict["n_group_raw"] = self._interp_dataarray(
+                self.n_group_raw, freqs, method
+            )
+
+        # Interpolate dispersion_raw if present
+        if self.dispersion_raw is not None:
+            update_dict["dispersion_raw"] = self._interp_dataarray(
+                self.dispersion_raw, freqs, method
+            )
+
+        # Interpolate grid correction data if present
+        for key, data in self._grid_correction_dict.items():
+            if isinstance(data, DataArray) and "f" in data.coords:
+                update_dict[key] = self._interp_dataarray(data, freqs, method)
+
+        # Handle eps_spec if present - use nearest neighbor interpolation
+        if self.eps_spec is not None:
+            update_dict["eps_spec"] = list(self._interp_dataarray(
+                FreqDataArray(self.eps_spec, coords=dict(f=self.monitor.freqs)), freqs, "nearest"
+            ).data)
+
+        # Update monitor with new frequencies
+        update_dict["monitor"] = self.monitor.updated_copy(freqs=list(freqs))
+
+        return self.copy(update=update_dict)
+
+    @staticmethod
+    def _interp_dataarray(
+        data: DataArray,
+        freqs: FreqArray,
+        method: str,
+    ) -> DataArray:
+        """Interpolate a DataArray along the frequency coordinate.
+
+        Parameters
+        ----------
+        data : DataArray
+            Data array to interpolate. Must have a frequency coordinate ``"f"``.
+        freqs : FreqArray
+            New frequency points.
+        method : str
+            Interpolation method (``"linear"`` or ``"cubic"``).
+
+        Returns
+        -------
+        DataArray
+            Interpolated data array with the same structure but new frequency points.
+        """
+        # Use xarray's built-in interpolation
+        # For complex data, this automatically interpolates real and imaginary parts
+        interp_kwargs = {"method": method}
+
+        # Check if we're extrapolating significantly and warn
+        freq_min, freq_max = float(data.coords["f"].min()), float(data.coords["f"].max())
+        new_freq_min, new_freq_max = float(freqs.min()), float(freqs.max())
+
+        if new_freq_min < freq_min * (1 - MODE_INTERP_EXTRAPOLATION_TOLERANCE) or new_freq_max > freq_max * (1 + MODE_INTERP_EXTRAPOLATION_TOLERANCE):
+            log.warning(
+                f"Interpolating to frequencies outside original range "
+                f"[{freq_min:.3e}, {freq_max:.3e}] Hz. New range: "
+                f"[{new_freq_min:.3e}, {new_freq_max:.3e}] Hz. "
+                "Results may be inaccurate due to extrapolation."
+            )
+            interp_kwargs["kwargs"] = {"fill_value": "extrapolate"}
+
+        if method == "nearest":
+            return data.sel(f=freqs, method="nearest")
+        else:
+            return data.interp(f=freqs, **interp_kwargs)
 
     @property
     def time_reversed_copy(self) -> FieldData:

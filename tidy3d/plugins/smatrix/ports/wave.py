@@ -15,6 +15,7 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.bound_ops import bounds_contains
 from tidy3d.components.grid.grid import Grid
+from tidy3d.components.mode_spec import ModeInterpSpec
 from tidy3d.components.microwave.impedance_calculator import (
     CurrentIntegralType,
     ImpedanceCalculator,
@@ -36,6 +37,7 @@ from .base_terminal import AbstractTerminalPort
 DEFAULT_WAVE_PORT_NUM_CELLS = 5
 MIN_WAVE_PORT_NUM_CELLS = 3
 DEFAULT_WAVE_PORT_FRAME = PECFrame()
+DEFAULT_WAVE_PORT_INTERP_SPEC = ModeInterpSpec(num_points=15, method="cubic")
 
 
 class WavePort(AbstractTerminalPort, Box):
@@ -106,6 +108,17 @@ class WavePort(AbstractTerminalPort, Box):
         False,
         title="Extrude Structures",
         description="Extrudes structures that intersect the wave port plane by a few grid cells when ``True``, improving mode injection accuracy.",
+    )
+
+    interp_spec: Optional[ModeInterpSpec] = pd.Field(
+        DEFAULT_WAVE_PORT_INTERP_SPEC,
+        title="Mode Interpolation Specification",
+        description="Parameters for frequency interpolation of mode solver results. "
+        "If provided, modes are computed at a reduced set of frequencies specified by "
+        "``interp_spec.num_points`` and interpolated to obtain results at all monitor "
+        "frequencies. This can significantly reduce computational cost for broadband "
+        "simulations where modes vary smoothly with frequency. Requires mode tracking to be "
+        "enabled via ``mode_spec.sort_spec.track_freq``.",
     )
 
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
@@ -185,6 +198,7 @@ class WavePort(AbstractTerminalPort, Box):
             mode_spec=self.mode_spec,
             store_fields_direction=self.direction,
             conjugated_dot_product=self.conjugated_dot_product,
+            interp_spec=self.interp_spec,
         )
         return [mode_mon]
 

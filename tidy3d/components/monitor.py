@@ -17,7 +17,7 @@ from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .base_sim.monitor import AbstractMonitor
 from .medium import MediumType
 from .microwave.base import MicrowaveBaseModel
-from .mode_spec import ModeSpec
+from .mode_spec import ModeInterpSpec, ModeSpec
 from .types import (
     ArrayFloat1D,
     AuxField,
@@ -358,6 +358,17 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         description="Use conjugated or non-conjugated dot product for mode decomposition.",
     )
 
+    interp_spec: Optional[ModeInterpSpec] = pydantic.Field(
+        None,
+        title="Mode Interpolation Specification",
+        description="Parameters for frequency interpolation of mode solver results. "
+        "If provided, modes are computed at a reduced set of frequencies specified by "
+        "``interp_spec.num_points`` and interpolated to obtain results at all monitor "
+        "frequencies. This can significantly reduce computational cost for broadband "
+        "simulations where modes vary smoothly with frequency. Requires mode tracking to be "
+        "enabled via ``mode_spec.sort_spec.track_freq``.",
+    )
+
     def plot(
         self,
         x: Optional[float] = None,
@@ -422,6 +433,42 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
                 "Tidy3D versions.",
                 custom_loc=["mode_spec", "num_modes"],
             )
+        return val
+
+    @pydantic.validator("interp_spec", always=True)
+    @skip_if_fields_missing(["mode_spec"])
+    def _validate_interp_requires_tracking(cls, val, values):
+        """Validate that frequency tracking is enabled when interpolation is requested."""
+        if val is None:
+            return val
+
+        mode_spec = values.get("mode_spec")
+        track_freq = mode_spec._track_freq
+
+        if track_freq is None:
+            raise ValidationError(
+                "Mode frequency interpolation requires mode tracking to be enabled. "
+                "Set 'mode_spec.sort_spec.track_freq' to 'central', 'lowest', or 'highest'.",
+            )
+        return val
+
+    @pydantic.validator("interp_spec", always=True)
+    @skip_if_fields_missing(["freqs"])
+    def _warn_interp_num_points(cls, val, values):
+        """Warn if num_points is less than total frequencies."""
+        if val is None:
+            return val
+
+        freqs = values.get("freqs")
+        num_freqs = len(freqs)
+
+        if val.num_points >= num_freqs:
+            log.warning(
+                f"interp_spec.num_points ({val.num_points}) is greater than or equal to "
+                f"the number of frequencies ({num_freqs}). No savings are achieved.",
+                custom_loc=["interp_spec", "num_points"],
+            )
+
         return val
 
     def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:

@@ -86,6 +86,68 @@ class ModeSortSpec(Tidy3dBaseModel):
     )
 
 
+class ModeInterpSpec(Tidy3dBaseModel):
+    """Specification for mode frequency interpolation.
+
+    Allows computing modes at a reduced set of frequencies and interpolating
+    to obtain results at all requested frequencies. This can significantly
+    reduce computational cost for broadband simulations where modes vary
+    smoothly with frequency.
+
+    Note
+    ----
+        Requires frequency tracking to be enabled (``mode_spec.sort_spec.track_freq``
+        must not be ``None``) to ensure mode ordering is consistent across frequencies.
+
+    Example
+    -------
+    >>> interp_spec = ModeInterpSpec(num_points=10, method='linear')
+
+    See Also
+    --------
+
+    :class:`ModeSolver`:
+        Mode solver that can use this specification for efficient broadband computation.
+
+    :class:`ModeSolverMonitor`:
+        Monitor that can use this specification to reduce mode computation cost.
+
+    :class:`ModeMonitor`:
+        Monitor that can use this specification to reduce mode computation cost.
+    """
+
+    num_points: int = pd.Field(
+        ...,
+        title="Number of Frequency Points",
+        description="Number of frequency points at which to actually compute modes. "
+        "Must be at least 2 and less than the total number of frequencies requested. "
+        "The mode solver will compute modes at this many uniformly-spaced frequencies "
+        "and interpolate to obtain results at all requested frequencies.",
+        ge=2,
+    )
+
+    method: Literal["linear", "cubic"] = pd.Field(
+        "linear",
+        title="Interpolation Method",
+        description="Method for interpolating mode data between computed frequencies. "
+        "'linear' uses linear interpolation (faster, requires 2+ points). "
+        "'cubic' uses cubic spline interpolation (smoother, more accurate, requires 4+ points). "
+        "For complex-valued data, real and imaginary parts are interpolated independently.",
+    )
+
+    @pd.validator("method", always=True)
+    @skip_if_fields_missing(["num_points"])
+    def _validate_cubic_needs_points(cls, val, values):
+        """Cubic interpolation requires at least 4 points."""
+        if val == "cubic" and values.get("num_points", 0) < 4:
+            raise ValidationError(
+                "Cubic interpolation requires at least 4 frequency points. "
+                f"Got num_points={values.get('num_points')}. "
+                "Use method='linear' or increase num_points."
+            )
+        return val
+
+
 class AbstractModeSpec(Tidy3dBaseModel, ABC):
     """
     Abstract base for mode specification data.

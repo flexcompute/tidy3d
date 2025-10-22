@@ -342,7 +342,7 @@ from .components.mode.data.sim_data import ModeSimulationData
 from .components.mode.simulation import ModeSimulation
 
 # modes
-from .components.mode_spec import ModeSortSpec, ModeSpec
+from .components.mode_spec import ModeInterpSpec, ModeSortSpec, ModeSpec
 
 # monitors
 from .components.monitor import (
@@ -702,6 +702,7 @@ __all__ = [
     "ModeSortSpec",
     "ModeSource",
     "ModeSpec",
+    "ModeInterpSpec",
     "ModulationSpec",
     "Monitor",
     "MultiPhysicsMedium",

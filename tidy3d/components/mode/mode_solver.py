@@ -44,7 +44,7 @@ from tidy3d.components.microwave.impedance_calculator import (
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from tidy3d.components.microwave.path_integrals.factory import make_path_integrals
-from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.mode_spec import ModeInterpSpec, ModeSpec
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
 from tidy3d.components.simulation import Simulation
@@ -200,6 +200,17 @@ class ModeSolver(Tidy3dBaseModel):
         "like ``mode_area`` require all E-field components.",
     )
 
+    interp_spec: Optional[ModeInterpSpec] = pydantic.Field(
+        None,
+        title="Mode Interpolation Specification",
+        description="Parameters for frequency interpolation of mode solver results. "
+        "If provided, modes are computed at a reduced set of ``interp_spec.num_points`` "
+        "frequencies and interpolated to obtain results at all requested frequencies. "
+        "This can significantly reduce computational cost for broadband mode solving where "
+        "modes vary smoothly with frequency. Requires mode tracking to be enabled via "
+        "``mode_spec.sort_spec.track_freq``.",
+    )
+
     @pydantic.validator("simulation", pre=True, always=True)
     def _convert_to_simulation(cls, val):
         """Convert to regular Simulation if e.g. JaxSimulation given."""
@@ -255,6 +266,42 @@ class ModeSolver(Tidy3dBaseModel):
                             "not symmetric with respect to it. To preserve correct symmetry, "
                             "the requested simulation region will be expanded by the solver."
                         )
+        return val
+
+    @pydantic.validator("interp_spec", always=True)
+    @skip_if_fields_missing(["mode_spec"])
+    def _validate_interp_requires_tracking(cls, val, values):
+        """Validate that frequency tracking is enabled when interpolation is requested."""
+        if val is None:
+            return val
+
+        mode_spec = values.get("mode_spec")
+        track_freq = mode_spec._track_freq
+
+        if track_freq is None:
+            raise ValidationError(
+                "Mode frequency interpolation requires mode tracking to be enabled. "
+                "Set 'mode_spec.sort_spec.track_freq' to 'central', 'lowest', or 'highest'."
+            )
+        return val
+
+    @pydantic.validator("interp_spec", always=True)
+    @skip_if_fields_missing(["freqs"])
+    def _warn_interp_num_points(cls, val, values):
+        """Warn if num_points is greater than or equal to total frequencies."""
+        if val is None:
+            return val
+
+        freqs = values.get("freqs")
+        num_freqs = len(freqs)
+
+        if val.num_points >= num_freqs:
+            log.warning(
+                f"interp_spec.num_points ({val.num_points}) is greater than or equal to "
+                f"the number of frequencies ({num_freqs}). No computational savings are achieved.",
+                custom_loc=["interp_spec", "num_points"],
+            )
+
         return val
 
     def _post_init_validators(self) -> None:
@@ -498,6 +545,35 @@ class ModeSolver(Tidy3dBaseModel):
 
         return mode_solver.data_raw._group_index_post_process(self.mode_spec.group_index_step)
 
+    def _get_data_with_interp(self) -> ModeSolverData:
+        """:class:`.ModeSolverData` computed at reduced frequencies and interpolated back.
+
+        Returns
+        -------
+        ModeSolverData
+            :class:`.ModeSolverData` object with modes computed at a reduced set of frequencies
+            specified by ``interp_spec.num_points`` and interpolated to the original frequencies.
+        """
+
+        # Create reduced frequency set uniformly spaced over the original range
+        freqs_reduced = np.linspace(
+            self.freqs[0],
+            self.freqs[-1],
+            self.interp_spec.num_points
+        )
+
+        # Create a copy of the mode solver with reduced frequencies and no interp_spec
+        # (to prevent recursion)
+        mode_solver_reduced = self.copy(
+            update={"freqs": freqs_reduced, "interp_spec": None}
+        )
+
+        # Get data at reduced frequencies
+        data_reduced = mode_solver_reduced.data_raw
+
+        # Interpolate back to original frequencies
+        return data_reduced.interp(freqs=self.freqs, method=self.interp_spec.method)
+
     @cached_property
     def grid_snapped(self) -> Grid:
         """The solver grid snapped to the plane normal and to simulation 0-sized dims if any."""
@@ -531,23 +607,31 @@ class ModeSolver(Tidy3dBaseModel):
         if self.mode_spec.group_index_step > 0:
             return self._get_data_with_group_index()
 
+        if self.interp_spec is not None:
+            return self._get_data_with_interp()
+
         if self.mode_spec.angle_rotation and np.abs(self.mode_spec.angle_theta) > 0:
             return self.rotated_mode_solver_data
 
         # Compute data on the Yee grid
         mode_solver_data = self._data_on_yee_grid()
+        # print("mode_solver_data: ", mode_solver_data)
         if self._has_microwave_mode_spec:
             mode_solver_data = MicrowaveModeSolverData(**mode_solver_data.dict(exclude={"type"}))
 
+        # print("mode_solver_data: ", mode_solver_data)
         # Colocate to grid boundaries if requested
         if self.colocate:
             mode_solver_data = self._colocate_data(mode_solver_data=mode_solver_data)
 
+        # print("mode_solver_data: ", mode_solver_data)
         # normalize modes
         self._normalize_modes(mode_solver_data=mode_solver_data)
 
         # filter polarization if requested
+        # print("mode_solver_data: ", mode_solver_data)
         mode_solver_data = self._filter_polarization(mode_solver_data=mode_solver_data)
+        # print("mode_solver_data: ", mode_solver_data)
 
         # filter and sort modes if requested by sort_spec
         mode_solver_data = mode_solver_data.sort_modes(
