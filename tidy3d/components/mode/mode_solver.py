@@ -560,9 +560,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Create a copy of the mode solver with reduced frequencies and no interp_spec
         # (to prevent recursion)
-        mode_solver_reduced = self.copy(
-            update={"freqs": freqs_reduced, "interp_spec": None}
-        )
+        mode_solver_reduced = self.copy(update={"freqs": freqs_reduced, "interp_spec": None})
 
         # Get data at reduced frequencies
         data_reduced = mode_solver_reduced.data_raw

@@ -7,8 +7,8 @@ from math import isclose
 from typing import Literal, Optional, Union
 
 import numpy as np
-from numpy.typing import ArrayLike
 import pydantic.v1 as pd
+from numpy.typing import ArrayLike
 
 from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError

@@ -15,12 +15,12 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.bound_ops import bounds_contains
 from tidy3d.components.grid.grid import Grid
-from tidy3d.components.mode_spec import ModeInterpSpec
 from tidy3d.components.microwave.impedance_calculator import (
     CurrentIntegralType,
     ImpedanceCalculator,
     VoltageIntegralType,
 )
+from tidy3d.components.mode_spec import ModeInterpSpec
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource, ModeSpec
@@ -37,7 +37,7 @@ from .base_terminal import AbstractTerminalPort
 DEFAULT_WAVE_PORT_NUM_CELLS = 5
 MIN_WAVE_PORT_NUM_CELLS = 3
 DEFAULT_WAVE_PORT_FRAME = PECFrame()
-DEFAULT_WAVE_PORT_INTERP_SPEC = ModeInterpSpec(num_points=15, method="cubic")
+DEFAULT_WAVE_PORT_INTERP_SPEC = ModeInterpSpec(num_points=21, method="cheb")
 
 
 class WavePort(AbstractTerminalPort, Box):
@@ -211,6 +211,7 @@ class WavePort(AbstractTerminalPort, Box):
             freqs=freqs,
             direction=self.direction,
             colocate=False,
+            interp_spec=self.interp_spec,
         )
         return mode_solver
 

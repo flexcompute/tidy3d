@@ -2408,15 +2408,15 @@ class ModeSolverData(ModeData):
 
         mode_interp_spec = ModeInterpSpec(method="cheb", num_points=len(freqs))
         expected_freqs = mode_interp_spec.sampling_points(freqs)
-        
+
         # Sort both arrays for comparison (Chebyshev nodes are naturally sorted in descending order)
         freqs_sorted = np.sort(freqs)
         expected_sorted = np.sort(expected_freqs)
-            
+
         # Check relative error
         freq_range = np.abs(expected_freqs[-1] - expected_freqs[0])
         max_error = np.max(np.abs(freqs_sorted - expected_sorted)) / freq_range
-        
+
         if max_error > CHEB_NODES_TOLERANCE:
             raise DataError(
                 f"For Chebyshev interpolation ('cheb'), source frequencies must be at "
@@ -2465,7 +2465,7 @@ class ModeSolverData(ModeData):
             Interpolation assumes modes vary smoothly with frequency. Results may be inaccurate
             near mode crossings or regions of rapid mode variation. Use frequency tracking
             (``mode_spec.sort_spec.track_freq``) to help maintain mode ordering consistency.
-            
+
             For Chebyshev interpolation, source frequencies must be at Chebyshev nodes of the
             second kind within the frequency range.
 
@@ -2486,14 +2486,14 @@ class ModeSolverData(ModeData):
             raise DataError("Cannot interpolate to fewer than 2 frequency points.")
 
         source_freqs = np.array(self.monitor.freqs)
-        
+
         # Validate method-specific requirements
         if method == "cubic" and len(source_freqs) < 4:
             raise DataError(
                 f"Cubic interpolation requires at least 4 source frequency points. "
                 f"Got {len(source_freqs)}. Use method='linear' instead."
             )
-        
+
         if method == "cheb":
             if len(source_freqs) < 3:
                 raise DataError(
@@ -2504,28 +2504,24 @@ class ModeSolverData(ModeData):
             self._validate_cheb_nodes(source_freqs)
 
         if method not in ["linear", "cubic", "cheb"]:
-            raise DataError(f"Invalid interpolation method '{method}'. Use 'linear', 'cubic', or 'cheb'.")
+            raise DataError(
+                f"Invalid interpolation method '{method}'. Use 'linear', 'cubic', or 'cheb'."
+            )
 
         # Build update dictionary
         update_dict = {}
 
         # Interpolate n_complex (required field)
-        update_dict["n_complex"] = self._interp_dataarray(
-            self.n_complex, freqs, method
-        )
+        update_dict["n_complex"] = self._interp_dataarray(self.n_complex, freqs, method)
 
         # Interpolate field components if present
         for field_name, field_data in self.field_components.items():
             if field_data is not None:
-                update_dict[field_name] = self._interp_dataarray(
-                    field_data, freqs, method
-                )
+                update_dict[field_name] = self._interp_dataarray(field_data, freqs, method)
 
         # Interpolate n_group_raw if present
         if self.n_group_raw is not None:
-            update_dict["n_group_raw"] = self._interp_dataarray(
-                self.n_group_raw, freqs, method
-            )
+            update_dict["n_group_raw"] = self._interp_dataarray(self.n_group_raw, freqs, method)
 
         # Interpolate dispersion_raw if present
         if self.dispersion_raw is not None:
@@ -2540,9 +2536,13 @@ class ModeSolverData(ModeData):
 
         # Handle eps_spec if present - use nearest neighbor interpolation
         if self.eps_spec is not None:
-            update_dict["eps_spec"] = list(self._interp_dataarray(
-                FreqDataArray(self.eps_spec, coords=dict(f=self.monitor.freqs)), freqs, "nearest"
-            ).data)
+            update_dict["eps_spec"] = list(
+                self._interp_dataarray(
+                    FreqDataArray(self.eps_spec, coords={"f": self.monitor.freqs}),
+                    freqs,
+                    "nearest",
+                ).data
+            )
 
         # Update monitor with new frequencies
         update_dict["monitor"] = self.monitor.updated_copy(freqs=list(freqs))
@@ -2574,7 +2574,7 @@ class ModeSolverData(ModeData):
         """
         # Map 'cheb' to xarray's 'barycentric' method
         xr_method = "barycentric" if method == "cheb" else method
-        
+
         # Use xarray's built-in interpolation
         # For complex data, this automatically interpolates real and imaginary parts
         interp_kwargs = {"method": xr_method}
@@ -2583,7 +2583,9 @@ class ModeSolverData(ModeData):
         freq_min, freq_max = float(data.coords["f"].min()), float(data.coords["f"].max())
         new_freq_min, new_freq_max = float(freqs.min()), float(freqs.max())
 
-        if new_freq_min < freq_min * (1 - MODE_INTERP_EXTRAPOLATION_TOLERANCE) or new_freq_max > freq_max * (1 + MODE_INTERP_EXTRAPOLATION_TOLERANCE):
+        if new_freq_min < freq_min * (
+            1 - MODE_INTERP_EXTRAPOLATION_TOLERANCE
+        ) or new_freq_max > freq_max * (1 + MODE_INTERP_EXTRAPOLATION_TOLERANCE):
             log.warning(
                 f"Interpolating to frequencies outside original range "
                 f"[{freq_min:.3e}, {freq_max:.3e}] Hz. New range: "

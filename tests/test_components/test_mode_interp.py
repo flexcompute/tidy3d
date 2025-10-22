@@ -7,13 +7,14 @@ import pydantic.v1 as pydantic
 import pytest
 
 import tidy3d as td
+
 td.config.use_local_subpixel = False
 
-from ..test_data.test_data_arrays import FS, MODE_SPEC, SIZE_2D
-from ..utils import AssertLogLevel
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.smatrix.ports.wave import DEFAULT_WAVE_PORT_INTERP_SPEC
 
+from ..test_data.test_data_arrays import MODE_SPEC, SIZE_2D
+from ..utils import AssertLogLevel
 
 # Shared test constants
 FREQS_DENSE = np.linspace(1e14, 2e14, 20)
@@ -59,7 +60,9 @@ def test_interp_spec_valid_cheb():
 
 def test_interp_spec_cheb_needs_3_points():
     """Test that Chebyshev interpolation requires at least 3 points."""
-    with pytest.raises(pydantic.ValidationError, match="Chebyshev interpolation requires at least 3"):
+    with pytest.raises(
+        pydantic.ValidationError, match="Chebyshev interpolation requires at least 3"
+    ):
         td.ModeInterpSpec(num_points=2, method="cheb")
 
 
@@ -68,7 +71,7 @@ def test_interp_spec_sampling_points_linear():
     spec = td.ModeInterpSpec(num_points=5, method="linear")
     freqs = np.linspace(1e14, 2e14, 100)
     sampling = spec.sampling_points(freqs)
-    
+
     assert len(sampling) == 5
     assert np.isclose(sampling[0], 1e14)
     assert np.isclose(sampling[-1], 2e14)
@@ -82,12 +85,12 @@ def test_interp_spec_sampling_points_cheb():
     spec = td.ModeInterpSpec(num_points=5, method="cheb")
     freqs = np.linspace(1e14, 2e14, 100)
     sampling = spec.sampling_points(freqs)
-    
+
     assert len(sampling) == 5
     # Chebyshev nodes should include endpoints
     assert np.isclose(sampling.min(), 1e14)
     assert np.isclose(sampling.max(), 2e14)
-    
+
     # Verify they are Chebyshev nodes
     f_min, f_max = 1e14, 2e14
     k = np.arange(5)
@@ -387,11 +390,7 @@ def test_mode_solver_data_interp_linear():
     original_num_modes = mode_data.n_complex.shape[1]
 
     # Interpolate to 20 frequencies
-    freqs_dense = np.linspace(
-        mode_data.monitor.freqs[0],
-        mode_data.monitor.freqs[-1],
-        20
-    )
+    freqs_dense = np.linspace(mode_data.monitor.freqs[0], mode_data.monitor.freqs[-1], 20)
     data_interp = mode_data.interp(freqs=freqs_dense, method="linear")
 
     # Check frequency dimension
@@ -416,11 +415,7 @@ def test_mode_solver_data_interp_cubic():
     assert len(mode_data.monitor.freqs) >= 4
 
     # Interpolate to 20 frequencies
-    freqs_dense = np.linspace(
-        mode_data.monitor.freqs[0],
-        mode_data.monitor.freqs[-1],
-        20
-    )
+    freqs_dense = np.linspace(mode_data.monitor.freqs[0], mode_data.monitor.freqs[-1], 20)
     data_interp = mode_data.interp(freqs=freqs_dense, method="cubic")
 
     # Check frequency dimension
@@ -434,7 +429,7 @@ def test_mode_solver_data_interp_cheb():
     interp_spec = td.ModeInterpSpec(num_points=5, method="cheb")
     freqs_all = np.linspace(1e14, 2e14, 50)
     freqs_cheb = interp_spec.sampling_points(freqs_all)
-    
+
     mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
     monitor = td.ModeSolverMonitor(
         center=(0, 0, 0),
@@ -535,11 +530,7 @@ def test_mode_solver_data_interp_preserves_modes():
     original_num_modes = mode_data.n_complex.shape[1]
 
     # Interpolate to different number of frequencies
-    freqs_dense = np.linspace(
-        mode_data.monitor.freqs[0],
-        mode_data.monitor.freqs[-1],
-        20
-    )
+    freqs_dense = np.linspace(mode_data.monitor.freqs[0], mode_data.monitor.freqs[-1], 20)
     data_interp = mode_data.interp(freqs=freqs_dense, method="linear")
 
     # Mode count should be unchanged
@@ -612,17 +603,14 @@ def test_mode_solver_data_interp_extrapolation_warning():
 def test_mode_solver_with_interp():
     """Test that ModeSolver uses interpolation when interp_spec is provided."""
     sim = get_simple_sim()
-    
+
     # Create solver with 10 frequencies
     freqs = np.linspace(1e14, 2e14, 10)
-    mode_spec = td.ModeSpec(
-        num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq="central")
-    )
-    
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+
     # Create solver with interpolation: compute at 3 frequencies, interpolate to 10
     interp_spec = td.ModeInterpSpec(num_points=3, method="linear")
-    
+
     solver_with_interp = ModeSolver(
         simulation=sim,
         plane=td.Box(center=(0, 0, 0), size=SIZE_2D),
@@ -630,10 +618,10 @@ def test_mode_solver_with_interp():
         mode_spec=mode_spec,
         interp_spec=interp_spec,
     )
-    
+
     # The solver should have the original 10 frequencies
     assert len(solver_with_interp.freqs) == 10
-    
+
     # The returned data should have 10 frequencies
     data = solver_with_interp.data_raw
     assert len(data.monitor.freqs) == 10
@@ -643,17 +631,14 @@ def test_mode_solver_with_interp():
 def test_mode_solver_creates_reduced_freqs():
     """Test that solver creates correct reduced frequency set internally."""
     sim = get_simple_sim()
-    
+
     # Create solver with 20 frequencies
     freqs = np.linspace(1e14, 2e14, 20)
-    mode_spec = td.ModeSpec(
-        num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq="central")
-    )
-    
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+
     # Compute at 5 frequencies, interpolate to 20
     interp_spec = td.ModeInterpSpec(num_points=5, method="linear")
-    
+
     solver = ModeSolver(
         simulation=sim,
         plane=td.Box(center=(0, 0, 0), size=SIZE_2D),
@@ -661,11 +646,11 @@ def test_mode_solver_creates_reduced_freqs():
         mode_spec=mode_spec,
         interp_spec=interp_spec,
     )
-    
+
     # The returned data should have all 20 frequencies
     data = solver.data_raw
     assert len(data.monitor.freqs) == 20
-    
+
     # The effective indices should be properly interpolated
     assert data.n_complex.shape[0] == 20
 
@@ -673,15 +658,12 @@ def test_mode_solver_creates_reduced_freqs():
 def test_mode_solver_interp_preserves_num_modes():
     """Test that interpolation preserves the number of modes."""
     sim = get_simple_sim()
-    
+
     freqs = np.linspace(1e14, 2e14, 15)
-    mode_spec = td.ModeSpec(
-        num_modes=3,
-        sort_spec=td.ModeSortSpec(track_freq="central")
-    )
-    
+    mode_spec = td.ModeSpec(num_modes=3, sort_spec=td.ModeSortSpec(track_freq="central"))
+
     interp_spec = td.ModeInterpSpec(num_points=4, method="linear")
-    
+
     solver = ModeSolver(
         simulation=sim,
         plane=td.Box(center=(0, 0, 0), size=SIZE_2D),
@@ -689,9 +671,9 @@ def test_mode_solver_interp_preserves_num_modes():
         mode_spec=mode_spec,
         interp_spec=interp_spec,
     )
-    
+
     data = solver.data_raw
-    
+
     # Should have 3 modes at each of 15 frequencies
     assert data.n_complex.shape == (15, 3)
 
@@ -699,16 +681,13 @@ def test_mode_solver_interp_preserves_num_modes():
 def test_mode_solver_interp_cubic():
     """Test that ModeSolver works with cubic interpolation."""
     sim = get_simple_sim()
-    
+
     freqs = np.linspace(1e14, 2e14, 10)
-    mode_spec = td.ModeSpec(
-        num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq="central")
-    )
-    
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+
     # Cubic interpolation requires at least 4 points
     interp_spec = td.ModeInterpSpec(num_points=4, method="cubic")
-    
+
     solver = ModeSolver(
         simulation=sim,
         plane=td.Box(center=(0, 0, 0), size=SIZE_2D),
@@ -716,7 +695,7 @@ def test_mode_solver_interp_cubic():
         mode_spec=mode_spec,
         interp_spec=interp_spec,
     )
-    
+
     data = solver.data_raw
     assert len(data.monitor.freqs) == 10
     assert data.n_complex.shape[0] == 10
@@ -725,16 +704,13 @@ def test_mode_solver_interp_cubic():
 def test_mode_solver_interp_cheb():
     """Test that ModeSolver works with Chebyshev interpolation."""
     sim = get_simple_sim()
-    
+
     freqs = np.linspace(1e14, 2e14, 20)
-    mode_spec = td.ModeSpec(
-        num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq="central")
-    )
-    
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+
     # Chebyshev interpolation requires at least 3 points
     interp_spec = td.ModeInterpSpec(num_points=5, method="cheb")
-    
+
     solver = ModeSolver(
         simulation=sim,
         plane=td.Box(center=(0, 0, 0), size=SIZE_2D),
@@ -742,7 +718,7 @@ def test_mode_solver_interp_cheb():
         mode_spec=mode_spec,
         interp_spec=interp_spec,
     )
-    
+
     data = solver.data_raw
     assert len(data.monitor.freqs) == 20
     assert data.n_complex.shape[0] == 20
@@ -751,13 +727,10 @@ def test_mode_solver_interp_cheb():
 def test_mode_solver_without_interp_returns_full_data():
     """Test that solver without interp_spec computes at all frequencies."""
     sim = get_simple_sim()
-    
+
     freqs = np.linspace(1e14, 2e14, 10)
-    mode_spec = td.ModeSpec(
-        num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq="central")
-    )
-    
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+
     solver = ModeSolver(
         simulation=sim,
         plane=td.Box(center=(0, 0, 0), size=SIZE_2D),
@@ -765,7 +738,7 @@ def test_mode_solver_without_interp_returns_full_data():
         mode_spec=mode_spec,
         interp_spec=None,  # No interpolation
     )
-    
+
     data = solver.data_raw
     assert len(data.monitor.freqs) == 10
     assert data.n_complex.shape[0] == 10
@@ -779,12 +752,9 @@ def test_mode_solver_without_interp_returns_full_data():
 def test_mode_monitor_with_interp_spec():
     """Test that ModeMonitor can be created with interp_spec."""
     freqs = np.linspace(1e14, 2e14, 10)
-    mode_spec = td.ModeSpec(
-        num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq="central")
-    )
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
     interp_spec = td.ModeInterpSpec(num_points=3, method="linear")
-    
+
     monitor = td.ModeMonitor(
         center=(0, 0, 0),
         size=SIZE_2D,
@@ -793,7 +763,7 @@ def test_mode_monitor_with_interp_spec():
         interp_spec=interp_spec,
         name="mode_monitor",
     )
-    
+
     assert monitor.interp_spec is not None
     assert monitor.interp_spec.num_points == 3
     assert monitor.interp_spec.method == "linear"
@@ -802,12 +772,9 @@ def test_mode_monitor_with_interp_spec():
 def test_mode_solver_monitor_with_interp_spec():
     """Test that ModeSolverMonitor can be created with interp_spec."""
     freqs = np.linspace(1e14, 2e14, 10)
-    mode_spec = td.ModeSpec(
-        num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq="central")
-    )
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
     interp_spec = td.ModeInterpSpec(num_points=4, method="cubic")
-    
+
     monitor = td.ModeSolverMonitor(
         center=(0, 0, 0),
         size=SIZE_2D,
@@ -816,7 +783,7 @@ def test_mode_solver_monitor_with_interp_spec():
         interp_spec=interp_spec,
         name="mode_solver_monitor",
     )
-    
+
     assert monitor.interp_spec is not None
     assert monitor.interp_spec.num_points == 4
     assert monitor.interp_spec.method == "cubic"
@@ -825,14 +792,14 @@ def test_mode_solver_monitor_with_interp_spec():
 def test_mode_monitor_interp_requires_tracking():
     """Test that ModeMonitor with interp_spec requires frequency tracking."""
     freqs = np.linspace(1e14, 2e14, 10)
-    
+
     # Without tracking
     mode_spec_no_track = td.ModeSpec(
         num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq=None)  # No tracking
+        sort_spec=td.ModeSortSpec(track_freq=None),  # No tracking
     )
     interp_spec = td.ModeInterpSpec(num_points=3, method="linear")
-    
+
     with pytest.raises(pydantic.ValidationError, match="requires mode tracking to be enabled"):
         td.ModeMonitor(
             center=(0, 0, 0),
@@ -847,14 +814,14 @@ def test_mode_monitor_interp_requires_tracking():
 def test_mode_solver_monitor_interp_requires_tracking():
     """Test that ModeSolverMonitor with interp_spec requires frequency tracking."""
     freqs = np.linspace(1e14, 2e14, 10)
-    
+
     # Without tracking
     mode_spec_no_track = td.ModeSpec(
         num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq=None)  # No tracking
+        sort_spec=td.ModeSortSpec(track_freq=None),  # No tracking
     )
     interp_spec = td.ModeInterpSpec(num_points=3, method="linear")
-    
+
     with pytest.raises(pydantic.ValidationError, match="requires mode tracking to be enabled"):
         td.ModeSolverMonitor(
             center=(0, 0, 0),
@@ -869,14 +836,11 @@ def test_mode_solver_monitor_interp_requires_tracking():
 def test_mode_monitor_warns_redundant_num_points():
     """Test warning when num_points >= number of frequencies in ModeMonitor."""
     freqs = np.linspace(1e14, 2e14, 5)
-    mode_spec = td.ModeSpec(
-        num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq="central")
-    )
-    
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+
     # num_points >= len(freqs) should trigger warning
     interp_spec = td.ModeInterpSpec(num_points=5, method="linear")
-    
+
     with AssertLogLevel("WARNING", contains_str="greater than or equal"):
         td.ModeMonitor(
             center=(0, 0, 0),
@@ -891,14 +855,11 @@ def test_mode_monitor_warns_redundant_num_points():
 def test_mode_solver_monitor_warns_redundant_num_points():
     """Test warning when num_points >= number of frequencies in ModeSolverMonitor."""
     freqs = np.linspace(1e14, 2e14, 5)
-    mode_spec = td.ModeSpec(
-        num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq="central")
-    )
-    
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+
     # num_points >= len(freqs) should trigger warning
     interp_spec = td.ModeInterpSpec(num_points=6, method="linear")
-    
+
     with AssertLogLevel("WARNING", contains_str="greater than or equal"):
         td.ModeSolverMonitor(
             center=(0, 0, 0),
@@ -913,11 +874,8 @@ def test_mode_solver_monitor_warns_redundant_num_points():
 def test_mode_monitor_interp_spec_none():
     """Test that ModeMonitor works without interp_spec."""
     freqs = np.linspace(1e14, 2e14, 10)
-    mode_spec = td.ModeSpec(
-        num_modes=2,
-        sort_spec=td.ModeSortSpec(track_freq="central")
-    )
-    
+    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+
     monitor = td.ModeMonitor(
         center=(0, 0, 0),
         size=SIZE_2D,
@@ -926,7 +884,7 @@ def test_mode_monitor_interp_spec_none():
         interp_spec=None,
         name="test",
     )
-    
+
     assert monitor.interp_spec is None
 
 
@@ -934,10 +892,14 @@ def test_mode_monitor_interp_spec_none():
 # WavePort interp_spec Tests
 # ============================================================================
 
+
 def make_wave_port():
     """Make a WavePort."""
+    from tidy3d.components.microwave.path_integrals.integrals.current import (
+        AxisAlignedCurrentIntegral,
+    )
     from tidy3d.plugins.smatrix.ports.wave import WavePort
-    from tidy3d.components.microwave.path_integrals.integrals.current import AxisAlignedCurrentIntegral
+
     return WavePort(
         center=(0, 0, 0),
         size=(1, 1, 0),
@@ -949,18 +911,18 @@ def make_wave_port():
             sign="+",
             extrapolate_to_endpoints=True,
             snap_contour_to_grid=True,
-        )
+        ),
     )
 
 
 def test_wave_port_to_monitors_propagates_default_interp_spec():
     """Test that WavePort.to_monitors() propagates default interp_spec to ModeMonitor."""
-    
+
     port = make_wave_port()
-    
+
     freqs = np.linspace(1e14, 2e14, 20)
     monitors = port.to_monitors(freqs=freqs)
-    
+
     assert len(monitors) == 1
     monitor = monitors[0]
     assert isinstance(monitor, td.ModeMonitor)
@@ -973,10 +935,10 @@ def test_wave_port_to_monitors_propagates_custom_interp_spec():
     """Test that WavePort.to_monitors() propagates custom interp_spec to ModeMonitor."""
     custom_interp = td.ModeInterpSpec(num_points=8, method="cheb")
     port = make_wave_port().updated_copy(interp_spec=custom_interp)
-    
+
     freqs = np.linspace(1e14, 2e14, 50)
     monitors = port.to_monitors(freqs=freqs)
-    
+
     assert len(monitors) == 1
     monitor = monitors[0]
     assert isinstance(monitor, td.ModeMonitor)
@@ -988,10 +950,10 @@ def test_wave_port_to_monitors_propagates_custom_interp_spec():
 def test_wave_port_to_monitors_propagates_none_interp_spec():
     """Test that WavePort.to_monitors() propagates interp_spec=None to ModeMonitor."""
     port = make_wave_port().updated_copy(interp_spec=None)
-    
+
     freqs = np.linspace(1e14, 2e14, 20)
     monitors = port.to_monitors(freqs=freqs)
-    
+
     assert len(monitors) == 1
     monitor = monitors[0]
     assert isinstance(monitor, td.ModeMonitor)
@@ -1001,4 +963,3 @@ def test_wave_port_to_monitors_propagates_none_interp_spec():
 # ============================================================================
 # Placeholder tests for future phases
 # ============================================================================
-
