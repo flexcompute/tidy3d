@@ -35,7 +35,7 @@ Tidy3D Configuration
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.config.Tidy3dConfig
+   tidy3d.config.ConfigManager
 
 Default Absorber Parameters
 ----------------------------

@@ -52,9 +52,9 @@ Get Started
 
            tidy3d configure --apikey=XXX
 
-        And enter your API key when prompted.
-
-        For more detailed installation instructions, see `this page <./install.html>`_.
+        For more detailed installation instructions, see `this page <./install.html>`_,
+        and refer to :doc:`configuration/index` if you would like to fine-tune your
+        settings.
 
     .. group-tab:: On Windows |:window:|
 
@@ -75,22 +75,12 @@ Get Started
             pip install pipx
             pipx run tidy3d configure --apikey=XXX
 
-        If you're running into trouble, you may need to manually set the API key directly in the configuration file where Tidy3D looks for it.
-        You need to place the ``$HOME/.tidy3d/config`` file in your home directory such as ``C:\Users\username\`` (where ``username`` is your username).
-
-        The API key must be in a file called ``$HOME/.tidy3d/config`` located in your home directory, with the following contents
-
-        .. code-block:: bash
-
-            apikey = "XXX"
-
-        You can manually set up your file like this, or do it through the command line line:
-
-        .. code-block:: bash
-
-            echo 'apikey = "XXX"' > ~/.tidy3d/config
-
-        Note the quotes around `XXX`.
+        If you're running into trouble, you may need to manually set the API key
+        directly in the configuration file where Tidy3D looks for it. The ``tidy3d
+        configure`` command stores the API key for you. If you prefer to manage the
+        file yourself, place ``config.toml`` in the directory described in
+        :doc:`configuration/index` (for example ``~/.config/tidy3d`` on macOS/Linux
+        or ``%APPDATA%\\tidy3d`` on Windows).
 
     .. group-tab:: In the Cloud |:cloud:|
 
@@ -261,6 +251,7 @@ Contents
   :maxdepth: 2
 
   install
+  configuration/index
   lectures/index
   notebooks/docs/index
   faq/docs/index
@@ -271,6 +262,3 @@ Contents
   development/index
   changelog
   About our Solver <https://www.flexcompute.com/tidy3d/solver/>
-
-
-

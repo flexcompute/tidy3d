@@ -78,23 +78,9 @@ Alternatively, the API key can be set up using the environment variable ``SIMCLO
 
     export SIMCLOUD_APIKEY="XXX"
 
-Finally, one may manually set the API key directly in the configuration file where Tidy3D looks for it.
-
-The API key must be in a file called ``.tidy3d/config`` located in your home directory, with the following contents
-
-.. code-block:: python
-
-    apikey = "XXX"
-
-You can manually set up your file like this, or do it through the command line line:
-
-.. code-block:: python
-
-    echo 'apikey = "XXX"' > ~/.tidy3d/config
-
-Note the quotes around `XXX`.
-
-Note that Windows users will most likely need to place the ``.tidy3d/config`` file in their ``C:\Users\username\`` directory (where ``username`` is your username).
+Finally, one may manually set the API key directly in the configuration file
+where Tidy3D looks for it. The path and file format differ slightly between
+platforms; see :doc:`configuration/index` for the up-to-date layout.
 
 
 
