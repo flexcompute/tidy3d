@@ -7,7 +7,6 @@ import warnings
 from abc import ABC, abstractmethod
 from itertools import compress
 from math import isclose
-from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -558,12 +557,12 @@ class GradedMesher(Mesher):
             )
         )
 
-        ordered_structures = (
-            [structures_others[0]]
-            + structures_unshadowed
-            + structures_others[1:]
-            + structures_enforced
-        )
+        ordered_structures = [
+            structures_others[0],
+            *structures_unshadowed,
+            *structures_others[1:],
+            *structures_enforced,
+        ]
         return len(structures_others) + len(structures_unshadowed), ordered_structures
 
     @staticmethod
@@ -1416,4 +1415,4 @@ class GradedMesher(Mesher):
         return 2
 
 
-MesherType = Union[GradedMesher]
+MesherType = GradedMesher

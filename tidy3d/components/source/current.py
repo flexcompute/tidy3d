@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from abc import ABC
 from math import cos, isclose, sin
-from typing import Optional
+from typing import Literal
 
 import pydantic.v1 as pydantic
-from typing_extensions import Literal
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.dataset import FieldDataset
@@ -208,7 +207,7 @@ class CustomCurrentSource(ReverseInterpolatedSource):
         * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
-    current_dataset: Optional[FieldDataset] = pydantic.Field(
+    current_dataset: FieldDataset | None = pydantic.Field(
         ...,
         title="Current Dataset",
         description=":class:`.FieldDataset` containing the desired frequency-domain "

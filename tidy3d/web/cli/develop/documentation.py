@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Optional
 
 import click
 
@@ -299,7 +298,7 @@ def build_documentation_from_remote_notebooks(args=None):
     help="Recursively find and replace strings in files based on a JSON configuration.",
 )
 def replace_in_files_command(
-    directory: str, json_dictionary: Optional[str], selected_version: Optional[str], dry_run: bool
+    directory: str, json_dictionary: str | None, selected_version: str | None, dry_run: bool
 ):
     """
     Recursively finds and replaces strings in files within a directory based on a given dictionary loaded from a JSON

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Optional
 
 import autograd.numpy as anp
 import numpy as np
@@ -111,7 +110,7 @@ class Sphere(base.Centered, base.Circular):
         return [shapely.Polygon(vertices[:, :2])]
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self, x: float | None = None, y: float | None = None, z: float | None = None
     ):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 

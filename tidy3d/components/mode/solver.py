@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -53,7 +53,7 @@ class EigSolver(Tidy3dBaseModel):
         symmetry=(0, 0),
         direction="+",
         solver_basis_fields=None,
-        plane_center: Optional[tuple[float, float]] = None,
+        plane_center: tuple[float, float] | None = None,
     ) -> tuple[Numpy, Numpy, EpsSpecType]:
         """
         Solve for the modes of a waveguide cross-section.

@@ -4,7 +4,7 @@ astigmatic Gaussian beam."""
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import autograd.numpy as np
 import pydantic.v1 as pd
@@ -263,7 +263,7 @@ class PlaneWaveBeamProfile(BeamProfile):
     See also :class:`.PlaneWave`.
     """
 
-    angular_spec: Union[FixedInPlaneKSpec, FixedAngleSpec] = pd.Field(
+    angular_spec: FixedInPlaneKSpec | FixedAngleSpec = pd.Field(
         FixedAngleSpec(),
         title="Angular Dependence Specification",
         description="Specification of plane wave propagation direction dependence on wavelength.",
@@ -278,7 +278,7 @@ class PlaneWaveBeamProfile(BeamProfile):
         "switch between waves with fixed angle and fixed in-plane k.",
     )
 
-    angle_theta_frequency: Optional[float] = pd.Field(
+    angle_theta_frequency: float | None = pd.Field(
         None,
         title="Frequency at Which Angle Theta is Defined",
         description="Frequency for which ``angle_theta`` is set. This only has an effect for "

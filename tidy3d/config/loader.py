@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import toml
 import tomlkit
@@ -21,7 +21,7 @@ from .serializer import build_document, collect_descriptions
 class ConfigLoader:
     """Handle reading and writing configuration files."""
 
-    def __init__(self, config_dir: Optional[Path] = None):
+    def __init__(self, config_dir: Path | None = None):
         self.config_dir = config_dir or resolve_config_directory()
         self.config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._docs: dict[Path, tomlkit.TOMLDocument] = {}
@@ -160,7 +160,7 @@ def load_environment_overrides() -> dict[str, Any]:
         if not segments:
             continue
         if segments[0] == "auth":
-            segments = ("web",) + segments[1:]
+            segments = ("web", *segments[1:])
         _assign_path(overrides, segments, value)
     return overrides
 

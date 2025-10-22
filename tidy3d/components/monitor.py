@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Literal, Optional
+from typing import Literal
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -360,9 +360,9 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:

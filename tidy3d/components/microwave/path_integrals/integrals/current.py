@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 import numpy as np
 import xarray as xr
 
@@ -133,7 +131,7 @@ class CompositeCurrentIntegral(CompositeCurrentIntegralSpec):
     @cached_property
     def current_integrals(
         self,
-    ) -> tuple[Union[AxisAlignedCurrentIntegral, Custom2DCurrentIntegral], ...]:
+    ) -> tuple[AxisAlignedCurrentIntegral | Custom2DCurrentIntegral, ...]:
         """ "Collection of closed current path integrals."""
         from tidy3d.components.microwave.path_integrals.factory import (
             make_current_integral,
@@ -218,7 +216,7 @@ class CompositeCurrentIntegral(CompositeCurrentIntegralSpec):
 
     def _check_phase_sign_consistency(
         self,
-        phase_difference: Union[FreqDataArray, FreqModeDataArray],
+        phase_difference: FreqDataArray | FreqModeDataArray,
     ) -> bool:
         """
         Check that the provided current data has a consistent phase with respect to the reference
@@ -260,8 +258,8 @@ class CompositeCurrentIntegral(CompositeCurrentIntegralSpec):
 
     def _check_phase_amplitude_consistency(
         self,
-        current_in_phase: Union[FreqDataArray, FreqModeDataArray],
-        current_out_phase: Union[FreqDataArray, FreqModeDataArray],
+        current_in_phase: FreqDataArray | FreqModeDataArray,
+        current_out_phase: FreqDataArray | FreqModeDataArray,
     ) -> bool:
         """
         Check that the summed in phase and out of phase components of current have a consistent relative amplitude.

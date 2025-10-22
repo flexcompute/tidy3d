@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import Literal
 
 try:
     import matplotlib as mpl
@@ -247,7 +247,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         "along the propagation axis.",
     )
 
-    sweep_spec: Optional[EMESweepSpecType] = pd.Field(
+    sweep_spec: EMESweepSpecType | None = pd.Field(
         None,
         title="EME Sweep Specification",
         description="Specification for a parameter sweep to be performed during the EME "
@@ -255,7 +255,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         "in 'sim_data.smatrix'. Other simulation monitor data is not included in the sweep.",
     )
 
-    constraint: Optional[Literal["passive", "unitary"]] = pd.Field(
+    constraint: Literal["passive", "unitary"] | None = pd.Field(
         "passive",
         title="EME Constraint",
         description="Constraint for EME propagation, imposed at cell interfaces. "
@@ -308,12 +308,12 @@ class EMESimulation(AbstractYeeGridSimulation):
     @add_ax_if_none
     def plot_eme_ports(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         **kwargs,
     ) -> Ax:
         """Plot the EME ports."""
@@ -352,12 +352,12 @@ class EMESimulation(AbstractYeeGridSimulation):
     def plot_eme_subgrid_boundaries(
         self,
         eme_grid_spec: EMEGridSpec,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         **kwargs,
     ) -> Ax:
         """Plot the EME subgrid boundaries.
@@ -404,12 +404,12 @@ class EMESimulation(AbstractYeeGridSimulation):
     @add_ax_if_none
     def plot_eme_grid(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         **kwargs,
     ) -> Ax:
         """Plot the EME grid."""
@@ -445,14 +445,14 @@ class EMESimulation(AbstractYeeGridSimulation):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        source_alpha: Optional[float] = None,
-        monitor_alpha: Optional[float] = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        source_alpha: float | None = None,
+        monitor_alpha: float | None = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -1109,11 +1109,11 @@ class EMESimulation(AbstractYeeGridSimulation):
     def subsection(
         self,
         region: Box,
-        grid_spec: Union[GridSpec, Literal["identical"]] = None,
-        eme_grid_spec: Union[EMEGridSpec, Literal["identical"]] = None,
-        symmetry: Optional[tuple[Symmetry, Symmetry, Symmetry]] = None,
+        grid_spec: GridSpec | Literal["identical"] = None,
+        eme_grid_spec: EMEGridSpec | Literal["identical"] = None,
+        symmetry: tuple[Symmetry, Symmetry, Symmetry] | None = None,
         warn_symmetry_expansion: bool = True,
-        monitors: Optional[tuple[MonitorType, ...]] = None,
+        monitors: tuple[MonitorType, ...] | None = None,
         remove_outside_structures: bool = True,
         remove_outside_custom_mediums: bool = False,
         **kwargs,

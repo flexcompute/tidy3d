@@ -4,8 +4,6 @@ reflection efficiency, gain, and realized gain.
 
 from __future__ import annotations
 
-from typing import Optional
-
 import pydantic.v1 as pd
 import xarray as xr
 
@@ -123,7 +121,7 @@ class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
         return reflection_efficiency
 
     def partial_gain(
-        self, pol_basis: PolarizationBasis = "linear", tilt_angle: Optional[float] = None
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float | None = None
     ) -> xr.Dataset:
         """The partial gain figures of merit for antennas. The partial gains are computed
         in the ``linear`` or ``circular`` polarization bases. If ``tilt_angle`` is not ``None``,
@@ -165,7 +163,7 @@ class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
         return partial_G.Gtheta + partial_G.Gphi
 
     def partial_realized_gain(
-        self, pol_basis: PolarizationBasis = "linear", tilt_angle: Optional[float] = None
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float | None = None
     ) -> xr.Dataset:
         """The partial realized gain figures of merit for antennas. The partial gains are computed
         in the ``linear`` or ``circular`` polarization bases. If ``tilt_angle`` is not ``None``,
@@ -264,7 +262,7 @@ class MicrowaveModeData(ModeData, MicrowaveBaseModel):
         ..., title="Monitor", description="Mode monitor associated with the data."
     )
 
-    transmission_line_data: Optional[TransmissionLineDataset] = pd.Field(
+    transmission_line_data: TransmissionLineDataset | None = pd.Field(
         None,
         title="Transmission Line Data",
         description="Additional data relevant to transmission lines in RF and microwave applications, "

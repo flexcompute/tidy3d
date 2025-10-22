@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 from math import isclose
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import numpy as np
 import pydantic.v1 as pd
@@ -39,7 +39,7 @@ class ModeSortSpec(Tidy3dBaseModel):
     """
 
     # Filtering stage
-    filter_key: Optional[MODE_DATA_KEYS] = pd.Field(
+    filter_key: MODE_DATA_KEYS | None = pd.Field(
         None,
         title="Filtering key",
         description="Quantity used to filter modes into two groups before sorting.",
@@ -56,13 +56,13 @@ class ModeSortSpec(Tidy3dBaseModel):
     )
 
     # Sorting stage
-    sort_key: Optional[MODE_DATA_KEYS] = pd.Field(
+    sort_key: MODE_DATA_KEYS | None = pd.Field(
         None,
         title="Sorting key",
         description="Quantity used to sort modes within each filtered group. If ``None``, "
         "sorting is by descending effective index.",
     )
-    sort_reference: Optional[float] = pd.Field(
+    sort_reference: float | None = pd.Field(
         None,
         title="Sorting reference",
         description=(
@@ -76,7 +76,7 @@ class ModeSortSpec(Tidy3dBaseModel):
     )
 
     # Frequency tracking - applied after sorting and filtering
-    track_freq: Optional[TrackFreq] = pd.Field(
+    track_freq: TrackFreq | None = pd.Field(
         "central",
         title="Tracking base frequency",
         description="If provided, enables cross-frequency mode tracking. Can be 'lowest', "
@@ -176,13 +176,13 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "Note: currently only supported when 'angle_phi' is a multiple of 'np.pi'.",
     )
 
-    track_freq: Optional[TrackFreq] = pd.Field(
+    track_freq: TrackFreq | None = pd.Field(
         None,
         title="Mode Tracking Frequency (deprecated)",
         description="Deprecated. Use 'sort_spec.track_freq' instead.",
     )
 
-    group_index_step: Union[pd.PositiveFloat, bool] = pd.Field(
+    group_index_step: pd.PositiveFloat | bool = pd.Field(
         False,
         title="Frequency step for group index computation",
         description="Control the computation of the group index alongside the effective index. If "
@@ -311,7 +311,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         return val
 
     @property
-    def _track_freq(self) -> Optional[TrackFreq]:
+    def _track_freq(self) -> TrackFreq | None:
         """Private resolver for tracking frequency: prefers ModeSpec.track_freq if set,
         otherwise falls back to ModeSortSpec.track_freq."""
         if self.track_freq is not None:

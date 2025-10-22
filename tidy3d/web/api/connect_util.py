@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 from functools import wraps
-from typing import Optional
 
 from requests import ReadTimeout
 from requests.exceptions import ConnectionError as ConnErr
@@ -17,7 +16,7 @@ from tidy3d.web import common
 from tidy3d.web.common import REFRESH_TIME
 
 
-def wait_for_connection(decorated_fn=None, wait_time_sec: Optional[float] = None):
+def wait_for_connection(decorated_fn=None, wait_time_sec: float | None = None):
     """Causes function to ignore connection errors and retry for ``wait_time_sec`` secs."""
 
     def decorator(web_fn, wait_time_sec=wait_time_sec):

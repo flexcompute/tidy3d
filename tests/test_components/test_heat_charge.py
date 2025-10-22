@@ -872,7 +872,7 @@ def test_heat_charge_structures_creation(structures):
 
 def test_heat_charge_bcs_validation(boundary_conditions):
     """Tests the validators for boundary conditions."""
-    bc_temp, bc_flux, bc_conv, bc_volt, bc_current = boundary_conditions
+    _bc_temp, _bc_flux, _bc_conv, _bc_volt, _bc_current = boundary_conditions
 
     # Invalid TemperatureBC
     with pytest.raises(pd.ValidationError):
@@ -968,7 +968,7 @@ def test_freqs_validation():
     # Test that freqs without SSACVoltageSource raises error
     with pytest.raises(
         pd.ValidationError,
-        match="If 'freqs' is provided and not empty, at least one 'SSACVoltageSource' must be present in the boundary conditions.",
+        match=r"If 'freqs' is provided and not empty, at least one 'SSACVoltageSource' must be present in the boundary conditions.",
     ):
         sim.updated_copy(
             boundary_spec=[
@@ -984,10 +984,10 @@ def test_freqs_validation():
     assert np.isclose(freqs, freqs_input).all()
     assert np.isclose(1e-3, amplitude)
 
-    with pytest.raises(pd.ValidationError, match="'freqs' cannot contain infinite frequencies."):
+    with pytest.raises(pd.ValidationError, match=r"'freqs' cannot contain infinite frequencies."):
         sim.updated_copy(analysis_spec=sim.analysis_spec.updated_copy(freqs=[1e2, np.inf]))
 
-    with pytest.raises(pd.ValidationError, match="'freqs' cannot contain negative frequencies."):
+    with pytest.raises(pd.ValidationError, match=r"'freqs' cannot contain negative frequencies."):
         sim.updated_copy(analysis_spec=sim.analysis_spec.updated_copy(freqs=[1e2, -1e2]))
 
 
@@ -1315,7 +1315,7 @@ def test_heat_charge_simulation(simulation_data):
 
 def test_sim_data_plotting(simulation_data):
     """Tests whether simulation data can be plotted and appropriate errors are raised."""
-    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
+    heat_sim_data, cond_sim_data, _cap_sim_data, _fc_sim_data, _mesh_data = simulation_data
 
     # Plotting temperature data
     heat_sim_data.plot_field("test", z=0)
@@ -1356,7 +1356,7 @@ def test_sim_data_plotting(simulation_data):
 
 def test_mesh_plotting(simulation_data):
     """Tests whether mesh can be plotted and appropriate errors are raised."""
-    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
+    heat_sim_data, cond_sim_data, _cap_sim_data, _fc_sim_data, mesh_data = simulation_data
 
     # Plotting mesh from unstructured temperature data
     heat_sim_data.plot_mesh("tri")
@@ -1579,7 +1579,8 @@ class TestCharge:
         condition_ssac_p = td.VoltageBC(source=td.SSACVoltageSource(voltage=[0, 1], amplitude=1e-3))
         # Two AC sources cannot be defined
         with pytest.raises(
-            pd.ValidationError, match="Only a single 'SSACVoltageSource' source can be supplied."
+            pd.ValidationError,
+            match=r"Only a single 'SSACVoltageSource' source can be supplied.",
         ):
             analysis = td.IsothermalSSACAnalysis(freqs=[1e2, 1e3], temperature=300)
             sim.updated_copy(
@@ -1592,7 +1593,8 @@ class TestCharge:
 
         # Test SSACAnalysis as well
         with pytest.raises(
-            pd.ValidationError, match="Only a single 'SSACVoltageSource' source can be supplied."
+            pd.ValidationError,
+            match=r"Only a single 'SSACVoltageSource' source can be supplied.",
         ):
             analysis_ssac = td.SSACAnalysis(freqs=[1e2, 1e3], tolerance_settings=charge_tolerance)
             sim.updated_copy(
@@ -2026,7 +2028,7 @@ def test_dynamic_simulation_updates(heat_simulation):
 
 def test_plotting_functions(simulation_data):
     """Test plotting functions with various data."""
-    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
+    heat_sim_data, cond_sim_data, _cap_sim_data, _fc_sim_data, _mesh_data = simulation_data
 
     # Valid plotting
     try:

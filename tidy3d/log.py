@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Callable, Optional, Union
+from typing import Literal
 
 from rich.console import Console
 from rich.text import Text
-from typing_extensions import Literal
 
 # Note: "SUPPORT" and "USER" levels are meant for backend runs only.
 # Logging in frontend code should just use the standard debug/info/warning/error/critical.
 LogLevel = Literal["DEBUG", "SUPPORT", "USER", "INFO", "WARNING", "ERROR", "CRITICAL"]
-LogValue = Union[int, LogLevel]
+LogValue = int | LogLevel
 
 # Logging levels compatible with logging module
 _level_value = {
@@ -245,7 +245,7 @@ class Logger:
         message: str,
         *args,
         log_once: bool = False,
-        custom_loc: Optional[list] = None,
+        custom_loc: list | None = None,
         capture: bool = True,
     ) -> None:
         """Distribute log messages to all handlers"""
@@ -314,7 +314,7 @@ class Logger:
         message: str,
         *args,
         log_once: bool = False,
-        custom_loc: Optional[list] = None,
+        custom_loc: list | None = None,
         capture: bool = True,
     ) -> None:
         """Log (message) % (args) at warning level"""

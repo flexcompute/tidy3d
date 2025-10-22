@@ -1303,7 +1303,7 @@ def test_triangle_mesh_from_height():
 
     with pytest.raises(
         ValueError,
-        match="All height values must be non-negative.",
+        match=r"All height values must be non-negative.",
     ):
         td.TriangleMesh.from_height_function(
             axis=axis,

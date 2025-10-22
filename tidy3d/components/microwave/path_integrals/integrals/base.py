@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Union
+from typing import Literal
 
 import numpy as np
 import xarray as xr
@@ -22,8 +22,8 @@ from tidy3d.components.microwave.path_integrals.specs.base import (
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import DataError
 
-IntegrableMonitorDataType = Union[FieldData, FieldTimeData, ModeData, ModeSolverData]
-EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
+IntegrableMonitorDataType = FieldData | FieldTimeData | ModeData | ModeSolverData
+EMScalarFieldType = ScalarFieldDataArray | ScalarFieldTimeDataArray | ScalarModeFieldDataArray
 FieldParameter = Literal["E", "H"]
 
 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import numpy as np
 
 import tidy3d as td
@@ -36,9 +34,7 @@ Rinner = 0.2768 * mm
 Router = 1.0 * mm
 
 
-def make_simulation(
-    planar_pec: bool, length: Optional[float] = None, grid_spec: td.GridSpec = None
-):
+def make_simulation(planar_pec: bool, length: float | None = None, grid_spec: td.GridSpec = None):
     if length:
         strip_length = length
     else:
@@ -114,7 +110,7 @@ def make_simulation(
 def make_component_modeler(
     planar_pec: bool,
     reference_impedance: complex = 50,
-    length: Optional[float] = None,
+    length: float | None = None,
     port_refinement: bool = True,
     port_snapping: bool = True,
     grid_spec: td.GridSpec = None,
@@ -172,7 +168,7 @@ def make_component_modeler(
     return modeler
 
 
-def make_coaxial_simulation(length: Optional[float] = None, grid_spec: td.GridSpec = None):
+def make_coaxial_simulation(length: float | None = None, grid_spec: td.GridSpec = None):
     if not length:
         length = default_strip_length
 
@@ -249,10 +245,10 @@ def make_coaxial_simulation(length: Optional[float] = None, grid_spec: td.GridSp
 
 def make_coaxial_component_modeler(
     reference_impedance: complex = 50,
-    length: Optional[float] = None,
+    length: float | None = None,
     port_refinement: bool = True,
     grid_spec: td.GridSpec = None,
-    port_types: tuple[Union[CoaxialLumpedPort, WavePort], Union[CoaxialLumpedPort, WavePort]] = (
+    port_types: tuple[CoaxialLumpedPort | WavePort, CoaxialLumpedPort | WavePort] = (
         CoaxialLumpedPort,
         CoaxialLumpedPort,
     ),
@@ -265,7 +261,7 @@ def make_coaxial_component_modeler(
 
     sim = make_coaxial_simulation(length=length, grid_spec=grid_spec)
 
-    def make_port(center, direction, type, name) -> Union[CoaxialLumpedPort, WavePort]:
+    def make_port(center, direction, type, name) -> CoaxialLumpedPort | WavePort:
         if type is CoaxialLumpedPort:
             port_cells = None
             if port_refinement:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from subprocess import run
-from typing import Union
 
 import pydantic.v1 as pd
 from pydantic.v1 import validator
@@ -118,7 +117,7 @@ class DRCRunner(Tidy3dBaseModel):
 
     def run(
         self,
-        source: Union[Geometry, Structure, Simulation, Path],
+        source: Geometry | Structure | Simulation | Path,
         td_object_gds_savefile: Path = DEFAULT_GDSFILE,
         resultsfile: Path = DEFAULT_RESULTSFILE,
         **to_gds_file_kwargs,

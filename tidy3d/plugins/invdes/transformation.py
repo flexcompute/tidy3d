@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import abc
-import typing
 
 import autograd.numpy as anp
 import pydantic.v1 as pd
@@ -82,4 +81,4 @@ class FilterProject(InvdesBaseModel):
         return data_projected
 
 
-TransformationType = typing.Union[FilterProject]
+TransformationType = FilterProject

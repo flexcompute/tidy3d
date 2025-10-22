@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import Union
 
 import pydantic.v1 as pd
 
@@ -84,7 +83,7 @@ class AbstractVariantItem(Tidy3dBaseModel):
     )
 
     @property
-    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, PoleResidue | Medium2D | MultiPhysicsMedium]:
         return {}
 
     def __str__(self):
@@ -100,14 +99,14 @@ class AbstractVariantItem(Tidy3dBaseModel):
 class VariantItem(AbstractVariantItem):
     """Reference, data_source, and material model for a variant of a material."""
 
-    medium: Union[PoleResidue, MultiPhysicsMedium] = pd.Field(
+    medium: PoleResidue | MultiPhysicsMedium = pd.Field(
         ...,
         title="Material dispersion model",
         description="A dispersive medium described by the pole-residue pair model.",
     )
 
     @property
-    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, PoleResidue | Medium2D | MultiPhysicsMedium]:
         return {"medium": self.medium}
 
 
@@ -171,7 +170,7 @@ class VariantItem2D(AbstractVariantItem):
     )
 
     @property
-    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, PoleResidue | Medium2D | MultiPhysicsMedium]:
         return {"medium": self.medium}
 
 
@@ -222,7 +221,7 @@ class VariantItemUniaxial(AbstractVariantItem):
         return AnisotropicMedium.parse_obj(mat_dict)
 
     @property
-    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, PoleResidue | Medium2D | MultiPhysicsMedium]:
         return {"ordinary": self.ordinary, "extraordinary": self.extraordinary}
 
 

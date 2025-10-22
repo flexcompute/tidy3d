@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union
 
 import pydantic.v1 as pd
 
@@ -110,10 +109,10 @@ class StructureSimulationBoundary(AbstractBCPlacement):
     )
 
 
-BCPlacementType = Union[
-    StructureBoundary,
-    StructureStructureInterface,
-    MediumMediumInterface,
-    SimulationBoundary,
-    StructureSimulationBoundary,
-]
+BCPlacementType = (
+    StructureBoundary
+    | StructureStructureInterface
+    | MediumMediumInterface
+    | SimulationBoundary
+    | StructureSimulationBoundary
+)

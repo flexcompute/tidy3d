@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Callable, Literal, Optional, Union
+from collections.abc import Callable
+from typing import Literal
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -34,7 +35,7 @@ class TriangleMesh(base.Geometry, ABC):
     >>> stl_geom = TriangleMesh.from_vertices_faces(vertices, faces)
     """
 
-    mesh_dataset: Optional[TriangleMeshDataset] = pydantic.Field(
+    mesh_dataset: TriangleMeshDataset | None = pydantic.Field(
         ...,
         title="Surface mesh data",
         description="Surface mesh data.",
@@ -152,9 +153,9 @@ class TriangleMesh(base.Geometry, ABC):
         filename: str,
         scale: float = 1.0,
         origin: tuple[float, float, float] = (0, 0, 0),
-        solid_index: Optional[int] = None,
+        solid_index: int | None = None,
         **kwargs,
-    ) -> Union[TriangleMesh, base.GeometryGroup]:
+    ) -> TriangleMesh | base.GeometryGroup:
         """Load a :class:`.TriangleMesh` directly from an STL file.
         The ``solid_index`` parameter can be used to select a single solid from the file.
         Otherwise, if the file contains a single solid, it will be loaded as a
@@ -554,7 +555,7 @@ class TriangleMesh(base.Geometry, ABC):
         return path.polygons_full
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self, x: float | None = None, y: float | None = None, z: float | None = None
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -656,9 +657,9 @@ class TriangleMesh(base.Geometry, ABC):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:

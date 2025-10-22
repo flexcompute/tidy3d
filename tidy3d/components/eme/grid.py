@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import numpy as np
 import pydantic.v1 as pd
@@ -26,7 +26,7 @@ MAX_NUM_REPS = 100000
 class EMEModeSpec(ModeSpec):
     """Mode spec for EME cells. Overrides some of the defaults and allowed values."""
 
-    track_freq: Union[TrackFreq, None] = pd.Field(
+    track_freq: TrackFreq | None = pd.Field(
         None,
         title="Mode Tracking Frequency",
         description="Parameter that turns on/off mode tracking based on their similarity. "
@@ -106,7 +106,7 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
         "the EME solver to reuse the modes and cell interface scattering matrices.",
     )
 
-    name: Optional[str] = pd.Field(
+    name: str | None = pd.Field(
         None, title="Name", description="Name of this 'EMEGridSpec'. Used in 'EMEPeriodicitySweep'."
     )
 
@@ -378,9 +378,6 @@ class EMEExplicitGrid(EMEGridSpec):
         return len(self.mode_specs)
 
 
-EMESubgridType = Union[EMEUniformGrid, EMEExplicitGrid, "EMECompositeGrid"]
-
-
 class EMECompositeGrid(EMEGridSpec):
     """EME grid made out of multiple subgrids.
 
@@ -397,7 +394,7 @@ class EMECompositeGrid(EMEGridSpec):
     ... )
     """
 
-    subgrids: list[EMESubgridType] = pd.Field(
+    subgrids: list[EMEUniformGrid | EMEExplicitGrid | EMECompositeGrid] = pd.Field(
         ..., title="Subgrids", description="Subgrids in the composite grid."
     )
 
@@ -536,8 +533,8 @@ class EMECompositeGrid(EMEGridSpec):
         structure_groups: list[list[Structure]],
         axis: Axis,
         mode_specs: list[EMEModeSpec],
-        names: Optional[list[str]] = None,
-        num_reps: Optional[list[pd.PositiveInt]] = None,
+        names: list[str] | None = None,
+        num_reps: list[pd.PositiveInt] | None = None,
     ) -> EMECompositeGrid:
         """Create a composite EME grid with boundaries aligned with
         structure bounding boxes.
@@ -817,4 +814,4 @@ class EMEGrid(Box):
         return indices
 
 
-EMEGridSpecType = Union[EMEUniformGrid, EMECompositeGrid, EMEExplicitGrid]
+EMEGridSpecType = EMEUniformGrid | EMECompositeGrid | EMEExplicitGrid

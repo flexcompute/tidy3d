@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 from copy import copy
 from functools import lru_cache
-from typing import Optional, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pydantic
@@ -265,7 +264,7 @@ class PolySlab(base.Planar):
         axis: Axis,
         slab_bounds: tuple[float, float],
         gds_layer: int,
-        gds_dtype: Optional[int] = None,
+        gds_dtype: int | None = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
@@ -327,7 +326,7 @@ class PolySlab(base.Planar):
     def _load_gds_vertices(
         gds_cell,
         gds_layer: int,
-        gds_dtype: Optional[int] = None,
+        gds_dtype: int | None = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
     ) -> list[ArrayFloat2D]:
         """Import :class:`PolySlab` from a ``gdstk.Cell``.
@@ -1531,7 +1530,7 @@ class PolySlab(base.Planar):
     @staticmethod
     def _clip_edge_to_bounds_t(
         v0_3d: np.ndarray, v1_3d: np.ndarray, sim_min: np.ndarray, sim_max: np.ndarray
-    ) -> Optional[tuple[float, float]]:
+    ) -> tuple[float, float] | None:
         """Parametric bounds [t0,t1] of segment within [sim_min, sim_max]."""
         t_start, t_end = 0.0, 1.0
         edge_clip_tolerance = config.adjoint.edge_clip_tolerance
@@ -1633,7 +1632,7 @@ class PolySlab(base.Planar):
         axis_vec[self.axis] = 1.0
 
         # densify along axis as |theta| grows: dz scales with cos(theta)
-        z_centers, dz, z0, z1 = self._z_slices(sim_min, sim_max, is_2d=is_2d, dx=dx * cos_th)
+        z_centers, dz, _z0, _z1 = self._z_slices(sim_min, sim_max, is_2d=is_2d, dx=dx * cos_th)
 
         # early exit: no slices
         if (not is_2d) and len(z_centers) == 0:
@@ -1817,7 +1816,7 @@ class PolySlab(base.Planar):
         sim_min: np.ndarray,
         sim_max: np.ndarray,
         is_2d: bool = False,
-        interpolators: Optional[dict] = None,
+        interpolators: dict | None = None,
     ) -> float:
         """VJP for dJ/dtheta where theta = sidewall_angle.
 
@@ -2092,7 +2091,7 @@ class PolySlab(base.Planar):
         sim_min: np.ndarray,
         sim_max: np.ndarray,
         is_2d: bool = False,
-        interpolators: Optional[dict] = None,
+        interpolators: dict | None = None,
     ) -> np.ndarray:
         """VJP for the vertices of a ``PolySlab``.
 
@@ -2288,7 +2287,7 @@ class PolySlab(base.Planar):
         scaled_slab_bounds = tuple(scale_normal * bound for bound in self.slab_bounds)
         return self.updated_copy(vertices=scaled_vertices, slab_bounds=scaled_slab_bounds)
 
-    def rotated(self, angle: float, axis: Union[Axis, Coordinate]) -> PolySlab:
+    def rotated(self, angle: float, axis: Axis | Coordinate) -> PolySlab:
         """Return a rotated copy of this geometry.
 
         Parameters
@@ -2362,7 +2361,7 @@ class ComplexPolySlabBase(PolySlab):
         axis: Axis,
         slab_bounds: tuple[float, float],
         gds_layer: int,
-        gds_dtype: Optional[int] = None,
+        gds_dtype: int | None = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,

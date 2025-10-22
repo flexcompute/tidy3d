@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 import pydantic.v1 as pd
 
@@ -112,7 +110,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         return val
 
     def to_source(
-        self, source_time: GaussianPulse, snap_center: Optional[float] = None, grid: Grid = None
+        self, source_time: GaussianPulse, snap_center: float | None = None, grid: Grid = None
     ) -> CustomCurrentSource:
         """Create a current source from the lumped port."""
         # Discretized source amps are manually zeroed out later if they
@@ -201,7 +199,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             current_dataset=dataset_E,
         )
 
-    def to_load(self, snap_center: Optional[float] = None) -> CoaxialLumpedResistor:
+    def to_load(self, snap_center: float | None = None) -> CoaxialLumpedResistor:
         """Create a load resistor from the lumped port."""
         # 2D materials are currently snapped to the grid, so snapping here is not needed.
         # Snapping is done here so plots of the simulation will more accurately portray the setup.
@@ -220,7 +218,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         )
 
     def to_voltage_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid = None
     ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
         center = list(self.center)
@@ -244,7 +242,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         )
 
     def to_current_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid = None
     ) -> FieldMonitor:
         """Field monitor to compute port current."""
         center = list(self.center)

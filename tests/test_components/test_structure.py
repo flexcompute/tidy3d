@@ -63,7 +63,7 @@ def test_lower_dimension_custom_medium_to_gds(tmp_path):
     y = np.array([0.0])
     z = np.linspace(-1, 1, nz)
     f = np.array([td.C_0])
-    mx, my, mz, _ = np.meshgrid(x, y, z, f, indexing="ij", sparse=True)
+    mx, _my, mz, _ = np.meshgrid(x, y, z, f, indexing="ij", sparse=True)
     data = 1 + 1 / (1 + (mx - 1) ** 2 + mz**2)
     eps_diagonal_data = td.ScalarFieldDataArray(data, coords={"x": x, "y": y, "z": z, "f": f})
     eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}

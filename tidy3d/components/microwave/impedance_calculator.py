@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import numpy as np
 import pydantic.v1 as pd
 
@@ -33,10 +31,10 @@ from tidy3d.components.microwave.path_integrals.integrals.voltage import (
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.exceptions import ValidationError
 
-VoltageIntegralType = Union[AxisAlignedVoltageIntegral, Custom2DVoltageIntegral]
-CurrentIntegralType = Union[
-    AxisAlignedCurrentIntegral, Custom2DCurrentIntegral, CompositeCurrentIntegral
-]
+VoltageIntegralType = AxisAlignedVoltageIntegral | Custom2DVoltageIntegral
+CurrentIntegralType = (
+    AxisAlignedCurrentIntegral | Custom2DCurrentIntegral | CompositeCurrentIntegral
+)
 
 
 class ImpedanceCalculator(MicrowaveBaseModel):
@@ -67,13 +65,13 @@ class ImpedanceCalculator(MicrowaveBaseModel):
     >>> _ = ImpedanceCalculator(voltage_integral=v_int)
     """
 
-    voltage_integral: Optional[VoltageIntegralType] = pd.Field(
+    voltage_integral: VoltageIntegralType | None = pd.Field(
         None,
         title="Voltage Integral",
         description="Definition of path integral for computing voltage.",
     )
 
-    current_integral: Optional[CurrentIntegralType] = pd.Field(
+    current_integral: CurrentIntegralType | None = pd.Field(
         None,
         title="Current Integral",
         description="Definition of contour integral for computing current.",
@@ -81,10 +79,10 @@ class ImpedanceCalculator(MicrowaveBaseModel):
 
     def compute_impedance(
         self, em_field: IntegrableMonitorDataType, return_voltage_and_current=False
-    ) -> Union[
-        ImpedanceResultType,
-        tuple[ImpedanceResultType, VoltageIntegralResultType, CurrentIntegralResultType],
-    ]:
+    ) -> (
+        ImpedanceResultType
+        | tuple[ImpedanceResultType, VoltageIntegralResultType, CurrentIntegralResultType]
+    ):
         """Compute impedance for the supplied ``em_field`` using ``voltage_integral`` and
         ``current_integral``. If only a single integral has been defined, impedance is
         computed using the total flux in ``em_field``.

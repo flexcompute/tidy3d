@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numbers
 from abc import ABC, abstractmethod
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import numpy as np
 import pydantic.v1 as pd
@@ -500,7 +500,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def _from_vtk_obj(
         cls,
         vtk_obj,
-        field: Optional[str] = None,
+        field: str | None = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
         values_type=IndexedDataArray,
@@ -533,7 +533,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def from_vtu(
         cls,
         file: str,
-        field: Optional[str] = None,
+        field: str | None = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
         ignore_invalid_cells: bool = False,
@@ -572,7 +572,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def from_vtk(
         cls,
         file: str,
-        field: Optional[str] = None,
+        field: str | None = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
         ignore_invalid_cells: bool = False,
@@ -641,7 +641,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         cls,
         vtk_obj,
         num_points: pd.PositiveInt,
-        field: Optional[str] = None,
+        field: str | None = None,
         values_type=IndexedDataArray,
         expect_complex=None,
     ) -> IndexedDataArray:
@@ -774,7 +774,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     @abstractmethod
     @requires_vtk
-    def plane_slice(self, axis: Axis, pos: float) -> Union[XrDataArray, UnstructuredGridDataset]:
+    def plane_slice(self, axis: Axis, pos: float) -> XrDataArray | UnstructuredGridDataset:
         """Slice data with a plane and return the Tidy3D representation of the result
         (``UnstructuredGridDataset``).
 
@@ -870,12 +870,12 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     def interp(
         self,
-        x: Union[float, ArrayLike] = None,
-        y: Union[float, ArrayLike] = None,
-        z: Union[float, ArrayLike] = None,
-        fill_value: Optional[
-            Union[float, Literal["extrapolate"]]
-        ] = None,  # TODO: an array if multiple fields?
+        x: float | ArrayLike = None,
+        y: float | ArrayLike = None,
+        z: float | ArrayLike = None,
+        fill_value: float
+        | Literal["extrapolate"]
+        | None = None,  # TODO: an array if multiple fields?
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
@@ -992,12 +992,12 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     def _spatial_interp(
         self,
-        x: Union[float, ArrayLike],
-        y: Union[float, ArrayLike],
-        z: Union[float, ArrayLike],
-        fill_value: Optional[
-            Union[float, Literal["extrapolate"]]
-        ] = None,  # TODO: an array if multiple fields?
+        x: float | ArrayLike,
+        y: float | ArrayLike,
+        z: float | ArrayLike,
+        fill_value: float
+        | Literal["extrapolate"]
+        | None = None,  # TODO: an array if multiple fields?
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
@@ -1269,7 +1269,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         max_samples_per_step: int,
         max_cells_per_step: int,
         rel_tol: float,
-        axis_ignore: Union[Axis, None],
+        axis_ignore: Axis | None,
     ) -> ArrayLike:
         """A general function (2D and 3D) to interpolate data at provided x, y, and z using
         vectorized python implementation.
@@ -1697,12 +1697,12 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     @requires_vtk
     def sel(
         self,
-        x: Union[float, ArrayLike] = None,
-        y: Union[float, ArrayLike] = None,
-        z: Union[float, ArrayLike] = None,
-        method: Optional[Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"]] = None,
+        x: float | ArrayLike = None,
+        y: float | ArrayLike = None,
+        z: float | ArrayLike = None,
+        method: Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"] | None = None,
         **sel_kwargs,
-    ) -> Union[UnstructuredGridDataset, XrDataArray]:
+    ) -> UnstructuredGridDataset | XrDataArray:
         """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument
         among 'x', 'y', 'z' or non-spatial dimensions through additional arguments. Along spatial dimensions a suitable slicing of
         grid is applied (plane slice, line slice, or interpolation). Selection along non-spatial dimensions is forwarded to

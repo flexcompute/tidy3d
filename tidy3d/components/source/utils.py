@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 from .current import CustomCurrentSource, PointDipole, UniformCurrentSource
 from .field import (
     TFSF,
@@ -15,14 +13,14 @@ from .field import (
 )
 
 # sources allowed in Simulation.sources
-SourceType = Union[
-    UniformCurrentSource,
-    PointDipole,
-    GaussianBeam,
-    AstigmaticGaussianBeam,
-    ModeSource,
-    PlaneWave,
-    CustomFieldSource,
-    CustomCurrentSource,
-    TFSF,
-]
+SourceType = (
+    UniformCurrentSource
+    | PointDipole
+    | GaussianBeam
+    | AstigmaticGaussianBeam
+    | ModeSource
+    | PlaneWave
+    | CustomFieldSource
+    | CustomCurrentSource
+    | TFSF
+)

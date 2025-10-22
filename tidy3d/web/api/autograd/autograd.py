@@ -50,7 +50,7 @@ from .io_utils import (
 )
 
 
-def _resolve_local_gradient(value: typing.Optional[bool]) -> bool:
+def _resolve_local_gradient(value: bool | None) -> bool:
     if value is not None:
         return bool(value)
 
@@ -100,23 +100,23 @@ def is_valid_for_autograd_async(simulations: dict[str, td.Simulation]) -> bool:
 
 def run(
     simulation: WorkflowType,
-    task_name: typing.Optional[str] = None,
+    task_name: str | None = None,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
-    callback_url: typing.Optional[str] = None,
+    callback_url: str | None = None,
     verbose: bool = True,
-    progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
-    progress_callback_download: typing.Optional[typing.Callable[[float], None]] = None,
-    solver_version: typing.Optional[str] = None,
-    worker_group: typing.Optional[str] = None,
+    progress_callback_upload: typing.Callable[[float], None] | None = None,
+    progress_callback_download: typing.Callable[[float], None] | None = None,
+    solver_version: str | None = None,
+    worker_group: str | None = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: typing.Optional[list[str]] = None,
-    local_gradient: typing.Optional[bool] = None,
-    max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    parent_tasks: list[str] | None = None,
+    local_gradient: bool | None = None,
+    max_num_adjoint_per_fwd: int | None = None,
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
-    pay_type: typing.Union[PayType, str] = PayType.AUTO,
-    priority: typing.Optional[int] = None,
-    lazy: typing.Optional[bool] = None,
+    pay_type: PayType | str = PayType.AUTO,
+    priority: int | None = None,
+    lazy: bool | None = None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -285,21 +285,21 @@ def run(
 
 
 def run_async(
-    simulations: typing.Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
+    simulations: dict[str, td.Simulation] | tuple[td.Simulation] | list[td.Simulation],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
-    callback_url: typing.Optional[str] = None,
-    num_workers: typing.Optional[int] = None,
+    callback_url: str | None = None,
+    num_workers: int | None = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
-    solver_version: typing.Optional[str] = None,
-    parent_tasks: typing.Optional[dict[str, list[str]]] = None,
-    local_gradient: typing.Optional[bool] = None,
-    max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    solver_version: str | None = None,
+    parent_tasks: dict[str, list[str]] | None = None,
+    local_gradient: bool | None = None,
+    max_num_adjoint_per_fwd: int | None = None,
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
-    pay_type: typing.Union[PayType, str] = PayType.AUTO,
-    priority: typing.Optional[int] = None,
-    lazy: typing.Optional[bool] = None,
+    pay_type: PayType | str = PayType.AUTO,
+    priority: int | None = None,
+    lazy: bool | None = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -416,7 +416,7 @@ def _run(
     simulation: td.Simulation,
     task_name: str,
     local_gradient: bool = False,
-    max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    max_num_adjoint_per_fwd: int | None = None,
     **run_kwargs,
 ) -> td.SimulationData:
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
@@ -459,7 +459,7 @@ def _run(
 def _run_async(
     simulations: dict[str, td.Simulation],
     local_gradient: bool = False,
-    max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    max_num_adjoint_per_fwd: int | None = None,
     **run_async_kwargs,
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""

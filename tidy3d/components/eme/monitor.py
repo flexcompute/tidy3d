@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import pydantic.v1 as pd
 
@@ -22,7 +22,7 @@ BYTES_COMPLEX = 8
 class EMEMonitor(AbstractMonitor, ABC):
     """Abstract EME monitor."""
 
-    freqs: Optional[FreqArray] = pd.Field(
+    freqs: FreqArray | None = pd.Field(
         None,
         title="Monitor Frequencies",
         description="Frequencies at which the monitor will record. "
@@ -30,7 +30,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         "A value of 'None' will record at all simulation 'freqs'.",
     )
 
-    num_modes: Optional[pd.NonNegativeInt] = pd.Field(
+    num_modes: pd.NonNegativeInt | None = pd.Field(
         None,
         title="Number of Modes",
         description="Maximum number of modes for the monitor to record. "
@@ -38,7 +38,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         "A value of 'None' will record all modes.",
     )
 
-    num_sweep: Optional[pd.NonNegativeInt] = pd.Field(
+    num_sweep: pd.NonNegativeInt | None = pd.Field(
         1,
         title="Number of Sweep Indices",
         description="Number of sweep indices for the monitor to record. "
@@ -228,7 +228,7 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
         "primal grid nodes). Default (False) is used internally in EME propagation.",
     )
 
-    num_modes: Optional[pd.NonNegativeInt] = pd.Field(
+    num_modes: pd.NonNegativeInt | None = pd.Field(
         None,
         title="Number of Modes",
         description="Maximum number of modes for the monitor to record. "
@@ -302,11 +302,11 @@ class EMECoefficientMonitor(EMEMonitor):
         return bytes_single
 
 
-EMEMonitorType = Union[
-    EMEModeSolverMonitor,
-    EMEFieldMonitor,
-    EMECoefficientMonitor,
-    ModeSolverMonitor,
-    PermittivityMonitor,
-    MediumMonitor,
-]
+EMEMonitorType = (
+    EMEModeSolverMonitor
+    | EMEFieldMonitor
+    | EMECoefficientMonitor
+    | ModeSolverMonitor
+    | PermittivityMonitor
+    | MediumMonitor
+)

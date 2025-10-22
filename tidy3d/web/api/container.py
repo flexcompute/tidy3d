@@ -8,7 +8,7 @@ import time
 from abc import ABC
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import pydantic.v1 as pd
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
@@ -256,9 +256,7 @@ class Job(WebContainer):
         self = self.updated_copy(task_id_cached=task_id_cached)
         super(Job, self).to_file(fname=fname)  # noqa: UP008
 
-    def run(
-        self, path: str = DEFAULT_DATA_PATH, priority: Optional[int] = None
-    ) -> WorkflowDataType:
+    def run(self, path: str = DEFAULT_DATA_PATH, priority: int | None = None) -> WorkflowDataType:
         """Run :class:`Job` all the way through and return data.
 
         Parameters
@@ -333,7 +331,7 @@ class Job(WebContainer):
             )
             return
 
-    def start(self, priority: Optional[int] = None) -> None:
+    def start(self, priority: int | None = None) -> None:
         """Start running a :class:`Job`.
 
         Parameters
@@ -446,7 +444,7 @@ class Job(WebContainer):
         """
         return web.estimate_cost(self.task_id, verbose=verbose, solver_version=self.solver_version)
 
-    def postprocess_start(self, worker_group: Optional[str] = None, verbose: bool = True) -> None:
+    def postprocess_start(self, worker_group: str | None = None, verbose: bool = True) -> None:
         """
         If the job is a modeler batch, checks if the run is complete and starts
         the postprocess phase.
@@ -618,9 +616,9 @@ class Batch(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulations: Union[
-        dict[TaskName, annotate_type(WorkflowType)], tuple[annotate_type(WorkflowType), ...]
-    ] = pd.Field(
+    simulations: (
+        dict[TaskName, annotate_type(WorkflowType)] | tuple[annotate_type(WorkflowType), ...]
+    ) = pd.Field(
         ...,
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",
@@ -663,7 +661,7 @@ class Batch(WebContainer):
         description="Collection of parent task ids for each job in batch, used internally only.",
     )
 
-    num_workers: Optional[pd.PositiveInt] = pd.Field(
+    num_workers: pd.PositiveInt | None = pd.Field(
         DEFAULT_NUM_WORKERS,
         title="Number of Workers",
         description="Number of workers for multi-threading upload and download of batch. "
@@ -704,7 +702,7 @@ class Batch(WebContainer):
     def run(
         self,
         path_dir: str = DEFAULT_DATA_DIR,
-        priority: Optional[int] = None,
+        priority: int | None = None,
     ) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
 
@@ -858,7 +856,7 @@ class Batch(WebContainer):
 
     def start(
         self,
-        priority: Optional[int] = None,
+        priority: int | None = None,
     ) -> None:
         """Start running all tasks in the :class:`Batch`.
 
@@ -897,7 +895,7 @@ class Batch(WebContainer):
             run_info_dict[task_name] = run_info
         return run_info_dict
 
-    def postprocess_start(self, worker_group: Optional[str] = None, verbose: bool = True) -> None:
+    def postprocess_start(self, worker_group: str | None = None, verbose: bool = True) -> None:
         """
         Start the postprocess phase for all applicable jobs in the batch.
 
@@ -918,7 +916,7 @@ class Batch(WebContainer):
         download_on_success: bool = False,
         path_dir: str = DEFAULT_DATA_DIR,
         replace_existing: bool = False,
-        postprocess_worker_group: Optional[str] = None,
+        postprocess_worker_group: str | None = None,
     ) -> None:
         """
         Monitor progress of each running task.
@@ -943,7 +941,7 @@ class Batch(WebContainer):
         # ----- download scheduling ---------------------------------------------------
         downloads_started: set[str] = set()
         download_futures: dict[TaskId, concurrent.futures.Future] = {}
-        download_executor: Optional[ThreadPoolExecutor] = None
+        download_executor: ThreadPoolExecutor | None = None
 
         if download_on_success:
             self._check_path_dir(path_dir=path_dir)

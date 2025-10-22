@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 
 from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
@@ -13,8 +11,8 @@ from tidy3d.plugins.smatrix.types import NetworkIndex
 
 def get_antenna_metrics_data(
     terminal_component_modeler_data: TerminalComponentModelerData,
-    port_amplitudes: Optional[dict[NetworkIndex, complex]] = None,
-    monitor_name: Optional[str] = None,
+    port_amplitudes: dict[NetworkIndex, complex] | None = None,
+    monitor_name: str | None = None,
 ) -> AntennaMetricsData:
     """Calculate antenna parameters using superposition of fields from multiple port excitations.
 

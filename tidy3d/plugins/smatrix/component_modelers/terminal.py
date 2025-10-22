@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import numpy as np
 import pydantic.v1 as pd
 
@@ -85,7 +83,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         "For each port, one simulation will be run with a source that is associated with the port.",
     )
 
-    run_only: Optional[tuple[NetworkIndex, ...]] = pd.Field(
+    run_only: tuple[NetworkIndex, ...] | None = pd.Field(
         None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
@@ -127,7 +125,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         description="Whether to compute scattering parameters using the 'pseudo' or 'power' wave definitions.",
     )
 
-    low_freq_smoothing: Optional[ModelerLowFrequencySmoothingSpec] = pd.Field(
+    low_freq_smoothing: ModelerLowFrequencySmoothingSpec | None = pd.Field(
         DEFAULT_LOW_FREQUENCY_SMOOTHING_SPEC,
         title="Low Frequency Smoothing",
         description="The low frequency smoothing parameters for the terminal component simulation.",
@@ -157,9 +155,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     @add_ax_if_none
     def plot_sim(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
@@ -192,9 +190,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     @add_ax_if_none
     def plot_sim_eps(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
@@ -225,7 +223,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         return self._sim_with_sources.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
     @staticmethod
-    def network_index(port: TerminalPortType, mode_index: Optional[int] = None) -> NetworkIndex:
+    def network_index(port: TerminalPortType, mode_index: int | None = None) -> NetworkIndex:
         """Converts the port, and a ``mode_index`` when the port is a :class:`.WavePort`, to a unique string specifier.
 
         Parameters
@@ -471,7 +469,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     @staticmethod
     def _check_grid_size_at_ports(
-        simulation: Simulation, ports: list[Union[LumpedPort, CoaxialLumpedPort]]
+        simulation: Simulation, ports: list[LumpedPort | CoaxialLumpedPort]
     ):
         """Raises :class:`.SetupError` if the grid is too coarse at port locations"""
         yee_grid = simulation.grid.yee

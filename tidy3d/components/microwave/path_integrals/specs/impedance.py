@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import pydantic.v1 as pd
 
 from tidy3d.components.base import skip_if_fields_missing
@@ -50,13 +48,13 @@ class CustomImpedanceSpec(MicrowaveBaseModel):
     ... )
     """
 
-    voltage_spec: Optional[VoltagePathSpecType] = pd.Field(
+    voltage_spec: VoltagePathSpecType | None = pd.Field(
         None,
         title="Voltage Integration Path",
         description="Path specification for computing the voltage associated with a mode profile.",
     )
 
-    current_spec: Optional[CurrentPathSpecType] = pd.Field(
+    current_spec: CurrentPathSpecType | None = pd.Field(
         None,
         title="Current Integration Path",
         description="Path specification for computing the current associated with a mode profile.",
@@ -79,4 +77,4 @@ class CustomImpedanceSpec(MicrowaveBaseModel):
         return val
 
 
-ImpedanceSpecType = Union[AutoImpedanceSpec, CustomImpedanceSpec]
+ImpedanceSpecType = AutoImpedanceSpec | CustomImpedanceSpec

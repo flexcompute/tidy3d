@@ -10,7 +10,7 @@ from copy import deepcopy
 from enum import Enum
 from io import StringIO
 from pathlib import Path
-from typing import Any, Optional, get_args, get_origin
+from typing import Any, get_args, get_origin
 
 from pydantic import BaseModel
 from rich.console import Console
@@ -109,8 +109,8 @@ class ConfigManager:
 
     def __init__(
         self,
-        profile: Optional[str] = None,
-        config_dir: Optional[os.PathLike[str]] = None,
+        profile: str | None = None,
+        config_dir: os.PathLike[str] | None = None,
     ):
         loader_path = None if config_dir is None else Path(config_dir)
         self._loader = ConfigLoader(loader_path)
@@ -124,7 +124,7 @@ class ConfigManager:
         self._raw_tree: dict[str, Any] = {}
         self._effective_tree: dict[str, Any] = {}
         self._env_overrides: dict[str, Any] = load_environment_overrides()
-        self._web_env_previous: dict[str, Optional[str]] = {}
+        self._web_env_previous: dict[str, str | None] = {}
 
         attach_manager(self)
         self._reload()
@@ -298,7 +298,7 @@ class ConfigManager:
     def on_handler_registered(self, section: str) -> None:
         self._apply_handlers(section=section)
 
-    def _resolve_initial_profile(self, profile: Optional[str]) -> str:
+    def _resolve_initial_profile(self, profile: str | None) -> str:
         if profile:
             return normalize_profile_name(str(profile))
 
@@ -354,13 +354,13 @@ class ConfigManager:
         self._section_models = new_sections
         self._plugin_models = new_plugins
 
-    def _get_model(self, name: str) -> Optional[BaseModel]:
+    def _get_model(self, name: str) -> BaseModel | None:
         if name.startswith("plugins."):
             plugin = name.split(".", 1)[1]
             return self._plugin_models.get(plugin)
         return self._section_models.get(name)
 
-    def _apply_handlers(self, section: Optional[str] = None) -> None:
+    def _apply_handlers(self, section: str | None = None) -> None:
         handlers = get_handlers()
         targets = [section] if section else handlers.keys()
         for target in targets:
@@ -445,7 +445,7 @@ class ConfigManager:
         return self.format()
 
 
-def _deep_get(tree: dict[str, Any], path: Iterable[str]) -> Optional[dict[str, Any]]:
+def _deep_get(tree: dict[str, Any], path: Iterable[str]) -> dict[str, Any] | None:
     node: Any = tree
     for segment in path:
         if not isinstance(node, dict):
@@ -456,7 +456,7 @@ def _deep_get(tree: dict[str, Any], path: Iterable[str]) -> Optional[dict[str, A
     return node if isinstance(node, dict) else None
 
 
-def _resolve_model_type(annotation: Any) -> Optional[type[BaseModel]]:
+def _resolve_model_type(annotation: Any) -> type[BaseModel] | None:
     """Return the first BaseModel subclass found in an annotation (if any)."""
 
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):

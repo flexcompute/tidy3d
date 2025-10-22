@@ -366,7 +366,7 @@ def test_distribution_variants(dist_type, width):
     else:
         assert structure is None
     network = linear_element.to_structure(grid)
-    L, C = linear_element.estimate_parasitic_elements(grid)
+    _L, C = linear_element.estimate_parasitic_elements(grid)
     assert C >= 0
 
     # Grid is fine enough that there are two connections made along x
@@ -379,5 +379,5 @@ def test_distribution_variants(dist_type, width):
     else:
         assert structure is None
     network = linear_element.to_structure(grid)
-    L, C = linear_element.estimate_parasitic_elements(grid)
+    _L, C = linear_element.estimate_parasitic_elements(grid)
     assert C >= 0

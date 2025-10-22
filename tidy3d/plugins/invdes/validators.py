@@ -33,7 +33,7 @@ def check_pixel_size(sim_field_name: str):
     """make validator to check the pixel size of sim or list of sims in an ``InverseDesign``."""
 
     def check_pixel_size_sim(
-        sim: td.Simulation, pixel_size: float, index: typing.Optional[int] = None
+        sim: td.Simulation, pixel_size: float, index: int | None = None
     ) -> None:
         """Check a pixel size compared to the simulation min wvl in material."""
         if not sim.sources:

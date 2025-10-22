@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools
 import json
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import pydantic.v1 as pd
 import yaml
@@ -24,7 +24,7 @@ class Version(pd.BaseModel):
     minor: int
 
     @classmethod
-    def from_string(cls, string: Optional[str] = None) -> Version:
+    def from_string(cls, string: str | None = None) -> Version:
         """Return Version from a version string."""
         if string is None:
             return cls.from_string(string=__version__)

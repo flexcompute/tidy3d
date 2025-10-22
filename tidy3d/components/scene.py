@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import autograd.numpy as np
 
@@ -138,7 +138,7 @@ class Scene(Tidy3dBaseModel):
         "`PECMedium` to 100, and others to 0.",
     )
 
-    plot_length_units: Optional[LengthUnit] = pd.Field(
+    plot_length_units: LengthUnit | None = pd.Field(
         "μm",
         title="Plot Units",
         description="When set to a supported ``LengthUnit``, "
@@ -421,11 +421,11 @@ class Scene(Tidy3dBaseModel):
     @staticmethod
     def _get_plot_lims(
         bounds: Bound,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
     ) -> tuple[tuple[float, float], tuple[float, float]]:
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -456,12 +456,12 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         fill_structures: bool = True,
         **patch_kwargs,
     ) -> Ax:
@@ -500,12 +500,12 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_structures(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         fill: bool = True,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
@@ -657,11 +657,11 @@ class Scene(Tidy3dBaseModel):
     def _set_plot_bounds(
         bounds: Bound,
         ax: Ax,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
     ) -> Ax:
         """Sets the xy limits of the scene at a plane, useful after plotting.
 
@@ -693,11 +693,11 @@ class Scene(Tidy3dBaseModel):
     def _get_structures_2dbox(
         self,
         structures: list[Structure],
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
     ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on 2d box specified by (x_min, x_max), (y_min, y_max).
 
@@ -809,15 +809,15 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_eps(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
-        eps_lim: tuple[Union[float, None], Union[float, None]] = (None, None),
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
+        eps_lim: tuple[float | None, float | None] = (None, None),
         scale: PlotScale = "lin",
     ) -> Ax:
         """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
@@ -876,20 +876,20 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_structures_eps(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         reverse: bool = False,
-        eps_lim: tuple[Union[float, None], Union[float, None]] = (None, None),
+        eps_lim: tuple[float | None, float | None] = (None, None),
         scale: PlotScale = "lin",
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         grid: Grid = None,
-        eps_component: Optional[PermittivityComponent] = None,
+        eps_component: PermittivityComponent | None = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -956,21 +956,21 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_structures_property(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         reverse: bool = False,
-        limits: tuple[Union[float, None], Union[float, None]] = (None, None),
+        limits: tuple[float | None, float | None] = (None, None),
         scale: PlotScale = "lin",
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         grid: Grid = None,
         property: Literal["eps", "doping", "N_a", "N_d"] = "eps",
-        eps_component: Optional[PermittivityComponent] = None,
+        eps_component: PermittivityComponent | None = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -1197,7 +1197,7 @@ class Scene(Tidy3dBaseModel):
         eps_max: float,
         ax: Ax = None,
         reverse: bool = False,
-        norm: Optional[mpl.colors.Normalize] = None,
+        norm: mpl.colors.Normalize | None = None,
     ) -> None:
         """Add a permittivity colorbar to plot."""
         Scene._add_cbar(
@@ -1212,8 +1212,8 @@ class Scene(Tidy3dBaseModel):
     @staticmethod
     def _eps_bounds(
         medium_list: list[Medium],
-        freq: Optional[float] = None,
-        eps_component: Optional[PermittivityComponent] = None,
+        freq: float | None = None,
+        eps_component: PermittivityComponent | None = None,
     ) -> tuple[float, float]:
         """Compute range of (real) permittivity present in the mediums at frequency "freq"."""
         medium_list = [medium for medium in medium_list if not medium.is_pec]
@@ -1230,7 +1230,7 @@ class Scene(Tidy3dBaseModel):
         return eps_min, eps_max
 
     def eps_bounds(
-        self, freq: Optional[float] = None, eps_component: Optional[str] = None
+        self, freq: float | None = None, eps_component: str | None = None
     ) -> tuple[float, float]:
         """Compute range of (real) permittivity present in the scene at frequency "freq".
 
@@ -1267,7 +1267,7 @@ class Scene(Tidy3dBaseModel):
         shape: Shapely,
         ax: Ax,
         grid: Grid,
-        eps_component: Optional[PermittivityComponent] = None,
+        eps_component: PermittivityComponent | None = None,
         norm: mpl.colors.Normalize = None,
     ):
         """
@@ -1418,9 +1418,9 @@ class Scene(Tidy3dBaseModel):
         eps_min: float,
         eps_max: float,
         reverse: bool = False,
-        alpha: Optional[float] = None,
-        eps_component: Optional[PermittivityComponent] = None,
-        norm: Optional[mpl.colors.Normalize] = None,
+        alpha: float | None = None,
+        eps_component: PermittivityComponent | None = None,
+        norm: mpl.colors.Normalize | None = None,
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in scene.plot_eps()."""
 
@@ -1467,9 +1467,9 @@ class Scene(Tidy3dBaseModel):
         eps_max: float,
         ax: Ax,
         reverse: bool = False,
-        alpha: Optional[float] = None,
-        eps_component: Optional[PermittivityComponent] = None,
-        norm: Optional[mpl.colors.Normalize] = None,
+        alpha: float | None = None,
+        eps_component: PermittivityComponent | None = None,
+        norm: mpl.colors.Normalize | None = None,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
         plot_params = self._get_structure_eps_plot_params(
@@ -1491,15 +1491,15 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_heat_charge_property(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        alpha: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         property: str = "heat_conductivity",
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
     ) -> Ax:
         """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1545,15 +1545,15 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_structures_heat_conductivity(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        alpha: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1610,16 +1610,16 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_structures_heat_charge_property(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        alpha: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         property: str = "heat_conductivity",
         reverse: bool = False,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1762,7 +1762,7 @@ class Scene(Tidy3dBaseModel):
         property_val_min: float,
         property_val_max: float,
         reverse: bool = False,
-        alpha: Optional[float] = None,
+        alpha: float | None = None,
         property: str = "heat_conductivity",
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in
@@ -1809,7 +1809,7 @@ class Scene(Tidy3dBaseModel):
         property: str,
         ax: Ax,
         reverse: bool = False,
-        alpha: Optional[float] = None,
+        alpha: float | None = None,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for thermal
         conductivity.
@@ -1829,14 +1829,14 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_heat_conductivity(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        alpha: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
     ):
         """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -2103,7 +2103,7 @@ class Scene(Tidy3dBaseModel):
         """
         coords = "xyz"
         normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        normal_axis, plane_axes = Box.pop_axis(coords, normal_axis_ind)
+        _normal_axis, _plane_axes = Box.pop_axis(coords, normal_axis_ind)
 
         # make grid for eps interpolation
         # we will do this by combining shape bounds and points where custom eps is provided

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from functools import lru_cache, partial
-from typing import Annotated, Callable, Optional, Union
+from typing import Annotated
 
 import numpy as np
 import pydantic.v1 as pd
@@ -20,7 +20,7 @@ from tidy3d.plugins.autograd.utilities import get_kernel_size_px, make_kernel
 class AbstractFilter(Tidy3dBaseModel, abc.ABC):
     """An abstract class for creating and applying convolution filters."""
 
-    kernel_size: Union[pd.PositiveInt, tuple[pd.PositiveInt, ...]] = pd.Field(
+    kernel_size: pd.PositiveInt | tuple[pd.PositiveInt, ...] = pd.Field(
         ..., title="Kernel Size", description="Size of the kernel in pixels for each dimension."
     )
     normalize: bool = pd.Field(
@@ -32,7 +32,7 @@ class AbstractFilter(Tidy3dBaseModel, abc.ABC):
 
     @classmethod
     def from_radius_dl(
-        cls, radius: Union[float, tuple[float, ...]], dl: Union[float, tuple[float, ...]], **kwargs
+        cls, radius: float | tuple[float, ...], dl: float | tuple[float, ...], **kwargs
     ) -> AbstractFilter:
         """Create a filter from radius and grid spacing.
 
@@ -125,9 +125,9 @@ class CircularFilter(AbstractFilter):
 
 
 def _get_kernel_size(
-    radius: Union[float, tuple[float, ...]],
-    dl: Union[float, tuple[float, ...]],
-    size_px: Union[int, tuple[int, ...]],
+    radius: float | tuple[float, ...],
+    dl: float | tuple[float, ...],
+    size_px: int | tuple[int, ...],
 ) -> tuple[int, ...]:
     """Determine the kernel size based on the provided radius, grid spacing, or size in pixels.
 
@@ -163,10 +163,10 @@ def _get_kernel_size(
 
 
 def make_filter(
-    radius: Optional[Union[float, tuple[float, ...]]] = None,
-    dl: Optional[Union[float, tuple[float, ...]]] = None,
+    radius: float | tuple[float, ...] | None = None,
+    dl: float | tuple[float, ...] | None = None,
     *,
-    size_px: Optional[Union[int, tuple[int, ...]]] = None,
+    size_px: int | tuple[int, ...] | None = None,
     normalize: bool = True,
     padding: PaddingType = "reflect",
     filter_type: KernelType,
@@ -225,4 +225,4 @@ See Also
 :func:`~filters.make_filter` : Function to create a filter based on the specified kernel type and size.
 """
 
-FilterType = Annotated[Union[ConicFilter, CircularFilter], pd.Field(discriminator=TYPE_TAG_STR)]
+FilterType = Annotated[ConicFilter | CircularFilter, pd.Field(discriminator=TYPE_TAG_STR)]

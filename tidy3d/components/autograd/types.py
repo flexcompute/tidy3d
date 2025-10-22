@@ -26,20 +26,20 @@ Box.__copy__ = lambda v: _copy(v)
 Box.__deepcopy__ = lambda v, memo: _deepcopy(v, memo)
 
 # Types for floats, or collections of floats that can also be autograd tracers
-TracedFloat = typing.Union[float, Box]
-TracedPositiveFloat = typing.Union[pd.PositiveFloat, Box]
-TracedSize1D = typing.Union[Size1D, Box]
-TracedSize = typing.Union[tuple[TracedSize1D, TracedSize1D, TracedSize1D], Box]
-TracedCoordinate = typing.Union[tuple[TracedFloat, TracedFloat, TracedFloat], Box]
-TracedVertices = typing.Union[ArrayFloat2D, Box]
+TracedFloat = float | Box
+TracedPositiveFloat = pd.PositiveFloat | Box
+TracedSize1D = Size1D | Box
+TracedSize = tuple[TracedSize1D, TracedSize1D, TracedSize1D] | Box
+TracedCoordinate = tuple[TracedFloat, TracedFloat, TracedFloat] | Box
+TracedVertices = ArrayFloat2D | Box
 
 # poles
-TracedComplex = typing.Union[Complex, Box]
+TracedComplex = Complex | Box
 TracedPoleAndResidue = tuple[TracedComplex, TracedComplex]
 
 # The data type that we pass in and out of the web.run() @autograd.primitive
-AutogradTraced = typing.Union[Box, ArrayLike]
-PathType = tuple[typing.Union[int, str], ...]
+AutogradTraced = Box | ArrayLike
+PathType = tuple[int | str, ...]
 AutogradFieldMap = dict_ag[PathType, AutogradTraced]
 
 InterpolationType = typing.Literal["nearest", "linear"]

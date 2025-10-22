@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 from collections.abc import Mapping
-from typing import Any, Optional, Union
+from typing import Any
 
 import autograd.numpy as anp
 import h5py
@@ -122,7 +122,7 @@ class DataArray(xr.DataArray):
             val.attrs[attr_name] = attr
         return val
 
-    def _interp_validator(self, field_name: Optional[str] = None) -> None:
+    def _interp_validator(self, field_name: str | None = None) -> None:
         """Ensure the data can be interpolated or selected by checking for duplicate coordinates.
 
         NOTE
@@ -220,7 +220,7 @@ class DataArray(xr.DataArray):
         raw_data = self.data.ravel()
         return np.allclose(raw_data, raw_data[0])
 
-    def to_hdf5(self, fname: Union[str, h5py.File], group_path: str) -> None:
+    def to_hdf5(self, fname: str | h5py.File, group_path: str) -> None:
         """Save an xr.DataArray to the hdf5 file or file handle with a given path to the group."""
 
         # file name passed
@@ -329,10 +329,10 @@ class DataArray(xr.DataArray):
 
     def _ag_interp(
         self,
-        coords: Union[Mapping[Any, Any], None] = None,
+        coords: Mapping[Any, Any] | None = None,
         method: InterpOptions = "linear",
         assume_sorted: bool = False,
-        kwargs: Union[Mapping[str, Any], None] = None,
+        kwargs: Mapping[str, Any] | None = None,
         **coords_kwargs: Any,
     ) -> Self:
         """Autograd interp override when tracing over self.data.
@@ -1614,21 +1614,15 @@ DATA_ARRAY_TYPES = [
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
 
-IndexedDataArrayTypes = Union[
-    IndexedDataArray,
-    IndexedVoltageDataArray,
-    IndexedTimeDataArray,
-    IndexedFieldVoltageDataArray,
-    PointDataArray,
-]
+IndexedDataArrayTypes = (
+    IndexedDataArray
+    | IndexedVoltageDataArray
+    | IndexedTimeDataArray
+    | IndexedFieldVoltageDataArray
+    | PointDataArray
+)
 
-IntegralResultType = Union[FreqDataArray, FreqModeDataArray, TimeDataArray]
-VoltageIntegralResultType = Union[
-    VoltageFreqDataArray, VoltageFreqModeDataArray, VoltageTimeDataArray
-]
-CurrentIntegralResultType = Union[
-    CurrentFreqDataArray, CurrentFreqModeDataArray, CurrentTimeDataArray
-]
-ImpedanceResultType = Union[
-    ImpedanceFreqDataArray, ImpedanceFreqModeDataArray, ImpedanceTimeDataArray
-]
+IntegralResultType = FreqDataArray | FreqModeDataArray | TimeDataArray
+VoltageIntegralResultType = VoltageFreqDataArray | VoltageFreqModeDataArray | VoltageTimeDataArray
+CurrentIntegralResultType = CurrentFreqDataArray | CurrentFreqModeDataArray | CurrentTimeDataArray
+ImpedanceResultType = ImpedanceFreqDataArray | ImpedanceFreqModeDataArray | ImpedanceTimeDataArray

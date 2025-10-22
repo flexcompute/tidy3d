@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -86,7 +85,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
 
     @staticmethod
     def _field_component_value(
-        field_component: Union[xr.DataArray, UnstructuredGridDatasetType], val: FieldVal
+        field_component: xr.DataArray | UnstructuredGridDatasetType, val: FieldVal
     ) -> xr.DataArray:
         """return the desired value of a field component.
 

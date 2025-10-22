@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import pydantic.v1 as pydantic
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -34,7 +32,7 @@ class AbstractLowFrequencySmoothingSpec(Tidy3dBaseModel):
         le=3,
     )
 
-    max_deviation: Optional[float] = pydantic.Field(
+    max_deviation: float | None = pydantic.Field(
         0.5,
         title="Maximum Deviation",
         description="The maximum deviation (in fraction of the trusted values) to allow for the low frequency smoothing.",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import pydantic.v1 as pd
 
@@ -14,7 +14,7 @@ from tidy3d.components.mode_spec import ModeSortSpec
 from tidy3d.components.types import TYPE_TAG_STR, Ax, PlotScale
 from tidy3d.components.types.monitor_data import ModeSolverDataType
 
-ModeSimulationMonitorDataType = Union[PermittivityData, MediumData]
+ModeSimulationMonitorDataType = PermittivityData | MediumData
 
 
 class ModeSimulationData(AbstractYeeGridSimulationData):
@@ -50,8 +50,8 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Ax = None,
         **sel_kwargs,
     ) -> Ax:

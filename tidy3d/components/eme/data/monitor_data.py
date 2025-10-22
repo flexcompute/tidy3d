@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 import pydantic.v1 as pd
 
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
@@ -50,11 +48,11 @@ class EMECoefficientData(AbstractMonitorData, EMECoefficientDataset):
     )
 
 
-EMEMonitorDataType = Union[
-    EMEModeSolverData,
-    EMEFieldData,
-    EMECoefficientData,
-    ModeSolverData,
-    PermittivityData,
-    MediumData,
-]
+EMEMonitorDataType = (
+    EMEModeSolverData
+    | EMEFieldData
+    | EMECoefficientData
+    | ModeSolverData
+    | PermittivityData
+    | MediumData
+)

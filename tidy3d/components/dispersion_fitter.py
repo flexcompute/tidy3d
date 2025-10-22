@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
 
@@ -144,20 +142,20 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
         description="Whether to show unweighted RMS error in addition to the default weighted "
         'RMS error. Requires ``td.config.logging_level = "INFO"``.',
     )
-    relaxed: Optional[bool] = Field(
+    relaxed: bool | None = Field(
         None,
         title="Relaxed",
         description="Whether to use relaxed fitting algorithm, which "
         "has better pole relocation properties. If ``None``, will try both original and relaxed "
         "algorithms.",
     )
-    smooth: Optional[bool] = Field(
+    smooth: bool | None = Field(
         None,
         title="Smooth",
         description="Whether to use real starting poles, which can help when fitting smooth data. "
         "If ``None``, will try both real and complex starting poles.",
     )
-    logspacing: Optional[bool] = Field(
+    logspacing: bool | None = Field(
         None,
         title="Log spacing",
         description="Whether to space the poles logarithmically. "
@@ -223,14 +221,14 @@ class FastFitterData(AdvancedFastFitterParam):
         title="eps_inf",
         description="Value of ``eps_inf``.",
     )
-    poles: Optional[ArrayComplex1D] = Field(
+    poles: ArrayComplex1D | None = Field(
         None, title="Pole frequencies in eV", description="Pole frequencies in eV"
     )
-    residues: Optional[ArrayComplex1D] = Field(
+    residues: ArrayComplex1D | None = Field(
         None, title="Residues in eV", description="Residues in eV"
     )
 
-    passivity_optimized: Optional[bool] = Field(
+    passivity_optimized: bool | None = Field(
         False,
         title="Passivity optimized",
         description="Whether the fit was optimized to enforce passivity. If None, "
@@ -758,7 +756,7 @@ def fit(
     resp_data: ArrayComplex1D,
     min_num_poles: PositiveInt = 1,
     max_num_poles: PositiveInt = DEFAULT_MAX_POLES,
-    resp_inf: Optional[float] = None,
+    resp_inf: float | None = None,
     tolerance_rms: NonNegativeFloat = DEFAULT_TOLERANCE_RMS,
     advanced_param: AdvancedFastFitterParam = None,
     scale_factor: PositiveFloat = 1,

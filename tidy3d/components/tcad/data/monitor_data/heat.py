@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import pydantic.v1 as pd
 
 from tidy3d.components.data.data_array import (
@@ -19,12 +17,12 @@ from tidy3d.components.tcad.monitors.heat import (
 from tidy3d.components.types import annotate_type
 from tidy3d.constants import KELVIN
 
-FieldDataset = Union[
-    SpatialDataArray,
-    ScalarFieldTimeDataArray,
-    annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset]),
-]
-UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
+FieldDataset = (
+    SpatialDataArray
+    | ScalarFieldTimeDataArray
+    | annotate_type(TriangularGridDataset | TetrahedralGridDataset)
+)
+UnstructuredFieldType = TriangularGridDataset | TetrahedralGridDataset
 
 
 class TemperatureData(HeatChargeMonitorData):
@@ -48,7 +46,7 @@ class TemperatureData(HeatChargeMonitorData):
         ..., title="Monitor", description="Temperature monitor associated with the data."
     )
 
-    temperature: Optional[FieldDataset] = pd.Field(
+    temperature: FieldDataset | None = pd.Field(
         ...,
         title="Temperature",
         description="Spatial temperature field.",

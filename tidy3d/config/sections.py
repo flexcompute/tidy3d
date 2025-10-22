@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ssl
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 import numpy as np
@@ -75,7 +75,7 @@ def apply_logging(config: LoggingConfig) -> None:
 class SimulationConfig(ConfigSection):
     """Simulation-related configuration."""
 
-    use_local_subpixel: Optional[bool] = Field(
+    use_local_subpixel: bool | None = Field(
         None,
         title="Use local subpixel",
         description=(
@@ -209,7 +209,7 @@ class AdjointConfig(ConfigSection):
         ge=0.0,
     )
 
-    solver_freq_chunk_size: Optional[PositiveInt] = Field(
+    solver_freq_chunk_size: PositiveInt | None = Field(
         None,
         title="Adjoint frequency chunk size",
         description=(
@@ -277,7 +277,7 @@ def apply_adjoint(config: AdjointConfig) -> None:
 class WebConfig(ConfigSection):
     """Web/HTTP configuration."""
 
-    apikey: Optional[SecretStr] = Field(
+    apikey: SecretStr | None = Field(
         None,
         title="API key",
         description="Tidy3D API key.",
@@ -323,7 +323,7 @@ class WebConfig(ConfigSection):
         le=300,
     )
 
-    ssl_version: Optional[ssl.TLSVersion] = Field(
+    ssl_version: ssl.TLSVersion | None = Field(
         None,
         title="SSL/TLS version",
         description="Optional SSL/TLS version to enforce for requests.",

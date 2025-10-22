@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Literal
 
 import numpy as np
 import pydantic.v1 as pd
@@ -60,7 +60,7 @@ class LumpedElement(MicrowaveBaseModel, ABC):
         min_length=1,
     )
 
-    num_grid_cells: Optional[pd.PositiveInt] = pd.Field(
+    num_grid_cells: pd.PositiveInt | None = pd.Field(
         DEFAULT_LUMPED_ELEMENT_NUM_CELLS,
         title="Lumped element grid cells",
         description="Number of mesh grid cells associated with the lumped element along each direction. "
@@ -573,21 +573,21 @@ class RLCNetwork(MicrowaveBaseModel):
 
     """
 
-    resistance: Optional[pd.PositiveFloat] = pd.Field(
+    resistance: pd.PositiveFloat | None = pd.Field(
         None,
         title="Resistance",
         description="Resistance value in ohms.",
         unit=OHM,
     )
 
-    capacitance: Optional[pd.PositiveFloat] = pd.Field(
+    capacitance: pd.PositiveFloat | None = pd.Field(
         None,
         title="Capacitance",
         description="Capacitance value in farads.",
         unit=FARAD,
     )
 
-    inductance: Optional[pd.PositiveFloat] = pd.Field(
+    inductance: pd.PositiveFloat | None = pd.Field(
         None,
         title="Inductance",
         description="Inductance value in henrys.",
@@ -914,7 +914,7 @@ class LinearLumpedElement(RectangularLumpedElement):
         * `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
     """
 
-    network: Union[RLCNetwork, AdmittanceNetwork] = pd.Field(
+    network: RLCNetwork | AdmittanceNetwork = pd.Field(
         ...,
         title="Network",
         description="The linear element produces an equivalent medium that emulates the "
@@ -979,9 +979,7 @@ class LinearLumpedElement(RectangularLumpedElement):
 
         return snap_box_to_grid(grid, cell_box, snap_spec=snap_spec)
 
-    def _create_connection_boxes(
-        self, cell_box: Box, grid: Grid
-    ) -> tuple[Optional[Box], Optional[Box]]:
+    def _create_connection_boxes(self, cell_box: Box, grid: Grid) -> tuple[Box | None, Box | None]:
         """Creates PEC structures that connect the network portion of the lumped element to the
         boundaries of the lumped element.
         """
@@ -1031,7 +1029,7 @@ class LinearLumpedElement(RectangularLumpedElement):
             medium=Medium2D(**medium_dict),
         )
 
-    def to_PEC_connection(self, grid) -> Optional[Structure]:
+    def to_PEC_connection(self, grid) -> Structure | None:
         """Converts the :class:`LinearLumpedElement` object to a :class:`.Structure`,
         representing any PEC connections.
         """
@@ -1169,10 +1167,6 @@ class LinearLumpedElement(RectangularLumpedElement):
 
 # lumped elements allowed in Simulation.lumped_elements
 LumpedElementType = Annotated[
-    Union[
-        LumpedResistor,
-        CoaxialLumpedResistor,
-        LinearLumpedElement,
-    ],
+    LumpedResistor | CoaxialLumpedResistor | LinearLumpedElement,
     pd.Field(discriminator=TYPE_TAG_STR),
 ]

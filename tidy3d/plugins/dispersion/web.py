@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ssl
 from enum import Enum
-from typing import Literal, Optional
+from typing import Literal
 
 import pydantic.v1 as pydantic
 import requests
@@ -83,7 +83,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         title="Number of inner iterations",
         description="Number of iterations in each inner optimization.",
     )
-    random_seed: Optional[int] = Field(
+    random_seed: int | None = Field(
         0,
         title="Random seed for starting coefficients",
         description="The fitting tool performs global optimizations with random "

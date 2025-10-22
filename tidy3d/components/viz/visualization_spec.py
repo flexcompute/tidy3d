@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import pydantic.v1 as pd
 
@@ -38,13 +38,13 @@ class VisualizationSpec(Tidy3dBaseModel):
         description="Color applied to the faces in visualization.",
     )
 
-    edgecolor: Optional[str] = pd.Field(
+    edgecolor: str | None = pd.Field(
         "",
         title="Edge color",
         description="Color applied to the edges in visualization.",
     )
 
-    alpha: Optional[pd.confloat(ge=0.0, le=1.0)] = pd.Field(
+    alpha: pd.confloat(ge=0.0, le=1.0) | None = pd.Field(
         1.0,
         title="Opacity",
         description="Opacity/alpha value in plotting between 0 and 1.",

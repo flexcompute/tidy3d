@@ -5,7 +5,6 @@ from __future__ import annotations
 import pathlib
 from collections import defaultdict
 from functools import cmp_to_key
-from typing import Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
@@ -145,9 +144,9 @@ class AbstractStructure(Tidy3dBaseModel):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:
@@ -405,9 +404,9 @@ class Structure(AbstractStructure):
 
     def to_gdstk(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         permittivity_threshold: pydantic.NonNegativeFloat = 1,
         frequency: pydantic.PositiveFloat = 0,
         gds_layer: pydantic.NonNegativeInt = 0,
@@ -474,9 +473,9 @@ class Structure(AbstractStructure):
     def to_gds(
         self,
         cell,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         permittivity_threshold: pydantic.NonNegativeFloat = 1,
         frequency: pydantic.PositiveFloat = 0,
         gds_layer: pydantic.NonNegativeInt = 0,
@@ -526,9 +525,9 @@ class Structure(AbstractStructure):
     def to_gds_file(
         self,
         fname: str,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         permittivity_threshold: pydantic.NonNegativeFloat = 1,
         frequency: pydantic.PositiveFloat = 0,
         gds_layer: pydantic.NonNegativeInt = 0,
@@ -661,9 +660,9 @@ class MeshOverrideStructure(AbstractStructure):
     """
 
     dl: tuple[
-        Optional[pydantic.PositiveFloat],
-        Optional[pydantic.PositiveFloat],
-        Optional[pydantic.PositiveFloat],
+        pydantic.PositiveFloat | None,
+        pydantic.PositiveFloat | None,
+        pydantic.PositiveFloat | None,
     ] = pydantic.Field(
         ...,
         title="Grid Size",
@@ -724,4 +723,4 @@ class MeshOverrideStructure(AbstractStructure):
         return val
 
 
-StructureType = Union[Structure, MeshOverrideStructure]
+StructureType = Structure | MeshOverrideStructure

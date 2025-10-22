@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 from pydantic import BaseModel
 
@@ -10,7 +11,7 @@ T = TypeVar("T", bound=BaseModel)
 
 _SECTIONS: dict[str, type[BaseModel]] = {}
 _HANDLERS: dict[str, Callable[[BaseModel], None]] = {}
-_MANAGER: Optional[ConfigManagerProtocol] = None
+_MANAGER: ConfigManagerProtocol | None = None
 
 
 class ConfigManagerProtocol:
@@ -30,7 +31,7 @@ def attach_manager(manager: ConfigManagerProtocol) -> None:
     _MANAGER = manager
 
 
-def get_manager() -> Optional[ConfigManagerProtocol]:
+def get_manager() -> ConfigManagerProtocol | None:
     """Return the currently attached configuration manager, if any."""
 
     return _MANAGER

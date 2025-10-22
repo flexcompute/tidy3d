@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal
 
 import numpy
 import pydantic.v1 as pydantic
@@ -44,14 +44,14 @@ class RectangularDielectric(Tidy3dBaseModel):
     - Coupled waveguides
     """
 
-    wavelength: Union[float, ArrayFloat1D] = pydantic.Field(
+    wavelength: float | ArrayFloat1D = pydantic.Field(
         ...,
         title="Wavelength",
         description="Wavelength(s) at which to calculate modes (in μm).",
         units=MICROMETER,
     )
 
-    core_width: Union[Size1D, ArrayFloat1D] = pydantic.Field(
+    core_width: Size1D | ArrayFloat1D = pydantic.Field(
         ...,
         title="Core width",
         description="Core width at the top of the waveguide. If set to an array, defines "
@@ -73,14 +73,14 @@ class RectangularDielectric(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    clad_medium: Union[AnnotatedMedium, tuple[AnnotatedMedium, ...]] = pydantic.Field(
+    clad_medium: AnnotatedMedium | tuple[AnnotatedMedium, ...] = pydantic.Field(
         ...,
         title="Clad Medium",
         description="Medium associated with the upper cladding layer. A sequence of mediums can "
         "be used to create a layered clad.",
     )
 
-    box_medium: Union[AnnotatedMedium, tuple[AnnotatedMedium, ...]] = pydantic.Field(
+    box_medium: AnnotatedMedium | tuple[AnnotatedMedium, ...] = pydantic.Field(
         None,
         title="Box Medium",
         description="Medium associated with the lower cladding layer. A sequence of mediums can "
@@ -94,7 +94,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    clad_thickness: Union[Size1D, ArrayFloat1D] = pydantic.Field(
+    clad_thickness: Size1D | ArrayFloat1D = pydantic.Field(
         None,
         title="Clad Thickness",
         description="Domain size above the core layer. An array can be used to define a layered "
@@ -102,7 +102,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    box_thickness: Union[Size1D, ArrayFloat1D] = pydantic.Field(
+    box_thickness: Size1D | ArrayFloat1D = pydantic.Field(
         None,
         title="Box Thickness",
         description="Domain size below the core layer. An array can be used to define a layered "
@@ -126,7 +126,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         units=RADIAN,
     )
 
-    gap: Union[float, ArrayFloat1D] = pydantic.Field(
+    gap: float | ArrayFloat1D = pydantic.Field(
         0.0,
         title="Gap",
         description="Distance between adjacent waveguides, measured at the top core edges.  "
@@ -816,12 +816,12 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        source_alpha: Optional[float] = None,
-        monitor_alpha: Optional[float] = None,
+        source_alpha: float | None = None,
+        monitor_alpha: float | None = None,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -858,13 +858,13 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot_eps(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
-        source_alpha: Optional[float] = None,
-        monitor_alpha: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        freq: float | None = None,
+        alpha: float | None = None,
+        source_alpha: float | None = None,
+        monitor_alpha: float | None = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -909,9 +909,9 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot_structures(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
@@ -941,11 +941,11 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot_structures_eps(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
@@ -993,9 +993,9 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot_grid(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
@@ -1095,10 +1095,10 @@ class RectangularDielectric(Tidy3dBaseModel):
         val: Literal["real", "imag", "abs"] = "real",
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Ax = None,
-        geometry_edges: Optional[str] = None,
+        geometry_edges: str | None = None,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.

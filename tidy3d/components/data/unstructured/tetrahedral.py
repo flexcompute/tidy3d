@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 import numpy as np
 import pydantic.v1 as pd
 from xarray import DataArray as XrDataArray
@@ -298,12 +296,12 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
     @requires_vtk
     def sel(
         self,
-        x: Union[float, ArrayLike] = None,
-        y: Union[float, ArrayLike] = None,
-        z: Union[float, ArrayLike] = None,
+        x: float | ArrayLike = None,
+        y: float | ArrayLike = None,
+        z: float | ArrayLike = None,
         method=None,
         **sel_kwargs,
-    ) -> Union[TriangularGridDataset, XrDataArray]:
+    ) -> TriangularGridDataset | XrDataArray:
         """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument
         among 'x', 'y', 'z' or non-spatial dimensions through additional arguments. Along spatial dimensions a suitable slicing of
         grid is applied (plane slice, line slice, or interpolation). Selection along non-spatial dimensions is forwarded to

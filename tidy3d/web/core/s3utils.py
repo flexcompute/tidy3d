@@ -6,10 +6,9 @@ import os
 import pathlib
 import tempfile
 import urllib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Optional
 
 import boto3
 from boto3.s3.transfer import TransferConfig
@@ -184,7 +183,7 @@ _s3_sts_tokens: [str, _S3STSToken] = {}
 
 
 def get_s3_sts_token(
-    resource_id: str, file_name: str, extra_arguments: Optional[Mapping[str, str]] = None
+    resource_id: str, file_name: str, extra_arguments: Mapping[str, str] | None = None
 ) -> _S3STSToken:
     """Get s3 sts token for the given resource id and file name.
 
@@ -218,8 +217,8 @@ def upload_file(
     path: str,
     remote_filename: str,
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
-    extra_arguments: Optional[Mapping[str, str]] = None,
+    progress_callback: Callable[[float], None] | None = None,
+    extra_arguments: Mapping[str, str] | None = None,
 ):
     """Upload a file to S3.
 
@@ -284,9 +283,9 @@ def upload_file(
 def download_file(
     resource_id: str,
     remote_filename: str,
-    to_file: Optional[str] = None,
+    to_file: str | None = None,
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
+    progress_callback: Callable[[float], None] | None = None,
 ) -> pathlib.Path:
     """Download file from S3.
 
@@ -374,9 +373,9 @@ def download_file(
 def download_gz_file(
     resource_id: str,
     remote_filename: str,
-    to_file: Optional[str] = None,
+    to_file: str | None = None,
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
+    progress_callback: Callable[[float], None] | None = None,
 ) -> pathlib.Path:
     """Download a ``.gz`` file and unzip it into ``to_file``, unless ``to_file`` itself
     ends in .gz

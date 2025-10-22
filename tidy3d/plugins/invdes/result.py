@@ -137,20 +137,20 @@ class InverseDesignResult(InvdesBaseModel):
         """Get the last value from the history."""
         return self.get(key=key, index=-1)
 
-    def get_sim(self, index: int = -1) -> typing.Union[td.Simulation, list[td.Simulation]]:
+    def get_sim(self, index: int = -1) -> td.Simulation | list[td.Simulation]:
         """Get the simulation at a specific index in the history (list of sims if multi)."""
         params = np.array(self.get(key="params", index=index))
         return self.design.to_simulation(params=params)
 
     def get_sim_data(
         self, index: int = -1, **kwargs
-    ) -> typing.Union[td.SimulationData, list[td.SimulationData]]:
+    ) -> td.SimulationData | list[td.SimulationData]:
         """Get the simulation data at a specific index in the history (list of simdata if multi)."""
         params = np.array(self.get(key="params", index=index))
         return self.design.to_simulation_data(params=params, **kwargs)
 
     @property
-    def sim_last(self) -> typing.Union[td.Simulation, list[td.Simulation]]:
+    def sim_last(self) -> td.Simulation | list[td.Simulation]:
         """The last simulation."""
         return self.get_sim(index=-1)
 

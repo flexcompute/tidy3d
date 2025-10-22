@@ -6,8 +6,8 @@ import os
 import pathlib
 import tempfile
 import time
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable, Optional, Union
 
 from botocore.exceptions import ClientError
 from pydantic.v1 import Extra, Field, parse_obj_as
@@ -146,33 +146,33 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
 class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     """Interface for managing the running of a :class:`.Simulation` task on server."""
 
-    task_id: Optional[str] = Field(
+    task_id: str | None = Field(
         ...,
         title="task_id",
         description="Task ID number, set when the task is uploaded, leave as None.",
         alias="taskId",
     )
-    folder_id: Optional[str] = Field(
+    folder_id: str | None = Field(
         None,
         title="folder_id",
         description="Folder ID number, set when the task is uploaded, leave as None.",
         alias="folderId",
     )
-    status: Optional[str] = Field(title="status", description="Simulation task status.")
+    status: str | None = Field(title="status", description="Simulation task status.")
 
     real_flex_unit: float = Field(
         None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
     )
 
-    created_at: Optional[datetime] = Field(
+    created_at: datetime | None = Field(
         title="created_at", description="Time at which this task was created.", alias="createdAt"
     )
 
-    task_type: Optional[str] = Field(
+    task_type: str | None = Field(
         title="task_type", description="The type of task.", alias="taskType"
     )
 
-    folder_name: Optional[str] = Field(
+    folder_name: str | None = Field(
         "default",
         title="Folder Name",
         description="Name of the folder associated with this task.",
@@ -205,11 +205,11 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         task_type: str,
         task_name: str,
         folder_name: str = "default",
-        callback_url: Optional[str] = None,
+        callback_url: str | None = None,
         simulation_type: str = "tidy3d",
-        parent_tasks: Optional[list[str]] = None,
+        parent_tasks: list[str] | None = None,
         file_type: str = "Gz",
-        port_name_list: Optional[list[str]] = None,
+        port_name_list: list[str] | None = None,
         projects_endpoint: str = "tidy3d/projects",
     ) -> SimulationTask:
         """Create a new task on the server.
@@ -358,7 +358,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         stub: TaskStub,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
         remote_sim_file: str = SIM_FILE_HDF5_GZ,
     ) -> None:
         """Upload :class:`.Simulation` object to Server.
@@ -398,7 +398,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         local_file: str,
         remote_filename: str,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> None:
         """
         Upload file to platform. Using this method when the json file is too large to parse
@@ -427,10 +427,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     def submit(
         self,
-        solver_version: Optional[str] = None,
-        worker_group: Optional[str] = None,
-        pay_type: Union[PayType, str] = PayType.AUTO,
-        priority: Optional[int] = None,
+        solver_version: str | None = None,
+        worker_group: str | None = None,
+        pay_type: PayType | str = PayType.AUTO,
+        priority: int | None = None,
     ):
         """Kick off this task.
 
@@ -504,7 +504,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         to_file: str,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
         remote_data_file: str = SIMULATION_DATA_HDF5_GZ,
     ) -> pathlib.Path:
         """Get simulation data file from Server.
@@ -561,7 +561,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         to_file: str,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
         remote_sim_file: str = SIM_FILE_HDF5_GZ,
     ) -> pathlib.Path:
         """Get simulation.hdf5 file from Server.
@@ -615,7 +615,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         to_file: str,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> pathlib.Path:
         """Get log file from Server.
 
@@ -678,7 +678,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             "tidy3d/tasks/abort", json={"taskType": self.task_type, "taskId": self.task_id}
         )
 
-    def validate_post_upload(self, parent_tasks: Optional[list[str]] = None):
+    def validate_post_upload(self, parent_tasks: list[str] | None = None):
         """Perform checks after task is uploaded and metadata is processed."""
         if self.task_type == "HEAT_CHARGE" and parent_tasks:
             try:
@@ -780,8 +780,8 @@ class BatchTask:
 
     def check(
         self,
-        solver_version: Optional[str] = None,
-        protocol_version: Optional[str] = None,
+        solver_version: str | None = None,
+        protocol_version: str | None = None,
         batch_type: str = "",
     ):
         """Submits a request to validate the batch configuration on the server.
@@ -813,9 +813,9 @@ class BatchTask:
 
     def submit(
         self,
-        solver_version: Optional[str] = None,
-        protocol_version: Optional[str] = None,
-        worker_group: Optional[str] = None,
+        solver_version: str | None = None,
+        protocol_version: str | None = None,
+        worker_group: str | None = None,
         batch_type: str = "",
     ):
         """Submits the batch for execution on the server.
@@ -850,9 +850,9 @@ class BatchTask:
 
     def postprocess(
         self,
-        solver_version: Optional[str] = None,
-        protocol_version: Optional[str] = None,
-        worker_group: Optional[str] = None,
+        solver_version: str | None = None,
+        protocol_version: str | None = None,
+        worker_group: str | None = None,
         batch_type: str = "",
     ):
         """Initiates post-processing for a completed batch run.
@@ -885,9 +885,7 @@ class BatchTask:
             },
         )
 
-    def wait_for_validate(
-        self, timeout: Optional[float] = None, batch_type: str = ""
-    ) -> BatchDetail:
+    def wait_for_validate(self, timeout: float | None = None, batch_type: str = "") -> BatchDetail:
         """Waits for the batch to complete the validation stage by polling its status.
 
         Parameters
@@ -920,7 +918,7 @@ class BatchTask:
                 return d
             time.sleep(REFRESH_TIME)
 
-    def wait_for_run(self, timeout: Optional[float] = None, batch_type: str = "") -> BatchDetail:
+    def wait_for_run(self, timeout: float | None = None, batch_type: str = "") -> BatchDetail:
         """Waits for the batch to complete the execution stage by polling its status.
 
         Parameters
@@ -963,7 +961,7 @@ class BatchTask:
         remote_data_file_gz: str,
         to_file: str,
         verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
+        progress_callback: Callable[[float], None] | None = None,
     ) -> pathlib.Path:
         """Downloads a batch data artifact, with a fallback mechanism.
 

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from tidy3d.components.microwave.impedance_calculator import (
     CurrentIntegralType,
     VoltageIntegralType,
@@ -89,8 +87,8 @@ def make_current_integral(path_spec: CurrentPathSpecType) -> CurrentIntegralType
 
 
 def make_path_integrals(
-    microwave_mode_spec: MicrowaveModeSpec, auto_spec: Optional[CustomImpedanceSpec] = None
-) -> tuple[tuple[Optional[VoltageIntegralType]], tuple[Optional[CurrentIntegralType]]]:
+    microwave_mode_spec: MicrowaveModeSpec, auto_spec: CustomImpedanceSpec | None = None
+) -> tuple[tuple[VoltageIntegralType | None], tuple[CurrentIntegralType | None]]:
     """
     Given a microwave mode specification and monitor, create the voltage and
     current path integrals used for the impedance computation.

@@ -77,7 +77,7 @@ def make_base_sim(
         ]
     )
 
-    src_size = sim_size_um[0:2] + (0,)
+    src_size = (*sim_size_um[0:2], 0)
 
     wl_min_src_um = 0.9 * adj_wvl_um
     wl_max_src_um = 1.1 * adj_wvl_um
@@ -268,7 +268,7 @@ def make_eval_fns(monitor_size_wvl):
 
     def intensity(sim_data):
         field_data = sim_data["monitor_fields"]
-        shape_x, shape_y, shape_z, *_ = field_data.Ex.values.shape
+        _shape_x, _shape_y, _shape_z, *_ = field_data.Ex.values.shape
 
         proj_pol_rotation = field_data.Ex.values - field_data.Ey.values
         return np.sum(np.abs(proj_pol_rotation) ** 2)
@@ -478,10 +478,10 @@ def test_finite_difference_2d_box_pec(rf_2d_test_parameters, rng, tmp_path, crea
 
     box_for_override = td.Box(
         center=(0, 0, 0),
-        size=sim_geometry.size[0:2] + (thickness_box_placement_um + 0.3 * mesh_wvl_um,),
+        size=(*sim_geometry.size[0:2], thickness_box_placement_um + 0.3 * mesh_wvl_um),
     )
 
-    eval_fns, eval_fn_names = make_eval_fns(monitor_size_wvl)
+    _eval_fns, _eval_fn_names = make_eval_fns(monitor_size_wvl)
 
     sim_path_dir = tmp_path / f"test{test_number}"
     sim_path_dir.mkdir()
@@ -521,7 +521,7 @@ def test_finite_difference_2d_box_pec(rf_2d_test_parameters, rng, tmp_path, crea
 
     obj_val_and_grad = ag.value_and_grad(objective)
 
-    obj, adj_grad = obj_val_and_grad([all_box_parameters])
+    _obj, adj_grad = obj_val_and_grad([all_box_parameters])
 
     fd_grad, valid_mask = run_and_process_fd(
         all_box_parameters=all_box_parameters, fd_step=fd_step, objective=objective
@@ -658,10 +658,10 @@ def test_finite_difference_3d_box_pec(rf_3d_test_parameters, rng, tmp_path, crea
 
     box_for_override = td.Box(
         center=(0, 0, 0),
-        size=sim_geometry.size[0:2] + (thickness_box_placement_um + 0.3 * mesh_wvl_um,),
+        size=(*sim_geometry.size[0:2], thickness_box_placement_um + 0.3 * mesh_wvl_um),
     )
 
-    eval_fns, eval_fn_names = make_eval_fns(monitor_size_wvl)
+    _eval_fns, _eval_fn_names = make_eval_fns(monitor_size_wvl)
 
     sim_path_dir = tmp_path / f"test{test_number}"
     sim_path_dir.mkdir()
@@ -701,7 +701,7 @@ def test_finite_difference_3d_box_pec(rf_3d_test_parameters, rng, tmp_path, crea
 
     obj_val_and_grad = ag.value_and_grad(objective)
 
-    obj, adj_grad = obj_val_and_grad([all_box_parameters])
+    _obj, adj_grad = obj_val_and_grad([all_box_parameters])
 
     fd_grad, valid_mask = run_and_process_fd(
         all_box_parameters=all_box_parameters, fd_step=fd_step, objective=objective

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Union
+from typing import Any
 
 import numpy as np
 import pydantic.v1 as pd
@@ -59,7 +59,7 @@ class Parameter(Tidy3dBaseModel, ABC):
 class ParameterNumeric(Parameter, ABC):
     """A variable with numeric values."""
 
-    span: tuple[Union[float, int], Union[float, int]] = pd.Field(
+    span: tuple[float | int, float | int] = pd.Field(
         ...,
         title="Span",
         description="(min, max) range within which are allowed values for the variable. Is inclusive of max value.",
@@ -214,4 +214,4 @@ class ParameterAny(Parameter):
         return self.allowed_values[0]
 
 
-ParameterType = Union[ParameterInt, ParameterFloat, ParameterAny]
+ParameterType = ParameterInt | ParameterFloat | ParameterAny

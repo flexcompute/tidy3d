@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -86,7 +85,7 @@ class SourceTime(AbstractTimeDependence):
         return self.frequency_range_sigma(sigma=DEFAULT_SIGMA)
 
     @abstractmethod
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
 
     @cached_property
@@ -218,7 +217,7 @@ class GaussianPulse(Pulse):
 
         return pulse_amp
 
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
 
         # TODO: decide if we should continue to return an end_time if the DC component remains
@@ -422,7 +421,7 @@ class ContinuousWave(Pulse):
 
         return const * offset * oscillation * amp
 
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
         return None
 
@@ -467,7 +466,7 @@ class CustomSourceTime(Pulse):
         description="Time delay of the envelope in units of 1 / (``2pi * fwidth``).",
     )
 
-    source_time_dataset: Optional[TimeDataset] = pydantic.Field(
+    source_time_dataset: TimeDataset | None = pydantic.Field(
         ...,
         title="Source time dataset",
         description="Dataset for storing the envelope of the custom source time. "
@@ -590,7 +589,7 @@ class CustomSourceTime(Pulse):
 
         return offset * oscillation * amp * envelope
 
-    def end_time(self) -> Optional[float]:
+    def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
 
         if self.source_time_dataset is None:
@@ -605,4 +604,4 @@ class CustomSourceTime(Pulse):
         return np.max(t_non_zero)
 
 
-SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]
+SourceTimeType = GaussianPulse | ContinuousWave | CustomSourceTime

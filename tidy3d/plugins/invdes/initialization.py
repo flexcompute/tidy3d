@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -43,7 +42,7 @@ class RandomInitializationSpec(AbstractInitializationSpec):
         title="Maximum Value",
         description="Maximum value for the random parameters (exclusive).",
     )
-    seed: Optional[pd.NonNegativeInt] = pd.Field(
+    seed: pd.NonNegativeInt | None = pd.Field(
         None, description="Seed for the random number generator."
     )
 
@@ -126,8 +125,6 @@ class CustomInitializationSpec(AbstractInitializationSpec):
         return params
 
 
-InitializationSpecType = Union[
-    RandomInitializationSpec,
-    UniformInitializationSpec,
-    CustomInitializationSpec,
-]
+InitializationSpecType = (
+    RandomInitializationSpec | UniformInitializationSpec | CustomInitializationSpec
+)

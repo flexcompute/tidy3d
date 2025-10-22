@@ -21,7 +21,7 @@ Examples:
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 import pydantic.v1 as pd
 
@@ -48,7 +48,7 @@ class DCVoltageSource(Tidy3dBaseModel):
     >>> voltage_source = td.DCVoltageSource(voltage=voltages)
     """
 
-    name: Optional[str] = pd.Field(
+    name: str | None = pd.Field(
         None,
         title="Name",
         description="Unique name for the DC voltage source",
@@ -108,7 +108,7 @@ class DCCurrentSource(Tidy3dBaseModel):
     >>> current_source = td.DCCurrentSource(current=0.4)
     """
 
-    name: Optional[str] = pd.Field(
+    name: str | None = pd.Field(
         None,
         title="Name",
         description="Unique name for the DC current source",

@@ -289,14 +289,14 @@ def test_sim_plot_fill_structures():
         run_time=1e-12,
     )
 
-    fig1, ax1 = plt.subplots()
+    _fig1, ax1 = plt.subplots()
     sim.plot(x=0, fill_structures=False, ax=ax1)
     structure_patches = [p for p in ax1.patches if isinstance(p, mpl.patches.PathPatch)]
     for patch in structure_patches[:1]:  # only one structure, rest is PML etc
         assert not patch.get_fill(), "Should be unfilled when False"
         assert patch.get_edgecolor() != "none"
 
-    fig2, ax2 = plt.subplots()
+    _fig2, ax2 = plt.subplots()
     sim.plot(x=0, fill_structures=True, ax=ax2)
     structure_patches = [p for p in ax2.patches if isinstance(p, mpl.patches.PathPatch)]
     for patch in structure_patches[:1]:
@@ -314,7 +314,7 @@ def test_sim_plot_structures_fill():
         run_time=1e-12,
     )
 
-    fig1, ax1 = plt.subplots()
+    _fig1, ax1 = plt.subplots()
     sim.plot_structures(x=0, fill=False, ax=ax1)
     structure_patches = [p for p in ax1.patches if isinstance(p, mpl.patches.PathPatch)]
     assert len(structure_patches) > 0, "No structures plotted"
@@ -324,7 +324,7 @@ def test_sim_plot_structures_fill():
         assert patch.get_edgecolor() != "none", "Edges should be visible"
         assert patch.get_linewidth() > 0, "Edge width should be positive"
 
-    fig2, ax2 = plt.subplots()
+    _fig2, ax2 = plt.subplots()
     sim.plot_structures(x=0, fill=True, ax=ax2)
     structure_patches = [p for p in ax2.patches if isinstance(p, mpl.patches.PathPatch)]
     assert len(structure_patches) > 0, "No structures plotted"

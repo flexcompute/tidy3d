@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import abc
-import typing
 
 import autograd.numpy as anp
 import pydantic.v1 as pd
@@ -98,4 +97,4 @@ class ErosionDilationPenalty(AbstractPenalty):
         return self.weight * penalty_unweighted
 
 
-PenaltyType = typing.Union[ErosionDilationPenalty]
+PenaltyType = ErosionDilationPenalty

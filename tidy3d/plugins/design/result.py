@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas
@@ -246,7 +246,7 @@ class Result(Tidy3dBaseModel):
         return df
 
     @classmethod
-    def from_dataframe(cls, df: pandas.DataFrame, dims: Optional[list[str]] = None) -> Result:
+    def from_dataframe(cls, df: pandas.DataFrame, dims: list[str] | None = None) -> Result:
         """Load a result directly from a `pandas.DataFrame` object.
 
         Parameters

@@ -5,7 +5,8 @@ from __future__ import annotations
 import functools
 import pathlib
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import Any
 
 import autograd.numpy as np
 import pydantic.v1 as pydantic
@@ -249,7 +250,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self, x: float | None = None, y: float | None = None, z: float | None = None
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -372,7 +373,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return True
 
     def intersects_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self, x: float | None = None, y: float | None = None, z: float | None = None
     ) -> bool:
         """Whether self intersects plane specified by one non-None value of x,y,z.
 
@@ -503,9 +504,9 @@ class Geometry(Tidy3dBaseModel, ABC):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         plot_length_units: LengthUnit = None,
         viz_spec: VisualizationSpec = None,
@@ -539,7 +540,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
 
         # find shapes that intersect self at plane
-        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        axis, _position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         shapes_intersect = self.intersections_plane(x=x, y=y, z=z)
 
         plot_params = self.plot_params
@@ -668,9 +669,9 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def add_ax_labels_and_title(
         ax: Ax,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         plot_length_units: LengthUnit = None,
     ) -> Ax:
         """Sets the axis labels, tick labels, and title based on ``axis``
@@ -967,7 +968,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         return Transformed(geometry=self, transform=Transformed.scaling(x, y, z))
 
-    def rotated(self, angle: float, axis: Union[Axis, Coordinate]) -> Geometry:
+    def rotated(self, angle: float, axis: Axis | Coordinate) -> Geometry:
         """Return a rotated copy of this geometry.
 
         Parameters
@@ -1158,7 +1159,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     def load_gds_vertices_gdstk(
         gds_cell,
         gds_layer: int,
-        gds_dtype: Optional[int] = None,
+        gds_dtype: int | None = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
     ) -> list[ArrayFloat2D]:
         """Load polygon vertices from a ``gdstk.Cell``.
@@ -1212,7 +1213,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis: Axis,
         slab_bounds: tuple[float, float],
         gds_layer: int,
-        gds_dtype: Optional[int] = None,
+        gds_dtype: int | None = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
@@ -1323,9 +1324,9 @@ class Geometry(Tidy3dBaseModel, ABC):
     @verify_packages_import(["gdstk"])
     def to_gdstk(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
     ) -> list:
@@ -1373,9 +1374,9 @@ class Geometry(Tidy3dBaseModel, ABC):
     def to_gds(
         self,
         cell,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
     ) -> None:
@@ -1413,9 +1414,9 @@ class Geometry(Tidy3dBaseModel, ABC):
     def to_gds_file(
         self,
         fname: str,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
         gds_cell_name: str = "MAIN",
@@ -1696,7 +1697,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         return self.center_axis
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self, x: float | None = None, y: float | None = None, z: float | None = None
     ):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -2063,7 +2064,7 @@ class Box(SimplePlaneIntersection, Centered):
         return path.polygons_full
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self, x: float | None = None, y: float | None = None, z: float | None = None
     ):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -2220,12 +2221,12 @@ class Box(SimplePlaneIntersection, Centered):
     def _plot_arrow(
         self,
         direction: tuple[float, float, float],
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        color: Optional[str] = None,
-        alpha: Optional[float] = None,
-        bend_radius: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        color: str | None = None,
+        alpha: float | None = None,
+        bend_radius: float | None = None,
         bend_axis: Axis = None,
         both_dirs: bool = False,
         ax: Ax = None,
@@ -2561,8 +2562,8 @@ class Box(SimplePlaneIntersection, Centered):
     @staticmethod
     def _integrate_face(
         arr_at_face: xr.DataArray,
-        integration_dims: Union[tuple[str], tuple[str, str]],
-        integration_bounds: Union[tuple[Coordinate2D], tuple[Coordinate2D, Coordinate2D]],
+        integration_dims: tuple[str] | tuple[str, str],
+        integration_bounds: tuple[Coordinate2D] | tuple[Coordinate2D, Coordinate2D],
     ) -> complex:
         """Perform the integration of the surface and sum over the frequency component of the gradient."""
 
@@ -2778,7 +2779,7 @@ class Box(SimplePlaneIntersection, Centered):
             Surface gradient vjp value
         """
 
-        fld_H_normal, flds_H_perp = self.pop_axis(("Hx", "Hy", "Hz"), axis=axis_normal)
+        _fld_H_normal, flds_H_perp = self.pop_axis(("Hx", "Hy", "Hz"), axis=axis_normal)
         Hs_perp = tuple(H_der_map[key] for key in flds_H_perp)
 
         is_2d, zero_dimension, do_singularity_correction = self._check_singularity_correction_pec(
@@ -3047,7 +3048,7 @@ class Transformed(Geometry):
         )
 
     @staticmethod
-    def rotation(angle: float, axis: Union[Axis, Coordinate]) -> MatrixReal4x4:
+    def rotation(angle: float, axis: Axis | Coordinate) -> MatrixReal4x4:
         """Return a rotation matrix.
 
         Parameters
@@ -3259,7 +3260,7 @@ class ClipOperation(Geometry):
         )
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self, x: float | None = None, y: float | None = None, z: float | None = None
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -3470,7 +3471,7 @@ class GeometryGroup(Geometry):
         ]
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self, x: float | None = None, y: float | None = None, z: float | None = None
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 

@@ -84,9 +84,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
         print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
-    def initialize_result(
-        self, params0: typing.Optional[anp.ndarray] = None
-    ) -> InverseDesignResult:
+    def initialize_result(self, params0: anp.ndarray | None = None) -> InverseDesignResult:
         """
         Create an initially empty `InverseDesignResult` from the starting parameters.
 
@@ -111,8 +109,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
     def run(
         self,
-        post_process_fn: typing.Optional[typing.Callable] = None,
-        callback: typing.Optional[typing.Callable] = None,
+        post_process_fn: typing.Callable | None = None,
+        callback: typing.Callable | None = None,
         params0: anp.ndarray = None,
     ) -> InverseDesignResult:
         """Run this inverse design problem from an optional initial set of parameters.
@@ -140,9 +138,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     def continue_run(
         self,
         result: InverseDesignResult,
-        num_steps: typing.Optional[int] = None,
-        post_process_fn: typing.Optional[typing.Callable] = None,
-        callback: typing.Optional[typing.Callable] = None,
+        num_steps: int | None = None,
+        post_process_fn: typing.Callable | None = None,
+        callback: typing.Callable | None = None,
     ) -> InverseDesignResult:
         """Run optimizer for a series of steps with an initialized state.
 
@@ -178,7 +176,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         # main optimization loop
         for step_index in range(done_steps, done_steps + num_steps):
             aux_data = {}
-            val, grad = val_and_grad_fn(params, aux_data=aux_data)
+            _val, grad = val_and_grad_fn(params, aux_data=aux_data)
 
             if anp.allclose(grad, 0.0):
                 td.log.warning(
@@ -230,9 +228,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     def continue_run_from_file(
         self,
         fname: str,
-        num_steps: typing.Optional[int] = None,
-        post_process_fn: typing.Optional[typing.Callable] = None,
-        callback: typing.Optional[typing.Callable] = None,
+        num_steps: int | None = None,
+        post_process_fn: typing.Callable | None = None,
+        callback: typing.Callable | None = None,
     ) -> InverseDesignResult:
         """Continue the optimization run from a ``.pkl`` file with an ``InverseDesignResult``."""
         result = InverseDesignResult.from_file(fname)
@@ -245,9 +243,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
     def continue_run_from_history(
         self,
-        num_steps: typing.Optional[int] = None,
-        post_process_fn: typing.Optional[typing.Callable] = None,
-        callback: typing.Optional[typing.Callable] = None,
+        num_steps: int | None = None,
+        post_process_fn: typing.Callable | None = None,
+        callback: typing.Callable | None = None,
     ) -> InverseDesignResult:
         """Continue the optimization run from a ``.pkl`` file with an ``InverseDesignResult``."""
         return self.continue_run_from_file(
@@ -289,7 +287,7 @@ class AdamOptimizer(AbstractOptimizer):
         return {"m": zeros, "v": zeros, "t": 0}
 
     def update(
-        self, parameters: np.ndarray, gradient: np.ndarray, state: typing.Optional[dict] = None
+        self, parameters: np.ndarray, gradient: np.ndarray, state: dict | None = None
     ) -> tuple[np.ndarray, dict]:
         if state is None:
             state = self.initial_state(parameters)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional
 
 import pydantic.v1 as pydantic
 
@@ -70,9 +69,9 @@ class Source(Box, AbstractSource, ABC):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:

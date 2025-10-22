@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Optional
 
 from tidy3d.components.types import Ax, Axis, LengthUnit
 from tidy3d.constants import UnitScaling
@@ -142,7 +141,7 @@ def set_default_labels_and_title(
     axis: Axis,
     position: float,
     ax: Ax,
-    plot_length_units: Optional[LengthUnit] = None,
+    plot_length_units: LengthUnit | None = None,
 ) -> Ax:
     """Adds axis labels and title to plots involving spatial dimensions.
     When the ``plot_length_units`` are specified, the plot axes are scaled, and

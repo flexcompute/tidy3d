@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Literal, Optional
+from typing import Literal
 
 import numpy as np
 import pydantic.v1 as pd
@@ -57,27 +57,27 @@ class DeviceCharacteristics(Tidy3dBaseModel):
 
     """
 
-    steady_dc_hole_capacitance: Optional[SteadyVoltageDataArray] = pd.Field(
+    steady_dc_hole_capacitance: SteadyVoltageDataArray | None = pd.Field(
         None,
         title="Steady DC hole capacitance",
         description="Device steady DC capacitance data based on holes. If the simulation "
         "has converged, these result should be close to that of electrons.",
     )
 
-    steady_dc_electron_capacitance: Optional[SteadyVoltageDataArray] = pd.Field(
+    steady_dc_electron_capacitance: SteadyVoltageDataArray | None = pd.Field(
         None,
         title="Steady DC electron capacitance",
         description="Device steady DC capacitance data based on electrons. If the simulation "
         "has converged, these result should be close to that of holes.",
     )
 
-    steady_dc_current_voltage: Optional[SteadyVoltageDataArray] = pd.Field(
+    steady_dc_current_voltage: SteadyVoltageDataArray | None = pd.Field(
         None,
         title="Steady DC current-voltage",
         description="Device steady DC current-voltage relation for the device.",
     )
 
-    steady_dc_resistance_voltage: Optional[SteadyVoltageDataArray] = pd.Field(
+    steady_dc_resistance_voltage: SteadyVoltageDataArray | None = pd.Field(
         None,
         title="Small signal resistance",
         description="Steady DC computation of the small signal resistance. This is computed "
@@ -85,7 +85,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         "is given in Ohms. Note that in 2D the resistance is given in :math:`\\Omega \\mu`.",
     )
 
-    ac_current_voltage: Optional[FreqVoltageDataArray] = pd.Field(
+    ac_current_voltage: FreqVoltageDataArray | None = pd.Field(
         None,
         title="Small-signal AC current-voltage",
         description="Small-signal AC current as a function of DC bias voltage and frequency. "
@@ -104,7 +104,7 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
     )
 
     @staticmethod
-    def _get_field_by_name(monitor_data: TCADMonitorDataType, field_name: Optional[str] = None):
+    def _get_field_by_name(monitor_data: TCADMonitorDataType, field_name: str | None = None):
         """Return a field data based on a monitor dataset and a specified field name."""
         if field_name is None:
             if len(monitor_data.field_components) > 1:
@@ -127,7 +127,7 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
     def plot_mesh(
         self,
         monitor_name: str,
-        field_name: Optional[str] = None,
+        field_name: str | None = None,
         structures_fill: bool = True,
         ax: Ax = None,
         **sel_kwargs,
@@ -262,7 +262,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         "associated with the monitors of the original :class:`.Simulation`.",
     )
 
-    device_characteristics: Optional[DeviceCharacteristics] = pd.Field(
+    device_characteristics: DeviceCharacteristics | None = pd.Field(
         None,
         title="Device characteristics",
         description="Data characterizing the device :class:`DeviceCharacteristics`.",
@@ -273,13 +273,13 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
     def plot_field(
         self,
         monitor_name: str,
-        field_name: Optional[Literal["temperature", "potential"]] = None,
+        field_name: Literal["temperature", "potential"] | None = None,
         val: RealFieldVal = "real",
         scale: Literal["lin", "log"] = "lin",
         structures_alpha: float = 0.2,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Ax = None,
         **sel_kwargs,
     ) -> Ax:

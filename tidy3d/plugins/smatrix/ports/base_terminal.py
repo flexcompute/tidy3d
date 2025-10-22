@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union
 
 import pydantic.v1 as pd
 
@@ -39,13 +38,13 @@ class AbstractTerminalPort(MicrowaveBaseModel, ABC):
 
     @abstractmethod
     def to_source(
-        self, source_time: GaussianPulse, snap_center: Optional[float] = None, grid: Grid = None
+        self, source_time: GaussianPulse, snap_center: float | None = None, grid: Grid = None
     ) -> Source:
         """Create a current source from a terminal-based port."""
 
     def to_field_monitors(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
-    ) -> Union[list[FieldMonitor], list[ModeMonitor]]:
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid = None
+    ) -> list[FieldMonitor] | list[ModeMonitor]:
         """DEPRECATED: Monitors used to compute the port voltage and current."""
         log.warning(
             "'to_field_monitors' method name is deprecated and will be removed in the future. Please use "
@@ -55,8 +54,8 @@ class AbstractTerminalPort(MicrowaveBaseModel, ABC):
 
     @abstractmethod
     def to_monitors(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
-    ) -> Union[list[FieldMonitor], list[ModeMonitor]]:
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid = None
+    ) -> list[FieldMonitor] | list[ModeMonitor]:
         """Monitors used to compute the port voltage and current."""
 
     @abstractmethod

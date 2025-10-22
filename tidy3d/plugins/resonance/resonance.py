@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Union
 
 import numpy as np
 import xarray as xr
@@ -111,7 +110,7 @@ class ResonanceFinder(Tidy3dBaseModel):
             )
         return val
 
-    def run(self, signals: Union[FieldTimeData, tuple[FieldTimeData, ...]]) -> xr.Dataset:
+    def run(self, signals: FieldTimeData | tuple[FieldTimeData, ...]) -> xr.Dataset:
         """Finds resonances in a :class:`.FieldTimeData` or a Tuple of such.
         The time coordinates must be uniformly spaced, and the spacing must be the same
         across all supplied data. The resonance finder runs on the sum of the
@@ -262,7 +261,7 @@ class ResonanceFinder(Tidy3dBaseModel):
         )
 
     def _aggregate_field_time(
-        self, signals: Union[FieldTimeData, tuple[FieldTimeData, ...]]
+        self, signals: FieldTimeData | tuple[FieldTimeData, ...]
     ) -> ScalarFieldTimeDataArray:
         """Aggregates several :class:`.FieldTimeData` into a single
         :class:`.ScalarFieldTimeDataArray`."""

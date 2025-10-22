@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import abc
-import typing
+from collections.abc import Callable
 
 import autograd.numpy as anp
 import numpy as np
@@ -19,7 +19,7 @@ from .base import InvdesBaseModel
 from .region import DesignRegionType
 from .validators import check_pixel_size
 
-PostProcessFnType = typing.Callable[[td.SimulationData], float]
+PostProcessFnType = Callable[[td.SimulationData], float]
 
 
 class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
@@ -43,15 +43,15 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         description="If ``True``, will print the regular output from ``web`` functions.",
     )
 
-    metric: typing.Optional[ExpressionType] = pd.Field(
+    metric: ExpressionType | None = pd.Field(
         None,
         title="Objective Metric",
         description="Serializable expression defining the objective function.",
     )
 
     def make_objective_fn(
-        self, post_process_fn: typing.Optional[typing.Callable] = None, maximize: bool = True
-    ) -> typing.Callable[[anp.ndarray], tuple[float, dict]]:
+        self, post_process_fn: Callable | None = None, maximize: bool = True
+    ) -> Callable[[anp.ndarray], tuple[float, dict]]:
         """Construct the objective function for this InverseDesign object."""
 
         if (post_process_fn is None) and (self.metric is None):
@@ -62,7 +62,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
 
         direction_multiplier = 1 if maximize else -1
 
-        def objective_fn(params: anp.ndarray, aux_data: typing.Optional[dict] = None) -> float:
+        def objective_fn(params: anp.ndarray, aux_data: dict | None = None) -> float:
             """Full objective function."""
             data = self.to_simulation_data(params=params)
 
@@ -265,7 +265,7 @@ class InverseDesignMulti(AbstractInverseDesign):
         description="Set of simulation without the design regions or monitors used in the objective fn.",
     )
 
-    output_monitor_names: tuple[typing.Union[tuple[str, ...], None], ...] = pd.Field(
+    output_monitor_names: tuple[tuple[str, ...] | None, ...] = pd.Field(
         None,
         title="Output Monitor Names",
         description="Optional names of monitors whose data the differentiable output depends on."
@@ -328,4 +328,4 @@ class InverseDesignMulti(AbstractInverseDesign):
         return self.run_async(simulations, **kwargs)
 
 
-InverseDesignType = typing.Union[InverseDesign, InverseDesignMulti]
+InverseDesignType = InverseDesign | InverseDesignMulti

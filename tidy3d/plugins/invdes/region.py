@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import abc
-import typing
 import warnings
+from typing import Literal
 
 import autograd.numpy as anp
 import numpy as np
@@ -167,7 +167,7 @@ class TopologyDesignRegion(DesignRegion):
         "inside of the penalties directly through the ``.weight`` field.",
     )
 
-    override_structure_dl: typing.Union[pd.PositiveFloat, typing.Literal[False]] = pd.Field(
+    override_structure_dl: pd.PositiveFloat | Literal[False] = pd.Field(
         None,
         title="Design Region Override Structure",
         description="Defines grid size when adding an ``override_structure`` to the "
@@ -366,4 +366,4 @@ class TopologyDesignRegion(DesignRegion):
         return penalty.evaluate(x=material_density, pixel_size=self.pixel_size)
 
 
-DesignRegionType = typing.Union[TopologyDesignRegion]
+DesignRegionType = TopologyDesignRegion

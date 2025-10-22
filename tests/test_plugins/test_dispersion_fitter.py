@@ -91,20 +91,20 @@ def test_lossless_dispersion(random_data, mock_remote_api):
 
     with pytest.raises(SetupError):
         fitter = DispersionFitter(wvl_um=[1.0], n_data=(1.0), wvl_range=(2, 3))
-        medium, rms = fitter.fit(num_tries=2)
+        _medium, _rms = fitter.fit(num_tries=2)
 
     wvl_um, n_data, _ = random_data
     fitter = DispersionFitter(wvl_um=wvl_um.tolist(), n_data=tuple(n_data))
-    medium, rms = fitter._fit_single()
-    medium, rms = fitter.fit(num_tries=2)
-    medium, rms = run_fitter(fitter)
+    _medium, _rms = fitter._fit_single()
+    _medium, _rms = fitter.fit(num_tries=2)
+    _medium, _rms = run_fitter(fitter)
 
     fitter = FastDispersionFitter(wvl_um=wvl_um.tolist(), n_data=tuple(n_data))
-    medium, rms = fitter.fit(advanced_param=advanced_param)
+    _medium, _rms = fitter.fit(advanced_param=advanced_param)
 
     # from permittivity data
     fitter = FastDispersionFitter.from_complex_permittivity(wvl_um, n_data**2)
-    medium2, rms2 = fitter.fit(advanced_param=advanced_param)
+    _medium2, _rms2 = fitter.fit(advanced_param=advanced_param)
 
 
 @responses.activate
@@ -112,25 +112,25 @@ def test_lossy_dispersion(random_data, mock_remote_api):
     """perform fitting on random lossy data"""
     wvl_um, n_data, k_data = random_data
     fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data, k_data=k_data)
-    medium, rms = fitter._fit_single()
-    medium, rms = fitter.fit(num_tries=2)
-    medium, rms = run_fitter(fitter)
+    _medium, _rms = fitter._fit_single()
+    _medium, _rms = fitter.fit(num_tries=2)
+    _medium, _rms = run_fitter(fitter)
 
     fitter = FastDispersionFitter(wvl_um=wvl_um.tolist(), n_data=n_data, k_data=k_data)
-    medium, rms = fitter.fit(advanced_param=advanced_param)
+    _medium, _rms = fitter.fit(advanced_param=advanced_param)
 
     # from permittivity data
     eps_complex = (n_data + 1j * k_data) ** 2
     fitter = FastDispersionFitter.from_complex_permittivity(
         wvl_um, eps_complex.real, eps_complex.imag
     )
-    medium2, rms2 = fitter.fit(advanced_param=advanced_param)
+    _medium2, _rms2 = fitter.fit(advanced_param=advanced_param)
 
     # from loss tangent
     fitter = FastDispersionFitter.from_loss_tangent(
         wvl_um, eps_complex.real, eps_complex.imag / eps_complex.real
     )
-    medium3, rms3 = fitter.fit(advanced_param=advanced_param)
+    _medium3, _rms3 = fitter.fit(advanced_param=advanced_param)
 
     # test that poles can be close but not exactly equal to provided freqs
     N = 2
@@ -139,7 +139,7 @@ def test_lossy_dispersion(random_data, mock_remote_api):
     k_data = np.ones(N) * 0.5
 
     fitter = FastDispersionFitter(wvl_um=wvl_um, n_data=n_data, k_data=k_data)
-    medium, rms_error = fitter.fit(max_num_poles=2, tolerance_rms=1e-3)
+    _medium, _rms_error = fitter.fit(max_num_poles=2, tolerance_rms=1e-3)
 
 
 def test_constant_loss_tangent():
@@ -193,25 +193,25 @@ def test_dispersion_load_url():
     # n only
     mock_data = [b"wl,n", b"1,2", b"2,2"]
     fitter = _test_nk(mock_data)
-    medium, rms = fitter.fit(num_tries=10)
+    _medium, _rms = fitter.fit(num_tries=10)
 
     # n and k
     mock_data = [b"wl,n", b"1,2", b"3,2.1", b"wl,k", b"1,0", b"3,0.1"]
     fitter = _test_nk(mock_data)
-    medium, rms = fitter.fit(num_tries=2)
+    _medium, _rms = fitter.fit(num_tries=2)
 
 
 def test_dispersion_load_file():
     """loads dispersion model from nk data file"""
 
     fitter = DispersionFitter.from_file("tests/data/nk_data.csv", skiprows=1, delimiter=",")
-    medium, rms = fitter.fit(num_tries=2)
+    _medium, _rms = fitter.fit(num_tries=2)
 
     fitter = DispersionFitter.from_file("tests/data/n_data.csv", skiprows=1, delimiter=",")
-    medium, rms = fitter.fit(num_tries=20)
+    _medium, _rms = fitter.fit(num_tries=20)
 
     fitter = FastDispersionFitter.from_file("tests/data/nk_data.csv", skiprows=1, delimiter=",")
-    medium, rms = fitter.fit(advanced_param=advanced_param)
+    _medium, _rms = fitter.fit(advanced_param=advanced_param)
 
 
 def test_dispersion_plot(random_data):
@@ -221,14 +221,14 @@ def test_dispersion_plot(random_data):
     fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data)
     fitter.plot(ax=AX)
     plt.close()
-    medium, rms = fitter.fit(num_tries=2)
+    medium, _rms = fitter.fit(num_tries=2)
     fitter.plot(medium, ax=AX)
     plt.close()
 
     fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data, k_data=k_data)
     fitter.plot()
     plt.close()
-    medium, rms = fitter.fit(num_tries=2)
+    medium, _rms = fitter.fit(num_tries=2)
     fitter.plot(medium, ax=AX)
     plt.close()
 
@@ -242,44 +242,44 @@ def test_dispersion_set_wvg_range(random_data):
     wvl_range = [1.2, 1.8]
     fitter = fitter.copy(update={"wvl_range": wvl_range})
     assert len(fitter.freqs) == 7
-    medium, rms = fitter.fit(num_tries=2)
+    _medium, _rms = fitter.fit(num_tries=2)
     fastfitter = fastfitter.copy(update={"wvl_range": wvl_range})
     assert len(fastfitter.freqs) == 7
-    medium, rms = fastfitter.fit(advanced_param=advanced_param)
+    _medium, _rms = fastfitter.fit(advanced_param=advanced_param)
 
     wvl_range = [1.2, 2.8]
     fitter = fitter.copy(update={"wvl_range": wvl_range, "k_data": k_data})
     assert len(fitter.freqs) == 9
-    medium, rms = fitter.fit(num_tries=2)
+    _medium, _rms = fitter.fit(num_tries=2)
     fastfitter = fastfitter.copy(update={"wvl_range": wvl_range})
     assert len(fastfitter.freqs) == 9
-    medium, rms = fastfitter.fit(advanced_param=advanced_param)
+    _medium, _rms = fastfitter.fit(advanced_param=advanced_param)
 
     wvl_range = [0.2, 1.8]
     fitter = fitter.copy(update={"wvl_range": wvl_range})
     assert len(fitter.freqs) == 9
-    medium, rms = fitter.fit(num_tries=2)
+    _medium, _rms = fitter.fit(num_tries=2)
     fastfitter = fastfitter.copy(update={"wvl_range": wvl_range})
     assert len(fastfitter.freqs) == 9
-    medium, rms = fastfitter.fit(advanced_param=advanced_param)
+    _medium, _rms = fastfitter.fit(advanced_param=advanced_param)
 
     wvl_range = [0.2, 2.8]
     fitter = fitter.copy(update={"wvl_range": wvl_range, "k_data": k_data})
     assert len(fitter.freqs) == 11
-    medium, rms = fitter.fit(num_tries=2)
+    _medium, _rms = fitter.fit(num_tries=2)
     fastfitter = fastfitter.copy(update={"wvl_range": wvl_range})
     assert len(fastfitter.freqs) == 11
-    medium, rms = fastfitter.fit(advanced_param=advanced_param)
+    _medium, _rms = fastfitter.fit(advanced_param=advanced_param)
 
 
 def test_dispersion_guess(random_data):
     """plots a medium fit from file"""
-    wvl_um, n_data, k_data = random_data
+    wvl_um, n_data, _k_data = random_data
 
     fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data)
-    medium, rms = fitter.fit(num_tries=2)
+    medium, _rms = fitter.fit(num_tries=2)
 
-    medium_new, rms_new = fitter.fit(num_tries=1, guess=medium)
+    _medium_new, _rms_new = fitter.fit(num_tries=1, guess=medium)
 
 
 def test_dispersion_loss_samples():

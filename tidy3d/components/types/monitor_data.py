@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 from tidy3d.components.data.monitor_data import (
     AuxFieldTimeData,
     DiffractionData,
@@ -23,8 +21,8 @@ from tidy3d.components.data.monitor_data import (
 from tidy3d.components.microwave.data.monitor_data import MicrowaveModeData, MicrowaveModeSolverData
 
 # Type aliases
-ModeDataType = Union[ModeData, MicrowaveModeData]
-ModeSolverDataType = Union[ModeSolverData, MicrowaveModeSolverData]
+ModeDataType = ModeData | MicrowaveModeData
+ModeSolverDataType = ModeSolverData | MicrowaveModeSolverData
 MonitorDataTypes = (
     FieldData,
     FieldTimeData,
@@ -43,4 +41,21 @@ MonitorDataTypes = (
     MicrowaveModeData,
     MicrowaveModeSolverData,
 )
-MonitorDataType = Union[MonitorDataTypes]
+MonitorDataType = (
+    FieldData
+    | FieldTimeData
+    | PermittivityData
+    | MediumData
+    | ModeSolverData
+    | ModeData
+    | FluxData
+    | FluxTimeData
+    | AuxFieldTimeData
+    | FieldProjectionKSpaceData
+    | FieldProjectionCartesianData
+    | FieldProjectionAngleData
+    | DiffractionData
+    | DirectivityData
+    | MicrowaveModeData
+    | MicrowaveModeSolverData
+)

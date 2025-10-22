@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import numpy as np
 import pydantic.v1 as pd
 
@@ -33,13 +31,13 @@ from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
 
 from .mode_solver import ModeSolver
 
-ModeSimulationMonitorType = Union[PermittivityMonitor, MediumMonitor]
+ModeSimulationMonitorType = PermittivityMonitor | MediumMonitor
 
 # dummy run time for conversion to FDTD sim
 # should be very small -- otherwise, generating tmesh will fail or take a long time
 RUN_TIME = 1e-30
 
-MODE_PLANE_TYPE = Union[Box, ModeSource, ModeMonitor, ModeSolverMonitor]
+MODE_PLANE_TYPE = Box | ModeSource | ModeMonitor | ModeSolverMonitor
 
 
 # attributes shared between ModeSimulation class and ModeSolver class
@@ -319,7 +317,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
     def from_simulation(
         cls,
         simulation: AbstractYeeGridSimulation,
-        wavelength: Optional[pd.PositiveFloat] = None,
+        wavelength: pd.PositiveFloat | None = None,
         **kwargs,
     ) -> ModeSimulation:
         """Creates :class:`.ModeSimulation` from a :class:`.AbstractYeeGridSimulation`.
@@ -376,7 +374,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     @classmethod
     def from_mode_solver(
-        cls, mode_solver: ModeSolver, wavelength: Optional[pd.PositiveFloat] = None
+        cls, mode_solver: ModeSolver, wavelength: pd.PositiveFloat | None = None
     ) -> ModeSimulation:
         """Creates :class:`.ModeSimulation` from a :class:`.ModeSolver`.
 
@@ -403,15 +401,15 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
-        source_alpha: Optional[float] = 0,
-        monitor_alpha: Optional[float] = 0,
-        lumped_element_alpha: Optional[float] = 0,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        source_alpha: float | None = 0,
+        monitor_alpha: float | None = 0,
+        lumped_element_alpha: float | None = 0,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         fill_structures: bool = True,
         **patch_kwargs,
     ) -> Ax:
@@ -498,8 +496,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def plot_eps_mode_plane(
         self,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot the mode plane simulation's components.
@@ -531,8 +529,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def plot_structures_eps_mode_plane(
         self,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,

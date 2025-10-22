@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import ssl
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import toml
 
@@ -130,17 +130,17 @@ class LegacyEnvironmentConfig:
 
     def __init__(
         self,
-        manager: Optional[ConfigManager] = None,
-        name: Optional[str] = None,
+        manager: ConfigManager | None = None,
+        name: str | None = None,
         *,
-        web_api_endpoint: Optional[str] = None,
-        website_endpoint: Optional[str] = None,
-        s3_region: Optional[str] = None,
-        ssl_verify: Optional[bool] = None,
-        enable_caching: Optional[bool] = None,
-        ssl_version: Optional[ssl.TLSVersion] = None,
-        env_vars: Optional[dict[str, str]] = None,
-        environment: Optional[LegacyEnvironment] = None,
+        web_api_endpoint: str | None = None,
+        website_endpoint: str | None = None,
+        s3_region: str | None = None,
+        ssl_verify: bool | None = None,
+        enable_caching: bool | None = None,
+        ssl_version: ssl.TLSVersion | None = None,
+        env_vars: dict[str, str] | None = None,
+        environment: LegacyEnvironment | None = None,
     ) -> None:
         if name is None:
             raise ValueError("Environment name is required")
@@ -165,7 +165,7 @@ class LegacyEnvironmentConfig:
             self._overrides["env_vars"] = dict(env_vars)
 
     @property
-    def manager(self) -> Optional[ConfigManager]:
+    def manager(self) -> ConfigManager | None:
         return self._manager
 
     def active(self) -> None:
@@ -181,17 +181,17 @@ class LegacyEnvironmentConfig:
         environment.set_current(self)
 
     @property
-    def web_api_endpoint(self) -> Optional[str]:
+    def web_api_endpoint(self) -> str | None:
         value = self._value("api_endpoint")
         return _maybe_str(value)
 
     @property
-    def website_endpoint(self) -> Optional[str]:
+    def website_endpoint(self) -> str | None:
         value = self._value("website_endpoint")
         return _maybe_str(value)
 
     @property
-    def s3_region(self) -> Optional[str]:
+    def s3_region(self) -> str | None:
         return self._value("s3_region")
 
     @property
@@ -266,7 +266,7 @@ class LegacyEnvironment:
     """Legacy Env wrapper that maps to profiles."""
 
     def __init__(self, manager: ConfigManager):
-        self._previous_env_vars: dict[str, Optional[str]] = {}
+        self._previous_env_vars: dict[str, str | None] = {}
         self.reset_manager(manager)
 
     def reset_manager(self, manager: ConfigManager) -> None:
@@ -341,7 +341,7 @@ class LegacyEnvironment:
         self._previous_env_vars = {}
 
 
-def _maybe_str(value: Any) -> Optional[str]:
+def _maybe_str(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)

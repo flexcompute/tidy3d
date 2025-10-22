@@ -6,7 +6,8 @@ import json
 import os
 import tempfile
 import time
-from typing import Callable, Literal, Optional, Union
+from collections.abc import Callable
+from typing import Literal
 
 from requests import HTTPError
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
@@ -95,7 +96,7 @@ def _batch_detail(resource_id: str):
     return BatchTask(resource_id).detail(batch_type="RF_SWEEP")
 
 
-def _batch_detail_error(resource_id: str) -> Optional[WebError]:
+def _batch_detail_error(resource_id: str) -> WebError | None:
     """Processes a failed batch job to generate a detailed error.
 
     This function inspects the status of a batch detail object. If the status
@@ -156,7 +157,7 @@ def _batch_detail_error(resource_id: str) -> Optional[WebError]:
 
 
 def _upload_component_modeler_subtasks(
-    resource_id: str, verbose: bool = True, solver_version: Optional[str] = None
+    resource_id: str, verbose: bool = True, solver_version: str | None = None
 ):
     """Kicks off and monitors the split and validation of component modeler tasks.
 
@@ -319,20 +320,20 @@ def _task_dict_to_url_bullet_list(data_dict: dict) -> str:
 @wait_for_connection
 def run(
     simulation: WorkflowType,
-    task_name: Optional[str] = None,
+    task_name: str | None = None,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
-    callback_url: Optional[str] = None,
+    callback_url: str | None = None,
     verbose: bool = True,
-    progress_callback_upload: Optional[Callable[[float], None]] = None,
-    progress_callback_download: Optional[Callable[[float], None]] = None,
-    solver_version: Optional[str] = None,
-    worker_group: Optional[str] = None,
+    progress_callback_upload: Callable[[float], None] | None = None,
+    progress_callback_download: Callable[[float], None] | None = None,
+    solver_version: str | None = None,
+    worker_group: str | None = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: Optional[list[str]] = None,
+    parent_tasks: list[str] | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: Union[PayType, str] = PayType.AUTO,
-    priority: Optional[int] = None,
+    pay_type: PayType | str = PayType.AUTO,
+    priority: int | None = None,
     lazy: bool = False,
 ) -> WorkflowDataType:
     """
@@ -455,15 +456,15 @@ def run(
 @wait_for_connection
 def upload(
     simulation: WorkflowType,
-    task_name: Optional[str] = None,
+    task_name: str | None = None,
     folder_name: str = "default",
-    callback_url: Optional[str] = None,
+    callback_url: str | None = None,
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
+    progress_callback: Callable[[float], None] | None = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: Optional[list[str]] = None,
+    parent_tasks: list[str] | None = None,
     source_required: bool = True,
-    solver_version: Optional[str] = None,
+    solver_version: str | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> TaskId:
     """
@@ -696,10 +697,10 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
 def start(
     task_id: TaskId,
     verbose: bool = True,
-    solver_version: Optional[str] = None,
-    worker_group: Optional[str] = None,
-    pay_type: Union[PayType, str] = PayType.AUTO,
-    priority: Optional[int] = None,
+    solver_version: str | None = None,
+    worker_group: str | None = None,
+    pay_type: PayType | str = PayType.AUTO,
+    priority: int | None = None,
 ) -> None:
     """Start running the simulation associated with task.
 
@@ -759,7 +760,7 @@ def start(
 
 
 @wait_for_connection
-def get_run_info(task_id: TaskId) -> tuple[Optional[float], Optional[float]]:
+def get_run_info(task_id: TaskId) -> tuple[float | None, float | None]:
     """Gets the % done and field_decay for a running task.
 
     Parameters
@@ -826,7 +827,7 @@ def get_status(task_id) -> str:
     return status
 
 
-def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] = None) -> None:
+def monitor(task_id: TaskId, verbose: bool = True, worker_group: str | None = None) -> None:
     """
     Print the real time task progress until completion.
 
@@ -1043,7 +1044,7 @@ def download(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
+    progress_callback: Callable[[float], None] | None = None,
 ) -> None:
     """Download results of task to file.
 
@@ -1173,7 +1174,7 @@ def download_log(
     task_id: TaskId,
     path: str = "tidy3d.log",
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
+    progress_callback: Callable[[float], None] | None = None,
 ) -> None:
     """Download the tidy3d log file associated with a task.
 
@@ -1202,7 +1203,7 @@ def load(
     path: str = "simulation_data.hdf5",
     replace_existing: bool = True,
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
+    progress_callback: Callable[[float], None] | None = None,
     lazy: bool = False,
 ) -> WorkflowDataType:
     """
@@ -1268,7 +1269,7 @@ def _monitor_modeler_batch(
     batch_id: str,
     verbose: bool = True,
     max_detail_tasks: int = 20,
-    worker_group: Optional[str] = None,
+    worker_group: str | None = None,
 ) -> None:
     """Monitor modeler batch progress with aggregate and per-task views."""
     console = get_logging_console() if verbose else None
@@ -1461,7 +1462,7 @@ def download_simulation(
     task_id: TaskId,
     path: str = SIM_FILE_HDF5,
     verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
+    progress_callback: Callable[[float], None] | None = None,
 ) -> None:
     """Download the ``.hdf5`` file associated with the :class:`.Simulation` of a given task.
 
@@ -1492,7 +1493,7 @@ def download_simulation(
 
 @wait_for_connection
 def get_tasks(
-    num_tasks: Optional[int] = None, order: Literal["new", "old"] = "new", folder: str = "default"
+    num_tasks: int | None = None, order: Literal["new", "old"] = "new", folder: str = "default"
 ) -> list[dict]:
     """Get a list with the metadata of the last ``num_tasks`` tasks.
 
@@ -1524,9 +1525,7 @@ def get_tasks(
 
 
 @wait_for_connection
-def estimate_cost(
-    task_id: str, verbose: bool = True, solver_version: Optional[str] = None
-) -> float:
+def estimate_cost(task_id: str, verbose: bool = True, solver_version: str | None = None) -> float:
     """Compute the maximum FlexCredit charge for a given task.
 
     Parameters
@@ -1790,7 +1789,7 @@ def account(verbose=True) -> Account:
 def postprocess_start(
     batch_id: str,
     verbose: bool = True,
-    worker_group: Optional[str] = None,
+    worker_group: str | None = None,
 ) -> None:
     """
     Checks if a batch run is complete and starts the postprocess phase.

@@ -5,8 +5,9 @@ from __future__ import annotations
 import struct
 import warnings
 from abc import ABC
+from collections.abc import Callable
 from math import isclose
-from typing import Any, Callable, Literal, Optional, Union, get_args
+from typing import Any, Literal, get_args
 
 import autograd.numpy as np
 import pydantic.v1 as pd
@@ -125,7 +126,7 @@ class MonitorData(AbstractMonitorData, ABC):
         return self.copy()
 
     def scale_fields_by_freq_array(
-        self, freq_array: FreqDataArray, method: Optional[str] = None
+        self, freq_array: FreqDataArray, method: str | None = None
     ) -> MonitorData:
         """Scale fields in :class:`.MonitorData` by an array of values stored in a :class:`.FreqDataArray`.
 
@@ -173,7 +174,7 @@ class MonitorData(AbstractMonitorData, ABC):
         return []
 
     @staticmethod
-    def flip_direction(direction: Union[str, DataArray]) -> str:
+    def flip_direction(direction: str | DataArray) -> str:
         """Flip the direction of a string ``('+', '-') -> ('-', '+')``."""
 
         if isinstance(direction, DataArray):
@@ -197,14 +198,14 @@ class MonitorData(AbstractMonitorData, ABC):
 class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
     """Collection of scalar fields with some symmetry properties."""
 
-    monitor: Union[
-        FieldMonitor,
-        FieldTimeMonitor,
-        AuxFieldTimeMonitor,
-        PermittivityMonitor,
-        ModeMonitor,
-        MediumMonitor,
-    ]
+    monitor: (
+        FieldMonitor
+        | FieldTimeMonitor
+        | AuxFieldTimeMonitor
+        | PermittivityMonitor
+        | ModeMonitor
+        | MediumMonitor
+    )
 
     symmetry: tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
         (0, 0, 0),
@@ -403,13 +404,9 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
 class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, ABC):
     """Collection of electromagnetic fields."""
 
-    grid_primal_correction: Union[
-        float,
-        FreqDataArray,
-        TimeDataArray,
-        FreqModeDataArray,
-        EMEFreqModeDataArray,
-    ] = pd.Field(
+    grid_primal_correction: (
+        float | FreqDataArray | TimeDataArray | FreqModeDataArray | EMEFreqModeDataArray
+    ) = pd.Field(
         1.0,
         title="Field correction factor",
         description="Correction factor that needs to be applied for data corresponding to a 2D "
@@ -417,13 +414,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         "which the data was computed. The factor is applied to fields defined on the primal grid "
         "locations along the normal direction.",
     )
-    grid_dual_correction: Union[
-        float,
-        FreqDataArray,
-        TimeDataArray,
-        FreqModeDataArray,
-        EMEFreqModeDataArray,
-    ] = pd.Field(
+    grid_dual_correction: (
+        float | FreqDataArray | TimeDataArray | FreqModeDataArray | EMEFreqModeDataArray
+    ) = pd.Field(
         1.0,
         title="Field correction factor",
         description="Correction factor that needs to be applied for data corresponding to a 2D "
@@ -737,7 +730,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return FreqModeDataArray(area)
 
     def dot(
-        self, field_data: Union[FieldData, ModeData, ModeSolverData], conjugate: bool = True
+        self, field_data: FieldData | ModeData | ModeSolverData, conjugate: bool = True
     ) -> ModeAmpsDataArray:
         r"""Dot product (modal overlap) with another :class:`.FieldData` object. Both datasets have
         to be frequency-domain data associated with a 2D monitor. Along the tangential directions,
@@ -829,7 +822,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return fields
 
     def outer_dot(
-        self, field_data: Union[FieldData, ModeData], conjugate: bool = True
+        self, field_data: FieldData | ModeData, conjugate: bool = True
     ) -> MixedModeDataArray:
         r"""Dot product (modal overlap) with another :class:`.FieldData` object.
 
@@ -1084,10 +1077,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         fname: str,
         units: UnitsZBF = "mm",
         background_refractive_index: float = 1,
-        n_x: Optional[int] = None,
-        n_y: Optional[int] = None,
-        freq: Optional[float] = None,
-        mode_index: Optional[int] = None,
+        n_x: int | None = None,
+        n_y: int | None = None,
+        freq: float | None = None,
+        mode_index: int | None = None,
         r_x: float = 0,
         r_y: float = 0,
         z_x: float = 0,
@@ -1813,7 +1806,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
     def _find_ordering_one_freq(
         self,
         data_to_sort: ModeData,
-        overlap_thresh: Union[float, np.array],
+        overlap_thresh: float | np.array,
     ) -> tuple[Numpy, Numpy]:
         """Find new ordering of modes in data_to_sort based on their similarity to own modes."""
         num_modes = self.n_complex.sizes["mode_index"]
@@ -2231,7 +2224,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         return self.updated_copy(**modify_data)
 
     def sort_modes(
-        self, sort_spec: Optional[ModeSortSpec] = None, track_freq: Optional[TrackFreq] = None
+        self, sort_spec: ModeSortSpec | None = None, track_freq: TrackFreq | None = None
     ) -> ModeSolverData:
         """Sort modes per frequency according to ``sort_spec``.
 
@@ -2459,7 +2452,7 @@ class FluxData(MonitorData):
 
     def _make_adjoint_sources(
         self, dataset_names: list[str], fwidth: float
-    ) -> list[Union[CustomCurrentSource, PointDipole]]:
+    ) -> list[CustomCurrentSource | PointDipole]:
         """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
 
         # avoids error in edge case where there are extraneous flux monitors not used in objective
@@ -2512,20 +2505,20 @@ class FluxTimeData(MonitorData):
     )
 
 
-ProjFieldType = Union[
-    FieldProjectionAngleDataArray,
-    FieldProjectionCartesianDataArray,
-    FieldProjectionKSpaceDataArray,
-    DiffractionDataArray,
-]
+ProjFieldType = (
+    FieldProjectionAngleDataArray
+    | FieldProjectionCartesianDataArray
+    | FieldProjectionKSpaceDataArray
+    | DiffractionDataArray
+)
 
-ProjMonitorType = Union[
-    FieldProjectionAngleMonitor,
-    FieldProjectionCartesianMonitor,
-    FieldProjectionKSpaceMonitor,
-    DiffractionMonitor,
-    DirectivityMonitor,
-]
+ProjMonitorType = (
+    FieldProjectionAngleMonitor
+    | FieldProjectionCartesianMonitor
+    | FieldProjectionKSpaceMonitor
+    | DiffractionMonitor
+    | DirectivityMonitor
+)
 
 
 class AbstractFieldProjectionData(MonitorData):
@@ -2691,7 +2684,7 @@ class AbstractFieldProjectionData(MonitorData):
         return ETA_0 / np.sqrt(eps_complex)
 
     @staticmethod
-    def propagation_factor(dist: Union[float, None], k: complex, is_2d_simulation: bool) -> complex:
+    def propagation_factor(dist: float | None, k: complex, is_2d_simulation: bool) -> complex:
         """A normalization factor that includes both phase and amplitude decay associated with propagation over a distance with a given wavenumber."""
         if dist is None:
             return 1.0
@@ -2799,7 +2792,7 @@ class AbstractFieldProjectionData(MonitorData):
 
     def _make_adjoint_sources(
         self, dataset_names: list[str], fwidth: float
-    ) -> list[Union[CustomCurrentSource, PointDipole]]:
+    ) -> list[CustomCurrentSource | PointDipole]:
         """Error if server-side field projection is used for autograd"""
 
         raise NotImplementedError(
@@ -3369,7 +3362,7 @@ class DiffractionData(AbstractFieldProjectionData):
         units=MICROMETER,
     )
 
-    bloch_vecs: Union[tuple[float, float], tuple[ArrayFloat1D, ArrayFloat1D]] = pd.Field(
+    bloch_vecs: tuple[float, float] | tuple[ArrayFloat1D, ArrayFloat1D] = pd.Field(
         ...,
         title="Bloch vectors",
         description="Bloch vectors along the local x and y directions in units of "
@@ -3377,7 +3370,7 @@ class DiffractionData(AbstractFieldProjectionData):
     )
 
     @staticmethod
-    def shifted_orders(orders: tuple[int, ...], bloch_vec: Union[float, np.ndarray]) -> np.ndarray:
+    def shifted_orders(orders: tuple[int, ...], bloch_vec: float | np.ndarray) -> np.ndarray:
         """Diffraction orders shifted by the Bloch vector."""
         return bloch_vec + np.atleast_2d(orders).T
 
@@ -3385,7 +3378,7 @@ class DiffractionData(AbstractFieldProjectionData):
     def reciprocal_coords(
         orders: np.ndarray,
         size: float,
-        bloch_vec: Union[float, np.ndarray],
+        bloch_vec: float | np.ndarray,
         f: float,
         medium: MediumType,
     ) -> np.ndarray:
@@ -3760,7 +3753,7 @@ class DirectivityData(FieldProjectionAngleData):
             raise ValueError("'tilt_angle' is only defined for linear polarization.")
 
     def partial_radiation_intensity(
-        self, pol_basis: PolarizationBasis = "linear", tilt_angle: Optional[float] = None
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float | None = None
     ) -> xr.Dataset:
         """Partial radiation intensity in the frequency domain as a function of angles theta and phi.
         The partial radiation intensities are computed in the ``linear`` or ``circular`` polarization
@@ -3838,7 +3831,7 @@ class DirectivityData(FieldProjectionAngleData):
         return FreqDataArray(sign * self.flux.values, {"f": self.f})
 
     def partial_directivity(
-        self, pol_basis: PolarizationBasis = "linear", tilt_angle: Optional[float] = None
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float | None = None
     ) -> xr.Dataset:
         """Directivity in the frequency domain as a function of angles theta and phi.
         The partial directivities are computed in the ``linear`` or ``circular`` polarization
@@ -3907,7 +3900,7 @@ class DirectivityData(FieldProjectionAngleData):
         self,
         power_in: FreqDataArray,
         pol_basis: PolarizationBasis = "linear",
-        tilt_angle: Optional[float] = None,
+        tilt_angle: float | None = None,
     ) -> xr.Dataset:
         """The partial gain figures of merit for antennas. The partial gains are computed
         in the ``linear`` or ``circular`` polarization bases. If ``tilt_angle`` is not ``None``,

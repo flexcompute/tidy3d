@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import numpy as np
 import pydantic.v1 as pd
 
@@ -62,19 +60,19 @@ class WavePort(AbstractTerminalPort, Box):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
-    voltage_integral: Optional[VoltageIntegralType] = pd.Field(
+    voltage_integral: VoltageIntegralType | None = pd.Field(
         None,
         title="Voltage Integral",
         description="Definition of voltage integral used to compute voltage and the characteristic impedance.",
     )
 
-    current_integral: Optional[CurrentIntegralType] = pd.Field(
+    current_integral: CurrentIntegralType | None = pd.Field(
         None,
         title="Current Integral",
         description="Definition of current integral used to compute current and the characteristic impedance.",
     )
 
-    num_grid_cells: Optional[int] = pd.Field(
+    num_grid_cells: int | None = pd.Field(
         DEFAULT_WAVE_PORT_NUM_CELLS,
         ge=MIN_WAVE_PORT_NUM_CELLS,
         title="Number of Grid Cells",
@@ -89,13 +87,13 @@ class WavePort(AbstractTerminalPort, Box):
         description="Use conjugated or non-conjugated dot product for mode decomposition.",
     )
 
-    frame: Optional[PECFrame] = pd.Field(
+    frame: PECFrame | None = pd.Field(
         DEFAULT_WAVE_PORT_FRAME,
         title="Source Frame",
         description="Add a thin frame around the source during FDTD run for an improved injection.",
     )
 
-    absorber: Union[bool, ABCBoundary, ModeABCBoundary] = pd.Field(
+    absorber: bool | ABCBoundary | ModeABCBoundary = pd.Field(
         True,
         title="Absorber",
         description="Place a mode absorber in the port. If ``True``, an automatically generated mode absorber is placed in the port. "
@@ -150,9 +148,7 @@ class WavePort(AbstractTerminalPort, Box):
         """Return the name of the :class:`.ModeMonitor` associated with this port."""
         return f"{self.name}_mode"
 
-    def to_source(
-        self, source_time: GaussianPulse, snap_center: Optional[float] = None
-    ) -> ModeSource:
+    def to_source(self, source_time: GaussianPulse, snap_center: float | None = None) -> ModeSource:
         """Create a mode source from the wave port."""
         center = list(self.center)
         if snap_center:
@@ -169,7 +165,7 @@ class WavePort(AbstractTerminalPort, Box):
         )
 
     def to_monitors(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid = None
     ) -> list[ModeMonitor]:
         """The wave port uses a :class:`.ModeMonitor` to compute the characteristic impedance
         and the port voltages and currents."""
@@ -201,7 +197,7 @@ class WavePort(AbstractTerminalPort, Box):
         return mode_solver
 
     def to_absorber(
-        self, snap_center: Optional[float] = None, freq_spec: Optional[pd.NonNegativeFloat] = None
+        self, snap_center: float | None = None, freq_spec: pd.NonNegativeFloat | None = None
     ) -> InternalAbsorber:
         """Create an internal absorber from the wave port."""
         center = list(self.center)
@@ -249,9 +245,7 @@ class WavePort(AbstractTerminalPort, Box):
             sign = -1.0
         return sign * current_coeffs * (fwd_amps - bwd_amps)
 
-    def compute_port_impedance(
-        self, sim_mode_data: Union[SimulationData, ModeData]
-    ) -> FreqModeDataArray:
+    def compute_port_impedance(self, sim_mode_data: SimulationData | ModeData) -> FreqModeDataArray:
         """Helper to compute impedance of port. The port impedance is computed from the
         transmission line mode, which should be TEM or at least quasi-TEM."""
         impedance_calc = ImpedanceCalculator(

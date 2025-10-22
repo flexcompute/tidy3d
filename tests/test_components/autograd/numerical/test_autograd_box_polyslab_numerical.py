@@ -368,8 +368,8 @@ def test_box_and_polyslab_gradients_match(is_3d, infinite_dim_2d, shift_box_cent
         local_gradient=False,
     )
 
-    box_value, box_grad = value_and_grad(box_objective)([initial_params])
-    polyslab_value, polyslab_grad = value_and_grad(polyslab_objective)([initial_params])
+    _box_value, box_grad = value_and_grad(box_objective)([initial_params])
+    _polyslab_value, polyslab_grad = value_and_grad(polyslab_objective)([initial_params])
 
     box_grad_np = box_grad
     polyslab_grad_np = polyslab_grad

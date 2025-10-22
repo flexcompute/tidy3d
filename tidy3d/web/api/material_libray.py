@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import builtins
 import json
-from typing import Optional
 
 from pydantic.v1 import Field, parse_obj_as, validator
 
@@ -18,11 +17,11 @@ class MaterialLibray(Queryable, smart_union=True):
 
     id: str = Field(title="Material Library ID", description="Material Library ID")
     name: str = Field(title="Material Library Name", description="Material Library Name")
-    medium: Optional[MediumType] = Field(title="medium", description="medium", alias="calcResult")
-    medium_type: Optional[str] = Field(
+    medium: MediumType | None = Field(title="medium", description="medium", alias="calcResult")
+    medium_type: str | None = Field(
         title="medium type", description="medium type", alias="mediumType"
     )
-    json_input: Optional[dict] = Field(
+    json_input: dict | None = Field(
         title="json input", description="original input", alias="jsonInput"
     )
 

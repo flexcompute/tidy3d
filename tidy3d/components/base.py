@@ -9,9 +9,10 @@ import math
 import os
 import pathlib
 import tempfile
+from collections.abc import Callable
 from functools import wraps
 from math import ceil
-from typing import Any, Callable, Literal, Optional, Union
+from typing import Any, Literal
 
 import h5py
 import numpy as np
@@ -284,7 +285,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return new_copy
 
     def updated_copy(
-        self, path: Optional[str] = None, deep: bool = True, validate: bool = True, **kwargs
+        self, path: str | None = None, deep: bool = True, validate: bool = True, **kwargs
     ) -> Self:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
 
@@ -365,9 +366,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     def from_file(
         cls,
         fname: str,
-        group_path: Optional[str] = None,
+        group_path: str | None = None,
         lazy: bool = False,
-        on_load: Optional[Callable] = None,
+        on_load: Callable | None = None,
         **parse_obj_kwargs,
     ) -> Self:
         """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
@@ -409,7 +410,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return obj
 
     @classmethod
-    def dict_from_file(cls, fname: str, group_path: Optional[str] = None) -> dict:
+    def dict_from_file(cls, fname: str, group_path: str | None = None) -> dict:
         """Loads a dictionary containing the model from a .yaml, .json, .hdf5, or .hdf5.gz file.
 
         Parameters
@@ -668,7 +669,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def dict_from_hdf5(
-        cls, fname: str, group_path: str = "", custom_decoders: Optional[list[Callable]] = None
+        cls, fname: str, group_path: str = "", custom_decoders: list[Callable] | None = None
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
 
@@ -746,7 +747,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         cls,
         fname: str,
         group_path: str = "",
-        custom_decoders: Optional[list[Callable]] = None,
+        custom_decoders: list[Callable] | None = None,
         **parse_obj_kwargs,
     ) -> Self:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
@@ -779,7 +780,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     def to_hdf5(
         self,
         fname: str,
-        custom_encoders: Optional[list[Callable]] = None,
+        custom_encoders: list[Callable] | None = None,
     ) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
@@ -840,7 +841,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def dict_from_hdf5_gz(
-        cls, fname: str, group_path: str = "", custom_decoders: Optional[list[Callable]] = None
+        cls, fname: str, group_path: str = "", custom_decoders: list[Callable] | None = None
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5.gz file.
 
@@ -881,7 +882,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         cls,
         fname: str,
         group_path: str = "",
-        custom_decoders: Optional[list[Callable]] = None,
+        custom_decoders: list[Callable] | None = None,
         **parse_obj_kwargs,
     ) -> Self:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
@@ -911,7 +912,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         )
         return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
-    def to_hdf5_gz(self, fname: str, custom_encoders: Optional[list[Callable]] = None) -> None:
+    def to_hdf5_gz(self, fname: str, custom_encoders: list[Callable] | None = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
 
         Parameters
@@ -1116,7 +1117,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     def _serialized_traced_field_keys(
         self, field_mapping: AutogradFieldMap | None = None
-    ) -> Optional[str]:
+    ) -> str | None:
         """Return a serialized, order-independent representation of traced field paths."""
 
         if field_mapping is None:
@@ -1229,7 +1230,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         doc += "\n"
         cls.__doc__ = doc
 
-    def get_submodels_by_hash(self) -> dict[int, list[Union[str, tuple[str, int]]]]:
+    def get_submodels_by_hash(self) -> dict[int, list[str | tuple[str, int]]]:
         """Return a dictionary of this object's sub-models indexed by their hash values."""
         fields = {}
         for key in self.__fields__:
@@ -1300,7 +1301,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
 def _make_lazy_proxy(
     target_cls: type,
-    on_load: Optional[Callable[[Any], None]] = None,
+    on_load: Callable[[Any], None] | None = None,
 ) -> type:
     """
     Return a lazy-loading proxy subclass of ``target_cls``.
@@ -1322,7 +1323,7 @@ def _make_lazy_proxy(
 
     class _LazyProxy(target_cls):
         def __init__(
-            self, fname: str, group_path: Optional[str], parse_obj_kwargs: Optional[dict[str, Any]]
+            self, fname: str, group_path: str | None, parse_obj_kwargs: dict[str, Any] | None
         ):
             object.__setattr__(self, "_lazy_fname", fname)
             object.__setattr__(self, "_lazy_group_path", group_path)

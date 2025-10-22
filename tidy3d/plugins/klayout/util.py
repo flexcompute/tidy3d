@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from shutil import which
-from typing import Union
 
 import tidy3d as td
 
 
-def check_installation(raise_error: bool = False) -> Union[str, None]:
+def check_installation(raise_error: bool = False) -> str | None:
     """Checks if KLayout is installed and added to the system PATH.
     If it is, this returns the path to the executable. Otherwise, returns ``None``.
     Equivalent to $which("klayout") in the terminal.

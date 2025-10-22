@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -215,7 +214,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
         * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
-    field_dataset: Optional[FieldDataset] = pydantic.Field(
+    field_dataset: FieldDataset | None = pydantic.Field(
         ...,
         title="Field Dataset",
         description=":class:`.FieldDataset` containing the desired frequency-domain "
@@ -408,7 +407,7 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
-    frame: Optional[PECFrame] = pydantic.Field(
+    frame: PECFrame | None = pydantic.Field(
         None,
         title="Source Frame",
         description="Add a thin frame around the source during the FDTD run to improve "
@@ -492,7 +491,7 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
     """
 
-    angular_spec: Union[FixedInPlaneKSpec, FixedAngleSpec] = pydantic.Field(
+    angular_spec: FixedInPlaneKSpec | FixedAngleSpec = pydantic.Field(
         FixedInPlaneKSpec(),
         title="Angular Dependence Specification",
         description="Specification of plane wave propagation direction dependence on wavelength.",
@@ -533,7 +532,7 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         the source frequency range is entirely below ``f_crit * CRITICAL_FREQUENCY_FACTOR."""
         if self._is_fixed_angle or self.num_freqs == 1:
             return
-        freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
+        _freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
         f_crit = self.source_time._freq0 * np.sin(self.angle_theta)
         if f_crit * CRITICAL_FREQUENCY_FACTOR > freq_max:
             raise SetupError(
@@ -721,9 +720,9 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
 
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:

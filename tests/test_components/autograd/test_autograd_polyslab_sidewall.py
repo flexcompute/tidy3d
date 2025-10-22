@@ -52,7 +52,7 @@ def sim_bounds():
 
 
 def test_constant_g_zero(geom, sim_bounds):
-    ps, H, theta, P = geom
+    ps, H, _theta, P = geom
     sim_min, sim_max = sim_bounds
     g = lambda xyz: np.ones(xyz.shape[0], dtype=float)
     di = FakeDerivativeInfo(g, dx=H / 50)
@@ -76,7 +76,7 @@ def test_linear_z_matches_closed_form(geom, sim_bounds):
 
 
 def test_2d_returns_zero(geom, sim_bounds):
-    ps, H, theta, P = geom
+    ps, H, _theta, _P = geom
     sim_min, sim_max = sim_bounds
     z0 = ps.center_axis
     g = lambda xyz: (xyz[:, 2] - z0)
@@ -88,7 +88,7 @@ def test_2d_returns_zero(geom, sim_bounds):
 
 
 def test_vertex_order_invariance(geom, sim_bounds):
-    ps, H, theta, P = geom
+    ps, H, _theta, _P = geom
     sim_min, sim_max = sim_bounds
     z0 = ps.center_axis
     g = lambda xyz: (xyz[:, 2] - z0)

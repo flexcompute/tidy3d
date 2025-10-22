@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Union
 
 import pydantic.v1 as pd
 
@@ -154,7 +153,7 @@ def parse_polygons(value: str) -> MultiPolygonMarker:
     return MultiPolygonMarker(polygons=tuple(polygons))
 
 
-def parse_violation_value(value: str) -> Union[EdgeMarker, EdgePairMarker, MultiPolygonMarker]:
+def parse_violation_value(value: str) -> EdgeMarker | EdgePairMarker | MultiPolygonMarker:
     """
     Parse a violation value based on its type (edge, edge-pair, or polygon).
 
@@ -211,7 +210,7 @@ class MultiPolygonMarker(Tidy3dBaseModel):
     )
 
 
-DRCMarker = Union[EdgeMarker, EdgePairMarker, MultiPolygonMarker]
+DRCMarker = EdgeMarker | EdgePairMarker | MultiPolygonMarker
 
 
 class DRCViolation(Tidy3dBaseModel):
@@ -290,7 +289,7 @@ class DRCResults(Tidy3dBaseModel):
         return summary
 
     @classmethod
-    def load(cls, resultsfile: Union[str, Path]) -> DRCResults:
+    def load(cls, resultsfile: str | Path) -> DRCResults:
         """Create a :class:`.DRCResults` instance from a results file.
 
         Parameters
@@ -319,7 +318,7 @@ class DRCResults(Tidy3dBaseModel):
         return cls(violations_by_category=violations_from_file(resultsfile=resultsfile))
 
 
-def violations_from_file(resultsfile: Union[str, Path]) -> dict[str, DRCViolation]:
+def violations_from_file(resultsfile: str | Path) -> dict[str, DRCViolation]:
     """Loads a KLayout DRC results file and returns the results as a dictionary of :class:`.DRCViolation` objects.
 
     Parameters

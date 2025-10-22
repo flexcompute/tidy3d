@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Union
-
 from .multi_physics import MultiPhysicsMedium
 from .solver_types import (
     ChargeMediumType,
@@ -13,14 +11,14 @@ from .solver_types import (
     OpticalMediumType3D,
 )
 
-StructureMediumType = Union[
-    MultiPhysicsMedium,
-    OpticalMediumType,
-    ElectricalMediumType,
-    HeatMediumType,
-    ChargeMediumType,
-]
+StructureMediumType = (
+    MultiPhysicsMedium
+    | OpticalMediumType
+    | ElectricalMediumType
+    | HeatMediumType
+    | ChargeMediumType
+)
 
-MultiPhysicsMediumType3D = Union[
-    MultiPhysicsMedium, OpticalMediumType3D, ElectricalMediumType3D, ChargeMediumType3D
-]
+MultiPhysicsMediumType3D = (
+    MultiPhysicsMedium | OpticalMediumType3D | ElectricalMediumType3D | ChargeMediumType3D
+)

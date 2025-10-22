@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 import pydantic.v1 as pd
 
@@ -98,7 +96,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         return 3 - self.injection_axis - self.voltage_axis
 
     def to_source(
-        self, source_time: GaussianPulse, snap_center: Optional[float] = None, grid: Grid = None
+        self, source_time: GaussianPulse, snap_center: float | None = None, grid: Grid = None
     ) -> UniformCurrentSource:
         """Create a current source from the lumped port."""
         if grid:
@@ -125,7 +123,7 @@ class LumpedPort(AbstractLumpedPort, Box):
             confine_to_bounds=True,
         )
 
-    def to_load(self, snap_center: Optional[float] = None) -> LumpedResistor:
+    def to_load(self, snap_center: float | None = None) -> LumpedResistor:
         """Create a load resistor from the lumped port."""
         # 2D materials are currently snapped to the grid, so snapping here is not needed.
         # It is done here so plots of the simulation will more accurately portray the setup
@@ -147,7 +145,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         )
 
     def to_voltage_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid = None
     ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
         if grid:
@@ -175,7 +173,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         )
 
     def to_current_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: float | None = None, grid: Grid = None
     ) -> FieldMonitor:
         """Field monitor to compute port current."""
         if grid:

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import functools
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from math import isclose
-from typing import Callable, Literal, Optional, Union
+from typing import Literal
 
 import autograd.numpy as np
 
@@ -402,7 +403,7 @@ class TwoPhotonAbsorption(NonlinearModel):
         "with Tidy3D version < 2.8 and may be removed in a future release.",
     )
 
-    beta: Union[float, Complex] = pd.Field(
+    beta: float | Complex = pd.Field(
         0,
         title="TPA coefficient",
         description="Coefficient for two-photon absorption (TPA).",
@@ -446,7 +447,7 @@ class TwoPhotonAbsorption(NonlinearModel):
         units=f"{MICROMETER}^(3 e_h)",
     )
 
-    n0: Optional[Complex] = pd.Field(
+    n0: Complex | None = pd.Field(
         None,
         title="Complex linear refractive index",
         description="Complex linear refractive index of the medium, computed for instance using "
@@ -454,7 +455,7 @@ class TwoPhotonAbsorption(NonlinearModel):
         "frequencies of the simulation sources (as long as these are all equal).",
     )
 
-    freq0: Optional[pd.PositiveFloat] = pd.Field(
+    freq0: pd.PositiveFloat | None = pd.Field(
         None,
         title="Central frequency",
         description="Central frequency, used to calculate the energy of the free-carriers "
@@ -584,7 +585,7 @@ class KerrNonlinearity(NonlinearModel):
         units=f"{MICROMETER}^2 / {WATT}",
     )
 
-    n0: Optional[Complex] = pd.Field(
+    n0: Complex | None = pd.Field(
         None,
         title="Complex linear refractive index",
         description="Complex linear refractive index of the medium, computed for instance using "
@@ -647,7 +648,7 @@ class KerrNonlinearity(NonlinearModel):
         return self.use_complex_fields
 
 
-NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
+NonlinearModelType = NonlinearSusceptibility | TwoPhotonAbsorption | KerrNonlinearity
 
 
 class NonlinearSpec(ABC, Tidy3dBaseModel):
@@ -768,7 +769,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         "useful in some cases.",
     )
 
-    nonlinear_spec: Union[NonlinearSpec, NonlinearSusceptibility] = pd.Field(
+    nonlinear_spec: NonlinearSpec | NonlinearSusceptibility = pd.Field(
         None,
         title="Nonlinear Spec",
         description="Nonlinear spec applied on top of the base medium properties.",
@@ -780,7 +781,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         description="Modulation spec applied on top of the base medium properties.",
     )
 
-    viz_spec: Optional[VisualizationSpec] = pd.Field(
+    viz_spec: VisualizationSpec | None = pd.Field(
         None,
         title="Visualization Specification",
         description="Plotting specification for visualizing medium.",
@@ -860,7 +861,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                 "Time modulation is not currently supported for the components of a 2D medium."
             )
 
-    heat_spec: Optional[ThermalSpecType] = pd.Field(
+    heat_spec: ThermalSpecType | None = pd.Field(
         None,
         title="Heat Specification",
         description="DEPRECATED: Use :class:`MultiPhysicsMedium`. Specification of the medium heat properties. They are "
@@ -1079,7 +1080,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return 0j
 
     def _eps_plot(
-        self, frequency: float, eps_component: Optional[PermittivityComponent] = None
+        self, frequency: float, eps_component: PermittivityComponent | None = None
     ) -> float:
         """Returns real part of epsilon for plotting. A specific component of the epsilon tensor can
         be selected for anisotropic medium.
@@ -1601,8 +1602,8 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
     def _eps_bounds(
         self,
-        frequency: Optional[float] = None,
-        eps_component: Optional[PermittivityComponent] = None,
+        frequency: float | None = None,
+        eps_component: PermittivityComponent | None = None,
     ) -> tuple[float, float]:
         """Returns permittivity bounds for setting the color bounds when plotting.
 
@@ -2063,7 +2064,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         units=PERMITTIVITY,
     )
 
-    conductivity: Optional[CustomSpatialDataTypeAnnotated] = pd.Field(
+    conductivity: CustomSpatialDataTypeAnnotated | None = pd.Field(
         None,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
@@ -2228,7 +2229,7 @@ class CustomMedium(AbstractCustomMedium):
     >>> eps = dielectric.eps_model(200e12)
     """
 
-    eps_dataset: Optional[PermittivityDataset] = pd.Field(
+    eps_dataset: PermittivityDataset | None = pd.Field(
         None,
         title="Permittivity Dataset",
         description="[To be deprecated] User-supplied dataset containing complex-valued "
@@ -2236,14 +2237,14 @@ class CustomMedium(AbstractCustomMedium):
         "will be interpolated based on ``interp_method``.",
     )
 
-    permittivity: Optional[CustomSpatialDataTypeAnnotated] = pd.Field(
+    permittivity: CustomSpatialDataTypeAnnotated | None = pd.Field(
         None,
         title="Permittivity",
         description="Spatial profile of relative permittivity.",
         units=PERMITTIVITY,
     )
 
-    conductivity: Optional[CustomSpatialDataTypeAnnotated] = pd.Field(
+    conductivity: CustomSpatialDataTypeAnnotated | None = pd.Field(
         None,
         title="Conductivity",
         description="Spatial profile Electric conductivity. Defined such "
@@ -2643,8 +2644,8 @@ class CustomMedium(AbstractCustomMedium):
     @classmethod
     def from_eps_raw(
         cls,
-        eps: Union[ScalarFieldDataArray, CustomSpatialDataType],
-        freq: Optional[float] = None,
+        eps: ScalarFieldDataArray | CustomSpatialDataType,
+        freq: float | None = None,
         interp_method: InterpMethod = "nearest",
         **kwargs,
     ) -> CustomMedium:
@@ -2712,9 +2713,9 @@ class CustomMedium(AbstractCustomMedium):
     @classmethod
     def from_nk(
         cls,
-        n: Union[ScalarFieldDataArray, CustomSpatialDataType],
-        k: Optional[Union[ScalarFieldDataArray, CustomSpatialDataType]] = None,
-        freq: Optional[float] = None,
+        n: ScalarFieldDataArray | CustomSpatialDataType,
+        k: ScalarFieldDataArray | CustomSpatialDataType | None = None,
+        freq: float | None = None,
         interp_method: InterpMethod = "nearest",
         **kwargs,
     ) -> CustomMedium:
@@ -2805,7 +2806,7 @@ class CustomMedium(AbstractCustomMedium):
         pt_mins = dict(zip("xyz", rmin))
         pt_maxs = dict(zip("xyz", rmax))
 
-        def make_grid(scalar_field: Union[ScalarFieldDataArray, SpatialDataArray]) -> Grid:
+        def make_grid(scalar_field: ScalarFieldDataArray | SpatialDataArray) -> Grid:
             """Make a grid for a single dataset."""
 
             def make_bound_coords(coords: np.ndarray, pt_min: float, pt_max: float) -> list[float]:
@@ -3621,8 +3622,8 @@ class PoleResidue(DispersiveMedium):
 
     @staticmethod
     def _get_vjps_from_params(
-        dJ_deps_complex: Union[complex, np.ndarray],
-        poles_vals: list[tuple[Union[complex, np.ndarray], Union[complex, np.ndarray]]],
+        dJ_deps_complex: complex | np.ndarray,
+        poles_vals: list[tuple[complex | np.ndarray, complex | np.ndarray]],
         omega: float,
         requested_paths: list[tuple],
         project_real: bool = False,
@@ -6101,7 +6102,7 @@ class HuraySurfaceRoughness(AbstractSurfaceRoughness):
         return correction
 
 
-SurfaceRoughnessType = Union[HammerstadSurfaceRoughness, HuraySurfaceRoughness]
+SurfaceRoughnessType = HammerstadSurfaceRoughness | HuraySurfaceRoughness
 
 
 class LossyMetalMedium(Medium):
@@ -6313,19 +6314,15 @@ class LossyMetalMedium(Medium):
         return ax
 
 
-IsotropicUniformMediumFor2DType = Union[
-    Medium, LossyMetalMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium
-]
-IsotropicUniformMediumType = Union[IsotropicUniformMediumFor2DType, PMCMedium]
-IsotropicCustomMediumType = Union[
-    CustomPoleResidue,
-    CustomSellmeier,
-    CustomLorentz,
-    CustomDebye,
-    CustomDrude,
-]
-IsotropicCustomMediumInternalType = Union[IsotropicCustomMediumType, CustomIsotropicMedium]
-IsotropicMediumType = Union[IsotropicCustomMediumType, IsotropicUniformMediumType]
+IsotropicUniformMediumFor2DType = (
+    Medium | LossyMetalMedium | PoleResidue | Sellmeier | Lorentz | Debye | Drude | PECMedium
+)
+IsotropicUniformMediumType = IsotropicUniformMediumFor2DType | PMCMedium
+IsotropicCustomMediumType = (
+    CustomPoleResidue | CustomSellmeier | CustomLorentz | CustomDebye | CustomDrude
+)
+IsotropicCustomMediumInternalType = IsotropicCustomMediumType | CustomIsotropicMedium
+IsotropicMediumType = IsotropicCustomMediumType | IsotropicUniformMediumType
 
 
 class AnisotropicMedium(AbstractMedium):
@@ -6464,7 +6461,7 @@ class AnisotropicMedium(AbstractMedium):
         return self.components[field_name].eps_model(frequency)
 
     def _eps_plot(
-        self, frequency: float, eps_component: Optional[PermittivityComponent] = None
+        self, frequency: float, eps_component: PermittivityComponent | None = None
     ) -> float:
         """Returns real part of epsilon for plotting. A specific component of the epsilon tensor can
         be selected for anisotropic medium.
@@ -6793,7 +6790,7 @@ class FullyAnisotropicMedium(AbstractMedium):
         return AbstractMedium.eps_sigma_to_eps_complex(eps, sig, frequency)
 
     def _eps_plot(
-        self, frequency: float, eps_component: Optional[PermittivityComponent] = None
+        self, frequency: float, eps_component: PermittivityComponent | None = None
     ) -> float:
         """Returns real part of epsilon for plotting. A specific component of the epsilon tensor can
         be selected for anisotropic medium.
@@ -6887,28 +6884,28 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_
     """
 
-    xx: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
+    xx: IsotropicCustomMediumType | CustomMedium = pd.Field(
         ...,
         title="XX Component",
         description="Medium describing the xx-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    yy: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
+    yy: IsotropicCustomMediumType | CustomMedium = pd.Field(
         ...,
         title="YY Component",
         description="Medium describing the yy-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    zz: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
+    zz: IsotropicCustomMediumType | CustomMedium = pd.Field(
         ...,
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    interp_method: Optional[InterpMethod] = pd.Field(
+    interp_method: InterpMethod | None = pd.Field(
         None,
         title="Interpolation method",
         description="When the value is ``None`` each component will follow its own "
@@ -7030,8 +7027,8 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 
     def _eps_bounds(
         self,
-        frequency: Optional[float] = None,
-        eps_component: Optional[PermittivityComponent] = None,
+        frequency: float | None = None,
+        eps_component: PermittivityComponent | None = None,
     ) -> tuple[float, float]:
         """Returns permittivity bounds for setting the color bounds when plotting.
 
@@ -7093,21 +7090,21 @@ class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
     >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
     """
 
-    xx: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
+    xx: IsotropicCustomMediumInternalType | CustomMedium = pd.Field(
         ...,
         title="XX Component",
         description="Medium describing the xx-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    yy: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
+    yy: IsotropicCustomMediumInternalType | CustomMedium = pd.Field(
         ...,
         title="YY Component",
         description="Medium describing the yy-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    zz: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
+    zz: IsotropicCustomMediumInternalType | CustomMedium = pd.Field(
         ...,
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
@@ -7131,7 +7128,7 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
         "have an effect.",
     )
 
-    perturbation_spec: Optional[Union[PermittivityPerturbation, IndexPerturbation]] = pd.Field(
+    perturbation_spec: PermittivityPerturbation | IndexPerturbation | None = pd.Field(
         None,
         title="Perturbation Spec",
         description="Specification of medium perturbation as one of predefined types.",
@@ -7145,7 +7142,7 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
         electron_density: CustomSpatialDataType = None,
         hole_density: CustomSpatialDataType = None,
         interp_method: InterpMethod = "linear",
-    ) -> Union[AbstractMedium, AbstractCustomMedium]:
+    ) -> AbstractMedium | AbstractCustomMedium:
         """Sample perturbations on provided heat and/or charge data and create a custom medium.
         Any of ``temperature``, ``electron_density``, and ``hole_density`` can be ``None``.
         If all passed arguments are ``None`` then a non-custom medium is returned.
@@ -7184,9 +7181,9 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
     @classmethod
     def from_unperturbed(
         cls,
-        medium: Union[Medium, DispersiveMedium],
+        medium: Medium | DispersiveMedium,
         subpixel: bool = True,
-        perturbation_spec: Union[PermittivityPerturbation, IndexPerturbation] = None,
+        perturbation_spec: PermittivityPerturbation | IndexPerturbation = None,
         **kwargs,
     ) -> AbstractPerturbationMedium:
         """Construct a medium with pertubation models from an unpertubed one.
@@ -7244,14 +7241,14 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
     ... )
     """
 
-    permittivity_perturbation: Optional[ParameterPerturbation] = pd.Field(
+    permittivity_perturbation: ParameterPerturbation | None = pd.Field(
         None,
         title="Permittivity Perturbation",
         description="List of heat and/or charge perturbations to permittivity.",
         units=PERMITTIVITY,
     )
 
-    conductivity_perturbation: Optional[ParameterPerturbation] = pd.Field(
+    conductivity_perturbation: ParameterPerturbation | None = pd.Field(
         None,
         title="Permittivity Perturbation",
         description="List of heat and/or charge perturbations to permittivity.",
@@ -7337,7 +7334,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         electron_density: CustomSpatialDataType = None,
         hole_density: CustomSpatialDataType = None,
         interp_method: InterpMethod = "linear",
-    ) -> Union[Medium, CustomMedium]:
+    ) -> Medium | CustomMedium:
         """Sample perturbations on provided heat and/or charge data and return 'CustomMedium'.
         Any of temperature, electron_density, and hole_density can be 'None'. If all passed
         arguments are 'None' then a 'Medium' object is returned. All provided fields must have
@@ -7460,7 +7457,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     ... )
     """
 
-    eps_inf_perturbation: Optional[ParameterPerturbation] = pd.Field(
+    eps_inf_perturbation: ParameterPerturbation | None = pd.Field(
         None,
         title="Perturbation of Epsilon at Infinity",
         description="Perturbations to relative permittivity at infinite frequency "
@@ -7468,9 +7465,9 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         units=PERMITTIVITY,
     )
 
-    poles_perturbation: Optional[
-        tuple[tuple[Optional[ParameterPerturbation], Optional[ParameterPerturbation]], ...]
-    ] = pd.Field(
+    poles_perturbation: (
+        tuple[tuple[ParameterPerturbation | None, ParameterPerturbation | None], ...] | None
+    ) = pd.Field(
         None,
         title="Perturbations of Poles",
         description="Perturbations to poles of the model.",
@@ -7548,7 +7545,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         electron_density: CustomSpatialDataType = None,
         hole_density: CustomSpatialDataType = None,
         interp_method: InterpMethod = "linear",
-    ) -> Union[PoleResidue, CustomPoleResidue]:
+    ) -> PoleResidue | CustomPoleResidue:
         """Sample perturbations on provided heat and/or charge data and return 'CustomPoleResidue'.
         Any of temperature, electron_density, and hole_density can be 'None'. If all passed
         arguments are 'None' then a 'PoleResidue' object is returned. All provided fields must have
@@ -7646,28 +7643,28 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 # types of mediums that can be used in Simulation and Structures
 
 
-MediumType3D = Union[
-    Medium,
-    AnisotropicMedium,
-    PECMedium,
-    PMCMedium,
-    PoleResidue,
-    Sellmeier,
-    Lorentz,
-    Debye,
-    Drude,
-    FullyAnisotropicMedium,
-    CustomMedium,
-    CustomPoleResidue,
-    CustomSellmeier,
-    CustomLorentz,
-    CustomDebye,
-    CustomDrude,
-    CustomAnisotropicMedium,
-    PerturbationMedium,
-    PerturbationPoleResidue,
-    LossyMetalMedium,
-]
+MediumType3D = (
+    Medium
+    | AnisotropicMedium
+    | PECMedium
+    | PMCMedium
+    | PoleResidue
+    | Sellmeier
+    | Lorentz
+    | Debye
+    | Drude
+    | FullyAnisotropicMedium
+    | CustomMedium
+    | CustomPoleResidue
+    | CustomSellmeier
+    | CustomLorentz
+    | CustomDebye
+    | CustomDrude
+    | CustomAnisotropicMedium
+    | PerturbationMedium
+    | PerturbationPoleResidue
+    | LossyMetalMedium
+)
 
 
 class Medium2D(AbstractMedium):
@@ -7731,7 +7728,7 @@ class Medium2D(AbstractMedium):
     @classmethod
     def _weighted_avg(
         cls, meds: list[IsotropicUniformMediumFor2DType], weights: list[float]
-    ) -> Union[PoleResidue, PECMedium]:
+    ) -> PoleResidue | PECMedium:
         """Average ``meds`` with weights ``weights``."""
         eps_inf = 1
         poles = []
@@ -8075,11 +8072,11 @@ PEC2D = Medium2D(ss=PEC, tt=PEC)
 
 # types of mediums that can be used in Simulation and Structures
 
-MediumType = Union[MediumType3D, Medium2D, AnisotropicMediumFromMedium2D]
+MediumType = MediumType3D | Medium2D | AnisotropicMediumFromMedium2D
 
 
 # Utility function
-def medium_from_nk(n: float, k: float, freq: float, **kwargs) -> Union[Medium, Lorentz]:
+def medium_from_nk(n: float, k: float, freq: float, **kwargs) -> Medium | Lorentz:
     """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`.Medium` if ``Re[epsilon]>=1``,
     or :class:`Lorentz` if if ``Re[epsilon]<1``.
 

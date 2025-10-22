@@ -7,7 +7,7 @@ import pathlib
 import re
 from abc import ABC
 from collections import defaultdict
-from typing import Callable, Optional, Union
+from collections.abc import Callable
 
 import h5py
 import numpy as np
@@ -57,7 +57,7 @@ class AdjointSourceInfo(Tidy3dBaseModel):
         description="Set of processed sources to include in the adjoint simulation.",
     )
 
-    post_norm: Union[float, FreqDataArray] = pd.Field(
+    post_norm: float | FreqDataArray = pd.Field(
         ...,
         title="Post Normalization Values",
         description="Factor to multiply the adjoint fields by after running "
@@ -428,7 +428,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         raise ValueError(f"No monitor with name '{mnt_name}' found in data file.")
 
     @staticmethod
-    def apply_phase(data: Union[xr.DataArray, xr.Dataset], phase: float = 0.0) -> xr.DataArray:
+    def apply_phase(data: xr.DataArray | xr.Dataset, phase: float = 0.0) -> xr.DataArray:
         """Apply a phase to xarray data."""
         if phase != 0.0:
             if np.any(np.iscomplex(data.values)):
@@ -449,8 +449,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         eps_alpha: float = 0.2,
         phase: float = 0.0,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Ax = None,
         shading: str = "flat",
         **sel_kwargs,
@@ -665,8 +665,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         eps_alpha: float = 0.2,
         phase: float = 0.0,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Ax = None,
         shading: str = "flat",
         **sel_kwargs,
@@ -743,11 +743,11 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         field_data: xr.DataArray,
         axis: Axis,
         position: float,
-        freq: Optional[float] = None,
+        freq: float | None = None,
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         cmap_type: ColormapType = "divergent",
         ax: Ax = None,
         **kwargs,

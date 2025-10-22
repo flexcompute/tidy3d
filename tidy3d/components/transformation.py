@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -74,7 +73,7 @@ class AbstractRotation(ABC, Tidy3dBaseModel):
 class RotationAroundAxis(AbstractRotation):
     """Rotation of vectors and tensors around a given vector."""
 
-    axis: Union[Axis, Coordinate] = pd.Field(
+    axis: Axis | Coordinate = pd.Field(
         0,
         title="Axis of Rotation",
         description="A vector that specifies the axis of rotation, or a single int: 0, 1, or 2, "
@@ -201,5 +200,5 @@ class ReflectionFromPlane(AbstractReflection):
         return R
 
 
-RotationType = Union[RotationAroundAxis]
-ReflectionType = Union[ReflectionFromPlane]
+RotationType = RotationAroundAxis
+ReflectionType = ReflectionFromPlane

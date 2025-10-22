@@ -75,7 +75,7 @@ def test_download_s3_file_success(mock_s3_client, mock_get_s3_sts_token, mock_S3
 
     # Check that mock_s3_client.download_file() was invoked with the correct arguments.
     mock_s3_client.download_file.assert_called_once()
-    call_args, call_kwargs = mock_s3_client.download_file.call_args
+    _call_args, call_kwargs = mock_s3_client.download_file.call_args
     assert call_kwargs["Bucket"] == "test-bucket"
     assert call_kwargs["Key"] == "test-key"
     assert call_kwargs["Filename"].endswith(s3utils.IN_TRANSIT_SUFFIX)
@@ -112,7 +112,7 @@ def test_download_s3_file_raises_oserror(
 
     # Check that mock_s3_client.download_file() was invoked with the correct arguments.
     mock_s3_client.download_file.assert_called_once()
-    call_args, call_kwargs = mock_s3_client.download_file.call_args
+    _call_args, call_kwargs = mock_s3_client.download_file.call_args
     assert call_kwargs["Bucket"] == "test-bucket"
     assert call_kwargs["Key"] == "test-key"
     assert call_kwargs["Filename"].endswith(s3utils.IN_TRANSIT_SUFFIX)

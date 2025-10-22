@@ -617,7 +617,7 @@ def plot_sim(sim: td.Simulation, plot_eps: bool = True) -> None:
 
     plot_fn = sim.plot_eps if plot_eps else sim.plot
 
-    f, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True)
+    _f, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True)
     plot_fn(x=0, ax=ax1)
     plot_fn(y=0, ax=ax2)
     plot_fn(z=0, ax=ax3)
@@ -949,7 +949,7 @@ class TestTupleGrads:
             return objval
 
         d_power = ag.value_and_grad(obj, argnum=(0, 1))
-        val, (dp_dcenter, dp_dsize) = d_power(self.center0, self.size0)
+        _val, (dp_dcenter, dp_dsize) = d_power(self.center0, self.size0)
 
         assert len(dp_dcenter) == 3
         assert len(dp_dsize) == 3
@@ -980,7 +980,7 @@ def test_autograd_async_some_zero_grad(use_emulated_run, structure_key, monitor_
             values.append(postprocess(sim_data))
         return min(values)
 
-    val, grad = ag.value_and_grad(objective)(params0)
+    _val, grad = ag.value_and_grad(objective)(params0)
 
     assert anp.all(grad != 0.0), "some gradients are 0"
 
@@ -1034,7 +1034,7 @@ def test_autograd_speed_num_structures(use_emulated_run):
     # if speed test, get the profile
     with cProfile.Profile() as pr:
         t = time.time()
-        val, grad = ag.value_and_grad(objective)(params0)
+        _val, _grad = ag.value_and_grad(objective)(params0)
         t2 = time.time() - t
         pr.print_stats(sort="cumtime")
         pr.dump_stats("results.prof")
@@ -1050,7 +1050,7 @@ def test_autograd_polyslab_cylinder(use_emulated_run, monitor_key):
 
     num_pts = 819
 
-    monitor, postprocess = make_monitors()[monitor_key]
+    monitor, _postprocess = make_monitors()[monitor_key]
 
     def make_cylinder(radius, x0, y0, t):
         return td.Cylinder(
@@ -1122,7 +1122,7 @@ def test_autograd_server(use_emulated_run, structure_key, monitor_key):
         value = postprocess(data)
         return value
 
-    val, grad = ag.value_and_grad(objective)(params0)
+    _val, grad = ag.value_and_grad(objective)(params0)
     assert np.all(np.abs(grad) > 0), "some gradients are 0"
 
 
@@ -1144,7 +1144,7 @@ def test_autograd_async_server(use_emulated_run, structure_key, monitor_key):
             value = value + postprocess(sim_data)
         return value
 
-    val, grad = ag.value_and_grad(objective)(params0)
+    _val, grad = ag.value_and_grad(objective)(params0)
     assert np.all(np.abs(grad) > 0), "some gradients are 0"
 
 
@@ -2838,7 +2838,8 @@ def test_polyslab_rotated_grad(polyslab: td.PolySlab, theta: float, axis: int) -
 
     if expect_exception:
         with pytest.raises(
-            AttributeError, match=".*'Transformed' object has no attribute 'vertices'.*"
+            AttributeError,
+            match=r".*'Transformed' object has no attribute 'vertices'.*",
         ):
             rotated_grad(theta, axis)
     else:
@@ -2984,7 +2985,7 @@ def test_custom_medium_conductivity_only_gradient(rng, use_emulated_run, tmp_pat
         )
         return postprocess(data, data[monitor.name])
 
-    val, grad = ag.value_and_grad(objective)(params0)
+    _val, grad = ag.value_and_grad(objective)(params0)
 
     assert anp.all(grad != 0.0), "some gradients are 0 for conductivity-only test"
 

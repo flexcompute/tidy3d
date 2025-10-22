@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -162,7 +160,7 @@ class ConvectionBC(HeatChargeBC):
         units=KELVIN,
     )
 
-    transfer_coeff: Union[pd.NonNegativeFloat, VerticalNaturalConvectionCoeffModel] = pd.Field(
+    transfer_coeff: pd.NonNegativeFloat | VerticalNaturalConvectionCoeffModel = pd.Field(
         title="Heat Transfer Coefficient",
         description="Heat transfer coefficient value.",
         units=HEAT_TRANSFER_COEFF,

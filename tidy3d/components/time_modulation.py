@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -79,7 +78,7 @@ class ContinuousWaveTimeModulation(AbstractTimeDependence):
         return abs(self.amplitude)
 
 
-TimeModulationType = Union[ContinuousWaveTimeModulation]
+TimeModulationType = ContinuousWaveTimeModulation
 
 
 class AbstractSpaceModulation(ABC, Tidy3dBaseModel):
@@ -128,14 +127,14 @@ class SpaceModulation(AbstractSpaceModulation):
     >>> space = SpaceModulation(amplitude=amp, phase=phase)
     """
 
-    amplitude: Union[float, SpatialDataArray] = pd.Field(
+    amplitude: float | SpatialDataArray = pd.Field(
         1,
         title="Amplitude of modulation in space",
         description="Amplitude of modulation that can vary spatially. "
         "It takes the unit of whatever is being modulated.",
     )
 
-    phase: Union[float, SpatialDataArray] = pd.Field(
+    phase: float | SpatialDataArray = pd.Field(
         0,
         title="Phase of modulation in space",
         description="Phase of modulation that can vary spatially.",
@@ -199,7 +198,7 @@ class SpaceModulation(AbstractSpaceModulation):
         return self.updated_copy(amplitude=amp_reduced, phase=phase_reduced)
 
 
-SpaceModulationType = Union[SpaceModulation]
+SpaceModulationType = SpaceModulation
 
 
 class SpaceTimeModulation(Tidy3dBaseModel):

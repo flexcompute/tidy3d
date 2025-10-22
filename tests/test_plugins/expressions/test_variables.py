@@ -37,19 +37,19 @@ def test_variable_evaluate_named(value):
 
 def test_variable_missing_positional():
     variable = Variable()
-    with pytest.raises(ValueError, match="No positional argument provided for unnamed variable."):
+    with pytest.raises(ValueError, match=r"No positional argument provided for unnamed variable."):
         variable.evaluate()
 
 
 def test_variable_missing_named():
     variable = Variable(name="x")
-    with pytest.raises(ValueError, match="Variable 'x' not provided."):
+    with pytest.raises(ValueError, match=r"Variable 'x' not provided."):
         variable.evaluate()
 
 
 def test_variable_wrong_named():
     variable = Variable(name="x")
-    with pytest.raises(ValueError, match="Variable 'x' not provided."):
+    with pytest.raises(ValueError, match=r"Variable 'x' not provided."):
         variable.evaluate(y=5)
 
 
@@ -89,9 +89,9 @@ def test_variable_missing_args():
     variable_unnamed = Variable()
     variable_named = Variable(name="x")
     expr = variable_unnamed + variable_named
-    with pytest.raises(ValueError, match="No positional argument provided for unnamed variable."):
+    with pytest.raises(ValueError, match=r"No positional argument provided for unnamed variable."):
         expr(x=3)
-    with pytest.raises(ValueError, match="Variable 'x' not provided."):
+    with pytest.raises(ValueError, match=r"Variable 'x' not provided."):
         expr(5)
 
 
@@ -99,14 +99,14 @@ def test_variable_multiple_positional_args():
     variable1 = Variable()
     variable2 = Variable()
     expr = variable1 + variable2
-    with pytest.raises(ValueError, match="Multiple positional arguments"):
+    with pytest.raises(ValueError, match=r"Multiple positional arguments"):
         expr(5, 3)
 
 
 def test_single_unnamed_variable_multiple_args():
     variable = Variable()
     expr = variable * 2
-    with pytest.raises(ValueError, match="Multiple positional arguments"):
+    with pytest.raises(ValueError, match=r"Multiple positional arguments"):
         expr(5, 3)
 
 

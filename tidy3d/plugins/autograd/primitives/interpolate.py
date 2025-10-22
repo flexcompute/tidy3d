@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 from autograd.extend import defvjp, primitive
 from numpy.typing import NDArray
@@ -164,7 +162,7 @@ def get_linear_derivative_wrt_y(
 def compute_quadratic_coefficients(
     x: NDArray,
     y: NDArray,
-    left_deriv: Optional[float] = None,
+    left_deriv: float | None = None,
 ) -> tuple[NDArray, NDArray, NDArray]:
     """Compute quadratic spline coefficients.
 
@@ -239,7 +237,7 @@ def evaluate_quadratic_spline(
 def get_quadratic_derivative_wrt_y(
     x: NDArray,
     y: NDArray,
-    left_deriv: Optional[float] = None,
+    left_deriv: float | None = None,
 ) -> tuple[NDArray, NDArray, NDArray]:
     """Compute derivative of quadratic spline coefficients wrt ``y``.
 
@@ -292,7 +290,7 @@ def get_quadratic_derivative_wrt_y(
 def setup_cubic_tridiagonal(
     x: NDArray,
     y: NDArray,
-    endpoint_derivs: tuple[Optional[float], Optional[float]] = (None, None),
+    endpoint_derivs: tuple[float | None, float | None] = (None, None),
 ) -> tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
     """Return (lower, diag, upper, rhs, h) for the cubic spline system.
 
@@ -397,7 +395,7 @@ def _solve_tridiagonal_multi(lower: NDArray, diag: NDArray, upper: NDArray, B: N
     np.ndarray
         Solution matrix
     """
-    n, k = B.shape
+    n, _k = B.shape
     c = upper.copy()
     d = diag.copy()
     a = lower.copy()
@@ -484,7 +482,7 @@ def evaluate_cubic_spline(
 def compute_spline_coefficients(
     x: NDArray,
     y: NDArray,
-    endpoint_derivs: tuple[Optional[float], Optional[float]] = (None, None),
+    endpoint_derivs: tuple[float | None, float | None] = (None, None),
 ) -> tuple[NDArray, NDArray, NDArray, NDArray]:
     """Compute the cubic spline coefficients ``(a, b, c, d)``.
 
@@ -510,7 +508,7 @@ def compute_spline_coefficients(
 def get_cubic_derivative_wrt_y(
     x: NDArray,
     y: NDArray,
-    endpoint_derivs: tuple[Optional[float], Optional[float]] = (None, None),
+    endpoint_derivs: tuple[float | None, float | None] = (None, None),
 ) -> tuple[NDArray, NDArray, NDArray, NDArray, NDArray]:
     """Compute derivatives of cubic spline coefficients ``(a, b, c, d)``
     wrt ``y`` values.
@@ -584,7 +582,7 @@ def get_cubic_derivative_wrt_y(
 def compute_spline_coeffs(
     x_points: NDArray,
     y_points: NDArray,
-    endpoint_derivatives: tuple[Optional[float], Optional[float]] = (None, None),
+    endpoint_derivatives: tuple[float | None, float | None] = (None, None),
     order: int = 3,
 ) -> tuple:
     """Compute spline coefficients for the given order.
@@ -649,7 +647,7 @@ def get_spline_derivatives_wrt_y(
     order: int,
     x_points: NDArray,
     y_points: NDArray,
-    endpoint_derivatives: tuple[Optional[float], Optional[float]] = (None, None),
+    endpoint_derivatives: tuple[float | None, float | None] = (None, None),
 ):
     """Returns a tuple of derivative arrays for the given spline order.
 
@@ -687,7 +685,7 @@ def _interpolate_spline(
     y_points: NDArray,
     num_points: int,
     order: int,
-    endpoint_derivatives: tuple[Optional[float], Optional[float]] = (None, None),
+    endpoint_derivatives: tuple[float | None, float | None] = (None, None),
 ) -> tuple[NDArray, NDArray]:
     """Primitive function to perform spline interpolation of a given order
     with optional endpoint derivatives.
@@ -781,7 +779,7 @@ def interpolate_spline(
     y_points: NDArray,
     num_points: int,
     order: int,
-    endpoint_derivatives: tuple[Optional[float], Optional[float]] = (None, None),
+    endpoint_derivatives: tuple[float | None, float | None] = (None, None),
 ) -> tuple[NDArray, NDArray]:
     """Differentiable spline interpolation of a given order
     with optional endpoint derivatives.

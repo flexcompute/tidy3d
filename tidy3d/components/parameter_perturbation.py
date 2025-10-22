@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools
 from abc import ABC, abstractmethod
-from typing import Callable, Optional, Union
+from collections.abc import Callable
 
 import numpy as np
 import pydantic.v1 as pd
@@ -41,7 +41,7 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
     @cached_property
     @abstractmethod
-    def perturbation_range(self) -> Union[tuple[float, float], tuple[Complex, Complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[Complex, Complex]:
         """Perturbation range."""
 
     @cached_property
@@ -50,7 +50,7 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
         """Whether perturbation is complex valued."""
 
     @staticmethod
-    def _linear_range(interval: tuple[float, float], ref: float, coeff: Union[float, Complex]):
+    def _linear_range(interval: tuple[float, float], ref: float, coeff: float | Complex):
         """Find value range for a linear perturbation."""
         if coeff in (0, 0j):  # to avoid 0*inf
             return np.array([0, 0])
@@ -58,8 +58,8 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
     @staticmethod
     def _get_val(
-        field: Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType], val: FieldVal
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
+        field: ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType, val: FieldVal
+    ) -> ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType:
         """Get specified value from a field."""
 
         if val == "real":
@@ -88,19 +88,19 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
 def ensure_temp_in_range(
     sample: Callable[
-        Union[ArrayLike[float], CustomSpatialDataType],
-        Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
+        ArrayLike[float] | CustomSpatialDataType,
+        ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType,
     ],
 ) -> Callable[
-    Union[ArrayLike[float], CustomSpatialDataType],
-    Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
+    ArrayLike[float] | CustomSpatialDataType,
+    ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType,
 ]:
     """Decorate ``sample`` to log warning if temperature supplied is out of bounds."""
 
     @functools.wraps(sample)
     def _sample(
-        self, temperature: Union[ArrayLike[float], CustomSpatialDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
+        self, temperature: ArrayLike[float] | CustomSpatialDataType
+    ) -> ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType:
         """New sample function."""
 
         if np.iscomplexobj(temperature):
@@ -130,8 +130,8 @@ class HeatPerturbation(AbstractPerturbation):
 
     @abstractmethod
     def sample(
-        self, temperature: Union[ArrayLike[float], CustomSpatialDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
+        self, temperature: ArrayLike[float] | CustomSpatialDataType
+    ) -> ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType:
         """Sample perturbation.
 
         Parameters
@@ -231,7 +231,7 @@ class LinearHeatPerturbation(HeatPerturbation):
         units=KELVIN,
     )
 
-    coeff: Union[float, Complex] = pd.Field(
+    coeff: float | Complex = pd.Field(
         ...,
         title="Thermo-optic Coefficient",
         description="Sensitivity (derivative) of perturbation with respect to temperature.",
@@ -239,14 +239,14 @@ class LinearHeatPerturbation(HeatPerturbation):
     )
 
     @cached_property
-    def perturbation_range(self) -> Union[tuple[float, float], tuple[Complex, Complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[Complex, Complex]:
         """Range of possible perturbation values in the provided ``temperature_range``."""
         return self._linear_range(self.temperature_range, self.temperature_ref, self.coeff)
 
     @ensure_temp_in_range
     def sample(
-        self, temperature: Union[ArrayLike[float], CustomSpatialDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
+        self, temperature: ArrayLike[float] | CustomSpatialDataType
+    ) -> ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType:
         """Sample perturbation at temperature points.
 
         Parameters
@@ -336,7 +336,7 @@ class CustomHeatPerturbation(HeatPerturbation):
     _no_nans = validate_no_nans("perturbation_values")
 
     @cached_property
-    def perturbation_range(self) -> Union[tuple[float, float], tuple[Complex, Complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[Complex, Complex]:
         """Range of possible parameter perturbation values."""
         return np.min(self.perturbation_values).item(), np.max(self.perturbation_values).item()
 
@@ -368,8 +368,8 @@ class CustomHeatPerturbation(HeatPerturbation):
 
     @ensure_temp_in_range
     def sample(
-        self, temperature: Union[ArrayLike[float], CustomSpatialDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
+        self, temperature: ArrayLike[float] | CustomSpatialDataType
+    ) -> ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType:
         """Sample perturbation at provided temperature points.
 
         Parameters
@@ -418,7 +418,7 @@ class CustomHeatPerturbation(HeatPerturbation):
         return np.iscomplexobj(self.perturbation_values)
 
 
-HeatPerturbationType = Union[LinearHeatPerturbation, CustomHeatPerturbation]
+HeatPerturbationType = LinearHeatPerturbation | CustomHeatPerturbation
 
 
 """ Elementary charge perturbation classes """
@@ -427,26 +427,26 @@ HeatPerturbationType = Union[LinearHeatPerturbation, CustomHeatPerturbation]
 def ensure_charge_in_range(
     sample: Callable[
         [
-            Union[ArrayLike[float], CustomSpatialDataType],
-            Union[ArrayLike[float], CustomSpatialDataType],
+            ArrayLike[float] | CustomSpatialDataType,
+            ArrayLike[float] | CustomSpatialDataType,
         ],
-        Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
+        ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType,
     ],
 ) -> Callable[
     [
-        Union[ArrayLike[float], CustomSpatialDataType],
-        Union[ArrayLike[float], CustomSpatialDataType],
+        ArrayLike[float] | CustomSpatialDataType,
+        ArrayLike[float] | CustomSpatialDataType,
     ],
-    Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
+    ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType,
 ]:
     """Decorate ``sample`` to log warning if charge supplied is out of bounds."""
 
     @functools.wraps(sample)
     def _sample(
         self,
-        electron_density: Union[ArrayLike[float], CustomSpatialDataType],
-        hole_density: Union[ArrayLike[float], CustomSpatialDataType],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
+        electron_density: ArrayLike[float] | CustomSpatialDataType,
+        hole_density: ArrayLike[float] | CustomSpatialDataType,
+    ) -> ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType:
         """New sample function."""
 
         # disable complex input
@@ -498,9 +498,9 @@ class ChargePerturbation(AbstractPerturbation):
     @abstractmethod
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], CustomSpatialDataType],
-        hole_density: Union[ArrayLike[float], CustomSpatialDataType],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
+        electron_density: ArrayLike[float] | CustomSpatialDataType,
+        hole_density: ArrayLike[float] | CustomSpatialDataType,
+    ) -> ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType:
         """Sample perturbation.
 
         Parameters
@@ -661,7 +661,7 @@ class LinearChargePerturbation(ChargePerturbation):
     )
 
     @cached_property
-    def perturbation_range(self) -> Union[tuple[float, float], tuple[Complex, Complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[Complex, Complex]:
         """Range of possible perturbation values within provided ``electron_range`` and
         ``hole_range``.
         """
@@ -676,9 +676,9 @@ class LinearChargePerturbation(ChargePerturbation):
     @ensure_charge_in_range
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], CustomSpatialDataType],
-        hole_density: Union[ArrayLike[float], CustomSpatialDataType],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
+        electron_density: ArrayLike[float] | CustomSpatialDataType,
+        hole_density: ArrayLike[float] | CustomSpatialDataType,
+    ) -> ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType:
         """Sample perturbation at electron and hole density points.
 
         Parameters
@@ -822,7 +822,7 @@ class CustomChargePerturbation(ChargePerturbation):
     _no_nans = validate_no_nans("perturbation_values")
 
     @cached_property
-    def perturbation_range(self) -> Union[tuple[float, float], tuple[complex, complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[complex, complex]:
         """Range of possible parameter perturbation values."""
         return np.min(self.perturbation_values).item(), np.max(self.perturbation_values).item()
 
@@ -865,9 +865,9 @@ class CustomChargePerturbation(ChargePerturbation):
     @ensure_charge_in_range
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], CustomSpatialDataType],
-        hole_density: Union[ArrayLike[float], CustomSpatialDataType],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
+        electron_density: ArrayLike[float] | CustomSpatialDataType,
+        hole_density: ArrayLike[float] | CustomSpatialDataType,
+    ) -> ArrayLike[float] | ArrayLike[Complex] | CustomSpatialDataType:
         """Sample perturbation at electron and hole density points.
 
         Parameters
@@ -970,9 +970,9 @@ class CustomChargePerturbation(ChargePerturbation):
         return np.iscomplexobj(self.perturbation_values)
 
 
-ChargePerturbationType = Union[LinearChargePerturbation, CustomChargePerturbation]
+ChargePerturbationType = LinearChargePerturbation | CustomChargePerturbation
 
-PerturbationType = Union[HeatPerturbationType, ChargePerturbationType]
+PerturbationType = HeatPerturbationType | ChargePerturbationType
 
 
 class ParameterPerturbation(Tidy3dBaseModel):
@@ -1037,7 +1037,7 @@ class ParameterPerturbation(Tidy3dBaseModel):
         return perturb_list
 
     @cached_property
-    def perturbation_range(self) -> Union[tuple[float, float], tuple[Complex, Complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[Complex, Complex]:
         """Range of possible parameter perturbation values due to both heat and charge effects."""
         prange = np.zeros(2)
 
@@ -1158,13 +1158,13 @@ class PermittivityPerturbation(Tidy3dBaseModel):
     >>> permittivity_pb = PermittivityPerturbation(delta_eps=delta_eps, delta_sigma=delta_sigma)
     """
 
-    delta_eps: Optional[ParameterPerturbation] = pd.Field(
+    delta_eps: ParameterPerturbation | None = pd.Field(
         None,
         title="Permittivity Perturbation",
         description="Perturbation model for permittivity.",
     )
 
-    delta_sigma: Optional[ParameterPerturbation] = pd.Field(
+    delta_sigma: ParameterPerturbation | None = pd.Field(
         None,
         title="Conductivity Perturbation",
         description="Perturbation model for conductivity.",
@@ -1647,13 +1647,13 @@ class IndexPerturbation(Tidy3dBaseModel):
     >>> index_pb = IndexPerturbation(delta_n=dn_pb, delta_k=dk_pb, freq=C_0)
     """
 
-    delta_n: Optional[ParameterPerturbation] = pd.Field(
+    delta_n: ParameterPerturbation | None = pd.Field(
         None,
         title="Refractive Index Perturbation",
         description="Perturbation of the real part of refractive index.",
     )
 
-    delta_k: Optional[ParameterPerturbation] = pd.Field(
+    delta_k: ParameterPerturbation | None = pd.Field(
         None,
         title="Exctinction Coefficient Perturbation",
         description="Perturbation of the imaginary part of refractive index.",

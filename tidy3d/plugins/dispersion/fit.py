@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import codecs
 import csv
-from typing import Optional
 
 import numpy as np
 import requests
@@ -44,7 +43,7 @@ class DispersionFitter(Tidy3dBaseModel):
         description="Imaginary part of the complex index of refraction.",
     )
 
-    wvl_range: tuple[Optional[float], Optional[float]] = Field(
+    wvl_range: tuple[float | None, float | None] = Field(
         (None, None),
         title="Wavelength range [wvl_min,wvl_max] for fitting",
         description="Truncate the wavelength, n and k data to the wavelength range '[wvl_min, "
@@ -752,7 +751,7 @@ class DispersionFitter(Tidy3dBaseModel):
         wvl_um: ArrayFloat1D,
         eps_real: ArrayFloat1D,
         eps_imag: ArrayFloat1D = None,
-        wvl_range: tuple[Optional[float], Optional[float]] = (None, None),
+        wvl_range: tuple[float | None, float | None] = (None, None),
     ) -> DispersionFitter:
         """Loads :class:`DispersionFitter` from wavelength and complex relative permittivity data
 
@@ -784,7 +783,7 @@ class DispersionFitter(Tidy3dBaseModel):
         wvl_um: ArrayFloat1D,
         eps_real: ArrayFloat1D,
         loss_tangent: ArrayFloat1D,
-        wvl_range: tuple[Optional[float], Optional[float]] = (None, None),
+        wvl_range: tuple[float | None, float | None] = (None, None),
     ) -> DispersionFitter:
         """Loads :class:`DispersionFitter` from wavelength and loss tangent data.
 

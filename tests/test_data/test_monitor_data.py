@@ -475,7 +475,7 @@ def test_directivity_data_from_projected_fields():
     monitor, proj_angle_data = make_field_dataset_using_power_density(
         values, theta, phi, freqs, r_proj
     )
-    with pytest.raises(ValueError, match="Chosen limits for `theta` are not appropriate"):
+    with pytest.raises(ValueError, match=r"Chosen limits for `theta` are not appropriate"):
         dir_data = td.DirectivityData.from_spherical_field_dataset(monitor, proj_angle_data)
 
     # Test invalid phi range
@@ -485,7 +485,7 @@ def test_directivity_data_from_projected_fields():
     monitor, proj_angle_data = make_field_dataset_using_power_density(
         values, theta, phi, freqs, r_proj
     )
-    with pytest.raises(ValueError, match="Chosen limits for `phi` are not appropriate"):
+    with pytest.raises(ValueError, match=r"Chosen limits for `phi` are not appropriate"):
         dir_data = td.DirectivityData.from_spherical_field_dataset(monitor, proj_angle_data)
 
     # Test too coarse sampling
@@ -495,7 +495,7 @@ def test_directivity_data_from_projected_fields():
     monitor, proj_angle_data = make_field_dataset_using_power_density(
         values, theta, phi, freqs, r_proj
     )
-    with pytest.raises(ValueError, match="There are not enough sampling points"):
+    with pytest.raises(ValueError, match=r"There are not enough sampling points"):
         dir_data = td.DirectivityData.from_spherical_field_dataset(monitor, proj_angle_data)
 
     # Test unsorted
@@ -505,7 +505,7 @@ def test_directivity_data_from_projected_fields():
     monitor, proj_angle_data = make_field_dataset_using_power_density(
         values, theta, phi, freqs, r_proj
     )
-    with pytest.raises(ValueError, match="theta was not provided as a sorted array."):
+    with pytest.raises(ValueError, match=r"theta was not provided as a sorted array."):
         dir_data = td.DirectivityData.from_spherical_field_dataset(monitor, proj_angle_data)
 
     # Test success case with proper sampling

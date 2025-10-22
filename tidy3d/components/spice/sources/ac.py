@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -33,7 +31,7 @@ class SSACVoltageSource(Tidy3dBaseModel):
     ... )
     """
 
-    name: Optional[str] = pd.Field(
+    name: str | None = pd.Field(
         None,
         title="Name",
         description="Unique name for the SSAC voltage source.",

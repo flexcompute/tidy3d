@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from typing import Callable, Optional, Union
 
 import numpy as np
 import xarray as xr
@@ -19,7 +19,7 @@ from .utils import get_static
 
 FieldData = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
-EpsType = Union[tidycomplex, FreqDataArray]
+EpsType = tidycomplex | FreqDataArray
 
 
 class LazyInterpolator:
@@ -115,36 +115,36 @@ class DerivativeInfo:
     frequencies: ArrayLike
     """Frequencies at which the adjoint gradient should be computed."""
 
-    H_der_map: Optional[FieldData] = None
+    H_der_map: FieldData | None = None
     """Magnetic field gradient map.
     Dataset where the field components ("Hx", "Hy", "Hz") store the multiplication
     of the forward and adjoint magnetic fields. The tangential component of this
     dataset is used when computing adjoint gradients for shifting boundaries of
     structures composed of PEC mediums."""
 
-    H_fwd: Optional[FieldData] = None
+    H_fwd: FieldData | None = None
     """Forward magnetic fields.
     Dataset where the field components ("Hx", "Hy", "Hz") represent the forward
     magnetic fields used for computing gradients for a given structure."""
 
-    H_adj: Optional[FieldData] = None
+    H_adj: FieldData | None = None
     """Adjoint magnetic fields.
     Dataset where the field components ("Hx", "Hy", "Hz") represent the adjoint
     magnetic fields used for computing gradients for a given structure."""
 
     # Optional fields with defaults
-    eps_background: Optional[EpsType] = None
+    eps_background: EpsType | None = None
     """Permittivity in background.
     Permittivity outside of the Structure as manually specified by
     Structure.background_medium."""
 
-    eps_no_structure: Optional[ScalarFieldDataArray] = None
+    eps_no_structure: ScalarFieldDataArray | None = None
     """Permittivity without structure.
     The permittivity of the original simulation without the structure that is
     being differentiated with respect to. Used to approximate permittivity
     outside of the structure for shape optimization."""
 
-    eps_inf_structure: Optional[ScalarFieldDataArray] = None
+    eps_inf_structure: ScalarFieldDataArray | None = None
     """Permittivity with infinite structure.
     The permittivity of the original simulation where the structure being
     differentiated with respect to is infinitely large. Used to approximate
@@ -162,7 +162,7 @@ class DerivativeInfo:
     If True, the structure contains a PEC material which changes the gradient
     formulation at the boundary compared to the dielectric case."""
 
-    interpolators: Optional[dict] = None
+    interpolators: dict | None = None
     """Pre-computed interpolators.
     Optional pre-computed interpolators for field components and permittivity data.
     When provided, avoids redundant interpolator creation for multiple geometries
@@ -216,7 +216,7 @@ class DerivativeInfo:
             coords = coords.astype(float_dtype, copy=False)
         return {name: interp(coords) for name, interp in interpolators.items()}
 
-    def create_interpolators(self, dtype: Optional[np.dtype] = None) -> dict:
+    def create_interpolators(self, dtype: np.dtype | None = None) -> dict:
         """Create interpolators for field components and permittivity data.
 
         Creates and caches ``RegularGridInterpolator`` objects for all field components
@@ -342,7 +342,7 @@ class DerivativeInfo:
         normals: np.ndarray,
         perps1: np.ndarray,
         perps2: np.ndarray,
-        interpolators: Optional[dict] = None,
+        interpolators: dict | None = None,
     ) -> np.ndarray:
         """Compute adjoint gradients at surface points for shape optimization.
 
@@ -716,8 +716,8 @@ class DerivativeInfo:
 
     def adaptive_vjp_spacing(
         self,
-        wl_fraction: Optional[float] = None,
-        min_allowed_spacing_fraction: Optional[float] = None,
+        wl_fraction: float | None = None,
+        min_allowed_spacing_fraction: float | None = None,
     ) -> float:
         """Compute adaptive spacing for finite-difference gradient evaluation.
 

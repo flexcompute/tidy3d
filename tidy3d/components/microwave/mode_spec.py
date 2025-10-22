@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
-
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
@@ -46,10 +44,9 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     ... )
     """
 
-    impedance_specs: Union[
-        annotate_type(ImpedanceSpecType),
-        tuple[Optional[annotate_type(ImpedanceSpecType)], ...],
-    ] = pd.Field(
+    impedance_specs: (
+        annotate_type(ImpedanceSpecType) | tuple[annotate_type(ImpedanceSpecType) | None, ...]
+    ) = pd.Field(
         default_factory=AutoImpedanceSpec._default_without_license_warning,
         title="Impedance Specifications",
         description="Field controls how the impedance is calculated for each mode calculated by the mode solver. "
@@ -60,9 +57,9 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     )
 
     @cached_property
-    def _impedance_specs_as_tuple(self) -> tuple[Optional[ImpedanceSpecType]]:
+    def _impedance_specs_as_tuple(self) -> tuple[ImpedanceSpecType | None]:
         """Gets the impedance_specs field converted to a tuple."""
-        if isinstance(self.impedance_specs, Union[tuple, list]):
+        if isinstance(self.impedance_specs, tuple | list):
             return tuple(self.impedance_specs)
         return (self.impedance_specs,)
 
@@ -79,7 +76,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
         """Check that the number of impedance specifications is equal to the number of modes.
         A single impedance spec is also permitted."""
         num_modes = values.get("num_modes")
-        if isinstance(val, Union[tuple, list]):
+        if isinstance(val, tuple | list):
             num_impedance_specs = len(val)
         else:
             return val

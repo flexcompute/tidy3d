@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 import numpy as np
 import xarray as xr
 
@@ -14,13 +12,13 @@ from .unstructured.base import UnstructuredGridDataset
 from .unstructured.tetrahedral import TetrahedralGridDataset
 from .unstructured.triangular import TriangularGridDataset
 
-UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
+UnstructuredGridDatasetType = TriangularGridDataset | TetrahedralGridDataset
 
-CustomSpatialDataType = Union[SpatialDataArray, UnstructuredGridDatasetType]
-CustomSpatialDataTypeAnnotated = Union[SpatialDataArray, annotate_type(UnstructuredGridDatasetType)]
+CustomSpatialDataType = SpatialDataArray | UnstructuredGridDatasetType
+CustomSpatialDataTypeAnnotated = SpatialDataArray | annotate_type(UnstructuredGridDatasetType)
 
 
-def _get_numpy_array(data_array: Union[ArrayLike, DataArray, UnstructuredGridDataset]) -> ArrayLike:
+def _get_numpy_array(data_array: ArrayLike | DataArray | UnstructuredGridDataset) -> ArrayLike:
     """Get numpy representation of dataarray/dataset values."""
     if isinstance(data_array, UnstructuredGridDataset):
         return data_array.values.values
@@ -30,8 +28,8 @@ def _get_numpy_array(data_array: Union[ArrayLike, DataArray, UnstructuredGridDat
 
 
 def _zeros_like(
-    data_array: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset],
-) -> Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]:
+    data_array: ArrayLike | xr.DataArray | UnstructuredGridDataset,
+) -> ArrayLike | xr.DataArray | UnstructuredGridDataset:
     """Get a zeroed replica of dataarray/dataset."""
     if isinstance(data_array, UnstructuredGridDataset):
         return data_array.updated_copy(values=xr.zeros_like(data_array.values))
@@ -41,8 +39,8 @@ def _zeros_like(
 
 
 def _ones_like(
-    data_array: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset],
-) -> Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]:
+    data_array: ArrayLike | xr.DataArray | UnstructuredGridDataset,
+) -> ArrayLike | xr.DataArray | UnstructuredGridDataset:
     """Get a unity replica of dataarray/dataset."""
     if isinstance(data_array, UnstructuredGridDataset):
         return data_array.updated_copy(values=xr.ones_like(data_array.values))
@@ -52,8 +50,8 @@ def _ones_like(
 
 
 def _check_same_coordinates(
-    a: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset],
-    b: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset],
+    a: ArrayLike | xr.DataArray | UnstructuredGridDataset,
+    b: ArrayLike | xr.DataArray | UnstructuredGridDataset,
 ) -> bool:
     """Check whether two array are defined at the same coordinates."""
 

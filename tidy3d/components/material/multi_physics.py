@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -81,9 +79,9 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         ... )
     """
 
-    name: Optional[str] = pd.Field(None, title="Name", description="Medium name")
+    name: str | None = pd.Field(None, title="Name", description="Medium name")
 
-    optical: Optional[OpticalMediumType] = pd.Field(
+    optical: OpticalMediumType | None = pd.Field(
         None,
         title="Optical properties",
         description="Specifies optical properties.",
@@ -96,14 +94,14 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
     #     description="Specifies electrical properties for RF simulations. This is currently not in use.",
     # )
 
-    heat: Optional[HeatMediumType] = pd.Field(
+    heat: HeatMediumType | None = pd.Field(
         None,
         title="Heat properties",
         description="Specifies properties for Heat simulations.",
         discriminator=TYPE_TAG_STR,
     )
 
-    charge: Optional[ChargeMediumType] = pd.Field(
+    charge: ChargeMediumType | None = pd.Field(
         None,
         title="Charge properties",
         description="Specifies properties for Charge simulations.",

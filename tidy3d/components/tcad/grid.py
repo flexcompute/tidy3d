@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -215,7 +214,7 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         "``dl_bulk`` is used instead.",
     )
 
-    mesh_refinements: tuple[annotate_type(Union[GridRefinementRegion, GridRefinementLine]), ...] = (
+    mesh_refinements: tuple[annotate_type(GridRefinementRegion | GridRefinementLine), ...] = (
         pd.Field(
             (),
             title="Mesh refinement structures",
@@ -234,4 +233,4 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         return val
 
 
-UnstructuredGridType = Union[UniformUnstructuredGrid, DistanceUnstructuredGrid]
+UnstructuredGridType = UniformUnstructuredGrid | DistanceUnstructuredGrid

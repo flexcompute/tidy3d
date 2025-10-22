@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -40,7 +39,7 @@ expected_task_names = {
 }
 
 
-def emulated_batch_run(simulations, path_dir: Optional[str] = None, **kwargs):
+def emulated_batch_run(simulations, path_dir: str | None = None, **kwargs):
     data_dict = {task_name: run_emulated(sim) for task_name, sim in simulations.simulations.items()}
     task_ids = dict(zip(simulations.simulations.keys(), data_dict.keys()))
     task_paths = {key: f"/path/to/{key}" for key in simulations.simulations.keys()}

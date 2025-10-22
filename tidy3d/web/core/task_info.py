@@ -5,7 +5,6 @@ from __future__ import annotations
 from abc import ABC
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 import pydantic.v1 as pydantic
 
@@ -87,7 +86,7 @@ class TaskInfo(TaskBase):
     nodeSize: int = None
     """Size of the node allocated for the task."""
 
-    completedAt: Optional[datetime] = None
+    completedAt: datetime | None = None
     """Timestamp when the task was completed."""
 
     status: str = None
@@ -102,7 +101,7 @@ class TaskInfo(TaskBase):
     solverVersion: str = None
     """Version of the solver used for the task."""
 
-    createAt: Optional[datetime] = None
+    createAt: datetime | None = None
     """Timestamp when the task was created."""
 
     estCostMin: float = None
@@ -132,10 +131,10 @@ class TaskInfo(TaskBase):
     s3Storage: float = None
     """Amount of S3 storage used by the task."""
 
-    startSolverTime: Optional[datetime] = None
+    startSolverTime: datetime | None = None
     """Timestamp when the solver started."""
 
-    finishSolverTime: Optional[datetime] = None
+    finishSolverTime: datetime | None = None
     """Timestamp when the solver finished."""
 
     totalSolverTime: int = None
@@ -263,8 +262,8 @@ class BatchMember(TaskBase):
     replaceData: str = None
     protocolVersion: str = None
     variable: str = None
-    createdAt: Optional[datetime] = None
-    updatedAt: Optional[datetime] = None
+    createdAt: datetime | None = None
+    updatedAt: datetime | None = None
     denormalizeStatus: str = None
     summary: dict = None
 
@@ -343,13 +342,13 @@ class AsyncJobDetail(TaskBase):
 
     asyncId: str
     status: str
-    progress: Optional[float] = None
-    createdAt: Optional[datetime] = None
-    completedAt: Optional[datetime] = None
-    tasks: Optional[dict[str, str]] = None
-    result: Optional[str] = None
-    taskBlockInfo: Optional[TaskBlockInfo] = None
-    message: Optional[str] = None
+    progress: float | None = None
+    createdAt: datetime | None = None
+    completedAt: datetime | None = None
+    tasks: dict[str, str] | None = None
+    result: str | None = None
+    taskBlockInfo: TaskBlockInfo | None = None
+    message: str | None = None
 
 
 AsyncJobDetail.update_forward_refs()

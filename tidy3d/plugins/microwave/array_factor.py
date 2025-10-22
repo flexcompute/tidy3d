@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -33,7 +32,7 @@ from tidy3d.log import log
 class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
     """Abstract base for phased array calculators."""
 
-    taper: Union[RectangularTaper, RadialTaper] = pd.Field(
+    taper: RectangularTaper | RadialTaper = pd.Field(
         None,
         discriminator=TYPE_TAG_STR,
         title="Antenna Array Taper",
@@ -173,7 +172,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
     def _duplicate_or_expand_list_of_objects(
         self,
         objects: tuple[
-            Union[Structure, MeshOverrideStructure, LayerRefinementSpec, LumpedElement], ...
+            Structure | MeshOverrideStructure | LayerRefinementSpec | LumpedElement, ...
         ],
         old_sim_bounds: Bound,
         new_sim_bounds: Bound,
@@ -467,9 +466,9 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
     @abstractmethod
     def array_factor(
         self,
-        theta: Union[float, ArrayLike],
-        phi: Union[float, ArrayLike],
-        frequency: Union[NonNegativeFloat, ArrayLike],
+        theta: float | ArrayLike,
+        phi: float | ArrayLike,
+        frequency: NonNegativeFloat | ArrayLike,
     ) -> ArrayLike:
         """
         Compute the array factor for an antenna array.
@@ -747,12 +746,10 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
         description="Phase-shifts between antennas along x, y, and z directions.",
     )
 
-    amp_multipliers: tuple[Optional[ArrayLike], Optional[ArrayLike], Optional[ArrayLike]] = (
-        pd.Field(
-            (None, None, None),
-            title="Amplitude Multipliers",
-            description="Amplitude multipliers spatially distributed along x, y, and z directions.",
-        )
+    amp_multipliers: tuple[ArrayLike | None, ArrayLike | None, ArrayLike | None] = pd.Field(
+        (None, None, None),
+        title="Amplitude Multipliers",
+        description="Amplitude multipliers spatially distributed along x, y, and z directions.",
     )
 
     @pd.validator("amp_multipliers", pre=True, always=True)
@@ -836,9 +833,9 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
 
     def array_factor(
         self,
-        theta: Union[float, ArrayLike],
-        phi: Union[float, ArrayLike],
-        frequency: Union[NonNegativeFloat, ArrayLike],
+        theta: float | ArrayLike,
+        phi: float | ArrayLike,
+        frequency: NonNegativeFloat | ArrayLike,
         medium: MediumType3D = Undefined,
     ) -> ArrayLike:
         """
@@ -1151,15 +1148,15 @@ class TaylorWindow(AbstractWindow):
 
 
 # define a list of acceptable rectangular windows
-RectangularWindowType = Union[
-    HammingWindow,
-    HannWindow,
-    KaiserWindow,
-    TaylorWindow,
-    ChebWindow,
-    BlackmanWindow,
-    BlackmanHarrisWindow,
-]
+RectangularWindowType = (
+    HammingWindow
+    | HannWindow
+    | KaiserWindow
+    | TaylorWindow
+    | ChebWindow
+    | BlackmanWindow
+    | BlackmanHarrisWindow
+)
 
 
 class AbstractTaper(MicrowaveBaseModel, ABC):
@@ -1182,21 +1179,21 @@ class AbstractTaper(MicrowaveBaseModel, ABC):
 class RectangularTaper(AbstractTaper):
     """Class for rectangular taper."""
 
-    window_x: Optional[RectangularWindowType] = pd.Field(
+    window_x: RectangularWindowType | None = pd.Field(
         None,
         title="X Axis Window",
         description="Window type used to taper array antenna along x axis.",
         discriminator=TYPE_TAG_STR,
     )
 
-    window_y: Optional[RectangularWindowType] = pd.Field(
+    window_y: RectangularWindowType | None = pd.Field(
         None,
         title="Y Axis Window",
         description="Window type used to taper array antenna along y axis.",
         discriminator=TYPE_TAG_STR,
     )
 
-    window_z: Optional[RectangularWindowType] = pd.Field(
+    window_z: RectangularWindowType | None = pd.Field(
         None,
         title="Z Axis Window",
         description="Window type used to taper array antenna along z axis.",

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 import pydantic.v1 as pd
 from typing_extensions import Self
@@ -38,9 +36,9 @@ class AxisAlignedVoltageIntegralSpec(AxisAlignedPathIntegralSpec):
         cls,
         plus_terminal: float,
         minus_terminal: float,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         extrapolate_to_endpoints: bool = True,
         snap_path_to_grid: bool = True,
     ) -> Self:
@@ -94,9 +92,9 @@ class AxisAlignedVoltageIntegralSpec(AxisAlignedPathIntegralSpec):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **path_kwargs,
     ) -> Ax:
@@ -159,9 +157,9 @@ class Custom2DVoltageIntegralSpec(Custom2DPathIntegralSpec):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **path_kwargs,
     ) -> Ax:

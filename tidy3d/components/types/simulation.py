@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Union
-
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.eme.data.sim_data import EMESimulationData
@@ -20,22 +18,22 @@ from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.plugins.mode.mode_solver import ModeSolver
 
-SimulationType = Union[
-    Simulation,
-    HeatChargeSimulation,
-    HeatSimulation,
-    EMESimulation,
-    ModeSolver,
-    ModeSimulation,
-    VolumeMesher,
-]
-SimulationDataType = Union[
-    SimulationData,
-    HeatChargeSimulationData,
-    HeatSimulationData,
-    EMESimulationData,
-    MicrowaveModeSolverData,
-    ModeSolverData,
-    ModeSimulationData,
-    VolumeMesherData,
-]
+SimulationType = (
+    Simulation
+    | HeatChargeSimulation
+    | HeatSimulation
+    | EMESimulation
+    | ModeSolver
+    | ModeSimulation
+    | VolumeMesher
+)
+SimulationDataType = (
+    SimulationData
+    | HeatChargeSimulationData
+    | HeatSimulationData
+    | EMESimulationData
+    | MicrowaveModeSolverData
+    | ModeSolverData
+    | ModeSimulationData
+    | VolumeMesherData
+)

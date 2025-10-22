@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Union
+from typing import Any
 
 import autograd.numpy as np
 import pydantic.v1 as pd
@@ -69,7 +69,7 @@ class ModeAmp(Metric):
         title="Monitor Name",
         description="The name of the mode monitor. This needs to match the name of the monitor in the simulation.",
     )
-    f: Optional[Union[float, FreqArray]] = pd.Field(  # type: ignore
+    f: float | FreqArray | None = pd.Field(  # type: ignore
         None,
         title="Frequency Array",
         description="The frequency array. If None, all frequencies in the monitor will be used.",

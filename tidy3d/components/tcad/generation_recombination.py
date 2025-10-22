@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Union
-
 import numpy as np
 import pydantic.v1 as pd
 
@@ -64,7 +62,7 @@ class FossumCarrierLifetime(Tidy3dBaseModel):
     alpha: float = pd.Field(..., title="Exponent constant", description="Exponent constant")
 
 
-CarrierLifetimeType = Union[FossumCarrierLifetime]
+CarrierLifetimeType = FossumCarrierLifetime
 
 
 class AugerRecombination(Tidy3dBaseModel):
@@ -168,11 +166,11 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
     - This model represents mid-gap traps Shockley-Reed-Hall recombination.
     """
 
-    tau_n: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
+    tau_n: pd.PositiveFloat | CarrierLifetimeType = pd.Field(
         ..., title="Electron lifetime", description="Electron lifetime", units=SECOND
     )
 
-    tau_p: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
+    tau_p: pd.PositiveFloat | CarrierLifetimeType = pd.Field(
         ..., title="Hole lifetime", description="Hole lifetime", units=SECOND
     )
 

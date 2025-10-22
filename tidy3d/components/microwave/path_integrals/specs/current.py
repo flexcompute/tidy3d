@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import numpy as np
 import pydantic.v1 as pd
@@ -147,9 +147,9 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **path_kwargs,
     ) -> Ax:
@@ -242,9 +242,9 @@ class Custom2DCurrentIntegralSpec(Custom2DPathIntegralSpec):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **path_kwargs,
     ) -> Ax:
@@ -310,12 +310,10 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
     ... )
     """
 
-    path_specs: tuple[Union[AxisAlignedCurrentIntegralSpec, Custom2DCurrentIntegralSpec], ...] = (
-        pd.Field(
-            ...,
-            title="Path Specifications",
-            description="Definition of the disjoint path specifications for each isolated contour integral.",
-        )
+    path_specs: tuple[AxisAlignedCurrentIntegralSpec | Custom2DCurrentIntegralSpec, ...] = pd.Field(
+        ...,
+        title="Path Specifications",
+        description="Definition of the disjoint path specifications for each isolated contour integral.",
     )
 
     sum_spec: Literal["sum", "split"] = pd.Field(
@@ -331,9 +329,9 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
     @add_ax_if_none
     def plot(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **path_kwargs,
     ) -> Ax:

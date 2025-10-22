@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 import pydantic.v1 as pd
 
 from tidy3d.components.data.data_array import SpatialDataArray
@@ -21,7 +19,7 @@ class HeatSource(StructureBasedHeatChargeSource):
     >>> heat_source = HeatSource(rate=1, structures=["box"])
     """
 
-    rate: Union[float, SpatialDataArray] = pd.Field(
+    rate: float | SpatialDataArray = pd.Field(
         title="Volumetric Heat Rate",
         description="Volumetric rate of heating or cooling (if negative).",
         units=VOLUMETRIC_HEAT_RATE,

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import Any
 
 import pydantic.v1 as pd
 
@@ -112,9 +113,9 @@ class DesignSpace(Tidy3dBaseModel):
         fn_args: list[dict[str, Any]],
         fn_values: list[Any],
         fn_source: str,
-        task_names: Optional[tuple[str]] = None,
-        task_paths: Optional[list] = None,
-        aux_values: Optional[list[Any]] = None,
+        task_names: tuple[str] | None = None,
+        task_paths: list | None = None,
+        aux_values: list[Any] | None = None,
         opt_output: Any = None,
     ) -> Result:
         """How to package results from ``method.run`` and ``method.run_batch``"""
@@ -144,7 +145,7 @@ class DesignSpace(Tidy3dBaseModel):
         except (TypeError, OSError):
             return None
 
-    def run(self, fn: Callable, fn_post: Optional[Callable] = None, verbose: bool = True) -> Result:
+    def run(self, fn: Callable, fn_post: Callable | None = None, verbose: bool = True) -> Result:
         """Explore a parameter space with a supplied method using the user supplied function.
         Supplied functions are used to evaluate the design space and are called within the method.
         For optimization methods these functions act as the fitness function. A single function can be
@@ -314,7 +315,7 @@ class DesignSpace(Tidy3dBaseModel):
 
     def _fn_mid(
         self, pre_out: dict[int, Any], sim_counter: int, console: Console
-    ) -> Union[dict[int, Any], BatchData]:
+    ) -> dict[int, Any] | BatchData:
         """A function of the output of ``fn_pre`` that gives the input to ``fn_post``."""
 
         # Keep copy of original to use if no tidy3d simulation required
@@ -456,10 +457,8 @@ class DesignSpace(Tidy3dBaseModel):
 
     def run_batch(
         self,
-        fn_pre: Callable[Any, Union[Simulation, list[Simulation], dict[str, Simulation]]],
-        fn_post: Callable[
-            Union[SimulationData, list[SimulationData], dict[str, SimulationData]], Any
-        ],
+        fn_pre: Callable[Any, Simulation | list[Simulation] | dict[str, Simulation]],
+        fn_post: Callable[SimulationData | list[SimulationData] | dict[str, SimulationData], Any],
         path_dir: str = ".",
         **batch_kwargs,
     ) -> Result:
@@ -564,7 +563,7 @@ class DesignSpace(Tidy3dBaseModel):
             return None
         return round(per_run_estimate * run_count, 3)
 
-    def summarize(self, fn_pre: Optional[Callable] = None, verbose: bool = True) -> dict[str, Any]:
+    def summarize(self, fn_pre: Callable | None = None, verbose: bool = True) -> dict[str, Any]:
         """Summarize the setup of the DesignSpace
 
         Prints a summary of the DesignSpace including the method and associated args, the parameters,

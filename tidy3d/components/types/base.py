@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import Literal
 
 import autograd.numpy as np
 import pydantic.v1 as pydantic
@@ -104,9 +104,9 @@ class ArrayLike:
 
 
 def constrained_array(
-    dtype: Optional[type] = None,
-    ndim: Optional[int] = None,
-    shape: Optional[tuple[pydantic.NonNegativeInt, ...]] = None,
+    dtype: type | None = None,
+    ndim: int | None = None,
+    shape: tuple[pydantic.NonNegativeInt, ...] | None = None,
 ) -> type:
     """Generate an ArrayLike sub-type with constraints built in."""
 
@@ -189,10 +189,10 @@ ScalarSymmetry = Literal[0, 1]
 Size1D = pydantic.NonNegativeFloat
 Size = tuple[Size1D, Size1D, Size1D]
 Coordinate = tuple[float, float, float]
-CoordinateOptional = tuple[Optional[float], Optional[float], Optional[float]]
+CoordinateOptional = tuple[float | None, float | None, float | None]
 Coordinate2D = tuple[float, float]
 Bound = tuple[Coordinate, Coordinate]
-GridSize = Union[pydantic.PositiveFloat, tuple[pydantic.PositiveFloat, ...]]
+GridSize = pydantic.PositiveFloat | tuple[pydantic.PositiveFloat, ...]
 Axis = Literal[0, 1, 2]
 Axis2D = Literal[0, 1]
 Shapely = BaseGeometry
@@ -207,8 +207,8 @@ PriorityMode = Literal["equal", "conductor"]
 # custom medium
 InterpMethod = Literal["nearest", "linear"]
 
-# Complex = Union[complex, ComplexNumber]
-Complex = Union[tidycomplex, ComplexNumber]
+# Complex = complex | ComplexNumber
+Complex = tidycomplex | ComplexNumber
 PoleAndResidue = tuple[Complex, Complex]
 
 # PoleAndResidue = Tuple[Tuple[float, float], Tuple[float, float]]
@@ -227,8 +227,8 @@ Direction = Literal["+", "-"]
 
 EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-FreqArray = Union[tuple[float, ...], ArrayFloat1D]
-ObsGridArray = Union[tuple[float, ...], ArrayFloat1D]
+FreqArray = tuple[float, ...] | ArrayFloat1D
+ObsGridArray = tuple[float, ...] | ArrayFloat1D
 PolarizationBasis = Literal["linear", "circular"]
 AuxField = Literal["Nfx", "Nfy", "Nfz"]
 

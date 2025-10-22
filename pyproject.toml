@@ -52,7 +52,7 @@ typing-extensions = "*"
 
 ### Optional dependencies ###
 # development core
-ruff = { version = "0.11.11", optional = true }
+ruff = { version = "0.14.1", optional = true }
 coverage = { version = "*", optional = true }
 dill = { version = "*", optional = true }
 ipython = { version = "*", optional = true }
@@ -236,38 +236,38 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 100
 extend-exclude = ["docs/faq/", "docs/notebooks/"]
 
 [tool.ruff.lint]
 extend-select = [
-  "E",      # pycodestyle errors
-  "F",      # pyflakes
-  "B",      # bugbear
-  "I",      # isort
-  "UP",     # pyupgrade
-  "W",      # pycodestyle
-  "C4",     # flake8-comprehensions
-  "NPY",    # numpy-specific rules
-  "RUF",    # ruff builtins
-  "ISC",    # implicit string concatenation
-  "PIE",    # flake8-pie
-  "RSE",    # unnecessary parantheses on raised exceptions
-  "TID",    # no relative imports from parent modules
-  "PLE",    # pylint errors
-  "PLC",    # pylint conventions
+  "E",        # pycodestyle errors
+  "F",        # pyflakes
+  "B",        # bugbear
+  "I",        # isort
+  "UP",       # pyupgrade
+  "W",        # pycodestyle
+  "C4",       # flake8-comprehensions
+  "NPY",      # numpy-specific rules
+  "RUF",      # ruff builtins
+  "ISC",      # implicit string concatenation
+  "PIE",      # flake8-pie
+  "RSE",      # unnecessary parantheses on raised exceptions
+  "TID",      # no relative imports from parent modules
+  "PLE",      # pylint errors
+  "PLC",      # pylint conventions
 ]
 extend-ignore = [
-  "RUF001", # ambiguous unicode characters
-  "RUF002", # ambiguous unicode characters
-  "RUF003", # ambiguous unicode characters
-  "RUF012", # type hints for mutable defaults
-  "RUF015", # next(iter(...)) instead of list(...)[0]
-  "E501",   # line too long
-  "B905",   # `zip()` without an explicit `strict=` parameter
-  "UP007",  # TODO: Remove once Python >= 3.10
-  "NPY002", # TODO: Revisit RNG handling
+  "RUF001",   # ambiguous unicode characters
+  "RUF002",   # ambiguous unicode characters
+  "RUF003",   # ambiguous unicode characters
+  "RUF012",   # type hints for mutable defaults
+  "RUF015",   # next(iter(...)) instead of list(...)[0]
+  "E501",     # line too long
+  "B905",     # `zip()` without an explicit `strict=` parameter
+  "NPY002",   # TODO: Revisit RNG handling
+  "PLC0415",  # allow imports not at top level
 ]
 
 [tool.ruff.lint.isort]

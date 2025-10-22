@@ -3,7 +3,6 @@ from __future__ import annotations
 from math import isclose
 
 import numpy as np
-
 from tidy3d.plugins.fitter import AdvancedFitterParam, StableDispersionFitter
 
 np.random.seed(4)
@@ -37,7 +36,7 @@ def test_dispersion_lossless():
     num_poles = 3
     num_tries = 10
     tolerance_rms = 1e-3
-    best_medium, best_rms = fitter.fit(
+    best_medium, _best_rms = fitter.fit(
         num_tries=num_tries, num_poles=num_poles, tolerance_rms=tolerance_rms
     )
 

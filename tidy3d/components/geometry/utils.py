@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from enum import Enum
 from math import isclose
-from typing import Any, Optional, Union
+from typing import Any
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -37,21 +37,21 @@ from tidy3d.exceptions import SetupError, Tidy3dError
 
 from . import base, mesh, polyslab, primitives
 
-GeometryType = Union[
-    base.Box,
-    base.Transformed,
-    base.ClipOperation,
-    base.GeometryGroup,
-    primitives.Sphere,
-    primitives.Cylinder,
-    polyslab.PolySlab,
-    polyslab.ComplexPolySlabBase,
-    mesh.TriangleMesh,
-]
+GeometryType = (
+    base.Box
+    | base.Transformed
+    | base.ClipOperation
+    | base.GeometryGroup
+    | primitives.Sphere
+    | primitives.Cylinder
+    | polyslab.PolySlab
+    | polyslab.ComplexPolySlabBase
+    | mesh.TriangleMesh
+)
 
 
 def flatten_shapely_geometries(
-    geoms: Union[Shapely, Iterable[Shapely]], keep_types: tuple[type, ...] = (Polygon,)
+    geoms: Shapely | Iterable[Shapely], keep_types: tuple[type, ...] = (Polygon,)
 ) -> list[Shapely]:
     """
     Flatten nested geometries into a flat list, while only keeping the specified types.
@@ -184,7 +184,7 @@ def flatten_groups(
     *geometries: GeometryType,
     flatten_nonunion_type: bool = False,
     flatten_transformed: bool = False,
-    transform: Optional[MatrixReal4x4] = None,
+    transform: MatrixReal4x4 | None = None,
 ) -> GeometryType:
     """Iterates over all geometries, flattening groups and unions.
 
@@ -449,9 +449,9 @@ class SnappingSpec(Tidy3dBaseModel):
         description="Describes how snapping positions will be chosen.",
     )
 
-    margin: Optional[
-        tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt, pydantic.NonNegativeInt]
-    ] = pydantic.Field(
+    margin: (
+        tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt, pydantic.NonNegativeInt] | None
+    ) = pydantic.Field(
         (0, 0, 0),
         title="Margin",
         description="Number of additional grid points to consider when expanding or contracting "
@@ -711,7 +711,7 @@ def _shift_value_signed(
     bounds: Bound,
     direction: Direction,
     shift: int,
-    name: Optional[str] = None,
+    name: str | None = None,
 ) -> float:
     """Calculate the signed distance corresponding to moving the object by ``shift`` number
     of cells in the positive or negative ``direction`` along the dimension given by

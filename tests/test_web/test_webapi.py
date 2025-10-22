@@ -365,7 +365,7 @@ def test_start_with_valid_priority(mock_start, priority):
 @pytest.mark.parametrize("priority", [0, -1, 11, 15])
 def test_start_with_invalid_priority(mock_start, priority):
     """Test start with invalid priority values."""
-    with pytest.raises(ValueError, match="Priority must be between '1' and '10' if specified."):
+    with pytest.raises(ValueError, match=r"Priority must be between '1' and '10' if specified."):
         start(TASK_ID, priority=priority)
 
 
@@ -383,7 +383,7 @@ def test_run_with_valid_priority(mock_webapi, monkeypatch, priority):
 def test_run_with_invalid_priority(mock_webapi, priority):
     """Test run with invalid priority values."""
     sim = make_sim()
-    with pytest.raises(ValueError, match="Priority must be between '1' and '10' if specified."):
+    with pytest.raises(ValueError, match=r"Priority must be between '1' and '10' if specified."):
         run(sim, TASK_NAME, folder_name=PROJECT_NAME, priority=priority)
 
 
@@ -718,7 +718,7 @@ def test_batch_run_saves_file_after_upload(mock_webapi, mock_job_status, tmp_pat
     monkeypatch.setattr(Batch, "start", mock_start_interrupt)
 
     # run should save the batch file after upload, even if interrupted
-    with pytest.raises(RuntimeError, match="Simulated interruption"):
+    with pytest.raises(RuntimeError, match=r"Simulated interruption"):
         batch.run(path_dir=str(tmp_path))
 
 
@@ -897,7 +897,7 @@ def test_load_invalid_task_raises(mock_webapi):
         json={"error": "Task not found"},
         status=404,
     )
-    with pytest.raises(WebNotFoundError, match="Resource not found"):
+    with pytest.raises(WebNotFoundError, match=r"Resource not found"):
         load(INVALID_TASK_ID, replace_existing=True)
 
 

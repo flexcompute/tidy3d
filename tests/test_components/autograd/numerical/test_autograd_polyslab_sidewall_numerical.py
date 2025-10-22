@@ -96,7 +96,7 @@ def test_autograd_polyslab_sidewall_vs_fd(axis, reference_plane, theta0_deg, tmp
 
     # objective and adjoint grad
     obj_fun = lambda tdeg: _objective(tdeg, axis, reference_plane, tmp_path, verbose)
-    obj, grad_adj = value_and_grad(obj_fun)(anp.array(theta0_deg))
+    _obj, grad_adj = value_and_grad(obj_fun)(anp.array(theta0_deg))
 
     # centered finite difference
     uid = f"axis{axis}_ref{reference_plane}_t{float(theta0_deg):+0.3f}"

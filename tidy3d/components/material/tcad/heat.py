@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union
 
 import pydantic.v1 as pd
 
@@ -198,5 +197,5 @@ class SolidSpec(SolidMedium):
     """Solid medium class for backwards compatibility"""
 
 
-ThermalSpecType = Union[FluidSpec, SolidSpec, SolidMedium, FluidMedium]
+ThermalSpecType = FluidSpec | SolidSpec | SolidMedium | FluidMedium
 # Note this needs to remain here to avoid circular imports in the new medium structure.

@@ -55,7 +55,7 @@ def test_time_inds():
 def test_downsampled():
     M = td.FieldMonitor(size=(1, 1, 1), name="f", freqs=[1e12], interval_space=(1, 2, 3))
     num_cells = (10, 10, 10)
-    downsampled_num_cells = a, b, c = M.downsampled_num_cells(num_cells=(10, 10, 10))
+    downsampled_num_cells = _a, _b, _c = M.downsampled_num_cells(num_cells=(10, 10, 10))
     assert downsampled_num_cells != num_cells
 
 

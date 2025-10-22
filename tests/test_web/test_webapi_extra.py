@@ -14,7 +14,7 @@ def test_get_info_not_found(monkeypatch):
     monkeypatch.setattr(
         "tidy3d.web.core.task_core.SimulationTask.get", lambda *args, **kwargs: None
     )
-    with pytest.raises(ValueError, match="Task not found."):
+    with pytest.raises(ValueError, match=r"Task not found."):
         get_info("non_existent_task_id")
 
 
@@ -24,13 +24,13 @@ def test_start_not_found(monkeypatch):
     monkeypatch.setattr(
         "tidy3d.web.core.task_core.SimulationTask.get", lambda *args, **kwargs: None
     )
-    with pytest.raises(ValueError, match="Task not found."):
+    with pytest.raises(ValueError, match=r"Task not found."):
         start("non_existent_task_id")
 
 
 def test_delete_not_found():
     """Tests that delete raises a ValueError when the task id is not found."""
-    with pytest.raises(ValueError, match="Task id not found."):
+    with pytest.raises(ValueError, match=r"Task id not found."):
         delete("")
 
 

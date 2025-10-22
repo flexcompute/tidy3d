@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from functools import reduce, wraps
-from typing import Any, Callable, Optional, Union
+from typing import Any
 
 import autograd.numpy as anp
 import numpy as np
@@ -86,9 +86,9 @@ def make_kernel(kernel_type: KernelType, size: Iterable[int], normalize: bool = 
 
 
 def get_kernel_size_px(
-    radius: Optional[Union[float, Iterable[float]]] = None,
-    dl: Optional[Union[float, Iterable[float]]] = None,
-) -> Union[int, list[int]]:
+    radius: float | Iterable[float] | None = None,
+    dl: float | Iterable[float] | None = None,
+) -> int | list[int]:
     """Calculate the kernel size in pixels based on the provided radius and grid spacing.
 
     Parameters
@@ -124,7 +124,7 @@ def get_kernel_size_px(
     )
 
 
-def chain(*funcs: Union[Callable, Iterable[Callable]]):
+def chain(*funcs: Callable | Iterable[Callable]):
     """Chain multiple functions together to apply them sequentially to an array.
 
     Parameters
@@ -168,7 +168,7 @@ def chain(*funcs: Union[Callable, Iterable[Callable]]):
     return chained
 
 
-def scalar_objective(func: Optional[Callable] = None, *, has_aux: bool = False) -> Callable:
+def scalar_objective(func: Callable | None = None, *, has_aux: bool = False) -> Callable:
     """Decorator to ensure the objective function returns a real scalar value.
 
     This decorator wraps an objective function to ensure that its return value is a real scalar.

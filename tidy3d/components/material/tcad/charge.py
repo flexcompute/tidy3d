@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 import pydantic.v1 as pd
 
 from tidy3d.components.data.data_array import SpatialDataArray
@@ -256,21 +254,21 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     """
 
-    N_c: Union[EffectiveDOSModelType, pd.PositiveFloat] = pd.Field(
+    N_c: EffectiveDOSModelType | pd.PositiveFloat = pd.Field(
         ...,
         title="Effective density of electron states",
         description=":math:`N_c` Effective density of states in the conduction band.",
         units=PERCMCUBE,
     )
 
-    N_v: Union[EffectiveDOSModelType, pd.PositiveFloat] = pd.Field(
+    N_v: EffectiveDOSModelType | pd.PositiveFloat = pd.Field(
         ...,
         title="Effective density of hole states",
         description=":math:`N_v` Effective density of states in the valence band.",
         units=PERCMCUBE,
     )
 
-    E_g: Union[EnergyBandGapModelType, pd.PositiveFloat] = pd.Field(
+    E_g: EnergyBandGapModelType | pd.PositiveFloat = pd.Field(
         ...,
         title="Band-gap energy",
         description=":math:`E_g` Band-gap energy",
@@ -302,7 +300,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         units=ELECTRON_VOLT,
     )
 
-    N_a: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
+    N_a: pd.NonNegativeFloat | SpatialDataArray | tuple[DopingBoxType, ...] = pd.Field(
         (),
         title="Doping: Acceptor concentration",
         description="Concentration of acceptor impurities, which create mobile holes, resulting in p-type material. "
@@ -311,7 +309,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         units=PERCMCUBE,
     )
 
-    N_d: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
+    N_d: pd.NonNegativeFloat | SpatialDataArray | tuple[DopingBoxType, ...] = pd.Field(
         (),
         title="Doping: Donor concentration",
         description="Concentration of donor impurities, which create mobile electrons, resulting in n-type material. "

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 import numpy as np
 import pydantic.v1 as pd
 
@@ -29,11 +27,9 @@ from tidy3d.components.types import TYPE_TAG_STR, Ax, annotate_type
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.exceptions import DataError
 
-FieldDataset = Union[
-    SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
-]
+FieldDataset = SpatialDataArray | annotate_type(TriangularGridDataset | TetrahedralGridDataset)
 
-UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
+UnstructuredFieldType = TriangularGridDataset | TetrahedralGridDataset
 
 
 class SteadyPotentialData(HeatChargeMonitorData):

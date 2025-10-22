@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, Optional, Union
+from collections.abc import Callable
 
 import autograd.numpy as np
 import pydantic.v1 as pd
@@ -16,13 +16,13 @@ from .parametrizations import FilterAndProject
 class ErosionDilationPenalty(Tidy3dBaseModel):
     """A class that computes a penalty for erosion/dilation of a parameter map not being unity."""
 
-    radius: Union[float, tuple[float, ...]] = pd.Field(
+    radius: float | tuple[float, ...] = pd.Field(
         ..., title="Radius", description="The radius of the kernel."
     )
-    dl: Union[float, tuple[float, ...]] = pd.Field(
+    dl: float | tuple[float, ...] = pd.Field(
         ..., title="Grid Spacing", description="The grid spacing."
     )
-    size_px: Union[int, tuple[int, ...]] = pd.Field(
+    size_px: int | tuple[int, ...] = pd.Field(
         None, title="Size in Pixels", description="The size of the kernel in pixels."
     )
     beta: pd.NonNegativeFloat = pd.Field(
@@ -90,10 +90,10 @@ class ErosionDilationPenalty(Tidy3dBaseModel):
 
 
 def make_erosion_dilation_penalty(
-    radius: Union[float, tuple[float, ...]],
-    dl: Union[float, tuple[float, ...]],
+    radius: float | tuple[float, ...],
+    dl: float | tuple[float, ...],
     *,
-    size_px: Optional[Union[int, tuple[int, ...]]] = None,
+    size_px: int | tuple[int, ...] | None = None,
     beta: float = 20.0,
     eta: float = 0.5,
     delta_eta: float = 0.01,
@@ -169,7 +169,7 @@ def bezier_with_grads(
     return b, dbdt, dbd2t
 
 
-def bezier_curvature(x: NDArray, y: NDArray, t: Union[NDArray, float] = 0.5) -> NDArray:
+def bezier_curvature(x: NDArray, y: NDArray, t: NDArray | float = 0.5) -> NDArray:
     """
     Calculate the curvature of a Bezier curve at a given parameter t.
 

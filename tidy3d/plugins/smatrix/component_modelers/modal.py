@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import autograd.numpy as np
 import pydantic.v1 as pd
 
@@ -41,7 +39,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         "For each input mode, one simulation will be run with a modal source.",
     )
 
-    run_only: Optional[tuple[MatrixIndex, ...]] = pd.Field(
+    run_only: tuple[MatrixIndex, ...] | None = pd.Field(
         None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
@@ -245,9 +243,9 @@ class ModalComponentModeler(AbstractComponentModeler):
     @add_ax_if_none
     def plot_sim(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
     ) -> Ax:
         """Plots the simulation with all sources added for troubleshooting.
@@ -283,9 +281,9 @@ class ModalComponentModeler(AbstractComponentModeler):
     @add_ax_if_none
     def plot_sim_eps(
         self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:

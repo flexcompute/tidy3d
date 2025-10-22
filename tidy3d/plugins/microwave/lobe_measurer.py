@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from math import isclose, isnan
-from typing import Optional
 
 import numpy as np
 import pydantic.v1 as pd
@@ -297,7 +296,7 @@ class LobeMeasurer(MicrowaveBaseModel):
         return side_lobes
 
     @property
-    def sidelobe_level(self) -> Optional[float]:
+    def sidelobe_level(self) -> float | None:
         """The sidelobe level returned on a linear scale."""
         if self.side_lobes.empty:
             return None

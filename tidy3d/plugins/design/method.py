@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import pydantic.v1 as pd
@@ -27,7 +28,7 @@ class Method(Tidy3dBaseModel, ABC):
         """Defines the search algorithm."""
 
     @abstractmethod
-    def _get_run_count(self, parameters: Optional[list] = None) -> int:
+    def _get_run_count(self, parameters: list | None = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
 
     def _force_int(self, next_point: dict, parameters: list) -> None:
@@ -231,7 +232,7 @@ class MethodBayOpt(MethodOptimize, ABC):
         description="The Xi coefficient used by the ``ei`` and ``poi`` acquisition functions. More detail available in the `package docs <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
     )
 
-    def _get_run_count(self, parameters: Optional[list] = None) -> int:
+    def _get_run_count(self, parameters: list | None = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.initial_iter + self.n_iter
 
@@ -382,24 +383,22 @@ class MethodGenAlg(MethodOptimize, ABC):
         description="The style of parent selector. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
     )
 
-    keep_parents: Union[pd.PositiveInt, Literal[-1, 0]] = pd.Field(
+    keep_parents: pd.PositiveInt | Literal[-1, 0] = pd.Field(
         default=-1,
         title="Keep Parents",
         description="The number of parents to keep unaltered in the population of the next generation. Default value of -1 keeps all current parents for the next generation. This value is overwritten if ``keep_parents`` is > 0. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
     )
 
-    keep_elitism: Union[pd.PositiveInt, Literal[0]] = pd.Field(
+    keep_elitism: pd.PositiveInt | Literal[0] = pd.Field(
         default=1,
         title="Keep Elitism",
         description="The number of top solutions to be included in the population of the next generation. Overwrites ``keep_parents`` if value is > 0. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
     )
 
-    crossover_type: Union[None, Literal["single_point", "two_points", "uniform", "scattered"]] = (
-        pd.Field(
-            default="single_point",
-            title="Crossover Type",
-            description="The style of crossover operation. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
-        )
+    crossover_type: None | Literal["single_point", "two_points", "uniform", "scattered"] = pd.Field(
+        default="single_point",
+        title="Crossover Type",
+        description="The style of crossover operation. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
     )
 
     crossover_prob: pd.confloat(ge=0, le=1) = pd.Field(
@@ -408,15 +407,13 @@ class MethodGenAlg(MethodOptimize, ABC):
         description="The probability of performing a crossover between two parents.",
     )
 
-    mutation_type: Union[None, Literal["random", "swap", "inversion", "scramble", "adaptive"]] = (
-        pd.Field(
-            default="random",
-            title="Mutation Type",
-            description="The style of gene mutation. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
-        )
+    mutation_type: None | Literal["random", "swap", "inversion", "scramble", "adaptive"] = pd.Field(
+        default="random",
+        title="Mutation Type",
+        description="The style of gene mutation. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
     )
 
-    mutation_prob: Union[pd.confloat(ge=0, le=1), Literal[None]] = pd.Field(
+    mutation_prob: pd.confloat(ge=0, le=1) | Literal[None] = pd.Field(
         default=0.2,
         title="Mutation Probability",
         description="The probability of mutating a gene.",
@@ -430,7 +427,7 @@ class MethodGenAlg(MethodOptimize, ABC):
 
     # TODO: See if anyone is interested in having the full suite of PyGAD options - there's a lot!
 
-    def _get_run_count(self, parameters: Optional[list] = None) -> int:
+    def _get_run_count(self, parameters: list | None = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         # +1 to generations as pygad creates an initial population which is effectively "Generation 0"
         run_count = self.solutions_per_pop * (self.n_generations + 1)
@@ -663,7 +660,7 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         description="The weight or inertia of particles in the optimization.",
     )
 
-    ftol: Union[pd.confloat(ge=0, le=1), Literal[-inf]] = pd.Field(
+    ftol: pd.confloat(ge=0, le=1) | Literal[-inf] = pd.Field(
         default=-inf,
         title="Relative Error for Convergence",
         description="Relative error in ``objective_func(best_solution)`` acceptable for convergence. See the `PySwarms docs <https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html>`_ for details. Off by default.",
@@ -681,7 +678,7 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         description="Set the initial positions of the swarm using a numpy array of appropriate size.",
     )
 
-    def _get_run_count(self, parameters: Optional[list] = None) -> int:
+    def _get_run_count(self, parameters: list | None = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.n_particles * self.n_iter
 
@@ -789,7 +786,7 @@ class AbstractMethodRandom(MethodSample, ABC):
     def _get_sampler(self, parameters: tuple[ParameterType, ...]) -> qmc_type.QMCEngine:
         """Sampler for this ``Method`` class. If ``None``, sets a default."""
 
-    def _get_run_count(self, parameters: Optional[list] = None) -> int:
+    def _get_run_count(self, parameters: list | None = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.num_points
 
@@ -831,10 +828,4 @@ class MethodMonteCarlo(AbstractMethodRandom):
         return qmc.LatinHypercube(d=d, seed=self.seed)
 
 
-MethodType = Union[
-    MethodMonteCarlo,
-    MethodGrid,
-    MethodBayOpt,
-    MethodGenAlg,
-    MethodParticleSwarm,
-]
+MethodType = MethodMonteCarlo | MethodGrid | MethodBayOpt | MethodGenAlg | MethodParticleSwarm

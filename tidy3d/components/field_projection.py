@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Union
 
 import autograd.numpy as anp
 import numpy as np
@@ -46,7 +45,7 @@ PTS_PER_WVL = 10
 
 # Numpy float array and related array types
 
-ArrayLikeN2F = Union[float, tuple[float, ...], ArrayComplex4D]
+ArrayLikeN2F = float | tuple[float, ...] | ArrayComplex4D
 
 
 class FieldProjector(Tidy3dBaseModel):
@@ -79,7 +78,7 @@ class FieldProjector(Tidy3dBaseModel):
         "near field.",
     )
 
-    pts_per_wavelength: Union[int, type(None)] = pydantic.Field(
+    pts_per_wavelength: int | type(None) = pydantic.Field(
         PTS_PER_WVL,
         title="Points per wavelength",
         description="Number of points per wavelength in the background medium with which "
@@ -355,8 +354,8 @@ class FieldProjector(Tidy3dBaseModel):
     @staticmethod
     def trapezoid(
         ary: np.ndarray,
-        pts: Union[Iterable[np.ndarray], np.ndarray],
-        axes: Union[Iterable[int], int] = 0,
+        pts: Iterable[np.ndarray] | np.ndarray,
+        axes: Iterable[int] | int = 0,
     ):
         """Trapezoidal integration in n dimensions.
 

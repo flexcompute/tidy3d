@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable, Optional
 
 import pydantic.v1 as pd
 from pydantic.v1 import BaseModel
@@ -145,7 +145,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         """
         self.simulation.to_file(file_path)
 
-    def to_hdf5_gz(self, fname: str, custom_encoders: Optional[list[Callable]] = None) -> None:
+    def to_hdf5_gz(self, fname: str, custom_encoders: list[Callable] | None = None) -> None:
         """Exports Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] instance to .hdf5.gz file.
 
         Parameters
@@ -210,7 +210,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
 
     @classmethod
     def from_file(
-        cls, file_path: str, lazy: bool = False, on_load: Optional[Callable] = None
+        cls, file_path: str, lazy: bool = False, on_load: Callable | None = None
     ) -> WorkflowDataType:
         """Loads a Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         from .yaml, .json, or .hdf5 file.

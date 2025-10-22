@@ -7,8 +7,6 @@ simulations.
 
 from __future__ import annotations
 
-from typing import Union
-
 import numpy as np
 
 from tidy3d.components.data.data_array import (
@@ -216,7 +214,7 @@ def compute_power_delivered_by_port(
 
 def s_to_z(
     s_matrix: TerminalPortDataArray,
-    reference: Union[complex, PortDataArray],
+    reference: complex | PortDataArray,
     s_param_def: SParamDef = "pseudo",
 ) -> DataArray:
     """Get the impedance matrix given the scattering matrix and a reference impedance.

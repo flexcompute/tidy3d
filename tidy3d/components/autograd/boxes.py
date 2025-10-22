@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import importlib
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import autograd.numpy as anp
 from autograd.extend import VJPNode, defjvp, register_notrace

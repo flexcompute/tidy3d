@@ -362,7 +362,7 @@ def test_max_geometry_validation():
             medium=td.Medium(permittivity=2.0),
         ),
     ]
-    with pytest.raises(pd.ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
+    with pytest.raises(pd.ValidationError, match=rf" {MAX_GEOMETRY_COUNT + 2} "):
         _ = td.Scene(structures=not_fine)
 
 
@@ -521,20 +521,21 @@ def test_log_scale_with_custom_limits():
     _ = scene.plot_eps(x=0, scale="log", eps_lim=(1e-5, 100))
     plt.close()
 
-    with pytest.raises(SetupError, match="Log scale cannot be used with non-positive values."):
+    with pytest.raises(SetupError, match=r"Log scale cannot be used with non-positive values."):
         _ = scene.plot_eps(x=0, scale="log", eps_lim=(-1e-2, 100))
         plt.close()
 
     _ = scene.plot_structures_property(x=0, property="eps", scale="log", limits=(1e-2, 100))
     plt.close()
 
-    with pytest.raises(SetupError, match="Log scale cannot be used with non-positive values."):
+    with pytest.raises(SetupError, match=r"Log scale cannot be used with non-positive values."):
         _ = scene.plot_structures_property(x=0, property="eps", scale="log", limits=(-2e-2, 100))
         plt.close()
 
     # Test that invalid scale raises error
     with pytest.raises(
-        SetupError, match="The scale 'invalid' is not supported for plotting structures property."
+        SetupError,
+        match=r"The scale 'invalid' is not supported for plotting structures property.",
     ):
         _ = scene.plot_structures_property(x=0, property="eps", scale="invalid")
     plt.close()

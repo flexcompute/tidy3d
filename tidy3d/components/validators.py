@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -374,7 +374,7 @@ def validate_parameter_perturbation(
     field_name: str,
     base_field_name: str,
     allowed_real_range: tuple[tuple[float, float], ...],
-    allowed_imag_range: Optional[tuple[tuple[float, float], ...]] = None,
+    allowed_imag_range: tuple[tuple[float, float], ...] | None = None,
     allowed_complex: bool = True,
 ):
     """Assert perturbations do not drive a parameter out of physical bounds."""

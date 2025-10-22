@@ -9,19 +9,16 @@ from tidy3d.web.api.autograd.autograd import run_async
 from tidy3d.web.api.container import DEFAULT_DATA_DIR, DEFAULT_DATA_PATH
 from tidy3d.web.core.types import PayType
 
-RunInput: typing.TypeAlias = typing.Union[
-    WorkflowType,
-    list["RunInput"],
-    tuple["RunInput", ...],
-    dict[typing.Hashable, "RunInput"],
-]
+RunInput: typing.TypeAlias = (
+    WorkflowType | list["RunInput"] | tuple["RunInput", ...] | dict[typing.Hashable, "RunInput"]
+)
 
-RunOutput: typing.TypeAlias = typing.Union[
-    WorkflowDataType,
-    list["RunOutput"],
-    tuple["RunOutput", ...],
-    dict[typing.Hashable, "RunOutput"],
-]
+RunOutput: typing.TypeAlias = (
+    WorkflowDataType
+    | list["RunOutput"]
+    | tuple["RunOutput", ...]
+    | dict[typing.Hashable, "RunOutput"]
+)
 
 
 def _collect_by_hash(
@@ -79,24 +76,24 @@ def _reconstruct_by_hash(node: RunInput, h2data: dict[str, WorkflowDataType]) ->
 
 def run(
     simulation: RunInput,
-    task_name: typing.Optional[str] = None,
+    task_name: str | None = None,
     folder_name: str = "default",
-    path: typing.Optional[str] = None,
-    callback_url: typing.Optional[str] = None,
+    path: str | None = None,
+    callback_url: str | None = None,
     verbose: bool = True,
-    progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
-    progress_callback_download: typing.Optional[typing.Callable[[float], None]] = None,
-    solver_version: typing.Optional[str] = None,
-    worker_group: typing.Optional[str] = None,
+    progress_callback_upload: typing.Callable[[float], None] | None = None,
+    progress_callback_download: typing.Callable[[float], None] | None = None,
+    solver_version: str | None = None,
+    worker_group: str | None = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: typing.Optional[list[str]] = None,
-    local_gradient: typing.Optional[bool] = None,
-    max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    parent_tasks: list[str] | None = None,
+    local_gradient: bool | None = None,
+    max_num_adjoint_per_fwd: int | None = None,
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
-    pay_type: typing.Union[PayType, str] = PayType.AUTO,
-    priority: typing.Optional[int] = None,
-    max_workers: typing.Optional[int] = None,
-    lazy: typing.Optional[bool] = None,
+    pay_type: PayType | str = PayType.AUTO,
+    priority: int | None = None,
+    max_workers: int | None = None,
+    lazy: bool | None = None,
 ) -> RunOutput:
     """
     Submit one or many simulations and return results in the same container shape.

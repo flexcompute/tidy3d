@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from functools import wraps
 from math import isclose
-from typing import Literal, Optional, Union, get_args
+from typing import Literal, get_args
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -101,9 +101,9 @@ FIELD_DECAY_CUTOFF = 1e-2
 # Maximum allowed size of the field data produced by the mode solver
 MAX_MODES_DATA_SIZE_GB = 20
 
-MODE_SIMULATION_TYPE = Union[Simulation, EMESimulation]
-MODE_SIMULATION_DATA_TYPE = Union[SimulationData, EMESimulationData]
-MODE_PLANE_TYPE = Union[Box, ModeSource, ModeMonitor, ModeSolverMonitor]
+MODE_SIMULATION_TYPE = Simulation | EMESimulation
+MODE_SIMULATION_DATA_TYPE = SimulationData | EMESimulationData
+MODE_PLANE_TYPE = Box | ModeSource | ModeMonitor | ModeSolverMonitor
 
 # When using ``angle_rotation`` without a bend, use a very large effective radius
 EFFECTIVE_RADIUS_FACTOR = 10_000
@@ -756,7 +756,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _car_2_cyn(
         self, mode_solver_data: ModeSolverData
-    ) -> dict[Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]]:
+    ) -> dict[ScalarModeFieldCylindricalDataArray | ModeIndexDataArray]:
         """Convert cartesian fields to cylindrical fields centered at the
         rotated bend center."""
 
@@ -956,9 +956,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _mode_rotation(
         self,
-        solver_ref_data_cylindrical: dict[
-            Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]
-        ],
+        solver_ref_data_cylindrical: dict[ScalarModeFieldCylindricalDataArray | ModeIndexDataArray],
         solver: ModeSolver,
     ) -> ModeSolverData:
         """Rotate the mode solver solution from the reference plane in cylindrical coordinates
@@ -1392,7 +1390,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _make_path_integrals(
         self,
-    ) -> tuple[tuple[Optional[VoltageIntegralType]], tuple[Optional[CurrentIntegralType]]]:
+    ) -> tuple[tuple[VoltageIntegralType | None], tuple[CurrentIntegralType | None]]:
         """Wrapper for making path integrals from the MicrowaveModeSpec. Note: overriden in the backend to support
         auto creation of path integrals."""
         if not self._has_microwave_mode_spec:
@@ -2004,9 +2002,7 @@ class ModeSolver(Tidy3dBaseModel):
             **kwargs,
         )
 
-    def to_monitor(
-        self, freqs: Optional[list[float]] = None, name: Optional[str] = None
-    ) -> ModeMonitor:
+    def to_monitor(self, freqs: list[float] | None = None, name: str | None = None) -> ModeMonitor:
         """Creates :class:`ModeMonitor` from a :class:`.ModeSolver` instance plus additional
         specifications.
 
@@ -2048,9 +2044,7 @@ class ModeSolver(Tidy3dBaseModel):
             name=name,
         )
 
-    def to_mode_solver_monitor(
-        self, name: str, colocate: Optional[bool] = None
-    ) -> ModeSolverMonitor:
+    def to_mode_solver_monitor(self, name: str, colocate: bool | None = None) -> ModeSolverMonitor:
         """Creates :class:`ModeSolverMonitor` from a :class:`.ModeSolver` instance.
 
         Parameters
@@ -2123,8 +2117,8 @@ class ModeSolver(Tidy3dBaseModel):
     @require_fdtd_simulation
     def sim_with_monitor(
         self,
-        freqs: Optional[list[float]] = None,
-        name: Optional[str] = None,
+        freqs: list[float] | None = None,
+        name: str | None = None,
     ) -> Simulation:
         """Creates :class:`.Simulation` from a :class:`.ModeSolver`. Creates a copy of
         the ModeSolver's original simulation with a mode monitor added corresponding to
@@ -2181,8 +2175,8 @@ class ModeSolver(Tidy3dBaseModel):
         scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        vmin: float | None = None,
+        vmax: float | None = None,
         ax: Ax = None,
         **sel_kwargs,
     ) -> Ax:
@@ -2241,8 +2235,8 @@ class ModeSolver(Tidy3dBaseModel):
     def plot(
         self,
         ax: Ax = None,
-        hlim: Optional[tuple[float, float]] = None,
-        vlim: Optional[tuple[float, float]] = None,
+        hlim: tuple[float, float] | None = None,
+        vlim: tuple[float, float] | None = None,
         fill_structures: bool = True,
         **patch_kwargs,
     ) -> Ax:
@@ -2299,8 +2293,8 @@ class ModeSolver(Tidy3dBaseModel):
 
     def plot_eps(
         self,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot the mode plane simulation's components.
@@ -2353,8 +2347,8 @@ class ModeSolver(Tidy3dBaseModel):
 
     def plot_structures_eps(
         self,
-        freq: Optional[float] = None,
-        alpha: Optional[float] = None,
+        freq: float | None = None,
+        alpha: float | None = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,

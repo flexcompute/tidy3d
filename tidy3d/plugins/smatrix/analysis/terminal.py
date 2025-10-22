@@ -196,7 +196,7 @@ def _compute_port_voltages_currents(
     I_matrix = V_matrix.copy(deep=True)
 
     for network_index in network_indices:
-        port, mode_index = modeler.network_dict[network_index]
+        port, _mode_index = modeler.network_dict[network_index]
         V_out, I_out = compute_port_VI(port, sim_data)
         indexer = {"port": network_index}
         V_matrix = V_matrix._with_updated_data(data=V_out.data, coords=indexer)

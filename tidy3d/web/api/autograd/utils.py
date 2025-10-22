@@ -1,8 +1,6 @@
 # utility functions for autograd web API
 from __future__ import annotations
 
-import typing
-
 import numpy as np
 
 import tidy3d as td
@@ -58,11 +56,11 @@ def E_to_D(fld_data: td.FieldData, eps_data: td.PermittivityData) -> td.FieldDat
 
 
 def multiply_field_data(
-    fld_1: td.FieldData, fld_2: typing.Union[td.FieldData, td.PermittivityData], fld_key: str
+    fld_1: td.FieldData, fld_2: td.FieldData | td.PermittivityData, fld_key: str
 ) -> td.FieldData:
     """Elementwise multiply two field data objects, writes data into ``fld_1`` copy."""
 
-    def get_field_key(dim: str, fld_data: typing.Union[td.FieldData, td.PermittivityData]) -> str:
+    def get_field_key(dim: str, fld_data: td.FieldData | td.PermittivityData) -> str:
         """Get the key corresponding to the scalar field along this dimension."""
         return f"{fld_key}{dim}" if isinstance(fld_data, td.FieldData) else f"eps_{dim}{dim}"
 

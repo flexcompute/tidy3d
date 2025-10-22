@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import pydantic.v1 as pd
 
@@ -39,7 +39,7 @@ class Variable(Expression):
     10
     """
 
-    name: Optional[str] = pd.Field(
+    name: str | None = pd.Field(
         None,
         title="Name",
         description="The name of the variable used for lookup during evaluation.",
