@@ -5,18 +5,24 @@ import typing
 from os import PathLike
 from pathlib import Path
 from typing import Any
-from collections.abc import Hashable
+from collections.abc import Iterable, Hashable
 from dataclasses import dataclass
 from os.path import dirname
 from pathlib import Path
 
+import numpy as np
 from autograd.builtins import dict as dict_ag
-from autograd.extend import defvjp, primitive
+from autograd.extend import Box, defvjp, primitive
 
 import tidy3d as td
-from tidy3d.components.autograd import AutogradFieldMap
+from tidy3d.components.autograd import AutogradFieldMap, get_static
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
+from tidy3d.components.autograd.constants import (
+    MAX_NUM_ADJOINT_PER_FWD,
+    MAX_NUM_TRACED_STRUCTURES,
+)
 from tidy3d.components.autograd.types import NumericalStructureInfo
+from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
@@ -62,6 +68,20 @@ def _resolve_local_gradient(value: typing.Optional[bool]) -> bool:
         return bool(value)
 
     return bool(config.adjoint.local_gradient)
+
+
+def _contains_tracer(value) -> bool:
+    if isinstance(value, Box):
+        return True
+    if isinstance(value, np.ndarray):
+        return any(_contains_tracer(v) for v in value.flat)
+    if isinstance(value, dict):
+        return any(_contains_tracer(v) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_contains_tracer(v) for v in value)
+    if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
+        return any(_contains_tracer(v) for v in value)
+    return False
 
 
 class SetupRunResult(typing.NamedTuple):
@@ -127,18 +147,42 @@ def _validate_numerical_structures(
             # preserve user-provided keys
             param_names = list(params.keys())
             param_values = list(params.values())
+            constructor_args = [params]  # pass dict as single argument
         elif isinstance(params, (list, tuple)):
-            param_names = list(range(len(params)))
-            param_values = list(params)
+            param_names = []
+            param_values = []
+            constructor_args = []
+            for idx, value in enumerate(params):
+                val_static = get_static(value)
+                if isinstance(val_static, np.ndarray) and val_static.ndim > 0:
+                    for offset in np.ndindex(val_static.shape):
+                        param_names.append((idx, *offset))
+                        param_values.append(value[offset])
+                    constructor_args.append(value)
+                else:
+                    param_names.append((idx,))
+                    param_values.append(value)
+                    constructor_args.append(value)
         else:
-            # treat scalar/array value as a single parameter
-            param_names = [0]
-            param_values = [params]
+            val_static = get_static(params)
+            if isinstance(val_static, np.ndarray) and val_static.ndim > 0:
+                param_names = []
+                param_values = []
+                constructor_args = [params]
+                for offset in np.ndindex(val_static.shape):
+                    param_names.append(offset)
+                    param_values.append(params[offset])
+            else:
+                # treat scalar value as a single parameter
+                param_names = [0]
+                param_values = [params]
+                constructor_args = [params]
 
         normalized[index] = {
             "function": func,
             "parameters": tuple(param_values),
             "parameter_names": tuple(param_names),
+            "constructor_args": tuple(constructor_args),
         }
 
     if normalized and user_vjp is None:
@@ -398,7 +442,17 @@ def run(
                 max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
             )
 
-    if isinstance(simulation, td.Simulation) and is_valid_for_autograd(simulation):
+    should_use_autograd = False
+    if isinstance(simulation, td.Simulation):
+        should_use_autograd = is_valid_for_autograd(simulation)
+        if not should_use_autograd and numerical_structures:
+            for cfg in numerical_structures.values():
+                params = cfg.get("parameters")
+                if _contains_tracer(params):
+                    should_use_autograd = True
+                    break
+
+    if should_use_autograd:
         return _run(
             simulation=simulation,
             numerical_structures=numerical_structures_validated,
@@ -700,9 +754,10 @@ def setup_run(
             func = config["function"]
             params = config["parameters"]
             param_names = config["parameter_names"]
+            constructor_args = config.get("constructor_args", params)
 
             try:
-                structure = func(*params)
+                structure = func(*constructor_args)
             except Exception as exc:  # pragma: no cover - defensive
                 raise AdjointError(
                     f"Failed to construct numerical structure at index {index}: {exc}"
@@ -729,10 +784,16 @@ def setup_run(
     )
 
     if numerical_info:
-        sim_fields_dict = dict(sim_fields_map.items())
+        sim_fields_dict = {
+            key: value
+            for key, value in sim_fields_map.items()
+            if not (key[0] == "structures" and key[1] in numerical_info)
+        }
+
         for index, info in numerical_info.items():
             for name, param in zip(info.parameter_names, info.parameters):
                 sim_fields_dict[("numerical", index, name)] = param
+
         sim_fields_map = dict_ag(sim_fields_dict)
 
     return SetupRunResult(
