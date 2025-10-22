@@ -1804,3 +1804,49 @@ def test_custom_source_time(monkeypatch, tmp_path):
         for source in sim.sources:
             assert source.source_time.freq0 == custom_source.freq0
             assert source.source_time.fwidth == custom_source.fwidth
+
+
+def test_validate_run_only_uniqueness():
+    """Test that run_only validator rejects duplicate entries for TerminalComponentModeler."""
+    modeler = make_component_modeler(planar_pec=True)
+
+    # Get valid network indices
+    port0_idx = modeler.network_index(modeler.ports[0])
+    port1_idx = modeler.network_index(modeler.ports[1])
+
+    # Test with duplicate entries - should raise ValidationError
+    with pytest.raises(pd.ValidationError, match="duplicate entries"):
+        modeler.updated_copy(run_only=(port0_idx, port0_idx, port1_idx))
+
+
+def test_validate_run_only_membership():
+    """Test that run_only validator rejects invalid indices for TerminalComponentModeler."""
+    modeler = make_component_modeler(planar_pec=True)
+
+    # Test with invalid index - should raise ValidationError
+    with pytest.raises(pd.ValidationError, match="not present in"):
+        modeler.updated_copy(run_only=("invalid_port_name",))
+
+    # Test with partially invalid indices
+    port0_idx = modeler.network_index(modeler.ports[0])
+    with pytest.raises(pd.ValidationError, match="not present in"):
+        modeler.updated_copy(run_only=(port0_idx, "invalid_port"))
+
+
+def test_validate_run_only_with_wave_ports():
+    """Test run_only validation with WavePorts in TerminalComponentModeler."""
+    z_grid = td.UniformGrid(dl=1 * 1e3)
+    xy_grid = td.UniformGrid(dl=0.1 * 1e3)
+    grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
+    modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort), grid_spec=grid_spec)
+
+    port0_idx = modeler.network_index(modeler.ports[0])
+    port1_idx = modeler.network_index(modeler.ports[1])
+
+    # Valid case
+    modeler_updated = modeler.updated_copy(run_only=(port0_idx,))
+    assert modeler_updated.run_only == (port0_idx,)
+
+    # Invalid case
+    with pytest.raises(pd.ValidationError, match="not present in"):
+        modeler.updated_copy(run_only=("nonexistent_wave_port",))
