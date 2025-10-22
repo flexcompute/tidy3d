@@ -198,7 +198,7 @@ def _upload_component_modeler_subtasks(
     }
 
     if verbose:
-        console.log("Starting Modeler and Subtasks Validation...")
+        console.log("Starting modeler and subtasks validation...")
 
     initial_resp = http.post(split_path, payload)
     split_job_detail = AsyncJobDetail(**initial_resp)
@@ -234,8 +234,10 @@ def _upload_component_modeler_subtasks(
                 time.sleep(RUN_REFRESH_TIME)
 
             if split_job_detail.status in ERROR_STATES:
-                msg = split_job_detail.message or "An unknown error occurred."
-                final_error = WebError(f"Component modeler split job failed: {msg}")
+                msg = split_job_detail.result or "An unknown error occurred."
+                final_error = WebError(
+                    f"Component modeler split job failed ({split_job_detail.status}): {msg}"
+                )
 
             if not final_error:
                 description = "Validating"
@@ -278,8 +280,10 @@ def _upload_component_modeler_subtasks(
 
         # Check for split job failure.
         if split_job_detail.status in ERROR_STATES:
-            msg = split_job_detail.message or "An unknown error occurred."
-            final_error = WebError(f"Component modeler split job failed: {msg}")
+            msg = split_job_detail.result or "An unknown error occurred."
+            final_error = WebError(
+                f"Component modeler split job failed ({split_job_detail.status}): {msg}"
+            )
 
         # If split succeeded, poll for validation completion.
         if not final_error:
