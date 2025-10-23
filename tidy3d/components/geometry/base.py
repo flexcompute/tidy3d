@@ -2170,6 +2170,53 @@ class Box(SimplePlaneIntersection, Centered):
         shapely_box = Geometry.evaluate_inf_shape(shapely_box)
         return [Geometry.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
 
+    def padded_copy(
+        self,
+        x: Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None,
+        y: Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None,
+        z: Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None,
+    ) -> Box:
+        """Created a padded copy of a :class:`Box` instance.
+
+        Parameters
+        ----------
+        x : Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None
+            Padding sizes at the left and right boundaries of the box along x-axis.
+        y : Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None
+            Padding sizes at the left and right boundaries of the box along y-axis.
+        z : Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None
+            Padding sizes at the left and right boundaries of the box along z-axis.
+
+        Returns
+        -------
+        Box
+            Padded instance of :class:`Box`.
+        """
+
+        # Validate that padding values are non-negative
+        for axis_name, axis_padding in zip(("x", "y", "z"), (x, y, z)):
+            if axis_padding is not None:
+                if not isinstance(axis_padding, (tuple, list)) or len(axis_padding) != 2:
+                    raise ValueError(f"Padding for {axis_name}-axis must be a tuple of two values.")
+                if any(p < 0 for p in axis_padding):
+                    raise ValueError(
+                        f"Padding values for {axis_name}-axis must be non-negative. Got {axis_padding}."
+                    )
+
+        rmin, rmax = self.bounds
+
+        def bound_array(arrs, idx):
+            return np.array([(a[idx] if a is not None else 0) for a in arrs])
+
+        # parse padding sizes for simulation
+        drmin = bound_array((x, y, z), 0)
+        drmax = bound_array((x, y, z), 1)
+
+        rmin = np.array(rmin) - drmin
+        rmax = np.array(rmax) + drmax
+
+        return Box.from_bounds(rmin=rmin, rmax=rmax)
+
     @cached_property
     def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates.

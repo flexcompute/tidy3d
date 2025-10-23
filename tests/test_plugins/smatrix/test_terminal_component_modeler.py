@@ -14,7 +14,7 @@ import tidy3d.plugins.smatrix.utils
 from tidy3d import SimulationDataMap
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
+from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError, ValidationError
 from tidy3d.plugins.smatrix import (
     CoaxialLumpedPort,
     LumpedPort,
@@ -31,6 +31,7 @@ from tidy3d.plugins.smatrix.utils import s_to_z, validate_square_matrix
 
 from ...utils import run_emulated
 from .terminal_component_modeler_def import (
+    make_basic_filter_terminals,
     make_coaxial_component_modeler,
     make_component_modeler,
     make_differential_stripline_modeler,
@@ -557,6 +558,90 @@ def test_coarse_grid_at_port(monkeypatch, tmp_path):
 def test_validate_port_voltage_axis():
     with pytest.raises(pd.ValidationError):
         LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=0, impedance=50)
+
+
+def test_lumped_port_from_structures():
+    """Test automatic lumped port setup between two terminal structures."""
+
+    # set up terminals of a basic filter
+    (str_gnd, str_resonator_basic, str_resonator_modified) = make_basic_filter_terminals()
+
+    # Geometry and Structure
+    mm = 1000  # Conversion mm to micron
+    WL = 0.5 * mm
+    LL1 = 5.8 * mm
+    LL2 = 1.2 * mm
+
+    # define basic parameters for automatic lumped port setup (except for signal terminal)
+    lp_options = {
+        "ground_terminal": str_gnd,
+        "lateral_coord": -1450,
+        "voltage_axis": 2,
+        "impedance": 50,
+    }
+
+    # ensure that value error is triggered if signal and ground terminals are not specified
+    with pytest.raises(ValueError):
+        LP0 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP1", **lp_options)
+
+    # make sure the Lumped port is set correctly
+    lp_options["signal_terminal"] = str_resonator_basic
+    LP1 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP1", **lp_options)
+    assert LP1.voltage_axis == lp_options["voltage_axis"]
+    assert np.isclose(LP1.impedance, lp_options["impedance"])
+
+    # make sure that `port_width` does not cause port geometry exceed overlap of terminals
+    lp_options["port_width"] = 1000
+    with pytest.raises(ValueError):
+        LP2 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP1", **lp_options)
+
+    lp_options["port_width"] = WL / 3
+    LP2 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP2", **lp_options)
+    assert np.isclose(LP2.size[1], WL / 3)
+
+    # specify lateral coordinate to select appropriate signal terminal to resolve ambiguity
+    lp_options["signal_terminal"] = str_resonator_modified
+    lp_options["lateral_coord"] = -2 * LL2 - WL / 2
+    lp_options["port_width"] = None
+    LP3 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP3", **lp_options)
+    assert np.isclose(LP3.center[1], -2 * LL2 - WL / 2)
+
+    # test that an error is raised when port plane does not intersect any signal terminals
+    with pytest.raises(ValueError):
+        LP3 = LumpedPort.from_structures(y=8 * mm, name="LP3", **lp_options)
+
+    # ensure that error is raised
+    with pytest.raises(ValueError):
+        lp_options["voltage_axis"] = 0
+        LP3 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP3", **lp_options)
+
+    # test port width with lateral coords
+    lp_options["port_width"] = WL / 3
+    lp_options["voltage_axis"] = 2
+    LP4 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP4", **lp_options)
+    assert np.isclose(LP4.size[1], lp_options["port_width"])
+
+    # test port width with lateral coords
+    lp_options["lateral_coord"] = None
+    with pytest.raises(ValidationError):
+        LP5 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP5", **lp_options)
+
+    lp_options["lateral_coord"] = 10 * WL
+    with pytest.raises(ValidationError):
+        LP6 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP6", **lp_options)
+
+    # ensure that validation error is raised when specified port width exceeds terminal overlap in lateral direction.
+    lp_options["port_width"] = 4 * WL
+    lp_options["lateral_coord"] = -2 * LL2 - WL / 2
+    with pytest.raises(ValueError):
+        LP6 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP6", **lp_options)
+
+    # ensure that validation error is raised when terminal medium is not PEC or lossy metal
+    str_gnd_new = str_gnd.updated_copy(medium=td.Medium(conductivity=1e2))
+    lp_options["lateral_coord"] = -2 * LL2 - WL / 2
+    lp_options["ground_terminal"] = str_gnd_new
+    with pytest.raises(ValidationError):
+        LP7 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP7", **lp_options)
 
 
 @pytest.mark.parametrize("snap_center", [None, 0.1])

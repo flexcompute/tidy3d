@@ -700,3 +700,48 @@ def make_patch_antenna_modeler(padding: tuple[float, float, float] = (0.25, 0.25
     )
 
     return modeler
+
+
+def make_basic_filter_terminals():
+    # Frequency
+    (f_min, f_max) = (0.1e9, 8e9)
+
+    # Materials
+    med_Cu = td.LossyMetalMedium(conductivity=60, frequency_range=(f_min, f_max))
+
+    # Geometry and Structure
+    mm = 1000  # Conversion mm to micron
+    H = 0.8 * mm  # Substrate thickness
+    T = 0.035 * mm  # Metal thickness
+    WL = 0.5 * mm
+    WC = 4 * mm
+    LC = 5.3 * mm
+    LL1 = 5.8 * mm
+    LL2 = 1.2 * mm
+    LL3 = 11.1 * mm
+    Lsub = LL1 + WL + LL3
+    Wsub = 2 * (LC + WL + LL2)
+
+    geom_C = td.Box.from_bounds(rmin=(-WC / 2, 0, 0), rmax=(WC / 2, LC, T))
+    geom_L2 = td.Box.from_bounds(rmin=(-WL / 2, -LL2 - WL, 0), rmax=(WL / 2, 0, T))
+    geom_L1 = td.Box.from_bounds(rmin=(-WL / 2 - LL1, -LL2 - WL, 0), rmax=(-WL / 2, -LL2, T))
+    geom_L3 = td.Box.from_bounds(rmin=(WL / 2, -LL2 - WL, 0), rmax=(WL / 2 + LL3, -LL2, T))
+
+    geom_resonator_basic = td.GeometryGroup(geometries=[geom_C, geom_L1, geom_L2, geom_L3])
+
+    x0, y0, z0 = geom_resonator_basic.bounding_box.center  # center (x,y) with circuit
+    geom_gnd = td.Box(center=(x0, y0, -H - T / 2), size=(Lsub, Wsub, T))
+
+    str_gnd = td.Structure(geometry=geom_gnd, medium=med_Cu)
+    str_resonator_basic = td.Structure(geometry=geom_resonator_basic, medium=med_Cu)
+
+    # add second signal trace to test lateral_coord
+    geom_sign = td.Box.from_bounds(
+        rmin=(-WL / 2 - LL1, -2 * LL2 - WL, 0), rmax=(WL / 2 + LL3, -2 * LL2, T)
+    )
+    geom_resonator_modified = td.GeometryGroup(
+        geometries=[geom_C, geom_L1, geom_L2, geom_L3, geom_sign]
+    )
+    str_resonator_modified = td.Structure(geometry=geom_resonator_modified, medium=med_Cu)
+
+    return (str_gnd, str_resonator_basic, str_resonator_modified)

@@ -298,6 +298,20 @@ def test_box_from_bounds():
     assert b.center == (0, 0, 0)
 
 
+def test_box_padded_copy():
+    """Test that padding layers are added along box boundaries."""
+    box = td.Box(size=(3, 2, 4))
+    padded_box = box.padded_copy(x=(4, 10), y=(1, 2))
+    assert np.allclose(np.array(padded_box.size), np.array([17, 5, 4]))
+    assert np.allclose(np.array(padded_box.center), np.array([3, 0.5, 0]))
+
+    # ensure errors are raised if padding  format is invalid.
+    with pytest.raises(ValueError):
+        padded_box = box.padded_copy(x=(1, -2), z=(-2, 0))
+    with pytest.raises(ValueError):
+        padded_box = box.padded_copy(x=(1))
+
+
 def test_polyslab_center_axis():
     """Test the handling of center_axis in a polyslab having (-td.inf, td.inf) bounds."""
     ps = POLYSLAB.copy(update={"slab_bounds": (-td.inf, td.inf)})
