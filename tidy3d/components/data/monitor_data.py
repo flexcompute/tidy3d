@@ -2482,9 +2482,6 @@ class ModeSolverData(ModeData):
         """
         # Validate input
         freqs = np.array(freqs)
-        if len(freqs) < 2:
-            raise DataError("Cannot interpolate to fewer than 2 frequency points.")
-
         source_freqs = np.array(self.monitor.freqs)
 
         # Validate method-specific requirements

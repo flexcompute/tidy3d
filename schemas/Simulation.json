@@ -10737,6 +10737,13 @@
             }
           ]
         },
+        "interp_spec": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModeInterpSpec"
+            }
+          ]
+        },
         "interval_space": {
           "default": [
             1,
@@ -10965,6 +10972,13 @@
             },
             {
               "type": "ArrayLike"
+            }
+          ]
+        },
+        "interp_spec": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModeInterpSpec"
             }
           ]
         },
@@ -11319,6 +11333,39 @@
       ],
       "type": "object"
     },
+    "ModeInterpSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "method": {
+          "default": "linear",
+          "enum": [
+            "cheb",
+            "cubic",
+            "linear"
+          ],
+          "type": "string"
+        },
+        "num_points": {
+          "minimum": 2,
+          "type": "integer"
+        },
+        "type": {
+          "default": "ModeInterpSpec",
+          "enum": [
+            "ModeInterpSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "num_points"
+      ],
+      "type": "object"
+    },
     "ModeMonitor": {
       "additionalProperties": false,
       "properties": {
@@ -11407,6 +11454,13 @@
             },
             {
               "type": "ArrayLike"
+            }
+          ]
+        },
+        "interp_spec": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModeInterpSpec"
             }
           ]
         },
@@ -11668,6 +11722,13 @@
             },
             {
               "type": "ArrayLike"
+            }
+          ]
+        },
+        "interp_spec": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModeInterpSpec"
             }
           ]
         },

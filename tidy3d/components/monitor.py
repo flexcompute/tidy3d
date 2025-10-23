@@ -455,7 +455,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
     @pydantic.validator("interp_spec", always=True)
     @skip_if_fields_missing(["freqs"])
     def _warn_interp_num_points(cls, val, values):
-        """Warn if num_points is less than total frequencies."""
+        """Warn if num_points is greater than or equal to total frequencies."""
         if val is None:
             return val
 
@@ -464,8 +464,9 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
 
         if val.num_points >= num_freqs:
             log.warning(
-                f"interp_spec.num_points ({val.num_points}) is greater than or equal to "
-                f"the number of frequencies ({num_freqs}). No savings are achieved.",
+                f"'interp_spec.num_points' ({val.num_points}) is greater than or equal to "
+                f"the number of frequencies ({num_freqs}). Interpolation will be skipped and "
+                f"modes will be computed at all {num_freqs} frequencies.",
                 custom_loc=["interp_spec", "num_points"],
             )
 

@@ -298,7 +298,8 @@ class ModeSolver(Tidy3dBaseModel):
         if val.num_points >= num_freqs:
             log.warning(
                 f"interp_spec.num_points ({val.num_points}) is greater than or equal to "
-                f"the number of frequencies ({num_freqs}). No computational savings are achieved.",
+                f"the number of frequencies ({num_freqs}). Interpolation will be skipped and "
+                f"modes will be computed at all {num_freqs} frequencies.",
                 custom_loc=["interp_spec", "num_points"],
             )
 
@@ -601,7 +602,7 @@ class ModeSolver(Tidy3dBaseModel):
         if self.mode_spec.group_index_step > 0:
             return self._get_data_with_group_index()
 
-        if self.interp_spec is not None:
+        if self.interp_spec is not None and self.interp_spec.num_points < len(self.freqs):
             return self._get_data_with_interp()
 
         if self.mode_spec.angle_rotation and np.abs(self.mode_spec.angle_theta) > 0:
@@ -609,23 +610,18 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Compute data on the Yee grid
         mode_solver_data = self._data_on_yee_grid()
-        # print("mode_solver_data: ", mode_solver_data)
         if self._has_microwave_mode_spec:
             mode_solver_data = MicrowaveModeSolverData(**mode_solver_data.dict(exclude={"type"}))
 
-        # print("mode_solver_data: ", mode_solver_data)
         # Colocate to grid boundaries if requested
         if self.colocate:
             mode_solver_data = self._colocate_data(mode_solver_data=mode_solver_data)
 
-        # print("mode_solver_data: ", mode_solver_data)
         # normalize modes
         self._normalize_modes(mode_solver_data=mode_solver_data)
 
         # filter polarization if requested
-        # print("mode_solver_data: ", mode_solver_data)
         mode_solver_data = self._filter_polarization(mode_solver_data=mode_solver_data)
-        # print("mode_solver_data: ", mode_solver_data)
 
         # filter and sort modes if requested by sort_spec
         mode_solver_data = mode_solver_data.sort_modes(

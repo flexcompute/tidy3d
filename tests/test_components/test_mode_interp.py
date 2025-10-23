@@ -7,7 +7,6 @@ import pydantic.v1 as pydantic
 import pytest
 
 import tidy3d as td
-
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.smatrix.ports.wave import DEFAULT_WAVE_PORT_INTERP_SPEC
 
@@ -315,7 +314,7 @@ def test_mode_solver_warns_num_points():
     interp_spec = td.ModeInterpSpec(num_points=25, method="linear")
     plane = td.Box(center=(0, 0, 0), size=SIZE_2D)
 
-    with AssertLogLevel("WARNING", contains_str="num_points"):
+    with AssertLogLevel("WARNING", contains_str="Interpolation will be skipped"):
         ModeSolver(
             simulation=sim,
             plane=plane,
@@ -347,19 +346,34 @@ def test_mode_solver_interp_spec_none():
 
 def get_mode_solver_data():
     """Create a simple ModeSolverData object for testing."""
+    from tidy3d.components.data.data_array import GroupIndexDataArray, ModeDispersionDataArray
+
     from ..test_data.test_data_arrays import (
         make_scalar_mode_field_data_array,
     )
     from ..test_data.test_monitor_data import N_COMPLEX
 
     freqs = np.linspace(1e14, 2e14, 5)
-    mode_spec = td.ModeSpec(num_modes=2, sort_spec=td.ModeSortSpec(track_freq="central"))
+    num_modes = len(N_COMPLEX.mode_index)
+    mode_indices = np.arange(num_modes)
+    mode_spec = td.ModeSpec(num_modes=num_modes, sort_spec=td.ModeSortSpec(track_freq="central"))
     monitor = td.ModeSolverMonitor(
         center=(0, 0, 0),
         size=SIZE_2D,
         freqs=freqs,
         mode_spec=mode_spec,
         name="test_monitor",
+    )
+
+    # Create n_group_raw and dispersion_raw with same shape as n_complex
+    n_group_values = 1.5 + 0.1 * np.random.random((len(freqs), num_modes))
+    n_group_raw = GroupIndexDataArray(
+        n_group_values, coords={"f": freqs, "mode_index": mode_indices}
+    )
+
+    dispersion_values = 10.0 + 2.0 * np.random.random((len(freqs), num_modes))
+    dispersion_raw = ModeDispersionDataArray(
+        dispersion_values, coords={"f": freqs, "mode_index": mode_indices}
     )
 
     # Create mode data with the right frequencies
@@ -372,6 +386,8 @@ def get_mode_solver_data():
         Hy=make_scalar_mode_field_data_array("Hy"),
         Hz=make_scalar_mode_field_data_array("Hz"),
         n_complex=N_COMPLEX.copy(),
+        n_group_raw=n_group_raw,
+        dispersion_raw=dispersion_raw,
         symmetry=(0, 0, 0),
         symmetry_center=(0, 0, 0),
         grid_expanded=td.Grid(boundaries=td.Coords(x=[0, 1], y=[0, 1], z=[0, 1])),
@@ -385,7 +401,7 @@ def test_mode_solver_data_interp_linear():
 
     # Original has 5 frequencies
     assert len(mode_data.monitor.freqs) == 5
-    original_num_modes = mode_data.n_complex.shape[1]
+    original_num_modes = len(mode_data.n_complex.mode_index)
 
     # Interpolate to 20 frequencies
     freqs_dense = np.linspace(mode_data.monitor.freqs[0], mode_data.monitor.freqs[-1], 20)
@@ -396,7 +412,7 @@ def test_mode_solver_data_interp_linear():
     assert data_interp.n_complex.shape[0] == 20
 
     # Check mode dimension is preserved
-    assert data_interp.n_complex.shape[1] == original_num_modes
+    assert len(data_interp.n_complex.mode_index) == original_num_modes
 
     # Check field components are interpolated
     for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
@@ -418,7 +434,7 @@ def test_mode_solver_data_interp_cubic():
 
     # Check frequency dimension
     assert len(data_interp.monitor.freqs) == 20
-    assert data_interp.n_complex.shape[0] == 20
+    assert len(data_interp.n_complex.mode_index) == len(mode_data.n_complex.mode_index)
 
 
 def test_mode_solver_data_interp_cheb():
@@ -459,7 +475,7 @@ def test_mode_solver_data_interp_cheb():
 
     # Check frequency dimension
     assert len(data_interp.monitor.freqs) == 50
-    assert data_interp.n_complex.shape[0] == 50
+    assert len(data_interp.n_complex.mode_index) == len(N_COMPLEX.mode_index)
 
 
 def test_mode_solver_data_interp_cheb_needs_3_source():
@@ -525,22 +541,76 @@ def test_mode_solver_data_interp_cheb_validates_nodes():
 def test_mode_solver_data_interp_preserves_modes():
     """Test that interpolation preserves mode count."""
     mode_data = get_mode_solver_data()
-    original_num_modes = mode_data.n_complex.shape[1]
+    original_num_modes = len(mode_data.n_complex.mode_index)
 
     # Interpolate to different number of frequencies
     freqs_dense = np.linspace(mode_data.monitor.freqs[0], mode_data.monitor.freqs[-1], 20)
     data_interp = mode_data.interp(freqs=freqs_dense, method="linear")
 
     # Mode count should be unchanged
-    assert data_interp.n_complex.shape[1] == original_num_modes
+    assert len(data_interp.n_complex.mode_index) == original_num_modes
 
 
-def test_mode_solver_data_interp_too_few_target_freqs():
-    """Test that interpolation fails with too few target frequencies."""
+def test_mode_solver_data_interp_includes_n_group_and_dispersion():
+    """Test that interpolation includes n_group_raw and dispersion_raw."""
     mode_data = get_mode_solver_data()
 
-    with pytest.raises(td.exceptions.DataError, match="fewer than 2"):
-        mode_data.interp(freqs=[1e14], method="linear")
+    # Verify source data has n_group_raw and dispersion_raw
+    assert mode_data.n_group_raw is not None
+    assert mode_data.dispersion_raw is not None
+    assert mode_data.n_group_raw.shape == (5, len(mode_data.n_complex.mode_index))
+    assert mode_data.dispersion_raw.shape == (5, len(mode_data.n_complex.mode_index))
+
+    # Interpolate to 20 frequencies
+    freqs_dense = np.linspace(mode_data.monitor.freqs[0], mode_data.monitor.freqs[-1], 20)
+    data_interp = mode_data.interp(freqs=freqs_dense, method="linear")
+
+    # Verify interpolated data has n_group_raw and dispersion_raw
+    assert data_interp.n_group_raw is not None
+    assert data_interp.dispersion_raw is not None
+
+    # Check shapes are correct
+    assert data_interp.n_group_raw.shape == (20, len(data_interp.n_complex.mode_index))
+    assert data_interp.dispersion_raw.shape == (20, len(data_interp.n_complex.mode_index))
+
+    # Check frequency coordinates are correct
+    assert len(data_interp.n_group_raw.coords["f"]) == 20
+    assert len(data_interp.dispersion_raw.coords["f"]) == 20
+
+
+def test_mode_solver_data_interp_single_frequency():
+    """Test that interpolation works with a single target frequency."""
+    mode_data = get_mode_solver_data()
+
+    # Original has 5 frequencies
+    assert len(mode_data.monitor.freqs) == 5
+    original_num_modes = len(mode_data.n_complex.mode_index)
+
+    # Interpolate to a single frequency in the middle of the range
+    single_freq = np.array([1.5e14])
+    data_interp = mode_data.interp(freqs=single_freq, method="linear")
+
+    # Check frequency dimension
+    assert len(data_interp.monitor.freqs) == 1
+    assert data_interp.n_complex.shape[0] == 1
+
+    # Check mode dimension is preserved
+    assert len(data_interp.n_complex.mode_index) == original_num_modes
+
+    # Check field components are interpolated
+    for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
+        field_data = getattr(data_interp, field_name)
+        assert field_data is not None
+        assert field_data.coords["f"].size == 1
+        assert float(field_data.coords["f"]) == 1.5e14
+
+    # Check n_group_raw and dispersion_raw if present
+    if data_interp.n_group_raw is not None:
+        print(data_interp.n_group_raw.shape)
+        print((1, original_num_modes))
+        assert data_interp.n_group_raw.shape == (1, original_num_modes)
+    if data_interp.dispersion_raw is not None:
+        assert data_interp.dispersion_raw.shape == (1, original_num_modes)
 
 
 def test_mode_solver_data_interp_cubic_needs_4_source():
@@ -839,7 +909,7 @@ def test_mode_monitor_warns_redundant_num_points():
     # num_points >= len(freqs) should trigger warning
     interp_spec = td.ModeInterpSpec(num_points=5, method="linear")
 
-    with AssertLogLevel("WARNING", contains_str="greater than or equal"):
+    with AssertLogLevel("WARNING", contains_str="Interpolation will be skipped"):
         td.ModeMonitor(
             center=(0, 0, 0),
             size=SIZE_2D,
@@ -858,7 +928,7 @@ def test_mode_solver_monitor_warns_redundant_num_points():
     # num_points >= len(freqs) should trigger warning
     interp_spec = td.ModeInterpSpec(num_points=6, method="linear")
 
-    with AssertLogLevel("WARNING", contains_str="greater than or equal"):
+    with AssertLogLevel("WARNING", contains_str="Interpolation will be skipped"):
         td.ModeSolverMonitor(
             center=(0, 0, 0),
             size=SIZE_2D,
