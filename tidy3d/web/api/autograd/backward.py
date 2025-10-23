@@ -334,36 +334,12 @@ def postprocess_adj(
         vjp_fn = None
         info = None
         if numerical_paths_raw:
-            if user_vjp is None:
-                raise AdjointError("Numerical structures detected but no 'user_vjp' provided.")
             info = numerical_info.get(structure_index)
             if info is None:
                 raise AdjointError(
                     f"Missing numerical structure metadata for index {structure_index}."
                 )
-
-            vjp_fn_entry = user_vjp.get(structure_index)
-            if vjp_fn_entry is None:
-                raise AdjointError(
-                    f"Missing user VJP for numerical structure index {structure_index}."
-                )
-
-            if callable(vjp_fn_entry):
-                vjp_fn = vjp_fn_entry
-            elif isinstance(vjp_fn_entry, dict):
-                if "parameters" in vjp_fn_entry and callable(vjp_fn_entry["parameters"]):
-                    vjp_fn = vjp_fn_entry["parameters"]
-                else:
-                    callables = [val for val in vjp_fn_entry.values() if callable(val)]
-                    if len(callables) != 1:
-                        raise AdjointError(
-                            f"Numerical structure index {structure_index} requires exactly one callable in its user VJP entry."
-                        )
-                    vjp_fn = callables[0]
-            else:
-                raise AdjointError(
-                    f"Invalid user VJP entry for numerical structure index {structure_index}."
-                )
+            vjp_fn = info.vjp
 
             name_to_path = {path[0]: path for path in numerical_paths_raw if path}
             try:
@@ -483,34 +459,35 @@ def postprocess_adj(
                     **chunk_kwargs,
                 )
 
-                gradients = vjp_fn(parameters=info.parameters, derivative_info=derivative_info_num)
+                params_static = tuple(get_static(param) for param in info.parameters)
 
-                if len(gradients) != len(info.parameters):
-                    raise AdjointError(
-                        f"User VJP for numerical structure index {structure_index} returned {len(gradients)} gradients, "
-                        f"expected {len(info.parameters)}."
-                    )
+                gradients = vjp_fn(parameters=params_static, derivative_info=derivative_info_num)
+                if isinstance(gradients, dict):
+                    missing = [path for path in numerical_paths_ordered if path not in gradients]
+                    if missing:
+                        raise AdjointError(
+                            f"Numerical structure index {structure_index} missing gradients for paths: {missing}."
+                        )
+                    gradient_iter = (gradients[path] for path in numerical_paths_ordered)
+                else:
+                    if len(gradients) != len(info.parameters):
+                        raise AdjointError(
+                            f"User VJP for numerical structure index {structure_index} returned {len(gradients)} gradients, "
+                            f"expected {len(info.parameters)}."
+                        )
+                    gradient_iter = gradients
 
-                print(f"gradients = {gradients}")
-                for idx, grad_key in enumerate(gradients):
-                    print(f"grad = {gradients[grad_key]}")
-                    numerical_accum[idx] = _accumulate(numerical_accum[idx], gradients[grad_key])
+                for idx, grad_value in enumerate(gradient_iter):
+                    numerical_accum[idx] = _accumulate(numerical_accum[idx], grad_value)
 
         for structure_path, vjp_value in vjp_value_map.items():
             sim_path = ("structures", structure_index, *list(structure_path))
             sim_fields_vjp[sim_path] = vjp_value
 
-        print(f"numerical accum = {numerical_accum}")
-
         if numerical_accum is not None:
             for name, grad, param in zip(info.parameter_names, numerical_accum, info.parameters):
                 if grad is None:
-                    print(f"ok = {param}")
                     grad = _zero_like(param)
-
-                print(f"name = {name}")
-                print(f"param = {param}")
-                print(f"numerical accum and grad = {grad}")
                 sim_fields_vjp[("numerical", structure_index, name)] = grad
 
     return sim_fields_vjp

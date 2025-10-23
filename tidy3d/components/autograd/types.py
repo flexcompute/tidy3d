@@ -56,6 +56,7 @@ class NumericalStructureInfo:
     parameters: tuple[typing.Any, ...]
     function: typing.Callable[..., typing.Any]
     structure: typing.Any
+    vjp: typing.Callable[..., typing.Any]
 
 
 __all__ = [

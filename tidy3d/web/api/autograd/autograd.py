@@ -70,6 +70,36 @@ def _resolve_local_gradient(value: typing.Optional[bool]) -> bool:
     return bool(config.adjoint.local_gradient)
 
 
+def _insert_numerical_structures_static(
+    simulation: td.Simulation,
+    numerical_structures: dict[int, dict[str, typing.Any]],
+) -> td.Simulation:
+    """Return a Simulation with numerical structures inserted, without autograd metadata."""
+
+    structures = list(simulation.structures)
+
+    for index in sorted(numerical_structures):
+        config = numerical_structures[index]
+        func = config["function"]
+        params_original = config["original_parameters"]
+
+        try:
+            structure = func(get_static(params_original))
+        except Exception as exc:  # pragma: no cover - defensive
+            raise AdjointError(
+                f"Failed to construct numerical structure at index {index}: {exc}"
+            ) from exc
+
+        if not isinstance(structure, td.Structure):
+            raise AdjointError(
+                "Numerical structure creation functions must return a tidy3d.Structure instance."
+            )
+
+        structures.insert(index, structure)
+
+    return simulation.copy(update={"structures": structures})
+
+
 def _contains_tracer(value) -> bool:
     if isinstance(value, Box):
         return True
@@ -94,6 +124,8 @@ def _validate_numerical_structures(
     numerical_structures: dict[int, dict[str, typing.Any]],
     user_vjp,
     simulation: td.Simulation,
+    *,
+    require_vjp: bool,
 ) -> dict[int, dict[str, typing.Any]]:
     """Validate and normalize user-supplied numerical structure configuration."""
 
@@ -137,97 +169,80 @@ def _validate_numerical_structures(
             raise AdjointError(
                 f"Numerical structure index {index} missing required 'parameters' entry."
             )
-
         params = config["parameters"]
+
+        vjp_callable: typing.Optional[typing.Callable[..., typing.Any]] = None
+        if "vjp" in config:
+            vjp_entry = config["vjp"]
+
+            if callable(vjp_entry):
+                vjp_callable = vjp_entry
+            elif isinstance(vjp_entry, dict):
+                if "parameters" in vjp_entry and callable(vjp_entry["parameters"]):
+                    vjp_callable = vjp_entry["parameters"]
+                else:
+                    callables = [val for val in vjp_entry.values() if callable(val)]
+                    if len(callables) == 1:
+                        vjp_callable = callables[0]
+            if vjp_callable is None:
+                raise AdjointError(
+                    f"Numerical structure index {index} must supply a callable 'vjp' or dict containing a single callable."
+                )
+        elif require_vjp:
+            raise AdjointError(f"Numerical structure index {index} missing required 'vjp' entry.")
 
         param_names: list[typing.Hashable]
         param_values: list[typing.Any]
 
         if isinstance(params, dict):
-            # preserve user-provided keys
             param_names = list(params.keys())
             param_values = list(params.values())
-            constructor_args = [params]  # pass dict as single argument
         elif isinstance(params, (list, tuple)):
             param_names = []
             param_values = []
-            constructor_args = []
             for idx, value in enumerate(params):
                 val_static = get_static(value)
                 if isinstance(val_static, np.ndarray) and val_static.ndim > 0:
                     for offset in np.ndindex(val_static.shape):
                         param_names.append((idx, *offset))
                         param_values.append(value[offset])
-                    constructor_args.append(value)
                 else:
                     param_names.append((idx,))
                     param_values.append(value)
-                    constructor_args.append(value)
         else:
             val_static = get_static(params)
             if isinstance(val_static, np.ndarray) and val_static.ndim > 0:
                 param_names = []
                 param_values = []
-                constructor_args = [params]
                 for offset in np.ndindex(val_static.shape):
                     param_names.append(offset)
                     param_values.append(params[offset])
             else:
-                # treat scalar value as a single parameter
                 param_names = [0]
                 param_values = [params]
-                constructor_args = [params]
 
         normalized[index] = {
             "function": func,
             "parameters": tuple(param_values),
             "parameter_names": tuple(param_names),
-            "constructor_args": tuple(constructor_args),
+            "original_parameters": params,
+            "vjp": vjp_callable,
         }
 
-    if normalized and user_vjp is None:
-        raise AdjointError(
-            "A 'user_vjp' mapping must be provided when using 'numerical_structures'."
-        )
-
-    if user_vjp is not None:
-        if not isinstance(user_vjp, dict):
-            raise AdjointError("'user_vjp' must be a dictionary when using 'numerical_structures'.")
-        missing = [idx for idx in normalized if idx not in user_vjp]
-        if missing:
-            raise AdjointError(
-                "Missing user VJP entries for numerical structure indices: "
-                + ", ".join(str(i) for i in missing)
-            )
-        for idx in normalized:
-            vjp_entry = user_vjp[idx]
-            if callable(vjp_entry):
-                continue
-            if isinstance(vjp_entry, dict):
-                # Accept either explicit "parameters" key or a single callable value.
-                if "parameters" in vjp_entry:
-                    if callable(vjp_entry["parameters"]):
-                        continue
-                    raise AdjointError(
-                        f"The 'parameters' entry for numerical structure index {idx} must be callable."
-                    )
-
-                callable_values = [val for val in vjp_entry.values() if callable(val)]
-                if len(callable_values) == 1:
-                    continue
-
-            raise AdjointError(
-                "Each entry in 'user_vjp' for numerical structures must be either a callable or a "
-                "dictionary containing a single callable (optionally under the key 'parameters')."
-            )
+    # Reject user_vjp entries that try to target numerical namespace
+    if isinstance(user_vjp, dict):
+        for key in user_vjp:
+            if isinstance(key, tuple) and key and key[0] == "numerical":
+                raise AdjointError(
+                    "Global 'user_vjp' cannot target 'numerical' namespace; specify VJP via numerical structure entry."
+                )
 
     # Ensure insertion indices are valid when accounting for prior insertions
     num_structs = len(simulation.structures)
     for idx in sorted(normalized):
         if idx > num_structs:
             raise AdjointError(
-                f"Numerical structure index {idx} is out of bounds for simulation with "
-                f"{num_structs} structures."
+                f"Numerical structure index {idx} is out of bounds for simulation with {num_structs} structures."
             )
         num_structs += 1
 
@@ -404,15 +419,13 @@ def run(
     if (user_vjp is not None) and (not local_gradient):
         raise AdjointError("User VJP specified for a remote gradient not supported.")
 
-    if numerical_structures is not None and not local_gradient:
-        raise AdjointError("'numerical_structures' is only supported when local_gradient=True.")
-
     numerical_structures_validated = None
     if isinstance(simulation, td.Simulation) and numerical_structures is not None:
         numerical_structures_validated = _validate_numerical_structures(
             numerical_structures=numerical_structures,
             user_vjp=user_vjp,
             simulation=simulation,
+            require_vjp=local_gradient,
         )
     elif isinstance(simulation, td.Simulation):
         numerical_structures_validated = {}
@@ -447,7 +460,7 @@ def run(
         should_use_autograd = is_valid_for_autograd(simulation)
         if not should_use_autograd and numerical_structures:
             for cfg in numerical_structures.values():
-                params = cfg.get("parameters")
+                params = cfg.get("original_parameters", cfg.get("parameters"))
                 if _contains_tracer(params):
                     should_use_autograd = True
                     break
@@ -475,8 +488,15 @@ def run(
             lazy=lazy,
         )
 
+    simulation_static = simulation
+    if isinstance(simulation, td.Simulation) and numerical_structures_validated:
+        simulation_static = _insert_numerical_structures_static(
+            simulation=simulation,
+            numerical_structures=numerical_structures_validated,
+        )
+
     return run_webapi(
-        simulation=simulation,
+        simulation=simulation_static,
         task_name=task_name,
         folder_name=folder_name,
         path=path,
@@ -752,12 +772,13 @@ def setup_run(
         for index in sorted(numerical_structures):
             config = numerical_structures[index]
             func = config["function"]
-            params = config["parameters"]
+            params_flat = config["parameters"]
             param_names = config["parameter_names"]
-            constructor_args = config.get("constructor_args", params)
+            params_original = config["original_parameters"]
+            vjp_callable = config["vjp"]
 
             try:
-                structure = func(*constructor_args)
+                structure = func(get_static(params_original))
             except Exception as exc:  # pragma: no cover - defensive
                 raise AdjointError(
                     f"Failed to construct numerical structure at index {index}: {exc}"
@@ -772,9 +793,10 @@ def setup_run(
             numerical_info[index] = NumericalStructureInfo(
                 index=index,
                 parameter_names=param_names,
-                parameters=tuple(params),
+                parameters=tuple(params_flat),
                 function=func,
                 structure=structure,
+                vjp=vjp_callable,
             )
 
         sim_prepared = simulation.copy(update={"structures": structures})
