@@ -3861,3 +3861,49 @@ def test_validate_microwave_mode_spec():
         sim = sim.updated_copy(
             monitors=[mode_mon],
         )
+
+
+def test_padded_copy():
+    """Test that padding layers are added along simulation boundaries."""
+    grid_spec = td.GridSpec.auto(wavelength=1.0)
+
+    sim = td.Simulation(
+        size=(5, 5, 5),
+        grid_spec=grid_spec,
+        structures=[
+            td.Structure(geometry=td.Box(size=(10, 13, 7)), medium=td.Medium(permittivity=2.0))
+        ],
+        lumped_elements=[],
+        run_time=1e-12,
+    )
+
+    padded_sim = sim.padded_copy(x=(4, 10), y=(1, 2))
+    assert np.allclose(np.array(padded_sim.size), np.array([19, 8, 5]))
+    assert np.allclose(np.array(padded_sim.center), np.array([3, 0.5, 0]))
+
+    with pytest.raises(ValueError):
+        padded_sim = sim.padded_copy(x=(1, -2), z=(-2, 0))
+    with pytest.raises(ValueError):
+        padded_sim = sim.padded_copy(x=(1))
+
+
+def test_uniformly_padded_copy():
+    """Test that padding layers are uniformly added along simulation boundaries."""
+    grid_spec = td.GridSpec.auto(wavelength=1.0)
+
+    sim = td.Simulation(
+        size=(5, 5, 5),
+        grid_spec=grid_spec,
+        structures=[
+            td.Structure(geometry=td.Box(size=(3, 2, 4)), medium=td.Medium(permittivity=2.0))
+        ],
+        lumped_elements=[],
+        run_time=1e-12,
+    )
+
+    padded_sim = sim.uniformly_padded_copy(padding=5)
+    assert np.allclose(np.array(padded_sim.size), np.array([15, 15, 15]))
+    assert np.allclose(np.array(padded_sim.center), np.array([0, 0, 0]))
+
+    with pytest.raises(ValueError):
+        padded_sim = sim.uniformly_padded_copy(padding=-1)

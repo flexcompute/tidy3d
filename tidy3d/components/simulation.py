@@ -5816,3 +5816,50 @@ class Simulation(AbstractYeeGridSimulation):
         )
 
     _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
+
+    def padded_copy(
+        self,
+        x: Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None,
+        y: Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None,
+        z: Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None,
+    ) -> Simulation:
+        """Created a copy of simulation with padded simulation domain.
+
+        Parameters
+        ----------
+        x : Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None
+            Padding sizes at the left and right boundaries of the simulation along x-axis.
+        y : Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None
+            Padding sizes at the left and right boundaries of the simulation along y-axis.
+        z : Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None
+            Padding sizes at the left and right boundaries of the simulation along z-axis.
+
+        Returns
+        -------
+        Simulation
+            Simulation with padded simulation domain.
+        """
+        # get simulation bounding box and pad it
+        box = Box(center=self.center, size=self.size)
+        padded_box = box.padded_copy(x, y, z)
+
+        return self.updated_copy(size=padded_box.size, center=padded_box.center)
+
+    def uniformly_padded_copy(self, padding: pydantic.NonNegativeFloat) -> Simulation:
+        """Create copy of simulation with uniformly padded simulation domain.
+
+        Parameters
+        ----------
+        padding : pydantic.NonNegativeFloat
+            Padding size applied uniformly at all simulation boundaries.
+
+        Returns
+        -------
+        Simulation
+            Simulation with uniformly padded simulation domain.
+        """
+        if padding < 0:
+            raise ValueError(f"Padding must be non-negative. Got {padding}.")
+
+        padding_tuple = (padding, padding)
+        return self.padded_copy(x=padding_tuple, y=padding_tuple, z=padding_tuple)
