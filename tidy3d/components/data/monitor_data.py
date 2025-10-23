@@ -13,7 +13,6 @@ import autograd.numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 from pandas import DataFrame
-from xarray.core.types import Self
 
 from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
@@ -102,6 +101,8 @@ SHIFT_VALUE_ADJ_FLD_SRC = 1e-5
 AXIAL_RATIO_CAP = 100
 # At this sampling rate, the computed area of a sphere is within ~1% of the true value.
 MIN_ANGULAR_SAMPLES_SPHERE = 10
+# Threshold for cos(theta) to avoid unphysically large amplitudes near grazing angles
+COS_THETA_THRESH = 1e-5
 
 
 class MonitorData(AbstractMonitorData, ABC):
@@ -2776,8 +2777,10 @@ class AbstractFieldProjectionData(MonitorData):
         if not np.all(index_k == 0):
             raise SetupError("Can't compute RCS for a lossy background medium.")
 
-        k = self.k[None, None, None, ...]
-        eta = self.eta[None, None, None, ...]
+        n_leading = max(0, len(self.dims) - 1)
+        expand_idx = (None,) * n_leading + (Ellipsis,)
+        k = self.k[expand_idx]
+        eta = self.eta[expand_idx]
 
         if self.is_2d_simulation:
             constant = k**2 / (16 * np.pi * eta)
@@ -3307,6 +3310,17 @@ class DiffractionData(AbstractFieldProjectionData):
         to x, P(S) corresponds to ``Ex``(``Ez``) polarization for monitor normal to y, and P(S)
         corresponds to ``Ex``(``Ey``) polarization for monitor normal to z.
 
+    Note
+    ----
+
+        The power amplitudes per polarization and diffraction order, and correspondingly the power
+        per diffraction order, correspond to the power carried by each diffraction order in the
+        monitor normal direction. They are not to be confused with power carried by plane waves
+        in the propagation direction of each diffraction order, which can be obtained from the
+        spherical-coordinate fields which are also stored. The power definition is such that the
+        grating efficiency is the recorded power over the input source power, and the direct sum
+        over the power in all orders should equal the total power flowing through the monitor.
+
 
     Example
     -------
@@ -3473,10 +3487,10 @@ class DiffractionData(AbstractFieldProjectionData):
         """Complex power amplitude in each order for 's' and 'p' polarizations, normalized so that
         the power carried by the wave of that order and polarization equals ``abs(amps)^2``.
         """
+        # use a small threshold to avoid blow-up near grazing angles
         cos_theta = np.cos(np.nan_to_num(self.angles[0]))
-
-        # will set amplitudes to 0 for glancing or negative angles
-        cos_theta[cos_theta <= 0] = np.inf
+        # set amplitudes to 0 for angles with cos(theta) <= COS_THETA_THRESH (glancing or negative)
+        cos_theta[cos_theta <= COS_THETA_THRESH] = np.inf
 
         norm = 1.0 / np.sqrt(2.0 * self.eta) / np.sqrt(cos_theta)
         amp_theta = self.Etheta.values * norm
@@ -3491,9 +3505,14 @@ class DiffractionData(AbstractFieldProjectionData):
         return DataArray(np.stack([amp_phi, amp_theta], axis=3), coords=coords)
 
     @property
-    def power(self) -> Self:
+    def power(self) -> DataArray:
         """Total power in each order, summed over both polarizations."""
         return (np.abs(self.amps) ** 2).sum(dim="polarization")
+
+    @property
+    def radar_cross_section(self) -> DataArray:
+        """Radar cross section in units of incident power."""
+        raise ValueError("RCS is not a well-defined quantity for diffraction data.")
 
     @property
     def fields_spherical(self) -> xr.Dataset:

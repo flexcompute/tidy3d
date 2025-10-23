@@ -1535,6 +1535,25 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     """:class:`Monitor` that uses a 2D Fourier transform to compute the
     diffraction amplitudes and efficiency for allowed diffraction orders.
 
+    Note
+    ----
+
+        The diffraction data are separated into S and P polarizations. At normal incidence when
+        S and P are undefined, P(S) corresponds to ``Ey``(``Ez``) polarization for monitor normal
+        to x, P(S) corresponds to ``Ex``(``Ez``) polarization for monitor normal to y, and P(S)
+        corresponds to ``Ex``(``Ey``) polarization for monitor normal to z.
+
+    Note
+    ----
+
+        The power amplitudes per polarization and diffraction order, and correspondingly the power
+        per diffraction order, correspond to the power carried by each diffraction order in the
+        monitor normal direction. They are not to be confused with power carried by plane waves
+        in the propagation direction of each diffraction order, which can be obtained from the
+        spherical-coordinate fields which are also stored. The power definition is such that the
+        grating efficiency is the recorded power over the input source power, and the direct sum
+        over the power in all orders should equal the total power flowing through the monitor.
+
     Example
     -------
     >>> monitor = DiffractionMonitor(
