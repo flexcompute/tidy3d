@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 from os import PathLike
 from typing import Any
@@ -14,6 +15,7 @@ from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.web import Batch, BatchData
+from tidy3d.web.api.autograd import has_traced_numerical_structures
 
 DEFAULT_DATA_DIR = "."
 
@@ -154,6 +156,8 @@ def create_batch(
 def _run_local(
     modeler: ComponentModelerType,
     path_dir: str = DEFAULT_DATA_DIR,
+    numerical_structures=None,
+    user_vjp=None,
     **kwargs: Any,
 ) -> ComponentModelerDataType:
     """Execute the full simulation workflow for a given component modeler.
@@ -183,7 +187,16 @@ def _run_local(
     from tidy3d.web.api.autograd import autograd as web_ag
 
     sims = modeler.sim_dict
-    if any(web_ag.is_valid_for_autograd(sim) for sim in sims.values()):
+
+    numerical_structures_modeler = numerical_structures or {}
+    user_vjp_modeler = user_vjp
+
+    should_use_autograd = any(web_ag.is_valid_for_autograd(sim) for sim in sims.values())
+
+    if not should_use_autograd and has_traced_numerical_structures(numerical_structures_modeler):
+        should_use_autograd = True
+
+    if should_use_autograd:
         if len(modeler.element_mappings) > 0:
             log.warning(
                 "Element mappings are used to populate S-matrix values, but autograd gradients "
@@ -199,7 +212,34 @@ def _run_local(
         kwargs.setdefault("simulation_type", "tidy3d_autograd_async")
         kwargs.setdefault("path_dir", path_dir)
 
-        sim_data_map = _run_async(simulations=sims, **kwargs)
+        local_gradient = kwargs.get("local_gradient", True)
+
+        if numerical_structures_modeler:
+            first_sim = next(iter(sims.values()))
+            numerical_structures_validated = web_ag._validate_numerical_structures(
+                numerical_structures=numerical_structures_modeler,
+                user_vjp=user_vjp_modeler,
+                simulation=first_sim,
+                require_vjp=local_gradient,
+            )
+
+            numerical_structures_broadcast = {
+                key: copy.deepcopy(numerical_structures_validated) for key in sims
+            }
+        else:
+            numerical_structures_broadcast = None
+
+        if user_vjp_modeler:
+            user_vjp_broadcast = dict.fromkeys(sims, user_vjp_modeler)
+        else:
+            user_vjp_broadcast = None
+
+        sim_data_map = _run_async(
+            simulations=sims,
+            numerical_structures=numerical_structures_broadcast,
+            user_vjp=user_vjp_broadcast,
+            **kwargs,
+        )
 
         return compose_modeler_data_from_batch_data(modeler=modeler, batch_data=sim_data_map)
 

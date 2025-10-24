@@ -210,6 +210,25 @@ def _contains_tracer(value) -> bool:
     return False
 
 
+def _has_traced_numerical_structures(
+    numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]],
+) -> bool:
+    if not numerical_structures:
+        return False
+
+    for cfg in numerical_structures.values():
+        params = cfg.get("parameters")
+        if _contains_tracer(params):
+            return True
+    return False
+
+
+def has_traced_numerical_structures(
+    numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]],
+) -> bool:
+    return _has_traced_numerical_structures(numerical_structures)
+
+
 class SetupRunResult(typing.NamedTuple):
     sim_fields: AutogradFieldMap
     simulation: td.Simulation
@@ -534,7 +553,20 @@ def run(
     path = Path(path)
 
     if isinstance(simulation, typing.get_args(ComponentModelerType)):
-        if any(is_valid_for_autograd(s) for s in simulation.sim_dict.values()):
+        sim_dict = simulation.sim_dict
+
+        numerical_structures_modeler = numerical_structures or {}
+        if not numerical_structures_modeler and isinstance(numerical_structures_validated, dict):
+            numerical_structures_modeler = numerical_structures_validated
+
+        should_use_component_autograd = any(is_valid_for_autograd(sim) for sim in sim_dict.values())
+
+        if not should_use_component_autograd and has_traced_numerical_structures(
+            numerical_structures_modeler
+        ):
+            should_use_component_autograd = True
+
+        if should_use_component_autograd:
             from tidy3d.plugins.smatrix import run as smatrix_run
 
             path_dir = path.parent
@@ -549,6 +581,8 @@ def run(
                 priority=priority,
                 local_gradient=local_gradient,
                 max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+                numerical_structures=numerical_structures_modeler,
+                user_vjp=user_vjp,
             )
 
     should_use_autograd = False
@@ -752,6 +786,7 @@ def run_async(
             if should_use_autograd_async:
                 break
 
+    if should_use_autograd_async:
         return _run_async(
             simulations=simulations_norm,
             folder_name=folder_name,
@@ -906,6 +941,7 @@ def _run_async(
             sim_static.attrs[TRACED_FIELD_KEYS_ATTR] = payload
 
         sims_original[task_name] = sim_static
+
         if has_numerical_tracers:
             aux_entry = {AUX_KEY_NUMERICAL_STRUCTURES: setup_result.numerical_info}
             run_async_kwargs.setdefault("aux_data_seed", {})[task_name] = aux_entry
@@ -1165,7 +1201,6 @@ def _run_async_primitive(
         )
 
     if local_gradient:
-        print("IN LOCAL GRADIENT")
         batch_data_combined, _ = _run_async_tidy3d(sims_combined, **run_async_kwargs)
 
         field_map_fwd_dict = {}
