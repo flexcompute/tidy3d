@@ -311,6 +311,16 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "frequencies it can change depending on the mode tracking.",
     )
 
+    assume_constant_modes: bool = pd.Field(
+        False,
+        title="Assume Constant Modes",
+        description="Whether to assume constant (frequency-independent) mode profiles",
+    )
+
+    interp_spec: ModeInterpSpec = pd.Field(
+        None, title="Interp spec", description="Interpolation spec"
+    )
+
     @pd.validator("bend_axis", always=True)
     @skip_if_fields_missing(["bend_radius"])
     def bend_axis_given(cls, val, values):

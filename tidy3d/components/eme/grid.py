@@ -11,7 +11,7 @@ import pydantic.v1 as pd
 from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords1D
-from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.mode_spec import ModeInterpSpec, ModeSpec
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq
 from tidy3d.constants import RADIAN, fp_eps, inf
@@ -25,6 +25,14 @@ MAX_NUM_REPS = 100000
 
 class EMEModeSpec(ModeSpec):
     """Mode spec for EME cells. Overrides some of the defaults and allowed values."""
+
+    interp_spec: ModeInterpSpec = pd.Field(
+        ModeInterpSpec(num_points=3, method="cheb"), title="Interp spec", description="Interp spec"
+    )
+
+    assume_constant_modes: bool = pd.Field(
+        True, title="Assume constant modes", description="Assume constant modes"
+    )
 
     track_freq: Union[TrackFreq, None] = pd.Field(
         None,

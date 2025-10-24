@@ -561,6 +561,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                 freqs=freqs,
                 mode_spec=mode_specs[i],
                 colocate=False,
+                interp_spec=mode_specs[i].interp_spec,
             )
             monitors.append(monitor)
         return monitors

@@ -200,7 +200,10 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         f1 = list(modes1.field_components.values())[0].f.values
         f2 = list(modes2.field_components.values())[0].f.values
 
-        f = np.array(sorted(set(f1).intersection(f2).intersection(self.simulation.freqs)))
+        if modes1.monitor.mode_spec.assume_constant_modes:
+            f = np.array(self.simulation.freqs)
+        else:
+            f = np.array(sorted(set(f1).intersection(f2).intersection(self.simulation.freqs)))
 
         modes_in_1 = "mode_index" in list(modes1.field_components.values())[0].coords
         modes_in_2 = "mode_index" in list(modes2.field_components.values())[0].coords

@@ -2429,6 +2429,7 @@ class ModeSolverData(ModeData):
         self,
         freqs: FreqArray,
         method: Literal["linear", "cubic", "cheb"] = "linear",
+        assume_constant_modes: bool = False,
     ) -> ModeSolverData:
         """Interpolate mode data to new frequency points.
 
@@ -2514,7 +2515,13 @@ class ModeSolverData(ModeData):
         # Interpolate field components if present
         for field_name, field_data in self.field_components.items():
             if field_data is not None:
-                update_dict[field_name] = self._interp_dataarray(field_data, freqs, method)
+                if assume_constant_modes:
+                    freq_central = (np.min(freqs) + np.max(freqs)) / 2
+                    update_dict[field_name] = self._interp_dataarray(
+                        field_data, np.array([freq_central]), method
+                    )
+                else:
+                    update_dict[field_name] = self._interp_dataarray(field_data, freqs, method)
 
         # Interpolate n_group_raw if present
         if self.n_group_raw is not None:
@@ -2529,7 +2536,13 @@ class ModeSolverData(ModeData):
         # Interpolate grid correction data if present
         for key, data in self._grid_correction_dict.items():
             if isinstance(data, DataArray) and "f" in data.coords:
-                update_dict[key] = self._interp_dataarray(data, freqs, method)
+                if assume_constant_modes:
+                    freq_central = (np.min(freqs) + np.max(freqs)) / 2
+                    update_dict[key] = self._interp_dataarray(
+                        data, np.array([freq_central]), method
+                    )
+                else:
+                    update_dict[key] = self._interp_dataarray(data, freqs, method)
 
         # Handle eps_spec if present - use nearest neighbor interpolation
         if self.eps_spec is not None:

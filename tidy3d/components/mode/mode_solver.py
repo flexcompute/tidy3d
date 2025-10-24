@@ -561,13 +561,21 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Create a copy of the mode solver with reduced frequencies and no interp_spec
         # (to prevent recursion)
-        mode_solver_reduced = self.copy(update={"freqs": freqs_reduced, "interp_spec": None})
+        # note: cannot assume constant modes, as mode sorting is needed for interpolation
+        mode_spec_reduced = self.mode_spec.updated_copy(assume_constant_modes=False)
+        mode_solver_reduced = self.copy(
+            update={"freqs": freqs_reduced, "interp_spec": None, "mode_spec": mode_spec_reduced}
+        )
 
         # Get data at reduced frequencies
-        data_reduced = mode_solver_reduced.data_raw
+        data_reduced = mode_solver_reduced._data_on_yee_grid()
 
         # Interpolate back to original frequencies
-        return data_reduced.interp(freqs=self.freqs, method=self.interp_spec.method)
+        return data_reduced.interp(
+            freqs=self.freqs,
+            method=self.interp_spec.method,
+            assume_constant_modes=self.mode_spec.assume_constant_modes,
+        )
 
     @cached_property
     def grid_snapped(self) -> Grid:
@@ -602,14 +610,16 @@ class ModeSolver(Tidy3dBaseModel):
         if self.mode_spec.group_index_step > 0:
             return self._get_data_with_group_index()
 
-        if self.interp_spec is not None and self.interp_spec.num_points < len(self.freqs):
-            return self._get_data_with_interp()
-
         if self.mode_spec.angle_rotation and np.abs(self.mode_spec.angle_theta) > 0:
             return self.rotated_mode_solver_data
 
-        # Compute data on the Yee grid
-        mode_solver_data = self._data_on_yee_grid()
+        if self.interp_spec is not None and self.interp_spec.num_points < len(self.freqs):
+            return self._get_data_with_interp()
+            # mode_solver_data = self._get_data_with_interp()
+        else:
+            # Compute data on the Yee grid
+            mode_solver_data = self._data_on_yee_grid()
+
         if self._has_microwave_mode_spec:
             mode_solver_data = MicrowaveModeSolverData(**mode_solver_data.dict(exclude={"type"}))
 
@@ -1262,6 +1272,13 @@ class ModeSolver(Tidy3dBaseModel):
         )
         data_dict = {"n_complex": index_data}
 
+        freqs = solver.freqs
+        if self.mode_spec.assume_constant_modes:
+            freq_central = (np.min(freqs) + np.max(freqs)) / 2
+            ind_central = np.abs(freqs - freq_central).argmin()
+            freqs = [list(freqs)[ind_central]]
+            fields = [fields[ind_central]]
+
         # Construct the field data on Yee grid
         for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
             xyz_coords = solver.grid_snapped[field_name].to_list
@@ -1271,7 +1288,7 @@ class ModeSolver(Tidy3dBaseModel):
                     "x": xyz_coords[0],
                     "y": xyz_coords[1],
                     "z": xyz_coords[2],
-                    "f": list(solver.freqs),
+                    "f": list(freqs),
                     "mode_index": np.arange(solver.mode_spec.num_modes),
                 },
             )
@@ -1951,7 +1968,12 @@ class ModeSolver(Tidy3dBaseModel):
         # direction, so angle_theta has to be taken into account. The distance along the propagation
         # direction is the distance along the normal direction over cosine(theta).
         cos_theta = np.cos(mode_spec.angle_theta)
-        k_vec = cos_theta * 2 * np.pi * n_complex * n_complex.f / C_0
+        freqs = n_complex.f
+        if mode_spec.assume_constant_modes:
+            freq_central = (np.min(freqs) + np.max(freqs)) / 2
+            ind_central = np.abs(freqs - freq_central).argmin()
+            freqs = freqs.isel(f=[ind_central])
+        k_vec = cos_theta * 2 * np.pi * n_complex * freqs / C_0
         if direction == "-":
             k_vec *= -1
         phase_primal = np.exp(1j * k_vec * (normal_primal - normal_pos))
@@ -1967,7 +1989,8 @@ class ModeSolver(Tidy3dBaseModel):
         else:
             phase_dual = phase_dual.squeeze(dim=normal_dim)
 
-        return FreqModeDataArray(phase_primal), FreqModeDataArray(phase_dual)
+        arrays = FreqModeDataArray(phase_primal), FreqModeDataArray(phase_dual)
+        return arrays
 
     @property
     def _is_tensorial(self) -> bool:
