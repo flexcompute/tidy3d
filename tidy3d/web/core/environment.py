@@ -6,6 +6,7 @@ import os
 import ssl
 from typing import Optional
 
+import toml
 from pydantic.v1 import BaseSettings, Field
 
 from .core_config import get_logger
@@ -104,24 +105,99 @@ class Environment:
         "nexus": nexus,
     }
 
+    def _load_custom_env_from_config(self) -> Optional[EnvironmentConfig]:
+        """Load custom environment config from ~/.tidy3d/config file.
+
+        Reads all nexus-related configuration from the config file and
+        creates a dynamic EnvironmentConfig if web_api_endpoint and
+        website_endpoint are present.
+
+        Returns
+        -------
+        Optional[EnvironmentConfig]
+            Custom environment config if endpoints are configured, None otherwise.
+        """
+        # Determine config file path (same logic as cli.constants)
+        from os.path import expanduser
+
+        tidy3d_base_dir = os.getenv("TIDY3D_BASE_DIR", expanduser("~"))
+        if os.access(tidy3d_base_dir, os.W_OK):
+            config_file = f"{tidy3d_base_dir}/.tidy3d/config"
+        else:
+            config_file = "/tmp/.tidy3d/config"
+
+        if not os.path.exists(config_file):
+            return None
+
+        try:
+            with open(config_file, encoding="utf-8") as f:
+                config = toml.loads(f.read())
+
+            web_api = config.get("web_api_endpoint")
+            website = config.get("website_endpoint")
+
+            # Only create custom env if BOTH required endpoints are present
+            if not (web_api and website):
+                return None
+
+            log = get_logger()
+            log.info(f"Using custom nexus environment from config: {web_api}")
+
+            # Get optional settings with defaults matching the hardcoded nexus
+            s3_region = config.get("s3_region", "us-east-1")
+            s3_endpoint = config.get("s3_endpoint", "http://127.0.0.1:9000")
+            ssl_verify = config.get("ssl_verify", False)
+            enable_caching = config.get("enable_caching", False)
+
+            # Create dynamic environment matching nexus structure
+            return EnvironmentConfig(
+                name="nexus_custom",
+                web_api_endpoint=web_api,
+                website_endpoint=website,
+                s3_region=s3_region,
+                ssl_verify=ssl_verify,
+                enable_caching=enable_caching,
+                env_vars={"AWS_ENDPOINT_URL_S3": s3_endpoint},
+            )
+
+        except Exception as e:
+            log = get_logger()
+            log.warning(f"Failed to load custom nexus config: {e}")
+            return None
+
     def __init__(self):
         log = get_logger()
         """Initialize the environment."""
         self._previous_env_vars = {}
+
+        # 1. Try to load custom environment from config file
+        custom_env = self._load_custom_env_from_config()
+
+        # 2. Check for explicit TIDY3D_ENV setting
         env_key = os.environ.get("TIDY3D_ENV")
         env_key = env_key.lower() if env_key else env_key
-        log.info(f"env_key is {env_key}")
-        if not env_key:
-            self._current = prod
-        elif env_key in self.env_map:
-            self._current = self.env_map[env_key]
+
+        # 3. Determine which environment to use (precedence order)
+        if env_key:
+            log.info(f"TIDY3D_ENV is {env_key}")
+            if env_key in self.env_map:
+                self._current = self.env_map[env_key]
+            else:
+                log.warning(
+                    f"The value '{env_key}' for the environment variable TIDY3D_ENV is not supported. "
+                    f"Using prod as default."
+                )
+                self._current = prod
+        elif custom_env:
+            # Config file has custom endpoints and assumes TIDY3D_ENV=nexus
+            log.info("Using custom nexus environment from config file")
+            os.environ["TIDY3D_ENV"] = "nexus"
+            self._current = custom_env
         else:
-            log.warning(
-                f"The value '{env_key}' for the environment variable TIDY3D_ENV is not supported. "
-                f"Using prod as default."
-            )
+            # Default to prod
             self._current = prod
 
+        # Set up environment variables if needed
         if self._current.env_vars:
             for key, value in self._current.env_vars.items():
                 self._previous_env_vars[key] = os.environ.get(key)

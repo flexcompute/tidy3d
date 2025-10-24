@@ -25,6 +25,7 @@ API |:computer:|
     logging
     utilities
     submit_simulations
+    nexus_config
     mesh/index
     heat/index
     charge/index
@@ -55,6 +56,7 @@ API |:computer:|
 .. include:: /api/scene.rst
 .. include:: /api/logging.rst
 .. include:: /api/submit_simulations.rst
+.. include:: /api/nexus_config.rst
 .. include:: /api/mesh/index.rst
 .. include:: /api/heat/index.rst
 .. include:: /api/charge/index.rst
