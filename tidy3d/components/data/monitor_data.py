@@ -149,20 +149,6 @@ class MonitorData(AbstractMonitorData, ABC):
 
         return self.normalize(amplitude_fn)
 
-    def _updated(self, update: dict) -> MonitorData:
-        """Similar to ``updated_copy``, but does not actually copy components, for speed.
-
-        Note
-        ----
-            This does **not** produce a copy of mutable objects, so e.g. if some of the data arrays
-            are not updated, they will point to the values in the original data. This method should
-            thus be used carefully.
-
-        """
-        data_dict = self.dict()
-        data_dict.update(update)
-        return type(self).parse_obj(data_dict)
-
     def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
         """Generate adjoint sources for this ``MonitorData`` instance."""
 
@@ -261,7 +247,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         if all(sym == 0 for sym in self.symmetry):
             return self
 
-        return self._updated(self._symmetry_update_dict)
+        return self.updated_copy(**self._symmetry_update_dict, deep=False, validate=False)
 
     @property
     def symmetry_expanded_copy(self) -> AbstractFieldData:
@@ -780,22 +766,50 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             fields_self = {key: field.conj() for key, field in fields_self.items()}
 
         fields_other = field_data._interpolated_tangential_fields(self._plane_grid_boundaries)
-
-        # Drop size-1 dimensions in the other data
-        fields_other = {key: field.squeeze(drop=True) for key, field in fields_other.items()}
-
-        # Cross products of fields
         dim1, dim2 = self._tangential_dims
-        e_self_x_h_other = fields_self["E" + dim1] * fields_other["H" + dim2]
-        e_self_x_h_other -= fields_self["E" + dim2] * fields_other["H" + dim1]
-        h_self_x_e_other = fields_self["H" + dim1] * fields_other["E" + dim2]
-        h_self_x_e_other -= fields_self["H" + dim2] * fields_other["E" + dim1]
+        d_area = self._diff_area
+
+        # After interpolation, the tangential coordinates should match. However, the two arrays
+        # may either have the same shape along other dimensions, or be broadcastable.
+        if (
+            fields_self[next(iter(fields_self))].shape
+            == fields_other[next(iter(fields_other))].shape
+        ):
+            # Arrays are same shape, so we can use numpy
+            e_self_x_h_other = fields_self["E" + dim1].values * fields_other["H" + dim2].values
+            e_self_x_h_other -= fields_self["E" + dim2].values * fields_other["H" + dim1].values
+            h_self_x_e_other = fields_self["H" + dim1].values * fields_other["E" + dim2].values
+            h_self_x_e_other -= fields_self["H" + dim2].values * fields_other["E" + dim1].values
+            integrand = xr.DataArray(
+                e_self_x_h_other - h_self_x_e_other, coords=fields_self["E" + dim1].coords
+            )
+            integrand *= d_area
+        else:
+            # Broadcasting is needed, which may be complicated depending on the dimensions order.
+            # Use xarray to handle robustly.
+
+            # Drop size-1 dimensions in the other data
+            fields_other = {key: field.squeeze(drop=True) for key, field in fields_other.items()}
+
+            # Cross products of fields
+            e_self_x_h_other = fields_self["E" + dim1] * fields_other["H" + dim2]
+            e_self_x_h_other -= fields_self["E" + dim2] * fields_other["H" + dim1]
+            h_self_x_e_other = fields_self["H" + dim1] * fields_other["E" + dim2]
+            h_self_x_e_other -= fields_self["H" + dim2] * fields_other["E" + dim1]
+            integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
 
         # Integrate over plane
-        d_area = self._diff_area
-        integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
-
         return ModeAmpsDataArray(0.25 * integrand.sum(dim=d_area.dims))
+
+    def _tangential_fields_match_coords(self, coords: ArrayFloat2D) -> bool:
+        """Check if the tangential fields already match given coords in the tangential plane."""
+        for field in self._tangential_fields.values():
+            for idim, dim in enumerate(self._tangential_dims):
+                if field.coords[dim].values.size != coords[idim].size or not np.all(
+                    field.coords[dim].values == coords[idim]
+                ):
+                    return False
+        return True
 
     def _interpolated_tangential_fields(self, coords: ArrayFloat2D) -> dict[str, DataArray]:
         """For 2D monitors, interpolate this fields to given coords in the tangential plane.
@@ -810,6 +824,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             Dictionary with interpolated fields.
         """
         fields = self._tangential_fields
+
+        # If coords already match, just return the tangential fields directly.
+        if self._tangential_fields_match_coords(coords):
+            return fields
 
         # Interpolate if data has more than one coordinate along a dimension
         interp_dict = {"assume_sorted": True}
@@ -1711,10 +1729,12 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         # Normalizing the flux to 1, does not guarantee self terms of overlap integrals
         # are also normalized to 1 when the non-conjugated product is used.
-        if self.monitor.conjugated_dot_product:
+        data_expanded = self.symmetry_expanded
+        if data_expanded.monitor.conjugated_dot_product:
             self_overlap = np.ones((num_freqs, num_modes))
         else:
-            self_overlap = np.abs(self.dot(self, self.monitor.conjugated_dot_product).values)
+            self_overlap = data_expanded.dot(data_expanded, self.monitor.conjugated_dot_product)
+            self_overlap = np.abs(self_overlap.values)
             threshold_array = overlap_thresh * self_overlap
 
         # Compute sorting order and overlaps with neighboring frequencies
@@ -1727,20 +1747,19 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         # Sort in two directions from the base frequency
         for step, last_ind in zip([-1, 1], [-1, num_freqs]):
             # Start with the base frequency
-            data_template = self._isel(f=[f0_ind])
+            data_template = data_expanded._isel(f=[f0_ind])
 
             # March to lower/higher frequencies
             for freq_id in range(f0_ind + step, last_ind, step):
                 # Calculate threshold array for this frequency
-                if not self.monitor.conjugated_dot_product:
+                if not data_expanded.monitor.conjugated_dot_product:
                     overlap_thresh = threshold_array[freq_id, :]
                 # Get next frequency to sort
-                data_to_sort = self._isel(f=[freq_id])
+                data_to_sort = data_expanded._isel(f=[freq_id])
                 # Assign to the base frequency so that outer_dot will compare them
                 data_to_sort = data_to_sort._assign_coords(f=[self.monitor.freqs[f0_ind]])
 
                 # Compute "sorting w.r.t. to neighbor" and overlap values
-
                 sorting_one_mode, amps_one_mode = data_template._find_ordering_one_freq(
                     data_to_sort, overlap_thresh
                 )
@@ -1756,8 +1775,8 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 for mode_ind in list(np.nonzero(overlap[freq_id, :] < overlap_thresh)[0]):
                     log.warning(
                         f"Mode '{mode_ind}' appears to undergo a discontinuous change "
-                        f"between frequencies '{self.monitor.freqs[freq_id]}' "
-                        f"and '{self.monitor.freqs[freq_id - step]}' "
+                        f"between frequencies '{data_expanded.monitor.freqs[freq_id]}' "
+                        f"and '{data_expanded.monitor.freqs[freq_id - step]}' "
                         f"(overlap: '{overlap[freq_id, mode_ind]:.2f}')."
                     )
 
@@ -1796,7 +1815,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             for key, field in update_dict.items()
             if isinstance(field, DataArray)
         }
-        return self._updated(update=update_dict)
+        return self.updated_copy(**update_dict, deep=False, validate=False)
 
     def _assign_coords(self, **assign_coords_kwargs):
         """Wraps ``xarray.DataArray.assign_coords`` for all data fields that are defined over frequency and
@@ -1808,7 +1827,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         update_dict = {
             key: field.assign_coords(**assign_coords_kwargs) for key, field in update_dict.items()
         }
-        return self._updated(update=update_dict)
+        return self.updated_copy(**update_dict, deep=False, validate=False)
 
     def _find_ordering_one_freq(
         self,
@@ -2214,20 +2233,56 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             Array of shape (num_freqs, num_modes) where each row is the
             permutation to apply to the mode_index for that frequency.
         """
+        sort_inds_2d = np.asarray(sort_inds_2d, dtype=int)
         num_freqs, num_modes = sort_inds_2d.shape
+
+        # Fast no-op
+        identity = np.arange(num_modes)
+        if np.all(sort_inds_2d == identity[None, :]):
+            return self
+
         modify_data = {}
+        new_mode_index_coord = identity
+
         for key, data in self.data_arrs.items():
             if "mode_index" not in data.dims or "f" not in data.dims:
                 continue
-            dims_orig = data.dims
-            f_coord = data.coords["f"]
-            slices = []
-            for ifreq in range(num_freqs):
-                sl = data.isel(f=ifreq, mode_index=sort_inds_2d[ifreq])
-                slices.append(sl.assign_coords(mode_index=np.arange(num_modes)))
-            # Concatenate along the 'f' dimension name and then restore original frequency coordinates
-            data = xr.concat(slices, dim="f").assign_coords(f=f_coord).transpose(*dims_orig)
-            modify_data[key] = data
+
+            dims_orig = tuple(data.dims)
+            # Preserve coords (as numpy)
+            coords_out = {
+                k: (v.values if hasattr(v, "values") else np.asarray(v))
+                for k, v in data.coords.items()
+            }
+            f_axis = data.get_axis_num("f")
+            m_axis = data.get_axis_num("mode_index")
+
+            # Move axes directly to (f, ..., mode)
+            src_order = (
+                [f_axis] + [ax for ax in range(data.ndim) if ax not in (f_axis, m_axis)] + [m_axis]
+            )
+            arr = np.moveaxis(data.data, src_order, range(data.ndim))
+            nf, nm = arr.shape[0], arr.shape[-1]
+            if nf != num_freqs or nm != num_modes:
+                raise DataError(
+                    "sort_inds_2d shape does not match array shape in _apply_mode_reorder."
+                )
+
+            # Apply sorting
+            arr2 = arr.reshape(nf, -1, nm)  # (nf, Nlead, nm)
+            inds = sort_inds_2d[:, None, :]  # (nf, 1, nm)
+            arr2_sorted = np.take_along_axis(arr2, inds, axis=2)
+            arr_sorted = arr2_sorted.reshape(arr.shape)
+
+            # Move axes back to original order
+            arr_sorted = np.moveaxis(arr_sorted, range(data.ndim), src_order)
+
+            # Update coords: keep f, reset mode_index to 0..num_modes-1
+            coords_out["mode_index"] = new_mode_index_coord
+            coords_out["f"] = data.coords["f"].values
+
+            modify_data[key] = DataArray(arr_sorted, coords=coords_out, dims=dims_orig)
+
         return self.updated_copy(**modify_data)
 
     def sort_modes(

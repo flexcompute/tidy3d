@@ -1334,8 +1334,7 @@ class ModeSolver(Tidy3dBaseModel):
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
         grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
         data_dict_colocated.update({"monitor": mode_solver_monitor, "grid_expanded": grid_expanded})
-        mode_solver_data = mode_solver_data._updated(update=data_dict_colocated)
-
+        mode_solver_data = mode_solver_data.updated_copy(**data_dict_colocated, deep=False)
         return mode_solver_data
 
     def _normalize_modes(self, mode_solver_data: ModeSolverData):
