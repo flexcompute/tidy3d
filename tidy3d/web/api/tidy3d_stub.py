@@ -308,8 +308,6 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         stub_data = Tidy3dStubData.from_file(
             file_path, lazy=lazy, on_load=cls._check_convergence_and_warnings
         )
-        if not lazy:
-            cls._check_convergence_and_warnings(stub_data)
         return stub_data
 
     @staticmethod

@@ -40,7 +40,7 @@ from tidy3d.web.core.types import PayType
 DEFAULT_NUM_WORKERS = 10
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
-BATCH_MONITOR_PROGRESS_REFRESH_TIME = 0.02
+BATCH_PROGRESS_REFRESH_TIME = 0.02
 
 BatchCategoryType = Literal[
     "tidy3d",
@@ -839,6 +839,9 @@ class Batch(WebContainer):
                         completed += 1
                         progress.update(pbar, completed=completed)
 
+                    progress.refresh()
+                    time.sleep(BATCH_PROGRESS_REFRESH_TIME)
+
     def get_info(self) -> dict[TaskName, TaskInfo]:
         """Get information about each task in the :class:`Batch`.
 
@@ -1070,7 +1073,7 @@ class Batch(WebContainer):
                             progress.update(pbar, description=desc, completed=pct)
 
                         progress.refresh()
-                        time.sleep(BATCH_MONITOR_PROGRESS_REFRESH_TIME)
+                        time.sleep(BATCH_PROGRESS_REFRESH_TIME)
 
                     # final render to terminal state for all bars
                     for task_name, job in self.jobs.items():
