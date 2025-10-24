@@ -453,6 +453,7 @@ def postprocess_adj(
                     else:
                         vjp_value_map[path] = value
 
+            print("BEFORE NUMERICAL ACCUM")
             if numerical_accum is not None:
                 derivative_info_num = DerivativeInfo(
                     paths=numerical_paths_ordered,
@@ -460,6 +461,8 @@ def postprocess_adj(
                 )
 
                 params_static = tuple(get_static(param) for param in info.parameters)
+
+                print("ABOUT TO CALL VJP FN")
 
                 gradients = vjp_fn(parameters=params_static, derivative_info=derivative_info_num)
                 if isinstance(gradients, dict):

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import typing
+from os.path import basename, dirname, join
 
 import tidy3d as td
+from tidy3d.components.autograd.types import NumericalStructureInfo
 from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, Job
 
 from .io_utils import get_vjp_traced_fields, upload_sim_fields_keys
@@ -75,6 +78,7 @@ def _run_async_tidy3d(
 
 def _run_async_tidy3d_bwd(
     simulations: dict[str, td.Simulation],
+    numerical_structures_info: typing.Optional[dict[str, dict[int, NumericalStructureInfo]]] = None,
     **run_kwargs: Any,
 ) -> dict[str, dict]:
     """Run a batch of adjoint simulations using regular web.run()."""

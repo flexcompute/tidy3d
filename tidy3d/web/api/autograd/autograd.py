@@ -100,6 +100,102 @@ def _insert_numerical_structures_static(
     return simulation.copy(update={"structures": structures})
 
 
+def _normalize_simulations_input(
+    simulations: typing.Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
+) -> tuple[dict[str, td.Simulation], dict[str, int]]:
+    """Normalize simulations to a dict and map each task name to its positional index."""
+
+    if isinstance(simulations, dict):
+        return simulations, {name: idx for idx, name in enumerate(simulations)}
+
+    normalized: dict[str, td.Simulation] = {}
+    name_mapping: dict[str, int] = {}
+
+    for idx, sim in enumerate(simulations):
+        task_name = Tidy3dStub(simulation=sim).get_default_task_name() + f"_{idx + 1}"
+        normalized[task_name] = sim
+        name_mapping[task_name] = idx
+
+    return normalized, name_mapping
+
+
+def _broadcast_config_list(
+    configs: typing.Optional[typing.Sequence[typing.Optional[typing.Any]]],
+    num_items: int,
+) -> dict[int, typing.Optional[typing.Any]]:
+    """Broadcast a list/tuple configuration to positional indices."""
+
+    if configs is None:
+        return {}
+
+    if len(configs) not in (1, num_items):
+        raise AdjointError(
+            "When providing a list/tuple for numerical_structures/user_vjp in run_async,"
+            " its length must be 1 or match the number of simulations."
+        )
+
+    if len(configs) == 1:
+        return dict.fromkeys(range(num_items), configs[0])
+
+    return dict(enumerate(configs))
+
+
+def _normalize_numerical_structures_input(
+    simulations: typing.Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
+    numerical_structures,
+    name_mapping: dict[str, int],
+) -> dict[str, typing.Optional[dict[int, dict[str, typing.Any]]]]:
+    """Normalize per-task numerical structure configs keyed by task names."""
+
+    if numerical_structures is None:
+        return dict.fromkeys(name_mapping)
+
+    if isinstance(simulations, dict):
+        expected_keys = set(simulations.keys())
+        provided_keys = set(numerical_structures.keys())
+        if provided_keys != expected_keys:
+            raise AdjointError(
+                "'numerical_structures' keys must match the simulation keys when run_async receives a dict."
+            )
+        return numerical_structures
+
+    configs_indexed = _broadcast_config_list(numerical_structures, len(simulations))
+
+    normalized = {}
+    for task_name, idx in name_mapping.items():
+        normalized[task_name] = configs_indexed.get(idx)
+
+    return normalized
+
+
+def _normalize_user_vjp_input(
+    simulations: typing.Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
+    user_vjp,
+    name_mapping: dict[str, int],
+) -> dict[str, typing.Any]:
+    """Normalize per-task user VJP configurations keyed by task names."""
+
+    if user_vjp is None:
+        return {}
+
+    if isinstance(simulations, dict):
+        expected_keys = set(simulations.keys())
+        provided_keys = set(user_vjp.keys())
+        if provided_keys != expected_keys:
+            raise AdjointError(
+                "'user_vjp' keys must match the simulation keys when run_async receives a dict."
+            )
+        return user_vjp
+
+    configs_indexed = _broadcast_config_list(user_vjp, len(simulations))
+
+    normalized = {}
+    for task_name, idx in name_mapping.items():
+        normalized[task_name] = configs_indexed.get(idx)
+
+    return normalized
+
+
 def _contains_tracer(value) -> bool:
     if isinstance(value, Box):
         return True
@@ -531,6 +627,18 @@ def run_async(
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
     lazy: typing.Optional[bool] = None,
+    numerical_structures: typing.Optional[
+        typing.Union[
+            dict[str, dict[int, dict[str, typing.Any]]],
+            typing.Sequence[typing.Optional[dict[int, dict[str, typing.Any]]]],
+        ]
+    ] = None,
+    user_vjp: typing.Optional[
+        typing.Union[
+            dict[str, typing.Any],
+            typing.Sequence[typing.Any],
+        ]
+    ] = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -607,9 +715,45 @@ def run_async(
 
     path_dir = Path(path_dir)
 
-    if is_valid_for_autograd_async(simulations):
+    simulations_norm, name_mapping = _normalize_simulations_input(simulations)
+
+    numerical_structures_norm = _normalize_numerical_structures_input(
+        simulations=simulations,
+        numerical_structures=numerical_structures,
+        name_mapping=name_mapping,
+    )
+
+    user_vjp_norm = _normalize_user_vjp_input(
+        simulations=simulations,
+        user_vjp=user_vjp,
+        name_mapping=name_mapping,
+    )
+
+    numerical_structures_validated = {}
+    for name, config in numerical_structures_norm.items():
+        cfg = config or {}
+        numerical_structures_validated[name] = _validate_numerical_structures(
+            numerical_structures=cfg,
+            user_vjp=user_vjp_norm.get(name),
+            simulation=simulations_norm[name],
+            require_vjp=local_gradient,
+        )
+
+    should_use_autograd_async = is_valid_for_autograd_async(simulations_norm)
+    if not should_use_autograd_async:
+        for name, _ in simulations_norm.items():
+            if numerical_structures_norm.get(name):
+                configs = numerical_structures_norm[name]
+                for cfg in configs.values():
+                    params = cfg.get("parameters")
+                    if _contains_tracer(params):
+                        should_use_autograd_async = True
+                        break
+            if should_use_autograd_async:
+                break
+
         return _run_async(
-            simulations=simulations,
+            simulations=simulations_norm,
             folder_name=folder_name,
             path_dir=path_dir,
             callback_url=callback_url,
@@ -620,13 +764,27 @@ def run_async(
             parent_tasks=parent_tasks,
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+            numerical_structures=numerical_structures_validated,
+            user_vjp=user_vjp_norm,
             pay_type=pay_type,
             priority=priority,
             lazy=lazy,
         )
 
+    simulations_static = {
+        name: (
+            _insert_numerical_structures_static(
+                simulation=simulations_norm[name],
+                numerical_structures=numerical_structures_validated[name],
+            )
+            if numerical_structures_validated[name]
+            else simulations_norm[name]
+        )
+        for name in simulations_norm
+    }
+
     return run_async_webapi(
-        simulations=simulations,
+        simulations=simulations_static,
         folder_name=folder_name,
         path_dir=path_dir,
         callback_url=callback_url,
@@ -710,6 +868,8 @@ def _run_async(
     simulations: dict[str, td.Simulation],
     local_gradient: bool = False,
     max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    numerical_structures: typing.Optional[dict[str, dict[int, dict[str, typing.Any]]]] = None,
+    user_vjp: typing.Optional[dict[str, typing.Any]] = None,
     **run_async_kwargs: Any,
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""
@@ -718,37 +878,127 @@ def _run_async(
 
     traced_fields_sim_dict: dict[str, AutogradFieldMap] = {}
     sims_original: dict[str, td.Simulation] = {}
+
+    skip_autograd_tasks: dict[str, bool] = {}
+    numerical_structures = numerical_structures or {}
+    user_vjp = user_vjp or {}
+
     for task_name in task_names:
         sim = simulations[task_name]
-        traced_fields = setup_run(simulation=sim)
+        setup_result = setup_run(
+            simulation=simulation,
+            numerical_structures=numerical_structures.get(task_name),
+            user_vjp=user_vjp.get(task_name),
+        )
+        traced_fields = setup_result.sim_fields#setup_run(simulation=sim)
         traced_fields_sim_dict[task_name] = traced_fields
+
+        has_numerical_tracers = bool(setup_result.numerical_info)
+
+        if not traced_fields and not has_numerical_tracers:
+            skip_autograd_tasks[task_name] = True
+            sims_original[task_name] = setup_result.simulation
+            continue
+
         payload = sim._serialized_traced_field_keys(traced_fields)
         sim_static = sim.to_static()
         if payload:
             sim_static.attrs[TRACED_FIELD_KEYS_ATTR] = payload
+
         sims_original[task_name] = sim_static
-    traced_fields_sim_dict = dict_ag(traced_fields_sim_dict)
+        if has_numerical_tracers:
+            aux_entry = {AUX_KEY_NUMERICAL_STRUCTURES: setup_result.numerical_info}
+            run_async_kwargs.setdefault("aux_data_seed", {})[task_name] = aux_entry
+        run_async_kwargs.setdefault("numerical_structures_info", {})[task_name] = (
+            setup_result.numerical_info or {}
+        )
 
-    # TODO: shortcut primitive running for any items with no tracers?
+    # If all tasks skipped autograd tracing, run the batch without autograd
+    if all(skip_autograd_tasks.get(task_name, False) for task_name in task_names):
+        sims_static = {
+            name: (
+                _insert_numerical_structures_static(
+                    simulation=simulations[name],
+                    numerical_structures=numerical_structures.get(name, {}),
+                )
+                if numerical_structures.get(name)
+                else simulations[name]
+            )
+            for name in task_names
+        }
 
-    aux_data_dict = {task_name: {} for task_name in task_names}
+        path_dir = run_async_kwargs.get("path_dir")
+        batch_data, _ = _run_async_tidy3d(
+            simulations=sims_static,
+            path_dir=path_dir,
+            **{k: v for k, v in run_async_kwargs.items() if k != "path_dir"},
+        )
+        return batch_data
+
+    # Remove skipped tasks from traced field dictionaries for autograd run
+    traced_fields_sim_dict = dict_ag(
+        {
+            name: traced_fields
+            for name, traced_fields in traced_fields_sim_dict.items()
+            if not skip_autograd_tasks.get(name, False)
+        }
+    )
+    sims_original = {name: sims_original[name] for name in traced_fields_sim_dict.keys()}
+    numerical_info_map_full = run_async_kwargs.pop("numerical_structures_info", {})
+    aux_data_seed = run_async_kwargs.pop("aux_data_seed", {})
+    aux_data_dict = {
+        task_name: dict(aux_data_seed.get(task_name, {}))
+        for task_name in traced_fields_sim_dict.keys()
+    }
+    numerical_info_map = {
+        name: numerical_info_map_full.get(name, {}) for name in traced_fields_sim_dict.keys()
+    }
+    user_vjp = {name: user_vjp.get(name) for name in traced_fields_sim_dict.keys()}
+
     traced_fields_data_dict = _run_async_primitive(
         traced_fields_sim_dict,  # if you pass as a kwarg it will not trace :/
         sims_original=sims_original,
         aux_data_dict=aux_data_dict,
         local_gradient=local_gradient,
         max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+        user_vjp=user_vjp,
+        numerical_structures_info=numerical_info_map,
         **run_async_kwargs,
     )
 
     # TODO: package this as a Batch? it might be not possible as autograd tracers lose their
     # powers when we save them to file.
     sim_data_dict = {}
-    for task_name in task_names:
+    for task_name in traced_fields_sim_dict.keys():
         traced_fields_data = traced_fields_data_dict[task_name]
         aux_data = aux_data_dict[task_name]
+        if numerical_info_map.get(task_name) and AUX_KEY_NUMERICAL_STRUCTURES not in aux_data:
+            aux_data[AUX_KEY_NUMERICAL_STRUCTURES] = numerical_info_map[task_name]
         sim_data = postprocess_run(traced_fields_data=traced_fields_data, aux_data=aux_data)
         sim_data_dict[task_name] = sim_data
+
+    # For tasks that skipped autograd, run vanilla sims now and merge results
+    skipped_names = [name for name in task_names if skip_autograd_tasks.get(name, False)]
+    if skipped_names:
+        sims_static_skipped = {
+            name: (
+                _insert_numerical_structures_static(
+                    simulation=simulations[name],
+                    numerical_structures=numerical_structures.get(name, {}),
+                )
+                if numerical_structures.get(name)
+                else simulations[name]
+            )
+            for name in skipped_names
+        }
+        path_dir = run_async_kwargs.get("path_dir")
+        batch_data_skipped, _ = _run_async_tidy3d(
+            simulations=sims_static_skipped,
+            path_dir=path_dir,
+            **{k: v for k, v in run_async_kwargs.items() if k != "path_dir"},
+        )
+        for name in skipped_names:
+            sim_data_dict[name] = batch_data_skipped[name]
 
     return sim_data_dict
 
@@ -898,6 +1148,8 @@ def _run_async_primitive(
     aux_data_dict: dict[dict[str, typing.Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
+    user_vjp: typing.Optional[dict[str, typing.Any]] = None,
+    numerical_structures_info: typing.Optional[dict[str, dict[int, NumericalStructureInfo]]] = None,
     **run_async_kwargs: Any,
 ) -> dict[str, AutogradFieldMap]:
     task_names = sim_fields_dict.keys()
@@ -913,6 +1165,7 @@ def _run_async_primitive(
         )
 
     if local_gradient:
+        print("IN LOCAL GRADIENT")
         batch_data_combined, _ = _run_async_tidy3d(sims_combined, **run_async_kwargs)
 
         field_map_fwd_dict = {}
@@ -920,6 +1173,8 @@ def _run_async_primitive(
             sim_data_combined = batch_data_combined[task_name]
             sim_original = sims_original[task_name]
             aux_data = aux_data_dict[task_name]
+            if numerical_structures_info and task_name in numerical_structures_info:
+                aux_data[AUX_KEY_NUMERICAL_STRUCTURES] = numerical_structures_info[task_name]
             field_map_fwd_dict[task_name] = postprocess_fwd(
                 sim_data_combined=sim_data_combined,
                 sim_original=sim_original,
@@ -946,8 +1201,11 @@ def _run_async_primitive(
         field_map_fwd_dict = {}
         for task_name, task_id_fwd in task_ids_fwd_dict.items():
             sim_data_orig = sim_data_orig_dict[task_name]
-            aux_data_dict[task_name][AUX_KEY_FWD_TASK_ID] = task_id_fwd
-            aux_data_dict[task_name][AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
+            aux_data = aux_data_dict[task_name]
+            aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
+            aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
+            if numerical_structures_info and task_name in numerical_structures_info:
+                aux_data[AUX_KEY_NUMERICAL_STRUCTURES] = numerical_structures_info[task_name]
             field_map = sim_data_orig._strip_traced_fields(
                 include_untraced_data_arrays=True, starting_path=("data",)
             )
@@ -1131,6 +1389,8 @@ def _run_async_bwd(
     aux_data_dict: dict[str, dict[str, typing.Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
+    user_vjp=None,
+    numerical_structures_info: typing.Optional[dict[str, dict[int, NumericalStructureInfo]]] = None,
     **run_async_kwargs: Any,
 ) -> typing.Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulation, computes grad."""
@@ -1139,6 +1399,14 @@ def _run_async_bwd(
     run_async_kwargs["is_adjoint"] = True
 
     task_names = data_fields_original_dict.keys()
+
+    if numerical_structures_info is None:
+        numerical_structures_info = {}
+
+    if isinstance(user_vjp, dict):
+        user_vjp_map = user_vjp
+    else:
+        user_vjp_map = dict.fromkeys(task_names, user_vjp)
 
     # get the fwd epsilon and field data from the cached aux_data
     sim_data_orig_dict = {}
@@ -1187,6 +1455,10 @@ def _run_async_bwd(
                 adj_task_name = f"{task_name}_adjoint_{i}"
                 all_sims_adj[adj_task_name] = sim_adj
                 task_name_mapping[adj_task_name] = task_name
+                # Carry per-task numerical metadata
+                aux = aux_data_dict[task_name]
+                if AUX_KEY_NUMERICAL_STRUCTURES in aux:
+                    numerical_structures_info[adj_task_name] = aux[AUX_KEY_NUMERICAL_STRUCTURES]
 
         if not all_sims_adj:
             td.log.warning(
@@ -1216,11 +1488,13 @@ def _run_async_bwd(
                 sim_fields_keys = sim_fields_keys_dict[task_name]
 
                 # Compute VJP contribution
+                task_user_vjp = user_vjp_map.get(task_name)
                 vjp_results[adj_task_name] = postprocess_adj(
                     sim_data_adj=sim_data_adj,
                     sim_data_orig=sim_data_orig,
                     sim_data_fwd=sim_data_fwd,
                     sim_fields_keys=sim_fields_keys,
+                    user_vjp=task_user_vjp,
                     numerical_info=aux_data_dict[task_name].get(AUX_KEY_NUMERICAL_STRUCTURES, {}),
                 )
         else:
@@ -1242,6 +1516,7 @@ def _run_async_bwd(
             # Run all adjoint simulations in a single batch
             vjp_results = _run_async_tidy3d_bwd(
                 simulations=all_sims_adj,
+                numerical_structures_info=numerical_structures_info,
                 **run_async_kwargs,
             )
 
