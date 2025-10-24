@@ -184,9 +184,17 @@ class HttpSessionManager:
     def get(self, path: str, json=None, params=None):
         """Get the resource."""
         self.reinit()
-        return self.session.get(
+        get = self.session.get(
             url=Env.current.get_real_url(path), auth=api_key_auth, json=json, params=params
         )
+        # try:
+        #     print("pre")
+        #     print(get)
+        #     print(get.text)
+        #     print("after")
+        # except Exception as e:
+        #     raise e
+        return get
 
     @http_interceptor
     def post(self, path: str, json=None):

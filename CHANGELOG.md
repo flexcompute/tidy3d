@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [v2.9.2]
+
+### Added
+
+### Changed
+- Improved Nexus platform configuration support and instantiation. Includes improvements to use the new `tidy3d configure ... --nexus-url <url>` CLI functionality.
+
+### Fixed
 
 ## [v2.9.1] - 2025-08-13
 

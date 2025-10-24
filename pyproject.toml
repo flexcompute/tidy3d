@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.9.1"
+version = "2.9.2"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"

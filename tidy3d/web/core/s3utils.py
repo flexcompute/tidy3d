@@ -69,6 +69,11 @@ class _S3STSToken(BaseModel):
             aws_secret_access_key=self.user_credential.secret_access_key,
             aws_session_token=self.user_credential.session_token,
             verify=Env.current.ssl_verify,
+            **(
+                {"endpoint_url": Env.current.env_vars.get("AWS_ENDPOINT_URL_S3")}
+                if "nexus" in Env.current.name
+                else {}
+            ),
         )
 
     def is_expired(self) -> bool:
