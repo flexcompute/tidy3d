@@ -8000,6 +8000,12 @@
           ],
           "type": "string"
         },
+        "quasi_tem_threshold": {
+          "default": 0.97,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
         "sort_spec": {
           "allOf": [
             {
@@ -8021,6 +8027,12 @@
         "target_neff": {
           "exclusiveMinimum": 0,
           "type": "number"
+        },
+        "terminal_specs": {
+          "items": {
+            "$ref": "#/definitions/TerminalSpec"
+          },
+          "type": "array"
         },
         "track_freq": {
           "enum": [
@@ -11613,6 +11625,79 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "TerminalSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "minus_terminals": {
+          "items": {
+            "anyOf": [
+              {
+                "items": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "ArrayLike"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "plus_terminals": {
+          "items": {
+            "anyOf": [
+              {
+                "items": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "ArrayLike"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "type": {
+          "default": "TerminalSpec",
+          "enum": [
+            "TerminalSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "minus_terminals",
+        "plus_terminals"
+      ],
       "type": "object"
     },
     "TetrahedralGridDataset": {

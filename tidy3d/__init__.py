@@ -24,9 +24,7 @@ from tidy3d.components.microwave.data.monitor_data import (
     MicrowaveModeSolverData,
 )
 from tidy3d.components.microwave.impedance_calculator import ImpedanceCalculator
-from tidy3d.components.microwave.mode_spec import (
-    MicrowaveModeSpec,
-)
+from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec, TerminalSpec
 from tidy3d.components.microwave.monitor import (
     MicrowaveModeMonitor,
     MicrowaveModeSolverMonitor,
@@ -799,6 +797,7 @@ __all__ = [
     "TemperatureBC",
     "TemperatureData",
     "TemperatureMonitor",
+    "TerminalSpec",
     "TetrahedralGridDataset",
     "Transformed",
     "TriangleMesh",

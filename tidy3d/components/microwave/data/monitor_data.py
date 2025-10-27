@@ -272,6 +272,32 @@ class MicrowaveModeData(ModeData, MicrowaveBaseModel):
         "been used to set up the monitor or mode solver.",
     )
 
+    def _is_transmission_line_mode(self, mode_index: int) -> bool:
+        """Check if a mode qualifies as a quasi-TEM transmission line mode.
+
+        Parameters
+        ----------
+        mode_index : int
+            Index of the mode to check.
+
+        Returns
+        -------
+        bool
+            True if mode is quasi-TEM, False otherwise.
+        """
+        TE_fraction = self.wg_TE_fraction.isel(mode_index=mode_index)
+        TM_fraction = self.wg_TM_fraction.isel(mode_index=mode_index)
+        # Evaluate QTEM condition at lowest frequency where TEM behavior is most critical
+        idx_min = TE_fraction["f"].argmin().item()
+        TE_fraction_low_f = TE_fraction.isel(f=idx_min)
+        TM_fraction_low_f = TM_fraction.isel(f=idx_min)
+        if (
+            TE_fraction_low_f >= self.monitor.mode_spec.quasi_tem_threshold
+            and TM_fraction_low_f >= self.monitor.mode_spec.quasi_tem_threshold
+        ):
+            return True
+        return False
+
     @property
     def modes_info(self) -> xr.Dataset:
         """Dataset collecting various properties of the stored modes."""

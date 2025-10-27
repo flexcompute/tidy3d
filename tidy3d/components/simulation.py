@@ -77,7 +77,6 @@ from .medium import (
     PECMedium,
 )
 from .microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
-from .microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from .monitor import (
     AbstractFieldProjectionMonitor,
     AbstractModeMonitor,
@@ -4478,7 +4477,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_time_monitors_outside_run_time()
         self._validate_time_monitors_num_steps()
         self._validate_freq_monitors_freq_range()
-        self._validate_microwave_mode_specs()
+        self._validate_microwave_mode_plane_analysis()
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
             raise SetupError("No sources in simulation.")
@@ -4667,29 +4666,24 @@ class Simulation(AbstractYeeGridSimulation):
                     "(Hz) as defined by the sources."
                 )
 
-    def _validate_microwave_mode_specs(self) -> None:
-        """Raise error if any microwave mode specifications with ``AutoImpedanceSpec`` will
-        fail to instantiate.
-        """
+    def _validate_microwave_mode_plane_analysis(self) -> None:
+        """Raise error if mode plane analysis fails for a `MicrowaveModeMonitor` or `MicrowaveModeSolverMonitor`.
+        Requires the grid and volumetric_structures information, so perform at pre upload stage."""
+        from tidy3d.components.mode.mode_solver import ModeSolver
+
         for monitor in self.monitors:
             if not isinstance(monitor, (MicrowaveModeMonitor, MicrowaveModeSolverMonitor)):
                 continue
-
-            if monitor.mode_spec._using_auto_current_spec:
-                mode_plane_analyzer = ModePlaneAnalyzer(
-                    center=monitor.center, size=monitor.size, field_data_colocated=monitor.colocate
+            mw_mode_spec = monitor.mode_spec
+            plane = monitor.geometry
+            try:
+                ModeSolver._validate_mode_plane_analysis(
+                    self, mw_mode_spec, plane, colocate=monitor.colocate
                 )
-                try:
-                    _ = mode_plane_analyzer.get_conductor_bounding_boxes(
-                        self.volumetric_structures,
-                        self.grid,
-                        self.symmetry,
-                        self.simulation_geometry,
-                    )
-                except SetupError as e:
-                    raise SetupError(
-                        f"Failed to setup auto impedance specification for monitor '{monitor.name}'. {e!s}"
-                    ) from e
+            except SetupError as e:
+                raise SetupError(
+                    f"Failed to perform mode plane analysis for monitor '{monitor.name}'. {e!s}"
+                ) from e
 
     @cached_property
     def monitors_data_size(self) -> dict[str, float]:

@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pd
 import pytest
 import xarray as xr
-from shapely import LineString
 
 import tidy3d as td
 from tidy3d.components.data.data_array import FreqModeDataArray
@@ -27,15 +25,12 @@ from tidy3d.components.microwave.path_integrals.factory import (
     make_path_integrals,
     make_voltage_integral,
 )
-from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import (
-    ModePlaneAnalyzer,
-)
-from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.constants import EPSILON_0
 from tidy3d.exceptions import DataError, SetupError, ValidationError
 
-from ..test_data.test_monitor_data import make_directivity_data
-from ..utils import AssertLogLevel, get_spatial_coords_dict, run_emulated
+from ...test_data.test_monitor_data import make_directivity_data
+from ...utils import AssertLogLevel, get_spatial_coords_dict, run_emulated
+from .utils import make_mw_sim, make_stripline_mode_solver
 
 MAKE_PLOTS = False
 if MAKE_PLOTS:
@@ -198,194 +193,6 @@ def make_coax_field_data():
         symmetry_center=SIM_Z.center,
         grid_expanded=SIM_Z.discretize_monitor(FIELD_MONITOR),
     )
-
-
-def make_mw_sim(
-    use_2D: bool = False,
-    colocate: bool = False,
-    transmission_line_type: Literal["microstrip", "cpw", "coax", "stripline"] = "microstrip",
-    width=3 * mm,
-    height=1 * mm,
-    metal_thickness=0.2 * mm,
-) -> td.Simulation:
-    """Helper to create a microwave simulation with a single type of transmission line present."""
-
-    freq_start = 1e9
-    freq_stop = 10e9
-
-    freq0 = (freq_start + freq_stop) / 2
-    fwidth = freq_stop - freq_start
-    freqs = np.arange(freq_start, freq_stop, 1e9)
-
-    run_time = 60 / fwidth
-
-    length = 40 * mm
-    sim_width = length
-
-    pec = td.PEC
-    if use_2D:
-        metal_thickness = 0.0
-        pec = td.PEC2D
-
-    epsr = 4.4
-    diel = td.Medium(permittivity=epsr)
-
-    metal_geos = []
-
-    if transmission_line_type == "microstrip":
-        substrate = td.Structure(
-            geometry=td.Box(
-                center=[0, 0, 0],
-                size=[td.inf, td.inf, 2 * height],
-            ),
-            medium=diel,
-        )
-        metal_geos.append(
-            td.Box(
-                center=[0, 0, height + metal_thickness / 2],
-                size=[td.inf, width, metal_thickness],
-            )
-        )
-    elif transmission_line_type == "cpw":
-        substrate = td.Structure(
-            geometry=td.Box(
-                center=[0, 0, 0],
-                size=[td.inf, td.inf, 2 * height],
-            ),
-            medium=diel,
-        )
-        metal_geos.append(
-            td.Box(
-                center=[0, 0, height + metal_thickness / 2],
-                size=[td.inf, width, metal_thickness],
-            )
-        )
-        gnd_width = 10 * width
-        gap = width / 5
-        gnd_shift = gnd_width / 2 + gap + width / 2
-        metal_geos.append(
-            td.Box(
-                center=[0, -gnd_shift, height + metal_thickness / 2],
-                size=[td.inf, gnd_width, metal_thickness],
-            )
-        )
-        metal_geos.append(
-            td.Box(
-                center=[0, gnd_shift, height + metal_thickness / 2],
-                size=[td.inf, gnd_width, metal_thickness],
-            )
-        )
-    elif transmission_line_type == "coax":
-        substrate = td.Structure(
-            geometry=td.Box(
-                center=[0, 0, 0],
-                size=[td.inf, td.inf, 2 * height],
-            ),
-            medium=diel,
-        )
-        metal_geos.append(
-            td.GeometryGroup(
-                geometries=(
-                    td.ClipOperation(
-                        operation="difference",
-                        geometry_a=td.Cylinder(
-                            axis=0, radius=2 * mm, center=(0, 0, 5 * mm), length=td.inf
-                        ),
-                        geometry_b=td.Cylinder(
-                            axis=0, radius=1.8 * mm, center=(0, 0, 5 * mm), length=td.inf
-                        ),
-                    ),
-                    td.Cylinder(axis=0, radius=0.6 * mm, center=(0, 0, 5 * mm), length=td.inf),
-                )
-            )
-        )
-    elif transmission_line_type == "stripline":
-        substrate = td.Structure(
-            geometry=td.Box(
-                center=[0, 0, 0],
-                size=[td.inf, td.inf, 2 * height + metal_thickness],
-            ),
-            medium=diel,
-        )
-        metal_geos.append(
-            td.Box(
-                center=[0, 0, 0],
-                size=[td.inf, width, metal_thickness],
-            )
-        )
-        gnd_width = 10 * width
-        metal_geos.append(
-            td.Box(
-                center=[0, 0, height + metal_thickness],
-                size=[td.inf, gnd_width, metal_thickness],
-            )
-        )
-        metal_geos.append(
-            td.Box(
-                center=[0, 0, -height - metal_thickness],
-                size=[td.inf, gnd_width, metal_thickness],
-            )
-        )
-    else:
-        raise AssertionError("Incorrect argument")
-
-    metal_structures = [td.Structure(geometry=geo, medium=pec) for geo in metal_geos]
-    structures = [substrate, *metal_structures]
-    boundary_spec = td.BoundarySpec(
-        x=td.Boundary(plus=td.PML(), minus=td.PML()),
-        y=td.Boundary(plus=td.PML(), minus=td.PML()),
-        z=td.Boundary(plus=td.PML(), minus=td.PECBoundary()),
-    )
-
-    size_sim = [
-        length + 2 * width,
-        sim_width,
-        20 * mm + height + metal_thickness,
-    ]
-    center_sim = [0, 0, size_sim[2] / 2]
-    # Slightly different setup for stripline substrate sandwiched between ground planes
-    if transmission_line_type == "stripline":
-        center_sim[2] = 0
-        boundary_spec = td.BoundarySpec(
-            x=td.Boundary(plus=td.PML(), minus=td.PML()),
-            y=td.Boundary(plus=td.PML(), minus=td.PML()),
-            z=td.Boundary(plus=td.PML(), minus=td.PML()),
-        )
-    size_port = [0, sim_width, size_sim[2]]
-    center_port = [0, 0, center_sim[2]]
-    impedance_specs = (td.AutoImpedanceSpec(),) * 4
-    mode_spec = td.MicrowaveModeSpec(
-        num_modes=4,
-        target_neff=1.8,
-        impedance_specs=impedance_specs,
-    )
-
-    mode_monitor = td.MicrowaveModeMonitor(
-        center=center_port, size=size_port, freqs=freqs, name="mode_1", colocate=colocate
-    )
-
-    gaussian = td.GaussianPulse(freq0=freq0, fwidth=fwidth)
-    mode_src = td.ModeSource(
-        center=(-length / 2, 0, center_sim[2]),
-        size=size_port,
-        direction="+",
-        mode_spec=mode_spec,
-        mode_index=0,
-        source_time=gaussian,
-    )
-    sim = td.Simulation(
-        center=center_sim,
-        size=size_sim,
-        grid_spec=td.GridSpec.uniform(dl=0.1 * mm),
-        structures=structures,
-        sources=[mode_src],
-        monitors=[mode_monitor],
-        run_time=run_time,
-        boundary_spec=boundary_spec,
-        plot_length_units="mm",
-        symmetry=(0, 0, 0),
-    )
-    return sim
 
 
 def test_inductance_formulas():
@@ -652,209 +459,6 @@ def test_path_integral_creation():
         )
 
 
-def test_mode_plane_analyzer_errors():
-    """Check that the ModePlaneAnalyzer reports errors properly."""
-
-    path_spec_gen = ModePlaneAnalyzer(size=(0, 2, 2), field_data_colocated=False)
-
-    # First some quick sanity checks with the helper
-    test_path = td.Box(center=(0, 0, 0), size=(0, 0.9, 0.1))
-    test_shapely = [LineString([(-1, 0), (1, 0)])]
-    assert path_spec_gen._check_box_intersects_with_conductors(test_shapely, test_path)
-
-    test_path = td.Box(center=(0, 0, 0), size=(0, 2.1, 0.1))
-    test_shapely = [LineString([(-1, 0), (1, 0)])]
-    assert not path_spec_gen._check_box_intersects_with_conductors(test_shapely, test_path)
-
-    sim = make_mw_sim(False, False, "microstrip")
-    coax = td.GeometryGroup(
-        geometries=(
-            td.ClipOperation(
-                operation="difference",
-                geometry_a=td.Cylinder(axis=0, radius=2 * mm, center=(0, 0, 5 * mm), length=td.inf),
-                geometry_b=td.Cylinder(
-                    axis=0, radius=1.4 * mm, center=(0, 0, 5 * mm), length=td.inf
-                ),
-            ),
-            td.Cylinder(axis=0, radius=1 * mm, center=(0, 0, 5 * mm), length=td.inf),
-        )
-    )
-    coax_struct = td.Structure(geometry=coax, medium=td.PEC)
-    sim = sim.updated_copy(structures=[coax_struct])
-    mode_monitor = sim.monitors[0]
-    modal_plane = td.Box(center=mode_monitor.center, size=mode_monitor.size)
-    path_spec_gen = ModePlaneAnalyzer(
-        center=modal_plane.center,
-        size=modal_plane.size,
-        field_data_colocated=mode_monitor.colocate,
-    )
-    with pytest.raises(SetupError):
-        path_spec_gen.get_conductor_bounding_boxes(
-            sim.structures,
-            sim.grid,
-            sim.symmetry,
-            sim.bounding_box,
-        )
-
-    # Error when no conductors intersecting mode plane
-    path_spec_gen = path_spec_gen.updated_copy(size=(0, 0.1, 0.1), center=(0, 0, 1.5))
-    with pytest.raises(SetupError):
-        path_spec_gen.get_conductor_bounding_boxes(
-            sim.structures,
-            sim.grid,
-            sim.symmetry,
-            sim.bounding_box,
-        )
-
-
-@pytest.mark.parametrize("colocate", [False, True])
-@pytest.mark.parametrize("tline_type", ["microstrip", "cpw", "coax"])
-def test_mode_plane_analyzer_canonical_shapes(colocate, tline_type):
-    """Test canonical transmission line types to make sure the correct path integrals are generated."""
-    sim = make_mw_sim(False, colocate, tline_type)
-    mode_monitor = sim.monitors[0]
-    modal_plane = td.Box(center=mode_monitor.center, size=mode_monitor.size)
-    mode_plane_analyzer = ModePlaneAnalyzer(
-        center=modal_plane.center,
-        size=modal_plane.size,
-        field_data_colocated=mode_monitor.colocate,
-    )
-    bounding_boxes, geos = mode_plane_analyzer.get_conductor_bounding_boxes(
-        sim.structures,
-        sim.grid,
-        sim.symmetry,
-        sim.bounding_box,
-    )
-
-    if tline_type == "coax":
-        assert len(bounding_boxes) == 2
-        for path_spec in bounding_boxes:
-            assert np.all(np.isclose(path_spec.center, (0, 0, 5 * mm)))
-    else:
-        assert len(bounding_boxes) == 1
-        assert np.all(np.isclose(bounding_boxes[0].center, (0, 0, 1.1 * mm)))
-
-
-@pytest.mark.parametrize("use_2D", [False, True])
-@pytest.mark.parametrize("symmetry", [(0, 0, 1), (0, 1, 1), (0, 1, 0)])
-def test_mode_plane_analyzer_advanced(use_2D, symmetry):
-    """The various symmetry permutations as well as with and without 2D structures."""
-    sim = make_mw_sim(use_2D, False, "stripline")
-
-    # Add shapes outside the portion considered for the symmetric simulation
-    bottom_left = td.Structure(
-        geometry=td.Box(
-            center=[0, -5 * mm, -5 * mm],
-            size=[td.inf, 1 * mm, 1 * mm],
-        ),
-        medium=td.PEC,
-    )
-    # Add shape only in the symmetric portion
-    top_right = td.Structure(
-        geometry=td.Box(
-            center=[0, 5 * mm, 5 * mm],
-            size=[td.inf, 1 * mm, 1 * mm],
-        ),
-        medium=td.PEC,
-    )
-
-    structures = [*list(sim.structures), bottom_left, top_right]
-    sim = sim.updated_copy(symmetry=symmetry, structures=structures)
-    mode_monitor = sim.monitors[0]
-
-    modal_plane = td.Box(center=mode_monitor.center, size=mode_monitor.size)
-    mode_plane_analyzer = ModePlaneAnalyzer(
-        center=modal_plane.center,
-        size=modal_plane.size,
-        field_data_colocated=mode_monitor.colocate,
-    )
-    bounding_boxes, geos = mode_plane_analyzer.get_conductor_bounding_boxes(
-        sim.structures,
-        sim.grid,
-        sim.symmetry,
-        sim.bounding_box,
-    )
-
-    if symmetry[1] == 1 and symmetry[2] == 1:
-        assert len(bounding_boxes) == 7
-    else:
-        assert len(bounding_boxes) == 5
-
-
-@pytest.mark.parametrize(
-    "mode_size", [(1.4 * mm, 1.0 * mm, 0), (1.4 * mm, 2 * mm, 0), (1.4 * mm - 1, 1.0 * mm + 1, 0)]
-)
-@pytest.mark.parametrize("symmetry", [(0, 0, 0), (0, 1, 0), (1, 1, 0)])
-def test_mode_plane_analyzer_mode_bounds(mode_size, symmetry):
-    """Test that the the mode plane bounds matches the mode solver grid bounds exactly."""
-
-    dl = 0.1 * mm
-
-    freq0 = (5e9) / 2
-    fwidth = 4e9
-    run_time = 60 / fwidth
-
-    boundary_spec = td.BoundarySpec(
-        x=td.Boundary(plus=td.PECBoundary(), minus=td.PECBoundary()),
-        y=td.Boundary(plus=td.PECBoundary(), minus=td.PECBoundary()),
-        z=td.Boundary(plus=td.PECBoundary(), minus=td.PECBoundary()),
-    )
-    impedance_specs = (td.AutoImpedanceSpec(),) * 4
-    mode_spec = td.MicrowaveModeSpec(
-        num_modes=4,
-        target_neff=1.8,
-        impedance_specs=impedance_specs,
-    )
-
-    metal_box = td.Structure(
-        geometry=td.Box.from_bounds(
-            rmin=(0.5 * mm, 0.5 * mm, 0.5 * mm), rmax=(1 * mm - 1 * dl, 0.5 * mm, 0.5 * mm)
-        ),
-        medium=td.PEC,
-    )
-    sim = td.Simulation(
-        center=(0, 0, 0),
-        size=(2 * mm, 2 * mm, 2 * mm),
-        grid_spec=td.GridSpec.uniform(dl=dl),
-        structures=(metal_box,),
-        run_time=run_time,
-        boundary_spec=boundary_spec,
-        plot_length_units="mm",
-        symmetry=symmetry,
-    )
-
-    mode_center = [0, 0, 0]
-    mode_plane = td.Box(center=mode_center, size=mode_size)
-
-    mms = ModeSolver(
-        simulation=sim,
-        plane=mode_plane,
-        mode_spec=mode_spec,
-        colocate=True,
-        freqs=[freq0],
-    )
-    mode_solver_boundaries = mms._solver_grid.boundaries.to_list
-    mode_plane_analyzer = ModePlaneAnalyzer(
-        center=mode_center,
-        size=mode_size,
-        field_data_colocated=False,
-    )
-    mode_plane_limits = mode_plane_analyzer._get_mode_limits(sim.grid, sim.symmetry)
-
-    for dim in (0, 1):
-        solver_dim_boundaries = mode_solver_boundaries[dim]
-        # TODO: Need the second check because the mode solver erroneously adds
-        # an extra grid cell even when touching the simulation boundary
-        assert (
-            solver_dim_boundaries[0] == mode_plane_limits[0][dim]
-            or mode_plane_limits[0][dim] == sim.bounds[0][dim]
-        )
-        assert (
-            solver_dim_boundaries[-1] == mode_plane_limits[1][dim]
-            or mode_plane_limits[1][dim] == sim.bounds[1][dim]
-        )
-
-
 def test_impedance_spec_validation():
     """Check that the various allowed methods for supplying path specifications are validated."""
 
@@ -1085,29 +689,14 @@ def test_mode_solver_with_microwave_mode_spec():
     width = 1.0 * mm
     height = 0.5 * mm
     metal_thickness = 0.1 * mm
+    dl = 0.05 * mm
+    num_modes = 3
 
-    stripline_sim = make_mw_sim(
-        transmission_line_type="stripline",
+    mms, stripline_sim = make_stripline_mode_solver(
         width=width,
         height=height,
         metal_thickness=metal_thickness,
-    )
-    dl = 0.05 * mm
-    stripline_sim = stripline_sim.updated_copy(grid_spec=td.GridSpec.uniform(dl=dl))
-
-    plane = td.Box(center=(0, 0, 0), size=(0, 10 * width, 2 * height + metal_thickness))
-    num_modes = 3
-    impedance_specs = td.AutoImpedanceSpec()
-    mode_spec = td.MicrowaveModeSpec(
-        num_modes=num_modes,
-        target_neff=2.2,
-        impedance_specs=impedance_specs,
-    )
-    mms = ModeSolver(
-        simulation=stripline_sim,
-        plane=plane,
-        mode_spec=mode_spec,
-        colocate=False,
+        dl=dl,
         freqs=[1e9, 5e9, 10e9],
     )
 
@@ -1145,6 +734,12 @@ def test_mode_solver_with_microwave_mode_spec():
         np.isclose(mms_data.transmission_line_data.Z0.real.sel(mode_index=0), 28.6, rtol=0.2)
     )
 
+    # Test that the first mode is identified as a transmission line mode (quasi-TEM)
+    assert mms_data._is_transmission_line_mode(0), "First mode should be quasi-TEM for stripline"
+    assert not mms_data._is_transmission_line_mode(1), (
+        "Second mode will not be a transmission line mode"
+    )
+
     # Make sure a single spec can be used
     microwave_spec_custom = td.MicrowaveModeSpec(
         num_modes=num_modes, target_neff=2.2, impedance_specs=custom_spec
@@ -1162,21 +757,20 @@ def test_mode_solver_with_microwave_group_index():
     width = 1.0 * mm
     height = 0.5 * mm
     metal_thickness = 0.1 * mm
-
-    stripline_sim = make_mw_sim(
-        transmission_line_type="stripline",
-        width=width,
-        height=height,
-        metal_thickness=metal_thickness,
-    )
     dl = 0.05 * mm
-    stripline_sim = stripline_sim.updated_copy(grid_spec=td.GridSpec.uniform(dl=dl))
-
-    plane = td.Box(center=(0, 0, 0), size=(0, 10 * width, 2 * height + metal_thickness))
     num_modes = 1
 
     # Define original frequencies that we want in the final result
     original_freqs = [1e9, 5e9, 10e9]
+
+    # Get the basic mode solver setup
+    mms, stripline_sim = make_stripline_mode_solver(
+        width=width,
+        height=height,
+        metal_thickness=metal_thickness,
+        dl=dl,
+        freqs=original_freqs,
+    )
 
     # Create custom impedance spec (AutoImpedanceSpec won't work with local mode solver)
     custom_spec = td.CustomImpedanceSpec(
@@ -1194,13 +788,8 @@ def test_mode_solver_with_microwave_group_index():
         group_index_step=True,  # This will expand frequencies to triplets
     )
 
-    mms = ModeSolver(
-        simulation=stripline_sim,
-        plane=plane,
-        mode_spec=mode_spec,
-        colocate=False,
-        freqs=original_freqs,
-    )
+    # Update mode solver with new spec
+    mms = mms.updated_copy(mode_spec=mode_spec)
 
     # Get the mode solver data
     mms_data: td.MicrowaveModeSolverData = mms.data
@@ -1876,3 +1465,128 @@ def test_RF_license_suppression():
     with AssertLogLevel(None):
         mode_spec = td.MicrowaveModeSpec._default_without_license_warning()
     td.config.microwave.suppress_rf_license_warning = original_setting
+
+
+def test_mode_solver_validates_terminal_specs():
+    """Test that ModeSolver validates terminal specifications during initialization."""
+    width = 1.0 * mm
+    height = 0.5 * mm
+    metal_thickness = 0.1 * mm
+    dl = 0.05 * mm
+
+    # Create a stripline mode solver setup
+    mms, stripline_sim = make_stripline_mode_solver(
+        width=width,
+        height=height,
+        metal_thickness=metal_thickness,
+        dl=dl,
+        freqs=[1e9],
+    )
+
+    # Valid terminal spec: point inside the conductor
+    valid_terminal_spec = td.TerminalSpec(plus_terminals=((0.0, 0.0),), minus_terminals=())
+    mode_spec_with_terminals = td.MicrowaveModeSpec(
+        num_modes=1,
+        target_neff=2.2,
+        terminal_specs=(valid_terminal_spec,),
+        impedance_specs=td.CustomImpedanceSpec(
+            voltage_spec=None,
+            current_spec=td.AxisAlignedCurrentIntegralSpec(
+                size=(0, width + dl, metal_thickness + dl), sign="+"
+            ),
+        ),
+    )
+
+    # Should not raise - valid terminal spec
+    mms_valid = mms.updated_copy(mode_spec=mode_spec_with_terminals)
+    assert mms_valid.mode_spec.terminal_specs is not None
+    # Should raise SetupError since running with TerminalSpec is not available with the local mode solver
+    with pytest.raises(SetupError, match="Terminal-based mode setup is not available"):
+        mms_valid.data
+
+    # Invalid terminal spec: point far from any conductor
+    invalid_terminal_spec = td.TerminalSpec(
+        plus_terminals=((100 * mm, 100 * mm),), minus_terminals=()
+    )
+    mode_spec_invalid = td.MicrowaveModeSpec(
+        num_modes=1,
+        target_neff=2.2,
+        terminal_specs=(invalid_terminal_spec,),
+        impedance_specs=td.CustomImpedanceSpec(
+            voltage_spec=None,
+            current_spec=td.AxisAlignedCurrentIntegralSpec(
+                size=(0, width + dl, metal_thickness + dl), sign="+"
+            ),
+        ),
+    )
+
+    # Should raise SetupError due to invalid terminal spec
+    with pytest.raises(SetupError, match="'TerminalSpec' was not setup correctly"):
+        mms.updated_copy(mode_spec=mode_spec_invalid)
+
+
+# def test_mode_solver_validates_conductor_bounding_boxes():
+#     """Test that ModeSolver validates conductor bounding boxes for auto current spec."""
+#     width = 1.0 * mm
+#     height = 0.5 * mm
+#     metal_thickness = 0.1 * mm
+#     dl = 0.05 * mm
+
+#     # Create a stripline mode solver setup
+#     mms, stripline_sim = make_stripline_mode_solver(
+#         width=width,
+#         height=height,
+#         metal_thickness=metal_thickness,
+#         dl=dl,
+#         freqs=[1e9],
+#     )
+
+#     # Use auto impedance spec which requires conductor bounding boxes
+#     auto_mode_spec = td.MicrowaveModeSpec(
+#         num_modes=1, target_neff=2.2, impedance_specs=td.AutoImpedanceSpec()
+#     )
+
+#     # This should raise during initialization because auto spec requires running mode solver
+#     # but validation should still check that conductors can be identified
+#     with pytest.raises(SetupError, match="Auto path specification is not available"):
+#         mms_auto = mms.updated_copy(mode_spec=auto_mode_spec)
+#         _ = mms_auto.data  # Try to access data, which triggers auto spec failure
+
+
+# def test_mode_solver_terminal_spec_conflict_detection():
+#     """Test that ModeSolver detects conflicting terminal specifications."""
+#     from tidy3d.components.mode.mode_solver import ModeSolver
+
+#     # Create a coupled microstrip setup with two conductors
+#     from .utils import make_coupled_microstrip_sim
+
+#     sim = make_coupled_microstrip_sim()
+
+#     # Create terminal specs with conflicting polarities
+#     # Same conductors in reversed polarity - should be detected as duplicate
+#     strip_left_center = sim.structures[1].geometry.center[1:3]
+#     strip_right_center = sim.structures[2].geometry.center[1:3]
+
+#     terminal_spec_1 = td.TerminalSpec(
+#         plus_terminals=(strip_left_center,), minus_terminals=(strip_right_center,)
+#     )
+#     terminal_spec_2 = td.TerminalSpec(
+#         plus_terminals=(strip_right_center,), minus_terminals=(strip_left_center,)
+#     )
+
+#     conflicting_mode_spec = td.MicrowaveModeSpec(
+#         num_modes=2,
+#         terminal_specs=(terminal_spec_1, terminal_spec_2),
+#         impedance_specs=td.AutoImpedanceSpec(),
+#     )
+
+#     mode_monitor = sim.monitors[0]
+
+#     # Should raise SetupError due to duplicate/conflicting terminal specs
+#     with pytest.raises(SetupError, match="'TerminalSpec' was not setup correctly"):
+#         mms = ModeSolver(
+#             simulation=sim,
+#             plane=td.Box(center=mode_monitor.center, size=mode_monitor.size),
+#             mode_spec=conflicting_mode_spec,
+#             freqs=[5e9],
+#         )

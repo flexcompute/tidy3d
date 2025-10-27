@@ -44,6 +44,7 @@ from tidy3d.components.microwave.impedance_calculator import (
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from tidy3d.components.microwave.path_integrals.factory import make_path_integrals
+from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
@@ -268,6 +269,12 @@ class ModeSolver(Tidy3dBaseModel):
         self._validate_num_grid_points()
         if self._has_microwave_mode_spec:
             self._validate_microwave_mode_spec(mode_spec=self.mode_spec, plane=self.plane)
+            self._validate_mode_plane_analysis(
+                sim=self.simulation,
+                mode_spec=self.mode_spec,
+                plane=self.plane,
+                colocate=self.colocate,
+            )
 
     @classmethod
     def _warn_thick_pml(
@@ -344,6 +351,42 @@ class ModeSolver(Tidy3dBaseModel):
     def _validate_microwave_mode_spec(cls, mode_spec: MicrowaveModeSpec, plane: Box) -> None:
         """Validate that the microwave mode spec is correctly setup."""
         mode_spec._check_path_integrals_within_box(plane)
+
+    @classmethod
+    def _validate_mode_plane_analysis(
+        cls,
+        sim: Simulation,
+        mode_spec: MicrowaveModeSpec,
+        plane: Box,
+        colocate: bool,
+    ) -> None:
+        """Check that the mode plane analysis works without issue."""
+        if mode_spec._using_auto_current_spec or mode_spec.terminal_specs is not None:
+            try:
+                mode_plane_analyzer = ModePlaneAnalyzer(
+                    center=plane.center,
+                    size=plane.size,
+                    field_data_colocated=colocate,
+                    structures=sim.volumetric_structures,
+                    grid=sim.grid,
+                    symmetry=sim.symmetry,
+                    sim_box=sim.simulation_geometry,
+                )
+                _ = mode_plane_analyzer.conductor_bounding_boxes
+
+            except SetupError as e:
+                raise SetupError(
+                    f"Failed to automatically place paths around conductors in the mode plane. {e!s}"
+                ) from e
+
+            if mode_spec.terminal_specs is not None:
+                try:
+                    voltage_sets = mode_plane_analyzer._identify_conductor_voltage_sets(
+                        mode_spec.terminal_specs
+                    )
+                    mode_plane_analyzer._validate_conductor_voltage_configurations(voltage_sets)
+                except SetupError as e:
+                    raise SetupError(f"'TerminalSpec' was not setup correctly. {e!s}") from e
 
     @cached_property
     def normal_axis(self) -> Axis:
@@ -1407,10 +1450,22 @@ class ModeSolver(Tidy3dBaseModel):
             )
         return make_path_integrals(self.mode_spec)
 
+    def _post_process_modes_with_terminal_specs(
+        self,
+        mode_solver_data: MicrowaveModeSolverData,
+    ) -> MicrowaveModeSolverData:
+        """Select, sort and post process modes to match terminal specifications."""
+        raise SetupError("Terminal-based mode setup is not available for the local mode solver.")
+
     def _add_microwave_data(
         self, mode_solver_data: MicrowaveModeSolverData
     ) -> MicrowaveModeSolverData:
         """Calculate and add microwave data to ``mode_solver_data`` which uses the path specifications."""
+
+        # Check if terminal specifications are present and will be used to drive the mode ordering and selection
+        if self.mode_spec.terminal_specs is not None:
+            mode_solver_data = self._post_process_modes_with_terminal_specs(mode_solver_data)
+
         voltage_integrals, current_integrals = self._make_path_integrals()
         # Need to operate on the full symmetry expanded fields
         mode_solver_data_expanded = mode_solver_data.symmetry_expanded_copy
@@ -1848,7 +1903,7 @@ class ModeSolver(Tidy3dBaseModel):
         mode_spec: ModeSpec,
         n_complex: ModeIndexDataArray,
         direction: Direction,
-    ) -> [FreqModeDataArray, FreqModeDataArray]:
+    ) -> tuple[FreqModeDataArray, FreqModeDataArray]:
         """Correct the fields due to propagation on the grid.
 
         Return a copy of the :class:`.ModeSolverData` with the fields renormalized to account
@@ -1864,7 +1919,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:`.ModeSolverData`
+        tuple[:class:`.FreqModeDataArray`, :class:`.FreqModeDataArray`]
             Copy of the data with renormalized fields.
         """
         normal_axis = plane.size.index(0.0)

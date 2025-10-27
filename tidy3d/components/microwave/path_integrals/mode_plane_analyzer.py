@@ -7,7 +7,7 @@ from math import isclose
 
 import pydantic.v1 as pd
 import shapely
-from shapely.geometry import LineString, Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box, Geometry
@@ -21,10 +21,17 @@ from tidy3d.components.geometry.utils import (
 )
 from tidy3d.components.grid.grid import Grid
 from tidy3d.components.medium import LossyMetalMedium, Medium
+from tidy3d.components.microwave.mode_spec import TerminalSpec
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import Axis, Bound, Coordinate, Shapely, Symmetry
 from tidy3d.components.validators import assert_plane
 from tidy3d.exceptions import SetupError
+
+# Type for holding sets of indices associated with conductors,
+# where the first set contains positive terminals and the second set contains negative terminals.
+VoltageSets = tuple[set[int], set[int]]
+# Conversion of user-supplied TerminalSpec into shapely geometries which are used to find intersecting conductors
+TerminalSpecShapes = tuple[list[Shapely], list[Shapely]]
 
 
 class ModePlaneAnalyzer(Box):
@@ -42,6 +49,30 @@ class ModePlaneAnalyzer(Box):
         "are placed with additional margin to avoid interpolated field values near conductor surfaces.",
     )
 
+    structures: tuple[Structure, ...] = pd.Field(
+        ...,
+        title="Structures",
+        description="Tuple of structures in the simulation to analyze for conductors.",
+    )
+
+    grid: Grid = pd.Field(
+        ...,
+        title="Grid",
+        description="Simulation grid for snapping paths to field data positions.",
+    )
+
+    symmetry: tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
+        (0, 0, 0),
+        title="Symmetry",
+        description="Symmetry conditions for the simulation in (x, y, z) directions.",
+    )
+
+    sim_box: Box = pd.Field(
+        ...,
+        title="Simulation Box",
+        description="Simulation domain box used for boundary condition analysis.",
+    )
+
     @cached_property
     def _snap_spec(self) -> SnappingSpec:
         """Creates snapping specification for bounding boxes."""
@@ -51,6 +82,111 @@ class ModePlaneAnalyzer(Box):
         # To avoid interpolated H field near metal surface
         margin = (2, 2, 2) if self.field_data_colocated else (0, 0, 0)
         return SnappingSpec(location=location, behavior=behavior, margin=margin)
+
+    @cached_property
+    def mode_symmetry(self) -> tuple[Symmetry, Symmetry, Symmetry]:
+        """Mode symmetry considering simulation box and simulation symmetry."""
+        return self._get_mode_symmetry(self.sim_box, self.symmetry)
+
+    @cached_property
+    def mode_limits(self) -> Bound:
+        """Mode plane bounds restricted to final grid positions.
+
+        Mode profiles are calculated on a grid which is expanded from the monitor size
+        to the closest grid boundaries, taking into account symmetry conditions.
+        """
+        return self._get_mode_limits(self.grid, self.mode_symmetry)
+
+    @cached_property
+    def conductor_shapes(self) -> list[Shapely]:
+        """Isolated conductor geometries in the mode plane.
+
+        Finds all PEC/metal structures, merges touching conductors, and filters out
+        grounded conductors (those touching PEC boundaries).
+
+        Returns
+        -------
+        list[Shapely]
+            List of conductor geometries after merging and filtering.
+
+        Raises
+        ------
+        SetupError
+            If no valid isolated conductors are found in the mode plane.
+        """
+        min_b_3d, max_b_3d = self.mode_limits
+
+        intersection_plane = Box.from_bounds(min_b_3d, max_b_3d)
+        conductor_shapely = self._get_isolated_conductors_as_shapely(
+            intersection_plane, self.structures
+        )
+
+        conductor_shapely = self._filter_conductors_touching_sim_bounds(
+            (min_b_3d, max_b_3d), self.mode_symmetry, conductor_shapely
+        )
+
+        if len(conductor_shapely) < 1:
+            raise SetupError(
+                "No valid isolated conductors were found in the mode plane. Please ensure that a 'Structure' "
+                "with a medium of type 'PEC' or 'LossyMetalMedium' intersects the mode plane and is not touching "
+                "the boundaries of the mode plane."
+            )
+
+        return conductor_shapely
+
+    @cached_property
+    def conductor_bounding_boxes(self) -> list[Box]:
+        """Bounding boxes encompassing each isolated conductor.
+
+        Each box is snapped to the grid and includes all symmetry-reflected regions.
+
+        Returns
+        -------
+        list[Box]
+            List of bounding boxes, one per isolated conductor.
+
+        Raises
+        ------
+        SetupError
+            If a generated bounding box intersects with a conductor.
+        """
+
+        def bounding_box_from_shapely(geom: Shapely) -> Box:
+            """Helper to convert the shapely geometry bounds to a Box."""
+            bounds = geom.bounds
+            normal_center = self.center[self._normal_axis]
+            rmin = Geometry.unpop_axis(normal_center, (bounds[0], bounds[1]), self._normal_axis)
+            rmax = Geometry.unpop_axis(normal_center, (bounds[2], bounds[3]), self._normal_axis)
+            return Box.from_bounds(rmin, rmax)
+
+        # Get desired snapping behavior of box enclosed conductors.
+        # Ideally, just large enough to coincide with the H field positions outside of the conductor.
+        # So a half grid cell, when the metal boundary is coincident with grid boundaries.
+        snap_spec = self._snap_spec
+
+        bounding_boxes = []
+        for shape in self.conductor_shapes:
+            box = bounding_box_from_shapely(shape)
+            boxes = self._apply_symmetries(self.symmetry, self.sim_box.center, box)
+            for box in boxes:
+                box_snapped = snap_box_to_grid(self.grid, box, snap_spec)
+                bounding_boxes.append(box_snapped)
+
+        for bounding_box in bounding_boxes:
+            if self._check_box_intersects_with_conductors(self.conductor_shapes, bounding_box):
+                raise SetupError(
+                    "Failed to automatically generate path specification because a generated path "
+                    "specification was found to intersect with a conductor. There is currently limited "
+                    "support for complex conductor geometries, so please provide an explicit current "
+                    "path specification through a 'CustomImpedanceSpec'. Alternatively, enforce a "
+                    "smaller grid around the conductors in the mode plane, which may resolve the issue."
+                )
+        return bounding_boxes
+
+    @cached_property
+    def num_conductors(self) -> int:
+        """Number of isolated conductors in the mode plane."""
+        return len(self.conductor_shapes)
 
     def _get_mode_symmetry(
         self, sim_box: Box, sym_symmetry: tuple[Symmetry, Symmetry, Symmetry]
@@ -166,85 +302,178 @@ class ModePlaneAnalyzer(Box):
         ml_pec_bounds = shapely.MultiLineString(shapely_pec_bounds)
         return [shape for shape in conductor_polygons if not ml_pec_bounds.intersects(shape)]
 
-    def get_conductor_bounding_boxes(
-        self,
-        structures: list[Structure],
-        grid: Grid,
-        symmetry: tuple[Symmetry, Symmetry, Symmetry],
-        sim_box: Box,
-    ) -> tuple[list[Box], list[Shapely]]:
-        """Returns bounding boxes that encompass each isolated conductor
-        in the mode plane.
+    def _convert_terminal_specifications_to_candidate_geometry(
+        self, structures: list[Structure], terminal_specs: list[TerminalSpec]
+    ) -> list[TerminalSpecShapes]:
+        """Converts the different methods for specifying terminals in `TerminalSpec` into
+        Shapely geometries. The intersection of these geometries with conductor polygons identifies
+        the terminals in the mode plane.
+        """
 
-        This method identifies isolated conductor geometries in the given plane.
-        The paths are snapped to the simulation grid
-        to ensure alignment with field data.
+        def find_structure_by_name(target_name):
+            """Find first element where name matches target_name."""
+            return next(
+                (item for item in structures if item.name is not None and item.name == target_name),
+                None,
+            )
+
+        def convert_terminal(terminal_specifier) -> Shapely:
+            if isinstance(terminal_specifier, tuple):
+                return Point(*terminal_specifier)
+            elif isinstance(terminal_specifier, str):
+                structure = find_structure_by_name(terminal_specifier)
+                if structure is None:
+                    raise SetupError(
+                        f"No structure found with name '{terminal_specifier}'. "
+                        "Please ensure that a `Structure` with the same name has been added to the simulation."
+                    )
+                shapes_plane = self.intersections_with(structure.geometry)
+                return shapes_plane
+            elif terminal_specifier.shape[0] == 1:
+                return Point(*terminal_specifier)
+            elif terminal_specifier.shape[0] == 2:
+                return LineString(terminal_specifier)
+            else:
+                return Polygon(terminal_specifier)
+
+        terminal_spec_shapes = []
+        for terminal_spec in terminal_specs:
+            plus_spec_shapes = [
+                convert_terminal(plus_terminal) for plus_terminal in terminal_spec.plus_terminals
+            ]
+            minus_spec_shapes = [
+                convert_terminal(minus_terminal) for minus_terminal in terminal_spec.minus_terminals
+            ]
+            terminal_spec_shapes.append((plus_spec_shapes, minus_spec_shapes))
+        return terminal_spec_shapes
+
+    def _find_conductor_terminals(
+        self,
+        conductor_shapely: list[Shapely],
+        terminal_specs: list[tuple[list[Shapely], list[Shapely]]],
+    ) -> list[VoltageSets]:
+        """Converts terminal specifications given as shapely geometry to conductor indices.
+
+        For each terminal spec, identifies which conductors contain the specified terminal
+        coordinates and returns sets of positive and negative conductor indices.
 
         Parameters
         ----------
-        structures : list
-            List of structures in the simulation.
-        grid : Grid
-            Simulation grid for snapping paths.
-        symmetry : tuple[Symmetry, Symmetry, Symmetry]
-            Symmetry conditions for the simulation in (x, y, z) directions.
-        sim_box : Box
-            Simulation domain box used for boundary conditions.
+        conductor_shapely : list[Shapely]
+            List of conductor geometries in the mode plane.
+        terminal_specs : list[Shapely]
+            Terminal specifications with (x, y) coordinates for positive and negative terminals.
 
         Returns
         -------
-        tuple[list[Box], list[Shapely]]
-            Bounding boxes and list of merged conductor geometries.
+        list[VoltageSets]
+            List of (positive_conductor_indices, negative_conductor_indices) for each terminal spec.
         """
 
-        def bounding_box_from_shapely(geom: Shapely) -> Box:
-            """Helper to convert the shapely geometry bounds to a Box."""
-            bounds = geom.bounds
-            normal_center = self.center[self._normal_axis]
-            rmin = Geometry.unpop_axis(normal_center, (bounds[0], bounds[1]), self._normal_axis)
-            rmax = Geometry.unpop_axis(normal_center, (bounds[2], bounds[3]), self._normal_axis)
-            return Box.from_bounds(rmin, rmax)
-
-        mode_symmetry_3d = self._get_mode_symmetry(sim_box, symmetry)
-        min_b_3d, max_b_3d = self._get_mode_limits(grid, mode_symmetry_3d)
-
-        intersection_plane = Box.from_bounds(min_b_3d, max_b_3d)
-        conductor_shapely = self._get_isolated_conductors_as_shapely(intersection_plane, structures)
-
-        conductor_shapely = self._filter_conductors_touching_sim_bounds(
-            (min_b_3d, max_b_3d), mode_symmetry_3d, conductor_shapely
-        )
-
-        if len(conductor_shapely) < 1:
-            raise SetupError(
-                "No valid isolated conductors were found in the mode plane. Please ensure that a 'Structure' "
-                "with a medium of type 'PEC' or 'LossyMetalMedium' intersects the mode plane and is not touching "
-                "the boundaries of the mode plane."
-            )
-
-        # Get desired snapping behavior of box enclosed conductors.
-        # Ideally, just large enough to coincide with the H field positions outside of the conductor.
-        # So a half grid cell, when the metal boundary is coincident with grid boundaries.
-        snap_spec = self._snap_spec
-
-        bounding_boxes = []
-        for shape in conductor_shapely:
-            box = bounding_box_from_shapely(shape)
-            boxes = self._apply_symmetries(symmetry, sim_box.center, box)
-            for box in boxes:
-                box_snapped = snap_box_to_grid(grid, box, snap_spec)
-                bounding_boxes.append(box_snapped)
-
-        for bounding_box in bounding_boxes:
-            if self._check_box_intersects_with_conductors(conductor_shapely, bounding_box):
+        def validate_conductor_intersection(indices: list[int], terminal_type: str) -> None:
+            """Validate that exactly one conductor intersects with the terminal."""
+            if len(indices) == 0:
                 raise SetupError(
-                    "Failed to automatically generate path specification because a generated path "
-                    "specification was found to intersect with a conductor. There is currently limited "
-                    "support for complex conductor geometries, so please provide an explicit current "
-                    "path specification through a 'CustomImpedanceSpec'. Alternatively, enforce a "
-                    "smaller grid around the conductors in the mode plane, which may resolve the issue."
+                    f"No conductor found intersecting with the {terminal_type}_terminal. "
+                    "Please ensure that your terminal specification (coordinate, line, or polygon) "
+                    "intersects with at least one conductive structure in the mode plane. "
+                    "Check that the terminal coordinates are within the bounds of a conductor."
                 )
-        return bounding_boxes, conductor_shapely
+            elif len(indices) > 1:
+                raise SetupError(
+                    f"Multiple conductors ({len(indices)}) found intersecting with the {terminal_type}_terminal. "
+                    "Please ensure that your terminal specification intersects with exactly one conductor. "
+                    "Consider making your terminal specification more precise (e.g., using a smaller region or point) "
+                    "to uniquely identify a single conductor."
+                )
+
+        terminals = []
+        for term_spec in terminal_specs:
+            all_plus_indices = set()
+            all_minus_indices = set()
+            for plus_terminal in term_spec[0]:
+                plus_indices = [
+                    i for i, geom in enumerate(conductor_shapely) if geom.intersects(plus_terminal)
+                ]
+                validate_conductor_intersection(plus_indices, "plus")
+                all_plus_indices.update(plus_indices)
+            for minus_terminal in term_spec[1]:
+                minus_indices = [
+                    i for i, geom in enumerate(conductor_shapely) if geom.intersects(minus_terminal)
+                ]
+                validate_conductor_intersection(minus_indices, "minus")
+                all_minus_indices.update(minus_indices)
+            terminals.append((all_plus_indices, all_minus_indices))
+        return terminals
+
+    def _identify_conductor_voltage_sets(
+        self, terminal_specs: tuple[TerminalSpec, ...]
+    ) -> list[VoltageSets]:
+        """Identifies the conductor polygons associated with the supplied `TerminalSpec`.
+        The conductor polygons are identified through their index into `self.conductor_shapes`.
+
+        Parameters
+        ----------
+        terminal_specs : tuple[TerminalSpec, ...]
+            Terminal specifications with (x, y) coordinates for positive and negative terminals.
+
+        Returns
+        -------
+        list[VoltageSets]
+            List of (positive_conductor_indices, negative_conductor_indices) for each terminal spec."""
+
+        conductor_shapes = self.conductor_shapes
+
+        terminal_spec_shapes = self._convert_terminal_specifications_to_candidate_geometry(
+            self.structures, terminal_specs
+        )
+        terminals = self._find_conductor_terminals(conductor_shapes, terminal_spec_shapes)
+        return terminals
+
+    def _validate_conductor_voltage_configurations(
+        self, conductor_voltage_sets: list[VoltageSets]
+    ) -> None:
+        """Validates terminal specifications for conflicts and duplicates.
+
+        Checks that no conductor appears in both positive and negative sets, and that
+        no duplicate configurations exist (including polarity-reversed duplicates).
+
+        Parameters
+        ----------
+        conductor_voltage_sets : list[VoltageSets]
+            List of (positive_conductor_indices, negative_conductor_indices) to validate.
+
+        Raises
+        ------
+        SetupError
+            If a conductor appears in both positive and negative sets, or if duplicate
+            configurations are detected.
+        """
+        # Check that a conductor index only belongs in either plus or minus sets
+        for voltage_set in conductor_voltage_sets:
+            if not voltage_set[0].isdisjoint(voltage_set[1]):
+                raise SetupError(
+                    "A conductor cannot be assigned to both a positive and negative voltage."
+                )
+
+        # Check that only unique polarity configurations exist
+        # Two configurations are considered the same if one is the polarity-reversed version of the other
+        unique_terminal_configuration = set()
+
+        for voltage_set in conductor_voltage_sets:
+            pos, neg = voltage_set
+
+            # Create a normalized representation that treats (pos, neg) and (neg, pos) as equivalent
+            # Using frozenset of frozensets ensures order-independence
+            terminal_configuration = frozenset([frozenset(pos), frozenset(neg)])
+
+            if terminal_configuration in unique_terminal_configuration:
+                raise SetupError(
+                    "Duplicate voltage configuration detected. "
+                    "Each unique pair of conductor sets (including polarity-reversed pairs) can only appear once."
+                )
+
+            unique_terminal_configuration.add(terminal_configuration)
 
     def _check_box_intersects_with_conductors(
         self, shapely_list: list[Shapely], bounding_box: Box
