@@ -474,3 +474,9 @@ class ModeSpec(AbstractModeSpec):
         * `Waveguide to ring coupling <../../notebooks/WaveguideToRingCoupling.html>`_
 
     """
+
+    assume_constant_modes: bool = pd.Field(
+        False,
+        title="assume constant modes",
+        description="assume constant modes"
+    )

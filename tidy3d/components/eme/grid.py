@@ -11,7 +11,7 @@ import pydantic.v1 as pd
 from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords1D
-from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.mode_spec import ModeSpec, ModeInterpSpec
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq
 from tidy3d.constants import RADIAN, fp_eps, inf
@@ -25,15 +25,27 @@ MAX_NUM_REPS = 100000
 
 class EMEModeSpec(ModeSpec):
     """Mode spec for EME cells. Overrides some of the defaults and allowed values."""
-
-    track_freq: Union[TrackFreq, None] = pd.Field(
-        None,
-        title="Mode Tracking Frequency",
-        description="Parameter that turns on/off mode tracking based on their similarity. "
-        "Can take values ``'lowest'``, ``'central'``, or ``'highest'``, which correspond to "
-        "mode tracking based on the lowest, central, or highest frequency. "
-        "If ``None`` no mode tracking is performed, which is the default for best performance.",
+    
+    interp_spec: ModeInterpSpec = pd.Field(
+        ModeInterpSpec(method="cheb", num_points=5),
+        title="interp spec", 
+        description="interp spec"
     )
+
+    assume_constant_modes: bool = pd.Field(
+        True,
+        title="assume constant modes",
+        description="assume constant modes"
+    )
+
+    # track_freq: Union[TrackFreq, None] = pd.Field(
+    #     None,
+    #     title="Mode Tracking Frequency",
+    #     description="Parameter that turns on/off mode tracking based on their similarity. "
+    #     "Can take values ``'lowest'``, ``'central'``, or ``'highest'``, which correspond to "
+    #     "mode tracking based on the lowest, central, or highest frequency. "
+    #     "If ``None`` no mode tracking is performed, which is the default for best performance.",
+    # )
 
     angle_theta: Literal[0.0] = pd.Field(
         0.0,
@@ -85,6 +97,7 @@ class EMEModeSpec(ModeSpec):
         """Convert to ordinary :class:`.ModeSpec`."""
         ms_dict = self.dict()
         ms_dict.pop("type")
+        ms_dict.pop("interp_spec")
         return ModeSpec.parse_obj(ms_dict)
 
 

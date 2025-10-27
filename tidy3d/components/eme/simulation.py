@@ -554,11 +554,14 @@ class EMESimulation(AbstractYeeGridSimulation):
         mode_planes = self.eme_grid.mode_planes
         mode_specs = [eme_mode_spec._to_mode_spec() for eme_mode_spec in self.eme_grid.mode_specs]
         for i in range(self.eme_grid.num_cells):
+            freqs_curr = freqs
+            if self.eme_grid.mode_specs[i].interp_spec is not None:
+                freqs_curr = np.array(self.eme_grid.mode_specs[i].interp_spec.sampling_points(freqs))
             monitor = ModeSolverMonitor(
                 center=mode_planes[i].center,
                 size=mode_planes[i].size,
                 name=f"_eme_mode_solver_monitor_{i}",
-                freqs=freqs,
+                freqs=freqs_curr,
                 mode_spec=mode_specs[i],
                 colocate=False,
             )

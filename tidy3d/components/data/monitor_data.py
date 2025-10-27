@@ -2429,6 +2429,7 @@ class ModeSolverData(ModeData):
         self,
         freqs: FreqArray,
         method: Literal["linear", "cubic", "cheb"] = "linear",
+        assume_constant_modes: bool = False
     ) -> ModeSolverData:
         """Interpolate mode data to new frequency points.
 
@@ -2512,9 +2513,10 @@ class ModeSolverData(ModeData):
         update_dict["n_complex"] = self._interp_dataarray(self.n_complex, freqs, method)
 
         # Interpolate field components if present
-        for field_name, field_data in self.field_components.items():
-            if field_data is not None:
-                update_dict[field_name] = self._interp_dataarray(field_data, freqs, method)
+        if not assume_constant_modes:
+            for field_name, field_data in self.field_components.items():
+                if field_data is not None:
+                    update_dict[field_name] = self._interp_dataarray(field_data, freqs, method)
 
         # Interpolate n_group_raw if present
         if self.n_group_raw is not None:
@@ -2527,15 +2529,16 @@ class ModeSolverData(ModeData):
             )
 
         # Interpolate grid correction data if present
-        for key, data in self._grid_correction_dict.items():
-            if isinstance(data, DataArray) and "f" in data.coords:
-                update_dict[key] = self._interp_dataarray(data, freqs, method)
+        if not assume_constant_modes:
+            for key, data in self._grid_correction_dict.items():
+                if isinstance(data, DataArray) and "f" in data.coords:
+                    update_dict[key] = self._interp_dataarray(data, freqs, method)
 
         # Handle eps_spec if present - use nearest neighbor interpolation
         if self.eps_spec is not None:
             update_dict["eps_spec"] = list(
                 self._interp_dataarray(
-                    FreqDataArray(self.eps_spec, coords={"f": self.monitor.freqs}),
+                    FreqDataArray(self.eps_spec, coords={"f": np.array(self.monitor.freqs)}),
                     freqs,
                     "nearest",
                 ).data
