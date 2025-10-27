@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numbers
 from abc import ABC, abstractmethod
+from os import PathLike
 from typing import Literal, Optional, Union
 
 import numpy as np
@@ -474,8 +475,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     @staticmethod
     @requires_vtk
-    def _read_vtkUnstructuredGrid(fname: str):
+    def _read_vtkUnstructuredGrid(fname: PathLike):
         """Load a :class:`vtkUnstructuredGrid` from a file."""
+        fname = str(fname)
         reader = vtk["mod"].vtkXMLUnstructuredGridReader()
         reader.SetFileName(fname)
         reader.Update()
@@ -485,8 +487,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     @staticmethod
     @requires_vtk
-    def _read_vtkLegacyFile(fname: str):
+    def _read_vtkLegacyFile(fname: PathLike):
         """Load a grid from a legacy `.vtk` file."""
+        fname = str(fname)
         reader = vtk["mod"].vtkGenericDataObjectReader()
         reader.SetFileName(fname)
         reader.Update()
@@ -532,7 +535,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     @requires_vtk
     def from_vtu(
         cls,
-        file: str,
+        file: PathLike,
         field: Optional[str] = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
@@ -542,7 +545,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         Parameters
         ----------
-        file : str
+        file : PathLike
             Full path to the .vtu file to load the unstructured data from.
         field : str = None
             Name of the field to load.
@@ -571,7 +574,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     @requires_vtk
     def from_vtk(
         cls,
-        file: str,
+        file: PathLike,
         field: Optional[str] = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
@@ -581,7 +584,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         Parameters
         ----------
-        file : str
+        file : PathLike
             Full path to the .vtk file to load the unstructured data from.
         field : str = None
             Name of the field to load.
@@ -607,15 +610,15 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         )
 
     @requires_vtk
-    def to_vtu(self, fname: str):
+    def to_vtu(self, fname: PathLike):
         """Exports unstructured grid data into a .vtu file.
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Full path to the .vtu file to save the unstructured data to.
         """
-
+        fname = str(fname)
         writer = vtk["mod"].vtkXMLUnstructuredGridWriter()
         writer.SetFileName(fname)
         writer.SetInputData(self._vtk_obj)

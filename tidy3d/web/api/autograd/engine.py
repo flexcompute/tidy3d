@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from os.path import basename, dirname, join
+from pathlib import Path
 
 import tidy3d as td
 from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, Job
@@ -26,11 +26,13 @@ def _run_tidy3d(
     if job.simulation_type == "autograd_fwd":
         verbose = run_kwargs.get("verbose", False)
         upload_sim_fields_keys(run_kwargs["sim_fields_keys"], task_id=job.task_id, verbose=verbose)
-    path = run_kwargs.get("path", DEFAULT_DATA_PATH)
+    path = Path(run_kwargs.get("path", DEFAULT_DATA_PATH))
     priority = run_kwargs.get("priority")
     if task_name.endswith("_adjoint"):
-        path_parts = basename(path).split(".")
-        path = join(dirname(path), path_parts[0] + "_adjoint." + ".".join(path_parts[1:]))
+        suffixes = "".join(path.suffixes)
+        base_name = path.name
+        base_without_suffix = base_name[: -len(suffixes)] if suffixes else base_name
+        path = path.with_name(f"{base_without_suffix}_adjoint{suffixes}")
     data = job.run(path, priority=priority)
     return data, job.task_id
 
@@ -61,7 +63,7 @@ def _run_async_tidy3d(
             task_id = task_ids[task_name]
             upload_sim_fields_keys(sim_fields_keys, task_id=task_id, verbose=verbose)
 
-    if path_dir:
+    if path_dir is not None:
         batch_data = batch.run(path_dir, priority=priority)
     else:
         batch_data = batch.run(priority=priority)

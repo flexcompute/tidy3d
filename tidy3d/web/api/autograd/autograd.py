@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import typing
-from os.path import dirname
+from os import PathLike
 from pathlib import Path
 
 from autograd.builtins import dict as dict_ag
@@ -102,7 +102,7 @@ def run(
     simulation: WorkflowType,
     task_name: typing.Optional[str] = None,
     folder_name: str = "default",
-    path: str = "simulation_data.hdf5",
+    path: PathLike = "simulation_data.hdf5",
     callback_url: typing.Optional[str] = None,
     verbose: bool = True,
     progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
@@ -130,7 +130,7 @@ def run(
         Name of task. If not provided, a default name will be generated.
     folder_name : str = "default"
         Name of folder to store task on web UI.
-    path : str = "simulation_data.hdf5"
+    path : PathLike = "simulation_data.hdf5"
         Path to download results file (.hdf5), including filename.
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
@@ -225,11 +225,13 @@ def run(
     # component modeler path: route autograd-valid modelers to local run
     from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
 
+    path = Path(path)
+
     if isinstance(simulation, typing.get_args(ComponentModelerType)):
         if any(is_valid_for_autograd(s) for s in simulation.sim_dict.values()):
             from tidy3d.plugins.smatrix import run as smatrix_run
 
-            path_dir = dirname(path) or "."
+            path_dir = path.parent
             return smatrix_run._run_local(
                 simulation,
                 path_dir=path_dir,
@@ -287,7 +289,7 @@ def run(
 def run_async(
     simulations: typing.Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
     folder_name: str = "default",
-    path_dir: str = DEFAULT_DATA_DIR,
+    path_dir: PathLike = DEFAULT_DATA_DIR,
     callback_url: typing.Optional[str] = None,
     num_workers: typing.Optional[int] = None,
     verbose: bool = True,
@@ -312,7 +314,7 @@ def run_async(
         Mapping of task name to simulation or list of simulations.
     folder_name : str = "default"
         Name of folder to store each task on web UI.
-    path_dir : str
+    path_dir : PathLike
         Base directory where data will be downloaded, by default current working directory.
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
@@ -373,6 +375,8 @@ def run_async(
             task_name = Tidy3dStub(simulation=sim).get_default_task_name() + f"_{i}"
             sim_dict[task_name] = sim
         simulations = sim_dict
+
+    path_dir = Path(path_dir)
 
     if is_valid_for_autograd_async(simulations):
         return _run_async(
@@ -748,7 +752,7 @@ def _run_bwd(
             path_dir_adj.mkdir(parents=True, exist_ok=True)
 
             batch_data_adj, _ = _run_async_tidy3d(
-                sims_adj_dict, path_dir=str(path_dir_adj), **run_kwargs
+                sims_adj_dict, path_dir=path_dir_adj, **run_kwargs
             )
             td.log.info("Completed local batch adjoint simulations")
 
@@ -886,7 +890,7 @@ def _run_async_bwd(
             path_dir_adj.mkdir(parents=True, exist_ok=True)
 
             batch_data_adj, _ = _run_async_tidy3d(
-                all_sims_adj, path_dir=str(path_dir_adj), **run_async_kwargs
+                all_sims_adj, path_dir=path_dir_adj, **run_async_kwargs
             )
 
             # Process results for each adjoint task

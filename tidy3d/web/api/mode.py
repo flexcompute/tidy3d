@@ -7,6 +7,7 @@ import pathlib
 import tempfile
 import time
 from datetime import datetime
+from os import PathLike
 from typing import Callable, Literal, Optional, Union
 
 import pydantic.v1 as pydantic
@@ -50,7 +51,7 @@ def run(
     task_name: str = "Untitled",
     mode_solver_name: str = "mode_solver",
     folder_name: str = "Mode Solver",
-    results_file: str = "mode_solver.hdf5",
+    results_file: PathLike = "mode_solver.hdf5",
     verbose: bool = True,
     progress_callback_upload: Optional[Callable[[float], None]] = None,
     progress_callback_download: Optional[Callable[[float], None]] = None,
@@ -70,7 +71,7 @@ def run(
         The name of the mode solver to create the in task.
     folder_name : str = "Mode Solver"
         Name of folder to store task on web UI.
-    results_file : str = "mode_solver.hdf5"
+    results_file : PathLike = "mode_solver.hdf5"
         Path to download results file (.hdf5).
     verbose : bool = True
         If ``True``, will print status, otherwise, will run silently.
@@ -372,8 +373,8 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         cls,
         task_id: str,
         solver_id: str,
-        to_file: str = "mode_solver.hdf5",
-        sim_file: str = "simulation.hdf5",
+        to_file: PathLike = "mode_solver.hdf5",
+        sim_file: PathLike = "simulation.hdf5",
         verbose: bool = True,
         progress_callback: Optional[Callable[[float], None]] = None,
     ) -> ModeSolverTask:
@@ -385,9 +386,9 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
             Unique identifier of the task on server.
         solver_id: str
             Unique identifier of the mode solver in the task.
-        to_file: str = "mode_solver.hdf5"
+        to_file: PathLike = "mode_solver.hdf5"
             File to store the mode solver downloaded from the task.
-        sim_file: str = "simulation.hdf5"
+        sim_file: PathLike = "simulation.hdf5"
             File to store the simulation downloaded from the task.
         verbose: bool = True
             Whether to display progress bars.
@@ -497,8 +498,8 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
     def get_modesolver(
         self,
-        to_file: str = "mode_solver.hdf5",
-        sim_file: str = "simulation.hdf5",
+        to_file: PathLike = "mode_solver.hdf5",
+        sim_file: PathLike = "simulation.hdf5",
         verbose: bool = True,
         progress_callback: Optional[Callable[[float], None]] = None,
     ) -> ModeSolver:
@@ -506,9 +507,9 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
         Parameters
         ----------
-        to_file: str = "mode_solver.hdf5"
+        to_file: PathLike = "mode_solver.hdf5"
             File to store the mode solver downloaded from the task.
-        sim_file: str = "simulation.hdf5"
+        sim_file: PathLike = "simulation.hdf5"
             File to store the simulation downloaded from the task, if any.
         verbose: bool = True
             Whether to display progress bars.
@@ -582,7 +583,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
     def get_result(
         self,
-        to_file: str = "mode_solver_data.hdf5",
+        to_file: PathLike = "mode_solver_data.hdf5",
         verbose: bool = True,
         progress_callback: Optional[Callable[[float], None]] = None,
     ) -> ModeSolverData:
@@ -590,7 +591,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
         Parameters
         ----------
-        to_file: str = "mode_solver_data.hdf5"
+        to_file: PathLike = "mode_solver_data.hdf5"
             File to store the mode solver downloaded from the task.
         verbose: bool = True
             Whether to display progress bars.
@@ -645,7 +646,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
     def get_log(
         self,
-        to_file: str = "mode_solver.log",
+        to_file: PathLike = "mode_solver.log",
         verbose: bool = True,
         progress_callback: Optional[Callable[[float], None]] = None,
     ) -> pathlib.Path:
@@ -653,7 +654,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
         Parameters
         ----------
-        to_file: str = "mode_solver.log"
+        to_file: PathLike = "mode_solver.log"
             File to store the mode solver downloaded from the task.
         verbose: bool = True
             Whether to display progress bars.

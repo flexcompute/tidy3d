@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 from contextlib import contextmanager
 from datetime import datetime
+from os import PathLike
 from typing import Callable, Optional, Union
 
 from rich.console import Console
@@ -385,7 +386,7 @@ def set_logging_console(stderr: bool = False) -> None:
 
 
 def set_logging_file(
-    fname: str,
+    fname: PathLike,
     filemode: str = "w",
     level: LogValue = DEFAULT_LEVEL,
     log_path: bool = False,
@@ -395,7 +396,7 @@ def set_logging_file(
 
     Parameters
     ----------
-    fname : str
+    fname : PathLike
         Path to file to direct the output to. If empty string, a previously set logging file will
         be closed, if any, but nothing else happens.
     filemode : str
@@ -418,7 +419,7 @@ def set_logging_file(
         finally:
             del log.handlers["file"]
 
-    if fname == "":
+    if str(fname) == "":
         # Empty string can be passed to just stop previously opened file handler
         return
 

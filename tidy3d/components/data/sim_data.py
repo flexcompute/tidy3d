@@ -7,6 +7,7 @@ import pathlib
 import re
 from abc import ABC
 from collections import defaultdict
+from os import PathLike
 from typing import Callable, Optional, Union
 
 import h5py
@@ -371,12 +372,14 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         )
 
     @classmethod
-    def mnt_data_from_file(cls, fname: str, mnt_name: str, **parse_obj_kwargs) -> MonitorDataType:
+    def mnt_data_from_file(
+        cls, fname: PathLike, mnt_name: str, **parse_obj_kwargs
+    ) -> MonitorDataType:
         """Loads data for a specific monitor from a .hdf5 file with data for a ``SimulationData``.
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Full path to an hdf5 file containing :class:`.SimulationData` data.
         mnt_name : str, optional
             ``.name`` of the monitor to load the data from.
@@ -1317,12 +1320,12 @@ class SimulationData(AbstractYeeGridSimulationData):
         monitor_name = Structure._get_monitor_name(index=structure_index, data_type=data_type)
         return self[monitor_name]
 
-    def to_mat_file(self, fname: str, **kwargs):
+    def to_mat_file(self, fname: PathLike, **kwargs):
         """Output the ``SimulationData`` object as ``.mat`` MATLAB file.
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Full path to the output file. Should include ``.mat`` file extension.
         **kwargs : dict, optional
             Extra arguments to ``scipy.io.savemat``: see ``scipy`` documentation for more detail.

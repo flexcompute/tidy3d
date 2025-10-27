@@ -6,6 +6,7 @@ import math
 import pathlib
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from os import PathLike
 from typing import Literal, Optional, Union, get_args
 
 import autograd.numpy as np
@@ -5215,7 +5216,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     def to_gds_file(
         self,
-        fname: str,
+        fname: PathLike,
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
@@ -5230,7 +5231,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Full path to the .gds file to save the :class:`.Simulation` slice to.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
@@ -5281,7 +5282,8 @@ class Simulation(AbstractYeeGridSimulation):
             frequency=frequency,
             gds_layer_dtype_map=gds_layer_dtype_map,
         )
-        pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
+        fname = pathlib.Path(fname)
+        fname.parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
     """ Plotting """

@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `custom_source_time` parameter to `ComponentModeler` classes (`ModalComponentModeler` and `TerminalComponentModeler`), allowing specification of custom source time dependence.
 - Validation for `run_only` field in component modelers to catch duplicate or invalid matrix indices early with clear error messages.
 - Introduced a profile-based configuration manager with TOML persistence and runtime overrides exposed via `tidy3d.config`.
+- Added support of `os.PathLike` objects as paths like `pathlib.Path` alongside `str` paths in all path-related functions.
 
 ### Changed
 - Improved performance of antenna metrics calculation by utilizing cached wave amplitude calculations instead of recomputing wave amplitudes for each port excitation in the `TerminalComponentModelerData`.

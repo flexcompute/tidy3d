@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from os import PathLike
 from typing import Literal, Optional, Union
 
 from tidy3d.components.types.workflow import WorkflowType
@@ -14,7 +15,7 @@ from .container import DEFAULT_DATA_DIR, Batch, BatchData
 def run_async(
     simulations: Union[dict[str, WorkflowType], tuple[WorkflowType], list[WorkflowType]],
     folder_name: str = "default",
-    path_dir: str = DEFAULT_DATA_DIR,
+    path_dir: PathLike = DEFAULT_DATA_DIR,
     callback_url: Optional[str] = None,
     num_workers: Optional[int] = None,
     verbose: bool = True,
@@ -37,7 +38,7 @@ def run_async(
         Mapping of task name to simulation or list of simulations.
     folder_name : str = "default"
         Name of folder to store each task on web UI.
-    path_dir : str
+    path_dir : PathLike
         Base directory where data will be downloaded, by default current working directory.
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with

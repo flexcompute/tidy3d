@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import concurrent
-import os
 import time
 from abc import ABC
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
+from os import PathLike
+from pathlib import Path
 from typing import Literal, Optional, Union
 
 import pydantic.v1 as pd
@@ -60,7 +61,7 @@ class WebContainer(Tidy3dBaseModel, ABC):
 
     @staticmethod
     @abstractmethod
-    def _check_path_dir(path: str) -> None:
+    def _check_path_dir(path: PathLike) -> None:
         """Make sure local output directory exists and create it if not."""
 
     @staticmethod
@@ -240,12 +241,12 @@ class Job(WebContainer):
         "reduce_simulation",
     )
 
-    def to_file(self, fname: str) -> None:
+    def to_file(self, fname: PathLike) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Full path to the .yaml or .json file to save the :class:`Tidy3dBaseModel` to.
 
         Example
@@ -257,13 +258,13 @@ class Job(WebContainer):
         super(Job, self).to_file(fname=fname)  # noqa: UP008
 
     def run(
-        self, path: str = DEFAULT_DATA_PATH, priority: Optional[int] = None
+        self, path: PathLike = DEFAULT_DATA_PATH, priority: Optional[int] = None
     ) -> WorkflowDataType:
         """Run :class:`Job` all the way through and return data.
 
         Parameters
         ----------
-        path : str = "./simulation_data.hdf5"
+        path : PathLike = "./simulation_data.hdf5"
             Path to download results file (.hdf5), including filename.
         priority: int = None
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
@@ -373,12 +374,12 @@ class Job(WebContainer):
         """
         web.monitor(self.task_id, verbose=self.verbose)
 
-    def download(self, path: str = DEFAULT_DATA_PATH) -> None:
+    def download(self, path: PathLike = DEFAULT_DATA_PATH) -> None:
         """Download results of simulation.
 
         Parameters
         ----------
-        path : str = "./simulation_data.hdf5"
+        path : PathLike = "./simulation_data.hdf5"
             Path to download data as ``.hdf5`` file (including filename).
 
         Note
@@ -388,12 +389,12 @@ class Job(WebContainer):
         self._check_path_dir(path=path)
         web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
-    def load(self, path: str = DEFAULT_DATA_PATH) -> WorkflowDataType:
+    def load(self, path: PathLike = DEFAULT_DATA_PATH) -> WorkflowDataType:
         """Download job results and load them into a data object.
 
         Parameters
         ----------
-        path : str = "./simulation_data.hdf5"
+        path : PathLike = "./simulation_data.hdf5"
             Path to download data as ``.hdf5`` file (including filename).
 
         Returns
@@ -402,7 +403,12 @@ class Job(WebContainer):
             Object containing simulation results.
         """
         self._check_path_dir(path=path)
-        data = web.load(task_id=self.task_id, path=path, verbose=self.verbose, lazy=self.lazy)
+        data = web.load(
+            task_id=self.task_id,
+            path=path,
+            verbose=self.verbose,
+            lazy=self.lazy,
+        )
         if isinstance(self.simulation, ModeSolver):
             self.simulation._patch_data(data=data)
         return data
@@ -478,17 +484,18 @@ class Job(WebContainer):
         )
 
     @staticmethod
-    def _check_path_dir(path: str) -> None:
+    def _check_path_dir(path: PathLike) -> None:
         """Make sure parent directory of ``path`` exists and create it if not.
 
         Parameters
         ----------
-        path : str
+        path : PathLike
             Path to file to be created (including filename).
         """
-        parent_dir = os.path.dirname(path)
-        if len(parent_dir) > 0 and not os.path.exists(parent_dir):
-            os.makedirs(parent_dir, exist_ok=True)
+        path = Path(path)
+        parent_dir = path.parent
+        if parent_dir != Path(".") and not parent_dir.exists():
+            parent_dir.mkdir(parents=True, exist_ok=True)
 
     @pd.root_validator(pre=True)
     def set_task_name_if_none(cls, values):
@@ -549,7 +556,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
 
     def load_sim_data(self, task_name: str) -> WorkflowDataType:
         """Load a simulation data object from file by task name."""
-        task_data_path = self.task_paths[task_name]
+        task_data_path = Path(self.task_paths[task_name])
         task_id = self.task_ids[task_name]
         web.get_info(task_id)
 
@@ -568,12 +575,14 @@ class BatchData(Tidy3dBaseModel, Mapping):
         return len(self.task_paths)
 
     @classmethod
-    def load(cls, path_dir: str = DEFAULT_DATA_DIR, replace_existing: bool = False) -> BatchData:
+    def load(
+        cls, path_dir: PathLike = DEFAULT_DATA_DIR, replace_existing: bool = False
+    ) -> BatchData:
         """Load :class:`Batch` from file, download results, and load them.
 
         Parameters
         ----------
-        path_dir : str = './'
+        path_dir : PathLike = './'
             Base directory where data will be downloaded, by default current working directory.
             A `batch.hdf5` file must be present in the directory.
         replace_existing : bool = False
@@ -585,10 +594,10 @@ class BatchData(Tidy3dBaseModel, Mapping):
             Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             for each Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
         """
-
-        batch_file = Batch._batch_path(path_dir=path_dir)
+        base_dir = Path(path_dir)
+        batch_file = Batch._batch_path(path_dir=base_dir)
         batch = Batch.from_file(batch_file)
-        return batch.load(path_dir=path_dir, replace_existing=replace_existing)
+        return batch.load(path_dir=base_dir, replace_existing=replace_existing)
 
 
 class Batch(WebContainer):
@@ -703,14 +712,14 @@ class Batch(WebContainer):
 
     def run(
         self,
-        path_dir: str = DEFAULT_DATA_DIR,
+        path_dir: PathLike = DEFAULT_DATA_DIR,
         priority: Optional[int] = None,
     ) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
 
         Parameters
         ----------
-        path_dir : str
+        path_dir : PathLike
             Base directory where data will be downloaded, by default current working directory.
         priority: int = None
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
@@ -790,12 +799,12 @@ class Batch(WebContainer):
             jobs[task_name] = job
         return jobs
 
-    def to_file(self, fname: str) -> None:
+    def to_file(self, fname: PathLike) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Full path to the .yaml or .json file to save the :class:`Tidy3dBaseModel` to.
 
         Example
@@ -916,7 +925,7 @@ class Batch(WebContainer):
         self,
         *,
         download_on_success: bool = False,
-        path_dir: str = DEFAULT_DATA_DIR,
+        path_dir: PathLike = DEFAULT_DATA_DIR,
         replace_existing: bool = False,
         postprocess_worker_group: Optional[str] = None,
     ) -> None:
@@ -933,7 +942,7 @@ class Batch(WebContainer):
         download_on_success : bool = False
             If ``True``, automatically start downloading the results for a job as soon as it reaches
             ``success``.
-        path_dir : str = './'
+        path_dir : PathLike = './'
             Base directory where data will be downloaded, by default the current working directory.
             Only used when ``download_on_success`` is ``True``.
         replace_existing : bool = False
@@ -964,19 +973,19 @@ class Batch(WebContainer):
             if task_id in downloads_started:
                 return
 
-            job_path_str = self._job_data_path(task_id=task_id, path_dir=path_dir)
-            if os.path.exists(job_path_str):
+            job_path = self._job_data_path(task_id=task_id, path_dir=path_dir)
+            if job_path.exists():
                 if not replace_existing:
                     downloads_started.add(task_id)
                     log.info(
-                        f"File '{job_path_str}' already exists. Skipping download "
+                        f"File '{job_path}' already exists. Skipping download "
                         "(set `replace_existing=True` to overwrite)."
                     )
                     return
-                log.info(f"File '{job_path_str}' already exists. Overwriting.")
+                log.info(f"File '{job_path}' already exists. Overwriting.")
 
             downloads_started.add(task_id)
-            download_futures[task_id] = download_executor.submit(job.download, job_path_str)
+            download_futures[task_id] = download_executor.submit(job.download, job_path)
 
         # ----- continue condition & status formatting -------------------------------
         def check_continue_condition(job) -> bool:
@@ -1125,46 +1134,48 @@ class Batch(WebContainer):
                     download_executor.shutdown(wait=True)
 
     @staticmethod
-    def _job_data_path(task_id: TaskId, path_dir: str = DEFAULT_DATA_DIR):
+    def _job_data_path(task_id: TaskId, path_dir: PathLike = DEFAULT_DATA_DIR) -> Path:
         """Default path to data of a single :class:`Job` in :class:`Batch`.
 
         Parameters
         ----------
         task_id : str
             task_id corresponding to a :class:`Job`.
-        path_dir : str = './'
+        path_dir : PathLike = './'
             Base directory where data will be downloaded, by default, the current working directory.
 
         Returns
         -------
-        str
+        Path
             Full path to the data file.
         """
-        return os.path.join(path_dir, f"{task_id!s}.hdf5")
+        return Path(path_dir) / f"{task_id!s}.hdf5"
 
     @staticmethod
-    def _batch_path(path_dir: str = DEFAULT_DATA_DIR):
+    def _batch_path(path_dir: PathLike = DEFAULT_DATA_DIR) -> Path:
         """Default path to save :class:`Batch` hdf5 file.
 
         Parameters
         ----------
-        path_dir : str = './'
+        path_dir : PathLike = './'
             Base directory where the batch.hdf5 will be downloaded,
             by default, the current working directory.
 
         Returns
         -------
-        str
+        Path
             Full path to the batch file.
         """
-        return os.path.join(path_dir, "batch.hdf5")
+        return Path(path_dir) / "batch.hdf5"
 
-    def download(self, path_dir: str = DEFAULT_DATA_DIR, replace_existing: bool = False) -> None:
+    def download(
+        self, path_dir: PathLike = DEFAULT_DATA_DIR, replace_existing: bool = False
+    ) -> None:
         """Download results of each task.
 
         Parameters
         ----------
-        path_dir : str = './'
+        path_dir : PathLike = './'
             Base directory where data will be downloaded, by default the current working directory.
         replace_existing : bool = False
             Downloads the data even if path exists (overwriting the existing).
@@ -1182,8 +1193,8 @@ class Batch(WebContainer):
 
         num_existing = 0
         for _, job in self.jobs.items():
-            job_path_str = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-            if os.path.exists(job_path_str):
+            job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+            if job_path.exists():
                 num_existing += 1
         if num_existing > 0:
             files_plural = "files have" if num_existing > 1 else "file has"
@@ -1197,19 +1208,19 @@ class Batch(WebContainer):
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             fns = []
             for task_name, job in self.jobs.items():
-                job_path_str = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-                if os.path.exists(job_path_str):
+                job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+                if job_path.exists():
                     if replace_existing:
-                        log.info(f"File '{job_path_str}' already exists. Overwriting.")
+                        log.info(f"File '{job_path}' already exists. Overwriting.")
                     else:
-                        log.info(f"File '{job_path_str}' already exists. Skipping.")
+                        log.info(f"File '{job_path}' already exists. Skipping.")
                         continue
                 if "error" in job.status:
                     log.warning(f"Not downloading '{task_name}' as the task errored.")
                     continue
 
-                def fn(job=job, job_path_str=job_path_str) -> None:
-                    return job.download(path=job_path_str)
+                def fn(job=job, job_path=job_path) -> None:
+                    return job.download(path=job_path)
 
                 fns.append(fn)
 
@@ -1233,7 +1244,7 @@ class Batch(WebContainer):
 
     def load(
         self,
-        path_dir: str = DEFAULT_DATA_DIR,
+        path_dir: PathLike = DEFAULT_DATA_DIR,
         replace_existing: bool = False,
         skip_download: bool = False,
     ) -> BatchData:
@@ -1241,7 +1252,7 @@ class Batch(WebContainer):
 
         Parameters
         ----------
-        path_dir : str = './'
+        path_dir : PathLike = './'
             Base directory where data will be downloaded, by default current working directory.
         replace_existing : bool = False
             Downloads the data even if path exists (overwriting the existing).
@@ -1269,7 +1280,7 @@ class Batch(WebContainer):
                 log.warning(f"Not loading '{task_name}' as the task errored.")
                 continue
 
-            task_paths[task_name] = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+            task_paths[task_name] = str(self._job_data_path(task_id=job.task_id, path_dir=path_dir))
             task_ids[task_name] = self.jobs[task_name].task_id
 
         data = BatchData(
@@ -1350,13 +1361,14 @@ class Batch(WebContainer):
         return batch_cost
 
     @staticmethod
-    def _check_path_dir(path_dir: str) -> None:
+    def _check_path_dir(path_dir: PathLike) -> None:
         """Make sure ``path_dir`` exists and create it if not.
 
         Parameters
         ----------
-        path_dir : str
+        path_dir : PathLike
             Directory path where files will be saved.
         """
-        if len(path_dir) > 0 and not os.path.exists(path_dir):
-            os.makedirs(path_dir, exist_ok=True)
+        path_dir = Path(path_dir)
+        if path_dir != Path(".") and not path_dir.exists():
+            path_dir.mkdir(parents=True, exist_ok=True)

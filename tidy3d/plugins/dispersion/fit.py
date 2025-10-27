@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import codecs
 import csv
+from os import PathLike
 from typing import Optional
 
 import numpy as np
@@ -698,12 +699,12 @@ class DispersionFitter(Tidy3dBaseModel):
         return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], **kwargs)
 
     @classmethod
-    def from_file(cls, fname: str, **loadtxt_kwargs) -> DispersionFitter:
+    def from_file(cls, fname: PathLike, **loadtxt_kwargs) -> DispersionFitter:
         """Loads :class:`DispersionFitter` from file containing wavelength, n, k data.
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Path to file containing wavelength (um), n, k (optional) data in columns.
         **loadtxt_kwargs
             Kwargs passed to ``np.loadtxt``, such as ``skiprows``, ``delimiter``.

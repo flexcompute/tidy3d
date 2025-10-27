@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import typing
+from os import PathLike
+from pathlib import Path
 
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.config import config
@@ -81,7 +83,7 @@ def run(
     simulation: RunInput,
     task_name: typing.Optional[str] = None,
     folder_name: str = "default",
-    path: typing.Optional[str] = None,
+    path: typing.Optional[PathLike] = None,
     callback_url: typing.Optional[str] = None,
     verbose: bool = True,
     progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
@@ -127,7 +129,7 @@ def run(
         Optional name for a single run. Prefixed for multiple runs.
     folder_name : str = "default"
         Folder shown on the web UI.
-    path : Optional[str] = None
+    path : Optional[PathLike] = None
         Output path. Interpreted as a file path for single simulations and a directory for multiple simulations.
         Defaults are "simulation.hdf5" (single simulation) and the current directory (multiple simulations).
     callback_url : Optional[str] = None
@@ -230,7 +232,7 @@ def run(
 
     key_prefix = ""
     if len(h2sim) == 1:
-        path = path if path is not None else DEFAULT_DATA_PATH
+        path = path if path is not None else Path(DEFAULT_DATA_PATH)
         h, sim = next(iter(h2sim.items()))
         data = {
             h: run_autograd(
@@ -257,11 +259,11 @@ def run(
     else:
         key_prefix = f"{task_name}_" if task_name else ""
         sims = {f"{key_prefix}{h}": s for h, s in h2sim.items()}
-        path = path if path is not None else DEFAULT_DATA_DIR
+        path_dir = Path(path) if path is not None else Path(DEFAULT_DATA_DIR)
         data = run_async(
             simulations=sims,
             folder_name=folder_name,
-            path_dir=path,
+            path_dir=path_dir,
             callback_url=callback_url,
             num_workers=max_workers,
             verbose=verbose,

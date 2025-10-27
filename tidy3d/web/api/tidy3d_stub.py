@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from os import PathLike
+from pathlib import Path
 from typing import Callable, Optional
 
 import pydantic.v1 as pd
@@ -73,13 +75,13 @@ class Tidy3dStub(BaseModel, TaskStub):
     simulation: WorkflowType = pd.Field(discriminator="type")
 
     @classmethod
-    def from_file(cls, file_path: str) -> WorkflowType:
+    def from_file(cls, file_path: PathLike) -> WorkflowType:
         """Loads a Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to load the
             Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] from.
 
@@ -92,13 +94,14 @@ class Tidy3dStub(BaseModel, TaskStub):
         -------
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
-        extension = _get_valid_extension(file_path)
+        path = Path(file_path)
+        extension = _get_valid_extension(path)
         if extension == ".json":
-            json_str = read_simulation_from_json(file_path)
+            json_str = read_simulation_from_json(path)
         elif extension == ".hdf5":
-            json_str = read_simulation_from_hdf5(file_path)
+            json_str = read_simulation_from_hdf5(path)
         elif extension == ".hdf5.gz":
-            json_str = read_simulation_from_hdf5_gz(file_path)
+            json_str = read_simulation_from_hdf5_gz(path)
 
         data = json.loads(json_str)
         type_ = data["type"]
@@ -123,20 +126,20 @@ class Tidy3dStub(BaseModel, TaskStub):
             )
 
         sim_class = class_map[type_]
-        sim = sim_class.from_file(file_path)
+        sim = sim_class.from_file(path)
 
         return sim
 
     def to_file(
         self,
-        file_path: str,
+        file_path: PathLike,
     ):
         """Exports Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] instance to .yaml, .json,
         or .hdf5 file
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to save the :class:`Stub` to.
 
         Example
@@ -145,16 +148,16 @@ class Tidy3dStub(BaseModel, TaskStub):
         """
         self.simulation.to_file(file_path)
 
-    def to_hdf5_gz(self, fname: str, custom_encoders: Optional[list[Callable]] = None) -> None:
+    def to_hdf5_gz(self, fname: PathLike, custom_encoders: Optional[list[Callable]] = None) -> None:
         """Exports Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] instance to .hdf5.gz file.
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Full path to the .hdf5.gz file to save
             the Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] to.
         custom_encoders : List[Callable]
-            List of functions accepting (fname: str, group_path: str, value: Any) that take
+            List of functions accepting (fname: PathLike, group_path: str, value: Any) that take
             the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
 
         Example
@@ -210,14 +213,14 @@ class Tidy3dStubData(BaseModel, TaskStubData):
 
     @classmethod
     def from_file(
-        cls, file_path: str, lazy: bool = False, on_load: Optional[Callable] = None
+        cls, file_path: PathLike, lazy: bool = False, on_load: Optional[Callable] = None
     ) -> WorkflowDataType:
         """Loads a Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to load the
             Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] from.
         lazy : bool = False
@@ -234,13 +237,14 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             An instance of the component class calling ``load``.
         """
-        extension = _get_valid_extension(file_path)
+        path = Path(file_path)
+        extension = _get_valid_extension(path)
         if extension == ".json":
-            json_str = read_simulation_from_json(file_path)
+            json_str = read_simulation_from_json(path)
         elif extension == ".hdf5":
-            json_str = read_simulation_from_hdf5(file_path)
+            json_str = read_simulation_from_hdf5(path)
         elif extension == ".hdf5.gz":
-            json_str = read_simulation_from_hdf5_gz(file_path)
+            json_str = read_simulation_from_hdf5_gz(path)
 
         data = json.loads(json_str)
         type_ = data["type"]
@@ -266,17 +270,17 @@ class Tidy3dStubData(BaseModel, TaskStubData):
             )
 
         data_class = data_class_map[type_]
-        sim_data = data_class.from_file(file_path, lazy=lazy, on_load=on_load)
+        sim_data = data_class.from_file(path, lazy=lazy, on_load=on_load)
 
         return sim_data
 
-    def to_file(self, file_path: str):
+    def to_file(self, file_path: PathLike):
         """Exports Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] instance
         to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to save the
             Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] to.
 
@@ -287,13 +291,13 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         self.data.to_file(file_path)
 
     @classmethod
-    def postprocess(cls, file_path: str, lazy: bool = True) -> WorkflowDataType:
+    def postprocess(cls, file_path: PathLike, lazy: bool = True) -> WorkflowDataType:
         """Load .yaml, .json, or .hdf5 file to
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] instance.
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to save the
             Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] to.
         lazy : bool = False

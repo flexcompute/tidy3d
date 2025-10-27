@@ -5,6 +5,7 @@ from __future__ import annotations
 import pathlib
 from collections import defaultdict
 from functools import cmp_to_key
+from os import PathLike
 from typing import Optional, Union
 
 import autograd.numpy as anp
@@ -525,7 +526,7 @@ class Structure(AbstractStructure):
 
     def to_gds_file(
         self,
-        fname: str,
+        fname: PathLike,
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
@@ -539,7 +540,7 @@ class Structure(AbstractStructure):
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Full path to the .gds file to save the :class:`.Structure` slice to.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
@@ -579,7 +580,8 @@ class Structure(AbstractStructure):
             gds_layer=gds_layer,
             gds_dtype=gds_dtype,
         )
-        pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
+        fname = pathlib.Path(fname)
+        fname.parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
     @classmethod

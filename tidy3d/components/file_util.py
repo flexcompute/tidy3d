@@ -3,35 +3,47 @@
 from __future__ import annotations
 
 import gzip
+import pathlib
 import shutil
+from io import BytesIO
+from os import PathLike
 from typing import Any
 
 import numpy as np
 
 
-def compress_file_to_gzip(input_file, output_gz_file):
+def compress_file_to_gzip(input_file: PathLike, output_gz_file: PathLike | BytesIO) -> None:
     """
-    Compresses a file using gzip.
+    Compress a file using gzip.
 
-    Args:
-        input_file (str): The path of the input file.
-        output_gz_file (str): The path of the output gzip file.
+    Parameters
+    ----------
+    input_file : PathLike
+        The path to the input file.
+    output_gz_file : PathLike | BytesIO
+        The path to the output gzip file or an in-memory buffer.
     """
-    with open(input_file, "rb") as file_in:
+    input_file = pathlib.Path(input_file)
+    with input_file.open("rb") as file_in:
         with gzip.open(output_gz_file, "wb") as file_out:
             shutil.copyfileobj(file_in, file_out)
 
 
-def extract_gzip_file(input_gz_file, output_file):
+def extract_gzip_file(input_gz_file: PathLike, output_file: PathLike) -> None:
     """
-    Extract a gzip file.
+    Extract a gzip-compressed file.
 
-    Args:
-        input_gz_file (str): The path of the gzip input file.
-        output_file (str): The path of the output file.
+    Parameters
+    ----------
+    input_gz_file : PathLike
+        The path to the gzip-compressed input file.
+    output_file : PathLike
+        The path to the extracted output file.
     """
-    with gzip.open(input_gz_file, "rb") as file_in:
-        with open(output_file, "wb") as file_out:
+    input_path = pathlib.Path(input_gz_file)
+    output_path = pathlib.Path(output_file)
+    with gzip.open(input_path, "rb") as file_in:
+        with output_path.open("wb") as file_out:
             shutil.copyfileobj(file_in, file_out)
 
 

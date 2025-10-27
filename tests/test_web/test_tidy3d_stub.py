@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import numpy as np
+import pytest
 import responses
 
 import tidy3d as td
@@ -160,6 +162,40 @@ def test_stub_data_lazy_loading(tmp_path):
     # we expect a warning from the lazy object if some field is accessed
     with AssertLogLevel("WARNING", contains_str=sim_diverged_log):
         _ = sim_data.monitor_data
+
+
+@pytest.mark.parametrize(
+    "path_builder",
+    (
+        lambda tmp_path, name: Path(tmp_path) / name,
+        lambda tmp_path, name: str(Path(tmp_path) / name),
+    ),
+)
+def test_stub_pathlike_roundtrip(tmp_path, path_builder):
+    """Ensure stub read/write helpers accept pathlib.Path and posixpath inputs."""
+
+    # Simulation stub roundtrip
+    sim = make_sim()
+    stub = Tidy3dStub(simulation=sim)
+    sim_path = path_builder(tmp_path, "pathlike_sim.json")
+    stub.to_file(sim_path)
+    assert os.path.exists(sim_path)
+    sim_loaded = Tidy3dStub.from_file(sim_path)
+    assert sim_loaded == sim
+
+    # Simulation data stub roundtrip
+    sim_data = make_sim_data()
+    stub_data = Tidy3dStubData(data=sim_data)
+    data_path = path_builder(tmp_path, "pathlike_data.hdf5")
+    stub_data.to_file(data_path)
+    assert os.path.exists(data_path)
+
+    data_loaded = Tidy3dStubData.from_file(data_path)
+    assert data_loaded.simulation == sim_data.simulation
+
+    # Postprocess using the same PathLike ensures downstream helpers accept the type
+    processed = Tidy3dStubData.postprocess(data_path, lazy=True)
+    assert isinstance(processed, SimulationData)
 
 
 def test_default_task_name():

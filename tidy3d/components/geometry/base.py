@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import pathlib
 from abc import ABC, abstractmethod
+from os import PathLike
 from typing import Any, Callable, Optional, Union
 
 import autograd.numpy as np
@@ -1412,7 +1413,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @verify_packages_import(["gdstk"])
     def to_gds_file(
         self,
-        fname: str,
+        fname: PathLike,
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
@@ -1424,7 +1425,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Full path to the .gds file to save the :class:`Geometry` slice to.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
@@ -1450,7 +1451,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         library = gdstk.Library()
         cell = library.new_cell(gds_cell_name)
         self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-        pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
+        fname = pathlib.Path(fname)
+        fname.parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:

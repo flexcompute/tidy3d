@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import functools
 import json
+from os import PathLike
+from pathlib import Path
 from typing import Callable, Optional
 
 import pydantic.v1 as pd
@@ -89,26 +91,20 @@ class Updater(pd.BaseModel):
     sim_dict: dict
 
     @classmethod
-    def from_file(cls, fname: str) -> Updater:
+    def from_file(cls, fname: PathLike) -> Updater:
         """Dictionary representing the simulation loaded from file."""
-
+        path = Path(fname)
         # TODO: fix this, it broke
-        if any(ext in fname for ext in (".hdf5", ".gz")):
-            sim_dict = Tidy3dBaseModel.from_file(fname=fname).dict()
-
+        if path.suffix in {".hdf5", ".gz"}:
+            sim_dict = Tidy3dBaseModel.from_file(fname=str(path)).dict()
         else:
-            # try:
-            with open(fname, encoding="utf-8") as f:
-                if ".json" in fname:
+            with path.open(encoding="utf-8") as f:
+                if path.suffix == ".json":
                     sim_dict = json.load(f)
-                elif ".yaml" in fname:
+                elif path.suffix == ".yaml":
                     sim_dict = yaml.safe_load(f)
                 else:
                     raise FileError('file extension must be ".json", ".yaml", ".hdf5", or ".gz"')
-
-            # except Exception as e:
-            #     raise FileError(f"Could not load file {fname}") from e
-
         return cls(sim_dict=sim_dict)
 
     @classmethod
