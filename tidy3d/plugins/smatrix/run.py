@@ -7,6 +7,7 @@ from typing import Any
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.index import SimulationDataMap
+from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
@@ -213,6 +214,11 @@ def _run_local(
         kwargs.setdefault("path_dir", path_dir)
 
         local_gradient = kwargs.get("local_gradient", True)
+
+        if (not local_gradient) and has_traced_numerical_structures(numerical_structures_modeler):
+            raise AdjointError(
+                "ComponentModeler autograd with traced numerical structures requires local_gradient=True."
+            )
 
         if numerical_structures_modeler:
             first_sim = next(iter(sims.values()))

@@ -72,6 +72,10 @@ def setup_adj(
         adjoint_monitors=adjoint_monitors,
     )
 
+    print(f"max num adjoint = {max_num_adjoint_per_fwd}")
+    print(f"{len(sims_adj)}")
+    print("\n\n")
+
     if len(sims_adj) > max_num_adjoint_per_fwd:
         raise AdjointError(
             f"Number of adjoint simulations ({len(sims_adj)}) exceeds the maximum allowed "

@@ -16,11 +16,11 @@ from autograd.extend import Box, defvjp, primitive
 
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
-from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
-from tidy3d.components.autograd.constants import (
-    MAX_NUM_ADJOINT_PER_FWD,
-    MAX_NUM_TRACED_STRUCTURES,
-)
+
+# from tidy3d.components.autograd.constants import (
+#     MAX_NUM_ADJOINT_PER_FWD,
+#     MAX_NUM_TRACED_STRUCTURES,
+# )
 from tidy3d.components.autograd.types import NumericalStructureInfo
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
@@ -151,13 +151,25 @@ def _normalize_numerical_structures_input(
         return dict.fromkeys(name_mapping)
 
     if isinstance(simulations, dict):
-        expected_keys = set(simulations.keys())
-        provided_keys = set(numerical_structures.keys())
-        if provided_keys != expected_keys:
-            raise AdjointError(
-                "'numerical_structures' keys must match the simulation keys when run_async receives a dict."
-            )
-        return numerical_structures
+        if isinstance(numerical_structures, dict):
+            expected_keys = set(simulations.keys())
+            provided_keys = set(numerical_structures.keys())
+            if provided_keys != expected_keys:
+                raise AdjointError(
+                    "'numerical_structures' keys must match the simulation keys when run_async receives a dict."
+                )
+            return numerical_structures
+
+        if isinstance(numerical_structures, (list, tuple)):
+            configs_indexed = _broadcast_config_list(numerical_structures, len(simulations))
+            return {
+                task_name: configs_indexed.get(idx)
+                for idx, task_name in enumerate(simulations.keys())
+            }
+
+        raise AdjointError(
+            "'numerical_structures' must be a dict or list/tuple when run_async receives a dict of simulations."
+        )
 
     configs_indexed = _broadcast_config_list(numerical_structures, len(simulations))
 
@@ -179,13 +191,25 @@ def _normalize_user_vjp_input(
         return {}
 
     if isinstance(simulations, dict):
-        expected_keys = set(simulations.keys())
-        provided_keys = set(user_vjp.keys())
-        if provided_keys != expected_keys:
-            raise AdjointError(
-                "'user_vjp' keys must match the simulation keys when run_async receives a dict."
-            )
-        return user_vjp
+        if isinstance(user_vjp, dict):
+            expected_keys = set(simulations.keys())
+            provided_keys = set(user_vjp.keys())
+            if provided_keys != expected_keys:
+                raise AdjointError(
+                    "'user_vjp' keys must match the simulation keys when run_async receives a dict."
+                )
+            return user_vjp
+
+        if isinstance(user_vjp, (list, tuple)):
+            configs_indexed = _broadcast_config_list(user_vjp, len(simulations))
+            return {
+                task_name: configs_indexed.get(idx)
+                for idx, task_name in enumerate(simulations.keys())
+            }
+
+        raise AdjointError(
+            "'user_vjp' must be a dict or list/tuple when run_async receives a dict of simulations."
+        )
 
     configs_indexed = _broadcast_config_list(user_vjp, len(simulations))
 
@@ -252,7 +276,7 @@ def _validate_numerical_structures(
     normalized: dict[int, dict[str, typing.Any]] = {}
     indices_seen: set[int] = set()
 
-    for index, config in numerical_structures.items():
+    for index, numerical_config in numerical_structures.items():
         if not isinstance(index, int) or index < 0:
             raise AdjointError(
                 "'numerical_structures' keys must be non-negative integers corresponding to indices."
@@ -264,31 +288,31 @@ def _validate_numerical_structures(
             )
         indices_seen.add(index)
 
-        if not isinstance(config, dict):
+        if not isinstance(numerical_config, dict):
             raise AdjointError(
                 "Each entry in 'numerical_structures' must be a dictionary with configuration values."
             )
 
-        if "function" not in config:
+        if "function" not in numerical_config:
             raise AdjointError(
                 f"Numerical structure index {index} missing required 'function' entry."
             )
 
-        func = config["function"]
+        func = numerical_config["function"]
         if not callable(func):
             raise AdjointError(
                 f"'function' for numerical structure index {index} must be callable."
             )
 
-        if "parameters" not in config:
+        if "parameters" not in numerical_config:
             raise AdjointError(
                 f"Numerical structure index {index} missing required 'parameters' entry."
             )
-        params = config["parameters"]
+        params = numerical_config["parameters"]
 
         vjp_callable: typing.Optional[typing.Callable[..., typing.Any]] = None
-        if "vjp" in config:
-            vjp_entry = config["vjp"]
+        if "vjp" in numerical_config:
+            vjp_entry = numerical_config["vjp"]
 
             if callable(vjp_entry):
                 vjp_callable = vjp_entry
@@ -764,8 +788,8 @@ def run_async(
     )
 
     numerical_structures_validated = {}
-    for name, config in numerical_structures_norm.items():
-        cfg = config or {}
+    for name, numerical_structures_config in numerical_structures_norm.items():
+        cfg = numerical_structures_config or {}
         numerical_structures_validated[name] = _validate_numerical_structures(
             numerical_structures=cfg,
             user_vjp=user_vjp_norm.get(name),
@@ -913,6 +937,10 @@ def _run_async(
 
     traced_fields_sim_dict: dict[str, AutogradFieldMap] = {}
     sims_original: dict[str, td.Simulation] = {}
+    sims_prepared: dict[str, td.Simulation] = {}
+
+    if max_num_adjoint_per_fwd is None:
+        max_num_adjoint_per_fwd = config.adjoint.max_adjoint_per_fwd
 
     skip_autograd_tasks: dict[str, bool] = {}
     numerical_structures = numerical_structures or {}
@@ -921,27 +949,29 @@ def _run_async(
     for task_name in task_names:
         sim = simulations[task_name]
         setup_result = setup_run(
-            simulation=simulation,
+            simulation=sim,
             numerical_structures=numerical_structures.get(task_name),
             user_vjp=user_vjp.get(task_name),
         )
-        traced_fields = setup_result.sim_fields#setup_run(simulation=sim)
-        traced_fields_sim_dict[task_name] = traced_fields
-
+        sim_prepared = setup_result.simulation
+        traced_fields = setup_result.sim_fields
         has_numerical_tracers = bool(setup_result.numerical_info)
+
+        sims_prepared[task_name] = sim_prepared
 
         if not traced_fields and not has_numerical_tracers:
             skip_autograd_tasks[task_name] = True
-            sims_original[task_name] = setup_result.simulation
+            sims_original[task_name] = sim_prepared
             continue
 
-        payload = sim._serialized_traced_field_keys(traced_fields)
-        sim_static = sim.to_static()
+        skip_autograd_tasks[task_name] = False
+        traced_fields_sim_dict[task_name] = traced_fields
+        payload = sim_prepared._serialized_traced_field_keys(traced_fields)
+        sim_static = sim_prepared.to_static()
         if payload:
             sim_static.attrs[TRACED_FIELD_KEYS_ATTR] = payload
 
         sims_original[task_name] = sim_static
-
         if has_numerical_tracers:
             aux_entry = {AUX_KEY_NUMERICAL_STRUCTURES: setup_result.numerical_info}
             run_async_kwargs.setdefault("aux_data_seed", {})[task_name] = aux_entry
@@ -951,23 +981,14 @@ def _run_async(
 
     # If all tasks skipped autograd tracing, run the batch without autograd
     if all(skip_autograd_tasks.get(task_name, False) for task_name in task_names):
-        sims_static = {
-            name: (
-                _insert_numerical_structures_static(
-                    simulation=simulations[name],
-                    numerical_structures=numerical_structures.get(name, {}),
-                )
-                if numerical_structures.get(name)
-                else simulations[name]
-            )
-            for name in task_names
-        }
+        sims_static = {name: sims_prepared[name] for name in task_names}
 
         path_dir = run_async_kwargs.get("path_dir")
+        remaining_kwargs = {k: v for k, v in run_async_kwargs.items() if k != "path_dir"}
         batch_data, _ = _run_async_tidy3d(
             simulations=sims_static,
             path_dir=path_dir,
-            **{k: v for k, v in run_async_kwargs.items() if k != "path_dir"},
+            **remaining_kwargs,
         )
         return batch_data
 
@@ -1002,8 +1023,7 @@ def _run_async(
         **run_async_kwargs,
     )
 
-    # TODO: package this as a Batch? it might be not possible as autograd tracers lose their
-    # powers when we save them to file.
+    # TODO: package this as a Batch? it might be not possible as autograd tracers lose their powers when we save them to file.
     sim_data_dict = {}
     for task_name in traced_fields_sim_dict.keys():
         traced_fields_data = traced_fields_data_dict[task_name]
@@ -1016,22 +1036,13 @@ def _run_async(
     # For tasks that skipped autograd, run vanilla sims now and merge results
     skipped_names = [name for name in task_names if skip_autograd_tasks.get(name, False)]
     if skipped_names:
-        sims_static_skipped = {
-            name: (
-                _insert_numerical_structures_static(
-                    simulation=simulations[name],
-                    numerical_structures=numerical_structures.get(name, {}),
-                )
-                if numerical_structures.get(name)
-                else simulations[name]
-            )
-            for name in skipped_names
-        }
+        sims_static_skipped = {name: sims_prepared[name] for name in skipped_names}
         path_dir = run_async_kwargs.get("path_dir")
+        remaining_kwargs = {k: v for k, v in run_async_kwargs.items() if k != "path_dir"}
         batch_data_skipped, _ = _run_async_tidy3d(
             simulations=sims_static_skipped,
             path_dir=path_dir,
-            **{k: v for k, v in run_async_kwargs.items() if k != "path_dir"},
+            **remaining_kwargs,
         )
         for name in skipped_names:
             sim_data_dict[name] = batch_data_skipped[name]
