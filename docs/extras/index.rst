@@ -1,5 +1,5 @@
-Extras Plugin |:gift:|
-======================
+Extras Plugin |:sparkles:|
+==========================
 .. currentmodule:: tidy3d-extras
 
 ``tidy3d-extras`` is an optional plugin for Tidy3D providing additional, more advanced local functionality. This additional functionality includes a more accurate local mode solver with subpixel averaging.
