@@ -27,7 +27,7 @@ class EMEModeSpec(ModeSpec):
     """Mode spec for EME cells. Overrides some of the defaults and allowed values."""
     
     interp_spec: ModeInterpSpec = pd.Field(
-        ModeInterpSpec(method="cheb", num_points=5),
+        ModeInterpSpec(method="cheb", num_points=4),
         title="interp spec", 
         description="interp spec"
     )
