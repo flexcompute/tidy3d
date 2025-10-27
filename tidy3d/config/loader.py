@@ -339,6 +339,10 @@ def migrate_legacy_config(*, overwrite: bool = False, remove_legacy: bool = Fals
     canonical_dir.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(legacy_dir, canonical_dir, dirs_exist_ok=overwrite)
 
+    from .legacy import finalize_legacy_migration  # local import to avoid circular dependency
+
+    finalize_legacy_migration(canonical_dir)
+
     if remove_legacy:
         shutil.rmtree(legacy_dir)
 

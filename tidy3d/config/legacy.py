@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import ssl
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
@@ -17,6 +18,12 @@ from tidy3d.log import log
 
 from .manager import ConfigManager, normalize_profile_name
 from .profiles import BUILTIN_PROFILES
+
+
+def _warn_env_deprecated() -> None:
+    message = "'tidy3d.config.Env' is deprecated; use 'config.switch_profile(...)' instead."
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
+    log.warning(message, log_once=True)
 
 
 class LegacyConfigWrapper:
@@ -169,6 +176,7 @@ class LegacyEnvironmentConfig:
         return self._manager
 
     def active(self) -> None:
+        _warn_env_deprecated()
         if self._manager is not None and self._manager.profile != self._name:
             self._manager.switch_profile(self._name)
 
@@ -296,6 +304,7 @@ class LegacyEnvironment:
         return self._current
 
     def set_current(self, env_config: LegacyEnvironmentConfig) -> None:
+        _warn_env_deprecated()
         key = normalize_profile_name(env_config.name)
         if env_config.manager is self._manager:
             if self._manager.profile != key:
@@ -377,5 +386,42 @@ __all__ = [
     "LegacyConfigWrapper",
     "LegacyEnvironment",
     "LegacyEnvironmentConfig",
+    "finalize_legacy_migration",
     "load_legacy_flat_config",
 ]
+
+
+def finalize_legacy_migration(config_dir: Path) -> None:
+    """Promote a copied legacy configuration tree into the structured format.
+
+    Parameters
+    ----------
+    config_dir : Path
+        Destination directory (typically the canonical config location).
+    """
+
+    legacy_data = load_legacy_flat_config(config_dir)
+
+    from .manager import ConfigManager  # local import to avoid circular dependency
+
+    manager = ConfigManager(profile="default", config_dir=config_dir)
+    config_path = config_dir / "config.toml"
+    for section, values in legacy_data.items():
+        if isinstance(values, dict):
+            manager.update_section(section, **values)
+    try:
+        manager.save(include_defaults=True)
+    except Exception:
+        if config_path.exists():
+            try:
+                config_path.unlink()
+            except Exception:
+                pass
+        raise
+
+    legacy_flat_path = config_dir / "config"
+    if legacy_flat_path.exists():
+        try:
+            legacy_flat_path.unlink()
+        except Exception as exc:
+            log.warning(f"Failed to remove legacy configuration file '{legacy_flat_path}': {exc}")

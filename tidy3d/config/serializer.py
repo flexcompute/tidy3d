@@ -123,8 +123,8 @@ def _apply_value(
         if key in container:
             container[key] = table
         else:
-            if description:
-                container.add(tomlkit.comment(description))
+            if isinstance(container, tomlkit.TOMLDocument) and len(container) > 0:
+                container.add(tomlkit.nl())
             container.add(key, table)
         return
 

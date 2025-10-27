@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
+
 from tidy3d.config.__init__ import get_manager, reload_config
 
 
@@ -14,9 +16,11 @@ def test_legacy_logging_level(config_manager):
 
 def test_env_switch(config_manager):
     config_module = importlib.import_module("tidy3d.config.__init__")
-    config_module.Env.dev.active()
+    with pytest.warns(DeprecationWarning, match="tidy3d.config.Env"):
+        config_module.Env.dev.active()
     assert get_manager().profile == "dev"
-    config_module.Env.set_current(config_module.Env.prod)
+    with pytest.warns(DeprecationWarning, match="tidy3d.config.Env"):
+        config_module.Env.set_current(config_module.Env.prod)
     assert get_manager().profile == "prod"
 
 

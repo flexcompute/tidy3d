@@ -318,7 +318,7 @@ class ConfigManager:
         self._raw_tree = deep_merge(self._builtin_data, self._base_data, self._profile_data)
 
         runtime = deepcopy(self._runtime_overrides.get(self._profile, {}))
-        effective = deep_merge(self._raw_tree, runtime, self._env_overrides)
+        effective = deep_merge(self._raw_tree, self._env_overrides, runtime)
         self._effective_tree = effective
         self._build_models()
 
