@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from os import PathLike
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.index import SimulationDataMap
@@ -17,7 +18,7 @@ DEFAULT_DATA_DIR = "."
 
 
 def compose_modeler(
-    modeler_file: str,
+    modeler_file: PathLike,
 ) -> ComponentModelerType:
     """Load a component modeler from an HDF5 file.
 
@@ -27,7 +28,7 @@ def compose_modeler(
 
     Parameters
     ----------
-    modeler_file : str
+    modeler_file : PathLike
         Path to the HDF5 file containing the modeler definition.
 
     Returns

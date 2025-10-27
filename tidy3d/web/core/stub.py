@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from os import PathLike
 
 
 class TaskStubData(ABC):
     @abstractmethod
-    def from_file(self, file_path) -> TaskStubData:
+    def from_file(self, file_path: PathLike) -> TaskStubData:
         """Loads a :class:`TaskStubData` from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to load the :class:`Stub` from.
 
         Returns
@@ -23,12 +24,12 @@ class TaskStubData(ABC):
         """
 
     @abstractmethod
-    def to_file(self, file_path):
+    def to_file(self, file_path: PathLike):
         """Loads a :class:`Stub` from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to load the :class:`Stub` from.
 
         Returns
@@ -40,12 +41,12 @@ class TaskStubData(ABC):
 
 class TaskStub(ABC):
     @abstractmethod
-    def from_file(self, file_path) -> TaskStub:
+    def from_file(self, file_path: PathLike) -> TaskStub:
         """Loads a :class:`TaskStubData` from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to load the :class:`Stub` from.
 
         Returns
@@ -55,12 +56,12 @@ class TaskStub(ABC):
         """
 
     @abstractmethod
-    def to_file(self, file_path):
+    def to_file(self, file_path: PathLike):
         """Loads a :class:`TaskStub` from .yaml, .json, .hdf5 or .hdf5.gz file.
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to load the :class:`TaskStub` from.
 
         Returns
@@ -70,11 +71,11 @@ class TaskStub(ABC):
         """
 
     @abstractmethod
-    def to_hdf5_gz(self, fname: str) -> None:
+    def to_hdf5_gz(self, fname: PathLike) -> None:
         """Exports :class:`TaskStub` instance to .hdf5.gz file.
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Full path to the .hdf5.gz file to save the :class:`TaskStub` to.
         """

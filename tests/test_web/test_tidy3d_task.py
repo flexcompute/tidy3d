@@ -376,3 +376,16 @@ def test_get_log(monkeypatch, set_api_key, tmp_path):
     task.get_log(LOG_FNAME)
     with open(LOG_FNAME) as f:
         assert f.read() == "0.3,5.7"
+
+
+@responses.activate
+def test_get_running_tasks(set_api_key):
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/py/tasks",
+        json={"data": [{"taskId": "1234", "status": "queued"}]},
+        status=200,
+    )
+
+    tasks = SimulationTask.get_running_tasks()
+    assert len(tasks) == 1

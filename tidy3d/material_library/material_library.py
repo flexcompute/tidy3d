@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from os import PathLike
 from typing import Union
 
 import pydantic.v1 as pd
@@ -37,9 +38,8 @@ from .util import (
 )
 
 
-def export_matlib_to_file(fname: str = "matlib.json") -> None:
+def export_matlib_to_file(fname: PathLike = "matlib.json") -> None:
     """Write the material library to a .json file."""
-
     mat_lib_dict = {
         f'{mat.name} ("{mat_name}")': {
             var_name: json.loads(var.medium._json_string) for var_name, var in mat.variants.items()

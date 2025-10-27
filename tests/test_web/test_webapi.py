@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import os
+import posixpath
 from concurrent.futures import Future
+from os import PathLike
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -739,8 +742,8 @@ def test_batch_monitor_downloads_on_success(monkeypatch, tmp_path):
             events.append((self.task_id, "status", status))
             return status
 
-        def download(self, path: str):
-            events.append((self.task_id, "download", path))
+        def download(self, path: PathLike):
+            events.append((self.task_id, "download", str(path)))
 
     monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
     monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
@@ -766,7 +769,7 @@ def test_batch_monitor_downloads_on_success(monkeypatch, tmp_path):
     }
 
     for task_id, _, path in downloads:
-        assert path == expected_paths[task_id]
+        assert str(path) == expected_paths[task_id]
 
     job1_download_idx = next(
         i
@@ -797,8 +800,8 @@ def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
             events.append((self.task_id, "status", status))
             return status
 
-        def download(self, path: str):
-            events.append((self.task_id, "download", path))
+        def download(self, path: PathLike):
+            events.append((self.task_id, "download", str(path)))
 
     monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
     monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
@@ -819,6 +822,7 @@ def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
     batch.monitor(download_on_success=True, path_dir=str(tmp_path))
 
     downloads = [event for event in events if event[1] == "download"]
+
     assert downloads == [("task_b_id", "download", os.path.join(str(tmp_path), "task_b_id.hdf5"))]
 
 
@@ -996,3 +1000,92 @@ def test_run_single_offline_eager(monkeypatch, tmp_path):
 
     assert isinstance(sim_data, SimulationData)
     assert sim_data.__class__.__name__ == "SimulationData"  # no proxy
+
+
+class FauxPath:
+    """Minimal PathLike to exercise __fspath__ support."""
+
+    def __init__(self, path: PathLike | str):
+        self._p = os.fspath(path)
+
+    def __fspath__(self) -> str:
+        return self._p
+
+
+def _pathlib_builder(tmp_path, name: str):
+    return Path(tmp_path) / name
+
+
+def _posix_builder(tmp_path, name: str):
+    return posixpath.join(tmp_path.as_posix(), name)
+
+
+def _str_builder(tmp_path, name: str):
+    return str(Path(tmp_path) / name)
+
+
+def _fspath_builder(tmp_path, name: str):
+    return FauxPath(Path(tmp_path) / name)
+
+
+@pytest.mark.parametrize(
+    "path_builder",
+    [_pathlib_builder, _posix_builder, _str_builder, _fspath_builder],
+    ids=["pathlib.Path", "posixpath_str", "str", "PathLike"],
+)
+def test_run_single_offline_eager_accepts_pathlikes(monkeypatch, tmp_path, path_builder):
+    """run(sim, path=...) accepts any PathLike."""
+    sim = make_sim()
+    task_name = "pathlike_single"
+    out_file = path_builder(tmp_path, "sim.hdf5")
+
+    # Patch webapi for offline run and to write to the provided path
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim={task_name: sim})
+
+    sim_data = run(sim, task_name=task_name, path=out_file)
+
+    # File existed (written via patched load) and types are correct
+    assert os.path.exists(os.fspath(out_file))
+    assert isinstance(sim_data, SimulationData)
+    assert sim_data.simulation == sim
+
+
+@pytest.mark.parametrize(
+    "path_builder",
+    [_pathlib_builder, _posix_builder, _str_builder, _fspath_builder],
+    ids=["pathlib.Path", "posixpath_str", "str", "PathLike"],
+)
+def test_job_run_accepts_pathlikes(monkeypatch, tmp_path, path_builder):
+    """Job.run(path=...) accepts any PathLike."""
+    sim = make_sim()
+    task_name = "job_pathlike"
+    out_file = path_builder(tmp_path, "job_out.hdf5")
+
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim={task_name: sim})
+
+    j = Job(simulation=sim, task_name=task_name, folder_name=PROJECT_NAME)
+    _ = j.run(path=out_file)
+
+    assert os.path.exists(os.fspath(out_file))
+
+
+@pytest.mark.parametrize(
+    "dir_builder",
+    [_pathlib_builder, _posix_builder, _str_builder, _fspath_builder],
+    ids=["pathlib.Path", "posixpath_str", "str", "PathLike"],
+)
+def test_batch_run_accepts_pathlike_dir(monkeypatch, tmp_path, dir_builder):
+    """Batch.run(path_dir=...) accepts any PathLike directory location."""
+    sims = {"A": make_sim(), "B": make_sim()}
+    out_dir = dir_builder(tmp_path, "batch_out")
+
+    # Map task_ids to sims: upload() is patched to return task_name, which for dict input
+    # corresponds to the dict keys ("A", "B"), so we map those.
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim={"A": sims["A"], "B": sims["B"]})
+
+    b = Batch(simulations=sims, folder_name=PROJECT_NAME)
+    b.run(path_dir=out_dir)
+
+    # Directory created and two .hdf5 outputs produced
+    out_dir_str = os.fspath(out_dir)
+    assert os.path.isdir(out_dir_str)

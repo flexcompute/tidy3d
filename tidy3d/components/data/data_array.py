@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import pathlib
 from abc import ABC
 from collections.abc import Mapping
+from os import PathLike
 from typing import Any, Optional, Union
 
 import autograd.numpy as anp
@@ -220,12 +222,14 @@ class DataArray(xr.DataArray):
         raw_data = self.data.ravel()
         return np.allclose(raw_data, raw_data[0])
 
-    def to_hdf5(self, fname: Union[str, h5py.File], group_path: str) -> None:
+    def to_hdf5(self, fname: Union[PathLike, h5py.File], group_path: str) -> None:
         """Save an xr.DataArray to the hdf5 file or file handle with a given path to the group."""
 
         # file name passed
-        if isinstance(fname, str):
-            with h5py.File(fname, "w") as f_handle:
+        if isinstance(fname, (str, pathlib.Path)):
+            path = pathlib.Path(fname)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with h5py.File(path, "w") as f_handle:
                 self.to_hdf5_handle(f_handle=f_handle, group_path=group_path)
 
         # file handle passed
@@ -244,9 +248,10 @@ class DataArray(xr.DataArray):
                 sub_group[key] = val
 
     @classmethod
-    def from_hdf5(cls, fname: str, group_path: str) -> Self:
+    def from_hdf5(cls, fname: PathLike, group_path: str) -> Self:
         """Load an DataArray from an hdf5 file with a given path to the group."""
-        with h5py.File(fname, "r") as f:
+        path = pathlib.Path(fname)
+        with h5py.File(path, "r") as f:
             sub_group = f[group_path]
             values = np.array(sub_group[DATA_ARRAY_VALUE_NAME])
             coords = {dim: np.array(sub_group[dim]) for dim in cls._dims if dim in sub_group}
@@ -256,13 +261,14 @@ class DataArray(xr.DataArray):
             return cls(values, coords=coords, dims=cls._dims)
 
     @classmethod
-    def from_file(cls, fname: str, group_path: str) -> Self:
+    def from_file(cls, fname: PathLike, group_path: str) -> Self:
         """Load an DataArray from an hdf5 file with a given path to the group."""
-        if ".hdf5" not in fname:
+        path = pathlib.Path(fname)
+        if not any(suffix.lower() == ".hdf5" for suffix in path.suffixes):
             raise FileError(
-                f"'DataArray' objects must be written to '.hdf5' format. Given filename of {fname}."
+                f"'DataArray' objects must be written to '.hdf5' format. Given filename of {path}."
             )
-        return cls.from_hdf5(fname=fname, group_path=group_path)
+        return cls.from_hdf5(fname=path, group_path=group_path)
 
     def __hash__(self) -> int:
         """Generate hash value for a :class:`.DataArray` instance, needed for custom components."""

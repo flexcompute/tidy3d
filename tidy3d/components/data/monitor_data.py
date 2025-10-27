@@ -6,6 +6,7 @@ import struct
 import warnings
 from abc import ABC
 from math import isclose
+from os import PathLike
 from typing import Any, Callable, Literal, Optional, Union, get_args
 
 import autograd.numpy as np
@@ -1081,7 +1082,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
     def to_zbf(
         self,
-        fname: str,
+        fname: PathLike,
         units: UnitsZBF = "mm",
         background_refractive_index: float = 1,
         n_x: Optional[int] = None,
@@ -1102,7 +1103,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         Parameters
         ----------
-        fname : str
+        fname : PathLike
             Full path to the ``.zbf`` file to be written.
         units : UnitsZBF = "mm"
             Spatial units used for the ``.zbf`` file. Options are ``"mm"``, ``"cm"``, ``"in"``, or ``"m"``.

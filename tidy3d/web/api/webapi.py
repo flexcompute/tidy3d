@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 import time
+from os import PathLike
+from pathlib import Path
 from typing import Callable, Literal, Optional, Union
 
 from requests import HTTPError
@@ -321,7 +322,7 @@ def run(
     simulation: WorkflowType,
     task_name: Optional[str] = None,
     folder_name: str = "default",
-    path: str = "simulation_data.hdf5",
+    path: PathLike = "simulation_data.hdf5",
     callback_url: Optional[str] = None,
     verbose: bool = True,
     progress_callback_upload: Optional[Callable[[float], None]] = None,
@@ -347,7 +348,7 @@ def run(
         Name of task. If not provided, a default name will be generated.
     folder_name : str = "default"
         Name of folder to store task on web UI.
-    path : str = "simulation_data.hdf5"
+    path : PathLike = "simulation_data.hdf5"
         Path to download results file (.hdf5), including filename.
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
@@ -1041,7 +1042,7 @@ def abort(task_id: TaskId):
 @wait_for_connection
 def download(
     task_id: TaskId,
-    path: str = "simulation_data.hdf5",
+    path: PathLike = "simulation_data.hdf5",
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
@@ -1051,7 +1052,7 @@ def download(
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str = "simulation_data.hdf5"
+    path : PathLike = "simulation_data.hdf5"
         Download path to .hdf5 data file (including filename).
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
@@ -1059,13 +1060,13 @@ def download(
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
-    # Component modeler batch download path
+    path = Path(path)
+
     if _is_modeler_batch(task_id):
         # Use a more descriptive default filename for component modeler downloads.
         # If the caller left the default as 'simulation_data.hdf5', prefer 'cm_data.hdf5'.
-        if os.path.basename(path) == "simulation_data.hdf5":
-            base_dir = os.path.dirname(path) or "."
-            path = os.path.join(base_dir, "cm_data.hdf5")
+        if path.name == "simulation_data.hdf5":
+            path = path.with_name("cm_data.hdf5")
 
         def _download_cm() -> bool:
             try:
@@ -1117,20 +1118,19 @@ def download(
 
 
 @wait_for_connection
-def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True) -> None:
+def download_json(task_id: TaskId, path: PathLike = SIM_FILE_JSON, verbose: bool = True) -> None:
     """Download the ``.json`` file associated with the :class:`.Simulation` of a given task.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str = "simulation.json"
+    path : PathLike = "simulation.json"
         Download path to .json file of simulation (including filename).
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
 
     """
-
     task = SimulationTask(taskId=task_id)
     task.get_simulation_json(path, verbose=verbose)
 
@@ -1144,7 +1144,7 @@ def delete_old(days_old: int, folder_name: str = "default") -> int:
 
 @wait_for_connection
 def load_simulation(
-    task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True
+    task_id: TaskId, path: PathLike = SIM_FILE_JSON, verbose: bool = True
 ) -> WorkflowType:
     """Download the ``.json`` file of a task and load the associated simulation.
 
@@ -1152,7 +1152,7 @@ def load_simulation(
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str = "simulation.json"
+    path : PathLike = "simulation.json"
         Download path to .json file of simulation (including filename).
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
@@ -1162,7 +1162,6 @@ def load_simulation(
     Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation loaded from downloaded json file.
     """
-
     task = SimulationTask.get(task_id)
     task.get_simulation_json(path, verbose=verbose)
     return Tidy3dStub.from_file(path)
@@ -1171,7 +1170,7 @@ def load_simulation(
 @wait_for_connection
 def download_log(
     task_id: TaskId,
-    path: str = "tidy3d.log",
+    path: PathLike = "tidy3d.log",
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
@@ -1181,7 +1180,7 @@ def download_log(
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str = "tidy3d.log"
+    path : PathLike = "tidy3d.log"
         Download path to log file (including filename).
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
@@ -1199,7 +1198,7 @@ def download_log(
 @wait_for_connection
 def load(
     task_id: TaskId,
-    path: str = "simulation_data.hdf5",
+    path: PathLike = "simulation_data.hdf5",
     replace_existing: bool = True,
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
@@ -1225,7 +1224,7 @@ def load(
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str
+    path : PathLike
         Download path to .hdf5 data file (including filename).
     replace_existing : bool = True
         Downloads the data even if path exists (overwriting the existing).
@@ -1243,15 +1242,21 @@ def load(
         Object containing simulation data.
     """
     # For component modeler batches, default to a clearer filename if the default was used.
-    if _is_modeler_batch(task_id):
-        base_dir = os.path.dirname(path) or "."
-        if os.path.basename(path) == "simulation_data.hdf5":
-            path = os.path.join(base_dir, "cm_data.hdf5")
-        elif os.path.basename(path) == "simulation_data.hdf5.gz":
-            path = os.path.join(base_dir, "cm_data.hdf5.gz")
+    path = Path(path)
 
-    if not os.path.exists(path) or replace_existing:
-        download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
+    if _is_modeler_batch(task_id):
+        if path.name == "simulation_data.hdf5":
+            path = path.with_name("cm_data.hdf5")
+        elif path.name == "simulation_data.hdf5.gz":
+            path = path.with_name("cm_data.hdf5.gz")
+
+    if not path.exists() or replace_existing:
+        download(
+            task_id=task_id,
+            path=path,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
 
     if verbose:
         console = get_logging_console()
@@ -1459,7 +1464,7 @@ def delete(task_id: TaskId, versions: bool = False) -> TaskInfo:
 @wait_for_connection
 def download_simulation(
     task_id: TaskId,
-    path: str = SIM_FILE_HDF5,
+    path: PathLike = SIM_FILE_HDF5,
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
@@ -1469,7 +1474,7 @@ def download_simulation(
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str = "simulation.hdf5"
+    path : PathLike = "simulation.hdf5"
         Download path to .hdf5 file of simulation (including filename).
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
@@ -1486,7 +1491,10 @@ def download_simulation(
 
     task = SimulationTask(taskId=task_id)
     task.get_simulation_hdf5(
-        path, verbose=verbose, progress_callback=progress_callback, remote_sim_file=remote_sim_file
+        path,
+        verbose=verbose,
+        progress_callback=progress_callback,
+        remote_sim_file=remote_sim_file,
     )
 
 
