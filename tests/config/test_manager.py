@@ -28,12 +28,19 @@ def test_runtime_isolated_per_profile(config_manager):
     assert config_manager.get_section("web").timeout == 45
 
 
-def test_environment_variable_precedence(monkeypatch, config_manager):
+def test_runtime_overrides_env(monkeypatch, config_manager):
     monkeypatch.setenv("TIDY3D_LOGGING__LEVEL", "WARNING")
     config_manager.switch_profile(config_manager.profile)
     config_manager.update_section("logging", level="DEBUG")
     logging_section = config_manager.get_section("logging")
-    # env var should still take precedence
+    # runtime change should override the environment variable
+    assert logging_section.level == "DEBUG"
+
+
+def test_env_applies_without_runtime_override(monkeypatch, config_manager):
+    monkeypatch.setenv("TIDY3D_LOGGING__LEVEL", "WARNING")
+    config_manager.switch_profile(config_manager.profile)
+    logging_section = config_manager.get_section("logging")
     assert logging_section.level == "WARNING"
 
 

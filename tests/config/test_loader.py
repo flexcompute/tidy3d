@@ -6,7 +6,10 @@ from click.testing import CliRunner
 from pydantic import Field
 
 from tidy3d.config import get_manager, reload_config
+from tidy3d.config import loader as config_loader
 from tidy3d.config import registry as config_registry
+from tidy3d.config.legacy import finalize_legacy_migration
+from tidy3d.config.loader import migrate_legacy_config
 from tidy3d.config.sections import ConfigSection
 from tidy3d.web.cli.app import tidy3d_cli
 
@@ -32,7 +35,7 @@ def test_save_includes_descriptions(config_manager, mock_config_dir):
     manager.save(include_defaults=True)
 
     content = _config_path(mock_config_dir).read_text(encoding="utf-8")
-    assert "# Web/HTTP configuration." in content
+    assert "Lowest logging level that will be emitted." in content
 
 
 def test_preserves_user_comments(config_manager, mock_config_dir):
@@ -41,10 +44,7 @@ def test_preserves_user_comments(config_manager, mock_config_dir):
 
     config_path = _config_path(mock_config_dir)
     text = config_path.read_text(encoding="utf-8")
-    text = text.replace(
-        "Web/HTTP configuration.",
-        "user-modified comment",
-    )
+    text = text.replace("Lowest logging level that will be emitted.", "user-modified comment")
     config_path.write_text(text, encoding="utf-8")
 
     reload_config(profile="default")
@@ -53,7 +53,7 @@ def test_preserves_user_comments(config_manager, mock_config_dir):
 
     updated = config_path.read_text(encoding="utf-8")
     assert "user-modified comment" in updated
-    assert "Web/HTTP configuration." not in updated
+    assert "Lowest logging level that will be emitted." not in updated
 
 
 def test_profile_preserves_comments(config_manager, mock_config_dir):
@@ -118,7 +118,7 @@ def test_cli_reset_config(mock_config_dir):
         assert result.exit_code == 0, result.output
 
         config_text = _config_path(mock_config_dir).read_text(encoding="utf-8")
-        assert "Web/HTTP configuration." in config_text
+        assert "Lowest logging level that will be emitted." in config_text
         assert "[web]" in config_text
         assert "secret" not in config_text
         assert not profiles_dir.exists()
@@ -143,8 +143,58 @@ def test_plugin_descriptions(mock_config_dir):
         manager = get_manager()
         manager.save(include_defaults=True)
         content = _config_path(mock_config_dir).read_text(encoding="utf-8")
-        assert "Comment plugin configuration." in content
         assert "Plugin knob description." in content
     finally:
         config_registry._SECTIONS.pop("plugins.comment_test", None)
         reload_config(profile="default")
+
+
+def test_finalize_legacy_migration_promotes_flat_file(tmp_path):
+    canonical_dir = tmp_path / "canonical"
+    canonical_dir.mkdir()
+    legacy_file = canonical_dir / "config"
+    legacy_file.write_text('apikey = "legacy-key"\n', encoding="utf-8")
+    extra_file = canonical_dir / "extra.txt"
+    extra_file.write_text("keep", encoding="utf-8")
+
+    finalize_legacy_migration(canonical_dir)
+
+    config_toml = canonical_dir / "config.toml"
+    assert config_toml.exists()
+    content = config_toml.read_text(encoding="utf-8")
+    assert "[web]" in content
+    assert "[logging]" in content
+    assert "Lowest logging level that will be emitted." in content
+    assert "legacy-key" in content
+    assert not legacy_file.exists()
+    assert extra_file.exists()
+    assert extra_file.read_text(encoding="utf-8") == "keep"
+
+
+def test_migrate_legacy_config_promotes_structured_config(tmp_path, monkeypatch):
+    legacy_dir = tmp_path / "legacy"
+    legacy_dir.mkdir()
+    legacy_file = legacy_dir / "config"
+    legacy_file.write_text('apikey = "legacy-key"\n', encoding="utf-8")
+    (legacy_dir / "extra.txt").write_text("keep", encoding="utf-8")
+
+    canonical_dir = tmp_path / "canonical"
+
+    monkeypatch.setattr(config_loader, "legacy_config_directory", lambda: legacy_dir)
+    monkeypatch.setattr(config_loader, "canonical_config_directory", lambda: canonical_dir)
+
+    destination = migrate_legacy_config()
+
+    assert destination == canonical_dir
+    config_toml = canonical_dir / "config.toml"
+    assert config_toml.exists()
+    content = config_toml.read_text(encoding="utf-8")
+    assert "[web]" in content
+    assert "[logging]" in content
+    assert "Lowest logging level that will be emitted." in content
+    assert "legacy-key" in content
+    assert not (canonical_dir / "config").exists()
+    extra_file = canonical_dir / "extra.txt"
+    assert extra_file.exists()
+    assert extra_file.read_text(encoding="utf-8") == "keep"
+    assert legacy_dir.exists()

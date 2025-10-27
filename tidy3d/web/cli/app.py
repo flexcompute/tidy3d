@@ -197,7 +197,10 @@ def config_migrate(overwrite: bool, delete_legacy: bool) -> None:
     if delete_legacy:
         click.echo("The legacy '~/.tidy3d' directory was removed.")
     else:
-        click.echo(f"The legacy directory remains at '{legacy_dir}'.")
+        click.echo(
+            f"The legacy directory remains at '{legacy_dir}'. "
+            "Remove it after confirming the new configuration works, or rerun with '--delete-legacy'."
+        )
 
 
 @click.group()
