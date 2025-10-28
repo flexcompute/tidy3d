@@ -8,6 +8,7 @@ Radiation & Scattering
    :template: module.rst
 
    tidy3d.DirectivityMonitor
+   tidy3d.plugins.smatrix.DirectivityMonitorSpec
    tidy3d.plugins.microwave.RectangularAntennaArrayCalculator
    tidy3d.plugins.microwave.LobeMeasurer
    tidy3d.AntennaMetricsData
@@ -30,19 +31,25 @@ When modeling antennas or scattering problems, it is vital to analyze the radiat
        phi=my_phi,
        theta=my_theta,
        name='My radiation monitor',
-       far_field_approx=True,
    )
 
-The :class:`.DirectivityMonitor` should completely surround the structure of interest. The ``far_field_approx`` flag can be used to set whether the far-field approximation is used (default ``True``).
+The :class:`.DirectivityMonitor` should completely surround the structure of interest.
 
-Once the monitor is defined, it should be added to the ``radiation_monitors`` option of the :class:`.TerminalComponentModeler`.
+Alternatively, a :class:`.DirectivityMonitorSpec` can be used to create a specification for automatic generation of a :class:`.DirectivityMonitor` in the :class:`.TerminalComponentModeler`.
+
+.. code-block:: python
+
+   # Define directivity monitor spec
+   my_directivity_monitor_spec = DirectivityMonitorSpec()
+
+Once the monitor or monitor spec is defined, it should be added to the ``radiation_monitors`` option of the :class:`.TerminalComponentModeler`.
 
 .. code-block:: python
 
    # Add directivity monitor to simulation
    my_tcm = TerminalComponentModeler(
        ...,
-       radiation_monitors=[my_directivity_monitor],
+       radiation_monitors=[my_directivity_monitor, my_directivity_monitor_spec],
    )
 
 Once the simulation is completed, the ``get_antenna_metrics_data()`` method of the :class:`.TerminalComponentModelerData` object is used to obtain the radiation metrics.

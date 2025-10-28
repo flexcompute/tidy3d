@@ -474,3 +474,225 @@ def make_differential_stripline_modeler():
     )
 
     return tcm
+
+
+def make_patch_antenna_simulation(padding: tuple[float, float, float] = (0.25, 0.25, 0.25)):
+    """Create a rectangular patch antenna simulation on a dielectric substrate.
+
+    Closely follows the patch antenna design from AntennaCharacteristics.ipynb,
+    based on: Sheen, D.M., Ali, S.M., Abouzahra, M.D. and Kong, J.A., 1990.
+    Application of the three-dimensional finite-difference time-domain method
+    to the analysis of planar microstrip circuits.
+
+    Parameters
+    ----------
+    padding : tuple[float, float, float]
+        Padding between substrate and simulation domain boundaries in x, y, z directions.
+
+    Returns
+    -------
+    td.Simulation
+        Patch antenna simulation object.
+    """
+    # Frequency setup for patch antenna (5-11 GHz range for resonances at 7.5 and 10 GHz)
+    freq_start_antenna = 5e9
+    freq_stop_antenna = 11e9
+    freq0 = (freq_start_antenna + freq_stop_antenna) / 2
+    wavelength0 = td.C_0 / freq0
+
+    # Metal thickness
+    th = 0.05 * mm
+
+    # Substrate parameters
+    sub_x = 23.34 * mm
+    sub_y = 40 * mm
+    sub_z = 0.794 * mm
+
+    # Patch parameters
+    patch_x = 12.45 * mm
+    patch_y = 16 * mm
+
+    # Feed line parameters
+    feed_x = 2.46 * mm
+    feed_y = 20 * mm
+    feed_offset = 2.09 * mm
+
+    # Materials
+    medium_sub = td.Medium(permittivity=2.2, name="Substrate")
+    medium_metal = td.PECMedium()
+
+    # Create structures for grid refinement calculation
+    ground_plane_temp = td.Structure(
+        geometry=td.Box(center=[0, 0, -(sub_z + th) / 2], size=[sub_x, sub_y, th]),
+        medium=medium_metal,
+        name="Ground",
+    )
+
+    feed_line_temp = td.Structure(
+        geometry=td.Box.from_bounds(
+            rmin=[-patch_x / 2 + feed_offset, -sub_y / 2, sub_z / 2],
+            rmax=[-patch_x / 2 + feed_offset + feed_x, -sub_y / 2 + feed_y, sub_z / 2 + th],
+        ),
+        medium=medium_metal,
+        name="Feed line",
+    )
+
+    patch_temp = td.Structure(
+        geometry=td.Box.from_bounds(
+            rmin=[-patch_x / 2, -sub_y / 2 + feed_y, sub_z / 2],
+            rmax=[patch_x / 2, -sub_y / 2 + feed_y + patch_y, sub_z / 2 + th],
+        ),
+        medium=medium_metal,
+        name="Patch",
+    )
+
+    # Create LayerRefinementSpec helper
+    def create_lr_spec(structures_list):
+        """Returns LayerRefinementSpec applied to the bounding box of the input structure list"""
+        lr_spec = td.LayerRefinementSpec.from_structures(
+            structures=structures_list,
+            axis=2,  # Layer normal is oriented along the z-axis
+            bounds_snapping="bounds",  # Snap grid lines to layer bounds in normal direction
+            bounds_refinement=td.GridRefinement(
+                dl=th, num_cells=2
+            ),  # cell size and num cells at layer boundaries in normal direction
+            corner_refinement=td.GridRefinement(
+                dl=0.2 * mm, num_cells=2
+            ),  # cell size and num cells around in-plane metal corners
+        )
+        return lr_spec
+
+    # Layer refinement for the ground layer
+    lr_spec_1 = create_lr_spec([ground_plane_temp])
+
+    # Layer refinement for the patch antenna layer
+    lr_spec_2 = create_lr_spec([feed_line_temp, patch_temp])
+
+    # Define overall grid specification
+    grid_spec = td.GridSpec.auto(
+        wavelength=wavelength0, min_steps_per_wvl=25, layer_refinement_specs=[lr_spec_1, lr_spec_2]
+    )
+
+    # Create substrate
+    substrate = td.Structure(
+        geometry=td.Box(center=[0, 0, 0], size=[sub_x, sub_y, sub_z]),
+        medium=medium_sub,
+        name="Substrate",
+    )
+
+    # Create ground plane
+    ground_plane = td.Structure(
+        geometry=td.Box(center=[0, 0, -(sub_z + th) / 2], size=[sub_x, sub_y, th]),
+        medium=medium_metal,
+        name="Ground",
+    )
+
+    # Create feed line
+    feed_line = td.Structure(
+        geometry=td.Box.from_bounds(
+            rmin=[-patch_x / 2 + feed_offset, -sub_y / 2, sub_z / 2],
+            rmax=[-patch_x / 2 + feed_offset + feed_x, -sub_y / 2 + feed_y, sub_z / 2 + th],
+        ),
+        medium=medium_metal,
+        name="Feed line",
+    )
+
+    # Create patch antenna
+    patch = td.Structure(
+        geometry=td.Box.from_bounds(
+            rmin=[-patch_x / 2, -sub_y / 2 + feed_y, sub_z / 2],
+            rmax=[patch_x / 2, -sub_y / 2 + feed_y + patch_y, sub_z / 2 + th],
+        ),
+        medium=medium_metal,
+        name="Patch",
+    )
+
+    # Structures list (dielectric first, then metal/PEC)
+    structures_list = [substrate, ground_plane, feed_line, patch]
+
+    # Padding distance
+    padding_um = td.C_0 / freq_start_antenna * np.array(padding)
+
+    # Simulation size
+    sim_x = sub_x + 2 * padding_um[0]
+    sim_y = sub_y + 2 * padding_um[1]
+    sim_z = sub_z + 2 * padding_um[2]
+
+    # Define PMLs on all sides
+    boundary_spec = td.BoundarySpec.pml(x=True, y=False, z=True)
+
+    # Create simulation object
+    sim = td.Simulation(
+        center=[0, 0, 0],
+        size=[sim_x, sim_y, sim_z],
+        structures=structures_list,
+        sources=[],
+        monitors=[],
+        boundary_spec=boundary_spec,
+        grid_spec=grid_spec,
+        run_time=5e-9,
+        shutoff=1e-4,
+        plot_length_units="mm",
+    )
+
+    return sim
+
+
+def make_patch_antenna_modeler(padding: tuple[float, float, float] = (0.25, 0.25, 0.25)):
+    """Create a TerminalComponentModeler for a rectangular patch antenna.
+
+    Closely follows the antenna setup from AntennaCharacteristics.ipynb.
+
+    Returns
+    -------
+    TerminalComponentModeler
+        Component modeler for the patch antenna.
+    """
+    # Frequency setup for patch antenna
+    freq_start_antenna = 5e9
+    freq_stop_antenna = 11e9
+
+    sim = make_patch_antenna_simulation(padding=padding)
+
+    # Patch antenna dimensions
+    patch_x = 12.45 * mm
+    feed_x = 2.46 * mm
+    feed_offset = 2.09 * mm
+    sub_z = 0.794 * mm
+    sub_y = 40 * mm
+
+    # Create lumped port excitation at feed line
+    port = LumpedPort(
+        name="lumped_port",
+        center=[-patch_x / 2 + feed_offset + feed_x / 2, -sub_y / 2, 0],
+        size=[feed_x, 0, sub_z],
+        voltage_axis=2,
+        impedance=50,
+    )
+
+    # Frequency sweep (201 points as in notebook)
+    freqs = np.linspace(freq_start_antenna, freq_stop_antenna, 201)
+
+    # Target frequencies for field monitor
+    freqs_target = [7.5e9, 10e9]
+
+    # Field monitor
+    monitor_field = td.FieldMonitor(
+        center=(0, 0, sub_z / 2),
+        size=(td.inf, td.inf, 0),
+        freqs=freqs_target,
+        name="field",
+    )
+
+    # Update simulation with field monitor
+    sim = sim.updated_copy(monitors=[monitor_field])
+
+    modeler = TerminalComponentModeler(
+        simulation=sim,
+        ports=[port],
+        freqs=freqs,
+        remove_dc_component=False,
+        radiation_monitors=[],
+    )
+
+    return modeler

@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Introduced a profile-based configuration manager with TOML persistence and runtime overrides exposed via `tidy3d.config`.
 - Added support of `os.PathLike` objects as paths like `pathlib.Path` alongside `str` paths in all path-related functions.
 - Added configurable local simulation result caching with checksum validation, eviction limits, and per-call overrides across `web.run`, `web.load`, and job workflows.
+- Added `DirectivityMonitorSpec` for automated creation and configuration of directivity radiation monitors in `TerminalComponentModeler`.
 
 ### Changed
 - Improved performance of antenna metrics calculation by utilizing cached wave amplitude calculations instead of recomputing wave amplitudes for each port excitation in the `TerminalComponentModelerData`.

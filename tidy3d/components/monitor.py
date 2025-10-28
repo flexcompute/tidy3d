@@ -915,7 +915,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     and projects them to a given set of observation points.
     """
 
-    custom_origin: Coordinate = pydantic.Field(
+    custom_origin: Optional[Coordinate] = pydantic.Field(
         None,
         title="Local Origin",
         description="Local origin used for defining observation points. If ``None``, uses the "

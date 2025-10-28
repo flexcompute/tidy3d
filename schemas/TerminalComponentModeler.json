@@ -6096,6 +6096,69 @@
       ],
       "type": "object"
     },
+    "DirectivityMonitorSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "buffer": {
+          "default": 2,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "custom_origin": {
+          "default": [
+            0,
+            0,
+            0
+          ],
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "freqs": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "num_phi_points": {
+          "default": 200,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "num_theta_points": {
+          "default": 100,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": {
+          "default": "DirectivityMonitorSpec",
+          "enum": [
+            "DirectivityMonitorSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "DistributedGeneration": {
       "additionalProperties": false,
       "properties": {
@@ -18304,7 +18367,21 @@
     "radiation_monitors": {
       "default": [],
       "items": {
-        "$ref": "#/definitions/DirectivityMonitor"
+        "discriminator": {
+          "mapping": {
+            "DirectivityMonitor": "#/definitions/DirectivityMonitor",
+            "DirectivityMonitorSpec": "#/definitions/DirectivityMonitorSpec"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/definitions/DirectivityMonitor"
+          },
+          {
+            "$ref": "#/definitions/DirectivityMonitorSpec"
+          }
+        ]
       },
       "type": "array"
     },
