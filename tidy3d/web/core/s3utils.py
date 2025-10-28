@@ -62,14 +62,25 @@ class _S3STSToken(BaseModel):
     def get_client(self) -> boto3.client:
         """Get the boto client for this token."""
 
-        return boto3.client(
-            "s3",
-            region_name=Env.current.s3_region,
-            aws_access_key_id=self.user_credential.access_key_id,
-            aws_secret_access_key=self.user_credential.secret_access_key,
-            aws_session_token=self.user_credential.session_token,
-            verify=Env.current.ssl_verify,
-        )
+        if Env.nexus.name == "nexus":
+            return boto3.client(
+                "s3",
+                endpoint_url=Env.current.env_vars.get("AWS_ENDPOINT_URL_S3"),
+                region_name=Env.current.s3_region,
+                aws_access_key_id=self.user_credential.access_key_id,
+                aws_secret_access_key=self.user_credential.secret_access_key,
+                aws_session_token=self.user_credential.session_token,
+                verify=Env.current.ssl_verify,
+            )
+        else:
+            return boto3.client(
+                "s3",
+                region_name=Env.current.s3_region,
+                aws_access_key_id=self.user_credential.access_key_id,
+                aws_secret_access_key=self.user_credential.secret_access_key,
+                aws_session_token=self.user_credential.session_token,
+                verify=Env.current.ssl_verify,
+            )
 
     def is_expired(self) -> bool:
         """True if token is expired."""
