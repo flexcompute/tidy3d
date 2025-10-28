@@ -42,7 +42,7 @@ def mock_config_dir(tmp_path, monkeypatch):
 
     base_dir = tmp_path / "config_home"
     monkeypatch.setenv("TIDY3D_BASE_DIR", str(base_dir))
-    return base_dir / ".tidy3d"
+    return base_dir / "config"
 
 
 @pytest.fixture

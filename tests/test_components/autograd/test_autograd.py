@@ -661,7 +661,7 @@ if TEST_POLYSLAB_SPEED:
 # args = [("polyslab", "mode")]
 
 
-def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
+def get_functions(structure_key: str, monitor_key: str) -> dict[str, typing.Callable]:
     if structure_key == ALL_KEY:
         structure_keys = structure_keys_
     else:

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.config import config
+from tidy3d.log import get_logging_console
 from tidy3d.web.api.autograd.autograd import run as run_autograd
 from tidy3d.web.api.autograd.autograd import run_async
 from tidy3d.web.api.container import DEFAULT_DATA_DIR, DEFAULT_DATA_PATH
@@ -232,7 +233,14 @@ def run(
 
     key_prefix = ""
     if len(h2sim) == 1:
-        path = path if path is not None else Path(DEFAULT_DATA_PATH)
+        if path is not None:
+            # user may submit the same simulation multiple times and not specify an extension, but dir path
+            if not Path(path).suffixes:
+                path = f"{path}.hdf5"
+                console = get_logging_console()
+                console.log(f"Changed output path to {path}")
+        else:
+            path = DEFAULT_DATA_PATH
         h, sim = next(iter(h2sim.items()))
         data = {
             h: run_autograd(

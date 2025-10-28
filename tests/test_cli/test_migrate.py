@@ -18,7 +18,7 @@ def temp_config_dir(monkeypatch, tmp_path) -> Path:
     original_base = os.environ.get("TIDY3D_BASE_DIR")
     monkeypatch.setenv("TIDY3D_BASE_DIR", str(tmp_path))
     reload_config(profile="default")
-    config_dir = Path(tmp_path) / ".tidy3d"
+    config_dir = Path(tmp_path) / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     yield config_dir
     if original_base is None:

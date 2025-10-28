@@ -26,6 +26,7 @@ from tidy3d.web.api.states import (
     POST_VALIDATE_STATES,
     STATE_PROGRESS_PERCENTAGE,
 )
+from tidy3d.web.cache import CacheEntry, resolve_local_cache
 from tidy3d.web.core.account import Account
 from tidy3d.web.core.constants import (
     CM_DATA_HDF5_GZ,
@@ -317,6 +318,119 @@ def _task_dict_to_url_bullet_list(data_dict: dict) -> str:
     return "\n".join([f"- {key}: '{value}'" for key, value in data_dict.items()])
 
 
+def _copy_simulation_data_from_cache_entry(entry: CacheEntry, path: PathLike) -> bool:
+    """
+    Copy cached simulation data from a cache entry to a specified path.
+
+    Parameters
+    ----------
+    entry : CacheEntry
+        The cache entry containing simulation data and metadata.
+    path : PathLike
+        The target directory or file path where the cached data should be materialized.
+
+    Returns
+    -------
+    bool
+        True if the cached simulation data was successfully copied, False otherwise.
+    """
+    if entry is not None:
+        try:
+            entry.materialize(Path(path))
+            return True
+        except Exception:
+            return False
+    return False
+
+
+def restore_simulation_if_cached(
+    simulation: WorkflowType,
+    path: Optional[PathLike] = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
+    verbose: bool = True,
+) -> Optional[PathLike]:
+    """
+    Attempt to restore simulation data from a local cache entry, if available.
+
+    Parameters
+    ----------
+    simulation : WorkflowType
+        The simulation or workflow object for which cached data may exist.
+    path : Optional[PathLike] = None
+        Optional path where the cached data should be copied. If not provided,
+        the path from the cache entry will be used.
+    reduce_simulation : Literal["auto", True, False] = "auto"
+        Whether to reduce the simulation for cache lookup. If "auto", reduction is applied
+        only when applicable (e.g., for mode solvers).
+    verbose : bool = True
+        If True, logs a message including a link to the cached task in the web UI.
+
+    Returns
+    -------
+    Optional[PathLike]
+        The path to the restored simulation data if found in cache, otherwise None. If no path is specified, the cache entry path is returned, otherwise the given path is returned.
+    """
+    simulation_cache = resolve_local_cache()
+    retrieved_simulation_path = None
+    if simulation_cache is not None:
+        sim_for_cache = simulation
+        if isinstance(simulation, (ModeSolver, ModeSimulation)):
+            sim_for_cache = get_reduced_simulation(simulation, reduce_simulation)
+        entry = simulation_cache.try_fetch(simulation=sim_for_cache, verbose=verbose)
+        if entry is not None:
+            if path is not None:
+                copied = _copy_simulation_data_from_cache_entry(entry, path)
+                if copied:
+                    retrieved_simulation_path = path
+            else:
+                retrieved_simulation_path = entry.artifact_path
+            cached_task_id = entry.metadata.get("task_id")
+            cached_workflow_type = entry.metadata.get("workflow_type")
+            if cached_task_id is not None and cached_workflow_type is not None and verbose:
+                console = get_logging_console() if verbose else None
+                url, _ = _get_task_urls(cached_workflow_type, simulation, cached_task_id)
+                console.log(
+                    f"Loaded simulation from local cache.\nView cached task using web UI at [link={url}]'{url}'[/link]."
+                )
+    return retrieved_simulation_path
+
+
+def load_simulation_if_cached(
+    simulation: WorkflowType,
+    path: Optional[PathLike] = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
+) -> Optional[WorkflowDataType]:
+    """
+    Load simulation results directly from the local cache, if available.
+
+    Parameters
+    ----------
+    simulation : WorkflowType
+        The simulation or workflow object to check for cached results.
+    path : Optional[PathLike] = None
+        Optional path to which cached data should be restored before loading.
+    reduce_simulation : Literal["auto", True, False] = "auto"
+        Whether to use a reduced simulation when checking the cache. If "auto",
+        reduction is applied automatically for mode solvers.
+
+    Returns
+    -------
+    Optional[WorkflowDataType]
+        The loaded simulation data if found in cache, otherwise None.
+    """
+    restored_path = restore_simulation_if_cached(simulation, path, reduce_simulation)
+    if restored_path is not None:
+        data = load(
+            task_id=None,
+            path=str(restored_path),
+        )
+        if isinstance(simulation, ModeSolver):
+            simulation._patch_data(data=data)
+        return data
+    else:
+        return None
+
+
 @wait_for_connection
 def run(
     simulation: WorkflowType,
@@ -420,27 +534,38 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
-    task_id = upload(
+    restored_path = restore_simulation_if_cached(
         simulation=simulation,
-        task_name=task_name,
-        folder_name=folder_name,
-        callback_url=callback_url,
-        verbose=verbose,
-        progress_callback=progress_callback_upload,
-        simulation_type=simulation_type,
-        parent_tasks=parent_tasks,
-        solver_version=solver_version,
+        path=path,
         reduce_simulation=reduce_simulation,
-    )
-    start(
-        task_id,
         verbose=verbose,
-        solver_version=solver_version,
-        worker_group=worker_group,
-        pay_type=pay_type,
-        priority=priority,
     )
-    monitor(task_id, verbose=verbose)
+
+    if not restored_path:
+        task_id = upload(
+            simulation=simulation,
+            task_name=task_name,
+            folder_name=folder_name,
+            callback_url=callback_url,
+            verbose=verbose,
+            progress_callback=progress_callback_upload,
+            simulation_type=simulation_type,
+            parent_tasks=parent_tasks,
+            solver_version=solver_version,
+            reduce_simulation=reduce_simulation,
+        )
+        start(
+            task_id,
+            verbose=verbose,
+            solver_version=solver_version,
+            worker_group=worker_group,
+            pay_type=pay_type,
+            priority=priority,
+        )
+        monitor(task_id, verbose=verbose)
+    else:
+        task_id = None
+
     data = load(
         task_id=task_id,
         path=path,
@@ -448,9 +573,32 @@ def run(
         progress_callback=progress_callback_download,
         lazy=lazy,
     )
+
     if isinstance(simulation, ModeSolver):
         simulation._patch_data(data=data)
     return data
+
+
+def _get_task_urls(
+    task_type: str,
+    simulation: WorkflowType,
+    resource_id: str,
+    folder_id: Optional[str] = None,
+    group_id: Optional[str] = None,
+) -> tuple[str, Optional[str]]:
+    """Log task and folder links to the web UI."""
+    if (task_type in ["RF", "COMPONENT_MODELER", "TERMINAL_COMPONENT_MODELER"]) and isinstance(
+        simulation, TerminalComponentModeler
+    ):
+        url = _get_url_rf(group_id or resource_id)
+    else:
+        url = _get_url(resource_id)
+
+    if folder_id is not None:
+        folder_url = _get_folder_url(folder_id)
+    else:
+        folder_url = None
+    return url, folder_url
 
 
 @wait_for_connection
@@ -573,16 +721,11 @@ def upload(
                 f"Cost of {solver_name} simulations is subject to change in the future."
             )
         if task_type in GUI_SUPPORTED_TASK_TYPES:
-            if (task_type == "RF") and (isinstance(simulation, TerminalComponentModeler)):
-                url = _get_url_rf(group_id or resource_id)
-                folder_url = _get_folder_url(task.folder_id)
-                console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
-                console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
-            else:
-                url = _get_url(resource_id)
-                folder_url = _get_folder_url(task.folder_id)
-                console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
-                console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
+            url, folder_url = _get_task_urls(
+                task_type, simulation, resource_id, task.folder_id, group_id
+            )
+            console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+            console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
 
     remote_sim_file = SIM_FILE_HDF5_GZ
     if task_type == "MODE_SOLVER":
@@ -668,7 +811,7 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
     ----------
     task_id : TaskId
         The unique identifier for the task or batch.
-    verbose : bool, optional
+    verbose : bool = True
         If ``True`` (default), display progress bars and status updates.
         If ``False``, the function runs silently.
 
@@ -1197,7 +1340,7 @@ def download_log(
 
 @wait_for_connection
 def load(
-    task_id: TaskId,
+    task_id: Optional[TaskId],
     path: PathLike = "simulation_data.hdf5",
     replace_existing: bool = True,
     verbose: bool = True,
@@ -1222,8 +1365,8 @@ def load(
 
     Parameters
     ----------
-    task_id : str
-        Unique identifier of task on server.  Returned by :meth:`upload`.
+    task_id : Optional[str] = None
+        Unique identifier of task on server. Returned by :meth:`upload`. If None, file is assumed to exist already from cache.
     path : PathLike
         Download path to .hdf5 data file (including filename).
     replace_existing : bool = True
@@ -1241,31 +1384,41 @@ def load(
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing simulation data.
     """
-    # For component modeler batches, default to a clearer filename if the default was used.
     path = Path(path)
+    # For component modeler batches, default to a clearer filename if the default was used.
+    if (
+        task_id
+        and _is_modeler_batch(task_id)
+        and path.name in {"simulation_data.hdf5", "simulation_data.hdf5.gz"}
+    ):
+        path = path.with_name(path.name.replace("simulation", "cm"))
 
-    if _is_modeler_batch(task_id):
-        if path.name == "simulation_data.hdf5":
-            path = path.with_name("cm_data.hdf5")
-        elif path.name == "simulation_data.hdf5.gz":
-            path = path.with_name("cm_data.hdf5.gz")
+    if task_id is None:
+        if not path.exists():
+            raise FileNotFoundError("Cached file not found.")
+    elif not path.exists() or replace_existing:
+        download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
 
-    if not path.exists() or replace_existing:
-        download(
-            task_id=task_id,
-            path=path,
-            verbose=verbose,
-            progress_callback=progress_callback,
-        )
-
-    if verbose:
+    if verbose and task_id is not None:
         console = get_logging_console()
         if _is_modeler_batch(task_id):
             console.log(f"loading component modeler data from {path}")
         else:
-            console.log(f"loading simulation from {path}")
+            console.log(f"Loading simulation from {path}")
 
     stub_data = Tidy3dStubData.postprocess(path, lazy=lazy)
+
+    simulation_cache = resolve_local_cache()
+    if simulation_cache is not None and task_id is not None:
+        info = get_info(task_id, verbose=False)
+        workflow_type = getattr(info, "taskType", None)
+        simulation_cache.store_result(
+            stub_data=stub_data,
+            task_id=task_id,
+            path=path,
+            workflow_type=workflow_type,
+        )
+
     return stub_data
 
 
