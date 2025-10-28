@@ -197,8 +197,8 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             modes1 = port_modes1
         if not modes2_provided:
             modes2 = port_modes2
-        f1 = list(modes1.field_components.values())[0].f.values
-        f2 = list(modes2.field_components.values())[0].f.values
+        f1 = list(modes1.monitor.freqs)
+        f2 = list(modes2.monitor.freqs)
 
         f = np.array(sorted(set(f1).intersection(f2).intersection(self.simulation.freqs)))
 
@@ -259,6 +259,11 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 overlaps1 = modes1.outer_dot(port_modes1, conjugate=False)
                 if not modes_in_1:
                     overlaps1 = overlaps1.expand_dims(dim={"mode_index_0": mode_index_1}, axis=1)
+                interp_spec1 = modes1.monitor.mode_spec.interp_spec
+                if interp_spec1 is not None:
+                    overlaps1 = modes1._interp_dataarray(
+                        overlaps1, freqs=f, method=interp_spec1.method
+                    )
                 O1 = overlaps1.sel(f=f, mode_index_1=keep_mode_inds1)
 
                 O1out = O1.rename(mode_index_0="mode_index_out", mode_index_1="mode_index_out_old")
@@ -288,6 +293,11 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 overlaps2 = modes2.outer_dot(port_modes2, conjugate=False)
                 if not modes_in_2:
                     overlaps2 = overlaps2.expand_dims(dim={"mode_index_0": mode_index_2}, axis=1)
+                interp_spec2 = modes2.monitor.mode_spec.interp_spec
+                if interp_spec2:
+                    overlaps2 = modes2._interp_dataarray(
+                        overlaps2, freqs=f, method=interp_spec2.method
+                    )
                 O2 = overlaps2.sel(f=f, mode_index_1=keep_mode_inds2)
 
                 O2out = O2.rename(mode_index_0="mode_index_out", mode_index_1="mode_index_out_old")

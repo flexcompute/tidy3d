@@ -475,8 +475,6 @@ class ModeSpec(AbstractModeSpec):
 
     """
 
-    assume_constant_modes: bool = pd.Field(
-        False,
-        title="assume constant modes",
-        description="assume constant modes"
+    interp_spec: ModeInterpSpec = pd.Field(
+        ModeInterpSpec(method="cheb", num_points=4), title="interp spec", description="interp spec"
     )

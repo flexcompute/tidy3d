@@ -1660,6 +1660,9 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         """Raise validation error if frequencies in eps_spec does not match frequency list"""
         if val:
             mode_data_freqs = values["monitor"].freqs
+            interp_spec = values["monitor"].mode_spec.interp_spec
+            if interp_spec is not None:
+                return val
             if len(val) != len(mode_data_freqs):
                 raise ValidationError(
                     "eps_spec must be provided at the same frequencies as mode solver data."
@@ -2429,7 +2432,7 @@ class ModeSolverData(ModeData):
         self,
         freqs: FreqArray,
         method: Literal["linear", "cubic", "cheb"] = "linear",
-        assume_constant_modes: bool = False
+        assume_constant_modes: bool = False,
     ) -> ModeSolverData:
         """Interpolate mode data to new frequency points.
 

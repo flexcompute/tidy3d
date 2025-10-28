@@ -565,6 +565,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Get data at reduced frequencies
         data_reduced = mode_solver_reduced.data_raw
+        return data_reduced
 
         # Interpolate back to original frequencies
         return data_reduced.interp(freqs=self.freqs, method=self.interp_spec.method)

@@ -555,8 +555,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         mode_specs = [eme_mode_spec._to_mode_spec() for eme_mode_spec in self.eme_grid.mode_specs]
         for i in range(self.eme_grid.num_cells):
             freqs_curr = freqs
-            if self.eme_grid.mode_specs[i].interp_spec is not None:
-                freqs_curr = np.array(self.eme_grid.mode_specs[i].interp_spec.sampling_points(freqs))
             monitor = ModeSolverMonitor(
                 center=mode_planes[i].center,
                 size=mode_planes[i].size,
@@ -582,6 +580,7 @@ class EMESimulation(AbstractYeeGridSimulation):
             num_modes=self.max_port_modes,
             num_sweep=None,
             normalize=self.normalize,
+            freqs=self.freqs,
         )
 
     def _post_init_validators(self) -> None:
@@ -748,6 +747,9 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_monitor_setup(self):
         """Check monitor setup."""
+        for i in range(len(self.monitors)):
+            if self.monitors[i].freqs is None:
+                self.monitors[i] = self.monitors[i].updated_copy(freqs=self.freqs)
         for i, monitor in enumerate(self.monitors):
             if isinstance(monitor, EMEMonitor):
                 _ = self._monitor_eme_cell_indices(monitor=monitor)
@@ -1011,6 +1013,18 @@ class EMESimulation(AbstractYeeGridSimulation):
         if monitor.freqs is None:
             return list(self.freqs)
         return list(monitor.freqs)
+
+    def _monitor_mode_freqs(self, monitor: EMEModeSolverMonitor) -> list[pd.NonNegativeFloat]:
+        """Monitor frequencies."""
+        freqs = set()
+        cell_inds = self._monitor_eme_cell_indices(monitor=monitor)
+        for cell_ind in cell_inds:
+            interp_spec = self.eme_grid.mode_specs[cell_ind].interp_spec
+            if interp_spec is None:
+                freqs |= set(self.freqs)
+            else:
+                freqs |= set(interp_spec.sampling_points(self.freqs))
+        return list(freqs)
 
     def _monitor_num_freqs(self, monitor: Monitor) -> int:
         """Total number of freqs included in monitor."""
