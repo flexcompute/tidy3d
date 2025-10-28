@@ -39,9 +39,6 @@ from .api.webapi import (
 )
 from .cli import tidy3d_cli
 from .cli.app import configure_fn as configure
-from .cli.migrate import migrate
-
-migrate()
 
 __all__ = [
     "Batch",
