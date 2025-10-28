@@ -312,6 +312,12 @@ class DesignSpace(Tidy3dBaseModel):
 
         return handler
 
+    @staticmethod
+    def _run_batch(batch: Batch, path_dir: str) -> BatchData:
+        """Run a batch and return the BatchData."""
+        batch_out = batch.run(path_dir=path_dir)
+        return batch_out
+
     def _fn_mid(
         self, pre_out: dict[int, Any], sim_counter: int, console: Console
     ) -> Union[dict[int, Any], BatchData]:
@@ -387,16 +393,17 @@ class DesignSpace(Tidy3dBaseModel):
             console.log(f"Running {run_statement}")
 
         # Running simulations and batches
-        sims_out = Batch(
+        batch = Batch(
             simulations=named_sims,
             folder_name=self.folder_name,
             simulation_type="tidy3d_design",
             verbose=False,  # Using a custom output instead of Batch.monitor updates
-        ).run(path_dir=self.path_dir)
+        )
+        sims_out = self._run_batch(batch, path_dir=self.path_dir)
 
         batch_results = {}
         for batch_key, batch in batches.items():
-            batch_out = batch.run(path_dir=self.path_dir)
+            batch_out = self._run_batch(batch, path_dir=self.path_dir)
             batch_results[batch_key] = batch_out
 
         def _return_to_dict(return_dict: dict, key: str, return_obj: Any) -> None:
