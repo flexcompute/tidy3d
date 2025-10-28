@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import atexit
 import concurrent
+import os
+import shutil
+import tempfile
 import time
+import uuid
 from abc import ABC
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -12,6 +17,7 @@ from pathlib import Path
 from typing import Literal, Optional, Union
 
 import pydantic.v1 as pd
+from pydantic.v1 import PrivateAttr
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
@@ -32,6 +38,7 @@ from tidy3d.web.api.states import (
     STATE_PROGRESS_PERCENTAGE,
 )
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
+from tidy3d.web.api.webapi import restore_simulation_if_cached
 from tidy3d.web.core.constants import TaskId, TaskName
 from tidy3d.web.core.task_core import Folder
 from tidy3d.web.core.task_info import RunInfo, TaskInfo
@@ -241,6 +248,29 @@ class Job(WebContainer):
         "reduce_simulation",
     )
 
+    _stash_path: Optional[str] = PrivateAttr(default=None)
+
+    def _stash_path_for_job(self) -> str:
+        """Stash file which is a temporary location for the cached-restored file."""
+        stash_dir = Path(tempfile.gettempdir()) / "tidy3d_stash"
+        stash_dir.mkdir(parents=True, exist_ok=True)
+        return str(Path(stash_dir / f"{self._cached_task_id}.hdf5"))
+
+    def _materialize_from_stash(self, dst_path: os.PathLike) -> None:
+        """Atomic copy from stash to requested path."""
+        tmp = str(dst_path) + ".part"
+        shutil.copy2(self._stash_path, tmp)
+        os.replace(tmp, dst_path)
+
+    def clear_stash(self) -> None:
+        """Delete this job's stash file only."""
+        if self._stash_path:
+            try:
+                if os.path.exists(self._stash_path):
+                    os.remove(self._stash_path)
+            finally:
+                self._stash_path = None
+
     def to_file(self, fname: PathLike) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
 
@@ -258,7 +288,9 @@ class Job(WebContainer):
         super(Job, self).to_file(fname=fname)  # noqa: UP008
 
     def run(
-        self, path: PathLike = DEFAULT_DATA_PATH, priority: Optional[int] = None
+        self,
+        path: PathLike = DEFAULT_DATA_PATH,
+        priority: Optional[int] = None,
     ) -> WorkflowDataType:
         """Run :class:`Job` all the way through and return data.
 
@@ -274,17 +306,50 @@ class Job(WebContainer):
         :class:`WorkflowDataType`
             Object containing simulation results.
         """
-        self.upload()
-        if priority is None:
-            self.start()
-        else:
-            self.start(priority=priority)
-        self.monitor()
-        return self.load(path=path)
+        self._check_path_dir(path=path)
+
+        loaded_from_cache = self.load_if_cached
+        if not loaded_from_cache:
+            self.upload()
+            if priority is None:
+                self.start()
+            else:
+                self.start(priority=priority)
+            self.monitor()
+        data = self.load(path=path)
+
+        return data
+
+    @cached_property
+    def load_if_cached(self) -> bool:
+        """Checks if results are cached and (if yes) restores them into our shared stash file."""
+        # use temporary path as final destination is unknown
+        stash_path = self._stash_path_for_job()
+
+        restored = restore_simulation_if_cached(
+            simulation=self.simulation,
+            path=stash_path,
+            reduce_simulation=self.reduce_simulation,
+            verbose=getattr(self, "verbose", True),
+        )
+
+        if restored is None:
+            return False
+
+        self._stash_path = stash_path
+        atexit.register(self.clear_stash)
+        return True
+
+    @cached_property
+    def _cached_task_id(self) -> TaskId:
+        """The task ID for jobs which are loaded from cache."""
+        return "cached_" + self.task_name + "_" + str(uuid.uuid4())
 
     @cached_property
     def task_id(self) -> TaskId:
         """The task ID for this ``Job``. Uploads the ``Job`` if it hasn't already been uploaded."""
+        if self.load_if_cached:
+            return self._cached_task_id
         if self.task_id_cached:
             return self.task_id_cached
         self._check_folder(self.folder_name)
@@ -298,7 +363,9 @@ class Job(WebContainer):
         return task_id
 
     def upload(self) -> None:
-        """Upload this ``Job``."""
+        """Upload this ``Job`` if not already got cached results."""
+        if self.load_if_cached:
+            return
         _ = self.task_id
 
     def get_info(self) -> TaskInfo:
@@ -314,6 +381,8 @@ class Job(WebContainer):
     @property
     def status(self):
         """Return current status of :class:`Job`."""
+        if self.load_if_cached:
+            return "success"
         if web._is_modeler_batch(self.task_id):
             detail = self.get_info()
             status = detail.totalStatus.value
@@ -346,13 +415,16 @@ class Job(WebContainer):
         Note
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
+        Function has no effect if cache is enabled and data was found in cache.
         """
-        web.start(
-            self.task_id,
-            solver_version=self.solver_version,
-            pay_type=self.pay_type,
-            priority=priority,
-        )
+        loaded = self.load_if_cached
+        if not loaded:
+            web.start(
+                self.task_id,
+                solver_version=self.solver_version,
+                pay_type=self.pay_type,
+                priority=priority,
+            )
 
     def get_run_info(self) -> RunInfo:
         """Return information about the running :class:`Job`.
@@ -372,6 +444,8 @@ class Job(WebContainer):
         To load the output of completed simulation into :class:`.SimulationData` objects,
         call :meth:`Job.load`.
         """
+        if self.load_if_cached:
+            return
         web.monitor(self.task_id, verbose=self.verbose)
 
     def download(self, path: PathLike = DEFAULT_DATA_PATH) -> None:
@@ -386,6 +460,9 @@ class Job(WebContainer):
         ----
         To load the data after download, use :meth:`Job.load`.
         """
+        if self.load_if_cached:
+            self._materialize_from_stash(path)
+            return
         self._check_path_dir(path=path)
         web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
@@ -403,8 +480,11 @@ class Job(WebContainer):
             Object containing simulation results.
         """
         self._check_path_dir(path=path)
+        if self.load_if_cached:
+            self._materialize_from_stash(path)
+
         data = web.load(
-            task_id=self.task_id,
+            task_id=None if self.load_if_cached else self.task_id,
             path=path,
             verbose=self.verbose,
             lazy=self.lazy,
@@ -450,6 +530,8 @@ class Job(WebContainer):
         Cost is calculated assuming the simulation runs for
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
         """
+        if self.load_if_cached:
+            return 0.0
         return web.estimate_cost(self.task_id, verbose=verbose, solver_version=self.solver_version)
 
     def postprocess_start(self, worker_group: Optional[str] = None, verbose: bool = True) -> None:
@@ -547,6 +629,11 @@ class BatchData(Tidy3dBaseModel, Mapping):
     verbose: bool = pd.Field(
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
+    cached_tasks: Optional[dict[TaskName, bool]] = pd.Field(
+        None,
+        title="Cached Tasks",
+        description="Whether the data of a task came from the cache.",
+    )
 
     lazy: bool = pd.Field(
         False,
@@ -554,13 +641,27 @@ class BatchData(Tidy3dBaseModel, Mapping):
         description="Whether to load the actual data (lazy=False) or return a proxy that loads the data when accessed (lazy=True).",
     )
 
+    is_downloaded: Optional[bool] = pd.Field(
+        False,
+        title="Is Downloaded",
+        description="Whether the simulation data was downloaded before.",
+    )
+
     def load_sim_data(self, task_name: str) -> WorkflowDataType:
         """Load a simulation data object from file by task name."""
         task_data_path = Path(self.task_paths[task_name])
         task_id = self.task_ids[task_name]
-        web.get_info(task_id)
+        from_cache = self.cached_tasks[task_name] if self.cached_tasks else False
+        if not from_cache:
+            web.get_info(task_id)
 
-        return web.load(task_id=task_id, path=task_data_path, verbose=False, lazy=self.lazy)
+        return web.load(
+            task_id=None if from_cache else task_id,
+            path=task_data_path,
+            verbose=self.verbose,
+            replace_existing=not (from_cache or self.is_downloaded),
+            lazy=self.lazy,
+        )
 
     def __getitem__(self, task_name: TaskName) -> WorkflowDataType:
         """Get the simulation data object for a given ``task_name``."""
@@ -744,14 +845,20 @@ class Batch(WebContainer):
         rather it iterates over the task names and loads the corresponding
         data from file one by one. If no file exists for that task, it downloads it.
         """
+        loaded = [job.load_if_cached for job in self.jobs.values()]
         self._check_path_dir(path_dir)
-        self.upload()
-        self.to_file(self._batch_path(path_dir=path_dir))
-        if priority is None:
-            self.start()
+        if not all(loaded):
+            self.upload()
+            self.to_file(self._batch_path(path_dir=path_dir))
+            if priority is None:
+                self.start()
+            else:
+                self.start(priority=priority)
+            self.monitor(path_dir=path_dir, download_on_success=True)
         else:
-            self.start(priority=priority)
-        self.monitor(path_dir=path_dir, download_on_success=True)
+            console = get_logging_console()
+            console.log("Found all simulations in cache.")
+            self.download(path_dir=path_dir)  # moves cache files
         return self.load(path_dir=path_dir, skip_download=True)
 
     @cached_property
@@ -1191,39 +1298,50 @@ class Batch(WebContainer):
         self._check_path_dir(path_dir=path_dir)
         self.to_file(self._batch_path(path_dir=path_dir))
 
-        num_existing = 0
-        for _, job in self.jobs.items():
-            job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-            if job_path.exists():
-                num_existing += 1
-        if num_existing > 0:
-            files_plural = "files have" if num_existing > 1 else "file has"
-            log.warning(
-                f"{num_existing} {files_plural} already been downloaded "
-                f"and will be skipped. To forcibly overwrite existing files, invoke "
-                "the load or download function with `replace_existing=True`.",
-                log_once=True,
+        # Warn about already-existing files if we won't overwrite them
+        if not replace_existing:
+            num_existing = sum(
+                os.path.exists(self._job_data_path(task_id=job.task_id, path_dir=path_dir))
+                for job in self.jobs.values()
             )
+            if num_existing > 0:
+                files_plural = "files have" if num_existing > 1 else "file has"
+                log.warning(
+                    f"{num_existing} {files_plural} already been downloaded "
+                    f"and will be skipped. To forcibly overwrite existing files, invoke "
+                    "the load or download function with `replace_existing=True`.",
+                    log_once=True,
+                )
 
-        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-            fns = []
-            for task_name, job in self.jobs.items():
-                job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-                if job_path.exists():
-                    if replace_existing:
-                        log.info(f"File '{job_path}' already exists. Overwriting.")
-                    else:
-                        log.info(f"File '{job_path}' already exists. Skipping.")
-                        continue
-                if "error" in job.status:
-                    log.warning(f"Not downloading '{task_name}' as the task errored.")
+        fns = []
+
+        for task_name, job in self.jobs.items():
+            if "error" in job.status:
+                log.warning(f"Not downloading '{task_name}' as the task errored.")
+                continue
+
+            job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+
+            if job_path.exists():
+                if replace_existing:
+                    log.info(f"File '{job_path}' already exists. Overwriting.")
+                else:
+                    log.info(f"File '{job_path}' already exists. Skipping.")
                     continue
 
-                def fn(job=job, job_path=job_path) -> None:
-                    return job.download(path=job_path)
+            if job.load_if_cached:
+                job._materialize_from_stash(job_path)
+                continue
 
-                fns.append(fn)
+            def fn(job=job, job_path=job_path) -> None:
+                job.download(path=job_path)
 
+            fns.append(fn)
+
+        if not fns:
+            return
+
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             futures = [executor.submit(fn) for fn in fns]
 
             if self.verbose:
@@ -1241,6 +1359,10 @@ class Batch(WebContainer):
                     for _ in concurrent.futures.as_completed(futures):
                         completed += 1
                         progress.update(pbar, completed=completed)
+            else:
+                # Still ensure completion if verbose is off
+                for _ in concurrent.futures.as_completed(futures):
+                    pass
 
     def load(
         self,
@@ -1283,8 +1405,18 @@ class Batch(WebContainer):
             task_paths[task_name] = str(self._job_data_path(task_id=job.task_id, path_dir=path_dir))
             task_ids[task_name] = self.jobs[task_name].task_id
 
+        loaded = {task_name: job.load_if_cached for task_name, job in self.jobs.items()}
+
+        if not skip_download:
+            self.download(path_dir=path_dir, replace_existing=replace_existing)
+
         data = BatchData(
-            task_paths=task_paths, task_ids=task_ids, verbose=self.verbose, lazy=self.lazy
+            task_paths=task_paths,
+            task_ids=task_ids,
+            verbose=self.verbose,
+            cached_tasks=loaded,
+            lazy=self.lazy,
+            is_downloaded=True,
         )
 
         for task_name, job in self.jobs.items():

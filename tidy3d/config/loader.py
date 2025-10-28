@@ -247,7 +247,8 @@ def resolve_config_directory() -> Path:
 
     base_override = os.getenv("TIDY3D_BASE_DIR")
     if base_override:
-        path = Path(base_override).expanduser().resolve() / ".tidy3d"
+        base_path = Path(base_override).expanduser().resolve()
+        path = base_path / "config"
         if _is_writable(path.parent):
             return path
         log.warning(
@@ -281,7 +282,7 @@ def _xdg_config_home() -> Path:
 def _temporary_config_dir() -> Path:
     base = Path(tempfile.gettempdir()) / "tidy3d"
     base.mkdir(mode=0o700, exist_ok=True)
-    return base / ".tidy3d"
+    return base / "config"
 
 
 def _is_writable(path: Path) -> bool:

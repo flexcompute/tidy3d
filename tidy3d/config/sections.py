@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import ssl
+from os import PathLike
 from pathlib import Path
 from typing import Any, Literal, Optional
 from urllib.parse import urlparse
@@ -11,7 +13,10 @@ import numpy as np
 from pydantic import (
     BaseModel,
     ConfigDict,
+    DirectoryPath,
     Field,
+    NonNegativeFloat,
+    NonNegativeInt,
     PositiveInt,
     SecretStr,
     field_serializer,
@@ -379,6 +384,67 @@ def apply_web(config: WebConfig) -> None:
     if manager is None:
         raise RuntimeError("Configuration manager not attached; cannot apply web env overrides.")
     manager.apply_web_env(dict(config.env_vars))
+
+
+def _default_cache_directory() -> Path:
+    """Determine the default on-disk cache directory respecting platform conventions."""
+
+    base_override = os.getenv("TIDY3D_BASE_DIR")
+    if base_override:
+        base = Path(base_override).expanduser().resolve()
+        return (base / "cache" / "simulations").resolve()
+    else:
+        xdg_cache = os.getenv("XDG_CACHE_HOME")
+        if xdg_cache:
+            base = Path(xdg_cache).expanduser().resolve()
+        else:
+            base = Path.home() / ".cache"
+    return (base / "tidy3d" / "simulations").resolve()
+
+
+@register_section("local_cache")
+class LocalCacheConfig(ConfigSection):
+    """Settings controlling the optional local simulation cache."""
+
+    enabled: bool = Field(
+        False,
+        title="Enable cache",
+        description="Enable or disable the local simulation cache.",
+        json_schema_extra={"persist": True},
+    )
+
+    directory: DirectoryPath = Field(
+        default_factory=_default_cache_directory,
+        title="Cache directory",
+        description="Directory where cached artifacts are stored.",
+        json_schema_extra={"persist": True},
+    )
+
+    max_size_gb: NonNegativeFloat = Field(
+        10.0,
+        title="Maximum cache size (GB)",
+        description="Maximum cache size in gigabytes. Set to 0 for no size limit.",
+        json_schema_extra={"persist": True},
+    )
+
+    max_entries: NonNegativeInt = Field(
+        0,
+        title="Maximum cache entries",
+        description="Maximum number of cache entries. Set to 0 for no limit.",
+        json_schema_extra={"persist": True},
+    )
+
+    @field_validator("directory", mode="before")
+    def _ensure_directory_exists(cls, v: PathLike) -> Path:
+        """Expand ~, resolve path, and create directory if missing before DirectoryPath validation."""
+        p = Path(v).expanduser().resolve()
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @field_serializer("directory")
+    def _serialize_directory(self, value: Path) -> str:
+        """Persist directory as strings."""
+        return str(value)
 
 
 @register_section("plugins")
