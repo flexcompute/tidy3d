@@ -67,7 +67,7 @@ def get_antenna_metrics_data(
     # Get the radiation monitor, use first as default
     # if none specified
     if monitor_name is None:
-        rad_mon = terminal_component_modeler_data.modeler.radiation_monitors[0]
+        rad_mon = terminal_component_modeler_data.modeler._finalized_radiation_monitors[0]
     else:
         rad_mon = terminal_component_modeler_data.modeler.get_radiation_monitor_by_name(
             monitor_name

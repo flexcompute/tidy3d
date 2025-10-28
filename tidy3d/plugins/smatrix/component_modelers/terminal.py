@@ -8,12 +8,14 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d import ClipOperation, GeometryGroup, GridSpec, PolySlab
-from tidy3d.components.base import cached_property
+from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.frequency_extrapolation import (
     AbstractLowFrequencySmoothingSpec,
     LowFrequencySmoothingSpec,
 )
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.geometry.bound_ops import bounds_union
 from tidy3d.components.geometry.utils import _shift_object
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.index import SimulationMap
@@ -21,9 +23,10 @@ from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.monitor import DirectivityMonitor, ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Ax, Complex
+from tidy3d.components.types import Ax, Complex, Coordinate
+from tidy3d.components.types.base import annotate_type
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.constants import C_0, OHM, fp_eps
+from tidy3d.constants import C_0, MICROMETER, OHM, fp_eps, inf
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.base import (
@@ -37,6 +40,79 @@ from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import NetworkElement, NetworkIndex, SParamDef
+
+AUTO_RADIATION_MONITOR_NAME = "radiation"
+AUTO_RADIATION_MONITOR_BUFFER = 2
+AUTO_RADIATION_MONITOR_NUM_POINTS_THETA = 100
+AUTO_RADIATION_MONITOR_NUM_POINTS_PHI = 200
+
+
+class DirectivityMonitorSpec(MicrowaveBaseModel):
+    """
+    Specification for automatically generating a :class:`.DirectivityMonitor`.
+
+    When included in the :attr:`.TerminalComponentModeler.radiation_monitors` tuple,
+    a :class:`.DirectivityMonitor` will be automatically generated with the specified
+    parameters. This allows users to mix manual :class:`.DirectivityMonitor` objects
+    with automatically generated ones, each with customizable parameters.
+
+    Note
+    ----
+    The default origin (`custom_origin`) for defining observation points in the automatically
+    generated monitor is set to (0, 0, 0) in the global coordinate system.
+
+    Example
+    -------
+    >>> auto_monitor = DirectivityMonitorSpec(
+    ...     name="custom_auto",
+    ...     buffer=3,
+    ...     num_theta_points=50,
+    ...     num_phi_points=100
+    ... )
+    """
+
+    name: Optional[str] = pd.Field(
+        None,
+        title="Monitor Name",
+        description=f"Optional name for the auto-generated monitor. "
+        f"If not provided, defaults to '{AUTO_RADIATION_MONITOR_NAME}_' + index of the monitor in the list of radiation monitors.",
+    )
+
+    freqs: Optional[tuple[pd.NonNegativeInt, ...]] = pd.Field(
+        None,
+        title="Frequencies",
+        description="Frequencies to obtain fields at. If not provided, uses all frequencies "
+        "from the :class:`.TerminalComponentModeler`. Must be a subset of modeler frequencies if provided.",
+    )
+
+    buffer: pd.NonNegativeInt = pd.Field(
+        AUTO_RADIATION_MONITOR_BUFFER,
+        title="Buffer Distance",
+        description="Number of grid cells to maintain between monitor and PML/domain boundaries. "
+        f"Default: {AUTO_RADIATION_MONITOR_BUFFER} cells.",
+    )
+
+    num_theta_points: pd.NonNegativeInt = pd.Field(
+        AUTO_RADIATION_MONITOR_NUM_POINTS_THETA,
+        title="Elevation Angle Points",
+        description="Number of elevation angle (theta) sample points from 0 to π. "
+        f"Default: {AUTO_RADIATION_MONITOR_NUM_POINTS_THETA}.",
+    )
+
+    num_phi_points: pd.NonNegativeInt = pd.Field(
+        AUTO_RADIATION_MONITOR_NUM_POINTS_PHI,
+        title="Azimuthal Angle Points",
+        description="Number of azimuthal angle (phi) sample points from -π to π. "
+        f"Default: {AUTO_RADIATION_MONITOR_NUM_POINTS_PHI}.",
+    )
+
+    custom_origin: Optional[Coordinate] = pd.Field(
+        (0, 0, 0),
+        title="Local Origin",
+        description="Local origin used for defining observation points. If ``None``, uses the "
+        "monitor's center.",
+        units=MICROMETER,
+    )
 
 
 class ModelerLowFrequencySmoothingSpec(AbstractLowFrequencySmoothingSpec):
@@ -103,11 +179,15 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
     )
 
-    radiation_monitors: tuple[DirectivityMonitor, ...] = pd.Field(
+    radiation_monitors: tuple[
+        annotate_type(Union[DirectivityMonitor, DirectivityMonitorSpec]), ...
+    ] = pd.Field(
         (),
         title="Radiation Monitors",
         description="Facilitates the calculation of figures-of-merit for antennas. "
-        "These monitor will be included in every simulation and record the radiated fields. ",
+        "These monitors will be included in every simulation and record the radiated fields. "
+        "Users can specify a combination of :class:`.DirectivityMonitor` objects for manual placement and :class:`.DirectivityMonitorSpec` "
+        "objects for automatic generation.",
     )
 
     assume_ideal_excitation: bool = pd.Field(
@@ -315,9 +395,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         return SimulationMap(keys=tuple(sim_dict.keys()), values=tuple(sim_dict.values()))
 
     @cached_property
-    def base_sim(self) -> Simulation:
-        """The base simulation with all grid refinement options, port loads (if present), and monitors added,
-        which is only missing the source excitations.
+    def _base_sim_no_radiation_monitors(self) -> Simulation:
+        """The intermediate base simulation with all grid refinement options, port loads (if present), and monitors added,
+        which is only missing the source excitations and radiation monitors.
         """
         # internal mesh override and snapping points are automatically generated from lumped elements.
         lumped_resistors = [port.to_load() for port in self._lumped_ports]
@@ -352,9 +432,6 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         ]
 
         new_mnts = list(self.simulation.monitors) + field_monitors
-
-        if self.radiation_monitors is not None:
-            new_mnts = new_mnts + list(self.radiation_monitors)
 
         new_lumped_elements = list(self.simulation.lumped_elements) + [
             port.to_load(snap_center=snap_centers[port.name]) for port in self._lumped_ports
@@ -406,8 +483,213 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         # extrude port structures
         sim_wo_source = self._extrude_port_structures(sim=sim_wo_source)
 
-        # This is the new default simulation with all shared components added
         return sim_wo_source
+
+    @cached_property
+    def _finalized_radiation_monitors(self) -> tuple[DirectivityMonitor, ...]:
+        """
+        The tuple of DirectivityMonitor objects for the radiation monitors.
+
+        Expands any DirectivityMonitorSpec instances to actual DirectivityMonitor objects.
+        DirectivityMonitor objects are kept as-is.
+        """
+        base_sim = self._base_sim_no_radiation_monitors
+        finalized = []
+
+        for index, rad_mon in enumerate(self.radiation_monitors):
+            if isinstance(rad_mon, DirectivityMonitorSpec):
+                # Generate DirectivityMonitor from DirectivityMonitorSpec spec
+                if not rad_mon.name:
+                    mon_name = f"{AUTO_RADIATION_MONITOR_NAME}_{index}"
+                    rad_mon = rad_mon.updated_copy(name=mon_name)
+
+                try:
+                    generated = self._generate_radiation_monitor(
+                        simulation=base_sim, auto_spec=rad_mon
+                    )
+                    finalized.append(generated)
+                except ValueError as e:
+                    raise ValueError(
+                        "Automatic construction of radiation monitors failed. "
+                        "Please address the reason or provide a tuple of DirectivityMonitor "
+                        "objects to the 'radiation_monitors' parameter."
+                    ) from e
+            else:
+                # DirectivityMonitor - use as-is
+                finalized.append(rad_mon)
+
+        return tuple(finalized)
+
+    @cached_property
+    def base_sim(self) -> Simulation:
+        """The base simulation with all components added, including radiation monitors."""
+        base_sim_tmp = self._base_sim_no_radiation_monitors
+        mnts_with_radiation = list(base_sim_tmp.monitors) + list(self._finalized_radiation_monitors)
+        return base_sim_tmp.updated_copy(monitors=mnts_with_radiation)
+
+    def _generate_radiation_monitor(
+        self, simulation: Simulation, auto_spec: DirectivityMonitorSpec
+    ) -> DirectivityMonitor:
+        """
+        Generates a DirectivityMonitor object for the simulation.
+
+        The monitor is placed at a specified buffer distance from PML boundaries
+        (or domain boundaries if no PML). It samples the whole sphere with specified angular resolution.
+
+        The monitor is validated to ensure it is far enough from simulation structures.
+
+        Parameters
+        ----------
+        simulation : Simulation
+            The simulation for which to generate the monitor.
+        auto_spec : DirectivityMonitorSpec
+            Specification for auto-generation.
+
+        Returns
+        -------
+        DirectivityMonitor
+            The generated monitor configured to measure radiation in all directions.
+
+        Raises
+        ------
+        ValueError
+            If the monitor is not far enough from structures.
+        """
+
+        # Extract parameters from auto_spec
+        monitor_name = auto_spec.name
+        monitor_buffer = auto_spec.buffer
+        num_theta = auto_spec.num_theta_points
+        num_phi = auto_spec.num_phi_points
+        monitor_freqs = auto_spec.freqs or self.freqs
+
+        # Get PML thicknesses in all directions
+        pml_layers = simulation.num_pml_layers  # List of (minus, plus) layers for each axis
+        grid = simulation.grid
+        boundaries = grid.boundaries.to_list  # List of coordinate arrays for each axis
+        num_cells = grid.num_cells  # List of number of cells for each axis
+
+        # Calculate monitor span using the specified buffer distance
+        mnt_span = [
+            (minus_pml + monitor_buffer, num_cells_axis - plus_pml - monitor_buffer)
+            for (minus_pml, plus_pml), num_cells_axis in zip(pml_layers, num_cells)
+        ]
+
+        # Calculate monitor bounds
+        mnt_bounds = [
+            (coords[start_idx], coords[end_idx]) if sim_size_axis > 0 else (-inf, inf)
+            for (start_idx, end_idx), coords, sim_size_axis in zip(
+                mnt_span, boundaries, simulation.size
+            )
+        ]
+
+        mnt_bounds = np.transpose(mnt_bounds)
+
+        mnt_box = Box.from_bounds(mnt_bounds[0], mnt_bounds[1])
+
+        # Create angle arrays for full sphere sampling
+        # theta: elevation angle [0, pi]
+        # phi: azimuthal angle [-pi, pi]
+        theta = np.linspace(0, np.pi, num_theta)
+        phi = np.linspace(-np.pi, np.pi, num_phi)
+
+        # Create the monitor
+        monitor = DirectivityMonitor(
+            center=mnt_box.center,
+            size=mnt_box.size,
+            freqs=monitor_freqs,
+            name=monitor_name,
+            theta=theta,
+            phi=phi,
+            custom_origin=auto_spec.custom_origin,
+        )
+
+        # Validate that monitor is far enough from structures
+        self._validate_radiation_monitor_buffer(simulation, mnt_span, monitor_buffer)
+
+        return monitor
+
+    def _validate_radiation_monitor_buffer(
+        self, simulation: Simulation, mnt_span: list[tuple[int, int]], buffer: int
+    ) -> None:
+        """Validate that the radiation monitor is far enough from simulation structures.
+
+        Checks that each side of the monitor is at least AUTO_RADIATION_MONITOR_BUFFER cells
+        away from the union of all structures and lumped elements, using grid cell indices.
+
+        Parameters
+        ----------
+        simulation : Simulation
+            The simulation containing structures and lumped elements.
+        mnt_span : list[tuple[int, int]]
+            The span (start, stop) indices of the monitor in each axis.
+        buffer : int
+            The buffer distance to use.
+
+        Raises
+        ------
+        ValueError
+            If the monitor is not far enough from structures.
+        """
+        # Get finalized simulation to include all structures
+        finalized_sim = simulation._finalized
+
+        # Get all structures (including finalized ones)
+        structures = finalized_sim.structures
+
+        # Get lumped elements
+        lumped_elements = simulation.lumped_elements
+
+        # If no structures or lumped elements, validation passes
+        if not structures and not lumped_elements:
+            return
+
+        # Calculate union of bounding boxes for all structures and lumped elements
+        all_geoms = []
+
+        # Add structures
+        for struct in structures:
+            all_geoms.append(struct.geometry)
+
+        # Add lumped elements (they have geometry)
+        for elem in lumped_elements:
+            all_geoms.append(elem.to_geometry())
+
+        # Compute union of all bounds
+        if all_geoms:
+            union_bounds = all_geoms[0].bounds
+            for geom in all_geoms[1:]:
+                union_bounds = bounds_union(union_bounds, geom.bounds)
+
+            # Convert union bounds to Box and get grid cell indices
+            union_box = Box.from_bounds(union_bounds[0], union_bounds[1])
+            grid = simulation.grid
+            union_inds = grid.discretize_inds(union_box, extend=True)
+
+            # Check each axis
+            for axis in range(3):
+                mnt_start, mnt_end = mnt_span[axis]
+                union_start, union_end = union_inds[axis]
+
+                axis_name = "xyz"[axis]
+
+                # Check minus side: union should be at least BUFFER cells away from monitor start
+                buffer_minus = union_start - mnt_start
+                if buffer_minus < buffer:
+                    raise ValueError(
+                        f"Automatically generated radiation monitor is too close to structures on the negative {axis_name} side. "
+                        f"Buffer: {buffer_minus} cells, required: {buffer} cells. "
+                        f"Please increase simulation domain size."
+                    )
+
+                # Check plus side: union should be at least BUFFER cells away from monitor end
+                buffer_plus = mnt_end - union_end
+                if buffer_plus < buffer:
+                    raise ValueError(
+                        f"Automatically generated radiation monitor is too close to structures on the positive {axis_name} side. "
+                        f"Buffer: {buffer_plus} cells, required: {buffer} cells. "
+                        f"Please increase simulation domain size."
+                    )
 
     def _add_source_to_sim(self, source_index: NetworkIndex) -> tuple[str, Simulation]:
         """Adds the source corresponding to the ``source_index`` to the base simulation."""
@@ -457,16 +739,31 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         return val
 
     @pd.validator("radiation_monitors")
+    @skip_if_fields_missing(["freqs"])
     def _validate_radiation_monitors(cls, val, values):
-        freqs = set(values.get("freqs"))
-        for rad_mon in val:
-            mon_freqs = rad_mon.freqs
-            is_subset = freqs.issuperset(mon_freqs)
-            if not is_subset:
-                raise ValidationError(
-                    f"The frequencies in the radiation monitor '{rad_mon.name}' "
-                    f"must be equal to or a subset of the frequencies in the '{cls.__name__}'."
-                )
+        """Validate radiation monitors configuration.
+
+        Validates that:
+        - DirectivityMonitor frequencies are a subset of modeler frequencies
+        - DirectivityMonitorSpec frequencies (if provided) are a subset of modeler frequencies
+        """
+        modeler_freqs = set(values.get("freqs", []))
+
+        for index, rad_mon in enumerate(val):
+            # Only validate freqs if explicitly provided
+            # freqs are provided always in DirectivityMonitor
+            # in DirectivityMonitorSpec, freqs may be not provided,
+            # in this case, we use the modeler frequencies, so no validation is needed
+            if rad_mon.freqs is not None:
+                mon_freqs = set(rad_mon.freqs)
+                is_subset = modeler_freqs.issuperset(mon_freqs)
+                if not is_subset:
+                    mon_name = rad_mon.name or f"{AUTO_RADIATION_MONITOR_NAME}_{index}"
+                    raise ValidationError(
+                        f"The frequencies in the radiation monitor '{mon_name}' "
+                        f"must be equal to or a subset of the frequencies in the '{cls.__name__}'."
+                    )
+
         return val
 
     @staticmethod
@@ -532,7 +829,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         ``Tidy3dKeyError``
             If no monitor with the given name exists.
         """
-        for monitor in self.radiation_monitors:
+        for monitor in self._finalized_radiation_monitors:
             if monitor.name == monitor_name:
                 return monitor
         raise Tidy3dKeyError(f"No radiation monitor named '{monitor_name}'.")

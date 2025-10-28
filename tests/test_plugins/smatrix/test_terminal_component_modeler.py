@@ -24,6 +24,7 @@ from tidy3d.plugins.smatrix import (
     TerminalPortDataArray,
     WavePort,
 )
+from tidy3d.plugins.smatrix.component_modelers.terminal import AUTO_RADIATION_MONITOR_NAME
 from tidy3d.plugins.smatrix.data.data_array import PortNameDataArray
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.utils import s_to_z, validate_square_matrix
@@ -33,6 +34,7 @@ from .terminal_component_modeler_def import (
     make_coaxial_component_modeler,
     make_component_modeler,
     make_differential_stripline_modeler,
+    make_patch_antenna_modeler,
 )
 
 mm = 1e3
@@ -1850,3 +1852,124 @@ def test_validate_run_only_with_wave_ports():
     # Invalid case
     with pytest.raises(pd.ValidationError, match="not present in"):
         modeler.updated_copy(run_only=("nonexistent_wave_port",))
+
+
+def test_radiation_monitors_auto():
+    """Test DirectivityMonitorSpec with various configurations."""
+    from tidy3d.plugins.smatrix import DirectivityMonitorSpec
+
+    # Test 1: DirectivityMonitorSpec with default values
+    auto_spec = DirectivityMonitorSpec()
+    assert auto_spec.buffer == 2
+    assert auto_spec.num_theta_points == 100
+    assert auto_spec.num_phi_points == 200
+    assert auto_spec.name is None
+    assert auto_spec.freqs is None
+
+    # Test 2: DirectivityMonitorSpec with custom values
+    auto_spec_custom = DirectivityMonitorSpec(
+        name="custom_auto",
+        buffer=3,
+        num_theta_points=50,
+        num_phi_points=100,
+    )
+    assert auto_spec_custom.name == "custom_auto"
+    assert auto_spec_custom.buffer == 3
+    assert auto_spec_custom.num_theta_points == 50
+    assert auto_spec_custom.num_phi_points == 100
+
+    # Test 3: Default DirectivityMonitorSpec in modeler
+    tcm = make_patch_antenna_modeler(padding=(0.5, 0.5, 0.5))
+    tcm_with_auto = tcm.updated_copy(radiation_monitors=(auto_spec, auto_spec_custom))
+    sim = tcm_with_auto.sim_dict["lumped_port"]
+
+    assert len(sim.monitors) == 5
+
+    assert isinstance(sim.monitors[-2], td.DirectivityMonitor)
+    assert len(sim.monitors[-2].theta) == 100
+    assert len(sim.monitors[-2].phi) == 200
+    assert (sim.monitors[-2].freqs == tcm_with_auto.freqs).all()
+    assert sim.monitors[-2].name == f"{AUTO_RADIATION_MONITOR_NAME}_0"
+
+    assert isinstance(sim.monitors[-1], td.DirectivityMonitor)
+    assert len(sim.monitors[-1].theta) == auto_spec_custom.num_theta_points
+    assert len(sim.monitors[-1].phi) == auto_spec_custom.num_phi_points
+    assert (sim.monitors[-1].freqs == tcm_with_auto.freqs).all()
+    assert sim.monitors[-1].name == auto_spec_custom.name
+
+    # Test 4: Mixed DirectivityMonitor and DirectivityMonitorSpec
+    manual_monitor = td.DirectivityMonitor(
+        size=tuple(0.8 * np.array(tcm.simulation.size)),
+        center=tcm.simulation.center,
+        freqs=tcm.freqs[1:3],
+        name="manual_monitor",
+        theta=np.linspace(0, np.pi, 50),
+        phi=np.linspace(-np.pi, np.pi, 100),
+    )
+    tcm_mixed = tcm.updated_copy(
+        radiation_monitors=(
+            manual_monitor,
+            DirectivityMonitorSpec(name="auto_1", buffer=2),
+            DirectivityMonitorSpec(name="auto_2", buffer=3),
+        )
+    )
+    sim_mixed = tcm_mixed.sim_dict["lumped_port"]
+
+    # Check that all three monitors are present
+    monitor_names = {m.name for m in sim_mixed.monitors}
+    assert "manual_monitor" in monitor_names
+    assert "auto_1" in monitor_names
+    assert "auto_2" in monitor_names
+
+    # Test 5: Buffer distance validation - should raise error with insufficient padding
+    with pytest.raises(ValueError, match="Automatic construction of radiation monitors failed"):
+        tcm_small = make_patch_antenna_modeler(padding=(0.01, 0.01, 0.5))
+        tcm_small_with_auto = tcm_small.updated_copy(radiation_monitors=(DirectivityMonitorSpec(),))
+        _ = tcm_small_with_auto.sim_dict["lumped_port"]
+
+    # Test 6: Custom buffer parameter - smaller buffer should fail with tight padding
+    with pytest.raises(ValueError, match="Automatic construction of radiation monitors failed"):
+        tcm_tight = make_patch_antenna_modeler(padding=(0.05, 0.05, 0.5))
+        tcm_tight_with_auto = tcm_tight.updated_copy(
+            radiation_monitors=(DirectivityMonitorSpec(buffer=5),)  # Require 5 cells
+        )
+        _ = tcm_tight_with_auto.sim_dict["lumped_port"]
+
+    # Test 7: custom_origin propagation
+    # Test 7a: custom_origin with explicit coordinates
+    custom_origin_coords = (1.0, 2.0, 3.0)
+    spec_with_origin = DirectivityMonitorSpec(
+        name="with_custom_origin", custom_origin=custom_origin_coords
+    )
+    tcm_with_origin = tcm.updated_copy(radiation_monitors=(spec_with_origin,))
+    sim_with_origin = tcm_with_origin.sim_dict["lumped_port"]
+
+    # Find the generated DirectivityMonitor
+    origin_monitor = [m for m in sim_with_origin.monitors if m.name == "with_custom_origin"][0]
+    assert isinstance(origin_monitor, td.DirectivityMonitor)
+    assert origin_monitor.custom_origin == custom_origin_coords
+
+    # Test 7b: custom_origin with None (should be accepted and propagated)
+    spec_with_none_origin = DirectivityMonitorSpec(name="with_none_origin", custom_origin=None)
+    tcm_with_none_origin = tcm.updated_copy(radiation_monitors=(spec_with_none_origin,))
+    sim_with_none_origin = tcm_with_none_origin.sim_dict["lumped_port"]
+
+    # Find the generated DirectivityMonitor
+    none_origin_monitor = [
+        m for m in sim_with_none_origin.monitors if m.name == "with_none_origin"
+    ][0]
+    assert isinstance(none_origin_monitor, td.DirectivityMonitor)
+    assert none_origin_monitor.custom_origin is None
+
+    # Test 7c: default custom_origin (should use the default value from field definition)
+    spec_default_origin = DirectivityMonitorSpec(name="default_origin")
+    tcm_default_origin = tcm.updated_copy(radiation_monitors=(spec_default_origin,))
+    sim_default_origin = tcm_default_origin.sim_dict["lumped_port"]
+
+    # Find the generated DirectivityMonitor
+    default_origin_monitor = [m for m in sim_default_origin.monitors if m.name == "default_origin"][
+        0
+    ]
+    assert isinstance(default_origin_monitor, td.DirectivityMonitor)
+    # Default should be (0, 0, 0) as defined in the field
+    assert default_origin_monitor.custom_origin == (0, 0, 0)
