@@ -256,6 +256,18 @@ def resolve_config_directory() -> Path:
         )
         return _temporary_config_dir()
 
+    canonical_dir = canonical_config_directory()
+    if _is_writable(canonical_dir.parent):
+        legacy_dir = legacy_config_directory()
+        if legacy_dir.exists():
+            log.warning(
+                f"Using canonical configuration directory at '{canonical_dir}'. "
+                "Found legacy directory at '~/.tidy3d', which will be ignored. "
+                "Remove it manually or run 'tidy3d config migrate --delete-legacy' to clean up.",
+                log_once=True,
+            )
+        return canonical_dir
+
     legacy_dir = legacy_config_directory()
     if legacy_dir.exists():
         log.warning(
@@ -263,10 +275,6 @@ def resolve_config_directory() -> Path:
             log_once=True,
         )
         return legacy_dir
-
-    canonical_dir = canonical_config_directory()
-    if _is_writable(canonical_dir.parent):
-        return canonical_dir
 
     log.warning(f"Unable to write to '{canonical_dir}'; falling back to temporary directory.")
     return _temporary_config_dir()

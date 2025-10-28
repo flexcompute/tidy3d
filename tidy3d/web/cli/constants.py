@@ -8,4 +8,3 @@ _CONFIG_ROOT = resolve_config_directory()
 
 TIDY3D_DIR = str(_CONFIG_ROOT)
 CONFIG_FILE = str(_CONFIG_ROOT / "config.toml")
-CREDENTIAL_FILE = str(_CONFIG_ROOT / "auth.json")

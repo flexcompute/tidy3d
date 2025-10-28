@@ -4,8 +4,8 @@ Commandline interface for tidy3d.
 
 from __future__ import annotations
 
-import json
-import os.path
+import os
+import shutil
 import ssl
 
 import click
@@ -17,8 +17,7 @@ from tidy3d.config.loader import (
     legacy_config_directory,
     migrate_legacy_config,
 )
-from tidy3d.web.cli.constants import CREDENTIAL_FILE, TIDY3D_DIR
-from tidy3d.web.cli.migrate import migrate as migrate_authentication
+from tidy3d.web.cli.constants import TIDY3D_DIR
 from tidy3d.web.core.constants import HEADER_APIKEY
 from tidy3d.web.core.environment import Env
 
@@ -90,15 +89,6 @@ def configure_fn(apikey: str) -> None:
         req.headers[HEADER_APIKEY] = apikey
         return req
 
-    if os.path.exists(CREDENTIAL_FILE):
-        with open(CREDENTIAL_FILE, encoding="utf-8") as fp:
-            auth_json = json.load(fp)
-        email = auth_json["email"]
-        password = auth_json["password"]
-        if email and password:
-            if migrate_authentication():
-                return
-
     if not apikey:
         current_apikey = get_description()
         message = f"Current API key: [{current_apikey}]\n" if current_apikey else ""
@@ -117,12 +107,6 @@ def configure_fn(apikey: str) -> None:
         config.save()
     else:
         click.echo("API key is invalid.")
-
-
-@click.command(name="auth-migrate")
-def migrate_command():
-    """Click command to migrate the credential to api key."""
-    migrate_authentication()
 
 
 @click.command()
@@ -158,20 +142,7 @@ def config_reset(yes: bool, preserve_profiles: bool) -> None:
     click.echo("Configuration reset to defaults.")
 
 
-@click.command(name="config-migrate")
-@click.option(
-    "--overwrite",
-    is_flag=True,
-    help="Replace existing files in the destination configuration directory if they already exist.",
-)
-@click.option(
-    "--delete-legacy",
-    is_flag=True,
-    help="Remove the legacy '~/.tidy3d' directory after a successful migration.",
-)
-def config_migrate(overwrite: bool, delete_legacy: bool) -> None:
-    """Copy configuration files from '~/.tidy3d' to the canonical location."""
-
+def _run_config_migration(overwrite: bool, delete_legacy: bool) -> None:
     legacy_dir = legacy_config_directory()
     if not legacy_dir.exists():
         click.echo("No legacy configuration directory found at '~/.tidy3d'; nothing to migrate.")
@@ -181,6 +152,20 @@ def config_migrate(overwrite: bool, delete_legacy: bool) -> None:
     try:
         destination = migrate_legacy_config(overwrite=overwrite, remove_legacy=delete_legacy)
     except FileExistsError:
+        if delete_legacy:
+            try:
+                shutil.rmtree(legacy_dir)
+            except OSError as exc:
+                click.echo(
+                    f"Destination '{canonical_dir}' already exists and the legacy directory "
+                    f"could not be removed. Error: {exc}"
+                )
+                return
+            click.echo(
+                f"Destination '{canonical_dir}' already exists. "
+                "Skipped copying legacy files and removed the legacy '~/.tidy3d' directory."
+            )
+            return
         click.echo(
             f"Destination '{canonical_dir}' already exists. "
             "Use '--overwrite' to replace the existing files."
@@ -203,6 +188,23 @@ def config_migrate(overwrite: bool, delete_legacy: bool) -> None:
         )
 
 
+@click.command(name="config-migrate")
+@click.option(
+    "--overwrite",
+    is_flag=True,
+    help="Replace existing files in the destination configuration directory if they already exist.",
+)
+@click.option(
+    "--delete-legacy",
+    is_flag=True,
+    help="Remove the legacy '~/.tidy3d' directory after a successful migration.",
+)
+def config_migrate(overwrite: bool, delete_legacy: bool) -> None:
+    """Copy configuration files from '~/.tidy3d' to the canonical location."""
+
+    _run_config_migration(overwrite, delete_legacy)
+
+
 @click.group()
 def config_group():
     """Configuration utilities."""
@@ -212,7 +214,6 @@ config_group.add_command(config_migrate, name="migrate")
 config_group.add_command(config_reset, name="reset")
 
 tidy3d_cli.add_command(configure)
-tidy3d_cli.add_command(migrate_command, name="migrate")
 tidy3d_cli.add_command(convert)
 tidy3d_cli.add_command(develop)
 tidy3d_cli.add_command(config_group, name="config")
