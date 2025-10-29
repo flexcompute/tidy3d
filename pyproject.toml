@@ -298,7 +298,7 @@ addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plai
 markers = [
   "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
 ]
-env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1"]
+env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1", "TIDY3D_MICROWAVE__SUPPRESS_RF_LICENSE_WARNING=true"]
 doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
 norecursedirs = [
   "tests/_test_local",
