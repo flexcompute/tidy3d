@@ -9124,49 +9124,11 @@
           "type": "object"
         },
         "n0": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ComplexNumber"
-            },
-            {
-              "properties": {
-                "imag": {
-                  "type": "number"
-                },
-                "real": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "imag",
-                "real"
-              ],
-              "type": "object"
-            }
-          ]
+          "type": "number"
         },
         "n2": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ComplexNumber"
-            },
-            {
-              "properties": {
-                "imag": {
-                  "type": "number"
-                },
-                "real": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "imag",
-                "real"
-              ],
-              "type": "object"
-            }
-          ],
-          "default": 0
+          "default": 0,
+          "type": "number"
         },
         "type": {
           "default": "KerrNonlinearity",
@@ -9174,10 +9136,6 @@
             "KerrNonlinearity"
           ],
           "type": "string"
-        },
-        "use_complex_fields": {
-          "default": false,
-          "type": "boolean"
         }
       },
       "type": "object"
@@ -17259,30 +17217,8 @@
           "type": "object"
         },
         "beta": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ComplexNumber"
-            },
-            {
-              "properties": {
-                "imag": {
-                  "type": "number"
-                },
-                "real": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "imag",
-                "real"
-              ],
-              "type": "object"
-            },
-            {
-              "type": "number"
-            }
-          ],
-          "default": 0
+          "default": 0,
+          "type": "number"
         },
         "c_e": {
           "default": 0,
@@ -17307,26 +17243,7 @@
           "type": "number"
         },
         "n0": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ComplexNumber"
-            },
-            {
-              "properties": {
-                "imag": {
-                  "type": "number"
-                },
-                "real": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "imag",
-                "real"
-              ],
-              "type": "object"
-            }
-          ]
+          "type": "number"
         },
         "sigma": {
           "default": 0,
@@ -17344,10 +17261,6 @@
             "TwoPhotonAbsorption"
           ],
           "type": "string"
-        },
-        "use_complex_fields": {
-          "default": false,
-          "type": "boolean"
         }
       },
       "type": "object"

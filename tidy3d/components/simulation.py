@@ -4440,14 +4440,6 @@ class Simulation(AbstractYeeGridSimulation):
                 for model in medium._nonlinear_models:
                     model._validate_medium_freqs(medium, freqs)
 
-                    if model.complex_fields:
-                        log.warning(
-                            "Found a nonlinear model with 'use_complex_fields=True'. "
-                            "For physical simulation results, this should always "
-                            "be 'False'. This option is available only for backwards "
-                            "compatibility and may be removed in a future release."
-                        )
-
         for i, monitor in enumerate(self.monitors):
             if isinstance(monitor, AuxFieldTimeMonitor):
                 for aux_field in monitor.fields:
