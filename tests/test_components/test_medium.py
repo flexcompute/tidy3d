@@ -8,7 +8,7 @@ import pydantic.v1 as pydantic
 import pytest
 
 import tidy3d as td
-from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.exceptions import ValidationError
 
 from ..utils import AssertLogLevel
 
@@ -701,13 +701,6 @@ def test_nonlinear_medium():
             nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1, freq0=1)])
         )
 
-    with pytest.raises(ValidationError):
-        med = td.Medium(
-            nonlinear_spec=td.NonlinearSpec(
-                models=[td.KerrNonlinearity(n2=-1j, n0=1, use_complex_fields=True)]
-            )
-        )
-
     # automatic detection of n0 and freq0
     n0 = 2
     freq0 = td.C_0 / 1
@@ -739,15 +732,6 @@ def test_nonlinear_medium():
     assert sim2.structures[0].medium.nonlinear_spec.models[0].n0 == n0
     assert sim2.structures[0].medium.nonlinear_spec.models[0].freq0 == freq0
 
-    # can't detect n0 with different source freqs
-    source_time2 = source_time.updated_copy(freq0=2 * freq0)
-    source2 = source.updated_copy(source_time=source_time2)
-    with pytest.raises(SetupError):
-        sim.updated_copy(sources=[source, source2])
-    with pytest.raises(SetupError):
-        sim.updated_copy(sources=[])
-
-    # but if we provided it, it's ok
     nonlinear_spec = td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1, n0=1)])
     structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
     sim = sim.updated_copy(structures=[structure])
@@ -756,10 +740,6 @@ def test_nonlinear_medium():
     nonlinear_spec = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, n0=1)])
     structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
     sim = sim.updated_copy(structures=[structure])
-    with pytest.raises(SetupError):
-        sim = sim.updated_copy(structures=[structure], sources=[source, source2])
-    with pytest.raises(SetupError):
-        sim = sim.updated_copy(structures=[structure], sources=[])
     nonlinear_spec = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, n0=1, freq0=1)])
     structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
     sim = sim.updated_copy(structures=[structure])
@@ -767,10 +747,8 @@ def test_nonlinear_medium():
 
     # active materials with automatic detection of n0
     nonlinear_spec_active = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1)])
-    medium_active = medium.updated_copy(nonlinear_spec=nonlinear_spec_active)
     with pytest.raises(ValidationError):
-        structure = structure.updated_copy(medium=medium_active)
-        sim.updated_copy(structures=[structure])
+        medium_active = medium.updated_copy(nonlinear_spec=nonlinear_spec_active)
 
     # nonlinear or time-modulation on medium2d
     # time-modulated
@@ -788,38 +766,6 @@ def test_nonlinear_medium():
         td.Medium2D(ss=medium, tt=medium)
     with pytest.raises(ValidationError):
         td.Medium2D(ss=modulated, tt=modulated)
-
-    # some parameters must be real now, unless we use old implementation
-    _ = td.TwoPhotonAbsorption(beta=1j, use_complex_fields=True)
-    with pytest.raises(pydantic.ValidationError):
-        _ = td.TwoPhotonAbsorption(beta=1j)
-    _ = td.KerrNonlinearity(n2=1j, use_complex_fields=True)
-    with pytest.raises(pydantic.ValidationError):
-        _ = td.KerrNonlinearity(n2=1j)
-
-    # consistent complex fields
-    _ = td.NonlinearSpec(
-        models=[
-            td.TwoPhotonAbsorption(beta=1, use_complex_fields=True),
-            td.KerrNonlinearity(n2=1, use_complex_fields=True),
-        ]
-    )
-    with pytest.raises(pydantic.ValidationError):
-        _ = td.NonlinearSpec(
-            models=[
-                td.TwoPhotonAbsorption(beta=1, use_complex_fields=True),
-                td.KerrNonlinearity(n2=1, use_complex_fields=False),
-            ]
-        )
-
-    # warn if using old implementation
-    with AssertLogLevel("WARNING", contains_str="use_complex_fields"):
-        med = td.Medium(
-            nonlinear_spec=td.NonlinearSpec(
-                models=[td.KerrNonlinearity(n2=1, use_complex_fields=True)]
-            )
-        )
-        _ = sim.updated_copy(medium=med, path="structures/0")
 
     grid_spec = td.GridSpec.auto(min_steps_per_wvl=10, wavelength=1)
     sim = sim.updated_copy(grid_spec=grid_spec)

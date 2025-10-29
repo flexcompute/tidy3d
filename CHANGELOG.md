@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `web.Batch(ComponentModeler)` and `web.Job(ComponentModeler)` native support
 - Simulation data of batch jobs are now automatically downloaded upon their individual completion in `Batch.run()`, avoiding waiting for the entire batch to reach completion.
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.
+- Removed support for deprecated complex fields implementation of certain nonlinearities. If complex fields are still present in the simulation, e.g. due to Bloch boundaries, then the real and imaginary parts of the fields do not interact nonlinearly.
 
 ### Fixed
 - More robust `Sellmeier` and `Debye` material model, and prevent very large pole parameters in `PoleResidue` material model.

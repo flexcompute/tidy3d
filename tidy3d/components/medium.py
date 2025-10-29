@@ -393,16 +393,7 @@ class TwoPhotonAbsorption(NonlinearModel):
     >>> tpa_model = TwoPhotonAbsorption(beta=1)
     """
 
-    use_complex_fields: bool = pd.Field(
-        False,
-        title="Use complex fields",
-        description="Whether to use the old deprecated complex-fields implementation. "
-        "The default real-field implementation is more physical and is always "
-        "recommended; this option is only available for backwards compatibility "
-        "with Tidy3D version < 2.8 and may be removed in a future release.",
-    )
-
-    beta: Union[float, Complex] = pd.Field(
+    beta: float = pd.Field(
         0,
         title="TPA coefficient",
         description="Coefficient for two-photon absorption (TPA).",
@@ -446,10 +437,10 @@ class TwoPhotonAbsorption(NonlinearModel):
         units=f"{MICROMETER}^(3 e_h)",
     )
 
-    n0: Optional[Complex] = pd.Field(
+    n0: Optional[float] = pd.Field(
         None,
-        title="Complex linear refractive index",
-        description="Complex linear refractive index of the medium, computed for instance using "
+        title="Linear refractive index",
+        description="Real linear refractive index of the medium, computed for instance using "
         "'medium.nk_model'. If not provided, it is calculated automatically using the central "
         "frequencies of the simulation sources (as long as these are all equal).",
     )
@@ -462,38 +453,6 @@ class TwoPhotonAbsorption(NonlinearModel):
         "from the simulation sources (as long as these are all equal).",
     )
 
-    @pd.validator("beta", always=True)
-    def _validate_beta_real(cls, val, values):
-        """Check that beta is real and give a useful error if it is not."""
-        use_complex_fields = values.get("use_complex_fields")
-        if use_complex_fields:
-            return val
-        if not np.isreal(val):
-            raise SetupError(
-                "Complex values of 'beta' in 'TwoPhotonAbsorption' are not "
-                "supported; the implementation uses the "
-                "physical real-valued fields."
-            )
-        return val
-
-    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]) -> None:
-        """Any validation that depends on knowing the central frequencies of the sources.
-        This includes passivity checking, if necessary."""
-        n0 = self._get_n0(self.n0, medium, freqs)
-        if freqs is not None:
-            _ = self._get_freq0(self.freq0, freqs)
-        beta = self.beta
-        if not medium.allow_gain:
-            chi_imag = np.real(beta * n0 * np.real(n0))
-            if chi_imag < 0:
-                raise ValidationError(
-                    "For passive medium, 'beta' in 'TwoPhotonAbsorption' must satisfy "
-                    f"'Re(beta * n0 * Re(n0)) >= 0'. Currently, this quantity equals '{chi_imag}', "
-                    f"and the linear index is 'n0={n0}'. To simulate gain medium, please set "
-                    "'allow_gain=True' in the medium class. Caution: simulations containing "
-                    "gain medium are unstable, and are likely to diverge."
-                )
-
     def _hardcode_medium_freqs(
         self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]
     ) -> TwoPhotonAbsorption:
@@ -504,14 +463,16 @@ class TwoPhotonAbsorption(NonlinearModel):
 
     def _validate_medium(self, medium: AbstractMedium) -> None:
         """Check that the model is compatible with the medium."""
-        # if n0 is specified, we can go ahead and validate passivity
-        if self.n0 is not None:
-            self._validate_medium_freqs(medium, None)
-
-    @property
-    def complex_fields(self) -> bool:
-        """Whether the model uses complex fields."""
-        return self.use_complex_fields
+        beta = self.beta
+        if not medium.allow_gain and beta < 0:
+            raise ValidationError(
+                "A passive medium must have 'beta >= 0' in "
+                f"'TwoPhotonAbsorption', given 'beta={beta}'. "
+                "To simulate a gain medium, please set "
+                "'allow_gain=True' in the medium class. Caution: "
+                "simulations containing gain medium are unstable, "
+                "and are likely to diverge."
+            )
 
     @property
     def aux_fields(self) -> list[str]:
@@ -568,23 +529,14 @@ class KerrNonlinearity(NonlinearModel):
     >>> kerr_model = KerrNonlinearity(n2=1)
     """
 
-    use_complex_fields: bool = pd.Field(
-        False,
-        title="Use complex fields",
-        description="Whether to use the old deprecated complex-fields implementation. "
-        "The default real-field implementation is more physical and is always "
-        "recommended; this option is only available for backwards compatibility "
-        "with Tidy3D version < 2.8 and may be removed in a future release.",
-    )
-
-    n2: Complex = pd.Field(
+    n2: float = pd.Field(
         0,
         title="Nonlinear refractive index",
         description="Nonlinear refractive index in the Kerr nonlinearity.",
         units=f"{MICROMETER}^2 / {WATT}",
     )
 
-    n0: Optional[Complex] = pd.Field(
+    n0: Optional[float] = pd.Field(
         None,
         title="Complex linear refractive index",
         description="Complex linear refractive index of the medium, computed for instance using "
@@ -592,59 +544,12 @@ class KerrNonlinearity(NonlinearModel):
         "frequencies of the simulation sources (as long as these are all equal).",
     )
 
-    @pd.validator("n2", always=True)
-    def _validate_n2_real(cls, val, values):
-        """Check that n2 is real and give a useful error if it is not."""
-        use_complex_fields = values.get("use_complex_fields")
-        if use_complex_fields:
-            return val
-        if not np.isreal(val):
-            raise SetupError(
-                "Complex values of 'n2' in 'KerrNonlinearity' are not "
-                "supported; the implementation uses the "
-                "physical real-valued fields. "
-                "To simulate nonlinear loss, consider instead using a "
-                "'TwoPhotonAbsorption' model, which implements a "
-                "more physical dispersive loss of the form "
-                "'chi_{TPA} = i (c_0 n_0 beta / omega) I'."
-            )
-        return val
-
-    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]) -> None:
-        """Any validation that depends on knowing the central frequencies of the sources.
-        This includes passivity checking, if necessary."""
-        n0 = self._get_n0(self.n0, medium, freqs)
-        n2 = self.n2
-        if not self.use_complex_fields:
-            return
-        if not medium.allow_gain:
-            chi_imag = np.imag(n2 * n0 * np.real(n0))
-            if chi_imag < 0:
-                raise ValidationError(
-                    "For passive medium, 'n2' in 'KerrNonlinearity' must satisfy "
-                    f"'Im(n2 * n0 * Re(n0)) >= 0'. Currently, this quantity equals '{chi_imag}', "
-                    f"and the linear index is 'n0={n0}'. To simulate gain medium, please set "
-                    "'allow_gain=True' in the medium class. Caution: simulations containing "
-                    "gain medium are unstable, and are likely to diverge."
-                )
-
-    def _validate_medium(self, medium: AbstractMedium) -> None:
-        """Check that the model is compatible with the medium."""
-        # if n0 is specified, we can go ahead and validate passivity
-        if self.n0 is not None:
-            self._validate_medium_freqs(medium, [])
-
     def _hardcode_medium_freqs(
         self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]
     ) -> KerrNonlinearity:
         """Update the nonlinear model to hardcode information on medium and freqs."""
         n0 = self._get_n0(n0=self.n0, medium=medium, freqs=freqs)
         return self.updated_copy(n0=n0)
-
-    @property
-    def complex_fields(self) -> bool:
-        """Whether the model uses complex fields."""
-        return self.use_complex_fields
 
 
 NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
@@ -694,29 +599,6 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
             )
         return val
 
-    @pd.validator("models", always=True)
-    def _consistent_old_complex_fields(cls, val):
-        """Ensure that old complex fields implementation is used consistently."""
-        if val is None:
-            return val
-        use_complex_fields = False
-        for model in val:
-            if isinstance(model, (KerrNonlinearity, TwoPhotonAbsorption)):
-                if model.use_complex_fields:
-                    use_complex_fields = True
-                elif use_complex_fields:
-                    # if one model uses complex fields, they all should
-                    raise SetupError(
-                        "Some of the nonlinear models have "
-                        "'use_complex_fields=True' and some have "
-                        "'use_complex_fields=False'. This option "
-                        "is only available for backwards compatibility "
-                        "with Tidy3D version < 2.8 "
-                        "and it must be consistent across the nonlinear "
-                        "models in a given 'NonlinearSpec'."
-                    )
-        return val
-
     @pd.validator("num_iters", always=True)
     def _validate_num_iters(cls, val, values):
         """Check that num_iters is not too large."""
@@ -744,6 +626,22 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
         for model in self.models:
             fields += model.aux_fields
         return fields
+
+    @pd.validator("models", always=True)
+    def _consistent_models(cls, val):
+        """Ensure that parameters shared between models are consistent."""
+        if val is None:
+            return val
+        n0 = None
+        for model in val:
+            if isinstance(model, (KerrNonlinearity, TwoPhotonAbsorption)):
+                if model.n0 is not None:
+                    if n0 is not None and not np.isclose(model.n0, n0):
+                        raise SetupError(
+                            f"Nonlinear models must have consistent 'n0'. Given {model.n0} and n0."
+                        )
+                    n0 = model.n0
+        return val
 
 
 class AbstractMedium(ABC, Tidy3dBaseModel):
