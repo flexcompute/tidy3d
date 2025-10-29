@@ -619,7 +619,7 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
             )
         return self.dispersion_raw
 
-    def plot_field(self, *args, **kwargs):
+    def plot_field(self, *args: Any, **kwargs: Any) -> None:
         """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""
         raise DeprecationWarning(
             "The 'plot_field()' method was moved to the 'ModeSolver' object."

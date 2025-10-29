@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional
+from typing import Any, Optional
 
 import pydantic.v1 as pydantic
 
@@ -45,7 +45,7 @@ class Source(Box, AbstractSource, ABC):
         return Box(center=self.center, size=self.size)
 
     @cached_property
-    def _injection_axis(self):
+    def _injection_axis(self) -> None:
         """Injection axis of the source."""
         return
 
@@ -74,7 +74,7 @@ class Source(Box, AbstractSource, ABC):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot this source."""
 

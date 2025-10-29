@@ -6,8 +6,10 @@ import json
 import os
 from enum import Enum
 from functools import wraps
+from typing import Any, Optional, TypeAlias
 
 import requests
+from jedi.inference.gradual.typing import Callable
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 
@@ -28,6 +30,8 @@ from .core_config import get_logger
 from .environment import Env
 from .exceptions import WebError, WebNotFoundError
 
+JSONType: TypeAlias = dict[str, Any] | list[Any] | str | int
+
 
 class ResponseCodes(Enum):
     """HTTP response codes to handle individually."""
@@ -42,7 +46,7 @@ def get_version() -> str:
     return core_config.get_version()
 
 
-def get_user_agent():
+def get_user_agent() -> str:
     """Get the user agent the current environment."""
     return os.environ.get("TIDY3D_AGENT", f"Python-Client/{get_version()}")
 
@@ -115,11 +119,11 @@ def get_headers() -> dict[str, str]:
     }
 
 
-def http_interceptor(func):
+def http_interceptor(func: Callable[..., Any]) -> Callable[..., JSONType]:
     """Intercept the response and raise an exception if the status code is not 200."""
 
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> JSONType:
         """The wrapper function."""
         suppress_404 = kwargs.pop("suppress_404", False)
 
@@ -196,7 +200,7 @@ def http_interceptor(func):
 
 
 class TLSAdapter(HTTPAdapter):
-    def init_poolmanager(self, *args, **kwargs):
+    def init_poolmanager(self, *args: Any, **kwargs: Any) -> None:
         context = create_urllib3_context(ssl_version=Env.current.ssl_version)
         kwargs["ssl_context"] = context
         return super().init_poolmanager(*args, **kwargs)
@@ -205,20 +209,20 @@ class TLSAdapter(HTTPAdapter):
 class HttpSessionManager:
     """Http util class."""
 
-    def __init__(self, session: requests.Session):
+    def __init__(self, session: requests.Session) -> None:
         """Initialize the session."""
         self.session = session
         self._mounted_ssl_version = None
         self._ensure_tls_adapter(Env.current.ssl_version)
         self.session.verify = Env.current.ssl_verify
 
-    def reinit(self):
+    def reinit(self) -> None:
         """Reinitialize the session."""
         ssl_version = Env.current.ssl_version
         self._ensure_tls_adapter(ssl_version)
         self.session.verify = Env.current.ssl_verify
 
-    def _ensure_tls_adapter(self, ssl_version):
+    def _ensure_tls_adapter(self, ssl_version: str) -> None:
         if not ssl_version:
             self._mounted_ssl_version = None
             return
@@ -227,7 +231,9 @@ class HttpSessionManager:
             self._mounted_ssl_version = ssl_version
 
     @http_interceptor
-    def get(self, path: str, json=None, params=None):
+    def get(
+        self, path: str, json: JSONType = None, params: Optional[dict[str, Any]] = None
+    ) -> requests.Response:
         """Get the resource."""
         self.reinit()
         return self.session.get(
@@ -235,13 +241,15 @@ class HttpSessionManager:
         )
 
     @http_interceptor
-    def post(self, path: str, json=None):
+    def post(self, path: str, json: JSONType = None) -> requests.Response:
         """Create the resource."""
         self.reinit()
         return self.session.post(Env.current.get_real_url(path), json=json, auth=api_key_auth)
 
     @http_interceptor
-    def put(self, path: str, json=None, files=None):
+    def put(
+        self, path: str, json: JSONType = None, files: Optional[dict[str, Any]] = None
+    ) -> requests.Response:
         """Update the resource."""
         self.reinit()
         return self.session.put(
@@ -249,7 +257,9 @@ class HttpSessionManager:
         )
 
     @http_interceptor
-    def delete(self, path: str, json=None, params=None):
+    def delete(
+        self, path: str, json: JSONType = None, params: Optional[dict[str, Any]] = None
+    ) -> requests.Response:
         """Delete the resource."""
         self.reinit()
         return self.session.delete(

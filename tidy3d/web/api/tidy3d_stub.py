@@ -133,7 +133,7 @@ class Tidy3dStub(BaseModel, TaskStub):
     def to_file(
         self,
         file_path: PathLike,
-    ):
+    ) -> None:
         """Exports Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] instance to .yaml, .json,
         or .hdf5 file
 
@@ -177,7 +177,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         """
         return task_type_name_of(self.simulation)
 
-    def validate_pre_upload(self, source_required) -> None:
+    def validate_pre_upload(self, source_required: bool) -> None:
         """Perform some pre-checks on instances of component"""
         if isinstance(self.simulation, Simulation):
             self.simulation.validate_pre_upload(source_required)
@@ -274,7 +274,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
 
         return sim_data
 
-    def to_file(self, file_path: PathLike):
+    def to_file(self, file_path: PathLike) -> None:
         """Exports Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] instance
         to .yaml, .json, or .hdf5 file
 

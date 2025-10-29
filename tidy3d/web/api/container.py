@@ -10,11 +10,11 @@ import tempfile
 import time
 import uuid
 from abc import ABC
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from os import PathLike
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 import pydantic.v1 as pd
 from pydantic.v1 import PrivateAttr
@@ -379,7 +379,7 @@ class Job(WebContainer):
         return web.get_info(task_id=self.task_id)
 
     @property
-    def status(self):
+    def status(self) -> str:
         """Return current status of :class:`Job`."""
         if self.load_if_cached:
             return "success"
@@ -391,7 +391,7 @@ class Job(WebContainer):
             return self.get_info().status
 
     @property
-    def postprocess_status(self):
+    def postprocess_status(self) -> Optional[str]:
         """Return current postprocess status of :class:`Job` if it is a Component Modeler."""
         if web._is_modeler_batch(self.task_id):
             detail = self.get_info()
@@ -580,7 +580,7 @@ class Job(WebContainer):
             parent_dir.mkdir(parents=True, exist_ok=True)
 
     @pd.root_validator(pre=True)
-    def set_task_name_if_none(cls, values):
+    def set_task_name_if_none(cls, values: dict[str, Any]) -> dict[str, Any]:
         """
         Auto-assign a task_name if user did not provide one.
         """
@@ -667,11 +667,11 @@ class BatchData(Tidy3dBaseModel, Mapping):
         """Get the simulation data object for a given ``task_name``."""
         return self.load_sim_data(task_name)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[TaskName]:
         """Iterate over the task names."""
         return iter(self.task_paths)
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Return the number of tasks in the batch."""
         return len(self.task_paths)
 
@@ -1065,7 +1065,7 @@ class Batch(WebContainer):
             self._check_path_dir(path_dir=path_dir)
             download_executor = ThreadPoolExecutor(max_workers=self.num_workers)
 
-        def _should_download(job) -> bool:
+        def _should_download(job: Job) -> bool:
             status = job.status
             if not web._is_modeler_batch(job.task_id):
                 return status == "success"
@@ -1073,7 +1073,7 @@ class Batch(WebContainer):
                 return True
             return status == "run_success" and getattr(job, "postprocess_status", None) == "success"
 
-        def schedule_download(job) -> None:
+        def schedule_download(job: Job) -> None:
             if download_executor is None or not _should_download(job):
                 return
             task_id = job.task_id
@@ -1095,7 +1095,7 @@ class Batch(WebContainer):
             download_futures[task_id] = download_executor.submit(job.download, job_path)
 
         # ----- continue condition & status formatting -------------------------------
-        def check_continue_condition(job) -> bool:
+        def check_continue_condition(job: Job) -> bool:
             status = job.status
             if not web._is_modeler_batch(job.task_id):
                 return status not in END_STATES
@@ -1333,7 +1333,7 @@ class Batch(WebContainer):
                 job._materialize_from_stash(job_path)
                 continue
 
-            def fn(job=job, job_path=job_path) -> None:
+            def fn(job: Job = job, job_path: PathLike = job_path) -> None:
                 job.download(path=job_path)
 
             fns.append(fn)

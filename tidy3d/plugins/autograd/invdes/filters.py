@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 from collections.abc import Iterable
 from functools import lru_cache, partial
-from typing import Annotated, Callable, Optional, Union
+from typing import Annotated, Any, Callable, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -32,7 +32,10 @@ class AbstractFilter(Tidy3dBaseModel, abc.ABC):
 
     @classmethod
     def from_radius_dl(
-        cls, radius: Union[float, tuple[float, ...]], dl: Union[float, tuple[float, ...]], **kwargs
+        cls,
+        radius: Union[float, tuple[float, ...]],
+        dl: Union[float, tuple[float, ...]],
+        **kwargs: Any,
     ) -> AbstractFilter:
         """Create a filter from radius and grid spacing.
 

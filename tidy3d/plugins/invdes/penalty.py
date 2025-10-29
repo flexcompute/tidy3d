@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import abc
 import typing
+from typing import Any
 
 import autograd.numpy as anp
 import pydantic.v1 as pd
@@ -28,7 +29,7 @@ class AbstractPenalty(InvdesBaseModel, abc.ABC):
     def evaluate(self) -> float:
         """Evaluate the penalty on supplied values."""
 
-    def __call__(self, *args, **kwargs) -> float:
+    def __call__(self, *args: Any, **kwargs: Any) -> float:
         return self.evaluate(*args, **kwargs)
 
 

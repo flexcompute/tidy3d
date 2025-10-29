@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pd
@@ -115,7 +115,7 @@ def initialize_params_from_simulation(
     bounds: tuple[Optional[float], Optional[float]] = (0.0, 1.0),
     rel_improve_tol: float = 1e-3,
     verbose: bool = False,
-    **param_kwargs,
+    **param_kwargs: Any,
 ) -> np.ndarray:
     """Initialize design parameters to match base simulation permittivity in a region.
 
@@ -279,7 +279,7 @@ def initialize_params_from_simulation(
         "best_x": params0.ravel().copy(),
     }
 
-    def callback(xk: np.ndarray):
+    def callback(xk: np.ndarray) -> None:
         val = loss_fn(xk)
         if val < state["best_val"]:
             state["best_val"] = val

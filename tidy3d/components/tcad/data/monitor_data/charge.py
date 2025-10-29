@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Any, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -212,7 +212,7 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
         return values
 
     @add_ax_if_none
-    def plot(self, ax: Ax = None, **sel_kwargs) -> Ax:
+    def plot(self, ax: Ax = None, **sel_kwargs: Any) -> Ax:
         """Plot the 1D cross-section of the energy bandgap diagram.
 
         Parameters

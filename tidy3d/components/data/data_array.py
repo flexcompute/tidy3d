@@ -77,7 +77,7 @@ class DataArray(xr.DataArray):
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: dict[str, str] = {}
 
-    def __init__(self, data, *args, **kwargs):
+    def __init__(self, data, *args: Any, **kwargs: Any) -> None:
         # if data is a vanilla autograd box, convert to our box
         if isbox(data) and not is_tidy_box(data):
             data = TidyArrayBox.from_arraybox(data)
@@ -155,7 +155,7 @@ class DataArray(xr.DataArray):
         return val
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
+    def __modify_schema__(cls, field_schema) -> None:
         """Sets the schema of DataArray object."""
 
         schema = {
@@ -435,7 +435,7 @@ class DataArray(xr.DataArray):
         return self._from_temp_dataset(ds)
 
     @staticmethod
-    def _ag_interp_func(var, indexes_coords, method, **kwargs):
+    def _ag_interp_func(var, indexes_coords, method, **kwargs: Any):
         """
         Interpolate the variable `var` along the coordinates specified in `indexes_coords` using the given `method`.
 

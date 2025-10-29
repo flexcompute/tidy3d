@@ -17,7 +17,7 @@ class EffectiveDOS(Tidy3dBaseModel, ABC):
     """Abstract class for the effective density of states"""
 
     @abstractmethod
-    def calc_eff_dos(self, T: float):
+    def calc_eff_dos(self, T: float) -> None:
         """Abstract method to calculate the effective density of states."""
 
     def get_effective_DOS(self, T: float):

@@ -118,7 +118,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         self,
         axis: Axis,
         structures: list[StructureType],
-        **kwargs,
+        **kwargs: Any,
     ) -> Coords1D:
         """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
         Symmetry, PML etc. are not considered in this method.
@@ -303,7 +303,7 @@ class UniformGrid(GridSpec1d):
         self,
         axis: Axis,
         structures: list[StructureType],
-        **kwargs,
+        **kwargs: Any,
     ) -> Coords1D:
         """Uniform 1D coords to be used as grid boundaries.
 
@@ -375,7 +375,7 @@ class CustomGridBoundaries(GridSpec1d):
         self,
         axis: Axis,
         structures: list[StructureType],
-        **kwargs,
+        **kwargs: Any,
     ) -> Coords1D:
         """Customized 1D coords to be used as grid boundaries.
 
@@ -471,7 +471,7 @@ class CustomGrid(GridSpec1d):
         self,
         axis: Axis,
         structures: list[StructureType],
-        **kwargs,
+        **kwargs: Any,
     ) -> Coords1D:
         """Customized 1D coords to be used as grid boundaries.
 
@@ -1109,7 +1109,7 @@ class LayerRefinementSpec(Box):
         refinement_inside_sim_only: bool = True,
         gap_meshing_iters: pd.NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Constructs a :class:`LayerRefinementSpec` that is unbounded in inplane dimensions from bounds along
         layer thickness dimension.
@@ -1185,7 +1185,7 @@ class LayerRefinementSpec(Box):
         refinement_inside_sim_only: bool = True,
         gap_meshing_iters: pd.NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Constructs a :class:`LayerRefinementSpec` from minimum and maximum coordinate bounds.
 
@@ -1262,7 +1262,7 @@ class LayerRefinementSpec(Box):
         refinement_inside_sim_only: bool = True,
         gap_meshing_iters: pd.NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Constructs a :class:`LayerRefinementSpec` from the bounding box of a list of structures.
 

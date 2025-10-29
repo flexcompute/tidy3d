@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 from math import cos, isclose, sin
-from typing import Optional
+from typing import Any, Optional
 
 import pydantic.v1 as pydantic
 from typing_extensions import Literal
@@ -116,7 +116,7 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
         angle_theta: float,
         angle_phi: float,
         component: Literal["electric", "magnetic"] = "electric",
-        **kwargs,
+        **kwargs: Any,
     ) -> list[PointDipole]:
         """Returns a list of `PointDipole` objects used to emulate a single dipole polarized in an arbitrary direction. The direction is specificed using a polar and azimuthal angle.
 

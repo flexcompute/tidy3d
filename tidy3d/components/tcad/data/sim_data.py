@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 import numpy as np
 import pydantic.v1 as pd
@@ -130,7 +130,7 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
         field_name: Optional[str] = None,
         structures_fill: bool = True,
         ax: Ax = None,
-        **sel_kwargs,
+        **sel_kwargs: Any,
     ) -> Ax:
         """Plot the simulation mesh in a monitor region with structures overlaid.
 
@@ -281,7 +281,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         ax: Ax = None,
-        **sel_kwargs,
+        **sel_kwargs: Any,
     ) -> Ax:
         """Plot the data for a monitor with simulation structures overlaid.
 

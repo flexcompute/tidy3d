@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import typing
+from typing import Any
 
 import autograd.numpy as anp
 import xarray as xr
@@ -18,7 +19,7 @@ def make_array(arr: typing.Any) -> anp.ndarray:
     return anp.array(arr)
 
 
-def get_amps(sim_data: td.SimulationData, monitor_name: str, **sel_kwargs) -> anp.ndarray:
+def get_amps(sim_data: td.SimulationData, monitor_name: str, **sel_kwargs: Any) -> anp.ndarray:
     """Grab amplitudes from a ``ModeMonitorData`` and select out values."""
 
     monitor_data = sim_data[monitor_name]
@@ -35,7 +36,7 @@ def get_field_component(
     sim_data: td.SimulationData,
     monitor_name: str,
     field_component: td.components.types.EMField,
-    **sel_kwargs,
+    **sel_kwargs: Any,
 ) -> anp.ndarray:
     """Grab field component from a ``FieldMonitorData`` and select out values."""
 
@@ -49,7 +50,7 @@ def get_field_component(
     return field_component_sel
 
 
-def get_intensity(sim_data: td.SimulationData, monitor_name: str, **sel_kwargs) -> anp.ndarray:
+def get_intensity(sim_data: td.SimulationData, monitor_name: str, **sel_kwargs: Any) -> anp.ndarray:
     """Grab field intensity from a ``FieldMonitorData`` and select out values."""
     intensity = sim_data.get_intensity(monitor_name)
     intensity_sel = intensity.sel(**sel_kwargs)

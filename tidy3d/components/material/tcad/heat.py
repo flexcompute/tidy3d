@@ -33,15 +33,15 @@ class AbstractHeatMedium(ABC, Tidy3dBaseModel):
         return self
 
     @property
-    def charge(self):
+    def charge(self) -> None:
         raise ValueError(f"A `charge` medium does not exist in this Medium definition: {self}")
 
     @property
-    def electrical(self):
+    def electrical(self) -> None:
         raise ValueError(f"An `electrical` medium does not exist in this Medium definition: {self}")
 
     @property
-    def optical(self):
+    def optical(self) -> None:
         raise ValueError(f"An `optical` medium does not exist in this Medium definition: {self}")
 
 

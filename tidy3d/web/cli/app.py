@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import shutil
 import ssl
+from typing import Any
 
 import click
 import requests
@@ -27,7 +28,7 @@ from .develop.index import develop
 os.makedirs(TIDY3D_DIR, exist_ok=True)
 
 
-def get_description():
+def get_description() -> str:
     """Get the description for the config command.
     Returns
     -------
@@ -47,7 +48,7 @@ def get_description():
 
 
 @click.group()
-def tidy3d_cli():
+def tidy3d_cli() -> None:
     """
     Tidy3d command line tool.
     """
@@ -55,7 +56,7 @@ def tidy3d_cli():
 
 @click.command()
 @click.option("--apikey", prompt=False)
-def configure(apikey):
+def configure(apikey: str) -> None:
     """Click command to configure the api key.
 
     Parameters
@@ -75,7 +76,7 @@ def configure_fn(apikey: str) -> None:
         User input api key.
     """
 
-    def auth(req):
+    def auth(req: requests.Request) -> requests.Request:
         """Enrich auth information to request.
         Parameters
         ----------
@@ -112,7 +113,7 @@ def configure_fn(apikey: str) -> None:
 @click.command()
 @click.argument("lsf_file")
 @click.argument("new_file")
-def convert(lsf_file, new_file):
+def convert(lsf_file: Any, new_file: Any) -> None:
     """Click command to convert .lsf project into Tidy3D .py file"""
     raise ValueError(
         "The converter feature is deprecated. "
@@ -206,7 +207,7 @@ def config_migrate(overwrite: bool, delete_legacy: bool) -> None:
 
 
 @click.group()
-def config_group():
+def config_group() -> None:
     """Configuration utilities."""
 
 

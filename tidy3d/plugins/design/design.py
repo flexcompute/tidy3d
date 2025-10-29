@@ -281,7 +281,7 @@ class DesignSpace(Tidy3dBaseModel):
         """Get function that tries to use batch processing on a set of arguments."""
 
         class Pre_Post_Handler:
-            def __init__(self, console):
+            def __init__(self, console) -> None:
                 self.sim_counter = 0
                 self.sim_names = []
                 self.sim_paths = []
@@ -335,7 +335,7 @@ class DesignSpace(Tidy3dBaseModel):
             output_dict: dict,
             naming_dict: dict,
             previous_key: str = "",
-        ):
+        ) -> None:
             """Recursively search for search_type objects within a dictionary."""
             current_key = previous_key
             for key, value in search_dict.items():
@@ -461,7 +461,7 @@ class DesignSpace(Tidy3dBaseModel):
             Union[SimulationData, list[SimulationData], dict[str, SimulationData]], Any
         ],
         path_dir: str = ".",
-        **batch_kwargs,
+        **batch_kwargs: Any,
     ) -> Result:
         """
         This function has been superceded by `run`, please use `run` for batched simulations.

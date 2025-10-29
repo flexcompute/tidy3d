@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Optional
+from typing import Any, Optional
 
 import click
 
@@ -38,8 +38,8 @@ def replace_in_files(
     directory: str,
     json_file_path: str,
     selected_version: str,
-    dry_run=False,
-):
+    dry_run: bool = False,
+) -> None:
     """
     Recursively finds and replaces strings in files within a directory based on a given dictionary loaded from a JSON
     file. The JSON file also includes a version selector. The function will print the file line and prompt for
@@ -126,7 +126,7 @@ def replace_in_files(
     help="Path to the submodule.",
     type=str,  # Specify the type as str for the 'submodule-path' option
 )
-def commit(message: str, submodule_path: str):
+def commit(message: str, submodule_path: str) -> int:
     """
     Add and commit changes in both the Git repository and its submodule.
 
@@ -141,7 +141,7 @@ def commit(message: str, submodule_path: str):
         The relative path to the submodule.
     """
 
-    def commit_repository(repository_path, commit_message):
+    def commit_repository(repository_path: str, commit_message: str) -> None:
         """
         Commit changes in the specified Git repository.
 
@@ -164,7 +164,7 @@ def commit(message: str, submodule_path: str):
 
 
 @develop.command(name="build-docs", help="Builds the sphinx documentation.")
-def build_documentation(args=None):
+def build_documentation(args: Any = None) -> None:
     """
     Build the Sphinx documentation.
 
@@ -211,7 +211,7 @@ def build_documentation(args=None):
     default="./docs/notebooks",
     help="The remote branch from tidy3d-notebooks.",
 )
-def build_documentation_from_remote_notebooks(args=None):
+def build_documentation_from_remote_notebooks(args: Any = None) -> int:
     """
     Update the notebooks submodule and build documentation.
 
@@ -300,7 +300,7 @@ def build_documentation_from_remote_notebooks(args=None):
 )
 def replace_in_files_command(
     directory: str, json_dictionary: Optional[str], selected_version: Optional[str], dry_run: bool
-):
+) -> int:
     """
     Recursively finds and replaces strings in files within a directory based on a given dictionary loaded from a JSON
     file. The JSON file also includes a version selector. The function will print the file line and prompt for

@@ -1032,7 +1032,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 new_data[comp] = np.conj(field)
         return self.copy(update=new_data)
 
-    def _check_fields_stored(self, components: list[str]):
+    def _check_fields_stored(self, components: list[str]) -> None:
         """Check that all requested field components are stored in the data."""
         missing_comps = [comp for comp in components if comp not in self.field_components.keys()]
         if len(missing_comps) > 0:
@@ -1320,7 +1320,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
         return self.copy(update=fields_norm)
 
     def to_source(
-        self, source_time: SourceTimeType, center: Coordinate, size: Size = None, **kwargs
+        self, source_time: SourceTimeType, center: Coordinate, size: Size = None, **kwargs: Any
     ) -> CustomFieldSource:
         """Create a :class:`.CustomFieldSource` from the fields stored in the :class:`.FieldData`.
 
@@ -1786,7 +1786,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return data_reordered.updated_copy(monitor=monitor_updated, deep=False, validate=False)
 
-    def _isel(self, **isel_kwargs):
+    def _isel(self, **isel_kwargs: Any):
         """Wraps ``xarray.DataArray.isel`` for all data fields that are defined over frequency and
         mode index. Used in ``overlap_sort`` but not officially supported since for example
         ``self.monitor.mode_spec`` and ``self.monitor.freqs`` will no longer be matching the
@@ -1800,7 +1800,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         }
         return self._updated(update=update_dict)
 
-    def _assign_coords(self, **assign_coords_kwargs):
+    def _assign_coords(self, **assign_coords_kwargs: Any):
         """Wraps ``xarray.DataArray.assign_coords`` for all data fields that are defined over frequency and
         mode index. Used in ``overlap_sort`` but not officially supported since for example
         ``self.monitor.mode_spec`` and ``self.monitor.freqs`` will no longer be matching the
@@ -2123,7 +2123,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return dataset.drop_vars(drop).to_dataframe()
 
-    def _check_fields_stored(self, components: list[EMField]):
+    def _check_fields_stored(self, components: list[EMField]) -> None:
         """Check that all requested field components are stored in the data."""
 
         # ModeData can either have all field components or none
@@ -2409,7 +2409,7 @@ class ModeSolverData(ModeData):
         new_data["monitor"] = mnt.updated_copy(direction=new_dir, store_fields_direction=new_dir)
         return self.copy(update=new_data)
 
-    def _check_fields_stored(self, components: list[str]):
+    def _check_fields_stored(self, components: list[str]) -> None:
         """Check that all requested field components are stored in the data."""
         missing_comps = [comp for comp in components if comp not in self.field_components.keys()]
         if len(missing_comps) > 0:
@@ -2942,13 +2942,13 @@ class FieldProjectionAngleData(AbstractFieldProjectionData):
         return tangential_dims
 
     @staticmethod
-    def _check_coords_sorted(coord: np.ndarray, name: str):
+    def _check_coords_sorted(coord: np.ndarray, name: str) -> None:
         """Helper for checking whether an array is sorted and raises an exception if it is not."""
         is_sorted = np.all(np.diff(coord) >= 0)
         if not is_sorted:
             raise ValueError(f"{name} was not provided as a sorted array.")
 
-    def _check_integration_suitability(self):
+    def _check_integration_suitability(self) -> None:
         """Checks whether the sampling of ``theta`` and ``phi`` is suitable for
         integrating over a spherical surface."""
         if (
@@ -3773,7 +3773,7 @@ class DirectivityData(FieldProjectionAngleData):
         return self.copy(update=dict(fields_norm, flux=new_flux))
 
     @staticmethod
-    def _check_valid_pol_basis(pol_basis: PolarizationBasis, tilt_angle: float):
+    def _check_valid_pol_basis(pol_basis: PolarizationBasis, tilt_angle: float) -> None:
         if pol_basis != "linear" and pol_basis != "circular":
             raise ValueError("'pol_basis' must be either 'linear' or 'circular'")
         if tilt_angle is not None and pol_basis == "circular":

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -855,7 +855,7 @@ class EigSolver(Tidy3dBaseModel):
         vec_init,
         guess_value=1.0,
         M=None,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Find ``num_modes`` eigenmodes of ``mat`` cloest to ``guess_value``.
 
@@ -894,7 +894,7 @@ class EigSolver(Tidy3dBaseModel):
         guess_value=1.0,
         M=None,
         basis_vecs=None,
-        **kwargs,
+        **kwargs: Any,
     ):
         """Find ``num_modes`` eigenmodes of ``mat`` cloest to ``guess_value``.
 
@@ -1076,7 +1076,7 @@ class EigSolver(Tidy3dBaseModel):
         return new_ten.reshape((3, 3, -1))
 
     @staticmethod
-    def split_curl_field_postprocess_inverse(split_curl, E):
+    def split_curl_field_postprocess_inverse(split_curl, E) -> None:
         """E has the shape (3, N, num_modes)"""
         raise RuntimeError("Split curl not yet implemented for relative mode solver.")
 
@@ -1090,6 +1090,6 @@ class EigSolver(Tidy3dBaseModel):
         return np.any(np.abs(material_response) > GOOD_CONDUCTOR_THRESHOLD * np.abs(pec_val))
 
 
-def compute_modes(*args, **kwargs) -> tuple[Numpy, Numpy, str]:
+def compute_modes(*args: Any, **kwargs: Any) -> tuple[Numpy, Numpy, str]:
     """A wrapper around ``EigSolver.compute_modes``, which is used in :class:`.ModeSolver`."""
     return EigSolver.compute_modes(*args, **kwargs)

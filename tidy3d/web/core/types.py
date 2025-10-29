@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import Enum
+from typing import Any
 
 from pydantic.v1 import BaseModel
 
@@ -13,7 +14,7 @@ class Tidy3DResource(BaseModel, ABC):
 
     @classmethod
     @abstractmethod
-    def get(cls, *args, **kwargs) -> Tidy3DResource:
+    def get(cls, *args: Any, **kwargs: Any) -> Tidy3DResource:
         """Get a resource from the server."""
 
 
@@ -22,11 +23,11 @@ class ResourceLifecycle(Tidy3DResource, ABC):
 
     @classmethod
     @abstractmethod
-    def create(cls, *args, **kwargs) -> Tidy3DResource:
+    def create(cls, *args: Any, **kwargs: Any) -> Tidy3DResource:
         """Create a new resource and return it."""
 
     @abstractmethod
-    def delete(self, *args, **kwargs) -> None:
+    def delete(self, *args: Any, **kwargs: Any) -> None:
         """Delete the resource."""
 
 
@@ -34,7 +35,7 @@ class Submittable(BaseModel, ABC):
     """Abstract base class / template for a webservice that implements a submit method."""
 
     @abstractmethod
-    def submit(self, *args, **kwargs) -> None:
+    def submit(self, *args: Any, **kwargs: Any) -> None:
         """Submit the task to the webservice."""
 
 
@@ -43,7 +44,7 @@ class Queryable(BaseModel, ABC):
 
     @classmethod
     @abstractmethod
-    def list(cls, *args, **kwargs) -> [Queryable]:
+    def list(cls, *args: Any, **kwargs: Any) -> [Queryable]:
         """List all resources of this type."""
 
 

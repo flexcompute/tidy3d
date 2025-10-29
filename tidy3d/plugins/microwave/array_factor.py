@@ -57,7 +57,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
 
     @property
     @abstractmethod
-    def _extend_dims(self):
+    def _extend_dims(self) -> None:
         """Dimensions along which antennas will be duplicated."""
 
     @property

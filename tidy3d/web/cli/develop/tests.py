@@ -17,7 +17,7 @@ __all__ = [
 ]
 
 
-def test_options(options: list):
+def test_options(options: list) -> None:
     """
     Inclusive rather than exclusive tests in a given set of environments.
 
@@ -47,7 +47,7 @@ def test_options(options: list):
 @develop.command(
     name="test-in-envrionment", help="Installs the specified poetry environment and tests"
 )
-def test_in_environment_command(types: list, env: str = "dev"):
+def test_in_environment_command(types: list, env: str = "dev") -> None:
     """
     Installs a poetry environment specified by the extra definition in pyproject.toml and runs tests with pytest and
     any additional arguments. Requires a poetry installation so make sure to verify the installation previously.

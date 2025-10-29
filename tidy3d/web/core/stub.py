@@ -24,7 +24,7 @@ class TaskStubData(ABC):
         """
 
     @abstractmethod
-    def to_file(self, file_path: PathLike):
+    def to_file(self, file_path: PathLike) -> None:
         """Loads a :class:`Stub` from .yaml, .json, or .hdf5 file.
 
         Parameters
@@ -56,7 +56,7 @@ class TaskStub(ABC):
         """
 
     @abstractmethod
-    def to_file(self, file_path: PathLike):
+    def to_file(self, file_path: PathLike) -> None:
         """Loads a :class:`TaskStub` from .yaml, .json, .hdf5 or .hdf5.gz file.
 
         Parameters

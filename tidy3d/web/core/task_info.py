@@ -163,7 +163,7 @@ class RunInfo(TaskBase):
     field_decay: pydantic.confloat(ge=0.0, le=1.0)
     """Field decay from the maximum value (0 to 1)."""
 
-    def display(self):
+    def display(self) -> None:
         """Print some info about the task's progress."""
         print(f" - {self.perc_done:.2f} (%) done")
         print(f" - {self.field_decay:.2e} field decay from max")

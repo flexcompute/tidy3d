@@ -182,7 +182,7 @@ def updates_from_version(version_from_string: str):
     return decorator
 
 
-def iterate_update_dict(update_dict: dict, update_types: dict[str, Callable]):
+def iterate_update_dict(update_dict: dict, update_types: dict[str, Callable]) -> None:
     """Recursively iterate nested ``update_dict``. For any nested ``nested_dict`` found,
     apply an update function if its ``nested_dict["type"]`` is in the keys of the ``update_types``
     dictionary. Also iterates lists and tuples.
@@ -296,12 +296,12 @@ def update_1_5(sim_dict: dict) -> dict:
 def update_1_4(sim_dict: dict) -> dict:
     """Updates version 1.4."""
 
-    def fix_polyslab(geo_dict):
+    def fix_polyslab(geo_dict) -> None:
         """Fix a PolySlab dictionary."""
         geo_dict.pop("length", None)
         geo_dict.pop("center", None)
 
-    def fix_modespec(ms_dict):
+    def fix_modespec(ms_dict) -> None:
         """Fix a ModeSpec dictionary."""
         sort_by = ms_dict.pop("sort_by", None)
         if sort_by and sort_by != "largest_neff":
@@ -310,7 +310,7 @@ def update_1_4(sim_dict: dict) -> dict:
                 "largest effective index. Use ModeSpec.filter_pol to select polarization instead."
             )
 
-    def fix_geometry_group(geo_dict):
+    def fix_geometry_group(geo_dict) -> None:
         """Fix a GeometryGroup dictionary."""
         geo_dict.pop("center", None)
 

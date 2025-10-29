@@ -15,6 +15,8 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import annotations
 
+from typing import Any
+
 try:
     from matplotlib.patches import PathPatch
     from matplotlib.path import Path
@@ -26,7 +28,7 @@ from numpy import array, concatenate, ones
 class Polygon:
     """Adapt Shapely polygons to a common interface"""
 
-    def __init__(self, context):
+    def __init__(self, context) -> None:
         if isinstance(context, dict):
             self.context = context["coordinates"]
         else:
@@ -86,7 +88,7 @@ def polygon_path(polygon):
     return Path(vertices, codes)
 
 
-def polygon_patch(polygon, **kwargs):
+def polygon_patch(polygon, **kwargs: Any):
     """Constructs a matplotlib patch from a geometric object
 
     The ``polygon`` may be a Shapely or GeoJSON-like object with or without holes.

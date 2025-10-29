@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -334,7 +334,7 @@ class HeatChargeSimulation(AbstractSimulation):
         "specify Charge simulations or transient Heat simulations.",
     )
 
-    def _post_init_validators(self):
+    def _post_init_validators(self) -> None:
         """Call validators taking ``self`` that get run after init."""
 
         # Charge mesh size validator
@@ -513,7 +513,7 @@ class HeatChargeSimulation(AbstractSimulation):
             media[bg_medium.name] = bg_medium
         structures_map = {s.name: s for s in structures if s.name}
 
-        def check_fluid_medium_attr(fluid_medium):
+        def check_fluid_medium_attr(fluid_medium) -> None:
             if (
                 (fluid_medium.thermal_conductivity is None)
                 or (fluid_medium.viscosity is None)
@@ -990,7 +990,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return values
 
-    def _estimate_charge_mesh_size(self):
+    def _estimate_charge_mesh_size(self) -> None:
         """Make an estimate of the mesh size and raise a warning if too big.
         NOTE: this is a very rough estimate. The back-end will actually stop
         execution based on actual node-count."""
@@ -1264,7 +1264,7 @@ class HeatChargeSimulation(AbstractSimulation):
         colorbar: str = "conductivity",
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """
         DEPRECATED: Method added for backwards compatibility with :class:`HeatSimulation.plot_heat_conductivity`.
@@ -1804,7 +1804,7 @@ class HeatChargeSimulation(AbstractSimulation):
         )
         return ax
 
-    def _add_source_cbar(self, ax: Ax, property: str = "heat_conductivity"):
+    def _add_source_cbar(self, ax: Ax, property: str = "heat_conductivity") -> None:
         """Add colorbar for heat sources."""
         source_min, source_max = self.source_bounds(property=property)
         self.scene._add_cbar(
@@ -1877,7 +1877,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return ax
 
     @classmethod
-    def from_scene(cls, scene: Scene, **kwargs) -> HeatChargeSimulation:
+    def from_scene(cls, scene: Scene, **kwargs: Any) -> HeatChargeSimulation:
         """Create a simulation from a :class:`.Scene` instance. Must provide additional parameters
         to define a valid simulation (for example, ``size``, ``grid_spec``, etc).
 

@@ -34,7 +34,7 @@ class AbstractTerminalPort(MicrowaveBaseModel, ABC):
 
     @cached_property
     @abstractmethod
-    def injection_axis(self):
+    def injection_axis(self) -> None:
         """Injection axis of the port."""
 
     @abstractmethod

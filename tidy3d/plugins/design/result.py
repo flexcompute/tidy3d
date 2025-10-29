@@ -177,7 +177,7 @@ class Result(Tidy3dBaseModel):
         """Get a data element indexing by function arg tuple."""
         return self.data[coords]
 
-    def sel(self, **kwargs) -> Any:
+    def sel(self, **kwargs: Any) -> Any:
         """Get a data element by function kwargs.."""
         coords_tuple = tuple(kwargs[dim] for dim in self.dims)
         return self.get_value(coords_tuple)

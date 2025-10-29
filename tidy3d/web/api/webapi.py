@@ -93,7 +93,7 @@ def _is_modeler_batch(resource_id: str) -> bool:
     return BatchTask.is_batch(resource_id, batch_type="RF_SWEEP")
 
 
-def _batch_detail(resource_id: str):
+def _batch_detail(resource_id: str) -> BatchDetail:
     return BatchTask(resource_id).detail(batch_type="RF_SWEEP")
 
 
@@ -159,7 +159,7 @@ def _batch_detail_error(resource_id: str) -> Optional[WebError]:
 
 def _upload_component_modeler_subtasks(
     resource_id: str, verbose: bool = True, solver_version: Optional[str] = None
-):
+) -> Optional[WebError]:
     """Kicks off and monitors the split and validation of component modeler tasks.
 
     This function orchestrates a two-phase process. First, it initiates a
@@ -752,7 +752,9 @@ def upload(
     return resource_id
 
 
-def get_reduced_simulation(simulation, reduce_simulation):
+def get_reduced_simulation(
+    simulation: WorkflowType, reduce_simulation: Literal["auto", True, False]
+) -> WorkflowType:
     """
     Adjust the given simulation object based on the reduce_simulation parameter. Currently only
     implemented for the mode solver.
@@ -924,7 +926,7 @@ def get_run_info(task_id: TaskId) -> tuple[Optional[float], Optional[float]]:
     return task.get_running_info()
 
 
-def get_status(task_id) -> str:
+def get_status(task_id: TaskId) -> str:
     """Get the status of a task. Raises an error if status is "error".
 
     Parameters
@@ -1143,7 +1145,7 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
 
 
 @wait_for_connection
-def abort(task_id: TaskId):
+def abort(task_id: TaskId) -> Optional[TaskInfo]:
     """Abort server-side data associated with task.
 
     Parameters
@@ -1800,7 +1802,7 @@ def estimate_cost(
 
 
 @wait_for_connection
-def real_cost(task_id: str, verbose=True) -> float | None:
+def real_cost(task_id: str, verbose: bool = True) -> float | None:
     """Get the billed cost for given task after it has been run.
 
     Parameters
@@ -1891,7 +1893,7 @@ def real_cost(task_id: str, verbose=True) -> float | None:
 
 
 @wait_for_connection
-def account(verbose=True) -> Account:
+def account(verbose: bool = True) -> Account:
     """Get account information including FlexCredit balance and usage limits.
 
     Parameters

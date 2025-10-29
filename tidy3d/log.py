@@ -6,7 +6,7 @@ import inspect
 from contextlib import contextmanager
 from datetime import datetime
 from os import PathLike
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from rich.console import Console
 from rich.text import Text
@@ -74,13 +74,13 @@ class LogHandler:
         level: LogValue,
         log_level_format: Callable = _default_log_level_format,
         prefix_every_line: bool = False,
-    ):
+    ) -> None:
         self.level = _get_level_int(level)
         self.console = console
         self.log_level_format = log_level_format
         self.prefix_every_line = prefix_every_line
 
-    def handle(self, level, level_name, message):
+    def handle(self, level, level_name, message) -> None:
         """Output log messages depending on log level"""
         if level >= self.level:
             stack = inspect.stack()
@@ -120,7 +120,7 @@ class Logger:
 
     _static_cache = set()
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.handlers = {}
         self.suppression = True
         self._counts = None
@@ -128,7 +128,7 @@ class Logger:
         self._capture = False
         self._captured_warnings = []
 
-    def set_capture(self, capture: bool):
+    def set_capture(self, capture: bool) -> None:
         """Turn on/off tree-like capturing of log messages."""
         self._capture = capture
 
@@ -162,7 +162,7 @@ class Logger:
                 self._stack = stack
         return False
 
-    def begin_capture(self):
+    def begin_capture(self) -> None:
         """Start capturing log stack for consolidated validation log.
 
         This method is used before any model validation starts and is included in the initialization
@@ -177,7 +177,7 @@ class Logger:
         else:
             self._stack = [stack_item]
 
-    def end_capture(self, model):
+    def end_capture(self, model) -> None:
         """End capturing log stack for consolidated validation log.
 
         This method is used after all model validations and is included in the initialization of
@@ -208,7 +208,7 @@ class Logger:
                 hash_ = hash(model)
                 self._stack[-1]["children"][hash_] = stack_item
 
-    def _parse_warning_capture(self, current_loc, stack_item):
+    def _parse_warning_capture(self, current_loc, stack_item) -> None:
         """Process capture tree to compile formatted captured warnings."""
 
         if "parent_fields" in stack_item:
@@ -244,7 +244,7 @@ class Logger:
         level: int,
         level_name: str,
         message: str,
-        *args,
+        *args: Any,
         log_once: bool = False,
         custom_loc: Optional[list] = None,
         capture: bool = True,
@@ -285,7 +285,7 @@ class Logger:
         for handler in self.handlers.values():
             handler.handle(level, level_name, composed_message)
 
-    def log(self, level: LogValue, message: str, *args, log_once: bool = False) -> None:
+    def log(self, level: LogValue, message: str, *args: Any, log_once: bool = False) -> None:
         """Log (message) % (args) with given level"""
         if isinstance(level, str):
             level_name = level
@@ -294,26 +294,26 @@ class Logger:
             level_name = _level_name.get(level, "unknown")
         self._log(level, level_name, message, *args, log_once=log_once)
 
-    def debug(self, message: str, *args, log_once: bool = False) -> None:
+    def debug(self, message: str, *args: Any, log_once: bool = False) -> None:
         """Log (message) % (args) at debug level"""
         self._log(_level_value["DEBUG"], "DEBUG", message, *args, log_once=log_once)
 
-    def support(self, message: str, *args, log_once: bool = False) -> None:
+    def support(self, message: str, *args: Any, log_once: bool = False) -> None:
         """Log (message) % (args) at support level"""
         self._log(_level_value["SUPPORT"], "SUPPORT", message, *args, log_once=log_once)
 
-    def user(self, message: str, *args, log_once: bool = False) -> None:
+    def user(self, message: str, *args: Any, log_once: bool = False) -> None:
         """Log (message) % (args) at user level"""
         self._log(_level_value["USER"], "USER", message, *args, log_once=log_once)
 
-    def info(self, message: str, *args, log_once: bool = False) -> None:
+    def info(self, message: str, *args: Any, log_once: bool = False) -> None:
         """Log (message) % (args) at info level"""
         self._log(_level_value["INFO"], "INFO", message, *args, log_once=log_once)
 
     def warning(
         self,
         message: str,
-        *args,
+        *args: Any,
         log_once: bool = False,
         custom_loc: Optional[list] = None,
         capture: bool = True,
@@ -329,11 +329,11 @@ class Logger:
             capture=capture,
         )
 
-    def error(self, message: str, *args, log_once: bool = False) -> None:
+    def error(self, message: str, *args: Any, log_once: bool = False) -> None:
         """Log (message) % (args) at error level"""
         self._log(_level_value["ERROR"], "ERROR", message, *args, log_once=log_once)
 
-    def critical(self, message: str, *args, log_once: bool = False) -> None:
+    def critical(self, message: str, *args: Any, log_once: bool = False) -> None:
         """Log (message) % (args) at critical level"""
         self._log(_level_value["CRITICAL"], "CRITICAL", message, *args, log_once=log_once)
 
@@ -454,13 +454,13 @@ class NoOpProgress:
     def __enter__(self):
         return self
 
-    def __exit__(self, *args, **kwargs):
+    def __exit__(self, *args: Any, **kwargs: Any) -> None:
         pass
 
-    def add_task(self, *args, **kwargs):
+    def add_task(self, *args: Any, **kwargs: Any) -> None:
         pass
 
-    def update(self, *args, **kwargs):
+    def update(self, *args: Any, **kwargs: Any) -> None:
         pass
 
 

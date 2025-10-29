@@ -6,8 +6,10 @@ import numpy as np
 import xarray as xr
 
 import tidy3d as td
+from tidy3d import Medium
 from tidy3d.components.autograd import AutogradFieldMap, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.data.data_array import DataArray
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
 from tidy3d.packaging import disable_local_subpixel
@@ -81,12 +83,10 @@ def setup_adj(
     return sims_adj
 
 
-def _compute_eps_array(medium, frequencies):
+def _compute_eps_array(medium: Medium, frequencies: list[float]) -> DataArray:
     """Compute permittivity array for all frequencies."""
     eps_data = [np.mean(medium.eps_model(f)) for f in frequencies]
-    return td.components.data.data_array.DataArray(
-        data=np.array(eps_data), dims=("f",), coords={"f": frequencies}
-    )
+    return DataArray(data=np.array(eps_data), dims=("f",), coords={"f": frequencies})
 
 
 def _slice_field_data(

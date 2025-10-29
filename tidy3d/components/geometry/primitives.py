@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Optional
+from typing import Any, Optional
 
 import autograd.numpy as anp
 import numpy as np
@@ -228,7 +228,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         return val
 
     def to_polyslab(
-        self, num_pts_circumference: int = _N_PTS_CYLINDER_POLYSLAB, **kwargs
+        self, num_pts_circumference: int = _N_PTS_CYLINDER_POLYSLAB, **kwargs: Any
     ) -> PolySlab:
         """Convert instance of ``Cylinder`` into a discretized version using ``PolySlab``.
 

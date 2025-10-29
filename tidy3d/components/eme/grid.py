@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -320,7 +320,7 @@ class EMEExplicitGrid(EMEGridSpec):
 
     @classmethod
     def from_structures(
-        cls, structures: list[Structure], axis: Axis, mode_spec: EMEModeSpec, **kwargs
+        cls, structures: list[Structure], axis: Axis, mode_spec: EMEModeSpec, **kwargs: Any
     ) -> EMEExplicitGrid:
         """Create an explicit EME grid with boundaries aligned with
         structure bounding boxes. Every cell in the resulting grid

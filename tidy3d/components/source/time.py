@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -303,7 +303,7 @@ class GaussianPulse(Pulse):
         return self.amplitude * phase
 
     @classmethod
-    def from_amp_complex(cls, amp: complex, **kwargs) -> GaussianPulse:
+    def from_amp_complex(cls, amp: complex, **kwargs: Any) -> GaussianPulse:
         """Set the complex amplitude of a ``GaussianPulse``.
 
         Parameters
@@ -344,7 +344,7 @@ class GaussianPulse(Pulse):
         fmin: pydantic.PositiveFloat,
         fmax: pydantic.PositiveFloat,
         minimum_source_bandwidth: pydantic.PositiveFloat = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> GaussianPulse:
         """Create a ``GaussianPulse`` that maximizes its amplitude in the frequency range [fmin, fmax].
 

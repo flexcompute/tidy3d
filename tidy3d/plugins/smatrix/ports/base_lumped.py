@@ -92,5 +92,5 @@ class AbstractLumpedPort(AbstractTerminalPort):
         ]
 
     @abstractmethod
-    def _check_grid_size(self, yee_grid: YeeGrid):
+    def _check_grid_size(self, yee_grid: YeeGrid) -> None:
         """Raises :class:`SetupError` if the grid is too coarse at port locations."""

@@ -68,6 +68,7 @@ pytest-env = "^1.1.5"
 tox = { version = "*", optional = true }
 diff-cover = { version = "*", optional = true }
 zizmor = { version = "*", optional = true }
+mypy = { version = "1.13.0", optional = true }
 
 # gdstk
 gdstk = { version = ">=0.9.49", optional = true }
@@ -136,6 +137,7 @@ dev = [
   'jupyter',
   'myst-parser',
   'memory_profiler',
+  'mypy',
   'psutil',
   'nbconvert',
   'nbdime',
@@ -312,3 +314,81 @@ norecursedirs = [
 filterwarnings = "ignore::DeprecationWarning"
 testpaths = ["tidy3d", "tests", "docs"]
 python_files = "*.py"
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+follow_imports = "skip"
+disallow_untyped_defs = true
+disable_error_code = [
+  "abstract",
+  "annotation-unchecked",
+  "arg-type",
+  "assert-type",
+  "assignment",
+  "attr-defined",
+  "await-not-async",
+  "call-arg",
+  "call-overload",
+  "comparison-overlap",
+  "dict-item",
+  "empty-body",
+  "exit-return",
+  "explicit-override",
+  "func-returns-value",
+  "has-type",
+  "ignore-without-code",
+  "import",
+  "import-not-found",
+  "import-untyped",
+  "index",
+  "list-item",
+  "literal-required",
+  "method-assign",
+  "misc",
+  "mutable-override",
+  "name-defined",
+  "name-match",
+  "narrowed-type-not-subtype",
+  "no-any-return",
+  "no-any-unimported",
+  "no-overload-impl",
+  "no-redef",
+  "no-untyped-call",
+  "operator",
+  "overload-cannot-match",
+  "overload-overlap",
+  "override",
+  "possibly-undefined",
+  "prop-decorator",
+  "redundant-cast",
+  "redundant-expr",
+  "redundant-self",
+  "return",
+  "return-value",
+  "safe-super",
+  "str-bytes-safe",
+  "str-format",
+  "syntax",
+  "top-level-await",
+  "truthy-bool",
+  "truthy-function",
+  "truthy-iterable",
+  "type-abstract",
+  "type-arg",
+  "type-var",
+  "typeddict-item",
+  "typeddict-readonly-mutated",
+  "typeddict-unknown-key",
+  "unimported-reveal",
+  "union-attr",
+  "unreachable",
+  "unused-awaitable",
+  "unused-coroutine",
+  "unused-ignore",
+  "used-before-def",
+  "valid-newtype",
+  "valid-type",
+  "var-annotated",
+]
+enable_error_code = ["no-untyped-def"]

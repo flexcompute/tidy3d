@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 import autograd.numpy as np
 
@@ -160,7 +160,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
     """Abstract model for a nonlinear material response.
     Used as part of a :class:`.NonlinearSpec`."""
 
-    def _validate_medium_type(self, medium: AbstractMedium):
+    def _validate_medium_type(self, medium: AbstractMedium) -> None:
         """Check that the model is compatible with the medium."""
         if isinstance(medium, AbstractCustomMedium):
             raise ValidationError(
@@ -178,7 +178,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
                 f"for medium class '{type(medium).__name__}'."
             )
 
-    def _validate_medium(self, medium: AbstractMedium):
+    def _validate_medium(self, medium: AbstractMedium) -> None:
         """Any additional validation that depends on the medium"""
 
     def _validate_medium_freqs(self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]) -> None:
@@ -502,7 +502,7 @@ class TwoPhotonAbsorption(NonlinearModel):
         freq0 = self._get_freq0(freq0=self.freq0, freqs=freqs)
         return self.updated_copy(n0=n0, freq0=freq0)
 
-    def _validate_medium(self, medium: AbstractMedium):
+    def _validate_medium(self, medium: AbstractMedium) -> None:
         """Check that the model is compatible with the medium."""
         # if n0 is specified, we can go ahead and validate passivity
         if self.n0 is not None:
@@ -628,7 +628,7 @@ class KerrNonlinearity(NonlinearModel):
                     "gain medium are unstable, and are likely to diverge."
                 )
 
-    def _validate_medium(self, medium: AbstractMedium):
+    def _validate_medium(self, medium: AbstractMedium) -> None:
         """Check that the model is compatible with the medium."""
         # if n0 is specified, we can go ahead and validate passivity
         if self.n0 is not None:
@@ -813,7 +813,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         self._validate_nonlinear_spec()
         self._validate_modulation_spec_post_init()
 
-    def _validate_nonlinear_spec(self):
+    def _validate_nonlinear_spec(self) -> None:
         """Check compatibility with nonlinear_spec."""
         if self.__class__.__name__ == "AnisotropicMedium" and any(
             comp.nonlinear_spec is not None for comp in [self.xx, self.yy, self.zz]
@@ -851,7 +851,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                     "Please use 'NonlinearSpec.num_iters' instead."
                 )
 
-    def _validate_modulation_spec_post_init(self):
+    def _validate_modulation_spec_post_init(self) -> None:
         """Check compatibility with nonlinear_spec."""
         if self.__class__.__name__ == "Medium2D" and any(
             comp.modulation_spec is not None for comp in [self.ss, self.tt]
@@ -875,11 +875,11 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     )
 
     @property
-    def charge(self):
+    def charge(self) -> None:
         return None
 
     @property
-    def electrical(self):
+    def electrical(self) -> None:
         return None
 
     @property
@@ -887,7 +887,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return self.heat_spec
 
     @property
-    def optical(self):
+    def optical(self) -> None:
         return None
 
     @pd.validator("modulation_spec", always=True)
@@ -1104,7 +1104,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     @cached_property
     @abstractmethod
-    def n_cfl(self):
+    def n_cfl(self) -> None:
         # TODO this should be moved out of here into FDTD Simulation Mediums?
         """To ensure a stable FDTD simulation, it is essential to select an appropriate
         time step size in accordance with the CFL condition. The maximal time step
@@ -1638,7 +1638,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         return np.all([AbstractCustomMedium._validate_isreal_dataarray(f) for f in dataarray_tuple])
 
     @abstractmethod
-    def _sel_custom_data_inside(self, bounds: Bound):
+    def _sel_custom_data_inside(self, bounds: Bound) -> None:
         """Return a new medium that contains the minimal amount custom data necessary to cover
         a spatial region defined by ``bounds``."""
 
@@ -1954,7 +1954,7 @@ class Medium(AbstractMedium):
         return self._eps_model(self.permittivity, self.conductivity, frequency)
 
     @classmethod
-    def from_nk(cls, n: float, k: float, freq: float, **kwargs):
+    def from_nk(cls, n: float, k: float, freq: float, **kwargs: Any):
         """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`.Medium`.
 
         Parameters
@@ -2646,7 +2646,7 @@ class CustomMedium(AbstractCustomMedium):
         eps: Union[ScalarFieldDataArray, CustomSpatialDataType],
         freq: Optional[float] = None,
         interp_method: InterpMethod = "nearest",
-        **kwargs,
+        **kwargs: Any,
     ) -> CustomMedium:
         """Construct a :class:`.CustomMedium` from datasets containing raw permittivity values.
 
@@ -2716,7 +2716,7 @@ class CustomMedium(AbstractCustomMedium):
         k: Optional[Union[ScalarFieldDataArray, CustomSpatialDataType]] = None,
         freq: Optional[float] = None,
         interp_method: InterpMethod = "nearest",
-        **kwargs,
+        **kwargs: Any,
     ) -> CustomMedium:
         """Construct a :class:`.CustomMedium` from datasets containing n and k values.
 
@@ -4302,7 +4302,7 @@ class Sellmeier(DispersiveMedium):
         return [(b_coeff, c_coeff)]
 
     @classmethod
-    def from_dispersion(cls, n: float, freq: float, dn_dwvl: float = 0, **kwargs):
+    def from_dispersion(cls, n: float, freq: float, dn_dwvl: float = 0, **kwargs: Any):
         """Convert ``n`` and wavelength dispersion ``dn_dwvl`` values at frequency ``freq`` to
         a single-pole :class:`Sellmeier` medium.
 
@@ -4530,7 +4530,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         freq: float,
         dn_dwvl: CustomSpatialDataType,
         interp_method="nearest",
-        **kwargs,
+        **kwargs: Any,
     ):
         """Convert ``n`` and wavelength dispersion ``dn_dwvl`` values at frequency ``freq`` to
         a single-pole :class:`CustomSellmeier` medium.
@@ -4770,7 +4770,7 @@ class Lorentz(DispersiveMedium):
         return coeff_a > coeff_b
 
     @classmethod
-    def from_nk(cls, n: float, k: float, freq: float, **kwargs):
+    def from_nk(cls, n: float, k: float, freq: float, **kwargs: Any):
         """Convert ``n`` and ``k`` values at frequency ``freq`` to a single-pole Lorentz
         medium.
 
@@ -7187,7 +7187,7 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
         medium: Union[Medium, DispersiveMedium],
         subpixel: bool = True,
         perturbation_spec: Union[PermittivityPerturbation, IndexPerturbation] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> AbstractPerturbationMedium:
         """Construct a medium with pertubation models from an unpertubed one.
 
@@ -8079,7 +8079,7 @@ MediumType = Union[MediumType3D, Medium2D, AnisotropicMediumFromMedium2D]
 
 
 # Utility function
-def medium_from_nk(n: float, k: float, freq: float, **kwargs) -> Union[Medium, Lorentz]:
+def medium_from_nk(n: float, k: float, freq: float, **kwargs: Any) -> Union[Medium, Lorentz]:
     """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`.Medium` if ``Re[epsilon]>=1``,
     or :class:`Lorentz` if if ``Re[epsilon]<1``.
 

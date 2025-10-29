@@ -11,9 +11,10 @@ from os import PathLike
 from typing import Callable, Literal, Optional, Union
 
 import pydantic.v1 as pydantic
+import requests
 from botocore.exceptions import ClientError
 from joblib import Parallel, delayed
-from rich.progress import Progress
+from rich.progress import Progress, TaskID
 
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.eme.simulation import EMESimulation
@@ -203,7 +204,9 @@ def run_batch(
     if results_files is None:
         results_files = [f"mode_solver_batch_results_{i}.hdf5" for i in range(num_mode_solvers)]
 
-    def handle_mode_solver(index, progress, pbar):
+    def handle_mode_solver(
+        index: int, progress: Progress, pbar: Optional[TaskID]
+    ) -> Optional[Parallel]:
         retries = 0
         while retries <= max_retries:
             try:
@@ -466,7 +469,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
     def submit(
         self,
         pay_type: Union[PayType, str] = PayType.AUTO,
-    ):
+    ) -> None:
         """Start the execution of this task.
 
         The mode solver must be uploaded to the server with the :meth:`ModeSolverTask.upload` method
@@ -483,14 +486,14 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
             },
         )
 
-    def delete(self):
+    def delete(self) -> None:
         """Delete the mode solver and its corresponding task from the server."""
         # Delete mode solver
         http.delete(f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}")
         # Delete parent task
         http.delete(f"tidy3d/tasks/{self.task_id}")
 
-    def abort(self):
+    def abort(self) -> requests.Response:
         """Abort the mode solver and its corresponding task from the server."""
         return http.put(
             "tidy3d/tasks/abort", json={"taskType": "MODE_SOLVER", "taskId": self.solver_id}

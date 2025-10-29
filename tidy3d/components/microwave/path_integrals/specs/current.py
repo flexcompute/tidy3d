@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -151,7 +151,7 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **path_kwargs,
+        **path_kwargs: Any,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
 
@@ -246,7 +246,7 @@ class Custom2DCurrentIntegralSpec(Custom2DPathIntegralSpec):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **path_kwargs,
+        **path_kwargs: Any,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
 
@@ -335,7 +335,7 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **path_kwargs,
+        **path_kwargs: Any,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
 

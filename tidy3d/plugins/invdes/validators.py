@@ -16,7 +16,7 @@ def ignore_inherited_field(field_name: str) -> typing.Callable:
     """Create validator that ignores a field inherited but not set by user."""
 
     @pd.validator(field_name, always=True)
-    def _ignore_field(cls, val):
+    def _ignore_field(cls, val) -> None:
         """Ignore supplied field value and warn."""
         if val is not None:
             td.log.warning(

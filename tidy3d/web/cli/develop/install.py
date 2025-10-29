@@ -9,6 +9,7 @@ from __future__ import annotations
 import platform
 import re
 import subprocess
+from typing import Any, Optional
 
 import click
 
@@ -31,7 +32,7 @@ __all__ = [
 ]
 
 
-def activate_correct_poetry_python():
+def activate_correct_poetry_python() -> None:
     """
     Activate the correct Python environment for Poetry based on the operating system.
     """
@@ -46,7 +47,7 @@ def activate_correct_poetry_python():
             print("Do you have a python available in your terminal?")
 
 
-def configure_submodules(args=None):
+def configure_submodules(args: Any = None) -> None:
     """
     Initialize and update the notebook submodule.
 
@@ -63,7 +64,7 @@ def configure_submodules(args=None):
     return 0
 
 
-def verify_pandoc_is_installed_and_version_less_than_3():
+def verify_pandoc_is_installed_and_version_less_than_3() -> bool:
     """
     Check if Pandoc is installed and its version is less than 3.
 
@@ -98,7 +99,7 @@ def verify_pandoc_is_installed_and_version_less_than_3():
         return False
 
 
-def verify_pipx_is_installed():
+def verify_pipx_is_installed() -> Optional[bool]:
     """
     Verify if pipx is installed on the system.
 
@@ -123,7 +124,7 @@ def verify_pipx_is_installed():
         return False
 
 
-def verify_poetry_is_installed():
+def verify_poetry_is_installed() -> Optional[bool]:
     """
     Check if Poetry is installed on the system.
 
@@ -151,7 +152,7 @@ def verify_poetry_is_installed():
         raise OSError("Poetry is not installed or not found in the system PATH.") from exc
 
 
-def verify_sphinx_is_installed():
+def verify_sphinx_is_installed() -> None:
     """
     Verify if Sphinx is installed in the poetry environment.
 
@@ -174,7 +175,7 @@ def verify_sphinx_is_installed():
 
 
 @develop.command(name="get-install-directory", help="Gets the TIDY3D base directory.")
-def get_install_directory_command():
+def get_install_directory_command() -> int:
     """
     Get the tidy3d installation directory.
 
@@ -188,7 +189,7 @@ def get_install_directory_command():
     name="install-dev-environment",
     help="Installs and configures the full required development environment.",
 )
-def install_development_environment(args=None):
+def install_development_environment(args: Any = None) -> None:
     """Install and configure the full required development environment.
 
     This command automates the installation of development tools like pipx, poetry, and pandoc, and sets up
@@ -267,7 +268,7 @@ def install_development_environment(args=None):
 @develop.command(
     name="install-in-poetry", help="Just installs the tidy3d development package in poetry."
 )
-def install_in_poetry(env: str = "dev"):
+def install_in_poetry(env: str = "dev") -> int:
     """
     Install the tidy3d development package in the poetry environment with the specified extra option, by default 'dev'.
 
@@ -288,7 +289,7 @@ def install_in_poetry(env: str = "dev"):
 @develop.command(
     name="uninstall-dev-environment", help="Uninstalls the tools installed by this CLI helper."
 )
-def uninstall_development_environment(args=None):
+def uninstall_development_environment(args: Any = None) -> int:
     """
     Uninstall the development environment and the tools installed by this CLI.
 
@@ -359,7 +360,7 @@ def uninstall_development_environment(args=None):
 
 
 @develop.command(name="update-submodules", help="Updates notebooks and FAQ submodule from remote")
-def update_submodules_remote(args=None):
+def update_submodules_remote(args: Any = None) -> int:
     """
     Update the notebooks submodule from the remote repository.
 
@@ -376,7 +377,7 @@ def update_submodules_remote(args=None):
 
 
 @develop.command(name="verify-dev-environment", help="Verifies the development environment.")
-def verify_development_environment(args=None):
+def verify_development_environment(args: Any = None) -> int:
     """
     Verify that the current development environment conforms to the specified requirements.
 

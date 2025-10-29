@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import builtins
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic.v1 import Field, parse_obj_as, validator
 
 from tidy3d.components.medium import MediumType
-from tidy3d.web.core.http_util import http
+from tidy3d.web.core.http_util import JSONType, http
 from tidy3d.web.core.types import Queryable
 
 
@@ -27,7 +27,7 @@ class MaterialLibray(Queryable, smart_union=True):
     )
 
     @validator("medium", "json_input", pre=True)
-    def parse_result(cls, values):
+    def parse_result(cls, values: dict[str, Any]) -> JSONType:
         """Automatically parsing medium and json_input from string to object."""
         return json.loads(values)
 

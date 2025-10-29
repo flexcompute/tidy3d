@@ -138,7 +138,7 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
 
         return new_property
 
-    def _post_init_validators(self):
+    def _post_init_validators(self) -> None:
         """Call validators taking ``self`` that get run after init."""
         # validate that data exists for all fields
         for field_name, field in self.field_components.items():

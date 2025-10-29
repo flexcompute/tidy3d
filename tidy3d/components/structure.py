@@ -6,7 +6,7 @@ import pathlib
 from collections import defaultdict
 from functools import cmp_to_key
 from os import PathLike
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
@@ -139,7 +139,7 @@ class AbstractStructure(Tidy3dBaseModel):
         return sorted(structures, key=cmp_to_key(structure_comparator))
 
     @property
-    def viz_spec(self):
+    def viz_spec(self) -> None:
         return None
 
     @equal_aspect
@@ -150,7 +150,7 @@ class AbstractStructure(Tidy3dBaseModel):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot structure's geometric cross section at single (x,y,z) coordinate.
 
@@ -586,7 +586,7 @@ class Structure(AbstractStructure):
 
     @classmethod
     def from_permittivity_array(
-        cls, geometry: GeometryType, eps_data: np.ndarray, **kwargs
+        cls, geometry: GeometryType, eps_data: np.ndarray, **kwargs: Any
     ) -> Structure:
         """Create ``Structure`` with ``geometry`` and ``CustomMedium`` containing ``eps_data`` for
         The ``permittivity`` field.   Extra keyword arguments are passed to ``td.Structure()``.

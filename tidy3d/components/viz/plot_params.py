@@ -16,7 +16,7 @@ class AbstractPlotParams(Tidy3dBaseModel):
     alpha: Any = pd.Field(1.0, title="Opacity")
     zorder: float = pd.Field(None, title="Display Order")
 
-    def include_kwargs(self, **kwargs) -> AbstractPlotParams:
+    def include_kwargs(self, **kwargs: Any) -> AbstractPlotParams:
         """Update the plot params with supplied kwargs."""
         update_dict = {
             key: value

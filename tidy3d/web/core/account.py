@@ -49,7 +49,7 @@ class Account(Tidy3DResource, extra=Extra.allow):
     )
 
     @classmethod
-    def get(cls):
+    def get(cls) -> Optional[Account]:
         """Get user account information.
 
         Parameters

@@ -100,7 +100,7 @@ class LocalCache:
         with self._lock:
             return [entry.metadata for entry in self._iter_entries()]
 
-    def clear(self, hard=False) -> None:
+    def clear(self, hard: bool = False) -> None:
         """Remove all cache contents."""
         with self._lock:
             if self._root.exists():
@@ -285,11 +285,6 @@ class LocalCache:
         """
         Attempt to resolve and fetch a cached result entry for the given simulation context.
         On miss or any cache error, returns None (the caller should proceed with upload/run).
-
-        Notes
-        -----
-        - Mirrors the exact cache key/context computation from `run`.
-        - Safe to call regardless of `use_cache` value; will no-op if cache is disabled.
         """
         try:
             simulation_hash = simulation._hash_self()
@@ -412,7 +407,7 @@ def _timestamp_suffix() -> str:
 
 
 class _Hasher:
-    def __init__(self):
+    def __init__(self) -> None:
         self._hasher = hashlib.sha256()
 
     def update(self, data: bytes) -> None:

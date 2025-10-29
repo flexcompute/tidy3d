@@ -137,7 +137,7 @@ def skip_if_fields_missing(fields: list[str], root=False):
 
     def actual_decorator(validator):
         @wraps(validator)
-        def _validator(cls, *args, **kwargs):
+        def _validator(cls, *args: Any, **kwargs: Any):
             """New validator function."""
             values = kwargs.get("values")
             if values is None:
@@ -180,7 +180,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         self.to_hdf5(bf)
         return hashlib.md5(bf.getvalue()).hexdigest()
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """Init method, includes post-init validators."""
         log.begin_capture()
         super().__init__(**kwargs)
@@ -274,7 +274,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
-    def copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Self:
+    def copy(self, deep: bool = True, validate: bool = True, **kwargs: Any) -> Self:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` and ``validate=True`` as default."""
         kwargs.update(deep=deep)
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
@@ -286,7 +286,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return new_copy
 
     def updated_copy(
-        self, path: Optional[str] = None, deep: bool = True, validate: bool = True, **kwargs
+        self, path: Optional[str] = None, deep: bool = True, validate: bool = True, **kwargs: Any
     ) -> Self:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
 
@@ -345,7 +345,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return self._updated_copy(deep=deep, validate=validate, **{field_name: new_component})
 
-    def _updated_copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Self:
+    def _updated_copy(self, deep: bool = True, validate: bool = True, **kwargs: Any) -> Self:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
         return self.copy(update=kwargs, deep=deep, validate=validate)
 
@@ -370,7 +370,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         group_path: Optional[str] = None,
         lazy: bool = False,
         on_load: Optional[Callable] = None,
-        **parse_obj_kwargs,
+        **parse_obj_kwargs: Any,
     ) -> Self:
         """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
 
@@ -471,7 +471,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return converter(fname=fname)
 
     @classmethod
-    def from_json(cls, fname: PathLike, **parse_obj_kwargs) -> Self:
+    def from_json(cls, fname: PathLike, **parse_obj_kwargs: Any) -> Self:
         """Load a :class:`Tidy3dBaseModel` from .json file.
 
         Parameters
@@ -536,7 +536,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             file_handle.write(json_string)
 
     @classmethod
-    def from_yaml(cls, fname: PathLike, **parse_obj_kwargs) -> Self:
+    def from_yaml(cls, fname: PathLike, **parse_obj_kwargs: Any) -> Self:
         """Loads :class:`Tidy3dBaseModel` from .yaml file.
 
         Parameters
@@ -759,7 +759,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         fname: PathLike,
         group_path: str = "",
         custom_decoders: Optional[list[Callable]] = None,
-        **parse_obj_kwargs,
+        **parse_obj_kwargs: Any,
     ) -> Self:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
@@ -903,7 +903,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         fname: PathLike,
         group_path: str = "",
         custom_decoders: Optional[list[Callable]] = None,
-        **parse_obj_kwargs,
+        **parse_obj_kwargs: Any,
     ) -> Self:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
 
@@ -1036,7 +1036,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
         return self._json()
 
-    def _json(self, indent=INDENT, exclude_unset=False, **kwargs) -> str:
+    def _json(self, indent=INDENT, exclude_unset=False, **kwargs: Any) -> str:
         """Overwrites the model ``json`` representation with some extra customized handling.
 
         Parameters
@@ -1114,7 +1114,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         self_dict = self.dict()
 
-        def insert_value(x, path: tuple[str, ...], sub_dict: dict):
+        def insert_value(x, path: tuple[str, ...], sub_dict: dict) -> None:
             """Insert a value into the path into a dictionary."""
             current_dict = sub_dict
             for key in path[:-1]:
@@ -1349,13 +1349,13 @@ def _make_lazy_proxy(
             self,
             fname: PathLike,
             group_path: Optional[str],
-            parse_obj_kwargs: Optional[dict[str, Any]],
+            parse_obj_kwargs: Any,
         ):
             object.__setattr__(self, "_lazy_fname", Path(fname))
             object.__setattr__(self, "_lazy_group_path", group_path)
             object.__setattr__(self, "_lazy_parse_obj_kwargs", dict(parse_obj_kwargs or {}))
 
-        def copy(self, **kwargs):
+        def copy(self, **kwargs: Any):
             """Return another lazy proxy instead of materializing."""
             return _LazyProxy(
                 self._lazy_fname,

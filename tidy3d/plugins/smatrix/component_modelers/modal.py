@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import autograd.numpy as np
 import pydantic.v1 as pd
@@ -180,7 +180,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         )
 
     def to_source(
-        self, port: Port, mode_index: int, num_freqs: int = 1, **kwargs
+        self, port: Port, mode_index: int, num_freqs: int = 1, **kwargs: Any
     ) -> list[ModeSource]:
         """Creates a mode source from a given port.
 
@@ -287,7 +287,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plots the permittivity of the simulation with all sources.
 

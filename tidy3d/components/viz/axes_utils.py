@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Optional
+from typing import Any, Optional
 
 from tidy3d.components.types import Ax, Axis, LengthUnit
 from tidy3d.constants import UnitScaling
@@ -15,7 +15,7 @@ def _create_unit_aware_locator():
     class UnitAwareLocator(ticker.Locator):
         """Custom tick locator that places ticks at nice positions in the target unit."""
 
-        def __init__(self, scale_factor: float):
+        def __init__(self, scale_factor: float) -> None:
             """
             Parameters
             ----------
@@ -111,7 +111,7 @@ def add_ax_if_none(plot):
     """
 
     @wraps(plot)
-    def _plot(*args, **kwargs) -> Ax:
+    def _plot(*args: Any, **kwargs: Any) -> Ax:
         """New plot function using a generated ax if None."""
         if kwargs.get("ax") is None:
             ax = make_ax()
@@ -128,7 +128,7 @@ def equal_aspect(plot):
     """
 
     @wraps(plot)
-    def _plot(*args, **kwargs) -> Ax:
+    def _plot(*args: Any, **kwargs: Any) -> Ax:
         """New plot function with equal aspect ratio axes returned."""
         ax = plot(*args, **kwargs)
         ax.set_aspect("equal")

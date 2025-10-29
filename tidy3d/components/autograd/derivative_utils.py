@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
 import xarray as xr
@@ -25,12 +25,12 @@ EpsType = Union[tidycomplex, FreqDataArray]
 class LazyInterpolator:
     """Lazy wrapper for interpolators that creates them on first access."""
 
-    def __init__(self, creator_func: Callable):
+    def __init__(self, creator_func: Callable) -> None:
         """Initialize with a function that creates the interpolator when called."""
         self.creator_func = creator_func
         self._interpolator = None
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any):
         """Create interpolator on first call and delegate to it."""
         if self._interpolator is None:
             self._interpolator = self.creator_func()
@@ -172,7 +172,7 @@ class DerivativeInfo:
     # private cache for interpolators
     _interpolators_cache: dict = field(default_factory=dict, init=False, repr=False)
 
-    def updated_copy(self, **kwargs):
+    def updated_copy(self, **kwargs: Any):
         """Create a copy with updated fields."""
         kwargs.pop("deep", None)
         kwargs.pop("validate", None)
@@ -251,7 +251,7 @@ class DerivativeInfo:
         interpolators = {}
         coord_cache = {}
 
-        def _make_lazy_interpolator_group(field_data_dict, group_key, is_field_group=True):
+        def _make_lazy_interpolator_group(field_data_dict, group_key, is_field_group=True) -> None:
             """Helper to create a group of lazy interpolators."""
             if is_field_group:
                 interpolators[group_key] = {}

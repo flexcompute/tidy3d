@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 import autograd.numpy as np
 
@@ -463,7 +463,7 @@ class Scene(Tidy3dBaseModel):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1269,7 +1269,7 @@ class Scene(Tidy3dBaseModel):
         grid: Grid,
         eps_component: Optional[PermittivityComponent] = None,
         norm: mpl.colors.Normalize = None,
-    ):
+    ) -> None:
         """
         Plot shape made of custom medium with ``pcolormesh``.
         """
@@ -2096,7 +2096,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax,
         plt_type: str = "doping",
         norm: mpl.colors.Normalize = None,
-    ):
+    ) -> None:
         """
         Plot shape made of structure defined with doping.
         plt_type accepts ["doping", "N_a", "N_d"]
