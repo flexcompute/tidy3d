@@ -29,6 +29,6 @@ repos:
     hooks:
       - id: mypy
         name: mypy (type signatures)
-        files: ^tidy3d/web
+        pass_filenames: false
         args:
           - --config-file=pyproject.toml

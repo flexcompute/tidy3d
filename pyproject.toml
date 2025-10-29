@@ -317,6 +317,9 @@ python_files = "*.py"
 
 [tool.mypy]
 python_version = "3.10"
+files = [
+  "tidy3d/web",
+]
 ignore_missing_imports = true
 follow_imports = "skip"
 disallow_untyped_defs = true
