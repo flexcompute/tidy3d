@@ -7,7 +7,6 @@ import pydantic.v1 as pd
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.config import config
 from tidy3d.log import log
-from tidy3d.utils import is_running_pytest
 
 
 class MicrowaveBaseModel(Tidy3dBaseModel):
@@ -17,8 +16,8 @@ class MicrowaveBaseModel(Tidy3dBaseModel):
     def _warn_rf_license(cls, values):
         from tidy3d.config import config
 
-        # Skip warning during test runs or when globally suppressed via config
-        if not is_running_pytest() and not config.suppress_rf_license_warning:
+        # Skip warning when globally suppressed via config
+        if not config.microwave.suppress_rf_license_warning:
             log.warning(
                 "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. "
                 "You have instantiated at least one RF-specific component.",
@@ -29,10 +28,10 @@ class MicrowaveBaseModel(Tidy3dBaseModel):
     @classmethod
     def _default_without_license_warning(cls) -> MicrowaveBaseModel:
         """Internal helper factory function for classes inheriting from ``MicrowaveBaseModel``."""
-        if config.suppress_rf_license_warning is True:
+        if config.microwave.suppress_rf_license_warning is True:
             return cls()
         else:
-            config.suppress_rf_license_warning = True
-            default_contructed = cls()
-            config.suppress_rf_license_warning = False
-            return default_contructed
+            config.microwave.suppress_rf_license_warning = True
+            default_constructed = cls()
+            config.microwave.suppress_rf_license_warning = False
+            return default_constructed
