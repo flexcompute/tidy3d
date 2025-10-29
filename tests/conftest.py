@@ -36,6 +36,13 @@ def reset_logger():
     set_logging_level(DEFAULT_LEVEL)
 
 
+@pytest.fixture(autouse=True)
+def clear_log_cache():
+    """Ensure log-once cache does not leak between tests."""
+    td.log._static_cache.clear()
+    yield
+
+
 @pytest.fixture
 def check_grads_with_tolerance(monkeypatch):
     @unary_to_nary

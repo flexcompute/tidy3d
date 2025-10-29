@@ -1783,3 +1783,14 @@ def test_impedance_calculator_mode_direction_handling():
     # Both should produce valid impedance values
     assert hasattr(impedance_mode_solver, "values")
     assert hasattr(impedance_mode, "values")
+
+
+def test_RF_license_suppression():
+    """Ensure license warnings are being emitted properly and default instantiations avoid the warning."""
+    original_setting = td.config.microwave.suppress_rf_license_warning
+    td.config.microwave.suppress_rf_license_warning = False
+    with AssertLogLevel("WARNING", contains_str="new license requirements"):
+        mode_spec = td.MicrowaveModeSpec()
+    with AssertLogLevel(None):
+        mode_spec = td.MicrowaveModeSpec._default_without_license_warning()
+    td.config.microwave.suppress_rf_license_warning = original_setting
