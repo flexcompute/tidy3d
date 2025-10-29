@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pydantic as pd
 import pydantic.v1 as pydantic
@@ -526,7 +528,7 @@ class FreqRange(Tidy3dBaseModel):
                 f"Received: {spacing!r}. Please provide a valid spacing type."
             )
 
-    def to_gaussian_pulse(self, **kwargs) -> GaussianPulse:
+    def to_gaussian_pulse(self, **kwargs: Any) -> GaussianPulse:
         """
         to_gaussian_pulse(): Return a ``GaussianPulse`` instance based on this frequency range.
 

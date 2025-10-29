@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Any, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -302,7 +302,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         y: Union[float, ArrayLike] = None,
         z: Union[float, ArrayLike] = None,
         method=None,
-        **sel_kwargs,
+        **sel_kwargs: Any,
     ) -> Union[TriangularGridDataset, XrDataArray]:
         """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument
         among 'x', 'y', 'z' or non-spatial dimensions through additional arguments. Along spatial dimensions a suitable slicing of

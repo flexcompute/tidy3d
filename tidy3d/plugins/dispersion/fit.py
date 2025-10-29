@@ -5,7 +5,7 @@ from __future__ import annotations
 import codecs
 import csv
 from os import PathLike
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import requests
@@ -557,7 +557,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return ax
 
     @staticmethod
-    def _validate_url_load(data_load: list):
+    def _validate_url_load(data_load: list) -> None:
         """Validate if the loaded data from URL is valid
             The data list should be in this format:
                 [["wl",     "n"],
@@ -610,7 +610,7 @@ class DispersionFitter(Tidy3dBaseModel):
 
     @classmethod
     def from_url(
-        cls, url_file: str, delimiter: str = ",", ignore_k: bool = False, **kwargs
+        cls, url_file: str, delimiter: str = ",", ignore_k: bool = False, **kwargs: Any
     ) -> DispersionFitter:
         """loads :class:`DispersionFitter` from url linked to a csv/txt file that
         contains wavelength (micron), n, and optionally k data. Preferred from
@@ -699,7 +699,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], **kwargs)
 
     @classmethod
-    def from_file(cls, fname: PathLike, **loadtxt_kwargs) -> DispersionFitter:
+    def from_file(cls, fname: PathLike, **loadtxt_kwargs: Any) -> DispersionFitter:
         """Loads :class:`DispersionFitter` from file containing wavelength, n, k data.
 
         Parameters

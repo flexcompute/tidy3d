@@ -10,7 +10,7 @@ __all__ = [
 
 
 @click.group(name="develop")
-def develop():
+def develop() -> None:
     """
     Development related command group in the CLI.
 

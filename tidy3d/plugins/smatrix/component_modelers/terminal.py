@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -241,7 +241,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot a :class:`.Simulation` with all sources and absorbers.
 
@@ -276,7 +276,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot permittivity of the :class:`.Simulation`.
 
@@ -769,14 +769,14 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     @staticmethod
     def _check_grid_size_at_ports(
         simulation: Simulation, ports: list[Union[LumpedPort, CoaxialLumpedPort]]
-    ):
+    ) -> None:
         """Raises :class:`.SetupError` if the grid is too coarse at port locations"""
         yee_grid = simulation.grid.yee
         for port in ports:
             port._check_grid_size(yee_grid)
 
     @staticmethod
-    def _check_grid_size_at_wave_ports(simulation: Simulation, ports: list[WavePort]):
+    def _check_grid_size_at_wave_ports(simulation: Simulation, ports: list[WavePort]) -> None:
         """Raises :class:`.SetupError` if the grid is too coarse at port locations"""
         for port in ports:
             disc_grid = simulation.discretize(port)

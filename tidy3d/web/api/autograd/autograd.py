@@ -4,6 +4,7 @@ from __future__ import annotations
 import typing
 from os import PathLike
 from pathlib import Path
+from typing import Any
 
 from autograd.builtins import dict as dict_ag
 from autograd.extend import defvjp, primitive
@@ -421,7 +422,7 @@ def _run(
     task_name: str,
     local_gradient: bool = False,
     max_num_adjoint_per_fwd: typing.Optional[int] = None,
-    **run_kwargs,
+    **run_kwargs: Any,
 ) -> td.SimulationData:
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
 
@@ -464,7 +465,7 @@ def _run_async(
     simulations: dict[str, td.Simulation],
     local_gradient: bool = False,
     max_num_adjoint_per_fwd: typing.Optional[int] = None,
-    **run_async_kwargs,
+    **run_async_kwargs: Any,
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""
 
@@ -535,7 +536,7 @@ def _run_primitive(
     aux_data: dict,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    **run_kwargs,
+    **run_kwargs: Any,
 ) -> AutogradFieldMap:
     """Autograd-traced 'run()' function: runs simulation, strips tracer data, caches fwd data."""
 
@@ -588,7 +589,7 @@ def _run_async_primitive(
     aux_data_dict: dict[dict[str, typing.Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    **run_async_kwargs,
+    **run_async_kwargs: Any,
 ) -> dict[str, AutogradFieldMap]:
     task_names = sim_fields_dict.keys()
 
@@ -668,7 +669,9 @@ def postprocess_fwd(
     )
 
 
-def upload_sim_fields_keys(sim_fields_keys: list[tuple], task_id: str, verbose: bool = False):
+def upload_sim_fields_keys(
+    sim_fields_keys: list[tuple], task_id: str, verbose: bool = False
+) -> None:
     """Upload traced simulation field keys for adjoint runs (delegated)."""
     return _upload_sim_fields_keys_impl(
         sim_fields_keys=sim_fields_keys, task_id=task_id, verbose=verbose
@@ -691,7 +694,7 @@ def _run_bwd(
     aux_data: dict,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    **run_kwargs,
+    **run_kwargs: Any,
 ) -> typing.Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulations, computes grad."""
 
@@ -816,7 +819,7 @@ def _run_async_bwd(
     aux_data_dict: dict[str, dict[str, typing.Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    **run_async_kwargs,
+    **run_async_kwargs: Any,
 ) -> typing.Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulation, computes grad."""
 
@@ -990,20 +993,20 @@ defvjp(_run_async_primitive, _run_async_bwd, argnums=[0])
 """ The fundamental Tidy3D run and run_async functions used above. """
 
 
-def parse_run_kwargs(**run_kwargs):
+def parse_run_kwargs(**run_kwargs: Any) -> dict[str, Any]:
     """Parse run kwargs for low-level engine (delegated)."""
     return _parse_run_kwargs_impl(**run_kwargs)
 
 
 def _run_tidy3d(
-    simulation: td.Simulation, task_name: str, **run_kwargs
+    simulation: td.Simulation, task_name: str, **run_kwargs: Any
 ) -> tuple[td.SimulationData, str]:
     """Run a simulation via engine wrapper (delegated)."""
     return _run_tidy3d_engine(simulation=simulation, task_name=task_name, **run_kwargs)
 
 
 def _run_async_tidy3d(
-    simulations: dict[str, td.Simulation], **run_kwargs
+    simulations: dict[str, td.Simulation], **run_kwargs: Any
 ) -> tuple[BatchData, dict[str, str]]:
     """Run a batch of simulations via engine wrapper (delegated)."""
     return _run_async_tidy3d_engine(simulations=simulations, **run_kwargs)
@@ -1011,13 +1014,13 @@ def _run_async_tidy3d(
 
 def _run_async_tidy3d_bwd(
     simulations: dict[str, td.Simulation],
-    **run_kwargs,
+    **run_kwargs: Any,
 ) -> dict[str, AutogradFieldMap]:
     """Run a batch of adjoint simulations via engine wrapper (delegated)."""
     return _run_async_tidy3d_bwd_engine(simulations=simulations, **run_kwargs)
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     if name == "MAX_NUM_TRACED_STRUCTURES":
         return config.adjoint.max_traced_structures
     if name == "MAX_NUM_ADJOINT_PER_FWD":

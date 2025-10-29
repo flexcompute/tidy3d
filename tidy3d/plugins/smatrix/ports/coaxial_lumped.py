@@ -381,7 +381,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         size = Geometry.unpop_axis(axis_size, (0, 0), self._voltage_axis)
         return size
 
-    def _check_grid_size(self, yee_grid: YeeGrid):
+    def _check_grid_size(self, yee_grid: YeeGrid) -> None:
         """Raises :class:``SetupError`` if the grid is too coarse at port locations"""
         trans_axes = self.remaining_axes
         for axis in trans_axes:

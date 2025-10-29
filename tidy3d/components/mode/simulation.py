@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -320,7 +320,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         cls,
         simulation: AbstractYeeGridSimulation,
         wavelength: Optional[pd.PositiveFloat] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> ModeSimulation:
         """Creates :class:`.ModeSimulation` from a :class:`.AbstractYeeGridSimulation`.
 
@@ -413,7 +413,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot the mode simulation. If any of ``x``, ``y``, or ``z`` is provided, the potentially
         larger FDTD simulation containing the mode plane is plotted at the desired location.
@@ -473,7 +473,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
     def plot_mode_plane(
         self,
         ax: Ax = None,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot the mode plane simulation's components.
 
@@ -574,7 +574,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
     def plot_grid_mode_plane(
         self,
         ax: Ax = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot the mode plane cell boundaries as lines.
 
@@ -612,7 +612,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         """
         return self._mode_solver.plot_pml(ax=ax)
 
-    def validate_pre_upload(self, source_required: bool = False):
+    def validate_pre_upload(self, source_required: bool = False) -> None:
         super().validate_pre_upload()
         self._mode_solver.validate_pre_upload(source_required=source_required)
 

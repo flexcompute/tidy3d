@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import functools
 from importlib import import_module
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 
@@ -74,7 +74,7 @@ def verify_packages_import(modules: list, required: Literal["any", "all"] = "all
         """
 
         @functools.wraps(func)
-        def checks_modules_import(*args, **kwargs):
+        def checks_modules_import(*args: Any, **kwargs: Any):
             """
             Checks if the modules are available. If they are not available, it will raise an error depending on the value.
             """
@@ -127,7 +127,7 @@ def requires_vtk(fn):
     """When decorating a method, requires that vtk is available."""
 
     @functools.wraps(fn)
-    def _fn(*args, **kwargs):
+    def _fn(*args: Any, **kwargs: Any):
         if vtk["mod"] is None:
             try:
                 import vtk as vtk_mod
@@ -188,7 +188,7 @@ def supports_local_subpixel(fn):
     conditioned on 'config.use_local_subpixel'."""
 
     @functools.wraps(fn)
-    def _fn(*args, **kwargs):
+    def _fn(*args: Any, **kwargs: Any):
         preference = config.simulation.use_local_subpixel
 
         if preference is False:
@@ -247,7 +247,7 @@ def disable_local_subpixel(fn):
     """When decorating a method, temporarily disables local subpixel."""
 
     @functools.wraps(fn)
-    def _fn(*args, **kwargs):
+    def _fn(*args: Any, **kwargs: Any):
         simulation = config.simulation
         previous = simulation.use_local_subpixel
 

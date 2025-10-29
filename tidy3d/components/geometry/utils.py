@@ -366,7 +366,9 @@ def vertices_from_shapely(shape: Shapely) -> ArrayFloat2D:
     raise Tidy3dError(f"Shape {shape} cannot be converted to Geometry.")
 
 
-def validate_no_transformed_polyslabs(geometry: GeometryType, transform: MatrixReal4x4 = None):
+def validate_no_transformed_polyslabs(
+    geometry: GeometryType, transform: MatrixReal4x4 = None
+) -> None:
     """Prevents the creation of slanted polyslabs rotated out of plane."""
     if transform is None:
         transform = np.eye(4)

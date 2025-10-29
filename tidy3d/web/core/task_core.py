@@ -10,6 +10,7 @@ from datetime import datetime
 from os import PathLike
 from typing import Callable, Optional, Union
 
+import requests
 from botocore.exceptions import ClientError
 from pydantic.v1 import Extra, Field, parse_obj_as
 
@@ -71,7 +72,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         create: bool = False,
         projects_endpoint: str = "tidy3d/projects",
         project_endpoint: str = "tidy3d/project",
-    ):
+    ) -> Folder:
         """Get folder by name.
 
         Parameters
@@ -98,7 +99,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         return folder
 
     @classmethod
-    def create(cls, folder_name: str):
+    def create(cls, folder_name: str) -> Folder:
         """Create a folder, return existing folder if there is one has the same name.
 
         Parameters
@@ -112,7 +113,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         """
         return Folder.get(folder_name, True)
 
-    def delete(self, projects_endpoint: str = "tidy3d/projects"):
+    def delete(self, projects_endpoint: str = "tidy3d/projects") -> None:
         """Remove this folder."""
 
         http.delete(f"{projects_endpoint}/{self.folder_id}")
@@ -312,7 +313,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             return []
         return parse_obj_as(list[SimulationTask], resp)
 
-    def delete(self, versions: bool = False):
+    def delete(self, versions: bool = False) -> None:
         """Delete current task from server.
 
         Parameters
@@ -335,7 +336,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         else:  # Fallback to old method if we can't get the groupId and version
             http.delete(f"tidy3d/tasks/{self.task_id}")
 
-    def get_simulation_json(self, to_file: PathLike, verbose: bool = True):
+    def get_simulation_json(self, to_file: PathLike, verbose: bool = True) -> None:
         """Get json file for a :class:`.Simulation` from server.
 
         Parameters
@@ -344,11 +345,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Save file to path.
         verbose: bool = True
             Whether to display progress bars.
-
-        Returns
-        -------
-        path: pathlib.Path
-            Path to saved file.
         """
         if not self.task_id:
             raise WebError("Expected field 'task_id' is unset.")
@@ -450,7 +446,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         worker_group: Optional[str] = None,
         pay_type: Union[PayType, str] = PayType.AUTO,
         priority: Optional[int] = None,
-    ):
+    ) -> None:
         """Kick off this task.
 
         It will be uploaded to server before
@@ -488,7 +484,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             },
         )
 
-    def estimate_cost(self, solver_version=None) -> float:
+    def estimate_cost(self, solver_version: Optional[str] = None) -> float:
         """Compute the maximum flex unit charge for a given task, assuming the simulation runs for
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
 
@@ -697,7 +693,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             verbose=verbose,
         )
 
-    def abort(self):
+    def abort(self) -> requests.Response:
         """Aborting current task from server."""
         if not self.task_id:
             raise ValueError("Task id not found.")
@@ -705,7 +701,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             "tidy3d/tasks/abort", json={"taskType": self.task_type, "taskId": self.task_id}
         )
 
-    def validate_post_upload(self, parent_tasks: Optional[list[str]] = None):
+    def validate_post_upload(self, parent_tasks: Optional[list[str]] = None) -> None:
         """Perform checks after task is uploaded and metadata is processed."""
         if self.task_type == "HEAT_CHARGE" and parent_tasks:
             try:
@@ -747,7 +743,7 @@ class BatchTask:
         most methods, as it dictates which backend service handles the request.
     """
 
-    def __init__(self, batch_id: str):
+    def __init__(self, batch_id: str) -> None:
         self.batch_id = batch_id
 
     @staticmethod
@@ -810,7 +806,7 @@ class BatchTask:
         solver_version: Optional[str] = None,
         protocol_version: Optional[str] = None,
         batch_type: str = "",
-    ):
+    ) -> requests.Response:
         """Submits a request to validate the batch configuration on the server.
 
         Parameters
@@ -844,7 +840,7 @@ class BatchTask:
         protocol_version: Optional[str] = None,
         worker_group: Optional[str] = None,
         batch_type: str = "",
-    ):
+    ) -> requests.Response:
         """Submits the batch for execution on the server.
 
         Parameters
@@ -881,7 +877,7 @@ class BatchTask:
         protocol_version: Optional[str] = None,
         worker_group: Optional[str] = None,
         batch_type: str = "",
-    ):
+    ) -> requests.Response:
         """Initiates post-processing for a completed batch run.
 
         Parameters

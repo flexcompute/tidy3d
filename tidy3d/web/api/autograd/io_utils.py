@@ -4,13 +4,16 @@ import os
 import tempfile
 
 import tidy3d as td
+from tidy3d.components.autograd import AutogradFieldMap
 from tidy3d.components.autograd.field_map import FieldMap, TracerKeys
 from tidy3d.web.core.s3utils import download_file, upload_file  # type: ignore
 
 from .constants import SIM_FIELDS_KEYS_FILE, SIM_VJP_FILE
 
 
-def upload_sim_fields_keys(sim_fields_keys: list[tuple], task_id: str, verbose: bool = False):
+def upload_sim_fields_keys(
+    sim_fields_keys: list[tuple], task_id: str, verbose: bool = False
+) -> None:
     """Function to upload the traced simulation field keys to the server for adjoint runs."""
     handle, fname = tempfile.mkstemp(suffix=".hdf5")
     os.close(handle)
@@ -29,7 +32,7 @@ def upload_sim_fields_keys(sim_fields_keys: list[tuple], task_id: str, verbose: 
         os.unlink(fname)
 
 
-def get_vjp_traced_fields(task_id_adj: str, verbose: bool):
+def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
     """Download and deserialize VJP traced fields for a completed adjoint job."""
     handle, fname = tempfile.mkstemp(suffix=".hdf5")
     os.close(handle)

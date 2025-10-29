@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from typing import Any
 
 import torch
 from autograd import make_vjp
@@ -48,7 +49,7 @@ def to_torch(fun):
         """
 
         @staticmethod
-        def forward(ctx, *args):
+        def forward(ctx, *args: Any):
             numpy_args = []
             grad_argnums = []
 
@@ -85,7 +86,7 @@ def to_torch(fun):
                 grads[idx] = torch.as_tensor(grad, device=ctx.device)
             return tuple(grads)
 
-    def apply(*args, **kwargs):
+    def apply(*args: Any, **kwargs: Any):
         # we bind the full function signature including defaults so that we can pass
         # all values as positional since torch.autograd.Function.apply only accepts
         # positional arguments

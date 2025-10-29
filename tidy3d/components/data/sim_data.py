@@ -8,7 +8,7 @@ import re
 from abc import ABC
 from collections import defaultdict
 from os import PathLike
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import h5py
 import numpy as np
@@ -373,7 +373,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
 
     @classmethod
     def mnt_data_from_file(
-        cls, fname: PathLike, mnt_name: str, **parse_obj_kwargs
+        cls, fname: PathLike, mnt_name: str, **parse_obj_kwargs: Any
     ) -> MonitorDataType:
         """Loads data for a specific monitor from a .hdf5 file with data for a ``SimulationData``.
 
@@ -456,7 +456,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmax: Optional[float] = None,
         ax: Ax = None,
         shading: str = "flat",
-        **sel_kwargs,
+        **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
 
@@ -672,7 +672,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmax: Optional[float] = None,
         ax: Ax = None,
         shading: str = "flat",
-        **sel_kwargs,
+        **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
 
@@ -753,7 +753,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmax: Optional[float] = None,
         cmap_type: ColormapType = "divergent",
         ax: Ax = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
 
@@ -1320,7 +1320,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         monitor_name = Structure._get_monitor_name(index=structure_index, data_type=data_type)
         return self[monitor_name]
 
-    def to_mat_file(self, fname: PathLike, **kwargs):
+    def to_mat_file(self, fname: PathLike, **kwargs: Any) -> None:
         """Output the ``SimulationData`` object as ``.mat`` MATLAB file.
 
         Parameters

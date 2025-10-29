@@ -109,7 +109,7 @@ def summarize_variant_item(v) -> str:
     return "\n".join(lines)
 
 
-def repr_pretty_with_rich(obj, p, cycle):
+def repr_pretty_with_rich(obj, p, cycle) -> None:
     """Enable _repr_pretty_ for jupyter notebooks to use the rich printing output."""
     if cycle:
         p.text("MaterialLibrary(...)")
@@ -121,7 +121,7 @@ def repr_pretty_with_rich(obj, p, cycle):
         p.text(sio.getvalue())
 
 
-def add_medium_details_to_tree(medium, medium_node: Tree):
+def add_medium_details_to_tree(medium, medium_node: Tree) -> None:
     """Adds details of a medium dictionary to a Rich Tree node."""
 
     if hasattr(medium, "eps_inf"):

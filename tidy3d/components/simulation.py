@@ -7,7 +7,7 @@ import pathlib
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from os import PathLike
-from typing import Literal, Optional, Union, get_args
+from typing import Any, Literal, Optional, Union, get_args
 
 import autograd.numpy as np
 
@@ -418,7 +418,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
     @pydantic.validator("grid_spec", always=True)
     @abstractmethod
-    def _validate_auto_grid_wavelength(cls, val, values):
+    def _validate_auto_grid_wavelength(cls, val, values) -> None:
         """Check that wavelength can be defined if there is auto grid spec."""
 
     def _monitor_num_cells(self, monitor: Monitor) -> int:
@@ -554,7 +554,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1080,7 +1080,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: Optional[tuple[float, float]] = None,
         override_structures_alpha: float = 1,
         snapping_points_alpha: float = 1,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1224,7 +1224,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot the simulation boundary conditions as lines on a plane
            defined by one nonzero x,y,z coordinate.
@@ -1841,7 +1841,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         volumetric equivalents."""
         return self._volumetric_structures_grid(self.grid)
 
-    def suggest_mesh_overrides(self, **kwargs) -> list[MeshOverrideStructure]:
+    def suggest_mesh_overrides(self, **kwargs: Any) -> list[MeshOverrideStructure]:
         """Generate a :class:`.MeshOverrideStructure` `List` which is automatically generated
         from structures in the simulation.
         """
@@ -1868,7 +1868,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         validate_geometries: bool = True,
         deep_copy: bool = True,
         internal_absorbers: Optional[tuple[InternalAbsorber, ...]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> AbstractYeeGridSimulation:
         """Generate a simulation instance containing only the ``region``.
 
@@ -2239,7 +2239,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         return self.updated_copy(grid_spec=GridSpec.from_grid(self.grid), structures=structures)
 
-    def _validate_finalized(self):
+    def _validate_finalized(self) -> None:
         """Validate that after adding pec frames simulation setup is still valid."""
 
         try:
@@ -3391,7 +3391,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         with log as consolidated_logger:
 
-            def warn(structure, istruct, side):
+            def warn(structure, istruct, side) -> None:
                 """Warning message for a structure too close to PML."""
                 obj_descr = named_obj_descr(structure, "structures", istruct)
                 consolidated_logger.warning(
@@ -4203,7 +4203,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_rf_license()
         self._validate_internal_abc_no_fully_anisotropic()
 
-    def _warn_rf_license(self):
+    def _warn_rf_license(self) -> None:
         """
         Warn about new licensing requirements for RF simulations. This function details all the conditions in which a
         simulation is categorised as RF simulation at the backend.
@@ -4241,7 +4241,9 @@ class Simulation(AbstractYeeGridSimulation):
         """Create a ModeSolver for each mode object in order to validate."""
         from .mode.mode_solver import ModeSolver
 
-        def validate_mode_object(mode_obj: Union[ModeSource, AbstractModeMonitor], msg_prefix: str):
+        def validate_mode_object(
+            mode_obj: Union[ModeSource, AbstractModeMonitor], msg_prefix: str
+        ) -> None:
             # Warn if pml is too thick
             ModeSolver._warn_thick_pml(
                 simulation=self,
@@ -4281,7 +4283,7 @@ class Simulation(AbstractYeeGridSimulation):
                 except Exception as e:
                     raise SetupError(f"Source at 'sources[{isrc}]' failed validation: {e!s}") from e
 
-    def _validate_custom_source_time(self):
+    def _validate_custom_source_time(self) -> None:
         """Warn if all simulation times are outside CustomSourceTime definition range."""
         run_time = self._run_time
         for idx, source in enumerate(self.sources):
@@ -4415,7 +4417,7 @@ class Simulation(AbstractYeeGridSimulation):
             num_freqs=source.num_freqs,
         )
 
-    def _validate_tfsf_aux_sources(self):
+    def _validate_tfsf_aux_sources(self) -> None:
         """Validate that PlaneWave sources auxiliary to TFSF sources can be successfully created."""
         for source in self.sources:
             if isinstance(source, TFSF):
@@ -4459,7 +4461,7 @@ class Simulation(AbstractYeeGridSimulation):
                 fields += medium.nonlinear_spec.aux_fields
         return fields
 
-    def _validate_internal_abc_no_fully_anisotropic(self):
+    def _validate_internal_abc_no_fully_anisotropic(self) -> None:
         """Error if internal absorber intersect fully anisotropic mediums."""
 
         total_structures = [self.scene.background_structure, *list(self.structures)]
@@ -4568,7 +4570,7 @@ class Simulation(AbstractYeeGridSimulation):
     def _validate_modes_size(self) -> None:
         """Warn if mode sources or monitors have a large number of points."""
 
-        def warn_mode_size(monitor: AbstractModeMonitor, msg_header: str, custom_loc: list):
+        def warn_mode_size(monitor: AbstractModeMonitor, msg_header: str, custom_loc: list) -> None:
             """Warn if a mode component has a large number of points."""
             num_cells = np.prod(self.discretize_monitor(monitor).num_cells)
             if num_cells > WARN_MODE_NUM_CELLS:
@@ -4608,7 +4610,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         def check_num_cells(
             mode_object: tuple[ModeSource, ModeMonitor], normal_axis: Axis, msg_header: str
-        ):
+        ) -> None:
             disc_grid = self.discretize(mode_object)
             _, check_axes = Box.pop_axis([0, 1, 2], axis=normal_axis)
             for axis in check_axes:
@@ -5050,7 +5052,7 @@ class Simulation(AbstractYeeGridSimulation):
         medium: MediumType,
         domain_size: float,
         has_diff_mnt: bool = False,
-    ):
+    ) -> None:
         """Helper to check if a given Bloch vector is consistent with a given source."""
 
         # make a dummy Bloch boundary to check for correctness
@@ -5795,7 +5797,7 @@ class Simulation(AbstractYeeGridSimulation):
         return Simulation.parse_obj(sim_dict)
 
     @classmethod
-    def from_scene(cls, scene: Scene, **kwargs) -> Simulation:
+    def from_scene(cls, scene: Scene, **kwargs: Any) -> Simulation:
         """Create a simulation from a :class:`.Scene` instance. Must provide additional parameters
         to define a valid simulation (for example, ``run_time``, ``grid_spec``, etc).
 

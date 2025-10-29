@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import tidy3d as td
 from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, Job
@@ -8,15 +9,15 @@ from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, Job
 from .io_utils import get_vjp_traced_fields, upload_sim_fields_keys
 
 
-def parse_run_kwargs(**run_kwargs):
+def parse_run_kwargs(**run_kwargs: Any) -> dict[str, Any]:
     """Parse the ``run_kwargs`` to extract what should be passed to the ``Job``/``Batch`` init."""
-    job_fields = [*list(Job._upload_fields), "solver_version", "pay_type", "lazy", "use_cache"]
+    job_fields = [*list(Job._upload_fields), "solver_version", "pay_type", "lazy"]
     job_init_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
     return job_init_kwargs
 
 
 def _run_tidy3d(
-    simulation: td.Simulation, task_name: str, **run_kwargs
+    simulation: td.Simulation, task_name: str, **run_kwargs: Any
 ) -> tuple[td.SimulationData, str]:
     """Run a simulation without any tracers using regular web.run()."""
 
@@ -38,7 +39,7 @@ def _run_tidy3d(
 
 
 def _run_async_tidy3d(
-    simulations: dict[str, td.Simulation], **run_kwargs
+    simulations: dict[str, td.Simulation], **run_kwargs: Any
 ) -> tuple[td.web.api.container.BatchData, dict[str, str]]:
     """Run a batch of simulations using regular web.run()."""
 
@@ -74,7 +75,7 @@ def _run_async_tidy3d(
 
 def _run_async_tidy3d_bwd(
     simulations: dict[str, td.Simulation],
-    **run_kwargs,
+    **run_kwargs: Any,
 ) -> dict[str, dict]:
     """Run a batch of adjoint simulations using regular web.run()."""
 

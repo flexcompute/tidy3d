@@ -116,7 +116,7 @@ class AxisAlignedPathIntegral(AxisAlignedPathIntegralSpec):
         return scalar_field
 
     @staticmethod
-    def _check_monitor_data_supported(em_field: IntegrableMonitorDataType):
+    def _check_monitor_data_supported(em_field: IntegrableMonitorDataType) -> None:
         """Helper for validating that monitor data is supported."""
         if not isinstance(em_field, (FieldData, FieldTimeData, ModeData, ModeSolverData)):
             supported_types = list(IntegrableMonitorDataType.__args__)

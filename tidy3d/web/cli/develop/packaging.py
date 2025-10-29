@@ -38,7 +38,7 @@ timing_commands = {
 
 def benchmark_timing_operations(
     timing_command: str, in_poetry_environment: bool = True, output_file: str = "import.log"
-):
+) -> None:
     """
     This function is used to time and benchmark the timing performance of various operations in the codebase. The
     idea of this functionality is to be able to track the performance of various operations over time and normalise
@@ -106,7 +106,7 @@ def benchmark_timing_operations(
 )
 def benchmark_timing_operations_command(
     timing_command: str, in_poetry_environment: bool = True, output_file: str = "import.log"
-):
+) -> None:
     # If timing_command is inputted without a value, raise a warning and print out the existing key options from the
     # timing command dictionary.
     if timing_command is None:

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import pathlib
 import subprocess
+from typing import Any
 
 import tidy3d
 
@@ -16,7 +17,7 @@ __all__ = [
 ]
 
 
-def get_install_directory():
+def get_install_directory() -> pathlib.Path:
     """
     Retrieve the installation directory of the tidy3d module.
 
@@ -28,7 +29,7 @@ def get_install_directory():
     return pathlib.Path(tidy3d.__file__).parent.parent.absolute()
 
 
-def echo_and_run_subprocess(command: list, **kwargs):
+def echo_and_run_subprocess(command: list, **kwargs: Any) -> subprocess.CompletedProcess[Any]:
     """
     Print and execute a subprocess command.
 
@@ -49,7 +50,7 @@ def echo_and_run_subprocess(command: list, **kwargs):
     return subprocess.run(command, cwd=get_install_directory(), **kwargs)
 
 
-def echo_and_check_subprocess(command: list, *args, **kwargs):
+def echo_and_check_subprocess(command: list, *args: Any, **kwargs: Any) -> int:
     """
     Print and execute a subprocess command, ensuring it completes successfully.
 

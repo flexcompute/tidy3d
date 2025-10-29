@@ -41,7 +41,7 @@ class AbstractChargeMedium(AbstractMedium):
     def eps_model(self, frequency: float) -> complex:
         return self.permittivity
 
-    def n_cfl(self):
+    def n_cfl(self) -> None:
         return None
 
 

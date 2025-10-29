@@ -76,7 +76,7 @@ def ab_to_s(
     return s_matrix
 
 
-def check_port_impedance_sign(Z_numpy: np.ndarray):
+def check_port_impedance_sign(Z_numpy: np.ndarray) -> None:
     """Sanity check for consistent sign of real part of Z for each port.
 
     This check iterates through each port and ensures that the sign of the real

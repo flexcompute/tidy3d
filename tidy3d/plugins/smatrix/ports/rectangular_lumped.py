@@ -248,7 +248,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         )
         return I_integral.compute_current(field_data)
 
-    def _check_grid_size(self, yee_grid: YeeGrid):
+    def _check_grid_size(self, yee_grid: YeeGrid) -> None:
         """Raises :class:`SetupError` if the grid is too coarse at port locations"""
         e_component = "xyz"[self.voltage_axis]
         e_yee_grid = yee_grid.grid_dict[f"E{e_component}"]

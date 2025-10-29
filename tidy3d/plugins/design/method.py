@@ -96,7 +96,7 @@ class MethodSample(Method, ABC):
     """A sweep method where all points are independently computed in one iteration."""
 
     @abstractmethod
-    def sample(self, parameters: tuple[ParameterType, ...], **kwargs) -> dict[str, Any]:
+    def sample(self, parameters: tuple[ParameterType, ...], **kwargs: Any) -> dict[str, Any]:
         """Defines how the design parameters are sampled."""
 
     def _assemble_args(
@@ -793,7 +793,7 @@ class AbstractMethodRandom(MethodSample, ABC):
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.num_points
 
-    def sample(self, parameters: tuple[ParameterType, ...], **kwargs) -> list[dict[str, Any]]:
+    def sample(self, parameters: tuple[ParameterType, ...], **kwargs: Any) -> list[dict[str, Any]]:
         """Defines how the design parameters are sampled on grid."""
 
         sampler = self._get_sampler(parameters)

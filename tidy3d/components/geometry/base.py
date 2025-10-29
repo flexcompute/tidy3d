@@ -139,7 +139,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return inside.reshape(arrays[0].shape)
 
     @staticmethod
-    def _ensure_equal_shape(*arrays):
+    def _ensure_equal_shape(*arrays: Any) -> None:
         """Ensure all input arrays have the same shape."""
         shapes = {np.array(arr).shape for arr in arrays}
         if len(shapes) > 1:
@@ -510,7 +510,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax: Ax = None,
         plot_length_units: LengthUnit = None,
         viz_spec: VisualizationSpec = None,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
 
@@ -780,7 +780,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return tuple(coords)
 
     @staticmethod
-    def parse_xyz_kwargs(**xyz) -> tuple[Axis, float]:
+    def parse_xyz_kwargs(**xyz: Any) -> tuple[Axis, float]:
         """Turns x,y,z kwargs into index of the normal axis and position along that axis.
 
         Parameters
@@ -805,7 +805,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis, position
 
     @staticmethod
-    def parse_two_xyz_kwargs(**xyz) -> list[tuple[Axis, float]]:
+    def parse_two_xyz_kwargs(**xyz: Any) -> list[tuple[Axis, float]]:
         """Turns x,y,z kwargs into indices of axes and the position along each axis.
 
         Parameters
@@ -1867,7 +1867,7 @@ class Box(SimplePlaneIntersection, Centered):
     )
 
     @classmethod
-    def from_bounds(cls, rmin: Coordinate, rmax: Coordinate, **kwargs):
+    def from_bounds(cls, rmin: Coordinate, rmax: Coordinate, **kwargs: Any):
         """Constructs a :class:`Box` from minimum and maximum coordinate bounds
 
         Parameters
@@ -1896,7 +1896,7 @@ class Box(SimplePlaneIntersection, Centered):
         return self.size.index(0.0)
 
     @classmethod
-    def surfaces(cls, size: Size, center: Coordinate, **kwargs):
+    def surfaces(cls, size: Size, center: Coordinate, **kwargs: Any):
         """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.
         The output surfaces are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
@@ -1984,7 +1984,7 @@ class Box(SimplePlaneIntersection, Centered):
         return surfaces
 
     @classmethod
-    def surfaces_with_exclusion(cls, size: Size, center: Coordinate, **kwargs):
+    def surfaces_with_exclusion(cls, size: Size, center: Coordinate, **kwargs: Any):
         """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.
         The output surfaces are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
@@ -2319,7 +2319,7 @@ class Box(SimplePlaneIntersection, Centered):
 
     @staticmethod
     def _arrow_shape_cb(arrow, pos, direction, sign, bend_radius):
-        def _cb(event):
+        def _cb(event) -> None:
             # We only want to set the shape once, so we disconnect ourselves
             event.canvas.mpl_disconnect(arrow.set_shape_cb[0])
 

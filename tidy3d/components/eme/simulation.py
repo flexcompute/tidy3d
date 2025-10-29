@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 try:
     import matplotlib as mpl
@@ -314,7 +314,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot the EME ports."""
         kwargs.setdefault("linewidth", 0.4)
@@ -358,7 +358,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot the EME subgrid boundaries.
         Does nothing if ``eme_grid_spec`` is not :class:`.EMECompositeGrid`.
@@ -410,7 +410,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot the EME grid."""
         kwargs.setdefault("linewidth", 0.2)
@@ -453,7 +453,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         monitor_alpha: Optional[float] = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -526,7 +526,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         return self.eme_grid_spec.make_grid(center=center, size=size, axis=self.axis)
 
     @classmethod
-    def from_scene(cls, scene: Scene, **kwargs) -> EMESimulation:
+    def from_scene(cls, scene: Scene, **kwargs: Any) -> EMESimulation:
         """Create an EME simulation from a :`.Scene` instance. Must provide additional parameters
         to define a valid EME simulation (for example, ``size``, ``grid_spec``, etc).
 
@@ -605,7 +605,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         # self._warn_monitor_interval()
         log.end_capture(self)
 
-    def _validate_too_close_to_edges(self):
+    def _validate_too_close_to_edges(self) -> None:
         """Can't have mode planes closer to boundary than extreme Yee grid center."""
         cell_centers = self.eme_grid.centers
         yee_centers = list(self.grid.centers.to_dict.values())[self.axis]
@@ -632,7 +632,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                         "Please move the monitor further from the boundary."
                     )
 
-    def _validate_constraint(self):
+    def _validate_constraint(self) -> None:
         """Constraint can be slow with too many modes. Warn in this case."""
         constraint = self.constraint
         max_num_modes = self.max_num_modes
@@ -645,7 +645,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                 "reducing the number of modes or setting 'constraint=None'."
             )
 
-    def _validate_port_offsets(self):
+    def _validate_port_offsets(self) -> None:
         """Port offsets cannot jointly exceed simulation length."""
         total_offset = self.port_offsets[0] + self.port_offsets[1]
         size = self.size
@@ -656,7 +656,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                 "cannot exceed the simulation 'size' in the 'axis' direction."
             )
 
-    def _validate_symmetry(self):
+    def _validate_symmetry(self) -> None:
         """Symmetry in propagation direction is not supported."""
         if self.symmetry[self.axis] != 0:
             raise SetupError("Symmetry in the propagation diretion is not currently supported.")
@@ -673,7 +673,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     #                    "it always monitors every EME cell."
     #                )
 
-    def _validate_sweep_spec_size(self):
+    def _validate_sweep_spec_size(self) -> None:
         """Make sure sweep spec is not too large."""
         if self.sweep_spec is None:
             return
@@ -684,7 +684,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                 f"which exceeds the maximum allowed '{MAX_NUM_SWEEP}'."
             )
 
-    def _validate_sweep_spec(self):
+    def _validate_sweep_spec(self) -> None:
         """Validate sweep spec."""
         if self.sweep_spec is None:
             return
@@ -743,7 +743,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                         "which is not compatible with 'EMEPeriodicitySweep'."
                     )
 
-    def _validate_monitor_setup(self):
+    def _validate_monitor_setup(self) -> None:
         """Check monitor setup."""
         for i, monitor in enumerate(self.monitors):
             if isinstance(monitor, EMEMonitor):
@@ -873,7 +873,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     def _validate_modes_size(self) -> None:
         """Warn if mode sources or monitors have a large number of points."""
 
-        def warn_mode_size(monitor: AbstractModeMonitor, msg_header: str, custom_loc: list):
+        def warn_mode_size(monitor: AbstractModeMonitor, msg_header: str, custom_loc: list) -> None:
             """Warn if a mode component has a large number of points."""
             num_cells = np.prod(self.discretize_monitor(monitor).num_cells)
             if num_cells > WARN_MODE_NUM_CELLS:
@@ -1116,7 +1116,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         monitors: Optional[tuple[MonitorType, ...]] = None,
         remove_outside_structures: bool = True,
         remove_outside_custom_mediums: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ) -> EMESimulation:
         """Generate a simulation instance containing only the ``region``.
         Same as in :class:`.AbstractYeeGridSimulation`, except also restricting EME grid.

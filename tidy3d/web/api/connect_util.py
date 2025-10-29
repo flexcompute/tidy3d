@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from functools import wraps
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from requests import ReadTimeout
 from requests.exceptions import ConnectionError as ConnErr
@@ -17,14 +17,20 @@ from tidy3d.web import common
 from tidy3d.web.common import REFRESH_TIME
 
 
-def wait_for_connection(decorated_fn=None, wait_time_sec: Optional[float] = None):
+def wait_for_connection(
+    decorated_fn: Optional[Callable[..., Any]] = None,
+    wait_time_sec: Optional[float] = None,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]] | Callable[..., Any]:
     """Causes function to ignore connection errors and retry for ``wait_time_sec`` secs."""
 
-    def decorator(web_fn, wait_time_sec=wait_time_sec):
+    def decorator(
+        web_fn: Callable[..., Any],
+        wait_time_sec: Optional[float] = wait_time_sec,
+    ) -> Callable[..., Any]:
         """Decorator returned by @wait_for_connection()"""
 
         @wraps(web_fn)
-        def web_fn_wrapped(*args, **kwargs):
+        def web_fn_wrapped(*args: Any, **kwargs: Any) -> Any:
             """Function to return including connection waiting."""
             time_start = time.time()
             warned_previously = False
@@ -50,7 +56,7 @@ def wait_for_connection(decorated_fn=None, wait_time_sec: Optional[float] = None
     return decorator
 
 
-def get_time_steps_str(time_steps) -> str:
+def get_time_steps_str(time_steps: int) -> str:
     """get_time_steps_str"""
     if time_steps < 1000:
         time_steps_str = f"{time_steps}"
@@ -61,7 +67,7 @@ def get_time_steps_str(time_steps) -> str:
     return time_steps_str
 
 
-def get_grid_points_str(grid_points) -> str:
+def get_grid_points_str(grid_points: int) -> str:
     """get_grid_points_str"""
     if grid_points < 1000:
         grid_points_str = f"{grid_points}"

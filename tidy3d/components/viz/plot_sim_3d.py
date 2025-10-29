@@ -23,7 +23,7 @@ def plot_scene_3d(scene, width=800, height=800) -> None:
         buffer2 = BytesIO()
         with h5py.File(buffer2, "w") as dst:
 
-            def copy_item(name, obj):
+            def copy_item(name, obj) -> None:
                 if isinstance(obj, h5py.Group):
                     dst.create_group(name)
                     for k, v in obj.attrs.items():

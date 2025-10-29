@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from os import PathLike
+from typing import Any
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.index import SimulationDataMap
@@ -126,7 +127,7 @@ def compose_modeler_data_from_batch_data(
 
 def create_batch(
     modeler: ComponentModelerType,
-    **kwargs,
+    **kwargs: Any,
 ) -> Batch:
     """Create a simulation Batch from a component modeler.
 
@@ -153,7 +154,7 @@ def create_batch(
 def _run_local(
     modeler: ComponentModelerType,
     path_dir: str = DEFAULT_DATA_DIR,
-    **kwargs,
+    **kwargs: Any,
 ) -> ComponentModelerDataType:
     """Execute the full simulation workflow for a given component modeler.
 

@@ -5,7 +5,7 @@ from tidy3d.log import log
 _ORIGINAL_PARAMS = None
 
 
-def apply_tidy3d_params():
+def apply_tidy3d_params() -> None:
     """
     Applies a set of defaults to the matplotlib params that are following the tidy3d color palettes and design.
     """
@@ -25,7 +25,7 @@ def apply_tidy3d_params():
         pass
 
 
-def restore_matplotlib_rcparams():
+def restore_matplotlib_rcparams() -> None:
     """
     Resets matplotlib rcParams to the values they had before the Tidy3D
     style was automatically applied on import.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -153,7 +153,7 @@ class TriangleMesh(base.Geometry, ABC):
         scale: float = 1.0,
         origin: tuple[float, float, float] = (0, 0, 0),
         solid_index: Optional[int] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Union[TriangleMesh, base.GeometryGroup]:
         """Load a :class:`.TriangleMesh` directly from an STL file.
         The ``solid_index`` parameter can be used to select a single solid from the file.
@@ -660,7 +660,7 @@ class TriangleMesh(base.Geometry, ABC):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
 

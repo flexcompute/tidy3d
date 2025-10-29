@@ -341,7 +341,7 @@ def _warn_potential_error(
     val_change_range: tuple[float, float],
     allowed_real_range: tuple[float, float],
     allowed_imag_range: tuple[float, float],
-):
+) -> None:
     """Basic validation that perturbations do not drive a parameter out of physical bounds."""
 
     min_val = val_change_range[0] + base_value
@@ -431,7 +431,7 @@ def validate_parameter_perturbation(
     return _warn_perturbed_val_range
 
 
-def _assert_min_freq(freqs, msg_start: str):
+def _assert_min_freq(freqs, msg_start: str) -> None:
     """Check if all ``freqs`` are above the minimum frequency."""
     if np.min(freqs) < MIN_FREQUENCY:
         raise ValidationError(

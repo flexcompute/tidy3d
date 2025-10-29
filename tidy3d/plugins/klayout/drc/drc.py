@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from subprocess import run
-from typing import Union
+from typing import Any, Union
 
 import pydantic.v1 as pd
 from pydantic.v1 import validator
@@ -121,7 +121,7 @@ class DRCRunner(Tidy3dBaseModel):
         source: Union[Geometry, Structure, Simulation, Path],
         td_object_gds_savefile: Path = DEFAULT_GDSFILE,
         resultsfile: Path = DEFAULT_RESULTSFILE,
-        **to_gds_file_kwargs,
+        **to_gds_file_kwargs: Any,
     ) -> None:
         """Runs KLayout's DRC on a GDS file or a Tidy3D object. The Tidy3D object can be a :class:`.Geometry`, :class:`.Structure`, or :class:`.Simulation`.
 

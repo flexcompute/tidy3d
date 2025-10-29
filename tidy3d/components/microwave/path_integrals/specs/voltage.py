@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import pydantic.v1 as pd
@@ -98,7 +98,7 @@ class AxisAlignedVoltageIntegralSpec(AxisAlignedPathIntegralSpec):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **path_kwargs,
+        **path_kwargs: Any,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
 
@@ -163,7 +163,7 @@ class Custom2DVoltageIntegralSpec(Custom2DPathIntegralSpec):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **path_kwargs,
+        **path_kwargs: Any,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
 

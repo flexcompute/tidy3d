@@ -822,7 +822,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         ax: Ax = None,
         source_alpha: Optional[float] = None,
         monitor_alpha: Optional[float] = None,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -997,7 +997,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1099,7 +1099,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         vmax: Optional[float] = None,
         ax: Ax = None,
         geometry_edges: Optional[str] = None,
-        **sel_kwargs,
+        **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
 

@@ -10,9 +10,10 @@ from datetime import datetime
 from enum import Enum
 from os import PathLike
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 import boto3
+import rich
 from boto3.s3.transfer import TransferConfig
 from pydantic import BaseModel, Field
 from rich.progress import (
@@ -92,12 +93,12 @@ class UploadProgress:
         Progressbar task instance.
     """
 
-    def __init__(self, size_bytes, progress):
+    def __init__(self, size_bytes: int, progress: rich.progress.Progress) -> None:
         """initialize with the size of file and rich.progress.Progress() instance.
 
         Parameters
         ----------
-        size_bytes: float
+        size_bytes: int
             Number of total bytes to upload.
         progress : rich.progress.Progress()
             Progressbar instance from rich
@@ -105,12 +106,12 @@ class UploadProgress:
         self.progress = progress
         self.ul_task = self.progress.add_task("[red]Uploading...", total=size_bytes)
 
-    def report(self, bytes_in_chunk):
+    def report(self, bytes_in_chunk: Any) -> None:
         """Update the progressbar with the most recent chunk.
 
         Parameters
         ----------
-        bytes_in_chunk : float
+        bytes_in_chunk : int
             Description
         """
         self.progress.update(self.ul_task, advance=bytes_in_chunk)
@@ -127,7 +128,7 @@ class DownloadProgress:
         Progressbar task instance.
     """
 
-    def __init__(self, size_bytes, progress):
+    def __init__(self, size_bytes: int, progress: rich.progress.Progress) -> None:
         """initialize with the size of file and rich.progress.Progress() instance
 
         Parameters
@@ -140,7 +141,7 @@ class DownloadProgress:
         self.progress = progress
         self.dl_task = self.progress.add_task("[red]Downloading...", total=size_bytes)
 
-    def report(self, bytes_in_chunk):
+    def report(self, bytes_in_chunk: int) -> None:
         """Update the progressbar with the most recent chunk.
 
         Parameters
@@ -156,7 +157,7 @@ class _S3Action(Enum):
     DOWNLOADING = "↓"
 
 
-def _get_progress(action: _S3Action):
+def _get_progress(action: _S3Action) -> Progress:
     """Get the progress of an action."""
 
     col = (
@@ -181,7 +182,7 @@ def _get_progress(action: _S3Action):
 
 _s3_config = TransferConfig()
 
-_s3_sts_tokens: [str, _S3STSToken] = {}
+_s3_sts_tokens: dict[str, _S3STSToken] = {}
 
 
 def get_s3_sts_token(
@@ -222,7 +223,7 @@ def upload_file(
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
     extra_arguments: Optional[Mapping[str, str]] = None,
-):
+) -> None:
     """Upload a file to S3.
 
     Parameters
@@ -275,7 +276,7 @@ def upload_file(
                     "upload", filename=str(remote_filename), total=total_size
                 )
 
-                def _callback(bytes_in_chunk):
+                def _callback(bytes_in_chunk: int) -> None:
                     progress.update(task_id, advance=bytes_in_chunk)
 
                 _upload(_callback)
@@ -363,7 +364,7 @@ def download_file(
                 progress.start()
                 task_id = progress.add_task("download", filename=remote_basename, total=total_size)
 
-                def _callback(bytes_in_chunk):
+                def _callback(bytes_in_chunk: int) -> None:
                     progress.update(task_id, advance=bytes_in_chunk)
 
                 _download(_callback)

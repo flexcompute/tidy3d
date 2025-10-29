@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from functools import wraps
 from math import isclose
-from typing import Literal, Optional, Union, get_args
+from typing import Any, Literal, Optional, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -116,7 +116,7 @@ def require_fdtd_simulation(fn):
     """Decorate a function to check that ``simulation`` is an FDTD ``Simulation``."""
 
     @wraps(fn)
-    def _fn(self, **kwargs):
+    def _fn(self, **kwargs: Any):
         """New decorated function."""
         if not isinstance(self.simulation, Simulation):
             raise SetupError(
@@ -274,7 +274,7 @@ class ModeSolver(Tidy3dBaseModel):
         plane: Box,
         mode_spec: ModeSpec,
         msg_prefix: str = "'ModeSolver'",
-    ):
+    ) -> None:
         """Warn if the pml covers a significant portion of the mode plane."""
         coord_0, coord_1 = cls._plane_grid(
             simulation=simulation,
@@ -302,7 +302,7 @@ class ModeSolver(Tidy3dBaseModel):
         return Box.from_bounds(*mode_plane_bnds)
 
     @classmethod
-    def _validate_mode_plane_radius(cls, mode_spec: ModeSpec, plane: Box, sim_geom: Box):
+    def _validate_mode_plane_radius(cls, mode_spec: ModeSpec, plane: Box, sim_geom: Box) -> None:
         """Validate that the radius of a mode spec with a bend is not smaller than half the size of
         the plane along the radial direction."""
 
@@ -1338,7 +1338,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         return mode_solver_data
 
-    def _normalize_modes(self, mode_solver_data: ModeSolverData):
+    def _normalize_modes(self, mode_solver_data: ModeSolverData) -> None:
         """Normalize modes. Note: this modifies ``mode_solver_data`` in-place."""
         scaling = np.sqrt(np.abs(mode_solver_data.flux))
         for field in mode_solver_data.field_components.values():
@@ -1809,7 +1809,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         return ((Ex, Ey, Ez), (Hx, Hy, Hz))
 
-    def _field_decay_warning(self, field_data: ModeSolverData):
+    def _field_decay_warning(self, field_data: ModeSolverData) -> None:
         """Warn if any of the modes do not decay at the edges."""
         _, plane_dims = self.plane.pop_axis(["x", "y", "z"], axis=self.normal_axis)
         field_sizes = field_data.Ex.sizes
@@ -1968,7 +1968,7 @@ class ModeSolver(Tidy3dBaseModel):
         direction: Direction = None,
         mode_index: pydantic.NonNegativeInt = 0,
         num_freqs: pydantic.PositiveInt = 1,
-        **kwargs,
+        **kwargs: Any,
     ) -> ModeSource:
         """Creates :class:`.ModeSource` from a :class:`.ModeSolver` instance plus additional
         specifications.
@@ -2184,7 +2184,7 @@ class ModeSolver(Tidy3dBaseModel):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         ax: Ax = None,
-        **sel_kwargs,
+        **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
 
@@ -2244,7 +2244,7 @@ class ModeSolver(Tidy3dBaseModel):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot the mode plane simulation's components.
 
@@ -2414,7 +2414,7 @@ class ModeSolver(Tidy3dBaseModel):
     def plot_grid(
         self,
         ax: Ax = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot the mode plane cell boundaries as lines.
 
@@ -2635,7 +2635,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         return a_center, h_lim, v_lim, t_axes
 
-    def _validate_modes_size(self):
+    def _validate_modes_size(self) -> None:
         """Make sure that the total size of the modes fields is not too large."""
         monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
         num_cells = self.simulation._monitor_num_cells(monitor)
@@ -2649,7 +2649,7 @@ class ModeSolver(Tidy3dBaseModel):
                 "frequencies or modes."
             )
 
-    def validate_pre_upload(self, source_required: bool = True):
+    def validate_pre_upload(self, source_required: bool = True) -> None:
         """Validate the fully initialized mode solver is ok for upload to our servers."""
         self._validate_modes_size()
 
@@ -2747,7 +2747,7 @@ class ModeSolver(Tidy3dBaseModel):
         :class:`.ModeSolver` webapi."""
         return self.to_fdtd_mode_solver()
 
-    def _patch_data(self, data: ModeSolverData):
+    def _patch_data(self, data: ModeSolverData) -> None:
         """
         Patch the :class:`.ModeSolver` with the provided data so that
         it will be used everywhere instead of locally-computed data.

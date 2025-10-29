@@ -59,7 +59,7 @@ class AbstractDopingBox(Box):
 
         return indices_in_box, X, Y, Z
 
-    def _post_init_validators(self):
+    def _post_init_validators(self) -> None:
         # check the doping box is 3D
         if len(self.zero_dims) > 0:
             raise SetupError(

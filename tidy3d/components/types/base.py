@@ -94,7 +94,7 @@ class ArrayLike:
         return val
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
+    def __modify_schema__(cls, field_schema) -> None:
         """Sets the schema of DataArray object."""
 
         schema = {
@@ -174,7 +174,7 @@ class tidycomplex(complex):
         return cls(value)
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
+    def __modify_schema__(cls, field_schema) -> None:
         """Sets the schema of ComplexNumber."""
         field_schema.update(ComplexNumber.schema())
 

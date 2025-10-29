@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import logging as log
 
+from rich.console import Console
+
+from tidy3d.log import Logger
+
 # default setting
 config_setting = {
     "logger": log,
@@ -12,7 +16,7 @@ config_setting = {
 }
 
 
-def set_config(logger, logger_console, version: str):
+def set_config(logger: Logger, logger_console: Console, version: str) -> None:
     """Init tidy3d core logger and logger console.
 
     Parameters
@@ -29,16 +33,16 @@ def set_config(logger, logger_console, version: str):
     config_setting["version"] = version
 
 
-def get_logger():
+def get_logger() -> Logger:
     """Get logging handlers."""
     return config_setting["logger"]
 
 
-def get_logger_console():
+def get_logger_console() -> Console:
     """Get console from logging handlers."""
     return config_setting["logger_console"]
 
 
-def get_version():
+def get_version() -> str:
     """Get version from cache."""
     return config_setting["version"]

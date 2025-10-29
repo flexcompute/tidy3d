@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+from typing import Any
 
 import autograd.numpy as anp
 import numpy as np
@@ -98,7 +99,7 @@ def interpn(
     xi: tuple[NDArray[np.float64], ...],
     *,
     method: InterpolationType = "linear",
-    **kwargs,
+    **kwargs: Any,
 ) -> NDArray[np.float64]:
     """Interpolate over a rectilinear grid in arbitrary dimensions.
 

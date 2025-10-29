@@ -24,4 +24,11 @@ repos:
     hooks:
       - id: zizmor
         stages: [pre-commit]
-
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        name: mypy (type signatures)
+        files: ^tidy3d/web
+        args:
+          - --config-file=pyproject.toml

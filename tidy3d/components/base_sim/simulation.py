@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Any, Optional
 
 import autograd.numpy as anp
 import pydantic.v1 as pd
@@ -251,7 +251,7 @@ class AbstractSimulation(Box, ABC):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
-        **patch_kwargs,
+        **patch_kwargs: Any,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -482,7 +482,7 @@ class AbstractSimulation(Box, ABC):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Ax:
         """Plot the simulation boundary conditions as lines on a plane
            defined by one nonzero x,y,z coordinate.
@@ -685,7 +685,7 @@ class AbstractSimulation(Box, ABC):
         )
 
     @classmethod
-    def from_scene(cls, scene: Scene, **kwargs) -> AbstractSimulation:
+    def from_scene(cls, scene: Scene, **kwargs: Any) -> AbstractSimulation:
         """Create a simulation from a :class:`.Scene` instance. Must provide additional parameters
         to define a valid simulation (for example, ``size``, ``run_time``, ``grid_spec``, etc).
 

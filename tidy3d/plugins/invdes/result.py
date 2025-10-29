@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import typing
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -143,7 +144,7 @@ class InverseDesignResult(InvdesBaseModel):
         return self.design.to_simulation(params=params)
 
     def get_sim_data(
-        self, index: int = -1, **kwargs
+        self, index: int = -1, **kwargs: Any
     ) -> typing.Union[td.SimulationData, list[td.SimulationData]]:
         """Get the simulation data at a specific index in the history (list of simdata if multi)."""
         params = np.array(self.get(key="params", index=index))
@@ -154,11 +155,11 @@ class InverseDesignResult(InvdesBaseModel):
         """The last simulation."""
         return self.get_sim(index=-1)
 
-    def sim_data_last(self, **kwargs) -> td.SimulationData:
+    def sim_data_last(self, **kwargs: Any) -> td.SimulationData:
         """Run the last simulation and return its data."""
         return self.get_sim_data(index=-1, **kwargs)
 
-    def plot_optimization(self):
+    def plot_optimization(self) -> None:
         """Plot the optimization progress from the history."""
         plt.plot(self.objective_fn_val, label="objective function")
         plt.plot(self.post_process_val, label="post process function")
