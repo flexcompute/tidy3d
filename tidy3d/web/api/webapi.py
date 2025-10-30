@@ -387,10 +387,10 @@ def restore_simulation_if_cached(
             cached_task_id = entry.metadata.get("task_id")
             cached_workflow_type = entry.metadata.get("workflow_type")
             if cached_task_id is not None and cached_workflow_type is not None and verbose:
-                console = get_logging_console() if verbose else None
+                console = get_logging_console()
                 url, _ = _get_task_urls(cached_workflow_type, simulation, cached_task_id)
                 console.log(
-                    f"Loaded simulation from local cache.\nView cached task using web UI at [link={url}]'{url}'[/link]."
+                    f"Loading simulation from local cache. View cached task using web UI at [link={url}]'{url}'[/link]."
                 )
     return retrieved_simulation_path
 
@@ -399,6 +399,7 @@ def load_simulation_if_cached(
     simulation: WorkflowType,
     path: Optional[PathLike] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    verbose: bool = True,
 ) -> Optional[WorkflowDataType]:
     """
     Load simulation results directly from the local cache, if available.
@@ -412,17 +413,22 @@ def load_simulation_if_cached(
     reduce_simulation : Literal["auto", True, False] = "auto"
         Whether to use a reduced simulation when checking the cache. If "auto",
         reduction is applied automatically for mode solvers.
+    verbose : bool = True
+        If True, logs a message including a link to the cached task in the web UI on loading.
 
     Returns
     -------
     Optional[WorkflowDataType]
         The loaded simulation data if found in cache, otherwise None.
     """
-    restored_path = restore_simulation_if_cached(simulation, path, reduce_simulation)
+    restored_path = restore_simulation_if_cached(
+        simulation, path, reduce_simulation, verbose=verbose
+    )
     if restored_path is not None:
         data = load(
             task_id=None,
             path=str(restored_path),
+            verbose=verbose,
         )
         if isinstance(simulation, ModeSolver):
             simulation._patch_data(data=data)
