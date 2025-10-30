@@ -16,11 +16,13 @@ from pathlib import Path
 from typing import Any, Optional
 
 from tidy3d import config
+from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.log import log
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 from tidy3d.web.core.constants import TaskId
 from tidy3d.web.core.http_util import get_version as _get_protocol_version
+from tidy3d.web.core.types import TaskType
 
 CACHE_ARTIFACT_NAME = "simulation_data.hdf5"
 CACHE_METADATA_NAME = "metadata.json"
@@ -316,17 +318,50 @@ class LocalCache:
         task_id: TaskId,
         path: str,
         workflow_type: str,
-    ) -> None:
+        simulation: Optional[WorkflowType] = None,
+    ) -> bool:
         """
-        After we have the data (postprocess done), store it in the cache using the
-        canonical key (simulation hash + workflow type + environment + version).
-        Also records the task_id mapping for legacy lookups.
+        Stores completed workflow results in the local cache using a canonical cache key.
+
+        Parameters
+        ----------
+        stub_data : :class:`.WorkflowDataType`
+            Object containing the workflow results, including references to the originating simulation.
+        task_id : str
+            Unique identifier of the finished workflow task.
+        path : str
+            Path to the results file on disk.
+        workflow_type : str
+            Type of workflow associated with the results (e.g., ``"SIMULATION"`` or ``"MODE_SOLVER"``).
+        simulation : Optional[:class:`.WorkflowDataType`]
+            Simulation object to use when computing the cache key. If not provided,
+            it will be inferred from ``stub_data.simulation`` when possible.
+
+        Returns
+        -------
+        bool
+            ``True`` if the result was successfully stored in the local cache, ``False`` otherwise.
+
+        Notes
+        -----
+        The cache entry is keyed by the simulation hash, workflow type, environment, and protocol version.
+        This enables automatic reuse of identical simulation results across future runs.
+        Legacy task ID mappings are recorded to support backward lookup compatibility.
         """
         try:
-            simulation_obj = getattr(stub_data, "simulation", None)
+            if simulation is not None:
+                simulation_obj = simulation
+            else:
+                simulation_obj = getattr(stub_data, "simulation", None)
+                if simulation_obj is None:
+                    log.debug(
+                        "Failed storing local cache entry: Could not find simulation data in stub_data."
+                    )
+                    return False
             simulation_hash = simulation_obj._hash_self() if simulation_obj is not None else None
             if not simulation_hash:
-                return
+                log.debug("Failed storing local cache entry: Could not hash simulation.")
+                return False
 
             version = _get_protocol_version()
 
@@ -350,6 +385,8 @@ class LocalCache:
             )
         except Exception as e:
             log.error(f"Could not store cache entry: {e}")
+            return False
+        return True
 
 
 def _copy_and_hash(
@@ -508,6 +545,46 @@ def resolve_local_cache(use_cache: Optional[bool] = None) -> Optional[LocalCache
     except Exception as err:
         log.debug(f"Simulation cache unavailable: {err}")
         return None
+
+
+def _store_mode_solver_in_cache(
+    task_id: TaskId, simulation: ModeSolver, data: WorkflowDataType, path: os.PathLike
+) -> bool:
+    """
+    Stores the results of a :class:`.ModeSolver` run in the local cache, if available.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of the mode solver task.
+    simulation : :class:`.ModeSolver`
+        Mode solver simulation object whose results should be cached.
+    data : :class:`.WorkflowDataType`
+        Data object containing the computed results to store.
+    path : PathLike
+        Path to the result file on disk.
+
+    Returns
+    -------
+    bool
+        ``True`` if the result was successfully stored in the local cache, ``False`` otherwise.
+
+    Notes
+    -----
+    This helper is used internally to persist completed mode solver results
+    for reuse across repeated runs with identical configurations.
+    """
+    simulation_cache = resolve_local_cache()
+    if simulation_cache is not None:
+        stored = simulation_cache.store_result(
+            stub_data=data,
+            task_id=task_id,
+            path=path,
+            workflow_type=TaskType.MODE_SOLVER.name,
+            simulation=simulation,
+        )
+        return stored
+    return False
 
 
 resolve_local_cache()

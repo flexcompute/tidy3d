@@ -7,11 +7,12 @@ import pytest
 
 import tidy3d as td
 from tests.test_components.autograd.test_autograd import ALL_KEY, get_functions, params0
+from tests.test_web.test_webapi_mode import make_mode_sim
 from tidy3d import config
 from tidy3d.config import get_manager
 from tidy3d.web import Job, common, run_async
 from tidy3d.web.api import webapi as web
-from tidy3d.web.api.container import WebContainer
+from tidy3d.web.api.container import Batch, WebContainer
 from tidy3d.web.api.webapi import load_simulation_if_cached
 from tidy3d.web.cache import CACHE_ARTIFACT_NAME, clear, resolve_local_cache
 
@@ -135,6 +136,9 @@ def _patch_run_pipeline(monkeypatch):
             "_Info", (), {"solverVersion": "solver-1", "taskType": "FDTD"}
         )(),
     )
+    monkeypatch.setattr(
+        web, "load_simulation", lambda task_id, *args, **kwargs: TASK_TO_SIM[task_id]
+    )
     return counters
 
 
@@ -173,6 +177,56 @@ def _test_load_simulation_if_cached(monkeypatch, tmp_path, basic_simulation):
     out_path2 = tmp_path / "result_load_simulation_if_cached2.hdf5"
     sim_data_from_cache_with_path = load_simulation_if_cached(basic_simulation, path=out_path2)
     assert sim_data_from_cache_with_path.simulation == basic_simulation
+
+
+def _test_mode_solver_caching(monkeypatch, tmp_path):
+    counters = _patch_run_pipeline(monkeypatch)
+
+    # store in cache
+    mode_sim = make_mode_sim()
+    mode_sim_data = web.run(mode_sim)
+
+    # test basic loading from cache
+    from_cache_data = load_simulation_if_cached(mode_sim)
+    assert from_cache_data is not None
+    assert isinstance(from_cache_data, _FakeStubData)
+    assert mode_sim_data.simulation == from_cache_data.simulation
+
+    # test loading from run
+    _reset_counters(counters)
+    mode_sim_data_run = web.run(mode_sim)
+    assert counters["download"] == 0
+    assert isinstance(mode_sim_data_run, _FakeStubData)
+    assert mode_sim_data.simulation == mode_sim_data_run.simulation
+
+    # test loading from job
+    _reset_counters(counters)
+    job = Job(simulation=mode_sim, task_name="test")
+    job_data = job.run()
+    assert counters["download"] == 0
+    assert isinstance(job_data, _FakeStubData)
+    assert mode_sim_data.simulation == job_data.simulation
+
+    # test loading from batch
+    _reset_counters(counters)
+    mode_sim_batch = Batch(simulations={"sim1": mode_sim})
+    batch_data = mode_sim_batch.run(path_dir=tmp_path)
+    mode_sim_data_batch = batch_data["sim1"]
+    assert counters["download"] == 0
+    assert isinstance(mode_sim_data_batch, _FakeStubData)
+    assert mode_sim_data.simulation == mode_sim_data_batch.simulation
+
+    cache = resolve_local_cache(True)
+    # test storing via job
+    cache.clear()
+    Job(simulation=mode_sim, task_name="test").run()
+    assert load_simulation_if_cached(mode_sim) is not None
+
+    # test storing via batch
+    cache.clear()
+    batch_mode_data = Batch(simulations={"sim1": mode_sim}).run(path_dir=tmp_path)
+    _ = batch_mode_data["sim1"]  # access to store
+    assert load_simulation_if_cached(mode_sim) is not None
 
 
 def _test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path):
@@ -381,3 +435,4 @@ def test_cache_sequential(monkeypatch, tmp_path, tmp_path_factory, basic_simulat
     _test_job_run_cache(monkeypatch, basic_simulation, tmp_path)
     _test_autograd_cache(monkeypatch)
     _test_configure_cache_roundtrip(monkeypatch, tmp_path)
+    _test_mode_solver_caching(monkeypatch, tmp_path)

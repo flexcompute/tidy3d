@@ -26,7 +26,7 @@ from tidy3d.web.api.states import (
     POST_VALIDATE_STATES,
     STATE_PROGRESS_PERCENTAGE,
 )
-from tidy3d.web.cache import CacheEntry, resolve_local_cache
+from tidy3d.web.cache import CacheEntry, _store_mode_solver_in_cache, resolve_local_cache
 from tidy3d.web.core.account import Account
 from tidy3d.web.core.constants import (
     CM_DATA_HDF5_GZ,
@@ -44,7 +44,7 @@ from tidy3d.web.core.http_util import get_version as _get_protocol_version
 from tidy3d.web.core.http_util import http
 from tidy3d.web.core.task_core import BatchDetail, BatchTask, Folder, SimulationTask
 from tidy3d.web.core.task_info import AsyncJobDetail, ChargeType, TaskInfo
-from tidy3d.web.core.types import PayType
+from tidy3d.web.core.types import PayType, TaskType
 
 from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
 from .tidy3d_stub import Tidy3dStub, Tidy3dStubData
@@ -575,7 +575,10 @@ def run(
     )
 
     if isinstance(simulation, ModeSolver):
+        if task_id is not None:
+            _store_mode_solver_in_cache(task_id, simulation, data, path)
         simulation._patch_data(data=data)
+
     return data
 
 
@@ -1298,7 +1301,7 @@ def load_simulation(
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : PathLike = "simulation.json"
-        Download path to .json file of simulation (including filename).
+        Download path to .json or .hdf5 file of simulation (including filename).
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
 
@@ -1308,7 +1311,13 @@ def load_simulation(
         Simulation loaded from downloaded json file.
     """
     task = SimulationTask.get(task_id)
-    task.get_simulation_json(path, verbose=verbose)
+    path = Path(path)
+    if path.suffix == ".json":
+        task.get_simulation_json(path, verbose=verbose)
+    elif path.suffix == ".hdf5":
+        task.get_simulation_hdf5(path, verbose=verbose)
+    else:
+        raise ValueError("Path suffix must be '.json' or '.hdf5'")
     return Tidy3dStub.from_file(path)
 
 
@@ -1414,12 +1423,24 @@ def load(
     if simulation_cache is not None and task_id is not None:
         info = get_info(task_id, verbose=False)
         workflow_type = getattr(info, "taskType", None)
-        simulation_cache.store_result(
-            stub_data=stub_data,
-            task_id=task_id,
-            path=path,
-            workflow_type=workflow_type,
-        )
+        if (
+            workflow_type != TaskType.MODE_SOLVER.name
+        ):  # we cannot get the simulation from data or web for mode solver
+            simulation = None
+            if lazy:  # get simulation via web to avoid unpacking of lazy object in store_result
+                try:
+                    with tempfile.NamedTemporaryFile(suffix=".hdf5") as tmp_file:
+                        simulation = load_simulation(task_id, path=tmp_file.name, verbose=False)
+                except Exception as e:
+                    log.info(f"Failed to load simulation for storing results: {e}.")
+                    return stub_data
+            simulation_cache.store_result(
+                stub_data=stub_data,
+                task_id=task_id,
+                path=path,
+                workflow_type=workflow_type,
+                simulation=simulation,
+            )
 
     return stub_data
 
