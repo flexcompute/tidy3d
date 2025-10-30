@@ -39,6 +39,7 @@ from tidy3d.web.api.states import (
 )
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 from tidy3d.web.api.webapi import restore_simulation_if_cached
+from tidy3d.web.cache import _store_mode_solver_in_cache
 from tidy3d.web.core.constants import TaskId, TaskName
 from tidy3d.web.core.task_core import Folder
 from tidy3d.web.core.task_info import RunInfo, TaskInfo
@@ -490,7 +491,15 @@ class Job(WebContainer):
             lazy=self.lazy,
         )
         if isinstance(self.simulation, ModeSolver):
+            if not self.load_if_cached:
+                _store_mode_solver_in_cache(
+                    self.task_id,
+                    self.simulation,
+                    data,
+                    path,
+                )
             self.simulation._patch_data(data=data)
+
         return data
 
     def delete(self) -> None:
@@ -1405,7 +1414,7 @@ class Batch(WebContainer):
             task_paths[task_name] = str(self._job_data_path(task_id=job.task_id, path_dir=path_dir))
             task_ids[task_name] = self.jobs[task_name].task_id
 
-        loaded = {task_name: job.load_if_cached for task_name, job in self.jobs.items()}
+        loaded_from_cache = {task_name: job.load_if_cached for task_name, job in self.jobs.items()}
 
         if not skip_download:
             self.download(path_dir=path_dir, replace_existing=replace_existing)
@@ -1414,7 +1423,7 @@ class Batch(WebContainer):
             task_paths=task_paths,
             task_ids=task_ids,
             verbose=self.verbose,
-            cached_tasks=loaded,
+            cached_tasks=loaded_from_cache,
             lazy=self.lazy,
             is_downloaded=True,
         )
@@ -1422,9 +1431,11 @@ class Batch(WebContainer):
         for task_name, job in self.jobs.items():
             if isinstance(job.simulation, ModeSolver):
                 job_data = data[task_name]
+                if not loaded_from_cache[task_name]:
+                    _store_mode_solver_in_cache(
+                        task_ids[task_name], job.simulation, job_data, task_paths[task_name]
+                    )
                 job.simulation._patch_data(data=job_data)
-        if not skip_download:
-            self.download(path_dir=path_dir, replace_existing=replace_existing)
 
         return data
 
