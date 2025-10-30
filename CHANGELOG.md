@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added multimode support to `WavePort` in the smatrix plugin, allowing multiple modes to be analyzed per port.
 
 ### Breaking Changes
+- Edge singularity correction at PEC and lossy metal edges defaults to `True`.
+- `angle_threshold` in `CornerFinderSpec` now defaults to `pi/4`.
 **Note: These breaking changes only affect the microwave and smatrix plugins.**
 - Renamed path integral classes for improved consistency. Please see our migration guide for details on updating your code.
   - `VoltageIntegralAxisAligned` → `AxisAlignedVoltageIntegral`
@@ -51,7 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unified run submission API: `web.run(...)` is now a container-aware wrapper that accepts a single simulation or arbitrarily nested containers (`list`, `tuple`, `dict` values) and returns results in the same shape.
 - `web.Batch(ComponentModeler)` and `web.Job(ComponentModeler)` native support
 - Simulation data of batch jobs are now automatically downloaded upon their individual completion in `Batch.run()`, avoiding waiting for the entire batch to reach completion.
-- Edge singularity correction at PEC and lossy metal edges defaults to `True`.
 
 ### Fixed
 - Ensured the legacy `Env` proxy mirrors `config.web` profile switches and preserves API URL.

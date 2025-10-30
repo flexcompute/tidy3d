@@ -15,7 +15,7 @@ from tidy3d.components.structure import Structure
 from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
 from tidy3d.constants import inf
 
-CORNER_ANGLE_THRESOLD = 0.1 * np.pi
+CORNER_ANGLE_THRESOLD = 0.25 * np.pi
 
 
 class CornerFinderSpec(Tidy3dBaseModel):
