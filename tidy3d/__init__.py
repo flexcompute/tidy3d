@@ -318,14 +318,10 @@ from .components.medium import (
     FullyAnisotropicMedium,
     HammerstadSurfaceRoughness,
     HuraySurfaceRoughness,
-    KerrNonlinearity,
     Lorentz,
     LossyMetalMedium,
     Medium,
     Medium2D,
-    NonlinearModel,
-    NonlinearSpec,
-    NonlinearSusceptibility,
     PECMedium,
     PerturbationMedium,
     PerturbationPoleResidue,
@@ -333,7 +329,6 @@ from .components.medium import (
     PoleResidue,
     Sellmeier,
     SurfaceImpedanceFitterParam,
-    TwoPhotonAbsorption,
     medium_from_nk,
 )
 from .components.mode.data.sim_data import ModeSimulationData
@@ -362,6 +357,15 @@ from .components.monitor import (
     ModeSolverMonitor,
     Monitor,
     PermittivityMonitor,
+)
+
+# nonlinear
+from .components.nonlinear import (
+    KerrNonlinearity,
+    NonlinearModel,
+    NonlinearSpec,
+    NonlinearSusceptibility,
+    TwoPhotonAbsorption,
 )
 from .components.parameter_perturbation import (
     CustomChargePerturbation,

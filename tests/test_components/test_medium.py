@@ -720,22 +720,17 @@ def test_nonlinear_medium():
         monitors=[monitor],
         structures=[structure],
     )
-    assert n0 == nonlinear_spec.models[0]._get_n0(n0=None, medium=medium, freqs=[freq0])
-    assert freq0 == nonlinear_spec.models[0]._get_freq0(freq0=None, freqs=[freq0])
 
-    # subsection with nonlinear materials needs to hardcode source info
+    # subsection with nonlinear materials preserves sources
     sim2 = sim.updated_copy(center=(-4, -4, -4), path="sources/0")
     sim2 = sim2.updated_copy(
         models=[td.TwoPhotonAbsorption(beta=1)], path="structures/0/medium/nonlinear_spec"
     )
     sim2 = sim2.subsection(region=td.Box(center=(0, 0, 0), size=(1, 1, 0)))
-    assert sim2.structures[0].medium.nonlinear_spec.models[0].n0 == n0
-    assert sim2.structures[0].medium.nonlinear_spec.models[0].freq0 == freq0
 
     nonlinear_spec = td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1, n0=1)])
     structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
     sim = sim.updated_copy(structures=[structure])
-    assert 1 == nonlinear_spec.models[0]._get_n0(n0=1, medium=medium, freqs=[1, 2])
 
     nonlinear_spec = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, n0=1)])
     structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
@@ -743,7 +738,6 @@ def test_nonlinear_medium():
     nonlinear_spec = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, n0=1, freq0=1)])
     structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
     sim = sim.updated_copy(structures=[structure])
-    assert 1 == nonlinear_spec.models[0]._get_freq0(freq0=1, freqs=[1, 2])
 
     # active materials with automatic detection of n0
     nonlinear_spec_active = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1)])

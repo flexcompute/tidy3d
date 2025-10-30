@@ -2012,21 +2012,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 abc for abc in self._shifted_internal_absorbers if new_box.intersects(abc)
             ]
 
-        # some nonlinear materials depend on the central frequency
-        # we update them with hardcoded freq0
-        freqs = np.array([source.source_time._freq0 for source in self.sources])
-        for i, structure in enumerate(new_structures):
-            medium = structure.medium
-            nonlinear_spec = medium.nonlinear_spec
-            if nonlinear_spec is not None:
-                new_nonlinear_spec = nonlinear_spec._hardcode_medium_freqs(
-                    medium=medium, freqs=freqs
-                )
-                new_structure = structure.updated_copy(
-                    nonlinear_spec=new_nonlinear_spec, path="medium"
-                )
-                new_structures[i] = new_structure
-
         if monitors is None:
             monitors = [mnt for mnt in self.monitors if new_box.intersects(mnt)]
 
