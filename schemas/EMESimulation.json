@@ -2316,7 +2316,7 @@
       "additionalProperties": false,
       "properties": {
         "angle_threshold": {
-          "default": 0.3141592653589793,
+          "default": 0.7853981633974483,
           "exclusiveMaximum": 3.141592653589793,
           "minimum": 0,
           "type": "number"
@@ -6361,7 +6361,7 @@
             }
           ],
           "default": {
-            "angle_threshold": 0.3141592653589793,
+            "angle_threshold": 0.7853981633974483,
             "attrs": {},
             "concave_resolution": null,
             "convex_resolution": null,
