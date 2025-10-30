@@ -31,6 +31,14 @@ TMP_BATCH_PREFIX = "tmp_batch"
 _CACHE: Optional[LocalCache] = None
 
 
+def get_cache_entry_dir(root: os.PathLike, key: str) -> Path:
+    """
+    Returns the cache directory for a given key.
+    A three-character prefix subdirectory is used to avoid hitting filesystem limits on the number of entries per folder.
+    """
+    return Path(root) / key[:3] / key
+
+
 @dataclass
 class CacheEntry:
     """Internal representation of a cache entry."""
@@ -41,7 +49,7 @@ class CacheEntry:
 
     @property
     def path(self) -> Path:
-        return self.root / self.key
+        return get_cache_entry_dir(self.root, self.key)
 
     @property
     def artifact_path(self) -> Path:
@@ -168,28 +176,14 @@ class LocalCache:
             with self._lock:
                 self._root.mkdir(parents=True, exist_ok=True)
                 self._ensure_limits(file_size)
-                final_dir = self._root / key
-                backup_dir: Optional[Path] = None
-
-                try:
-                    if final_dir.exists():
-                        backup_dir = final_dir.with_name(
-                            f"{final_dir.name}.bak.{_timestamp_suffix()}"
-                        )
-                        os.replace(final_dir, backup_dir)
-                    # move tmp_dir into place
-                    os.replace(tmp_dir, final_dir)
-                except Exception:
-                    # restore backup if needed
-                    if backup_dir and backup_dir.exists():
-                        os.replace(backup_dir, final_dir)
-                    raise
-                else:
-                    entry = CacheEntry(key=key, root=self._root, metadata=metadata)
-                    if backup_dir and backup_dir.exists():
-                        shutil.rmtree(backup_dir, ignore_errors=True)
-                    log.debug("Stored simulation cache entry '%s' (%d bytes).", key, file_size)
-                    return entry
+                final_dir = get_cache_entry_dir(self._root, key)
+                final_dir.parent.mkdir(parents=True, exist_ok=True)
+                if final_dir.exists():
+                    shutil.rmtree(final_dir)
+                os.replace(tmp_dir, final_dir)
+                entry = CacheEntry(key=key, root=self._root, metadata=metadata)
+                log.debug("Stored simulation cache entry '%s' (%d bytes).", key, file_size)
+                return entry
         finally:
             try:
                 if tmp_dir.exists():
@@ -242,20 +236,33 @@ class LocalCache:
             log.info(f"Simulation cache evicted entry '{entry.key}' to reclaim {size} bytes.")
 
     def _iter_entries(self) -> Iterable[CacheEntry]:
+        """Iterate over all cache entries, including those in prefix subdirectories."""
         if not self._root.exists():
             return []
+
         entries: list[CacheEntry] = []
-        for child in self._root.iterdir():
-            if child.name.startswith(TMP_PREFIX) or child.name.startswith(TMP_BATCH_PREFIX):
+
+        for prefix_dir in self._root.iterdir():
+            if not prefix_dir.is_dir() or prefix_dir.name.startswith(
+                (TMP_PREFIX, TMP_BATCH_PREFIX)
+            ):
                 continue
-            meta_path = child / CACHE_METADATA_NAME
-            if not meta_path.exists():
-                continue
-            try:
-                metadata = json.loads(meta_path.read_text(encoding="utf-8"))
-            except Exception:
-                metadata = {}
-            entries.append(CacheEntry(key=child.name, root=self._root, metadata=metadata))
+
+            for child in prefix_dir.iterdir():
+                if not child.is_dir():
+                    continue
+
+                meta_path = child / CACHE_METADATA_NAME
+                if not meta_path.exists():
+                    continue
+
+                try:
+                    metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+                except Exception:
+                    metadata = {}
+
+                entries.append(CacheEntry(key=child.name, root=self._root, metadata=metadata))
+
         return entries
 
     def _load_entry(self, key: str) -> Optional[CacheEntry]:

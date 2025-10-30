@@ -13,7 +13,7 @@ from tidy3d.web import Job, common, run_async
 from tidy3d.web.api import webapi as web
 from tidy3d.web.api.container import WebContainer
 from tidy3d.web.api.webapi import load_simulation_if_cached
-from tidy3d.web.cache import CACHE_ARTIFACT_NAME, clear, resolve_local_cache
+from tidy3d.web.cache import CACHE_ARTIFACT_NAME, clear, get_cache_entry_dir, resolve_local_cache
 
 common.CONNECTION_RETRY_TIME = 0.1
 
@@ -281,7 +281,7 @@ def _test_checksum_mismatch_triggers_refresh(monkeypatch, tmp_path, basic_simula
 
     cache = resolve_local_cache(use_cache=True)
     metadata = cache.list()[0]
-    corrupted_path = cache.root / metadata["cache_key"] / CACHE_ARTIFACT_NAME
+    corrupted_path = get_cache_entry_dir(cache.root, metadata["cache_key"]) / CACHE_ARTIFACT_NAME
     corrupted_path.write_text("corrupted")
 
     cache._fetch(metadata["cache_key"])
