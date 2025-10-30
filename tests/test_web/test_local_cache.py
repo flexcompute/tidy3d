@@ -1,20 +1,26 @@
 from __future__ import annotations
 
+import importlib
+import io
 import os
+import re
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from rich.console import Console
 
 import tidy3d as td
 from tests.test_components.autograd.test_autograd import ALL_KEY, get_functions, params0
 from tests.test_web.test_webapi_mode import make_mode_sim
 from tidy3d import config
 from tidy3d.config import get_manager
-from tidy3d.web import Job, common, run_async
+from tidy3d.web import Job, common, run, run_async
 from tidy3d.web.api import webapi as web
 from tidy3d.web.api.container import Batch, WebContainer
 from tidy3d.web.api.webapi import load_simulation_if_cached
 from tidy3d.web.cache import CACHE_ARTIFACT_NAME, clear, get_cache_entry_dir, resolve_local_cache
+from tidy3d.web.core.task_core import BatchTask
 
 common.CONNECTION_RETRY_TIME = 0.1
 
@@ -139,6 +145,8 @@ def _patch_run_pipeline(monkeypatch):
     monkeypatch.setattr(
         web, "load_simulation", lambda task_id, *args, **kwargs: TASK_TO_SIM[task_id]
     )
+    monkeypatch.setattr(BatchTask, "is_batch", lambda *args, **kwargs: "success")
+    monkeypatch.setattr(BatchTask, "detail", lambda *args: SimpleNamespace(status="success"))
     return counters
 
 
@@ -265,6 +273,79 @@ def _test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path):
     assert isinstance(data_task1, _FakeStubData)
     assert isinstance(data_task2, _FakeStubData)
     assert len(cache) == 3
+
+
+def _test_verbosity(monkeypatch, basic_simulation):
+    _CSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")  # ANSI CSI
+    _OSC8_RE = re.compile(r"\x1b\]8;.*?(?:\x1b\\|\x07)", re.DOTALL)  # OSC-8 hyperlinks
+
+    def _normalize_console_text(s: str) -> str:
+        s = _OSC8_RE.sub("", s)  # drop hyperlinks
+        s = _CSI_RE.sub("", s)  # drop colors, etc.
+        s = s.replace("\r", "")
+        s = re.sub(r"[ \t]+", " ", s)  # collapse runs of spaces/tabs
+        return s.strip()
+
+    buf = io.StringIO()
+    test_console = Console(file=buf, force_terminal=True)
+
+    counters = _patch_run_pipeline(monkeypatch)
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+    _reset_fake_maps()
+    _reset_counters(counters)
+    sim2 = basic_simulation.updated_copy(shutoff=1e-4)
+    sim3 = basic_simulation.updated_copy(shutoff=1e-3)
+
+    run(basic_simulation, verbose=True)  # seed cache
+
+    log_mod = importlib.import_module("tidy3d.log")
+
+    # --- swap handler console (and restore later) ---
+    if "console" not in log_mod.log.handlers:
+        log_mod.set_logging_console()
+    orig_console = log_mod.log.handlers["console"].console
+    log_mod.log.handlers["console"].console = test_console
+    try:
+        buf.truncate(0)
+        buf.seek(0)
+
+        log_mod.get_logging_console().log("test")
+        assert "test" in buf.getvalue()
+
+        buf.truncate(0)
+        buf.seek(0)
+
+        # test for load_simulation_if_cached
+        sim_data = load_simulation_if_cached(basic_simulation, verbose=True)
+        assert sim_data is not None
+        assert "Loading simulation from" in buf.getvalue(), (
+            f"Expected 'Loading simulation from' in log, got '{buf.getvalue()}'"
+        )
+
+        buf.truncate(0)
+        buf.seek(0)
+        load_simulation_if_cached(basic_simulation, verbose=False)
+        assert sim_data is not None
+        assert buf.getvalue().strip() == "", f"Expected empty log, got '{buf.getvalue()}'"
+
+        # test for batched runs
+        buf.truncate(0)
+        buf.seek(0)
+        run([basic_simulation, sim3], verbose=True)
+        txt = _normalize_console_text(buf.getvalue())
+        assert "Got 1 simulation from cache" in txt, (
+            f"Expected 'Got 1 simulation from cache' in log, got '{buf.getvalue()}'"
+        )
+
+        buf.truncate(0)
+        buf.seek(0)
+        run([basic_simulation, sim2], verbose=False)
+        assert buf.getvalue().strip() == "", f"Expected empty log, got '{buf.getvalue()}'"
+
+    finally:
+        # explicit restore so nothing leaks
+        log_mod.log.handlers["console"].console = orig_console
 
 
 def _test_job_run_cache(monkeypatch, basic_simulation, tmp_path):
@@ -436,3 +517,4 @@ def test_cache_sequential(monkeypatch, tmp_path, tmp_path_factory, basic_simulat
     _test_autograd_cache(monkeypatch)
     _test_configure_cache_roundtrip(monkeypatch, tmp_path)
     _test_mode_solver_caching(monkeypatch, tmp_path)
+    _test_verbosity(monkeypatch, basic_simulation)

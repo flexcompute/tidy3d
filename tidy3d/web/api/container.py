@@ -18,7 +18,14 @@ from typing import Any, Literal, Optional, Union
 
 import pydantic.v1 as pd
 from pydantic.v1 import PrivateAttr
-from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    TaskID,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.mode.mode_solver import ModeSolver
@@ -331,7 +338,7 @@ class Job(WebContainer):
             simulation=self.simulation,
             path=stash_path,
             reduce_simulation=self.reduce_simulation,
-            verbose=getattr(self, "verbose", True),
+            verbose=self.verbose,
         )
 
         if restored is None:
@@ -945,11 +952,23 @@ class Batch(WebContainer):
         """Upload a series of tasks associated with this ``Batch`` using multi-threading."""
         self._check_folder(self.folder_name)
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-            futures = [executor.submit(job.upload) for _, job in self.jobs.items()]
+            jobs_from_cache = [job for job in self.jobs.values() if job.load_if_cached]
+            jobs_to_upload = [job for job in self.jobs.values() if not job.load_if_cached]
+            futures = [executor.submit(job.upload) for job in jobs_to_upload]
 
             # progressbar (number of tasks uploaded)
             if self.verbose:
                 console = get_logging_console()
+                n_cached = len(jobs_from_cache)
+                if n_cached > 0:
+                    console.log(
+                        f"Got {n_cached} simulation{'s' if n_cached > 1 else ''} from cache."
+                    )
+
+            if len(futures) == 0:  # got all jobs from cache
+                return
+
+            if self.verbose:
                 progress_columns = (
                     TextColumn("[progress.description]{task.description}"),
                     BarColumn(),
@@ -957,8 +976,8 @@ class Batch(WebContainer):
                     TimeElapsedColumn(),
                 )
                 with Progress(*progress_columns, console=console, transient=False) as progress:
-                    pbar_message = f"Uploading data for {self.num_jobs} tasks"
-                    pbar = progress.add_task(pbar_message, total=self.num_jobs)
+                    pbar_message = f"Uploading data for {len(jobs_to_upload)} task{'s' if len(jobs_to_upload) > 1 else ''}"
+                    pbar = progress.add_task(pbar_message, total=len(jobs_to_upload))
                     completed = 0
                     for _ in concurrent.futures.as_completed(futures):
                         completed += 1
@@ -966,6 +985,9 @@ class Batch(WebContainer):
 
                     progress.refresh()
                     time.sleep(BATCH_PROGRESS_REFRESH_TIME)
+            else:
+                for _ in concurrent.futures.as_completed(futures):
+                    pass
 
     def get_info(self) -> dict[TaskName, TaskInfo]:
         """Get information about each task in the :class:`Batch`.
@@ -1138,6 +1160,8 @@ class Batch(WebContainer):
         postprocess_started_tasks: set[str] = set()
 
         try:
+            console = None
+            progress_columns = []
             if self.verbose:
                 console = get_logging_console()
                 self.estimate_cost()
@@ -1152,10 +1176,13 @@ class Batch(WebContainer):
                     TimeElapsedColumn(),
                 )
 
-                with Progress(*progress_columns, console=console, transient=False) as progress:
-                    pbar_tasks: dict[str, int] = {}
-                    for task_name, job in self.jobs.items():
-                        schedule_download(job)
+            with Progress(
+                *progress_columns, console=console, transient=False, disable=not self.verbose
+            ) as progress:
+                pbar_tasks: dict[str, TaskID] = {}
+                for task_name, job in self.jobs.items():
+                    schedule_download(job)
+                    if self.verbose:
                         status = job.status
                         completed = STATE_PROGRESS_PERCENTAGE.get(status, 0)
                         desc = pbar_description(task_name, status, max_name_length, 0)
@@ -1163,23 +1190,24 @@ class Batch(WebContainer):
                             desc, total=COMPLETED_PERCENT, completed=completed
                         )
 
-                    while any(check_continue_condition(job) for job in self.jobs.values()):
-                        for task_name, job in self.jobs.items():
-                            status = job.status
+                while any(check_continue_condition(job) for job in self.jobs.values()):
+                    for task_name, job in self.jobs.items():
+                        status = job.status
 
-                            # auto-start postprocess for modeler jobs when run finishes
-                            if (
-                                web._is_modeler_batch(job.task_id)
-                                and status == "run_success"
-                                and job.task_id not in postprocess_started_tasks
-                            ):
-                                job.postprocess_start(
-                                    worker_group=postprocess_worker_group, verbose=True
-                                )
-                                postprocess_started_tasks.add(job.task_id)
+                        # auto-start postprocess for modeler jobs when run finishes
+                        if (
+                            web._is_modeler_batch(job.task_id)
+                            and status == "run_success"
+                            and job.task_id not in postprocess_started_tasks
+                        ):
+                            job.postprocess_start(
+                                worker_group=postprocess_worker_group, verbose=True
+                            )
+                            postprocess_started_tasks.add(job.task_id)
 
-                            schedule_download(job)
+                        schedule_download(job)
 
+                        if self.verbose:
                             # choose display status & percent
                             if status != "run_success":
                                 display_status = status
@@ -1196,13 +1224,17 @@ class Batch(WebContainer):
                             pbar = pbar_tasks[task_name]
                             desc = pbar_description(task_name, display_status, max_name_length, 0)
                             progress.update(pbar, description=desc, completed=pct)
-
+                    if self.verbose:
                         progress.refresh()
                         time.sleep(BATCH_PROGRESS_REFRESH_TIME)
+                    else:
+                        time.sleep(web.REFRESH_TIME)
 
-                    # final render to terminal state for all bars
-                    for task_name, job in self.jobs.items():
-                        schedule_download(job)
+                # final render to terminal state for all bars
+                for task_name, job in self.jobs.items():
+                    schedule_download(job)
+
+                    if self.verbose:
                         status = job.status
                         if status != "run_success":
                             display_status = status
@@ -1222,25 +1254,9 @@ class Batch(WebContainer):
                         desc = pbar_description(task_name, display_status, max_name_length, 0)
                         progress.update(pbar, description=desc, completed=pct)
 
+                if self.verbose:
                     progress.refresh()
                     console.log("Batch complete.")
-            else:
-                # quiet mode
-                while any(check_continue_condition(job) for job in self.jobs.values()):
-                    for job in self.jobs.values():
-                        if (
-                            web._is_modeler_batch(job.task_id)
-                            and job.status == "run_success"
-                            and job.task_id not in postprocess_started_tasks
-                        ):
-                            job.postprocess_start(
-                                worker_group=postprocess_worker_group, verbose=False
-                            )
-                            postprocess_started_tasks.add(job.task_id)
-
-                        schedule_download(job)
-
-                    time.sleep(web.REFRESH_TIME)
         finally:
             if download_executor is not None:
                 try:
