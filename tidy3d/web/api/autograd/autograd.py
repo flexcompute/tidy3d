@@ -57,15 +57,7 @@ from .io_utils import (
 from .io_utils import (
     upload_sim_fields_keys as _upload_sim_fields_keys_impl,
 )
-
-
-class UserVjpEntry(typing.NamedTuple):
-    structure_index: int
-    path: tuple[Hashable, ...]
-    fn: typing.Callable[..., typing.Any]
-
-
-UserVjpSpec = tuple[UserVjpEntry, ...]
+from .types import SetupRunResult, UserVjpEntry, UserVjpSpec
 
 
 def _resolve_local_gradient(value: typing.Optional[bool]) -> bool:
@@ -75,7 +67,7 @@ def _resolve_local_gradient(value: typing.Optional[bool]) -> bool:
     return bool(config.adjoint.local_gradient)
 
 
-def _insert_numerical_structures_static(
+def insert_numerical_structures_static(
     simulation: td.Simulation,
     numerical_structures: dict[int, dict[str, typing.Any]],
 ) -> td.Simulation:
@@ -124,7 +116,7 @@ def _normalize_simulations_input(
     return normalized, name_mapping
 
 
-def _normalize_user_vjp_spec(spec) -> typing.Optional[UserVjpSpec]:
+def normalize_user_vjp_spec(spec) -> typing.Optional[UserVjpSpec]:
     """Normalize a user-provided VJP specification into canonical tuple entries."""
 
     if spec is None:
@@ -143,7 +135,7 @@ def _normalize_user_vjp_spec(spec) -> typing.Optional[UserVjpSpec]:
     return tuple(UserVjpEntry(entry[0], (entry[1],), entry[2]) for entry in entries)
 
 
-def _normalize_user_vjp_input(
+def normalize_user_vjp_input(
     simulations: typing.Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
     user_vjp,
     name_mapping: dict[str, int],
@@ -159,7 +151,7 @@ def _normalize_user_vjp_input(
                 "When simulations are provided as a dict, 'user_vjp' must also be a dict keyed by task names."
             )
         return {
-            task_name: _normalize_user_vjp_spec(user_vjp.get(task_name))
+            task_name: normalize_user_vjp_spec(user_vjp.get(task_name))
             if user_vjp.get(task_name) is not None
             else None
             for task_name in task_names
@@ -182,12 +174,12 @@ def _normalize_user_vjp_input(
     normalized: dict[str, typing.Optional[UserVjpSpec]] = {}
     for task_name, idx in name_mapping.items():
         spec = user_vjp[idx]
-        normalized[task_name] = _normalize_user_vjp_spec(spec) if spec is not None else None
+        normalized[task_name] = normalize_user_vjp_spec(spec) if spec is not None else None
 
     return normalized
 
 
-def _has_traced_numerical_structures(
+def has_traced_numerical_structures(
     numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]],
 ) -> bool:
     if not numerical_structures:
@@ -200,19 +192,7 @@ def _has_traced_numerical_structures(
     return False
 
 
-def has_traced_numerical_structures(
-    numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]],
-) -> bool:
-    return _has_traced_numerical_structures(numerical_structures)
-
-
-class SetupRunResult(typing.NamedTuple):
-    sim_fields: AutogradFieldMap
-    simulation: td.Simulation
-    numerical_info: dict[int, NumericalStructureInfo]
-
-
-def _validate_numerical_structures(
+def validate_numerical_structures(
     numerical_structures: dict[int, dict[str, typing.Any]], user_vjp, simulation: td.Simulation
 ) -> None:
     """Validate user-supplied numerical structure configuration."""
@@ -406,14 +386,14 @@ def run(
             raise AdjointError(
                 "'user_vjp' must now be provided as tuples of (structure_index, field_name, callable)."
             )
-        user_vjp_normalized = _normalize_user_vjp_spec(user_vjp)
+        user_vjp_normalized = normalize_user_vjp_spec(user_vjp)
 
     if (user_vjp is not None) and (not local_gradient):
         raise AdjointError("User VJP specified for a remote gradient not supported.")
 
     numerical_structures_validated = None
     if isinstance(simulation, td.Simulation) and numerical_structures is not None:
-        _validate_numerical_structures(
+        validate_numerical_structures(
             numerical_structures=numerical_structures,
             user_vjp=user_vjp_normalized,
             simulation=simulation,
@@ -497,7 +477,7 @@ def run(
 
     simulation_static = simulation
     if isinstance(simulation, td.Simulation) and numerical_structures_validated:
-        simulation_static = _insert_numerical_structures_static(
+        simulation_static = insert_numerical_structures_static(
             simulation=simulation,
             numerical_structures=numerical_structures_validated,
         )
@@ -657,7 +637,7 @@ def run_async(
         dict.fromkeys(name_mapping) if numerical_structures is None else numerical_structures
     )
 
-    user_vjp_norm = _normalize_user_vjp_input(
+    user_vjp_norm = normalize_user_vjp_input(
         simulations=simulations,
         user_vjp=user_vjp,
         name_mapping=name_mapping,
@@ -666,7 +646,7 @@ def run_async(
     numerical_structures_validated = {}
     for name, numerical_structures_config in numerical_structures.items():
         cfg = numerical_structures_config or {}
-        _validate_numerical_structures(
+        validate_numerical_structures(
             numerical_structures=cfg,
             user_vjp=user_vjp_norm.get(name),
             simulation=simulations_norm[name],
@@ -708,7 +688,7 @@ def run_async(
 
     simulations_static = {
         name: (
-            _insert_numerical_structures_static(
+            insert_numerical_structures_static(
                 simulation=simulations_norm[name],
                 numerical_structures=numerical_structures_validated[name],
             )
@@ -759,8 +739,6 @@ def _run(
         user_vjp=user_vjp,
     )
     traced_fields_sim = setup_result.sim_fields
-    if not traced_fields_sim:
-        print("FALLBACK")
     simulation = setup_result.simulation
 
     # if we register this as not needing adjoint at all (no tracers), call regular run function
@@ -950,17 +928,7 @@ def setup_run(
             params_flat = config["parameters"]
             vjp_callable = config["vjp"]
 
-            try:
-                structure = func(get_static(params_flat))
-            except Exception as exc:  # pragma: no cover - defensive
-                raise AdjointError(
-                    f"Failed to construct numerical structure at index {index}: {exc}"
-                ) from exc
-
-            if not isinstance(structure, td.Structure):
-                raise AdjointError(
-                    "Numerical structure creation functions must return a tidy3d.Structure instance."
-                )
+            structure = func(get_static(params_flat))
 
             structures.insert(index, structure)
             numerical_info[index] = NumericalStructureInfo(
@@ -971,19 +939,21 @@ def setup_run(
                 vjp=vjp_callable,
             )
 
-        sim_prepared = simulation.copy(update={"structures": structures})
+            sim_prepared = simulation.updated_copy(structures=structures)
 
     sim_fields_map = sim_prepared._strip_traced_fields(
         include_untraced_data_arrays=False, starting_path=("structures",)
     )
 
     if numerical_info:
+        # collect sim fields for structures that go through regular derivative path
         sim_fields_dict = {
             key: value
             for key, value in sim_fields_map.items()
             if not (key[0] == "structures" and key[1] in numerical_info)
         }
 
+        # collect sim fields for structures that go through numerical derivative path
         for index, info in numerical_info.items():
             for idx, param in enumerate(info.parameters):
                 sim_fields_dict[("numerical", index, idx)] = param

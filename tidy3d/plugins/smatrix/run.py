@@ -193,7 +193,7 @@ def _run_local(
     user_vjp_modeler = user_vjp
     user_vjp_modeler_normalized = None
     if user_vjp_modeler is not None:
-        user_vjp_modeler_normalized = web_ag._normalize_user_vjp_spec(user_vjp_modeler)
+        user_vjp_modeler_normalized = web_ag.normalize_user_vjp_spec(user_vjp_modeler)
 
     should_use_autograd = any(web_ag.is_valid_for_autograd(sim) for sim in sims.values())
 
