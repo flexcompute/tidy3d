@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.
 
 ### Fixed
+- Ensured the legacy `Env` proxy mirrors `config.web` profile switches and preserves API URL.
 - More robust `Sellmeier` and `Debye` material model, and prevent very large pole parameters in `PoleResidue` material model.
 - Bug in `WavePort` when more than one mode is requested in the `ModeSpec`.
 - Solver error for named 2D materials with inhomogeneous substrates.

@@ -27,7 +27,6 @@ from .constants import (
     SIMCLOUD_APIKEY,
 )
 from .core_config import get_logger
-from .environment import Env
 from .exceptions import WebError, WebNotFoundError
 
 JSONType: TypeAlias = dict[str, Any] | list[Any] | str | int
@@ -201,7 +200,7 @@ def http_interceptor(func: Callable[..., Any]) -> Callable[..., JSONType]:
 
 class TLSAdapter(HTTPAdapter):
     def init_poolmanager(self, *args: Any, **kwargs: Any) -> None:
-        context = create_urllib3_context(ssl_version=Env.current.ssl_version)
+        context = create_urllib3_context(ssl_version=config.web.ssl_version)
         kwargs["ssl_context"] = context
         return super().init_poolmanager(*args, **kwargs)
 
@@ -213,14 +212,14 @@ class HttpSessionManager:
         """Initialize the session."""
         self.session = session
         self._mounted_ssl_version = None
-        self._ensure_tls_adapter(Env.current.ssl_version)
-        self.session.verify = Env.current.ssl_verify
+        self._ensure_tls_adapter(config.web.ssl_version)
+        self.session.verify = config.web.ssl_verify
 
     def reinit(self) -> None:
         """Reinitialize the session."""
-        ssl_version = Env.current.ssl_version
+        ssl_version = config.web.ssl_version
         self._ensure_tls_adapter(ssl_version)
-        self.session.verify = Env.current.ssl_verify
+        self.session.verify = config.web.ssl_verify
 
     def _ensure_tls_adapter(self, ssl_version: str) -> None:
         if not ssl_version:
@@ -237,14 +236,14 @@ class HttpSessionManager:
         """Get the resource."""
         self.reinit()
         return self.session.get(
-            url=Env.current.get_real_url(path), auth=api_key_auth, json=json, params=params
+            url=config.web.build_api_url(path), auth=api_key_auth, json=json, params=params
         )
 
     @http_interceptor
     def post(self, path: str, json: JSONType = None) -> requests.Response:
         """Create the resource."""
         self.reinit()
-        return self.session.post(Env.current.get_real_url(path), json=json, auth=api_key_auth)
+        return self.session.post(config.web.build_api_url(path), json=json, auth=api_key_auth)
 
     @http_interceptor
     def put(
@@ -253,7 +252,7 @@ class HttpSessionManager:
         """Update the resource."""
         self.reinit()
         return self.session.put(
-            Env.current.get_real_url(path), json=json, auth=api_key_auth, files=files
+            config.web.build_api_url(path), json=json, auth=api_key_auth, files=files
         )
 
     @http_interceptor
@@ -263,7 +262,7 @@ class HttpSessionManager:
         """Delete the resource."""
         self.reinit()
         return self.session.delete(
-            Env.current.get_real_url(path), auth=api_key_auth, json=json, params=params
+            config.web.build_api_url(path), auth=api_key_auth, json=json, params=params
         )
 
 

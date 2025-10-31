@@ -15,6 +15,7 @@ from botocore.exceptions import ClientError
 from pydantic.v1 import Extra, Field, parse_obj_as
 
 import tidy3d as td
+from tidy3d.config import config
 from tidy3d.exceptions import ValidationError
 from tidy3d.web.common import REFRESH_TIME
 
@@ -27,7 +28,6 @@ from .constants import (
     SIMULATION_DATA_HDF5_GZ,
 )
 from .core_config import get_logger_console
-from .environment import Env
 from .exceptions import WebError, WebNotFoundError
 from .file_util import read_simulation_from_hdf5
 from .http_util import get_version as _get_protocol_version
@@ -478,7 +478,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "solverVersion": solver_version,
                 "workerGroup": worker_group,
                 "protocolVersion": protocol_version,
-                "enableCaching": Env.current.enable_caching,
+                "enableCaching": config.web.enable_caching,
                 "payType": pay_type.value,
                 "priority": priority,
             },

@@ -375,6 +375,17 @@ class WebConfig(ConfigSection):
             normalized = normalized.rstrip("/")
         return normalized
 
+    def build_api_url(self, path: str) -> str:
+        """Join the configured API endpoint with a request path."""
+
+        base = str(self.api_endpoint or "")
+        path_str = str(path or "")
+        if not base:
+            return path_str.lstrip("/")
+        if not path_str:
+            return base
+        return "/".join([base.rstrip("/"), path_str.lstrip("/")])
+
 
 @register_handler("web")
 def apply_web(config: WebConfig) -> None:
