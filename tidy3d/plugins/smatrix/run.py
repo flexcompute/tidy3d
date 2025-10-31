@@ -191,6 +191,9 @@ def _run_local(
 
     numerical_structures_modeler = numerical_structures or {}
     user_vjp_modeler = user_vjp
+    user_vjp_modeler_normalized = None
+    if user_vjp_modeler is not None:
+        user_vjp_modeler_normalized = web_ag._normalize_user_vjp_spec(user_vjp_modeler)
 
     should_use_autograd = any(web_ag.is_valid_for_autograd(sim) for sim in sims.values())
 
@@ -224,9 +227,8 @@ def _run_local(
             first_sim = next(iter(sims.values()))
             numerical_structures_validated = web_ag._validate_numerical_structures(
                 numerical_structures=numerical_structures_modeler,
-                user_vjp=user_vjp_modeler,
+                user_vjp=user_vjp_modeler_normalized,
                 simulation=first_sim,
-                require_vjp=local_gradient,
             )
 
             numerical_structures_broadcast = {
@@ -235,8 +237,8 @@ def _run_local(
         else:
             numerical_structures_broadcast = None
 
-        if user_vjp_modeler:
-            user_vjp_broadcast = dict.fromkeys(sims, user_vjp_modeler)
+        if user_vjp_modeler_normalized is not None:
+            user_vjp_broadcast = dict.fromkeys(sims, user_vjp_modeler_normalized)
         else:
             user_vjp_broadcast = None
 

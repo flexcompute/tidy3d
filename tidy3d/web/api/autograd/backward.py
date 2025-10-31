@@ -17,6 +17,9 @@ from tidy3d.packaging import disable_local_subpixel
 
 from .utils import E_to_D, get_derivative_maps
 
+if typing.TYPE_CHECKING:
+    from .autograd import UserVjpSpec
+
 
 def setup_adj(
     data_fields_vjp: AutogradFieldMap,
@@ -110,7 +113,7 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
-    user_vjp,
+    user_vjp: typing.Optional[UserVjpSpec],
     numerical_info: dict[int, NumericalStructureInfo],
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
@@ -124,6 +127,14 @@ def postprocess_adj(
             sim_vjp_map[structure_index].append(tuple(structure_path))
         elif namespace == "numerical":
             numerical_vjp_map[structure_index].add(tuple(structure_path))
+
+    user_vjp_lookup: dict[int, dict[typing.Hashable, typing.Callable[..., typing.Any]]] = {}
+    if user_vjp:
+        for structure_index, path, vjp_fn in user_vjp:
+            if not path:
+                continue
+            field_key = path[0]
+            user_vjp_lookup.setdefault(structure_index, {})[field_key] = vjp_fn
 
     structure_data_cache: dict[int, dict[str, typing.Any]] = {}
 
@@ -345,14 +356,14 @@ def postprocess_adj(
                 )
             vjp_fn = info.vjp
 
-            name_to_path = {path[0]: path for path in numerical_paths_raw if path}
-            try:
-                numerical_paths_ordered = tuple(name_to_path[name] for name in info.parameter_names)
-            except KeyError as exc:  # pragma: no cover - defensive
-                raise AdjointError(
-                    f"Numerical structure index {structure_index} missing VJP path for parameter '{exc.args[0]}'."
-                ) from exc
-            numerical_accum = [None] * len(info.parameters)
+            paths_with_indices = sorted(
+                ((path[0], path) for path in numerical_paths_raw if path),
+                key=lambda item: item[0],
+            )
+            requested_indices = tuple(idx for idx, _ in paths_with_indices)
+            numerical_paths_ordered = tuple(path for _, path in paths_with_indices)
+            num_params = len(info.parameters)
+            numerical_accum = [None] * num_params
 
         for chunk_start in range(0, n_freqs, freq_chunk_size):
             chunk_end = min(chunk_start + freq_chunk_size, n_freqs)
@@ -444,8 +455,8 @@ def postprocess_adj(
                 )
 
                 vjp_fns = None
-                if (user_vjp is not None) and (structure_index in user_vjp):
-                    vjp_fns = user_vjp[structure_index]
+                if user_vjp_lookup and (structure_index in user_vjp_lookup):
+                    vjp_fns = user_vjp_lookup[structure_index]
 
                 vjp_chunk = data["structure"]._compute_derivatives(
                     derivative_info_struct, vjp_fns=vjp_fns
@@ -458,7 +469,7 @@ def postprocess_adj(
                         vjp_value_map[path] = value
 
             print("BEFORE NUMERICAL ACCUM")
-            if numerical_accum is not None:
+            if numerical_accum is not None and numerical_paths_ordered:
                 derivative_info_num = DerivativeInfo(
                     paths=numerical_paths_ordered,
                     **chunk_kwargs,
@@ -470,31 +481,29 @@ def postprocess_adj(
 
                 gradients = vjp_fn(parameters=params_static, derivative_info=derivative_info_num)
                 if isinstance(gradients, dict):
-                    missing = [path for path in numerical_paths_ordered if path not in gradients]
-                    if missing:
-                        raise AdjointError(
-                            f"Numerical structure index {structure_index} missing gradients for paths: {missing}."
-                        )
-                    gradient_iter = (gradients[path] for path in numerical_paths_ordered)
+                    gradient_iter = (gradients.get(path) for path in numerical_paths_ordered)
                 else:
-                    if len(gradients) != len(info.parameters):
+                    if len(gradients) != len(numerical_paths_ordered):
                         raise AdjointError(
                             f"User VJP for numerical structure index {structure_index} returned {len(gradients)} gradients, "
-                            f"expected {len(info.parameters)}."
+                            f"expected {len(numerical_paths_ordered)}."
                         )
                     gradient_iter = gradients
 
-                for idx, grad_value in enumerate(gradient_iter):
-                    numerical_accum[idx] = _accumulate(numerical_accum[idx], grad_value)
+                for idx_requested, grad_value in zip(requested_indices, gradient_iter):
+                    numerical_accum[idx_requested] = _accumulate(
+                        numerical_accum[idx_requested], grad_value
+                    )
 
         for structure_path, vjp_value in vjp_value_map.items():
             sim_path = ("structures", structure_index, *list(structure_path))
             sim_fields_vjp[sim_path] = vjp_value
 
         if numerical_accum is not None:
-            for name, grad, param in zip(info.parameter_names, numerical_accum, info.parameters):
+            for idx, param in enumerate(info.parameters):
+                grad = numerical_accum[idx]
                 if grad is None:
                     grad = _zero_like(param)
-                sim_fields_vjp[("numerical", structure_index, name)] = grad
+                sim_fields_vjp[("numerical", structure_index, idx)] = grad
 
     return sim_fields_vjp

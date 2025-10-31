@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import copy
 import typing
-from collections.abc import Hashable
 from dataclasses import dataclass
 
 import pydantic.v1 as pd
@@ -52,8 +51,7 @@ class NumericalStructureInfo:
     """Metadata describing a user-supplied numerical structure insertion."""
 
     index: int
-    parameter_names: tuple[Hashable, ...]
-    parameters: tuple[typing.Any, ...]
+    parameters: typing.Any
     function: typing.Callable[..., typing.Any]
     structure: typing.Any
     vjp: typing.Callable[..., typing.Any]

@@ -5,11 +5,14 @@ from collections.abc import Iterable
 from typing import Any
 
 import autograd.numpy as anp
+import numpy as np
+from autograd.extend import Box
 from autograd.tracer import getval
 
 __all__ = [
     "asarray1d",
     "contains",
+    "contains_tracer",
     "get_static",
     "is_tidy_box",
     "pack_complex_vec",
@@ -41,6 +44,20 @@ def contains(target: Any, seq: Iterable[Any]) -> bool:
         if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
             if contains(target, x):
                 return True
+    return False
+
+
+def contains_tracer(value) -> bool:
+    if isinstance(value, Box):
+        return True
+    if isinstance(value, np.ndarray):
+        return any(contains_tracer(v) for v in value.flat)
+    if isinstance(value, dict):
+        return any(contains_tracer(v) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(contains_tracer(v) for v in value)
+    if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
+        return any(contains_tracer(v) for v in value)
     return False
 
 

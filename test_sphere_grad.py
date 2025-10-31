@@ -136,7 +136,7 @@ def obj_fn(params):
         "sphere_grad",
         local_gradient=True,
         verbose=True,
-        user_vjp={0: {"radius": vjp_sphere, "center": vjp_sphere}},
+        user_vjp=((0, "radius", vjp_sphere), (0, "center", vjp_sphere)),
     )
 
     return np.sum(np.abs(sim_data["field"].flux.data) ** 2)
