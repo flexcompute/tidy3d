@@ -1156,6 +1156,88 @@ def test_mode_solver_with_microwave_mode_spec():
     )
 
 
+def test_mode_solver_with_microwave_group_index():
+    """Test that group_index calculation with MicrowaveModeSpec correctly filters frequencies."""
+
+    width = 1.0 * mm
+    height = 0.5 * mm
+    metal_thickness = 0.1 * mm
+
+    stripline_sim = make_mw_sim(
+        transmission_line_type="stripline",
+        width=width,
+        height=height,
+        metal_thickness=metal_thickness,
+    )
+    dl = 0.05 * mm
+    stripline_sim = stripline_sim.updated_copy(grid_spec=td.GridSpec.uniform(dl=dl))
+
+    plane = td.Box(center=(0, 0, 0), size=(0, 10 * width, 2 * height + metal_thickness))
+    num_modes = 1
+
+    # Define original frequencies that we want in the final result
+    original_freqs = [1e9, 5e9, 10e9]
+
+    # Create custom impedance spec (AutoImpedanceSpec won't work with local mode solver)
+    custom_spec = td.CustomImpedanceSpec(
+        voltage_spec=None,
+        current_spec=td.AxisAlignedCurrentIntegralSpec(
+            size=(0, width + dl, metal_thickness + dl), sign="+"
+        ),
+    )
+
+    # Enable group_index calculation
+    mode_spec = td.MicrowaveModeSpec(
+        num_modes=num_modes,
+        target_neff=2.2,
+        impedance_specs=custom_spec,
+        group_index_step=True,  # This will expand frequencies to triplets
+    )
+
+    mms = ModeSolver(
+        simulation=stripline_sim,
+        plane=plane,
+        mode_spec=mode_spec,
+        colocate=False,
+        freqs=original_freqs,
+    )
+
+    # Get the mode solver data
+    mms_data: td.MicrowaveModeSolverData = mms.data
+
+    # Verify that group index was calculated
+    assert mms_data.n_group is not None, "Group index should be calculated"
+
+    # Verify that transmission line data exists
+    assert mms_data.transmission_line_data is not None, "Transmission line data should exist"
+
+    # Verify that the frequencies in transmission_line_data match the original frequencies
+    # (not the expanded triplet used internally for group index calculation)
+    tl_freqs_Z0 = mms_data.transmission_line_data.Z0.coords["f"].values
+    tl_freqs_voltage = mms_data.transmission_line_data.voltage_coeffs.coords["f"].values
+    tl_freqs_current = mms_data.transmission_line_data.current_coeffs.coords["f"].values
+
+    assert len(tl_freqs_Z0) == len(original_freqs), (
+        f"Z0 should have {len(original_freqs)} frequencies, got {len(tl_freqs_Z0)}"
+    )
+    assert len(tl_freqs_voltage) == len(original_freqs), (
+        f"voltage_coeffs should have {len(original_freqs)} frequencies, got {len(tl_freqs_voltage)}"
+    )
+    assert len(tl_freqs_current) == len(original_freqs), (
+        f"current_coeffs should have {len(original_freqs)} frequencies, got {len(tl_freqs_current)}"
+    )
+
+    assert np.allclose(tl_freqs_Z0, original_freqs), (
+        f"Z0 frequencies {tl_freqs_Z0} should match original {original_freqs}"
+    )
+    assert np.allclose(tl_freqs_voltage, original_freqs), (
+        f"voltage_coeffs frequencies {tl_freqs_voltage} should match original {original_freqs}"
+    )
+    assert np.allclose(tl_freqs_current, original_freqs), (
+        f"current_coeffs frequencies {tl_freqs_current} should match original {original_freqs}"
+    )
+
+
 @pytest.mark.parametrize("axis", [0, 1, 2])
 def test_voltage_integral_axes(axis):
     """Check AxisAlignedVoltageIntegral runs."""

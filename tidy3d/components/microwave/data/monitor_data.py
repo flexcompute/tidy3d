@@ -281,6 +281,30 @@ class MicrowaveModeData(ModeData, MicrowaveBaseModel):
             super_info["Im(Z0)"] = self.transmission_line_data.Z0.imag
         return super_info
 
+    def _group_index_post_process(self, frequency_step: float) -> ModeData:
+        """Calculate group index and remove added frequencies used only for this calculation.
+
+        Parameters
+        ----------
+        frequency_step: float
+            Fractional frequency step used to calculate the group index.
+
+        Returns
+        -------
+        :class:`.ModeData`
+            Filtered data with calculated group index.
+        """
+        super_data = super()._group_index_post_process(frequency_step)
+        if self.transmission_line_data is not None:
+            _, center_inds, _ = self._group_index_freq_slices()
+            update_dict = {
+                "Z0": self.transmission_line_data.Z0.isel(f=center_inds),
+                "voltage_coeffs": self.transmission_line_data.voltage_coeffs.isel(f=center_inds),
+                "current_coeffs": self.transmission_line_data.current_coeffs.isel(f=center_inds),
+            }
+            super_data = super_data.updated_copy(**update_dict, path="transmission_line_data")
+        return super_data
+
 
 class MicrowaveModeSolverData(ModeSolverData, MicrowaveModeData):
     """

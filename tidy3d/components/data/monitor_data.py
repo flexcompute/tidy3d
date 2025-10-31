@@ -1890,6 +1890,24 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return pairs, values
 
+    def _group_index_freq_slices(self) -> tuple[slice, slice, slice]:
+        """Get frequency slices for group index numerical differentiation.
+
+        Group index calculation uses three-point finite differences, requiring
+        backward, center, and forward frequency points organized as triplets.
+
+        Returns
+        -------
+        tuple[slice, slice, slice]
+            Slices for (backward, center, forward) frequencies from the frequency array.
+        """
+        freqs = self.n_complex.coords["f"].values
+        num_freqs = freqs.size
+        back = slice(0, num_freqs, 3)
+        center = slice(1, num_freqs, 3)
+        fwd = slice(2, num_freqs, 3)
+        return back, center, fwd
+
     def _group_index_post_process(self, frequency_step: float) -> ModeData:
         """Calculate group index and remove added frequencies used only for this calculation.
 
@@ -1904,12 +1922,8 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             Filtered data with calculated group index.
         """
 
-        freqs = self.n_complex.coords["f"].values
-        num_freqs = freqs.size
-        back = slice(0, num_freqs, 3)
-        center = slice(1, num_freqs, 3)
-        fwd = slice(2, num_freqs, 3)
-        freqs = freqs[center]
+        back, center, fwd = self._group_index_freq_slices()
+        freqs = self.n_complex.coords["f"].values[center]
 
         # calculate group index
         n_center = self.n_eff.isel(f=center).values

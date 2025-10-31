@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in `TerminalComponentModelerData.get_antenna_metrics_data()` where `WavePort` mode indices were not properly handled. Improved docstrings and type hints to make the usage clearer.
 - Improved type hints for `Tidy3dBaseModel`, so that all derived classes will have more accurate return types.
 - More robust method for suppressing RF license warnings during tests.
+- Fixed frequency sampling of `TransmissionLineDataset` within `MicrowaveModeData` when using group index calculation.
 
 ### Removed
 - Removed deprecated `use_complex_fields` parameter from `TwoPhotonAbsorption` and `KerrNonlinearity`. Parameters `beta` and `n2` are now real-valued only, as is `n0` if specified.
