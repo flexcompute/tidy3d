@@ -113,8 +113,8 @@ Plane Wave
    :template: module.rst
 
    tidy3d.PlaneWave
-   tidy3d.FixedInPlaneK
-   tidy3d.FixedAngle
+   tidy3d.FixedInPlaneKSpec
+   tidy3d.FixedAngleSpec
 
 The ``PlaneWave`` class represents an incident plane wave of a certain polarization and orientation. This is typically used in conjunction with periodic boundary conditions, e.g. in a unit cell simulation.
 
