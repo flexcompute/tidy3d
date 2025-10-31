@@ -110,6 +110,18 @@ class LegacyConfigWrapper:
 
         self._manager = manager
 
+    def switch_profile(self, profile: str) -> None:
+        """Switch active profile and synchronize the legacy environment proxy."""
+
+        normalized = normalize_profile_name(profile)
+        self._manager.switch_profile(normalized)
+        try:
+            from tidy3d.config import Env as _legacy_env
+        except Exception:
+            _legacy_env = None
+        if _legacy_env is not None:
+            _legacy_env._sync_to_manager(apply_env=True)
+
     def __getattr__(self, name: str) -> Any:
         return getattr(self._manager, name)
 
@@ -133,7 +145,7 @@ class LegacyConfigWrapper:
 
 
 class LegacyEnvironmentConfig:
-    """Backward compatible environment config wrapper."""
+    """Backward compatible environment config wrapper that proxies ConfigManager."""
 
     def __init__(
         self,
@@ -151,35 +163,38 @@ class LegacyEnvironmentConfig:
     ) -> None:
         if name is None:
             raise ValueError("Environment name is required")
-        name = normalize_profile_name(name)
         self._manager = manager
-        self._name = name
+        self._name = normalize_profile_name(name)
         self._environment = environment
-        self._overrides: dict[str, Any] = {}
+        self._pending: dict[str, Any] = {}
         if web_api_endpoint is not None:
-            self._overrides["api_endpoint"] = web_api_endpoint
+            self._pending["api_endpoint"] = web_api_endpoint
         if website_endpoint is not None:
-            self._overrides["website_endpoint"] = website_endpoint
+            self._pending["website_endpoint"] = website_endpoint
         if s3_region is not None:
-            self._overrides["s3_region"] = s3_region
+            self._pending["s3_region"] = s3_region
         if ssl_verify is not None:
-            self._overrides["ssl_verify"] = ssl_verify
+            self._pending["ssl_verify"] = ssl_verify
         if enable_caching is not None:
-            self._overrides["enable_caching"] = enable_caching
+            self._pending["enable_caching"] = enable_caching
         if ssl_version is not None:
-            self._overrides["ssl_version"] = ssl_version
+            self._pending["ssl_version"] = ssl_version
         if env_vars is not None:
-            self._overrides["env_vars"] = dict(env_vars)
+            self._pending["env_vars"] = dict(env_vars)
+
+    def reset_manager(self, manager: ConfigManager) -> None:
+        self._manager = manager
 
     @property
     def manager(self) -> Optional[ConfigManager]:
-        return self._manager
+        if self._manager is not None:
+            return self._manager
+        if self._environment is not None:
+            return self._environment._manager
+        return None
 
     def active(self) -> None:
         _warn_env_deprecated()
-        if self._manager is not None and self._manager.profile != self._name:
-            self._manager.switch_profile(self._name)
-
         environment = self._environment
         if environment is None:
             from tidy3d.config import Env  # local import to avoid circular
@@ -217,17 +232,19 @@ class LegacyEnvironmentConfig:
         return bool(value)
 
     @enable_caching.setter
-    def enable_caching(self, value: bool) -> None:
-        self._overrides["enable_caching"] = value
-        if self._manager and self._manager.profile == self._name:
-            self._manager.update_section("web", enable_caching=value)
+    def enable_caching(self, value: Optional[bool]) -> None:
+        self._set_pending("enable_caching", value)
 
     @property
     def ssl_version(self):
         return self._value("ssl_version")
 
+    @ssl_version.setter
+    def ssl_version(self, value) -> None:
+        self._set_pending("ssl_version", value)
+
     @property
-    def env_vars(self):
+    def env_vars(self) -> dict[str, str]:
         value = self._value("env_vars")
         if value is None:
             return {}
@@ -235,7 +252,7 @@ class LegacyEnvironmentConfig:
 
     @env_vars.setter
     def env_vars(self, value: dict[str, str]) -> None:
-        self._overrides["env_vars"] = dict(value)
+        self._set_pending("env_vars", dict(value))
 
     @property
     def name(self) -> str:
@@ -245,29 +262,60 @@ class LegacyEnvironmentConfig:
     def name(self, value: str) -> None:
         self._name = normalize_profile_name(value)
 
-    def get_real_url(self, path: str) -> str:
-        endpoint = self.web_api_endpoint or ""
-        return "/".join([endpoint.rstrip("/"), path.lstrip("/")])
-
-    @property
-    def _web_section(self):
-        section = {}
-        if self._manager is not None:
-            if self._manager.profile == self._name:
-                source = self._manager.as_dict().get("web", {})
+    def copy_state_from(self, other: LegacyEnvironmentConfig) -> None:
+        if not isinstance(other, LegacyEnvironmentConfig):
+            raise TypeError("Expected LegacyEnvironmentConfig instance.")
+        for key, value in other._pending.items():
+            if key == "env_vars" and value is not None:
+                self._pending[key] = dict(value)
             else:
-                source = self._manager.preview_profile(self._name).get("web", {})
-            if isinstance(source, dict):
-                section.update(source)
-        for key, value in self._overrides.items():
-            if value is not None:
-                section[key] = value
-        return section
+                self._pending[key] = value
+
+    def get_real_url(self, path: str) -> str:
+        manager = self.manager
+        if manager is not None and manager.profile == self._name:
+            web_section = manager.get_section("web")
+            if hasattr(web_section, "build_api_url"):
+                return web_section.build_api_url(path)
+
+        endpoint = self.web_api_endpoint or ""
+        if not path:
+            return endpoint
+        return "/".join([endpoint.rstrip("/"), str(path).lstrip("/")])
+
+    def apply_pending_overrides(self) -> None:
+        manager = self.manager
+        if manager is None or manager.profile != self._name:
+            return
+        if not self._pending:
+            return
+        updates = dict(self._pending)
+        manager.update_section("web", **updates)
+        self._pending.clear()
+
+    def _set_pending(self, key: str, value: Any) -> None:
+        if key == "env_vars" and value is not None:
+            self._pending[key] = dict(value)
+        else:
+            self._pending[key] = value
+        self.apply_pending_overrides()
+
+    def _web_section(self) -> dict[str, Any]:
+        manager = self.manager
+        if manager is None:
+            return {}
+        profile = normalize_profile_name(self._name)
+        if manager.profile == profile:
+            section = manager.get_section("web")
+            return section.model_dump(mode="python", exclude_unset=False)
+        preview = manager.preview_profile(profile)
+        source = preview.get("web", {})
+        return dict(source) if isinstance(source, dict) else {}
 
     def _value(self, key: str) -> Any:
-        if key in self._overrides and self._overrides[key] is not None:
-            return self._overrides[key]
-        return self._web_section.get(key)
+        if key in self._pending:
+            return self._pending[key]
+        return self._web_section().get(key)
 
 
 class LegacyEnvironment:
@@ -275,63 +323,73 @@ class LegacyEnvironment:
 
     def __init__(self, manager: ConfigManager):
         self._previous_env_vars: dict[str, Optional[str]] = {}
+        self.env_map: dict[str, LegacyEnvironmentConfig] = {}
+        self._current: Optional[LegacyEnvironmentConfig] = None
+        self._manager: Optional[ConfigManager] = None
+        self._applied_profile: Optional[str] = None
         self.reset_manager(manager)
 
     def reset_manager(self, manager: ConfigManager) -> None:
         self._manager = manager
-        self.env_map: dict[str, LegacyEnvironmentConfig] = {}
+        self.env_map = {}
         for name in BUILTIN_PROFILES:
-            self.env_map[name] = LegacyEnvironmentConfig(manager, name, environment=self)
-
-        desired_env = os.getenv("TIDY3D_ENV")
-        if desired_env:
-            desired = normalize_profile_name(desired_env)
-        else:
-            desired = manager.profile
-
-        if desired == "default":
-            desired = "prod"
-
-        desired = normalize_profile_name(desired)
-
-        self._current = self.env_map.setdefault(
-            desired, LegacyEnvironmentConfig(manager, desired, environment=self)
-        )
-        self._apply_env_vars(self._current)
+            key = normalize_profile_name(name)
+            self.env_map[key] = LegacyEnvironmentConfig(manager, key, environment=self)
+        self._applied_profile = None
+        self._current = None
+        self._sync_to_manager(apply_env=True)
 
     @property
     def current(self) -> LegacyEnvironmentConfig:
+        self._sync_to_manager()
+        assert self._current is not None
         return self._current
 
     def set_current(self, env_config: LegacyEnvironmentConfig) -> None:
         _warn_env_deprecated()
         key = normalize_profile_name(env_config.name)
-        if env_config.manager is self._manager:
-            if self._manager.profile != key:
-                self._manager.switch_profile(key)
-            stored = self.env_map.setdefault(key, env_config)
-        else:
-            stored = env_config
-            stored.name = key
-            self.env_map[key] = stored
+        stored = self._get_config(key)
+        stored.copy_state_from(env_config)
+        if self._manager and self._manager.profile != key:
+            self._manager.switch_profile(key)
+        self._sync_to_manager(apply_env=True)
 
-        stored._environment = self
-        self._current = stored
-        self._apply_env_vars(stored)
-
-    def enable_caching(self, enable_caching: bool = True) -> None:
-        if self._current.manager is self._manager:
-            self._manager.update_section("web", enable_caching=enable_caching)
-        self._current.enable_caching = enable_caching
+    def enable_caching(self, enable_caching: Optional[bool] = True) -> None:
+        config = self.current
+        config.enable_caching = enable_caching
+        self._sync_to_manager()
 
     def set_ssl_version(self, ssl_version) -> None:
-        if self._current.manager is self._manager:
-            self._manager.update_section("web", ssl_version=ssl_version)
-        self._current._overrides["ssl_version"] = ssl_version
+        config = self.current
+        config.ssl_version = ssl_version
+        self._sync_to_manager()
 
     def __getattr__(self, name: str) -> LegacyEnvironmentConfig:
+        return self._get_config(name)
+
+    def _get_config(self, name: str) -> LegacyEnvironmentConfig:
         key = normalize_profile_name(name)
-        return self.env_map.setdefault(key, LegacyEnvironmentConfig(self._manager, key))
+        config = self.env_map.get(key)
+        if config is None:
+            config = LegacyEnvironmentConfig(self._manager, key, environment=self)
+            self.env_map[key] = config
+        else:
+            manager = self._manager
+            if manager is not None:
+                config.reset_manager(manager)
+            config._environment = self
+        return config
+
+    def _sync_to_manager(self, *, apply_env: bool = False) -> None:
+        if self._manager is None:
+            return
+        active = normalize_profile_name(self._manager.profile)
+        config = self._get_config(active)
+        config.apply_pending_overrides()
+        self._current = config
+        if apply_env or self._applied_profile != active:
+            self._apply_env_vars(config)
+            self._applied_profile = active
 
     def _apply_env_vars(self, config: LegacyEnvironmentConfig) -> None:
         self._restore_env_vars()

@@ -20,12 +20,12 @@ from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.simulation import Simulation
+from tidy3d.config import config
 from tidy3d.exceptions import SetupError, WebError
 from tidy3d.log import get_logging_console, log
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME, ModeSolver
 from tidy3d.version import __version__
 from tidy3d.web.core.core_config import get_logger_console
-from tidy3d.web.core.environment import Env
 from tidy3d.web.core.http_util import http
 from tidy3d.web.core.s3utils import download_file, download_gz_file, upload_file
 from tidy3d.web.core.task_core import Folder
@@ -480,10 +480,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
         http.post(
             f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run",
-            {
-                "enableCaching": Env.current.enable_caching,
-                "payType": pay_type.value,
-            },
+            {"enableCaching": config.web.enable_caching, "payType": pay_type.value},
         )
 
     def delete(self) -> None:

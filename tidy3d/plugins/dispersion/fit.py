@@ -16,10 +16,10 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fie
 from tidy3d.components.medium import AbstractMedium, PoleResidue
 from tidy3d.components.types import ArrayFloat1D, Ax
 from tidy3d.components.viz import add_ax_if_none
+from tidy3d.config import config
 from tidy3d.constants import C_0, HBAR, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError, WebError
 from tidy3d.log import get_logging_console, log
-from tidy3d.web.core.environment import Env
 
 
 class DispersionFitter(Tidy3dBaseModel):
@@ -658,7 +658,7 @@ class DispersionFitter(Tidy3dBaseModel):
         :class:`DispersionFitter`
             A :class:`DispersionFitter` instance.
         """
-        resp = requests.get(url_file, verify=Env.current.ssl_verify)
+        resp = requests.get(url_file, verify=config.web.ssl_verify)
 
         try:
             resp.raise_for_status()

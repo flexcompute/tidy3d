@@ -13,10 +13,10 @@ from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, val
 from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
 from tidy3d.components.medium import PoleResidue
 from tidy3d.components.types import Undefined
+from tidy3d.config import config
 from tidy3d.constants import HERTZ, MICROMETER
 from tidy3d.exceptions import SetupError, Tidy3dError, WebError
 from tidy3d.log import log
-from tidy3d.web.core.environment import Env
 from tidy3d.web.core.http_util import get_headers
 
 from .fit import DispersionFitter
@@ -228,11 +228,12 @@ class FitterData(AdvancedFitterParam):
 
         _env = config_env
         if _env == "default":
-            _env = "dev" if "dev" in Env.current.web_api_endpoint else "prod"
+            endpoint = str(config.web.api_endpoint or "")
+            _env = "dev" if "dev" in endpoint else "prod"
         return URL_ENV[_env]
 
     @staticmethod
-    def _setup_server(url_server: str):
+    def _setup_server(url_server: str) -> tuple[dict[str, str], bool]:
         """set up web server access
 
         Parameters
@@ -241,18 +242,20 @@ class FitterData(AdvancedFitterParam):
             URL for the server
         """
 
+        ssl_verify = config.web.ssl_verify
         try:
             # test connection
-            resp = requests.get(f"{url_server}/health", verify=Env.current.ssl_verify)
+            resp = requests.get(f"{url_server}/health", verify=ssl_verify)
             resp.raise_for_status()
         except (requests.exceptions.SSLError, ssl.SSLError):
             log.info("Retrying with SSL verification disabled.")
-            Env.current.ssl_verify = False
-            resp = requests.get(f"{url_server}/health", verify=Env.current.ssl_verify)
+            ssl_verify = False
+            resp = requests.get(f"{url_server}/health", verify=ssl_verify)
+            resp.raise_for_status()
         except Exception as e:
             raise WebError("Connection to the server failed. Please try again.") from e
 
-        return get_headers()
+        return get_headers(), ssl_verify
 
     def run(self) -> tuple[PoleResidue, float]:
         """Execute the data fit using the stable fitter in the server.
@@ -264,13 +267,13 @@ class FitterData(AdvancedFitterParam):
         """
 
         url_server = self._set_url("default")
-        headers = self._setup_server(url_server)
+        headers, ssl_verify = self._setup_server(url_server)
 
         resp = requests.post(
             f"{url_server}/dispersion/fit",
             headers=headers,
             data=self.json(),
-            verify=Env.current.ssl_verify,
+            verify=ssl_verify,
         )
 
         try:

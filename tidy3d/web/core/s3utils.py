@@ -25,8 +25,9 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 
+from tidy3d.config import config
+
 from .core_config import get_logger_console
-from .environment import Env
 from .exceptions import WebError
 from .file_util import extract_gzip_file
 from .http_util import http
@@ -66,11 +67,11 @@ class _S3STSToken(BaseModel):
 
         return boto3.client(
             "s3",
-            region_name=Env.current.s3_region,
+            region_name=config.web.s3_region,
             aws_access_key_id=self.user_credential.access_key_id,
             aws_secret_access_key=self.user_credential.secret_access_key,
             aws_session_token=self.user_credential.session_token,
-            verify=Env.current.ssl_verify,
+            verify=config.web.ssl_verify,
         )
 
     def is_expired(self) -> bool:

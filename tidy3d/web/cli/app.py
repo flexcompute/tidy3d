@@ -20,7 +20,6 @@ from tidy3d.config.loader import (
 )
 from tidy3d.web.cli.constants import TIDY3D_DIR
 from tidy3d.web.core.constants import HEADER_APIKEY
-from tidy3d.web.core.environment import Env
 
 from .develop.index import develop
 
@@ -95,12 +94,12 @@ def configure_fn(apikey: str) -> None:
         message = f"Current API key: [{current_apikey}]\n" if current_apikey else ""
         apikey = click.prompt(f"{message}Please enter your api key", type=str)
 
+    target_url = config.web.build_api_url("apikey")
+
     try:
-        resp = requests.get(
-            f"{Env.current.web_api_endpoint}/apikey", auth=auth, verify=Env.current.ssl_verify
-        )
+        resp = requests.get(target_url, auth=auth, verify=config.web.ssl_verify)
     except (requests.exceptions.SSLError, ssl.SSLError):
-        resp = requests.get(f"{Env.current.web_api_endpoint}/apikey", auth=auth, verify=False)
+        resp = requests.get(target_url, auth=auth, verify=False)
 
     if resp.status_code == 200:
         click.echo("Configured successfully.")

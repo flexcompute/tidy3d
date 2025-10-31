@@ -16,6 +16,7 @@ from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+from tidy3d.config import config
 from tidy3d.exceptions import WebError
 from tidy3d.log import get_logging_console, log
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
@@ -38,7 +39,6 @@ from tidy3d.web.core.constants import (
     SIMULATION_DATA_HDF5_GZ,
     TaskId,
 )
-from tidy3d.web.core.environment import Env
 from tidy3d.web.core.exceptions import WebNotFoundError
 from tidy3d.web.core.http_util import get_version as _get_protocol_version
 from tidy3d.web.core.http_util import http
@@ -75,17 +75,24 @@ SOLVER_NAME = {
 
 def _get_url(task_id: str) -> str:
     """Get the URL for a task on our server."""
-    return f"{Env.current.website_endpoint}/workbench?taskId={task_id}"
+    return _build_website_url(f"workbench?taskId={task_id}")
 
 
 def _get_folder_url(folder_id: str) -> str:
     """Get the URL for a task folder on our server."""
-    return f"{Env.current.website_endpoint}/folders/{folder_id}"
+    return _build_website_url(f"folders/{folder_id}")
 
 
 def _get_url_rf(resource_id: str) -> str:
     """Get the RF GUI URL for a modeler/batch group."""
-    return f"{Env.current.website_endpoint}/rf?taskId={resource_id}"
+    return _build_website_url(f"rf?taskId={resource_id}")
+
+
+def _build_website_url(path: str) -> str:
+    base = str(config.web.website_endpoint or "")
+    if not path:
+        return base
+    return "/".join([base.rstrip("/"), str(path).lstrip("/")])
 
 
 def _is_modeler_batch(resource_id: str) -> bool:
@@ -757,7 +764,7 @@ def upload(
     task.validate_post_upload(parent_tasks=parent_tasks)
 
     # log the url for the task in the web UI
-    log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{resource_id}")
+    log.debug(_build_website_url(f"folders/{task.folder_id}/tasks/{resource_id}"))
     return resource_id
 
 
