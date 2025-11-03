@@ -5,10 +5,6 @@ import typing
 from os import PathLike
 from pathlib import Path
 from typing import Any
-from collections.abc import Iterable, Hashable
-from dataclasses import dataclass
-from os.path import dirname
-from pathlib import Path
 
 import numpy as np
 from autograd.builtins import dict as dict_ag
@@ -16,7 +12,7 @@ from autograd.extend import defvjp, primitive
 
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
-from tidy3d.components.autograd.types import NumericalStructureInfo
+from tidy3d.components.autograd.types import CustomVJPPathType, NumericalStructureInfo
 from tidy3d.components.autograd.utils import contains_tracer
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
@@ -116,7 +112,7 @@ def _normalize_simulations_input(
     return normalized, name_mapping
 
 
-def normalize_user_vjp_spec(spec) -> typing.Optional[UserVjpSpec]:
+def normalize_user_vjp_spec(spec: tuple[CustomVJPPathType, ...]) -> typing.Optional[UserVjpSpec]:
     """Normalize a user-provided VJP specification into canonical tuple entries."""
 
     if spec is None:
@@ -137,7 +133,7 @@ def normalize_user_vjp_spec(spec) -> typing.Optional[UserVjpSpec]:
 
 def normalize_user_vjp_input(
     simulations: typing.Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
-    user_vjp,
+    user_vjp: tuple[CustomVJPPathType, ...],
     name_mapping: dict[str, int],
 ) -> dict[str, typing.Optional[UserVjpSpec]]:
     """Normalize per-task user VJP configurations keyed by task names."""
@@ -193,7 +189,9 @@ def has_traced_numerical_structures(
 
 
 def validate_numerical_structures(
-    numerical_structures: dict[int, dict[str, typing.Any]], user_vjp, simulation: td.Simulation
+    numerical_structures: dict[int, dict[str, typing.Any]],
+    user_vjp: tuple[CustomVJPPathType, ...],
+    simulation: td.Simulation,
 ) -> None:
     """Validate user-supplied numerical structure configuration."""
 
@@ -274,7 +272,7 @@ def run(
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
     lazy: typing.Optional[bool] = None,
-    user_vjp=None,
+    user_vjp: typing.Optional[tuple[CustomVJPPathType, ...]] = None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -382,10 +380,6 @@ def run(
 
     user_vjp_normalized = None
     if user_vjp is not None:
-        if isinstance(user_vjp, dict):
-            raise AdjointError(
-                "'user_vjp' must now be provided as tuples of (structure_index, field_name, callable)."
-            )
         user_vjp_normalized = normalize_user_vjp_spec(user_vjp)
 
     if (user_vjp is not None) and (not local_gradient):
@@ -724,7 +718,7 @@ def _run(
     numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]] = None,
     local_gradient: bool = False,
     max_num_adjoint_per_fwd: typing.Optional[int] = None,
-    user_vjp=None,
+    user_vjp: typing.Optional[tuple[CustomVJPPathType, ...]] = None,
     **run_kwargs: Any,
 ) -> td.SimulationData:
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
@@ -798,6 +792,7 @@ def _run_async(
     if max_num_adjoint_per_fwd is None:
         max_num_adjoint_per_fwd = config.adjoint.max_adjoint_per_fwd
 
+    print(f"numerical structures coming into run async! {numerical_structures}")
     skip_autograd_tasks: dict[str, bool] = {}
     numerical_structures = numerical_structures or {}
     user_vjp = user_vjp or {}
@@ -812,6 +807,8 @@ def _run_async(
         sim_prepared = setup_result.simulation
         traced_fields = setup_result.sim_fields
         has_numerical_tracers = bool(setup_result.numerical_info)
+
+        print(f"DO WE HAVE NUMERICAL TRACERS? {has_numerical_tracers}")
 
         sims_prepared[task_name] = sim_prepared
 
@@ -909,13 +906,14 @@ def _run_async(
 def setup_run(
     simulation: td.Simulation,
     numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]] = None,
-    user_vjp=None,
+    user_vjp: typing.Optional[tuple[CustomVJPPathType, ...]] = None,
 ) -> SetupRunResult:
     """Prepare simulation and traced fields, including numerical structure insertions."""
 
     numerical_info: dict[int, NumericalStructureInfo] = {}
     sim_prepared = simulation
 
+    print(f"DO WE HAVE NUMERICAL STRUCTURES?: {numerical_structures}")
     if numerical_structures:
         structures = list(simulation.structures)
         td.log.info(
@@ -938,6 +936,8 @@ def setup_run(
                 structure=structure,
                 vjp=vjp_callable,
             )
+
+            print(f"index of numerical structures = {index}")
 
             sim_prepared = simulation.updated_copy(structures=structures)
 
@@ -987,7 +987,7 @@ def _run_primitive(
     aux_data: dict,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    user_vjp,
+    user_vjp: tuple[CustomVJPPathType, ...],
     **run_kwargs: Any,
 ) -> AutogradFieldMap:
     """Autograd-traced 'run()' function: runs simulation, strips tracer data, caches fwd data."""
@@ -1153,7 +1153,7 @@ def _run_bwd(
     aux_data: dict,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    user_vjp,
+    user_vjp: tuple[CustomVJPPathType, ...],
     **run_kwargs: Any,
 ) -> typing.Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulations, computes grad."""

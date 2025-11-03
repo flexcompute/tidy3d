@@ -53,6 +53,10 @@ def get_user_agent() -> str:
 def api_key() -> None:
     """Get the api key for the current environment."""
 
+    # print(f'{SIMCLOUD_APIKEY}')
+    # print(f'{os.environ.get(SIMCLOUD_APIKEY)}')
+    # print(f'{config.web.apikey}')
+
     if os.environ.get(SIMCLOUD_APIKEY):
         return os.environ.get(SIMCLOUD_APIKEY)
 
@@ -82,6 +86,7 @@ def api_key_auth(request: requests.request) -> requests.request:
         The request with authentication set.
     """
     key = api_key()
+
     version = get_version()
     if not key:
         raise ValueError(
