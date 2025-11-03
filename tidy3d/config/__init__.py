@@ -34,9 +34,11 @@ def _create_manager() -> ConfigManager:
 
 
 _base_manager = _create_manager()
+# TODO(FXC-3827): Drop LegacyConfigWrapper once legacy accessors are removed in Tidy3D 2.12.
 _config_wrapper = LegacyConfigWrapper(_base_manager)
 config = _config_wrapper
 
+# TODO(FXC-3827): Remove legacy Env exports after deprecation window (planned 2.12).
 Environment = LegacyEnvironment
 EnvironmentConfig = LegacyEnvironmentConfig
 Env = LegacyEnvironment(_base_manager)

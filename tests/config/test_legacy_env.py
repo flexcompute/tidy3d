@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import ssl
+import warnings
 
 from tidy3d.config import Env, get_manager, reload_config
 from tidy3d.config import config as config_wrapper
@@ -69,3 +70,25 @@ def test_env_vars_follow_profile_switch(mock_config_dir, monkeypatch, config_man
         assert os.environ["TIDY3D_TEST_VAR"] == "applied"
     finally:
         reload_config(profile="default")
+
+
+def test_web_core_environment_reexports():
+    """Legacy `tidy3d.web.core.environment` exports remain available via config shim."""
+
+    import tidy3d.web as web
+    from tidy3d.config import Env as ConfigEnv
+
+    environment = web.core.environment
+    assert environment.Env is ConfigEnv
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
+        dev = environment.dev
+        uat = environment.uat
+
+    assert dev is ConfigEnv.dev
+    assert uat is ConfigEnv.uat
+    assert len(caught) == 2
+    assert "tidy3d.web.core.environment.dev" in str(caught[0].message)
+    assert "tidy3d.web.core.environment.uat" in str(caught[1].message)
+    assert "2.12" in str(caught[0].message)
