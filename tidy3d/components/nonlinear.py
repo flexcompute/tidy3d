@@ -27,19 +27,25 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
 
     def _validate_medium_type(self, medium: AbstractMedium) -> None:
         """Check that the model is compatible with the medium."""
-        from .medium import AbstractCustomMedium, DispersiveMedium, Medium
+        from .medium import (
+            AbstractCustomMedium,
+            CustomDispersiveMedium,
+            CustomMedium,
+            DispersiveMedium,
+            Medium,
+        )
 
-        if isinstance(medium, AbstractCustomMedium):
-            raise ValidationError(
-                f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
-                f"for medium class '{type(medium).__name__}'."
-            )
         if medium.is_time_modulated:
             raise ValidationError(
                 f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
                 f"for time-modulated medium class '{type(medium).__name__}'."
             )
-        if not isinstance(medium, (Medium, DispersiveMedium)):
+        if isinstance(medium, AbstractCustomMedium) and not medium.is_isotropic:
+            raise ValidationError(
+                f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
+                f"for anisotropic medium class '{type(medium).__name__}'."
+            )
+        if not isinstance(medium, (Medium, DispersiveMedium, CustomMedium, CustomDispersiveMedium)):
             raise ValidationError(
                 f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
                 f"for medium class '{type(medium).__name__}'."
