@@ -16,6 +16,7 @@ import toml
 
 from tidy3d.log import log
 
+# TODO(FXC-3827): Remove LegacyConfigWrapper/Environment shims and related helpers in Tidy3D 2.12.
 from .manager import ConfigManager, normalize_profile_name
 from .profiles import BUILTIN_PROFILES
 
@@ -26,6 +27,7 @@ def _warn_env_deprecated() -> None:
     log.warning(message, log_once=True)
 
 
+# TODO(FXC-3827): Delete LegacyConfigWrapper once legacy attribute access is dropped.
 class LegacyConfigWrapper:
     """Provide attribute-level compatibility with the legacy config module."""
 
@@ -144,6 +146,7 @@ class LegacyConfigWrapper:
         return self._manager.format()
 
 
+# TODO(FXC-3827): Delete LegacyEnvironmentConfig once profile-based Env shim is removed.
 class LegacyEnvironmentConfig:
     """Backward compatible environment config wrapper that proxies ConfigManager."""
 
@@ -318,6 +321,7 @@ class LegacyEnvironmentConfig:
         return self._web_section().get(key)
 
 
+# TODO(FXC-3827): Delete LegacyEnvironment after deprecating `tidy3d.config.Env`.
 class LegacyEnvironment:
     """Legacy Env wrapper that maps to profiles."""
 
