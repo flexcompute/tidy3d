@@ -792,7 +792,6 @@ def _run_async(
     if max_num_adjoint_per_fwd is None:
         max_num_adjoint_per_fwd = config.adjoint.max_adjoint_per_fwd
 
-    print(f"numerical structures coming into run async! {numerical_structures}")
     skip_autograd_tasks: dict[str, bool] = {}
     numerical_structures = numerical_structures or {}
     user_vjp = user_vjp or {}
@@ -807,8 +806,6 @@ def _run_async(
         sim_prepared = setup_result.simulation
         traced_fields = setup_result.sim_fields
         has_numerical_tracers = bool(setup_result.numerical_info)
-
-        print(f"DO WE HAVE NUMERICAL TRACERS? {has_numerical_tracers}")
 
         sims_prepared[task_name] = sim_prepared
 
@@ -913,7 +910,6 @@ def setup_run(
     numerical_info: dict[int, NumericalStructureInfo] = {}
     sim_prepared = simulation
 
-    print(f"DO WE HAVE NUMERICAL STRUCTURES?: {numerical_structures}")
     if numerical_structures:
         structures = list(simulation.structures)
         td.log.info(
@@ -936,8 +932,6 @@ def setup_run(
                 structure=structure,
                 vjp=vjp_callable,
             )
-
-            print(f"index of numerical structures = {index}")
 
             sim_prepared = simulation.updated_copy(structures=structures)
 

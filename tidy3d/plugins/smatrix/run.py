@@ -200,8 +200,6 @@ def _run_local(
     if not should_use_autograd and has_traced_numerical_structures(numerical_structures_modeler):
         should_use_autograd = True
 
-    print(f"ARE WE USING AUTOGRAD!!!??? {should_use_autograd}")
-
     if should_use_autograd:
         if len(modeler.element_mappings) > 0:
             log.warning(
@@ -232,7 +230,6 @@ def _run_local(
                 user_vjp=user_vjp_modeler_normalized,
                 simulation=first_sim,
             )
-            # print(f'validated: {numerical_structures_validated}')
 
             numerical_structures_broadcast = {
                 key: copy.deepcopy(numerical_structures_modeler) for key in sims
@@ -244,8 +241,6 @@ def _run_local(
             user_vjp_broadcast = dict.fromkeys(sims, user_vjp_modeler_normalized)
         else:
             user_vjp_broadcast = None
-
-        print(f"numerical_structures_broadcast = {numerical_structures_broadcast}")
 
         sim_data_map = _run_async(
             simulations=sims,

@@ -384,14 +384,9 @@ class Structure(AbstractStructure):
             for path_key, paths in collect_paths_by_keys.items():
                 info = derivative_info.updated_copy(paths=paths, deep=False)
 
-                print(f"path key = {path_key}")
-                print(f"vjp fns = {vjp_fns}")
-
                 if (vjp_fns is not None) and (path_key in vjp_fns):
-                    print("found a match!!")
                     derivative_values_map.update(vjp_fns[path_key](med_or_geo_field, info))
                 else:
-                    print("no match")
                     derivative_values_map.update(
                         med_or_geo_field._compute_derivatives(derivative_info=info)
                     )

@@ -41,6 +41,7 @@ TracedPoleAndResidue = tuple[TracedComplex, TracedComplex]
 # The data type that we pass in and out of the web.run() @autograd.primitive
 AutogradTraced = typing.Union[Box, ArrayLike]
 PathType = tuple[typing.Union[int, str], ...]
+CustomVJPPathType = tuple[typing.Union[int, str, typing.Callable], ...]
 AutogradFieldMap = dict_ag[PathType, AutogradTraced]
 
 InterpolationType = typing.Literal["nearest", "linear"]
