@@ -10,7 +10,7 @@ from tidy3d.plugins.autograd.types import PaddingType
 @pytest.mark.parametrize("radius", [1, 2, (1, 2)])
 @pytest.mark.parametrize("dl", [0.1, 0.2, (0.1, 0.2)])
 @pytest.mark.parametrize("size_px", [None, 5, (5, 7)])
-@pytest.mark.parametrize("filter_type", ["circular", "conic"])
+@pytest.mark.parametrize("filter_type", ["circular", "conic", "gaussian"])
 @pytest.mark.parametrize("padding", PaddingType.__args__)
 def test_make_filter_and_project(rng, radius, dl, size_px, filter_type, padding):
     """Test make_filter_and_project function for various parameters."""

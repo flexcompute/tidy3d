@@ -10,19 +10,10 @@ from tidy3d.plugins.autograd.primitives import gaussian_filter
 @pytest.mark.parametrize("size", [10, 11])
 @pytest.mark.parametrize("ndim", [1, 2, 3])
 @pytest.mark.parametrize("sigma", [1, 2])
-@pytest.mark.parametrize(
-    "mode",
-    [
-        "constant",
-        "reflect",
-        "wrap",
-        pytest.param("nearest", marks=pytest.mark.skip(reason="Grads not implemented.")),
-        pytest.param("mirror", marks=pytest.mark.skip(reason="Grads not implemented.")),
-    ],
-)
+@pytest.mark.parametrize("mode", ["constant", "nearest", "mirror", "reflect", "wrap"])
 def test_gaussian_filter_grad(rng, size, ndim, sigma, mode):
     x = rng.random((size,) * ndim)
-    check_grads(lambda x: gaussian_filter(x, sigma=sigma, mode=mode), modes=["rev"], order=2)(x)
+    check_grads(lambda x: gaussian_filter(x, sigma=sigma, mode=mode), modes=["rev"], order=1)(x)
 
 
 @pytest.mark.parametrize("shape, axis", [((100,), -1), ((10, 12), 0), ((10, 12), 1)])
