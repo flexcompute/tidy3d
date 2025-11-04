@@ -319,6 +319,9 @@ python_files = "*.py"
 python_version = "3.10"
 files = [
   "tidy3d/web",
+  "tidy3d/config",
+  "tidy3d/material_library",
+  "tidy3d/components/geometry"
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

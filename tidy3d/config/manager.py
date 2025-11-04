@@ -59,14 +59,14 @@ class SectionAccessor:
         model = self._manager._get_model(self._path)
         return f"SectionAccessor({self._path}={model!r})"
 
-    def __rich__(self):
+    def __rich__(self) -> Panel:
         model = self._manager._get_model(self._path)
         if model is None:
             return Panel(Text(f"Section '{self._path}' is unavailable", style="red"))
         data = _prepare_for_display(model.model_dump(exclude_unset=False))
         return _build_section_panel(self._path, data)
 
-    def dict(self, *args, **kwargs):
+    def dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         model = self._manager._get_model(self._path)
         if model is None:
             return {}
@@ -135,7 +135,7 @@ class ConfigManager:
         return self._profile
 
     @property
-    def config_dir(self):
+    def config_dir(self) -> Path:
         return self._loader.config_dir
 
     @property
@@ -264,7 +264,7 @@ class ConfigManager:
             tree = deep_merge(tree, self._env_overrides)
         return deep_merge(self._default_tree(), tree)
 
-    def __rich__(self):
+    def __rich__(self) -> Panel:
         """Return a rich renderable representation of the full configuration."""
 
         return _build_config_panel(

@@ -5,12 +5,13 @@ from __future__ import annotations
 import math
 from copy import copy
 from functools import lru_cache
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
 from autograd.tracer import getval, isbox
+from numpy._typing import NDArray
 from numpy.polynomial.legendre import leggauss as _leggauss
 
 from tidy3d.components.autograd import AutogradFieldMap, TracedVertices, get_static
@@ -37,6 +38,9 @@ from tidy3d.packaging import verify_packages_import
 
 from . import base, triangulation
 
+if TYPE_CHECKING:
+    from gdstk import Cell
+
 # sampling polygon along dilation for validating polygon to be
 # non self-intersecting during the entire dilation process
 _N_SAMPLE_POLYGON_INTERSECT = 5
@@ -53,7 +57,7 @@ _MIN_POLYGON_AREA = fp_eps
 
 
 @lru_cache(maxsize=128)
-def leggauss(n):
+def leggauss(n: int) -> tuple[NDArray, NDArray]:
     """Cached version of leggauss with dtype conversions."""
     g, w = _leggauss(n)
     return g.astype(config.adjoint.gradient_dtype_float, copy=False), w.astype(
@@ -102,7 +106,7 @@ class PolySlab(base.Planar):
         return shapely.Polygon(vertices)
 
     @pydantic.validator("slab_bounds", always=True)
-    def slab_bounds_order(cls, val):
+    def slab_bounds_order(cls, val: tuple[float, float]) -> tuple[float, float]:
         """Maximum position of the slab should be no smaller than its minimal position."""
         if val[1] < val[0]:
             raise SetupError(
@@ -113,7 +117,7 @@ class PolySlab(base.Planar):
         return val
 
     @pydantic.validator("vertices", always=True)
-    def correct_shape(cls, val):
+    def correct_shape(cls, val: ArrayFloat2D) -> ArrayFloat2D:
         """Makes sure vertices size is correct.
         Make sure no intersecting edges.
         """
@@ -140,7 +144,9 @@ class PolySlab(base.Planar):
 
     @pydantic.validator("vertices", always=True)
     @skip_if_fields_missing(["dilation"])
-    def no_complex_self_intersecting_polygon_at_reference_plane(cls, val, values):
+    def no_complex_self_intersecting_polygon_at_reference_plane(
+        cls, val: ArrayFloat2D, values: dict[str, Any]
+    ) -> ArrayFloat2D:
         """At the reference plane, check if the polygon is self-intersecting.
 
         There are two types of self-intersection that can occur during dilation:
@@ -190,7 +196,9 @@ class PolySlab(base.Planar):
 
     @pydantic.validator("vertices", always=True)
     @skip_if_fields_missing(["sidewall_angle", "dilation", "slab_bounds", "reference_plane"])
-    def no_self_intersecting_polygon_during_extrusion(cls, val, values):
+    def no_self_intersecting_polygon_during_extrusion(
+        cls, val: ArrayFloat2D, values: dict[str, Any]
+    ) -> ArrayFloat2D:
         """In this simple polyslab, we don't support self-intersecting polygons yet, meaning that
         any normal cross section of the PolySlab cannot be self-intersecting. This part checks
         if any self-interction will occur during extrusion with non-zero sidewall angle.
@@ -261,7 +269,7 @@ class PolySlab(base.Planar):
     @classmethod
     def from_gds(
         cls,
-        gds_cell,
+        gds_cell: Cell,
         axis: Axis,
         slab_bounds: tuple[float, float],
         gds_layer: int,
@@ -325,7 +333,7 @@ class PolySlab(base.Planar):
 
     @staticmethod
     def _load_gds_vertices(
-        gds_cell,
+        gds_cell: Cell,
         gds_layer: int,
         gds_dtype: Optional[int] = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
@@ -411,7 +419,7 @@ class PolySlab(base.Planar):
         return zmax - zmin
 
     @cached_property
-    def reference_polygon(self) -> np.ndarray:
+    def reference_polygon(self) -> NDArray:
         """The polygon at the reference plane.
 
         Returns
@@ -426,7 +434,7 @@ class PolySlab(base.Planar):
         return self._heal_polygon(offset_vertices)
 
     @cached_property
-    def middle_polygon(self) -> np.ndarray:
+    def middle_polygon(self) -> NDArray:
         """The polygon at the middle.
 
         Returns
@@ -444,7 +452,7 @@ class PolySlab(base.Planar):
         return self.reference_polygon
 
     @cached_property
-    def base_polygon(self) -> np.ndarray:
+    def base_polygon(self) -> NDArray:
         """The polygon at the base, derived from the ``middle_polygon``.
 
         Returns
@@ -458,7 +466,7 @@ class PolySlab(base.Planar):
         return self._shift_vertices(self.middle_polygon, dist)[0]
 
     @cached_property
-    def top_polygon(self) -> np.ndarray:
+    def top_polygon(self) -> NDArray:
         """The polygon at the top, derived from the ``middle_polygon``.
 
         Returns
@@ -493,9 +501,7 @@ class PolySlab(base.Planar):
         """Is this ``PolySlab`` CCW-oriented?"""
         return PolySlab._area(self.vertices) > 0
 
-    def inside(
-        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> np.ndarray[bool]:
+    def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
         with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
         volume of the :class:`Geometry`, and ``False`` otherwise.
@@ -549,10 +555,10 @@ class PolySlab(base.Planar):
             # slanted sidewall, offsetting vertices at each z
             else:
                 # a helper function for moving axis
-                def _move_axis(arr):
+                def _move_axis(arr: NDArray) -> NDArray:
                     return np.moveaxis(arr, source=self.axis, destination=-1)
 
-                def _move_axis_reverse(arr):
+                def _move_axis_reverse(arr: NDArray) -> NDArray:
                     return np.moveaxis(arr, source=-1, destination=self.axis)
 
                 inside_polygon_axis = _move_axis(inside_polygon)
@@ -635,7 +641,7 @@ class PolySlab(base.Planar):
         path, _ = section.to_2D(to_2D=to_2D)
         return path.polygons_full
 
-    def _intersections_normal(self, z: float):
+    def _intersections_normal(self, z: float) -> list[Shapely]:
         """Find shapely geometries intersecting planar geometry with axis normal to slab.
 
         Parameters
@@ -659,7 +665,7 @@ class PolySlab(base.Planar):
         vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
         return [self.make_shapely_polygon(vertices_z)]
 
-    def _intersections_side(self, position, axis) -> list:
+    def _intersections_side(self, position: float, axis: int) -> list[Shapely]:
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
 
         For slanted polyslab, the procedure is as follows,
@@ -766,7 +772,7 @@ class PolySlab(base.Planar):
         # in other cases, just return the original unmerged polygons
         return polys
 
-    def _find_intersecting_height(self, position: float, axis: int) -> np.ndarray:
+    def _find_intersecting_height(self, position: float, axis: int) -> NDArray:
         """Found a list of height where the plane will intersect with the vertices;
         For vertical sidewall, just return np.array([]).
         Assumes axis is handles so this function works on xy plane.
@@ -805,11 +811,11 @@ class PolySlab(base.Planar):
 
     def _find_intersecting_ys_angle_vertical(
         self,
-        vertices: np.ndarray,
+        vertices: NDArray,
         position: float,
         axis: int,
         exclude_on_vertices: bool = False,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[NDArray, NDArray, NDArray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
         Find intersection point (in y) assuming straight line,and intersecting angle between plane
         and edges. (For unslanted polyslab).
@@ -888,8 +894,8 @@ class PolySlab(base.Planar):
         return ints_y_sort, ints_angle_sort
 
     def _find_intersecting_ys_angle_slant(
-        self, vertices: np.ndarray, position: float, axis: int
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        self, vertices: NDArray, position: float, axis: int
+    ) -> tuple[NDArray, NDArray, NDArray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
         Find intersection point (in y) assuming straight line,and intersecting angle between plane
         and edges. (For slanted polyslab)
@@ -1043,7 +1049,7 @@ class PolySlab(base.Planar):
         return -extrusion * self._tanq
 
     @staticmethod
-    def _area(vertices: np.ndarray) -> float:
+    def _area(vertices: NDArray) -> float:
         """Compute the signed polygon area (positive for CCW orientation).
 
         Parameters
@@ -1066,7 +1072,7 @@ class PolySlab(base.Planar):
         return np.sum(term1 - term2) * 0.5
 
     @staticmethod
-    def _perimeter(vertices: np.ndarray) -> float:
+    def _perimeter(vertices: NDArray) -> float:
         """Compute the polygon perimeter.
 
         Parameters
@@ -1090,7 +1096,7 @@ class PolySlab(base.Planar):
         return np.sum(dists)
 
     @staticmethod
-    def _orient(vertices: np.ndarray) -> np.ndarray:
+    def _orient(vertices: NDArray) -> NDArray:
         """Return a CCW-oriented polygon.
 
         Parameters
@@ -1106,7 +1112,7 @@ class PolySlab(base.Planar):
         return vertices if PolySlab._area(vertices) > 0 else vertices[::-1, :]
 
     @staticmethod
-    def _remove_duplicate_vertices(vertices: np.ndarray) -> np.ndarray:
+    def _remove_duplicate_vertices(vertices: NDArray) -> NDArray:
         """Remove redundant/identical nearest neighbour vertices.
 
         Parameters
@@ -1125,7 +1131,7 @@ class PolySlab(base.Planar):
         return vertices[~np.isclose(vertices_diff, 0, rtol=_IS_CLOSE_RTOL)]
 
     @staticmethod
-    def _proper_vertices(vertices: ArrayFloat2D) -> np.ndarray:
+    def _proper_vertices(vertices: ArrayFloat2D) -> NDArray:
         """convert vertices to np.array format,
         removing duplicate neighbouring vertices,
         and oriented in CCW direction.
@@ -1141,7 +1147,7 @@ class PolySlab(base.Planar):
 
     @staticmethod
     def _edge_events_detection(
-        proper_vertices: np.ndarray, dilation: float, ignore_at_dist: bool = True
+        proper_vertices: NDArray, dilation: float, ignore_at_dist: bool = True
     ) -> bool:
         """Detect any edge events within the offset distance ``dilation``.
         If ``ignore_at_dist=True``, the edge event at ``dist`` is ignored.
@@ -1198,7 +1204,7 @@ class PolySlab(base.Planar):
 
     @staticmethod
     def _neighbor_vertices_crossing_detection(
-        vertices: np.ndarray, dist: float, ignore_at_dist: bool = True
+        vertices: NDArray, dist: float, ignore_at_dist: bool = True
     ) -> float:
         """Detect if neighboring vertices will cross after a dilation distance dist.
 
@@ -1233,12 +1239,12 @@ class PolySlab(base.Planar):
         return None
 
     @staticmethod
-    def array_to_vertices(arr_vertices: np.ndarray) -> ArrayFloat2D:
+    def array_to_vertices(arr_vertices: NDArray) -> ArrayFloat2D:
         """Converts a numpy array of vertices to a list of tuples."""
         return list(arr_vertices)
 
     @staticmethod
-    def vertices_to_array(vertices_tuple: ArrayFloat2D) -> np.ndarray:
+    def vertices_to_array(vertices_tuple: ArrayFloat2D) -> NDArray:
         """Converts a list of tuples (vertices) to a numpy array."""
         return np.array(vertices_tuple)
 
@@ -1246,7 +1252,7 @@ class PolySlab(base.Planar):
     def interior_angle(self) -> ArrayFloat1D:
         """Angle formed inside polygon by two adjacent edges."""
 
-        def normalize(v):
+        def normalize(v: NDArray) -> NDArray:
             return v / np.linalg.norm(v, axis=0)
 
         vs_orig = self.reference_polygon.T
@@ -1266,8 +1272,8 @@ class PolySlab(base.Planar):
 
     @staticmethod
     def _shift_vertices(
-        vertices: np.ndarray, dist
-    ) -> tuple[np.ndarray, np.ndarray, tuple[np.ndarray, np.ndarray]]:
+        vertices: NDArray, dist: float
+    ) -> tuple[NDArray, NDArray, tuple[NDArray, NDArray]]:
         """Shifts the vertices of a polygon outward uniformly by distances
         `dists`.
 
@@ -1290,7 +1296,7 @@ class PolySlab(base.Planar):
         if math.isclose(getval(dist), 0):
             return vertices, np.zeros(vertices.shape[0], dtype=float), None
 
-        def rot90(v):
+        def rot90(v: tuple[NDArray, NDArray]) -> NDArray:
             """90 degree rotation of 2d vector
             vx -> vy
             vy -> -vx
@@ -1298,10 +1304,10 @@ class PolySlab(base.Planar):
             vxs, vys = v
             return np.stack((-vys, vxs), axis=0)
 
-        def cross(u, v):
+        def cross(u: NDArray, v: NDArray) -> Any:
             return u[0] * v[1] - u[1] * v[0]
 
-        def normalize(v):
+        def normalize(v: NDArray) -> NDArray:
             return v / np.linalg.norm(v, axis=0)
 
         vs_orig = copy(vertices.T)
@@ -1334,8 +1340,8 @@ class PolySlab(base.Planar):
 
     @staticmethod
     def _edge_length_and_reduction_rate(
-        vertices: np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray]:
+        vertices: NDArray,
+    ) -> tuple[NDArray, NDArray]:
         """Edge length of reduction rate of each edge with unit offset length.
 
         Parameters
@@ -1362,7 +1368,7 @@ class PolySlab(base.Planar):
         return edge_length, edge_reduction
 
     @staticmethod
-    def _maximal_erosion(vertices: np.ndarray) -> float:
+    def _maximal_erosion(vertices: NDArray) -> float:
         """The erosion value that reduces the length of
         all edges to be non-positive.
         """
@@ -1371,7 +1377,7 @@ class PolySlab(base.Planar):
         return -np.min(edge_length[ind_nonzero] / edge_reduction[ind_nonzero])
 
     @staticmethod
-    def _heal_polygon(vertices: np.ndarray) -> np.ndarray:
+    def _heal_polygon(vertices: NDArray) -> NDArray:
         """heal a self-intersecting polygon."""
         shapely_poly = PolySlab.make_shapely_polygon(vertices)
         if shapely_poly.is_valid:
@@ -1507,7 +1513,9 @@ class PolySlab(base.Planar):
         return vjps
 
     # ---- Shared helpers for VJP surface integrations ----
-    def _z_slices(self, sim_min: np.ndarray, sim_max: np.ndarray, is_2d: bool, dx: float):
+    def _z_slices(
+        self, sim_min: NDArray, sim_max: NDArray, is_2d: bool, dx: float
+    ) -> tuple[NDArray, float, float, float]:
         """Compute z-slice centers and spacing within bounds.
 
         Returns (z_centers, dz, z0, z1). For 2D, returns single center and dz=1.
@@ -1530,7 +1538,7 @@ class PolySlab(base.Planar):
 
     @staticmethod
     def _clip_edge_to_bounds_t(
-        v0_3d: np.ndarray, v1_3d: np.ndarray, sim_min: np.ndarray, sim_max: np.ndarray
+        v0_3d: NDArray, v1_3d: NDArray, sim_min: NDArray, sim_max: NDArray
     ) -> Optional[tuple[float, float]]:
         """Parametric bounds [t0,t1] of segment within [sim_min, sim_max]."""
         t_start, t_end = 0.0, 1.0
@@ -1561,7 +1569,9 @@ class PolySlab(base.Planar):
         return (t_start, t_end)
 
     @staticmethod
-    def _adaptive_edge_samples(L: float, dx: float, t_start: float = 0.0, t_end: float = 1.0):
+    def _adaptive_edge_samples(
+        L: float, dx: float, t_start: float = 0.0, t_end: float = 1.0
+    ) -> tuple[NDArray, NDArray]:
         """Gauss samples and weights along [t_start,t_end] with adaptive count."""
         L_eff = L * max(0.0, t_end - t_start)
         n_uniform = max(1, int(np.ceil(L_eff / dx)))
@@ -1597,12 +1607,12 @@ class PolySlab(base.Planar):
 
     def _collect_sidewall_patches(
         self,
-        vertices: np.ndarray,
-        next_v: np.ndarray,
-        edges: np.ndarray,
+        vertices: NDArray,
+        next_v: NDArray,
+        edges: NDArray,
         basis: dict,
-        sim_min: np.ndarray,
-        sim_max: np.ndarray,
+        sim_min: NDArray,
+        sim_max: NDArray,
         is_2d: bool,
         dx: float,
     ) -> dict:
@@ -1814,8 +1824,8 @@ class PolySlab(base.Planar):
     def _compute_derivative_sidewall_angle(
         self,
         derivative_info: DerivativeInfo,
-        sim_min: np.ndarray,
-        sim_max: np.ndarray,
+        sim_min: NDArray,
+        sim_max: NDArray,
         is_2d: bool = False,
         interpolators: Optional[dict] = None,
     ) -> float:
@@ -1934,7 +1944,7 @@ class PolySlab(base.Planar):
     def compute_derivative_slab_bounds_line(
         self,
         derivative_info: DerivativeInfo,
-        extents: np.ndarray,
+        extents: NDArray,
         r1_min: float,
         r1_max: float,
         r2_min: float,
@@ -1999,7 +2009,7 @@ class PolySlab(base.Planar):
     def compute_derivative_slab_bounds_surface(
         self,
         derivative_info: DerivativeInfo,
-        extents: np.ndarray,
+        extents: NDArray,
         r1_min: float,
         r1_max: float,
         r2_min: float,
@@ -2089,11 +2099,11 @@ class PolySlab(base.Planar):
     def _compute_derivative_vertices(
         self,
         derivative_info: DerivativeInfo,
-        sim_min: np.ndarray,
-        sim_max: np.ndarray,
+        sim_min: NDArray,
+        sim_max: NDArray,
         is_2d: bool = False,
         interpolators: Optional[dict] = None,
-    ) -> np.ndarray:
+    ) -> NDArray:
         """VJP for the vertices of a ``PolySlab``.
 
         Uses shared sidewall patch collection and batched field evaluation.
@@ -2159,7 +2169,9 @@ class PolySlab(base.Planar):
         vjp_per_vertex = np.stack((v0x + v1x, v0y + v1y), axis=1)
         return vjp_per_vertex
 
-    def _edge_geometry_arrays(self, dtype: np.dtype = config.adjoint.gradient_dtype_float):
+    def _edge_geometry_arrays(
+        self, dtype: np.dtype = config.adjoint.gradient_dtype_float
+    ) -> tuple[NDArray, NDArray, NDArray, dict[str, NDArray]]:
         """Return (vertices, next_v, edges, basis) arrays for sidewall edge geometry."""
         vertices = np.asarray(self.vertices, dtype=dtype)
         next_v = np.roll(vertices, -1, axis=0)
@@ -2169,8 +2181,8 @@ class PolySlab(base.Planar):
 
     def edge_basis_vectors(
         self,
-        edges: np.ndarray,  # (N, 2)
-    ) -> dict[str, np.ndarray]:  # (N, 3)
+        edges: NDArray,  # (N, 2)
+    ) -> dict[str, NDArray]:  # (N, 3)
         """Normalized basis vectors for ``normal`` direction, ``slab`` tangent direction and ``edge``."""
 
         # ensure edges have consistent dtype
@@ -2207,7 +2219,7 @@ class PolySlab(base.Planar):
             "perp2": slabs_norm_xyz,
         }
 
-    def unpop_axis_vect(self, ax_coords: np.ndarray, plane_coords: np.ndarray) -> np.ndarray:
+    def unpop_axis_vect(self, ax_coords: NDArray, plane_coords: NDArray) -> NDArray:
         """Combine coordinate along axis with coordinates on the plane tangent to the axis.
 
         ax_coords.shape == [N]
@@ -2224,7 +2236,7 @@ class PolySlab(base.Planar):
 
         return arr_xyz
 
-    def pop_axis_vect(self, coord: np.ndarray) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]:
+    def pop_axis_vect(self, coord: NDArray) -> tuple[NDArray, tuple[NDArray, NDArray]]:
         """Combine coordinate along axis with coordinates on the plane tangent to the axis.
 
         coord.shape == [N, 3]
@@ -2237,7 +2249,7 @@ class PolySlab(base.Planar):
         return arr_axis, arrs_plane
 
     @staticmethod
-    def normalize_vect(arr: np.ndarray) -> np.ndarray:
+    def normalize_vect(arr: NDArray) -> NDArray:
         """normalize an array shaped (N, d) along the `d` axis and return (N, 1)."""
         norm = np.linalg.norm(arr, axis=-1, keepdims=True)
         norm = np.where(norm == 0, 1, norm)
@@ -2351,14 +2363,16 @@ class ComplexPolySlabBase(PolySlab):
     :class:`plugins.polyslab.ComplexPolySlab`."""
 
     @pydantic.validator("vertices", always=True)
-    def no_self_intersecting_polygon_during_extrusion(cls, val, values):
+    def no_self_intersecting_polygon_during_extrusion(
+        cls, val: ArrayFloat2D, values: dict[str, Any]
+    ) -> ArrayFloat2D:
         """Turn off the validation for this class."""
         return val
 
     @classmethod
     def from_gds(
         cls,
-        gds_cell,
+        gds_cell: Cell,
         axis: Axis,
         slab_bounds: tuple[float, float],
         gds_layer: int,

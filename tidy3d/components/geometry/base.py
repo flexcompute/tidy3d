@@ -5,13 +5,16 @@ from __future__ import annotations
 import functools
 import pathlib
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from os import PathLike
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
 import xarray as xr
+from numpy._typing import ArrayLike, NDArray
+from typing_extensions import Self
 
 try:
     from matplotlib import patches
@@ -74,6 +77,11 @@ from tidy3d.exceptions import (
 from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
+if TYPE_CHECKING:
+    from gdstk import Cell
+    from matplotlib.backend_bases import Event
+    from matplotlib.patches import FancyArrowPatch
+
 POLY_GRID_SIZE = 1e-12
 POLY_TOLERANCE_RATIO = 1e-12
 POLY_DISTANCE_TOLERANCE = 8e-12
@@ -98,13 +106,11 @@ class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
 
     @cached_property
-    def plot_params(self):
+    def plot_params(self) -> PlotParams:
         """Default parameters for plotting a Geometry object."""
         return plot_params_geometry
 
-    def inside(
-        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> np.ndarray[bool]:
+    def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
         with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
         volume of the :class:`Geometry`, and ``False`` otherwise.
@@ -124,7 +130,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             ``True`` for every point that is inside the geometry.
         """
 
-        def point_inside(x: float, y: float, z: float):
+        def point_inside(x: float, y: float, z: float) -> bool:
             """Returns ``True`` if a single point ``(x, y, z)`` is inside."""
             shapes_intersect = self.intersections_plane(z=z)
             loc = self.make_shapely_point(x, y)
@@ -166,7 +172,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return shapely.Point(minx, miny)
 
     def _inds_inside_bounds(
-        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+        self, x: NDArray[float], y: NDArray[float], z: NDArray[float]
     ) -> tuple[slice, slice, slice]:
         """Return slices into the sorted input arrays that are inside the geometry bounds.
 
@@ -193,8 +199,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         return tuple(inds_in)
 
     def inside_meshgrid(
-        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> np.ndarray[bool]:
+        self, x: NDArray[float], y: NDArray[float], z: NDArray[float]
+    ) -> NDArray[bool]:
         """Perform ``self.inside`` on a set of sorted 1D coordinates. Applies meshgrid to the
         supplied coordinates before checking inside.
 
@@ -296,7 +302,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return plane.intersections_with(self)
 
     def intersects(
-        self, other, strict_inequality: tuple[bool, bool, bool] = [False, False, False]
+        self, other: Geometry, strict_inequality: tuple[bool, bool, bool] = [False, False, False]
     ) -> bool:
         """Returns ``True`` if two :class:`Geometry` have intersecting `.bounds`.
 
@@ -434,7 +440,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return bounds_union(bounds1, bounds2)
 
     @cached_property
-    def bounding_box(self):
+    def bounding_box(self) -> Box:
         """Returns :class:`Box` representation of the bounding box of a :class:`Geometry`.
 
         Returns
@@ -585,7 +591,9 @@ class Geometry(Tidy3dBaseModel, ABC):
         return ax
 
     @staticmethod
-    def _do_not_intersect(bounds_a, bounds_b, shape_a, shape_b):
+    def _do_not_intersect(
+        bounds_a: float, bounds_b: float, shape_a: Shapely, shape_b: Shapely
+    ) -> bool:
         """Check whether two shapes intersect."""
 
         # do a bounding box check to see if any intersection to do anything about
@@ -708,7 +716,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return ax
 
     @staticmethod
-    def _evaluate_inf(array):
+    def _evaluate_inf(array: ArrayLike) -> NDArray[np.floating]:
         """Processes values and evaluates any infs into large (signed) numbers."""
         array = get_static(np.array(array))
         return np.where(np.isinf(array), np.sign(array) * LARGE_NUMBER, array)
@@ -884,7 +892,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         return points_new
 
-    def volume(self, bounds: Bound = None):
+    def volume(self, bounds: Bound = None) -> float:
         """Returns object's volume with optional bounds.
 
         Parameters
@@ -907,7 +915,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     def _volume(self, bounds: Bound) -> float:
         """Returns object's volume within given bounds."""
 
-    def surface_area(self, bounds: Bound = None):
+    def surface_area(self, bounds: Bound = None) -> float:
         """Returns object's surface area with optional bounds.
 
         Parameters
@@ -1157,7 +1165,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     @verify_packages_import(["gdstk"])
     def load_gds_vertices_gdstk(
-        gds_cell,
+        gds_cell: Cell,
         gds_layer: int,
         gds_dtype: Optional[int] = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
@@ -1209,7 +1217,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     @verify_packages_import(["gdstk"])
     def from_gds(
-        gds_cell,
+        gds_cell: Cell,
         axis: Axis,
         slab_bounds: tuple[float, float],
         gds_layer: int,
@@ -1373,7 +1381,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @verify_packages_import(["gdstk"])
     def to_gds(
         self,
-        cell,
+        cell: Cell,
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
@@ -1468,65 +1476,65 @@ class Geometry(Tidy3dBaseModel, ABC):
             return (self.geometry_a, self.geometry_b)
         return (self,)
 
-    def __add__(self, other):
+    def __add__(self, other: Union[int, Geometry]) -> Union[Self, GeometryGroup]:
         """Union of geometries"""
         # This allows the user to write sum(geometries...) with the default start=0
         if isinstance(other, int):
             return self
         if not isinstance(other, Geometry):
-            return NotImplemented
+            return NotImplemented  # type: ignore[return-value]
         return GeometryGroup(geometries=self._as_union() + other._as_union())
 
-    def __radd__(self, other):
+    def __radd__(self, other: Union[int, Geometry]) -> Union[Self, GeometryGroup]:
         """Union of geometries"""
         # This allows the user to write sum(geometries...) with the default start=0
         if isinstance(other, int):
             return self
         if not isinstance(other, Geometry):
-            return NotImplemented
+            return NotImplemented  # type: ignore[return-value]
         return GeometryGroup(geometries=other._as_union() + self._as_union())
 
-    def __or__(self, other):
+    def __or__(self, other: Geometry) -> GeometryGroup:
         """Union of geometries"""
         if not isinstance(other, Geometry):
             return NotImplemented
         return GeometryGroup(geometries=self._as_union() + other._as_union())
 
-    def __mul__(self, other):
+    def __mul__(self, other: Geometry) -> ClipOperation:
         """Intersection of geometries"""
         if not isinstance(other, Geometry):
             return NotImplemented
         return ClipOperation(operation="intersection", geometry_a=self, geometry_b=other)
 
-    def __and__(self, other):
+    def __and__(self, other: Geometry) -> ClipOperation:
         """Intersection of geometries"""
         if not isinstance(other, Geometry):
             return NotImplemented
         return ClipOperation(operation="intersection", geometry_a=self, geometry_b=other)
 
-    def __sub__(self, other):
+    def __sub__(self, other: Geometry) -> ClipOperation:
         """Difference of geometries"""
         if not isinstance(other, Geometry):
-            return NotImplemented
+            return NotImplemented  # type: ignore[return-value]
         return ClipOperation(operation="difference", geometry_a=self, geometry_b=other)
 
-    def __xor__(self, other):
+    def __xor__(self, other: Geometry) -> ClipOperation:
         """Symmetric difference of geometries"""
         if not isinstance(other, Geometry):
             return NotImplemented
         return ClipOperation(operation="symmetric_difference", geometry_a=self, geometry_b=other)
 
-    def __pos__(self):
+    def __pos__(self) -> Self:
         """No op"""
         return self
 
-    def __neg__(self):
+    def __neg__(self) -> ClipOperation:
         """Opposite of a geometry"""
         return ClipOperation(
             operation="difference", geometry_a=Box(size=(inf, inf, inf)), geometry_b=self
         )
 
-    def __invert__(self):
+    def __invert__(self) -> ClipOperation:
         """Opposite of a geometry"""
         return ClipOperation(
             operation="difference", geometry_a=Box(size=(inf, inf, inf)), geometry_b=self
@@ -1547,7 +1555,7 @@ class Centered(Geometry, ABC):
     )
 
     @pydantic.validator("center", always=True)
-    def _center_not_inf(cls, val):
+    def _center_not_inf(cls, val: tuple[float, float, float]) -> tuple[float, float, float]:
         """Make sure center is not infinitiy."""
         if any(np.isinf(v) for v in val):
             raise ValidationError("center can not contain td.inf terms.")
@@ -1589,7 +1597,7 @@ class SimplePlaneIntersection(Geometry, ABC):
             # Apply transformation in the plane by removing row and column
             to_2D_in_plane = np.delete(np.delete(to_2D, 2, 0), axis, 1)
 
-            def transform(p_array):
+            def transform(p_array: NDArray) -> NDArray:
                 return np.dot(
                     np.hstack((p_array, np.ones((p_array.shape[0], 1)))), to_2D_in_plane.T
                 )[:, :2]
@@ -1699,7 +1707,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
 
     def intersections_plane(
         self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
-    ):
+    ) -> list[Shapely]:
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -1743,7 +1751,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         """
 
     @abstractmethod
-    def _intersections_side(self, position: float, axis: Axis) -> list:
+    def _intersections_side(self, position: float, axis: Axis) -> list[Shapely]:
         """Find shapely geometries intersecting planar geometry with axis orthogonal to plane.
 
         Parameters
@@ -1820,13 +1828,13 @@ class Circular(Geometry):
     )
 
     @pydantic.validator("radius", always=True)
-    def _radius_not_inf(cls, val):
+    def _radius_not_inf(cls, val: float) -> float:
         """Make sure center is not infinitiy."""
         if np.isinf(val):
             raise ValidationError("radius can not be td.inf.")
         return val
 
-    def _intersect_dist(self, position, z0) -> float:
+    def _intersect_dist(self, position: float, z0: float) -> float:
         """Distance between points on circle at z=position where center of circle at z=z0.
 
         Parameters
@@ -1867,7 +1875,7 @@ class Box(SimplePlaneIntersection, Centered):
     )
 
     @classmethod
-    def from_bounds(cls, rmin: Coordinate, rmax: Coordinate, **kwargs: Any):
+    def from_bounds(cls, rmin: Coordinate, rmax: Coordinate, **kwargs: Any) -> Self:
         """Constructs a :class:`Box` from minimum and maximum coordinate bounds
 
         Parameters
@@ -1896,7 +1904,7 @@ class Box(SimplePlaneIntersection, Centered):
         return self.size.index(0.0)
 
     @classmethod
-    def surfaces(cls, size: Size, center: Coordinate, **kwargs: Any):
+    def surfaces(cls, size: Size, center: Coordinate, **kwargs: Any) -> list[Self]:
         """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.
         The output surfaces are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
@@ -1961,7 +1969,7 @@ class Box(SimplePlaneIntersection, Centered):
         del_idx = [[2 * i, 2 * i + 1] for i in del_idx]
         del_idx = [item for sublist in del_idx for item in sublist]
 
-        def del_items(items, indices):
+        def del_items(items: Iterable, indices: int) -> list:
             """Delete list items at indices."""
             return [i for j, i in enumerate(items) if j not in indices]
 
@@ -1984,7 +1992,7 @@ class Box(SimplePlaneIntersection, Centered):
         return surfaces
 
     @classmethod
-    def surfaces_with_exclusion(cls, size: Size, center: Coordinate, **kwargs: Any):
+    def surfaces_with_exclusion(cls, size: Size, center: Coordinate, **kwargs: Any) -> list[Self]:
         """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.
         The output surfaces are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
@@ -2066,7 +2074,7 @@ class Box(SimplePlaneIntersection, Centered):
 
     def intersections_plane(
         self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
-    ):
+    ) -> list[Shapely]:
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -2105,9 +2113,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         return [self.make_shapely_box(minx, miny, maxx, maxy)]
 
-    def inside(
-        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> np.ndarray[bool]:
+    def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
         with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
         volume of the :class:`Geometry`, and ``False`` otherwise.
@@ -2134,7 +2140,7 @@ class Box(SimplePlaneIntersection, Centered):
         dist_z = np.abs(z - z0)
         return (dist_x <= Lx / 2) * (dist_y <= Ly / 2) * (dist_z <= Lz / 2)
 
-    def intersections_with(self, other):
+    def intersections_with(self, other: Shapely) -> list[Shapely]:
         """Returns list of shapely geometries representing the intersections of the geometry with
         this 2D box.
 
@@ -2205,7 +2211,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         rmin, rmax = self.bounds
 
-        def bound_array(arrs, idx):
+        def bound_array(arrs: ArrayLike, idx: int) -> NDArray:
             return np.array([(a[idx] if a is not None else 0) for a in arrs])
 
         # parse padding sizes for simulation
@@ -2233,7 +2239,7 @@ class Box(SimplePlaneIntersection, Centered):
         return (coord_min, coord_max)
 
     @cached_property
-    def geometry(self):
+    def geometry(self) -> Box:
         """:class:`Box` representation of self (used for subclasses of Box).
 
         Returns
@@ -2365,8 +2371,14 @@ class Box(SimplePlaneIntersection, Centered):
         return ax
 
     @staticmethod
-    def _arrow_shape_cb(arrow, pos, direction, sign, bend_radius):
-        def _cb(event) -> None:
+    def _arrow_shape_cb(
+        arrow: FancyArrowPatch,
+        pos: tuple[float, float],
+        direction: ArrayLike,
+        sign: float,
+        bend_radius: float | None,
+    ) -> Callable[[Event], None]:
+        def _cb(event: Event) -> None:
             # We only want to set the shape once, so we disconnect ourselves
             event.canvas.mpl_disconnect(arrow.set_shape_cb[0])
 
@@ -2625,7 +2637,7 @@ class Box(SimplePlaneIntersection, Centered):
 
     @staticmethod
     def _snap_coords_outside(
-        min_max_index: int, snap_coords_values: np.ndarray, coord_normal_face: float
+        min_max_index: int, snap_coords_values: NDArray, coord_normal_face: float
     ) -> float:
         """Snap interpolation coordinate for a PEC face integration to be just outside the surface boundary.
         This ensures we don't interpolate with fields that are zero inside of the PEC."""
@@ -2900,13 +2912,13 @@ class Transformed(Geometry):
     )
 
     @pydantic.validator("transform")
-    def _transform_is_invertible(cls, val):
+    def _transform_is_invertible(cls, val: MatrixReal4x4) -> MatrixReal4x4:
         # If the transform is not invertible, this will raise an error
         _ = np.linalg.inv(val)
         return val
 
     @pydantic.validator("geometry")
-    def _geometry_is_finite(cls, val):
+    def _geometry_is_finite(cls, val: GeometryType) -> GeometryType:
         if not np.isfinite(val.bounds).all():
             raise ValidationError(
                 "Transformations are only supported on geometries with finite dimensions. "
@@ -2916,7 +2928,7 @@ class Transformed(Geometry):
         return val
 
     @pydantic.root_validator(skip_on_failure=True)
-    def _apply_transforms(cls, values):
+    def _apply_transforms(cls, values: dict[str, Any]) -> dict[str, Any]:
         while isinstance(values["geometry"], Transformed):
             inner = values["geometry"]
             values["geometry"] = inner.geometry
@@ -2995,9 +3007,7 @@ class Transformed(Geometry):
             np.dot(to_2D, self.transform),
         )
 
-    def inside(
-        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> np.ndarray[bool]:
+    def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
         with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
         volume of the :class:`Geometry`, and ``False`` otherwise.
@@ -3204,7 +3214,7 @@ class ClipOperation(Geometry):
     )
 
     @pydantic.validator("geometry_a", "geometry_b", always=True)
-    def _geometries_untraced(cls, val):
+    def _geometries_untraced(cls, val: GeometryType) -> GeometryType:
         """Make sure that ``ClipOperation`` geometries do not contain tracers."""
         traced = val._strip_traced_fields()
         if traced:
@@ -3365,9 +3375,7 @@ class ClipOperation(Geometry):
             )
         return result
 
-    def inside(
-        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> np.ndarray[bool]:
+    def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
         with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
         volume of the :class:`Geometry`, and ``False`` otherwise.
@@ -3391,8 +3399,8 @@ class ClipOperation(Geometry):
         return self._bit_operation(inside_a, inside_b)
 
     def inside_meshgrid(
-        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> np.ndarray[bool]:
+        self, x: NDArray[float], y: NDArray[float], z: NDArray[float]
+    ) -> NDArray[bool]:
         """Faster way to check ``self.inside`` on a meshgrid. The input arrays are assumed sorted.
 
         Parameters
@@ -3469,7 +3477,9 @@ class GeometryGroup(Geometry):
     )
 
     @pydantic.validator("geometries", always=True)
-    def _geometries_not_empty(cls, val):
+    def _geometries_not_empty(
+        cls, val: tuple[annotate_type(GeometryType), ...]
+    ) -> tuple[annotate_type(GeometryType), ...]:
         """make sure geometries are not empty."""
         if not len(val) > 0:
             raise ValidationError("GeometryGroup.geometries must not be empty.")
@@ -3564,9 +3574,7 @@ class GeometryGroup(Geometry):
         """
         return any(geom.intersects_axis_position(axis, position) for geom in self.geometries)
 
-    def inside(
-        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> np.ndarray[bool]:
+    def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
         with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
         volume of the :class:`Geometry`, and ``False`` otherwise.
@@ -3589,8 +3597,8 @@ class GeometryGroup(Geometry):
         return functools.reduce(lambda a, b: a | b, individual_insides)
 
     def inside_meshgrid(
-        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> np.ndarray[bool]:
+        self, x: NDArray[float], y: NDArray[float], z: NDArray[float]
+    ) -> NDArray[bool]:
         """Faster way to check ``self.inside`` on a meshgrid. The input arrays are assumed sorted.
 
         Parameters

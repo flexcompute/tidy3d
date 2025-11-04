@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -20,6 +20,9 @@ from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
 from . import base
+
+if TYPE_CHECKING:
+    from trimesh import Trimesh
 
 AREA_SIZE_THRESHOLD = 1e-36
 
@@ -44,7 +47,7 @@ class TriangleMesh(base.Geometry, ABC):
 
     @pydantic.root_validator(pre=True)
     @verify_packages_import(["trimesh"])
-    def _validate_trimesh_library(cls, values):
+    def _validate_trimesh_library(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Check if the trimesh package is imported as a validator."""
         return values
 
@@ -303,7 +306,7 @@ class TriangleMesh(base.Geometry, ABC):
     @verify_packages_import(["trimesh"])
     def _triangles_to_trimesh(
         cls, triangles: np.ndarray
-    ):  # -> TrimeshType: We need to get this out of the classes and into functional methods operating on a class (maybe still referenced to the class)
+    ) -> Trimesh:  # -> We need to get this out of the classes and into functional methods operating on a class (maybe still referenced to the class)
         """Convert an (N, 3, 3) numpy array of triangles to a ``trimesh.Trimesh``."""
         import trimesh
 
@@ -492,7 +495,7 @@ class TriangleMesh(base.Geometry, ABC):
     @verify_packages_import(["trimesh"])
     def trimesh(
         self,
-    ):  # -> TrimeshType: We need to get this out of the classes and into functional methods operating on a class (maybe still referenced to the class)
+    ) -> Trimesh:  # -> We need to get this out of the classes and into functional methods operating on a class (maybe still referenced to the class)
         """A ``trimesh.Trimesh`` object representing the custom surface mesh geometry."""
         return self._triangles_to_trimesh(self.triangles)
 

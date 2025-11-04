@@ -9,6 +9,7 @@ import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 import shapely
+from shapely.geometry.base import BaseGeometry
 
 from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
@@ -112,7 +113,7 @@ class Sphere(base.Centered, base.Circular):
 
     def intersections_plane(
         self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
-    ):
+    ) -> list[BaseGeometry]:
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -213,7 +214,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
     @pydantic.validator("length", always=True)
     @skip_if_fields_missing(["sidewall_angle", "reference_plane"])
-    def _only_middle_for_infinite_length_slanted_cylinder(cls, val, values):
+    def _only_middle_for_infinite_length_slanted_cylinder(
+        cls, val: float, values: dict[str, Any]
+    ) -> float:
         """For a slanted cylinder of infinite length, ``reference_plane`` can only
         be ``middle``; otherwise, the radius at ``center`` is either td.inf or 0.
         """
@@ -395,7 +398,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         return vjps
 
     @property
-    def center_axis(self):
+    def center_axis(self) -> Any:
         """Gets the position of the center of the geometry in the out of plane dimension."""
         z0, _ = self.pop_axis(self.center, axis=self.axis)
         return z0
@@ -522,7 +525,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         path, _ = section.to_2D(to_2D=to_2D)
         return path.polygons_full
 
-    def _intersections_normal(self, z: float):
+    def _intersections_normal(self, z: float) -> list[BaseGeometry]:
         """Find shapely geometries intersecting cylindrical geometry with axis normal to slab.
 
         Parameters
@@ -549,7 +552,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axis)
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
-    def _intersections_side(self, position, axis):
+    def _intersections_side(self, position: float, axis: int) -> list[BaseGeometry]:
         """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.
         When ``sidewall_angle`` is nonzero, so that it's in fact a conical frustum or cone, the
         cross section can contain hyperbolic curves. This is currently approximated by a polygon
@@ -767,7 +770,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         """
         return min(self.radius_bottom, self.radius_top)
 
-    def _radius_z(self, z: float):
+    def _radius_z(self, z: float) -> float:
         """Compute the radius of the cross section at the position z.
 
         Parameters
