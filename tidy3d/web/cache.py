@@ -184,7 +184,6 @@ class LocalCache:
                     shutil.rmtree(final_dir)
                 os.replace(tmp_dir, final_dir)
                 entry = CacheEntry(key=key, root=self._root, metadata=metadata)
-                log.debug("Stored simulation cache entry '%s' (%d bytes).", key, file_size)
                 return entry
         finally:
             try:
@@ -390,6 +389,7 @@ class LocalCache:
                 source_path=Path(path),
                 metadata=metadata,
             )
+            log.debug("Stored local cache entry for workflow type '%s'.", workflow_type)
         except Exception as e:
             log.error(f"Could not store cache entry: {e}")
             return False

@@ -257,12 +257,14 @@ class Job(WebContainer):
     )
 
     _stash_path: Optional[str] = PrivateAttr(default=None)
+    _cached_task_id: Optional[TaskId] = PrivateAttr(default=None)
 
+    @cached_property
     def _stash_path_for_job(self) -> str:
         """Stash file which is a temporary location for the cached-restored file."""
         stash_dir = Path(tempfile.gettempdir()) / "tidy3d_stash"
         stash_dir.mkdir(parents=True, exist_ok=True)
-        return str(Path(stash_dir / f"{self._cached_task_id}.hdf5"))
+        return str(Path(stash_dir / f"{uuid.uuid4()}.hdf5"))
 
     def _materialize_from_stash(self, dst_path: os.PathLike) -> None:
         """Atomic copy from stash to requested path."""
@@ -332,14 +334,15 @@ class Job(WebContainer):
     def load_if_cached(self) -> bool:
         """Checks if results are cached and (if yes) restores them into our shared stash file."""
         # use temporary path as final destination is unknown
-        stash_path = self._stash_path_for_job()
+        stash_path = self._stash_path_for_job
 
-        restored = restore_simulation_if_cached(
+        restored, cached_task_id = restore_simulation_if_cached(
             simulation=self.simulation,
             path=stash_path,
             reduce_simulation=self.reduce_simulation,
             verbose=self.verbose,
         )
+        self._cached_task_id = cached_task_id
 
         if restored is None:
             return False
@@ -347,11 +350,6 @@ class Job(WebContainer):
         self._stash_path = stash_path
         atexit.register(self.clear_stash)
         return True
-
-    @cached_property
-    def _cached_task_id(self) -> TaskId:
-        """The task ID for jobs which are loaded from cache."""
-        return "cached_" + self.task_name + "_" + str(uuid.uuid4())
 
     @cached_property
     def task_id(self) -> TaskId:
@@ -1127,6 +1125,8 @@ class Batch(WebContainer):
 
         # ----- continue condition & status formatting -------------------------------
         def check_continue_condition(job: Job) -> bool:
+            if job.load_if_cached:
+                return False
             status = job.status
             if not web._is_modeler_batch(job.task_id):
                 return status not in END_STATES
@@ -1514,6 +1514,10 @@ class Batch(WebContainer):
             console = get_logging_console()
             if batch_cost is not None and batch_cost > 0:
                 console.log(f"Maximum FlexCredit cost: {batch_cost:1.3f} for the whole batch.")
+            elif batch_cost == 0 and all(job.load_if_cached for job in self.jobs.values()):
+                console.log(
+                    "No Flexcredit cost for batch as all simulations were restored from local cache."
+                )
             else:
                 console.log("Could not get estimated batch cost!")
 

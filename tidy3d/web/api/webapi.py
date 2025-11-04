@@ -355,7 +355,7 @@ def restore_simulation_if_cached(
     path: Optional[PathLike] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     verbose: bool = True,
-) -> Optional[PathLike]:
+) -> tuple[Optional[PathLike], Optional[TaskId]]:
     """
     Attempt to restore simulation data from a local cache entry, if available.
 
@@ -376,9 +376,12 @@ def restore_simulation_if_cached(
     -------
     Optional[PathLike]
         The path to the restored simulation data if found in cache, otherwise None. If no path is specified, the cache entry path is returned, otherwise the given path is returned.
+    Optional[TaskId]
+        The original task id of the restored simulation data.
     """
     simulation_cache = resolve_local_cache()
     retrieved_simulation_path = None
+    cached_task_id = None
     if simulation_cache is not None:
         sim_for_cache = simulation
         if isinstance(simulation, (ModeSolver, ModeSimulation)):
@@ -399,7 +402,7 @@ def restore_simulation_if_cached(
                 console.log(
                     f"Loading simulation from local cache. View cached task using web UI at [link={url}]'{url}'[/link]."
                 )
-    return retrieved_simulation_path
+    return retrieved_simulation_path, cached_task_id
 
 
 def load_simulation_if_cached(
@@ -428,7 +431,7 @@ def load_simulation_if_cached(
     Optional[WorkflowDataType]
         The loaded simulation data if found in cache, otherwise None.
     """
-    restored_path = restore_simulation_if_cached(
+    restored_path, _ = restore_simulation_if_cached(
         simulation, path, reduce_simulation, verbose=verbose
     )
     if restored_path is not None:
@@ -547,7 +550,7 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
-    restored_path = restore_simulation_if_cached(
+    restored_path, _ = restore_simulation_if_cached(
         simulation=simulation,
         path=path,
         reduce_simulation=reduce_simulation,
