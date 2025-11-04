@@ -7,16 +7,23 @@ import re
 from pathlib import Path
 from types import SimpleNamespace
 
+import autograd as ag
 import pytest
+import xarray as xr
+from autograd.core import defvjp
 from rich.console import Console
 
 import tidy3d as td
 from tests.test_components.autograd.test_autograd import ALL_KEY, get_functions, params0
 from tests.test_web.test_webapi_mode import make_mode_sim
 from tidy3d import config
+from tidy3d.components.autograd.field_map import FieldMap
 from tidy3d.config import get_manager
 from tidy3d.web import Job, common, run, run_async
 from tidy3d.web.api import webapi as web
+from tidy3d.web.api.autograd import autograd, engine, io_utils
+from tidy3d.web.api.autograd.autograd import run as run_autograd
+from tidy3d.web.api.autograd.constants import SIM_VJP_FILE
 from tidy3d.web.api.container import Batch, WebContainer
 from tidy3d.web.api.webapi import load_simulation_if_cached
 from tidy3d.web.cache import CACHE_ARTIFACT_NAME, clear, get_cache_entry_dir, resolve_local_cache
@@ -38,6 +45,24 @@ def _reset_fake_maps():
 class _FakeStubData:
     def __init__(self, simulation: td.Simulation):
         self.simulation = simulation
+
+    def __getitem__(self, key):
+        if key == "mode":
+            params = self.simulation.attrs["params_autograd"]
+            return SimpleNamespace(
+                amps=xr.DataArray(params, dims=["x"], coords={"x": list(range(len(params)))})
+            )
+
+    def _strip_traced_fields(self, *args, **kwargs):
+        """Fake _strip_traced_fields: return minimal valid autograd-style mapping."""
+        return {"params": self.simulation.attrs["params"]}
+
+    def _insert_traced_fields(self, field_mapping, *args, **kwargs):
+        self.simulation.attrs["params_autograd"] = field_mapping["params"]
+        return self
+
+    def _make_adjoint_sims(self, **kwargs):
+        return [self.simulation.updated_copy(run_time=self.simulation.run_time * 2)]
 
 
 @pytest.fixture
@@ -128,6 +153,18 @@ def _patch_run_pipeline(monkeypatch):
     def _fake_status(self):
         return "success"
 
+    def _fake_download_file(resource_id, remote_filename, to_file=None, **kwargs):
+        # Only count this download if it's the adjoint/VJP file
+        if str(remote_filename) == SIM_VJP_FILE:
+            counters["download"] += 1
+
+    def _fake_from_file(*args, **kwargs):
+        field_map = FieldMap(tracers=())
+        return field_map
+
+    monkeypatch.setattr(io_utils, "download_file", _fake_download_file)
+    monkeypatch.setattr(autograd, "postprocess_fwd", _fake_from_file)
+    monkeypatch.setattr(FieldMap, "from_file", _fake_from_file)
     monkeypatch.setattr(WebContainer, "_check_folder", _fake__check_folder)
     monkeypatch.setattr(web, "upload", _fake_upload)
     monkeypatch.setattr(web, "start", _fake_start)
@@ -135,6 +172,7 @@ def _patch_run_pipeline(monkeypatch):
     monkeypatch.setattr(web, "download", _fake_download)
     monkeypatch.setattr(web, "estimate_cost", lambda *args, **kwargs: 0.0)
     monkeypatch.setattr(Job, "status", property(_fake_status))
+    monkeypatch.setattr(engine, "upload_sim_fields_keys", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         web,
         "get_info",
@@ -143,10 +181,22 @@ def _patch_run_pipeline(monkeypatch):
         )(),
     )
     monkeypatch.setattr(
+        io_utils,
+        "get_info",
+        lambda task_id, verbose=True: type(
+            "_Info", (), {"solverVersion": "solver-1", "taskType": "FDTD"}
+        )(),
+    )
+    monkeypatch.setattr(
         web, "load_simulation", lambda task_id, *args, **kwargs: TASK_TO_SIM[task_id]
     )
+    monkeypatch.setattr(
+        io_utils, "load_simulation", lambda task_id, *args, **kwargs: TASK_TO_SIM[task_id]
+    )
     monkeypatch.setattr(BatchTask, "is_batch", lambda *args, **kwargs: "success")
-    monkeypatch.setattr(BatchTask, "detail", lambda *args: SimpleNamespace(status="success"))
+    monkeypatch.setattr(
+        BatchTask, "detail", lambda *args, **kwargs: SimpleNamespace(status="success")
+    )
     return counters
 
 
@@ -371,23 +421,59 @@ def _test_job_run_cache(monkeypatch, basic_simulation, tmp_path):
     assert os.path.exists(out2_path)
 
 
-def _test_autograd_cache(monkeypatch):
+def _test_autograd_cache(monkeypatch, request):
     counters = _patch_run_pipeline(monkeypatch)
+
+    # "Original" rule: the one autograd uses by default
+    def _orig_make_dict_vjp(ans, keys, vals):
+        return lambda g: [g[key] for key in keys]
+
+    def _zero_make_dict_vjp(ans, keys, vals):
+        def vjp(g):
+            # One gradient per entry in `vals`, all zeros, matching shape/dtype
+            return [ag.numpy.zeros_like(v) for v in vals]
+
+        return vjp
+
+    # Install our zero-VJP (this is the thing that affects global state)
+    defvjp(
+        ag.builtins._make_dict,
+        _zero_make_dict_vjp,
+        argnums=(1,),  # gradient w.r.t. `vals`
+    )
+
+    # Make sure we restore it after the test
+    def _restore_make_dict_vjp():
+        defvjp(
+            ag.builtins._make_dict,
+            _orig_make_dict_vjp,
+            argnums=(1,),
+        )
+
+    request.addfinalizer(_restore_make_dict_vjp)
+
     cache = resolve_local_cache(use_cache=True)
     cache.clear()
 
     functions = get_functions(ALL_KEY, "mode")
     make_sim = functions["sim"]
-    sim = make_sim(params0)
-    web.run(sim)
-    assert counters["download"] == 1
-    assert len(cache) == 1
+    postprocess = functions["postprocess"]
+
+    def objective(params):
+        sim = make_sim(params)
+        sim.attrs["params"] = params
+        sim_data = run_autograd(sim)
+        value = postprocess(sim_data)
+        return value
+
+    ag.value_and_grad(objective)(params0)
+    assert counters["download"] == 2
+    assert len(cache) == 2
 
     _reset_counters(counters)
-    sim = make_sim(params0)
-    web.run(sim)
-    assert counters["download"] == 0
-    assert len(cache) == 1
+    ag.value_and_grad(objective)(params0)
+    assert counters["download"] == 1  # download field data
+    assert len(cache) == 2
 
 
 def _test_load_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data):
@@ -499,7 +585,9 @@ def _test_env_var_overrides(monkeypatch, tmp_path):
     manager._reload()
 
 
-def test_cache_sequential(monkeypatch, tmp_path, tmp_path_factory, basic_simulation, fake_data):
+def test_cache_sequential(
+    monkeypatch, tmp_path, tmp_path_factory, basic_simulation, fake_data, request
+):
     """Run all critical cache tests in sequence to ensure stability."""
     monkeypatch.setattr(config.local_cache, "enabled", True)
 
@@ -514,7 +602,7 @@ def test_cache_sequential(monkeypatch, tmp_path, tmp_path_factory, basic_simulat
     _test_cache_eviction_by_size(monkeypatch, tmp_path_factory, basic_simulation)
     _test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path)
     _test_job_run_cache(monkeypatch, basic_simulation, tmp_path)
-    _test_autograd_cache(monkeypatch)
+    _test_autograd_cache(monkeypatch, request)
     _test_configure_cache_roundtrip(monkeypatch, tmp_path)
     _test_mode_solver_caching(monkeypatch, tmp_path)
     _test_verbosity(monkeypatch, basic_simulation)

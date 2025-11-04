@@ -69,6 +69,29 @@ api_path = "tidy3d.web.api.webapi"
 Env.dev.active()
 
 
+class FakeJob:
+    def __init__(self, task_id: str, statuses: list[str], events: list[str]):
+        self.task_id = task_id
+        self._statuses = statuses
+        self._idx = 0
+        self.events = events
+
+    @property
+    def status(self):
+        status = self._statuses[self._idx]
+        if self._idx < len(self._statuses) - 1:
+            self._idx += 1
+        self.events.append((self.task_id, "status", status))
+        return status
+
+    def download(self, path: PathLike):
+        self.events.append((self.task_id, "download", str(path)))
+
+    @property
+    def load_if_cached(self):
+        return False
+
+
 class ImmediateExecutor:
     def __init__(self, *args, **kwargs):
         pass
@@ -728,23 +751,6 @@ def test_batch_run_saves_file_after_upload(mock_webapi, mock_job_status, tmp_pat
 def test_batch_monitor_downloads_on_success(monkeypatch, tmp_path):
     events = []
 
-    class FakeJob:
-        def __init__(self, task_id: str, statuses: list[str]):
-            self.task_id = task_id
-            self._statuses = statuses
-            self._idx = 0
-
-        @property
-        def status(self):
-            status = self._statuses[self._idx]
-            if self._idx < len(self._statuses) - 1:
-                self._idx += 1
-            events.append((self.task_id, "status", status))
-            return status
-
-        def download(self, path: PathLike):
-            events.append((self.task_id, "download", str(path)))
-
     monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
     monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
 
@@ -752,8 +758,8 @@ def test_batch_monitor_downloads_on_success(monkeypatch, tmp_path):
     batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
     batch._cached_properties = {}
     fake_jobs = {
-        "task_a": FakeJob("task_a_id", ["running", "success", "success"]),
-        "task_b": FakeJob("task_b_id", ["running", "running", "success"]),
+        "task_a": FakeJob("task_a_id", ["running", "success", "success"], events),
+        "task_b": FakeJob("task_b_id", ["running", "running", "success"], events),
     }
     batch._cached_properties["jobs"] = fake_jobs
 
@@ -786,23 +792,6 @@ def test_batch_monitor_downloads_on_success(monkeypatch, tmp_path):
 def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
     events = []
 
-    class FakeJob:
-        def __init__(self, task_id: str, statuses: list[str]):
-            self.task_id = task_id
-            self._statuses = statuses
-            self._idx = 0
-
-        @property
-        def status(self):
-            status = self._statuses[self._idx]
-            if self._idx < len(self._statuses) - 1:
-                self._idx += 1
-            events.append((self.task_id, "status", status))
-            return status
-
-        def download(self, path: PathLike):
-            events.append((self.task_id, "download", str(path)))
-
     monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
     monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
 
@@ -810,8 +799,8 @@ def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
     batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
     batch._cached_properties = {}
     fake_jobs = {
-        "task_a": FakeJob("task_a_id", ["success", "success"]),
-        "task_b": FakeJob("task_b_id", ["running", "success"]),
+        "task_a": FakeJob("task_a_id", ["success", "success"], events),
+        "task_b": FakeJob("task_b_id", ["running", "success"], events),
     }
     batch._cached_properties["jobs"] = fake_jobs
 

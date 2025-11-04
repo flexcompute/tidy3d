@@ -19,6 +19,7 @@ from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
 from tidy3d.web.api.container import BatchData
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
+from tidy3d.web.api.webapi import load, restore_simulation_if_cached
 from tidy3d.web.api.webapi import run as run_webapi
 from tidy3d.web.core.types import PayType
 
@@ -561,16 +562,31 @@ def _run_primitive(
             aux_data=aux_data,
         )
     else:
-        sim_combined.validate_pre_upload()
         sim_original = sim_original.updated_copy(simulation_type="autograd_fwd", deep=False)
-        run_kwargs["simulation_type"] = "autograd_fwd"
-        run_kwargs["sim_fields_keys"] = list(sim_fields.keys())
-
-        sim_data_orig, task_id_fwd = _run_tidy3d(
-            sim_original,
-            task_name=task_name,
-            **run_kwargs,
+        restored_path, task_id_fwd = restore_simulation_if_cached(
+            simulation=sim_original,
+            path=run_kwargs.get("path", None),
+            reduce_simulation=run_kwargs.get("reduce_simulation", "auto"),
+            verbose=run_kwargs.get("verbose", True),
         )
+        if restored_path is None or task_id_fwd is None:
+            sim_combined.validate_pre_upload()
+            run_kwargs["simulation_type"] = "autograd_fwd"
+            run_kwargs["sim_fields_keys"] = list(sim_fields.keys())
+
+            sim_data_orig, task_id_fwd = _run_tidy3d(
+                sim_original,
+                task_name=task_name,
+                **run_kwargs,
+            )
+        else:
+            sim_data_orig = load(
+                task_id=None,
+                path=run_kwargs.get("path", None),
+                verbose=run_kwargs.get("verbose", None),
+                progress_callback=run_kwargs.get("progress_callback", None),
+                lazy=run_kwargs.get("lazy", None),
+            )
 
         # TODO: put this in postprocess?
         aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
