@@ -2,129 +2,486 @@ name: "public/tidy3d/python-client-release"
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release Tag (e.g., v2.10.0, v2.10.0rc1)'
+        required: true
+        type: string
+      
+      release_type:
+        description: 'Release Type (draft=test, final=PyPI)'
+        type: choice
+        default: 'draft'
+        required: false
+        options:
+          - draft
+          - final
+      
+      workflow_control:
+        description: 'Workflow Stage Control'
+        default: 'start-tag'
+        required: false
+        type: choice
+        options:
+          - start-tag
+          - start-tests
+          - start-deploy
+          - only-tag
+          - only-tests
+          - only-tag-tests
+          - only-tag-deploy
+      
+      client_tests:
+        description: 'Run python-client-tests'
+        type: boolean
+        default: true
+      
+      cli_tests:
+        description: 'Run develop-cli tests'
+        type: boolean
+        default: true
+      
+      submodule_tests:
+        description: 'Run submodule tests'
+        type: boolean
+        default: true
+  
+  workflow_call:
+    inputs:
+      release_tag:
+        description: 'Release Tag (e.g., v2.10.0, v2.10.0rc1)'
+        required: true
+        type: string
+      
+      release_type:
+        description: 'Release Type (draft=test, final=PyPI)'
+        type: string
+        default: 'draft'
+        required: false
+      
+      workflow_control:
+        description: 'Workflow Stage Control'
+        default: 'start-tag'
+        required: false
+        type: string
+      
+      client_tests:
+        description: 'Run python-client-tests'
+        type: boolean
+        default: true
+      
+      cli_tests:
+        description: 'Run develop-cli tests'
+        type: boolean
+        default: true
+      
+      submodule_tests:
+        description: 'Run submodule tests'
+        type: boolean
+        default: true
+    
+    outputs:
+      workflow_success:
+        description: 'Overall release workflow success status'
+        value: ${{ jobs.compile-tests-results.outputs.proceed_deploy == 'true' || jobs.compile-tests-results.result == 'skipped' }}
 
 permissions:
   contents: read
 
+
 jobs:
-  test-latest-submodules:
+  determine-workflow-scope:
     runs-on: ubuntu-latest
-    if: contains(github.ref, 'rc') == false
+    outputs:
+      release_tag: ${{ env.RELEASE_TAG }}
+      release_type: ${{ env.RELEASE_TYPE }}
+      is_rc_release: ${{ steps.determine-workflow-steps.outputs.is_rc_release }}
+      push_to_latest: ${{ steps.determine-workflow-steps.outputs.push_to_latest }}
+      run_tag: ${{ steps.determine-workflow-steps.outputs.run_tag }}
+      run_tests: ${{ steps.determine-workflow-steps.outputs.run_tests }}
+      run_deploy: ${{ steps.determine-workflow-steps.outputs.run_deploy }}
+      run_client_tests: ${{ steps.determine-workflow-steps.outputs.run_client_tests }}
+      run_cli_tests: ${{ steps.determine-workflow-steps.outputs.run_cli_tests }}
+      run_submodule_tests: ${{ steps.determine-workflow-steps.outputs.run_submodule_tests }}
+      deploy_github_release: ${{ steps.determine-workflow-steps.outputs.deploy_github_release }}
+      deploy_pypi: ${{ steps.determine-workflow-steps.outputs.deploy_pypi }}
+      sync_readthedocs: ${{ steps.determine-workflow-steps.outputs.sync_readthedocs }}
+      sync_branches: ${{ steps.determine-workflow-steps.outputs.sync_branches }}
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+      RELEASE_TYPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_type || inputs.release_type }}
+      WORKFLOW_CONTROL: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.workflow_control || inputs.workflow_control }}
+      CLIENT_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.client_tests || inputs.client_tests }}
+      CLI_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.cli_tests || inputs.cli_tests }}
+      SUBMODULE_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.submodule_tests || inputs.submodule_tests }}
     steps:
-      - name: Checkout repository with submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
-          # This fetches only a single branch by default, so additional fetch is needed
-          fetch-depth: 0 # Optionally, set to 0 to fetch all history for all branches and tags
-          persist-credentials: false
-
-      - name: Initialize and update submodule
+      - name: validate-tag-format
         run: |
-          git submodule update --init --recursive
-
-      - name: Check if submodules are up to date
-        shell: bash
+          set -e
+          echo "Validating release tag format..."
+          echo "Release tag: $RELEASE_TAG"
+          echo "Release type: $RELEASE_TYPE"
+          
+          # Only enforce strict validation for final releases
+          if [[ "$RELEASE_TYPE" == "final" ]]; then
+            echo "Final release detected - applying strict tag validation"
+            
+            # Tag must match semantic versioning: v{major}.{minor}.{patch}[rc{num}]
+            TAG_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$'
+            
+            if [[ ! "$RELEASE_TAG" =~ $TAG_REGEX ]]; then
+              echo "Invalid tag format: $RELEASE_TAG"
+              echo "  Expected format: v{major}.{minor}.{patch}[rc{num}]"
+              echo "  Examples: v2.10.0, v2.10.0rc1, v2.10.1rc2"
+              exit 1
+            fi
+            
+            echo "Tag format is valid"
+          else
+            echo "Draft release - skipping strict tag validation"
+            echo "Tag accepted: $RELEASE_TAG"
+          fi
+      
+      - name: determine-workflow-steps
+        id: determine-workflow-steps
         run: |
-          NOTEBOOKS_PATH=docs/notebooks
-          FAQ_PATH=docs/faq
-
-          # Checking out Notebooks submodule with the same branch as the main project/develop
-          echo "Checking $NOTEBOOKS_PATH for updates..."
-          cd $NOTEBOOKS_PATH
-          NOTEBOOKS_CURRENT_COMMIT=$(git rev-parse HEAD)
-          echo $(git fetch --all --verbose)
-          echo $(git remote get-url origin)
-          if git show-ref --verify refs/remotes/origin/develop; then
-           echo "Branch develop exists."
+          set -v
+          echo "=== Input Parameters ==="
+          echo "RELEASE_TAG: $RELEASE_TAG"
+          echo "RELEASE_TYPE: $RELEASE_TYPE"
+          echo "WORKFLOW_CONTROL: $WORKFLOW_CONTROL"
+          echo "CLIENT_TESTS: $CLIENT_TESTS"
+          echo "CLI_TESTS: $CLI_TESTS"
+          echo "SUBMODULE_TESTS: $SUBMODULE_TESTS"
+          echo ""
+          
+          # ============================================
+          # PART 1: WORKFLOW FLOW CONTROL
+          # ============================================
+          run_tag=false
+          run_tests=false
+          run_deploy=false
+          
+          case "$WORKFLOW_CONTROL" in
+            start-tag)
+              run_tag=true
+              run_tests=true
+              run_deploy=true
+              ;;
+            start-tests)
+              run_tests=true
+              run_deploy=true
+              ;;
+            start-deploy)
+              run_deploy=true
+              ;;
+            only-tag)
+              run_tag=true
+              ;;
+            only-tests)
+              run_tests=true
+              ;;
+            only-tag-tests)
+              run_tag=true
+              run_tests=true
+              ;;
+            only-tag-deploy)
+              run_tag=true
+              run_deploy=true
+              ;;
+            *)
+              echo "Invalid WORKFLOW_CONTROL: $WORKFLOW_CONTROL"
+              exit 1
+              ;;
+          esac
+          
+          echo "=== Workflow Stage Control ==="
+          echo "run_tag: $run_tag"
+          echo "run_tests: $run_tests"
+          echo "run_deploy: $run_deploy"
+          echo ""
+          
+          # ============================================
+          # PART 2: DETERMINE RC STATUS
+          # ============================================
+          is_rc_release=false
+          if [[ "$RELEASE_TAG" == *"rc"* ]]; then
+            is_rc_release=true
+          fi
+          
+          echo "=== Release Type ==="
+          echo "is_rc_release: $is_rc_release"
+          echo ""
+          
+          # ============================================
+          # PART 2.5: DETERMINE PUSH TO LATEST
+          # ============================================
+          push_to_latest=false
+          SEMVER_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          
+          # Only push to latest if:
+          # 1. Release type is final
+          # 2. Not an RC release
+          # 3. Tag matches semantic versioning pattern v{major}.{minor}.{patch}
+          if [[ "$RELEASE_TYPE" == "final" && "$is_rc_release" == "false" && "$RELEASE_TAG" =~ $SEMVER_REGEX ]]; then
+            push_to_latest=true
+            echo "=== Push to Latest ==="
+            echo "Will push to 'latest' branch in readthedocs"
+            echo "   Conditions met: final release + non-RC + semantic version tag"
           else
-            echo "::error::Branch develop does not exist on remote."
+            echo "=== Push to Latest ==="
+            echo " Will NOT push to 'latest' branch"
+            if [[ "$RELEASE_TYPE" != "final" ]]; then
+              echo "   Reason: Not a final release (is $RELEASE_TYPE)"
+            elif [[ "$is_rc_release" == "true" ]]; then
+              echo "   Reason: RC release"
+            elif [[ ! "$RELEASE_TAG" =~ $SEMVER_REGEX ]]; then
+              echo "   Reason: Tag doesn't match semantic version pattern (v{major}.{minor}.{patch})"
+            fi
+          fi
+          echo ""
+          
+          # ============================================
+          # PART 3: TEST CONTROL
+          # ============================================
+          run_client_tests=false
+          run_cli_tests=false
+          run_submodule_tests=false
+          
+          if [[ "$run_tests" == "true" ]]; then
+            [[ "$CLIENT_TESTS" == "true" ]] && run_client_tests=true
+            [[ "$CLI_TESTS" == "true" ]] && run_cli_tests=true
+            
+            # Submodule tests: user input OR auto-enable for final non-RC releases
+            if [[ "$SUBMODULE_TESTS" == "true" ]]; then
+              run_submodule_tests=true
+              echo "??  Submodule tests enabled by user input"
+            elif [[ "$push_to_latest" == "true" ]]; then
+              run_submodule_tests=true
+              echo "??  Submodule tests auto-enabled for final non-RC release (push_to_latest=true)"
+            fi
+          fi
+          
+          echo "=== Test Control ==="
+          echo "run_client_tests: $run_client_tests"
+          echo "run_cli_tests: $run_cli_tests"
+          echo "run_submodule_tests: $run_submodule_tests"
+          echo ""
+          
+          # ============================================
+          # PART 4: DEPLOYMENT CONTROL
+          # ============================================
+          deploy_github_release=false
+          deploy_pypi=false
+          sync_readthedocs=false
+          sync_branches=false
+          
+          if [[ "$run_deploy" == "true" ]]; then
+            # Always create GitHub release and sync docs
+            deploy_github_release=true
+            sync_readthedocs=true
+            
+            # Only publish to PyPI and sync branches on final releases
+            if [[ "$RELEASE_TYPE" == "final" ]]; then
+              deploy_pypi=true
+              sync_branches=true
+            fi
+          fi
+          
+          echo "=== Deployment Control ==="
+          echo "deploy_github_release: $deploy_github_release"
+          echo "deploy_pypi: $deploy_pypi"
+          echo "sync_readthedocs: $sync_readthedocs"
+          echo "sync_branches: $sync_branches"
+          echo ""
+          
+          # ============================================
+          # PART 5: SAVE ALL OUTPUTS
+          # ============================================
+          echo "is_rc_release=$is_rc_release" >> $GITHUB_OUTPUT
+          echo "push_to_latest=$push_to_latest" >> $GITHUB_OUTPUT
+          echo "run_tag=$run_tag" >> $GITHUB_OUTPUT
+          echo "run_tests=$run_tests" >> $GITHUB_OUTPUT
+          echo "run_deploy=$run_deploy" >> $GITHUB_OUTPUT
+          echo "run_client_tests=$run_client_tests" >> $GITHUB_OUTPUT
+          echo "run_cli_tests=$run_cli_tests" >> $GITHUB_OUTPUT
+          echo "run_submodule_tests=$run_submodule_tests" >> $GITHUB_OUTPUT
+          echo "deploy_github_release=$deploy_github_release" >> $GITHUB_OUTPUT
+          echo "deploy_pypi=$deploy_pypi" >> $GITHUB_OUTPUT
+          echo "sync_readthedocs=$sync_readthedocs" >> $GITHUB_OUTPUT
+          echo "sync_branches=$sync_branches" >> $GITHUB_OUTPUT
+          
+          echo "? Workflow scope determined"
+  
+  create-tag:
+    name: create-and-push-tag
+    needs: determine-workflow-scope
+    if: needs.determine-workflow-scope.outputs.run_tag == 'true'
+    uses: ./.github/workflows/tidy3d-python-client-create-tag.yml
+    permissions:
+      contents: write
+    with:
+      release_tag: ${{ needs.determine-workflow-scope.outputs.release_tag }}
+      release_type: ${{ needs.determine-workflow-scope.outputs.release_type }}
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+  
+  run-client-tests:
+    name: run-python-client-tests
+    needs: [determine-workflow-scope, create-tag]
+    if: |
+      always() &&
+      needs.determine-workflow-scope.outputs.run_client_tests == 'true'
+    uses: ./.github/workflows/tidy3d-python-client-tests.yml
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+    with:
+      release_tag: ${{ needs.determine-workflow-scope.outputs.release_tag }}
+      local_tests: true
+      remote_tests: true
+      cli_tests: ${{ needs.determine-workflow-scope.outputs.run_cli_tests == 'true' }}
+      submodule_tests: ${{ needs.determine-workflow-scope.outputs.run_submodule_tests == 'true' }}
+  
+  compile-tests-results:
+    name: compile-tests-results
+    if: |
+      always() &&
+      needs.determine-workflow-scope.outputs.run_tests == 'true' &&
+      needs.determine-workflow-scope.outputs.run_deploy == 'true'
+    needs:
+      - determine-workflow-scope
+      - run-client-tests
+    runs-on: ubuntu-latest
+    outputs:
+      proceed_deploy: ${{ steps.check-tests.outputs.proceed_deploy }}
+    steps:
+      - name: check-tests
+        id: check-tests
+        env:
+          RUN_CLIENT_TESTS: ${{ needs.determine-workflow-scope.outputs.run_client_tests }}
+          CLIENT_TESTS_RESULT: ${{ needs.run-client-tests.result }}
+          WORKFLOW_SUCCESS: ${{ needs.run-client-tests.outputs.workflow_success }}
+        run: |
+          echo "=== Checking Test Results ==="
+          echo ""
+          
+          proceed_deploy=true
+          
+          # Check client tests using the workflow_success output from tests workflow
+          # This output validates all tests: local, remote, CLI, submodule, lint, mypy, etc.
+          if [[ "$RUN_CLIENT_TESTS" == "true" ]]; then
+            echo "Client tests workflow result: $CLIENT_TESTS_RESULT"
+            echo "Client tests validation status: $WORKFLOW_SUCCESS"
+            
+            if [[ "$CLIENT_TESTS_RESULT" != "success" ]] || [[ "$WORKFLOW_SUCCESS" != "true" ]]; then
+              echo "Client tests failed - see workflow-validation job in tests workflow for details"
+              proceed_deploy=false
+            else
+              echo "All client tests passed (local, remote, CLI, submodule, and quality checks)"
+            fi
+          else
+            echo "Client tests: not required (skipped)"
+          fi
+          
+          echo ""
+          echo "=== Final Decision ==="
+          if [[ "$proceed_deploy" == "true" ]]; then
+            echo "All required tests passed - deployment can proceed"
+          else
+            echo "One or more required tests failed - deployment blocked"
             exit 1
           fi
-          NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/develop)
-          echo "NOTEBOOKS_LATEST_COMMIT: $NOTEBOOKS_LATEST_COMMIT"
-          echo "NOTEBOOKS_CURRENT_COMMIT: $NOTEBOOKS_CURRENT_COMMIT"
-
-
-          cd ../..
-          if [ "$NOTEBOOKS_LATEST_COMMIT" != "$NOTEBOOKS_CURRENT_COMMIT" ]; then
-            echo "::error ::Submodule $NOTEBOOKS_PATH is not up to date with the develop branch. Please update it."
-            exit 1
-          else
-            echo "Submodule $NOTEBOOKS_PATH is up to date with the develop branch."
-          fi
-
-          # Checking FAQs only on the develop branch.
-          echo "Checking $FAQ_PATH for updates..."
-          cd $FAQ_PATH
-          FAQ_CURRENT_COMMIT=$(git rev-parse HEAD)
-          echo $(git fetch --all --verbose)
-          echo $(git remote get-url origin)
-          FAQ_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/develop)
-          echo "FAQ_LATEST_COMMIT: $FAQ_LATEST_COMMIT"
-          echo "FAQ_CURRENT_COMMIT: $FAQ_CURRENT_COMMIT"
-          cd ../..
-          if [ "$FAQ_LATEST_COMMIT" != "$FAQ_CURRENT_COMMIT" ]; then
-            echo "::error ::Submodule $FAQ_PATH is not up to date. Please update it."
-            exit 1
-          else
-            echo "Submodule $FAQ_PATH is up to date."
-          fi
-
+          
+          echo "proceed_deploy=$proceed_deploy" >> $GITHUB_OUTPUT
+  
+  sync-readthedocs:
+    name: sync-docs-to-readthedocs
+    needs: [determine-workflow-scope, compile-tests-results]
+    if: |
+      always() &&
+      (needs.compile-tests-results.outputs.proceed_deploy == 'true' || needs.compile-tests-results.result == 'skipped') &&
+      needs.determine-workflow-scope.outputs.sync_readthedocs == 'true'
+    uses: ./.github/workflows/tidy3d-docs-sync-readthedocs-repo.yml
+    permissions:
+      contents: write
+    with:
+      source_ref: ${{ needs.determine-workflow-scope.outputs.release_tag }}
+      target_ref: ${{ needs.determine-workflow-scope.outputs.push_to_latest == 'true' && 'latest' || '' }}
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+  
   github-release:
+    name: create-github-release
+    needs: [determine-workflow-scope, compile-tests-results]
+    if: |
+      always() &&
+      (needs.compile-tests-results.outputs.proceed_deploy == 'true' || needs.compile-tests-results.result == 'skipped') &&
+      needs.determine-workflow-scope.outputs.deploy_github_release == 'true'
     runs-on: ubuntu-latest
     permissions:
-        contents: write
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.determine-workflow-scope.outputs.release_tag }}
+      IS_RC_RELEASE: ${{ needs.determine-workflow-scope.outputs.is_rc_release }}
     steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ github.ref }}
-        persist-credentials: false
-    - name: Exit if any RC release
-      if: contains(github.ref, 'rc') == false
-      uses: everlytic/branch-merge@c4a244dc23143f824ae6c022a10732566cb8e973 # v1.1.5
-      with:
-        github_token: ${{ secrets.GH_PAT }}
-        source_ref: ${{ github.ref }}
-        target_branch: "latest"
-        commit_message_template: ':tada: RELEASE: Merged {source_ref} into target {target_branch}'
-    - name: Release
-      uses: softprops/action-gh-release@aec2ec56f94eb8180ceec724245f64ef008b89f5  # v2.4.0
-      with:
-        generate_release_notes: true      
-      env:
-        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+      - run: |
+          echo "steps"
+      # - name: checkout-tag
+      #   uses: actions/checkout@v4
+      #   with:
+      #     ref: ${{ env.RELEASE_TAG }}
+      #     persist-credentials: false
+      
+      # - name: create-github-release
+      #   uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191  # v2.0.8
+      #   with:
+      #     tag_name: ${{ env.RELEASE_TAG }}
+      #     generate_release_notes: true
+      #     prerelease: ${{ env.IS_RC_RELEASE == 'true' }}
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+  
   pypi-release:
+    name: publish-to-pypi
+    needs: [determine-workflow-scope, compile-tests-results]
+    if: |
+      always() &&
+      (needs.compile-tests-results.outputs.proceed_deploy == 'true' || needs.compile-tests-results.result == 'skipped') &&
+      needs.determine-workflow-scope.outputs.deploy_pypi == 'true'
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ needs.determine-workflow-scope.outputs.release_tag }}
     steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ github.ref }}
-        persist-credentials: false
-    - uses: actions/setup-python@v2
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install setuptools wheel twine build
-    - name: Build and publish
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: | # zizmor: ignore[use-trusted-publishing]
-        python -m build
-        python -m twine upload --repository pypi dist/*  
-  sync_to_develop:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: "latest"
-        persist-credentials: false
-    - name: Exit if any RC release
-      if: contains(github.ref, 'rc') == false
-      uses: everlytic/branch-merge@c4a244dc23143f824ae6c022a10732566cb8e973 # v1.1.5
-      with:
-        github_token: ${{ secrets.GH_PAT }}
-        source_ref: "latest"
-        target_branch: "develop"
-        commit_message_template: ':tada: RELEASE: Synced latest into develop'
+      - run: |
+          echo "steps"
+
+      # - name: checkout-tag
+      #   uses: actions/checkout@v4
+      #   with:
+      #     ref: ${{ env.RELEASE_TAG }}
+      #     persist-credentials: false
+      
+      # - name: setup-python
+      #   uses: actions/setup-python@v5
+      #   with:
+      #     python-version: '3.10'
+      
+      # - name: install-build-tools
+      #   run: |
+      #     python -m pip install --upgrade pip
+      #     python -m pip install setuptools wheel twine build
+      
+      # - name: build-package
+      #   run: |
+      #     echo "Building package from tag $RELEASE_TAG..."
+      #     python -m build
+      #     ls -lh dist/
+      
+      # - name: publish-to-pypi
+      #   env:
+      #     TWINE_USERNAME: __token__
+      #     TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      #   run: | # zizmor: ignore[use-trusted-publishing]
+      #     echo "Publishing to PyPI..."
+      #     python -m twine upload --repository pypi dist/*
+      #     echo "Published to PyPI"

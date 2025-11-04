@@ -2,6 +2,7 @@ name: "public/tidy3d/python-client-tests"
 
 on:
   merge_group:
+  
   workflow_dispatch:
     inputs:
       remote_tests:
@@ -12,6 +13,52 @@ on:
         description: 'local-tests'
         type: boolean
         default: false
+      cli_tests:
+        description: 'Run develop-cli tests'
+        type: boolean
+        default: false
+      submodule_tests:
+        description: 'Run submodule tests'
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Release Tag (v2.10.0, v2.10.0rc1)'
+        required: false
+        type: string
+        default: ''
+  
+  workflow_call:
+    inputs:
+      remote_tests:
+        description: 'remote-tests'
+        type: boolean
+        required: false
+        default: true
+      local_tests:
+        description: 'local-tests'
+        type: boolean
+        required: false
+        default: true
+      cli_tests:
+        description: 'Run develop-cli tests'
+        type: boolean
+        required: false
+        default: false
+      submodule_tests:
+        description: 'Run submodule tests'
+        type: boolean
+        required: false
+        default: false
+      release_tag:
+        description: 'Release Tag (v2.10.0, v2.10.0rc1)'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      workflow_success:
+        description: 'Overall test workflow success status'
+        value: ${{ jobs.workflow-validation.result == 'success' }}
+  
   pull_request:
     branches:
       - latest
@@ -36,6 +83,8 @@ jobs:
       pr_review_tests: ${{ steps.determine-test-type.outputs.pr_review_tests }}
       local_tests: ${{ steps.determine-test-type.outputs.local_tests }}
       remote_tests: ${{ steps.determine-test-type.outputs.remote_tests }}
+      cli_tests: ${{ steps.determine-test-type.outputs.cli_tests }}
+      submodule_tests: ${{ steps.determine-test-type.outputs.submodule_tests }}
       pr_approval_state: ${{ steps.approval.outputs.approved }}
     steps:
       - name: check-current-approval-status
@@ -82,8 +131,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REVIEW_STATE: ${{ github.event.review.state }}
           REF: ${{ github.ref }}
-          INPUT_LOCAL: ${{ github.event.inputs.local_tests }}
-          INPUT_REMOTE: ${{ github.event.inputs.remote_tests }}
+          INPUT_LOCAL: ${{ github.event.inputs.local_tests || inputs.local_tests }}
+          INPUT_REMOTE: ${{ github.event.inputs.remote_tests || inputs.remote_tests }}
+          INPUT_CLI: ${{ github.event.inputs.cli_tests || inputs.cli_tests }}
+          INPUT_SUBMODULE: ${{ github.event.inputs.submodule_tests || inputs.submodule_tests }}
           APPROVED: ${{ steps.approval.outputs.approved }}
         run: |
           echo "Event: $EVENT_NAME"
@@ -92,10 +143,14 @@ jobs:
           echo "Git REF: $REF"
           echo "Input local: $INPUT_LOCAL"
           echo "Input remote: $INPUT_REMOTE"
+          echo "Input cli: $INPUT_CLI"
+          echo "Input submodule: $INPUT_SUBMODULE"
           echo "Approved: $APPROVED"
 
           remote_tests=false
           local_tests=false
+          cli_tests=false
+          submodule_tests=false
           code_quality_tests=false
           pr_review_tests=false
           
@@ -109,6 +164,14 @@ jobs:
 
             if [[ "$INPUT_LOCAL" == "true" ]]; then
               local_tests=true
+            fi
+            
+            if [[ "$INPUT_CLI" == "true" ]]; then
+              cli_tests=true
+            fi
+            
+            if [[ "$INPUT_SUBMODULE" == "true" ]]; then
+              submodule_tests=true
             fi
           fi
 
@@ -145,12 +208,16 @@ jobs:
 
           echo "local_tests=$local_tests" >> $GITHUB_OUTPUT
           echo "remote_tests=$remote_tests" >> $GITHUB_OUTPUT
+          echo "cli_tests=$cli_tests" >> $GITHUB_OUTPUT
+          echo "submodule_tests=$submodule_tests" >> $GITHUB_OUTPUT
           echo "code_quality_tests=$code_quality_tests" >> $GITHUB_OUTPUT
           echo "pr_review_tests=$pr_review_tests" >> $GITHUB_OUTPUT
           echo "code_quality_tests=$code_quality_tests"
           echo "pr_review_tests=$pr_review_tests"
           echo "local_tests=$local_tests"
           echo "remote_tests=$remote_tests"
+          echo "cli_tests=$cli_tests"
+          echo "submodule_tests=$submodule_tests"
 
   lint:
     needs: determine-test-scope
@@ -466,15 +533,27 @@ jobs:
     defaults:
       run:
         shell: bash
-    env:  # Set environment variables for the whole job
+    env:
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
     permissions:
         pull-requests: write
     steps:
-    - uses: actions/checkout@v4
+    - name: checkout-head
+      if: ${{ !env.RELEASE_TAG }}
+      uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # Required 0 for diff report.
+        fetch-depth: 0
+        submodules: false
+        persist-credentials: false
+
+    - name: checkout-tag
+      if: ${{ env.RELEASE_TAG }}
+      uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.RELEASE_TAG }}
+        fetch-depth: 0
         submodules: false
         persist-credentials: false
 
@@ -580,13 +659,25 @@ jobs:
     defaults:
       run:
         shell: bash
-    env:  # Set environment variables for the whole job
+    env:
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
 
     steps:
-    - uses: actions/checkout@v4
+    - name: checkout-head
+      if: ${{ !env.RELEASE_TAG }}
+      uses: actions/checkout@v4
       with:
+        fetch-depth: 1
+        submodules: false
+        persist-credentials: false
+
+    - name: checkout-tag
+      if: ${{ env.RELEASE_TAG }}
+      uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 1
         submodules: false
         persist-credentials: false
@@ -652,12 +743,26 @@ jobs:
         valColorRange: ${{ env.total }}
         style: "for-the-badge"
   
-  pr-requirements-pass:
-    name: pr-requirements-pass
-    if: |
-      always() &&
-      (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'merge_group') && 
-      ((needs.determine-test-scope.outputs.pr_approval_state == 'true' && needs.determine-test-scope.outputs.local_tests == 'true') || needs.determine-test-scope.outputs.remote_tests == 'true')
+  develop-cli-tests:
+    name: develop-cli-tests
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.cli_tests == 'true'
+    uses: ./.github/workflows/tidy3d-python-client-develop-cli.yml
+    with:
+      release_tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+
+  submodule-tests:
+    name: submodule-tests
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.submodule_tests == 'true'
+    uses: ./.github/workflows/tidy3d-python-client-submodules-test.yml
+    with:
+      run-workflow: true
+      release_tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+  
+  workflow-validation:
+    name: workflow-validation
+    if: always()
     needs:
       - determine-test-scope
       - local-tests
@@ -668,63 +773,89 @@ jobs:
       - lint-commit-messages
       - lint-branch-name
       - zizmor
+      - develop-cli-tests
+      - submodule-tests
     runs-on: ubuntu-latest
-    env:
-      NEEDS_LOCAL_TESTS_RESULT: ${{ needs.local-tests.result }}
-      NEEDS_REMOTE_TESTS_RESULT: ${{ needs.remote-tests.result }}
-      NEEDS_LINT_RESULT: ${{ needs.lint.result }}
-      NEEDS_VERIFY_SCHEMA_CHANGE_RESULT: ${{ needs.verify-schema-change.result }}
-      NEEDS_LINT_COMMIT_MESSAGES_RESULT: ${{ needs.lint-commit-messages.result }}
-      NEEDS_LINT_BRANCH_NAME_RESULT: ${{ needs.lint-branch-name.result }}
-      NEEDS_ZIZMOR_RESULT: ${{ needs.zizmor.result }}
     steps:
       - name: check-linting-result
-        if: ${{ needs.lint.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.lint.result != 'success' && needs.lint.result != 'skipped' }}
         run: |
           echo "❌ Linting failed."
           exit 1
 
       - name: check-mypy-result
-        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.mypy.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.mypy.result != 'success' && needs.mypy.result != 'skipped' }}
         run: |
           echo "❌ Mypy type checking failed."
           exit 1
           
       - name: check-schema-change-verification
-        if: ${{ needs.verify-schema-change.result != 'success' }}
-        
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.verify-schema-change.result != 'success' && needs.verify-schema-change.result != 'skipped' }}
         run: |
           echo "❌ Schema change verification failed."
           exit 1
 
       - name: check-local-tests-result
-        if: ${{ needs.local-tests.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.local_tests == 'true' && needs.local-tests.result != 'success' && needs.local-tests.result != 'skipped' }}
         run: |
           echo "❌ Local tests failed."
           exit 1
 
       - name: check-remote-tests-result
-        if: ${{ needs.remote-tests.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.remote_tests == 'true' && needs.remote-tests.result != 'success' && needs.remote-tests.result != 'skipped' }}
         run: |
           echo "❌ Remote tests failed."
           exit 1
 
       - name: check-commit-message-linting
-        if: ${{  needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.lint-commit-messages.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.lint-commit-messages.result != 'success' && needs.lint-commit-messages.result != 'skipped' }}
         run: |
           echo "❌ Commit message linting failed."
           exit 1
 
       - name: check-branch-name-linting
-        if: ${{ needs.determine-test-scope.outputs.pr_review_tests == 'true' && needs.lint-branch-name.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.pr_review_tests == 'true' && needs.lint-branch-name.result != 'success' && needs.lint-branch-name.result != 'skipped' }}
         run: |
           echo "❌ Branch name linting failed."
           exit 1
 
       - name: check-zizmor-static-analysis
-        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.zizmor.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.zizmor.result != 'success' && needs.zizmor.result != 'skipped' }}
         run: |
           echo "❌ Zizmor static analysis failed."
+          exit 1
+
+      - name: check-cli-tests-result
+        if: ${{ needs.determine-test-scope.outputs.cli_tests == 'true' && needs.develop-cli-tests.result != 'success' && needs.develop-cli-tests.result != 'skipped' }}
+        run: |
+          echo "❌ CLI tests failed."
+          exit 1
+
+      - name: check-submodule-tests-result
+        if: ${{ needs.determine-test-scope.outputs.submodule_tests == 'true' && needs.submodule-tests.result != 'success' && needs.submodule-tests.result != 'skipped' }}
+        run: |
+          echo "❌ Submodule tests failed."
+          exit 1
+
+      - name: all-checks-passed
+        if: ${{ success() }}
+        run: echo "✅ All required jobs passed!"
+  
+  pr-requirements-pass:
+    name: pr-requirements-pass
+    if: |
+      always() &&
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'merge_group') && 
+      ((needs.determine-test-scope.outputs.pr_approval_state == 'true' && needs.determine-test-scope.outputs.local_tests == 'true') || needs.determine-test-scope.outputs.remote_tests == 'true')
+    needs:
+      - determine-test-scope
+      - workflow-validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: check-workflow-validation
+        if: ${{ needs.workflow-validation.result != 'success' }}
+        run: |
+          echo "❌ Workflow validation failed. See workflow-validation job for details."
           exit 1
 
       - name: all-checks-passed

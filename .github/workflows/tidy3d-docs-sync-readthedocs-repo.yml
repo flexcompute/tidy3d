@@ -3,10 +3,36 @@ name: "docs/tidy3d/sync-to-readthedocs-repo"
 on:
   workflow_dispatch:
     inputs:
-      target_branch:
-        description: 'Target mirror repo branch. Defaults to source branch/tag.'
+      source_ref:
+        description: 'Source ref (branch/tag) to sync. Defaults to current ref.'
         required: false
         type: string
+        default: ''
+      target_ref:
+        description: 'Target mirror repo ref. Defaults to source ref.'
+        required: false
+        type: string
+        default: ''
+  
+  workflow_call:
+    inputs:
+      source_ref:
+        description: 'Source ref (branch/tag) to sync. Required for workflow_call.'
+        required: true
+        type: string
+      target_ref:
+        description: 'Target mirror repo ref. Defaults to source ref.'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      workflow_success:
+        description: 'Sync workflow success status'
+        value: ${{ jobs.build-and-deploy.result == 'success' }}
+      synced_ref:
+        description: 'The ref that was synced to the mirror'
+        value: ${{ jobs.build-and-deploy.outputs.synced_ref }}
+  
   push:
     branches:
       - main
@@ -30,16 +56,26 @@ jobs:
       - id: extract
         name: Extract branch or tag name
         shell: bash
+        env:
+          INPUT_SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.source_ref || inputs.source_ref }}
         run: |
-          REF_NAME="${GITHUB_REF#refs/*/}"
+          if [[ -n "$INPUT_SOURCE_REF" ]]; then
+            REF_NAME="$INPUT_SOURCE_REF"
+            echo "Using provided source_ref: $REF_NAME"
+          else
+            REF_NAME="${GITHUB_REF#refs/*/}"
+            echo "Extracted ref from GITHUB_REF: $REF_NAME"
+          fi
           echo "ref_name=$REF_NAME" >> $GITHUB_OUTPUT
-          echo "Extracted ref: $REF_NAME"
+          echo "Final ref: $REF_NAME"
 
   build-and-deploy:
     permissions:
       contents: write
     needs: extract_branch_or_tag
     runs-on: ubuntu-latest
+    outputs:
+      synced_ref: ${{ steps.sync-result.outputs.synced_ref }}
     steps:
       - name: full-checkout
         uses: actions/checkout@v4
@@ -52,20 +88,25 @@ jobs:
           persist-credentials: true
 
       - name: push-mirror-repo
+        id: sync-result
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           SOURCE_REF: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
-          TARGET_BRANCH_INPUT: ${{ github.event.inputs.target_branch }}
+          TARGET_REF: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_ref || inputs.target_ref }}
         run: |
           echo "Source reference: $SOURCE_REF"
           git pull origin "$SOURCE_REF"
           git remote add mirror https://github.com/flexcompute-readthedocs/tidy3d-docs.git
          
-          if [[ -n "$TARGET_BRANCH_INPUT" && "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "Manual trigger detected. Pushing contents of '$SOURCE_REF' to remote branch '$TARGET_BRANCH_INPUT'."
-            git push mirror "$SOURCE_REF:refs/heads/$TARGET_BRANCH_INPUT" --force
+          if [[ -n "$TARGET_REF" ]]; then
+            echo "Pushing contents of '$SOURCE_REF' to remote ref '$TARGET_REF'."
+            git push mirror "$SOURCE_REF:refs/heads/$TARGET_REF" --force
+            SYNCED_REF="$TARGET_REF"
           else
-            echo "Automatic trigger or manual run without target. Pushing '$SOURCE_REF' to the same ref on the mirror."
-            # This preserves the original behavior: pushes a branch to a branch, or a tag to a tag.
+            echo "Pushing '$SOURCE_REF' to the same ref on the mirror."
             git push mirror "$SOURCE_REF" --force
+            SYNCED_REF="$SOURCE_REF"
           fi
+          
+          echo "synced_ref=$SYNCED_REF" >> $GITHUB_OUTPUT
+          echo "? Successfully synced to: $SYNCED_REF"
