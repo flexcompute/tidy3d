@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 from os import PathLike
-from typing import Union
+from typing import TYPE_CHECKING, Any, Union
 
 import pydantic.v1 as pd
+from rich.panel import Panel
+from rich.table import Table
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
@@ -36,6 +38,9 @@ from .util import (
     summarize_variant_item,
     summarize_variant_item_rich,
 )
+
+if TYPE_CHECKING:
+    from IPython.lib.pretty import RepresentationPrinter
 
 
 def export_matlib_to_file(fname: PathLike = "matlib.json") -> None:
@@ -87,13 +92,13 @@ class AbstractVariantItem(Tidy3dBaseModel):
     def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
         return {}
 
-    def __str__(self):
+    def __str__(self) -> str:
         return summarize_variant_item(self)
 
-    def __rich__(self):
+    def __rich__(self) -> Panel:
         return summarize_variant_item_rich(self)
 
-    def _repr_pretty_(self, p, cycle):
+    def _repr_pretty_(self, p: RepresentationPrinter, cycle: bool) -> None:
         return repr_pretty_with_rich(self, p, cycle)
 
 
@@ -126,7 +131,7 @@ class MaterialItem(Tidy3dBaseModel):
     )
 
     @pd.validator("default", always=True)
-    def _default_in_variants(cls, val, values):
+    def _default_in_variants(cls, val: str, values: dict[str, Any]) -> Any:
         """Make sure the default variant is already included in the ``variants``."""
         if val not in values["variants"]:
             raise SetupError(
@@ -135,12 +140,12 @@ class MaterialItem(Tidy3dBaseModel):
             )
         return val
 
-    def __getitem__(self, variant_name):
+    def __getitem__(self, variant_name: str) -> Union[PoleResidue, MultiPhysicsMedium]:
         """Helper function to easily access the medium of a variant"""
         return self.variants[variant_name].medium
 
     @property
-    def medium(self):
+    def medium(self) -> Union[PoleResidue, MultiPhysicsMedium]:
         """The default medium."""
         if self.name == "Silicon Dioxide":
             log.warning(
@@ -149,13 +154,13 @@ class MaterialItem(Tidy3dBaseModel):
             )
         return self.variants[self.default].medium
 
-    def __str__(self):
+    def __str__(self) -> str:
         return summarize_material_item(self)
 
-    def __rich__(self):
+    def __rich__(self) -> Panel:
         return summarize_material_item_rich(self)
 
-    def _repr_pretty_(self, p, cycle):
+    def _repr_pretty_(self, p: RepresentationPrinter, cycle: bool) -> None:
         return repr_pretty_with_rich(self, p, cycle)
 
 
@@ -236,7 +241,7 @@ class MaterialItemUniaxial(MaterialItem):
         "that maps from a key to the variant model.",
     )
 
-    def medium(self, optical_axis: Axis):
+    def medium(self, optical_axis: Axis) -> AnisotropicMedium:
         """The default medium."""
         return self.variants[self.default].medium(optical_axis)
 
@@ -2108,13 +2113,13 @@ cSi_MultiPhysics = VariantItem(
 
 
 class MaterialLibrary(dict):
-    def __str__(self):
+    def __str__(self) -> str:
         return summarize_material_library(self)
 
-    def __rich__(self):
+    def __rich__(self) -> Table:
         return summarize_material_library_rich(self)
 
-    def _repr_pretty_(self, p, cycle):
+    def _repr_pretty_(self, p: RepresentationPrinter, cycle: bool) -> None:
         return repr_pretty_with_rich(self, p, cycle)
 
 

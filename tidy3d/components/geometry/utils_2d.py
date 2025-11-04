@@ -12,11 +12,11 @@ from tidy3d.components.geometry.polyslab import _MIN_POLYGON_AREA, PolySlab
 from tidy3d.components.grid.grid import Grid
 from tidy3d.components.scene import Scene
 from tidy3d.components.structure import Structure
-from tidy3d.components.types import Axis
+from tidy3d.components.types import Axis, Shapely
 from tidy3d.constants import fp_eps, inf
 
 
-def increment_float(val: float, sign) -> float:
+def increment_float(val: float, sign: int) -> float:
     """Applies a small positive or negative shift as though `val` is a 32bit float
     using numpy.nextafter, but additionally handles some corner cases.
     """
@@ -52,7 +52,7 @@ def get_bounds(geom: Geometry, axis: Axis) -> tuple[float, float]:
     return (geom.bounds[0][axis], geom.bounds[1][axis])
 
 
-def get_thickened_geom(geom: Geometry, axis: Axis):
+def get_thickened_geom(geom: Geometry, axis: Axis) -> Geometry:
     """Helper to return a slightly thickened version of a planar geometry."""
     center = get_bounds(geom, axis)[0]
     neg_thickness = increment_float(center, -1.0)
@@ -64,7 +64,7 @@ def get_neighbors(
     geom: Geometry,
     axis: Axis,
     structures: list[Structure],
-):
+) -> tuple[tuple[Structure, ...], tuple[Structure, ...], tuple[float, float]]:
     """Find the neighboring structures and return the tested positions above and below."""
     center = get_bounds(geom, axis)[0]
     check_delta = [
@@ -127,7 +127,7 @@ def subdivide(
         vertices = list(zip(xx, yy))
         return PolySlab(slab_bounds=(center, center), vertices=vertices, axis=axis)
 
-    def to_multipolygon(shapely_geometry) -> shapely.MultiPolygon:
+    def to_multipolygon(shapely_geometry: Shapely) -> shapely.MultiPolygon:
         return shapely.MultiPolygon(ClipOperation.to_polygon_list(shapely_geometry))
 
     axis = geom._normal_2dmaterial

@@ -14,7 +14,7 @@ from typing import Any, Optional
 
 import toml
 
-from tidy3d.log import log
+from tidy3d.log import LogLevel, log
 
 # TODO(FXC-3827): Remove LegacyConfigWrapper/Environment shims and related helpers in Tidy3D 2.12.
 from .manager import ConfigManager, normalize_profile_name
@@ -36,11 +36,11 @@ class LegacyConfigWrapper:
         self._frozen = False  # retained for backwards compatibility tests
 
     @property
-    def logging_level(self):
+    def logging_level(self) -> LogLevel:
         return self._manager.get_section("logging").level
 
     @logging_level.setter
-    def logging_level(self, value):
+    def logging_level(self, value: LogLevel) -> None:
         from warnings import warn
 
         warn(
@@ -51,11 +51,11 @@ class LegacyConfigWrapper:
         self._manager.update_section("logging", level=value)
 
     @property
-    def log_suppression(self):
+    def log_suppression(self) -> bool:
         return self._manager.get_section("logging").suppression
 
     @log_suppression.setter
-    def log_suppression(self, value):
+    def log_suppression(self, value: bool) -> None:
         from warnings import warn
 
         warn(
@@ -66,11 +66,11 @@ class LegacyConfigWrapper:
         self._manager.update_section("logging", suppression=value)
 
     @property
-    def use_local_subpixel(self):
+    def use_local_subpixel(self) -> Optional[bool]:
         return self._manager.get_section("simulation").use_local_subpixel
 
     @use_local_subpixel.setter
-    def use_local_subpixel(self, value):
+    def use_local_subpixel(self, value: Optional[bool]) -> None:
         from warnings import warn
 
         warn(
@@ -81,11 +81,11 @@ class LegacyConfigWrapper:
         self._manager.update_section("simulation", use_local_subpixel=value)
 
     @property
-    def suppress_rf_license_warning(self):
+    def suppress_rf_license_warning(self) -> bool:
         return self._manager.get_section("microwave").suppress_rf_license_warning
 
     @suppress_rf_license_warning.setter
-    def suppress_rf_license_warning(self, value):
+    def suppress_rf_license_warning(self, value: bool) -> None:
         from warnings import warn
 
         warn(
@@ -97,14 +97,14 @@ class LegacyConfigWrapper:
         self._manager.update_section("microwave", suppress_rf_license_warning=value)
 
     @property
-    def frozen(self):
+    def frozen(self) -> bool:
         return self._frozen
 
     @frozen.setter
-    def frozen(self, value):
+    def frozen(self, value: bool) -> None:
         self._frozen = bool(value)
 
-    def save(self, include_defaults: bool = False):
+    def save(self, include_defaults: bool = False) -> None:
         self._manager.save(include_defaults=include_defaults)
 
     def reset_manager(self, manager: ConfigManager) -> None:
@@ -239,11 +239,11 @@ class LegacyEnvironmentConfig:
         self._set_pending("enable_caching", value)
 
     @property
-    def ssl_version(self):
+    def ssl_version(self) -> Optional[ssl.TLSVersion]:
         return self._value("ssl_version")
 
     @ssl_version.setter
-    def ssl_version(self, value) -> None:
+    def ssl_version(self, value: Optional[ssl.TLSVersion]) -> None:
         self._set_pending("ssl_version", value)
 
     @property
@@ -363,7 +363,7 @@ class LegacyEnvironment:
         config.enable_caching = enable_caching
         self._sync_to_manager()
 
-    def set_ssl_version(self, ssl_version) -> None:
+    def set_ssl_version(self, ssl_version: Optional[ssl.TLSVersion]) -> None:
         config = self.current
         config.ssl_version = ssl_version
         self._sync_to_manager()

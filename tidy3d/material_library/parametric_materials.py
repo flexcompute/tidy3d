@@ -274,7 +274,7 @@ class Graphene(ParametricVariantItem2D):
         freqs: list[float],
         sigma: list[complex],
         indslist: list[tuple[int, int]],
-    ):
+    ) -> PoleResidue:
         """Fit the interband conductivity with a Pade approximation, as described in
 
         Stamatios Amanatiadis, Theodoros Zygiridis, Tadao Ohtani, Yasushi Kanai,

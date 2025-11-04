@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import StringIO
+from typing import TYPE_CHECKING, Union
 
 from rich.console import Console
 from rich.panel import Panel
@@ -8,12 +9,22 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
+from tidy3d import Medium2D, MultiPhysicsMedium, PoleResidue
 from tidy3d.components.viz import FLEXCOMPUTE_COLORS
+
+if TYPE_CHECKING:
+    from IPython.lib.pretty import RepresentationPrinter
+
+    from tidy3d.material_library.material_library import (
+        AbstractVariantItem,
+        MaterialItem,
+        MaterialLibrary,
+    )
 
 MAX_POLES_TO_DISPLAY = 3
 
 
-def summarize_material_library(matlib) -> str:
+def summarize_material_library(matlib: MaterialLibrary) -> str:
     """Return a user-friendly multiline string summarizing the entire material library."""
     lines = ["Material Library Summary:"]
     for key, mat_item in sorted(matlib.items()):
@@ -28,7 +39,7 @@ def summarize_material_library(matlib) -> str:
     return "\n".join(lines)
 
 
-def summarize_material_item(m) -> str:
+def summarize_material_item(m: MaterialItem) -> str:
     """
     Return a concise summary of a single MaterialItem instance:
     includes name, default variant, plus the list of all variants.
@@ -41,7 +52,7 @@ def summarize_material_item(m) -> str:
     return "\n".join(lines)
 
 
-def variant_name(v):
+def variant_name(v: AbstractVariantItem) -> str:
     """Retrieve variant name for display."""
     default_name = "Unnamed Variant"
     name = default_name
@@ -56,7 +67,7 @@ def variant_name(v):
     return name
 
 
-def summarize_medium(med) -> list[str]:
+def summarize_medium(med: Union[PoleResidue, Medium2D, MultiPhysicsMedium]) -> list[str]:
     """Returns relevant medium information for display."""
     lines = []
 
@@ -77,7 +88,7 @@ def summarize_medium(med) -> list[str]:
     return lines
 
 
-def summarize_variant_item(v) -> str:
+def summarize_variant_item(v: AbstractVariantItem) -> str:
     """
     Return a concise summary for a single VariantItem instance,
     highlighting references and main model parameters (e.g., eps_inf, # poles, freq. range).
@@ -109,7 +120,11 @@ def summarize_variant_item(v) -> str:
     return "\n".join(lines)
 
 
-def repr_pretty_with_rich(obj, p, cycle) -> None:
+def repr_pretty_with_rich(
+    obj: Union[AbstractVariantItem, MaterialItem, MaterialLibrary],
+    p: RepresentationPrinter,
+    cycle: bool,
+) -> None:
     """Enable _repr_pretty_ for jupyter notebooks to use the rich printing output."""
     if cycle:
         p.text("MaterialLibrary(...)")
@@ -121,7 +136,9 @@ def repr_pretty_with_rich(obj, p, cycle) -> None:
         p.text(sio.getvalue())
 
 
-def add_medium_details_to_tree(medium, medium_node: Tree) -> None:
+def add_medium_details_to_tree(
+    medium: Union[PoleResidue, Medium2D, MultiPhysicsMedium], medium_node: Tree
+) -> None:
     """Adds details of a medium dictionary to a Rich Tree node."""
 
     if hasattr(medium, "eps_inf"):
@@ -139,7 +156,7 @@ def add_medium_details_to_tree(medium, medium_node: Tree) -> None:
         medium_node.add(f"[bold]Freq. Range:[/bold] {medium.frequency_range}")
 
 
-def summarize_material_library_rich(matlib):
+def summarize_material_library_rich(matlib: MaterialLibrary) -> Table:
     """Returns a Rich Table summarizing the MaterialLibrary."""
 
     table = Table(
@@ -187,7 +204,7 @@ def summarize_material_library_rich(matlib):
     return table
 
 
-def summarize_material_item_rich(m):
+def summarize_material_item_rich(m: MaterialItem) -> Panel:
     """Returns a Rich Tree representation summarizing the MaterialItem."""
     tree_title = f"[bold {FLEXCOMPUTE_COLORS['brand_purple']}]Material Summary: {m.name}[/]"
     tree = Tree(tree_title)
@@ -207,7 +224,7 @@ def summarize_material_item_rich(m):
     return Panel(tree, border_style=f"{FLEXCOMPUTE_COLORS['brand_purple']}", expand=False)
 
 
-def summarize_variant_item_rich(v):
+def summarize_variant_item_rich(v: AbstractVariantItem) -> Panel:
     """Returns Rich renderables for displaying a VariantItem summary."""
 
     name = variant_name(v)

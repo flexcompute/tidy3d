@@ -479,7 +479,7 @@ def get_closest_value(test: float, coords: np.ArrayLike, upper_bound_idx: int) -
     return lower_bound if dlower < dupper else upper_bound
 
 
-def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol=fp_eps) -> Box:
+def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol: float = fp_eps) -> Box:
     """Snaps a :class:`.Box` to the grid, so that the boundaries of the box are aligned with grid centers or boundaries.
     The way in which each dimension of the `box` is snapped to the grid is controlled by ``snap_spec``.
     """
