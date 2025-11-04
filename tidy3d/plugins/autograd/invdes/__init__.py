@@ -3,9 +3,11 @@ from __future__ import annotations
 from .filters import (
     CircularFilter,
     ConicFilter,
+    GaussianFilter,
     make_circular_filter,
     make_conic_filter,
     make_filter,
+    make_gaussian_filter,
 )
 from .misc import grey_indicator
 from .parametrizations import (
@@ -21,6 +23,7 @@ __all__ = [
     "ConicFilter",
     "ErosionDilationPenalty",
     "FilterAndProject",
+    "GaussianFilter",
     "grey_indicator",
     "initialize_params_from_simulation",
     "make_circular_filter",
@@ -29,6 +32,7 @@ __all__ = [
     "make_erosion_dilation_penalty",
     "make_filter",
     "make_filter_and_project",
+    "make_gaussian_filter",
     "ramp_projection",
     "tanh_projection",
 ]

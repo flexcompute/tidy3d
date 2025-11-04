@@ -13,8 +13,18 @@ import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.plugins.autograd.functions import convolve
+from tidy3d.plugins.autograd.primitives import gaussian_filter as autograd_gaussian_filter
 from tidy3d.plugins.autograd.types import KernelType, PaddingType
 from tidy3d.plugins.autograd.utilities import get_kernel_size_px, make_kernel
+
+_GAUSSIAN_SIGMA_SCALE = 0.445  # empirically matches conic kernel response in 1D/2D tests
+_GAUSSIAN_PADDING_MAP = {
+    "constant": "constant",
+    "edge": "nearest",
+    "reflect": "reflect",
+    "symmetric": "mirror",
+    "wrap": "wrap",
+}
 
 
 class AbstractFilter(Tidy3dBaseModel, abc.ABC):
@@ -92,9 +102,13 @@ class AbstractFilter(Tidy3dBaseModel, abc.ABC):
         size_px = tuple(np.atleast_1d(self.kernel_size))
         if len(size_px) != squeezed_array.ndim:
             size_px *= squeezed_array.ndim
+        filtered_array = self._apply_filter(squeezed_array, size_px)
+        return np.reshape(filtered_array, original_shape)
+
+    def _apply_filter(self, array: NDArray, size_px: tuple[int, ...]) -> NDArray:
+        """Apply the concrete filter implementation to the squeezed array."""
         kernel = self.get_kernel(size_px, self.normalize)
-        convolved_array = convolve(squeezed_array, kernel, padding=self.padding)
-        return np.reshape(convolved_array, original_shape)
+        return convolve(array, kernel, padding=self.padding)
 
 
 class ConicFilter(AbstractFilter):
@@ -125,6 +139,60 @@ class CircularFilter(AbstractFilter):
         :func:`~filters.AbstractFilter.get_kernel` for full method documentation.
         """
         return make_kernel(kernel_type="circular", size=size_px, normalize=normalize)
+
+
+class GaussianFilter(AbstractFilter):
+    """A Gaussian filter implemented via separable gaussian_filter primitive.
+
+    Notes
+    -----
+    Padding modes ``'constant'``, ``'edge'``, ``'reflect'``, ``'symmetric'``, and ``'wrap'`` are
+    supported. Modes ``'edge'`` and ``'symmetric'`` are internally mapped to the SciPy equivalents
+    ``'nearest'`` and ``'mirror'`` respectively. The default ``sigma_scale`` of 0.445 was tuned to
+    match the conic kernel when expressed in pixel radius. The ``normalize`` flag inherited from
+    :class:`AbstractFilter` is ignored because the separable Gaussian implementation always returns
+    a unit-sum kernel; setting it to ``False`` has no effect.
+    """
+
+    sigma_scale: float = pd.Field(
+        _GAUSSIAN_SIGMA_SCALE,
+        title="Sigma Scale",
+        description="Scale factor mapping radius in pixels to Gaussian sigma.",
+        ge=0.0,
+    )
+    truncate: float = pd.Field(
+        2.0,
+        title="Truncate",
+        description="Truncation radius in multiples of sigma passed to ``gaussian_filter``.",
+        ge=0.0,
+    )
+
+    @staticmethod
+    def get_kernel(size_px: Iterable[int], normalize: bool) -> NDArray:
+        raise NotImplementedError("GaussianFilter does not build an explicit kernel.")
+
+    def _apply_filter(self, array: NDArray, size_px: tuple[int, ...]) -> NDArray:
+        radius_px = np.maximum((np.array(size_px, dtype=float) - 1.0) / 2.0, 0.0)
+        if radius_px.size == 0:
+            return array
+
+        mode = _GAUSSIAN_PADDING_MAP.get(self.padding)
+        if mode is None:
+            raise ValueError(
+                f"Unsupported padding mode '{self.padding}' for gaussian filter; "
+                f"supported modes are {tuple(_GAUSSIAN_PADDING_MAP)}."
+            )
+
+        sigma = tuple(float(self.sigma_scale * r) if r > 0 else 0.0 for r in radius_px)
+        if not any(sigma):
+            return array
+
+        kwargs: dict[str, Any] = {"mode": mode, "truncate": float(self.truncate)}
+        if mode == "constant":
+            kwargs["cval"] = 0.0
+
+        filtered = autograd_gaussian_filter(array, sigma=sigma, **kwargs)
+        return filtered
 
 
 def _get_kernel_size(
@@ -189,7 +257,7 @@ def make_filter(
     padding : PaddingType = "reflect"
         The padding mode to use.
     filter_type : KernelType
-        The type of kernel to create (``circular`` or ``conic``).
+        The type of kernel to create (``circular``, ``conic``, or ``gaussian``).
 
     Returns
     -------
@@ -202,10 +270,12 @@ def make_filter(
         filter_class = ConicFilter
     elif filter_type == "circular":
         filter_class = CircularFilter
+    elif filter_type == "gaussian":
+        filter_class = GaussianFilter
     else:
         raise ValueError(
             f"Unsupported filter_type: {filter_type}. "
-            "Must be one of `CircularFilter` or `ConicFilter`."
+            "Must be one of `CircularFilter`, `ConicFilter`, or `GaussianFilter`."
         )
 
     filter_instance = filter_class(kernel_size=kernel_size, normalize=normalize, padding=padding)
@@ -221,11 +291,21 @@ See Also
 """
 
 make_circular_filter = partial(make_filter, filter_type="circular")
-make_circular_filter.__doc__ = """make_filter() with a default filter_type value of `circular`.
+make_circular_filter.__doc__ = """make_filter() with a default filter_type value of ``circular``.
 
 See Also
 --------
 :func:`~filters.make_filter` : Function to create a filter based on the specified kernel type and size.
 """
 
-FilterType = Annotated[Union[ConicFilter, CircularFilter], pd.Field(discriminator=TYPE_TAG_STR)]
+make_gaussian_filter = partial(make_filter, filter_type="gaussian")
+make_gaussian_filter.__doc__ = """make_filter() with a default filter_type value of ``gaussian``.
+
+See Also
+--------
+:func:`~filters.make_filter` : Function to create a filter based on the specified kernel type and size.
+"""
+
+FilterType = Annotated[
+    Union[ConicFilter, CircularFilter, GaussianFilter], pd.Field(discriminator=TYPE_TAG_STR)
+]

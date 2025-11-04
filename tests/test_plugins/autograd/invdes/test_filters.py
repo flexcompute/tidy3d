@@ -7,6 +7,7 @@ from tidy3d.plugins.autograd.invdes.filters import (
     make_circular_filter,
     make_conic_filter,
     make_filter,
+    make_gaussian_filter,
 )
 from tidy3d.plugins.autograd.types import PaddingType
 
@@ -41,7 +42,7 @@ def test_get_kernel_size_invalid_arguments():
 @pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("padding", PaddingType.__args__)
 class TestMakeFilter:
-    @pytest.mark.parametrize("filter_type", ["circular", "conic"])
+    @pytest.mark.parametrize("filter_type", ["circular", "conic", "gaussian"])
     def test_make_filter(self, rng, filter_type, radius, dl, size_px, normalize, padding):
         """Test make_filter function for various parameters."""
         filter_func = make_filter(
@@ -72,6 +73,19 @@ class TestMakeFilter:
     def test_make_conic_filter(self, rng, radius, dl, size_px, normalize, padding):
         """Test make_conic_filter function for various parameters."""
         filter_func = make_conic_filter(
+            radius=radius,
+            dl=dl,
+            size_px=size_px,
+            normalize=normalize,
+            padding=padding,
+        )
+        array = rng.random((51, 51))
+        result = filter_func(array)
+        assert result.shape == array.shape
+
+    def test_make_gaussian_filter(self, rng, radius, dl, size_px, normalize, padding):
+        """Test make_gaussian_filter function for various parameters."""
+        filter_func = make_gaussian_filter(
             radius=radius,
             dl=dl,
             size_px=size_px,
