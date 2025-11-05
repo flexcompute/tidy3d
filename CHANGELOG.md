@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `DirectivityMonitorSpec` for automated creation and configuration of directivity radiation monitors in `TerminalComponentModeler`.
 - Added multimode support to `WavePort` in the smatrix plugin, allowing multiple modes to be analyzed per port.
 - Added support for `.lydrc` files for design rule checking in the `klayout` plugin.
+- Introduced `BroadbandPulse` for exciting simulations across a wide frequency spectrum.
 
 ### Breaking Changes
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.
