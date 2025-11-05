@@ -46,8 +46,8 @@ TYPE_MAP: dict[type, TaskType] = {
     EMESimulation: TaskType.EME,
     ModeSimulation: TaskType.MODE,
     VolumeMesher: TaskType.VOLUME_MESH,
-    ModalComponentModeler: TaskType.COMPONENT_MODELER,
-    TerminalComponentModeler: TaskType.TERMINAL_COMPONENT_MODELER,
+    ModalComponentModeler: TaskType.MODAL_CM,
+    TerminalComponentModeler: TaskType.TERMINAL_CM,
 }
 
 
@@ -116,7 +116,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         """Perform some pre-checks on instances of component"""
         if isinstance(self.simulation, Simulation):
             self.simulation.validate_pre_upload(source_required)
-        elif isinstance(self.simulation, EMESimulation):
+        else:
             self.simulation.validate_pre_upload()
 
     def get_default_task_name(self) -> str:

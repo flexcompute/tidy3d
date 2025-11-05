@@ -415,7 +415,7 @@ def test_run_with_invalid_priority(mock_webapi, priority):
 
 
 @responses.activate
-def test_get_run_info(mock_get_run_info):
+def test_get_run_info(mock_get_run_info, mock_get_info):
     assert get_run_info(TASK_ID) == (100, 0)
 
 

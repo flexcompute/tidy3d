@@ -24,3 +24,9 @@ class VolumeMesher(Tidy3dBaseModel):
 
     def _get_simulation_types(self) -> list[TCADAnalysisTypes]:
         return [TCADAnalysisTypes.MESH]
+
+    def validate_pre_upload(self):
+        """Validate the VolumeMesher before uploading to the cloud.
+        Currently no validation but method is required when calling ``web.upload``.
+        """
+        return

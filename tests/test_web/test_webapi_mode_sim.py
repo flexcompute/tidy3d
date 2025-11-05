@@ -303,7 +303,7 @@ def test_get_info(mock_get_info):
 
 
 @responses.activate
-def test_get_run_info(mock_get_run_info):
+def test_get_run_info(mock_get_run_info, mock_get_info):
     assert get_run_info(TASK_ID) == (100, 0)
 
 
