@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Optional, Union
-
-import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqDataArray
@@ -17,20 +15,14 @@ from tidy3d.components.source.base import Source
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import FreqArray
 from tidy3d.log import log
+from tidy3d.plugins.smatrix.ports.base import AbstractBasePort
 
 
-class AbstractTerminalPort(MicrowaveBaseModel, ABC):
+class AbstractTerminalPort(AbstractBasePort, MicrowaveBaseModel):
     """Class representing a single terminal-based port. All terminal ports must provide methods
     for computing voltage and current. These quantities represent the voltage between the
     terminals, and the current flowing from one terminal into the other.
     """
-
-    name: str = pd.Field(
-        ...,
-        title="Name",
-        description="Unique name for the port.",
-        min_length=1,
-    )
 
     @cached_property
     @abstractmethod

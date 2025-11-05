@@ -23,7 +23,7 @@ from tidy3d.constants import HERTZ
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.ports.modal import Port
-from tidy3d.plugins.smatrix.ports.types import TerminalPortType
+from tidy3d.plugins.smatrix.ports.types import LumpedPortType, PortType, TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import Element, MatrixIndex, NetworkElement, NetworkIndex
 
@@ -182,27 +182,20 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         return val
 
     @staticmethod
-    def get_task_name(
-        port: Port, mode_index: Optional[int] = None, format: Optional[TaskNameFormat] = "RF"
-    ) -> str:
+    def get_task_name(port: PortType, mode_index: Optional[int] = None) -> str:
         """Generates a standardized task name from a port object.
 
         This method creates a unique string identifier for a simulation task based on
-        a port. The naming convention can be controlled by specifying a mode index
-        directly, which takes precedence, or by selecting a predefined format.
+        a port and, if applicable, a specified mode index.
 
         Parameters
         ----------
-        port : Port
+        port : PortType
             The port object from which to derive the base name.
         mode_index : Optional[int], optional
-            If provided, this index is appended to the port name (e.g., 'port_1@1'),
-            overriding the `format` argument. Defaults to None.
-        format : TaskNameFormat, optional
-            Specifies the naming convention to use when `mode_index` is not provided.
-            - "RF": Returns the plain port name (e.g., "port_1").
-            - "PF": Appends a zero index to the name (e.g., "port_1@0").
-            Defaults to "RF".
+            If provided, this index is appended
+            to the port name (e.g., 'port_1@1'). Defaults to `None`, in which case the first
+            mode is chosen by default.
 
         Returns
         -------
@@ -212,19 +205,26 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         Raises
         ------
         ValueError
-            If an invalid `format` string is provided.
+            If `mode_index` is specified for a lumped port.
         """
-        if mode_index is not None:
-            return f"{port.name}@{mode_index}"
-        if format == "PF":
-            port_name = f"{port.name}@0"
-        elif format == "RF":
-            port_name = f"{port.name}"
+
+        if isinstance(port, LumpedPortType):
+            if mode_index is not None:
+                raise ValueError(
+                    "'mode_index' should not be specified for a lumped port, "
+                    f"but was passed with value '{mode_index}'."
+                )
+            return f"{port.name}"
+        elif isinstance(port, WavePort):
+            # WavePorts default to first mode index
+            if mode_index is not None:
+                return f"{port.name}@{mode_index}"
+            return f"{port.name}@{port._mode_indices[0]}"
         else:
-            raise ValueError(
-                f"Format '{format}' invalid for port-name task creation. Must be defined in {TaskNameFormat}"
-            )
-        return port_name
+            # Modal ports default to 0
+            if mode_index is not None:
+                return f"{port.name}@{mode_index}"
+            return f"{port.name}@0"
 
     def get_port_by_name(self, port_name: str) -> Port:
         """Get the port from the name."""

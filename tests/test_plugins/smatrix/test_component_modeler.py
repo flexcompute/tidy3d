@@ -434,17 +434,9 @@ def test_get_task_name():
     task_name = ModalComponentModeler.get_task_name(port=port, mode_index=1)
     assert task_name == "port1@1"
 
-    # Test with format="PF"
-    task_name = ModalComponentModeler.get_task_name(port=port, format="PF")
+    # Test with mode_index unspecified
+    task_name = ModalComponentModeler.get_task_name(port=port)
     assert task_name == "port1@0"
-
-    # Test with format="RF"
-    task_name = ModalComponentModeler.get_task_name(port=port, format="RF")
-    assert task_name == "port1"
-
-    # Test with invalid format
-    with pytest.raises(ValueError):
-        ModalComponentModeler.get_task_name(port=port, format="invalid")
 
 
 def test_custom_source_time(monkeypatch):
