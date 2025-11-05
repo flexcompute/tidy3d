@@ -1263,8 +1263,12 @@ def test_antenna_parameters(monkeypatch, port_type):
     modeler_data = run_component_modeler(monkeypatch, modeler)
 
     # Make sure network index works for single mode / multimode cases
-    port_1_network_index = modeler.network_index(modeler.ports[0], 0)
-    port_2_network_index = modeler.network_index(modeler.ports[1], 0)
+    if port_type == "lumped":
+        port_1_network_index = modeler.network_index(modeler.ports[0])
+        port_2_network_index = modeler.network_index(modeler.ports[1])
+    else:
+        port_1_network_index = modeler.network_index(modeler.ports[0], 0)
+        port_2_network_index = modeler.network_index(modeler.ports[1], 0)
     _ = modeler_data.get_antenna_metrics_data({port_1_network_index: 1.0})
     _ = modeler_data.get_antenna_metrics_data({port_2_network_index: None})
     antenna_params = modeler_data.get_antenna_metrics_data()
@@ -1362,7 +1366,7 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
         port_types=(CoaxialLumpedPort, CoaxialLumpedPort), grid_spec=grid_spec
     )
     port0_idx = modeler.network_index(modeler.ports[0])
-    port1_idx = modeler.network_index(modeler.ports[1], 0)
+    port1_idx = modeler.network_index(modeler.ports[1])
     modeler_run1 = modeler.updated_copy(run_only=(port0_idx,))
 
     # Make sure the smatrix and impedance calculations work for reduced simulations
@@ -2239,8 +2243,66 @@ def test_wave_port_mode_index_with_modeler():
 
     # Verify network_dict only has entries for the selected modes
     network_indices = set(modeler.network_dict.keys())
-    assert "port1_0" in network_indices
-    assert "port1_2" in network_indices
-    assert "port1_1" not in network_indices
-    assert "port1_3" not in network_indices
+    assert "port1@0" in network_indices
+    assert "port1@2" in network_indices
+    assert "port1@1" not in network_indices
+    assert "port1@3" not in network_indices
     assert "lumped_port" in network_indices
+
+
+def test_get_task_name():
+    """Test get_task_name with RF ports."""
+
+    # First make sure ports cannot have @ in their name
+    with pytest.raises(pd.ValidationError):
+        lumped_port = LumpedPort(
+            center=(0, 0, 0),
+            size=(1, 0, 0.5),
+            voltage_axis=0,
+            name="lumped1@0",
+        )
+
+    lumped_port = LumpedPort(
+        center=(0, 0, 0),
+        size=(1, 0, 0.5),
+        voltage_axis=0,
+        name="lumped1",
+    )
+
+    # Test with lumped port (no mode_index) - should work
+    task_name = TerminalComponentModeler.get_task_name(port=lumped_port)
+    assert task_name == "lumped1"
+
+    # Test with lumped port and mode_index - should raise ValueError
+    with pytest.raises(ValueError, match="mode_index.*should not be specified.*lumped port"):
+        TerminalComponentModeler.get_task_name(port=lumped_port, mode_index=0)
+
+    # Test with CoaxialLumpedPort as well
+    coax_port = CoaxialLumpedPort(
+        center=(0, 0, 0),
+        outer_diameter=2.0,
+        inner_diameter=0.5,
+        normal_axis=2,
+        direction="+",
+        name="coax1",
+    )
+
+    # Test with coaxial lumped port (no mode_index) - should work
+    task_name = TerminalComponentModeler.get_task_name(port=coax_port)
+    assert task_name == "coax1"
+
+    # Test with coaxial lumped port and mode_index - should raise ValueError
+    with pytest.raises(ValueError, match="mode_index.*should not be specified.*lumped port"):
+        TerminalComponentModeler.get_task_name(port=coax_port, mode_index=1)
+
+    wave_port = WavePort(
+        center=(0, 0, 0),
+        size=(4, 4, 0),
+        direction="+",
+        name="wave",
+        mode_selection=(1, 2),
+        mode_spec=td.MicrowaveModeSpec(num_modes=3),
+    )
+    # Test with wave port (no mode_index) - should work
+    task_name = TerminalComponentModeler.get_task_name(port=wave_port)
+    assert task_name == "wave@1"

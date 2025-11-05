@@ -37,7 +37,7 @@ from tidy3d.plugins.smatrix.data.data_array import PortDataArray
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
-from tidy3d.plugins.smatrix.ports.types import LumpedPortType, TerminalPortType
+from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import NetworkElement, NetworkIndex, SParamDef
 
@@ -321,9 +321,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         NetworkIndex
             A unique string that is used to identify the row/column of the scattering matrix.
         """
-        if isinstance(port, LumpedPortType):
-            return f"{port.name}"
-        return f"{port.name}_{mode_index}"
+        return TerminalComponentModeler.get_task_name(port=port, mode_index=mode_index)
 
     @cached_property
     def network_dict(self) -> dict[NetworkIndex, tuple[TerminalPortType, int]]:
