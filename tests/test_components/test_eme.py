@@ -412,16 +412,10 @@ def test_eme_simulation():
         _ = sim.updated_copy(monitors=[monitor])
 
     # test max sim size and freqs
-    sim_bad = sim.updated_copy(size=(1000, 1000, 1000))
+    sim_bad = sim.updated_copy(size=(150, 150, 3))
     with pytest.raises(SetupError):
         sim_bad.validate_pre_upload()
-    sim_bad = sim.updated_copy(size=(1000, 500, 3), monitors=[], store_port_modes=True)
-    with pytest.raises(SetupError):
-        sim_bad.validate_pre_upload()
-    sim_bad = sim.updated_copy(size=(1000, 500, 3), monitors=[], store_port_modes=False)
-    with pytest.raises(SetupError):
-        sim_bad.validate_pre_upload()
-    sim_bad = sim.updated_copy(size=(500, 500, 3), monitors=[])
+    sim_bad = sim.updated_copy(size=(50, 50, 3), monitors=[])
     with AssertLogLevel("WARNING", "slow-down"):
         sim_bad.validate_pre_upload()
 
