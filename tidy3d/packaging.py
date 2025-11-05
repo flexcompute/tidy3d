@@ -16,7 +16,6 @@ import numpy as np
 from tidy3d.config import config
 
 from .exceptions import Tidy3dImportError
-from .log import log
 from .version import __version__
 
 vtk = {
@@ -184,6 +183,80 @@ def get_numpy_major_version(module=np):
     return major_version
 
 
+def _check_tidy3d_extras_available():
+    """Helper function to check if 'tidy3d-extras' is available and version matched.
+
+    Raises
+    ------
+    Tidy3dImportError
+        If tidy3d-extras is not available or not properly initialized.
+    """
+    if tidy3d_extras["mod"] is not None:
+        return
+
+    module_exists = find_spec("tidy3d_extras") is not None
+    if not module_exists:
+        raise Tidy3dImportError(
+            "The package 'tidy3d-extras' is absent. "
+            "Please install the 'tidy3d-extras' package using, for "
+            "example, 'pip install tidy3d[extras]'."
+        )
+
+    try:
+        import tidy3d_extras as tidy3d_extras_mod
+
+    except ImportError as exc:
+        raise Tidy3dImportError(
+            "The package 'tidy3d-extras' did not initialize correctly."
+        ) from exc
+
+    version = tidy3d_extras_mod.__version__
+
+    if version is None:
+        raise Tidy3dImportError(
+            "The package 'tidy3d-extras' did not initialize correctly, "
+            "likely due to an invalid API key."
+        )
+
+    if version != __version__:
+        raise Tidy3dImportError(
+            f"The version of 'tidy3d-extras' is {version}, but the version of 'tidy3d' is {__version__}. "
+            "They must match. You can install the correct "
+            "version using 'pip install tidy3d[extras]'."
+        )
+
+    tidy3d_extras["mod"] = tidy3d_extras_mod
+
+
+def check_tidy3d_extras_licensed_feature(feature_name: str):
+    """Helper function to check if a specific feature is licensed in 'tidy3d-extras'.
+
+    Parameters
+    ----------
+    feature_name : str
+        The name of the feature to check for.
+
+    Raises
+    ------
+    Tidy3dImportError
+        If the feature is not available with your license.
+    """
+
+    try:
+        _check_tidy3d_extras_available()
+    except Tidy3dImportError as exc:
+        raise Tidy3dImportError(
+            "The package 'tidy3d-extras' is required for this feature '{feature_name}'."
+        ) from exc
+
+    features = tidy3d_extras["mod"].extension._features()
+    if feature_name not in features:
+        raise Tidy3dImportError(
+            f"The feature '{feature_name}' is not available with your license. "
+            "Please contact Tidy3D support, or upgrade your license."
+        )
+
+
 def supports_local_subpixel(fn):
     """When decorating a method, checks that 'tidy3d-extras' is available,
     conditioned on 'config.simulation.use_local_subpixel'."""
@@ -194,61 +267,22 @@ def supports_local_subpixel(fn):
 
         if preference is False:
             tidy3d_extras["use_local_subpixel"] = False
-            tidy3d_extras["mod"] = None
-        else:
-            if tidy3d_extras["mod"] is None:
-                tidy3d_extras["use_local_subpixel"] = False
-                tidy3d_extras["mod"] = None
-                module_exists = find_spec("tidy3d_extras") is not None
+            return fn(*args, **kwargs)
 
-                if preference is True and not module_exists:
-                    raise Tidy3dImportError(
-                        "The package 'tidy3d-extras' is required for this "
-                        "operation when 'config.simulation.use_local_subpixel' is 'True'. "
-                        "Please install the 'tidy3d-extras' package using, for "
-                        "example, 'pip install tidy3d[extras]'."
-                    )
+        try:
+            check_tidy3d_extras_licensed_feature("local_subpixel")
+        except Tidy3dImportError as exc:
+            tidy3d_extras["use_local_subpixel"] = False
+            if preference is True:
+                raise Tidy3dImportError(
+                    f"{exc!s} To suppress this error, you can set "
+                    "'config.simulation.use_local_subpixel=False'."
+                ) from exc
+            # preference is None, so we can just return
+            return fn(*args, **kwargs)
 
-                if module_exists:
-                    try:
-                        import tidy3d_extras as tidy3d_extras_mod
-
-                    except ImportError as exc:
-                        tidy3d_extras["mod"] = None
-                        tidy3d_extras["use_local_subpixel"] = False
-                        raise Tidy3dImportError(
-                            "The package 'tidy3d-extras' did not initialize correctly. "
-                            "To suppress this error, you can set "
-                            "'config.simulation.use_local_subpixel=False'."
-                        ) from exc
-
-                    version = tidy3d_extras_mod.__version__
-
-                    if version is None:
-                        tidy3d_extras["mod"] = None
-                        tidy3d_extras["use_local_subpixel"] = False
-                        raise Tidy3dImportError(
-                            "The package 'tidy3d-extras' did not initialize correctly, "
-                            "likely due to an invalid API key. To suppress this error, "
-                            "you can set 'config.simulation.use_local_subpixel=False'."
-                        )
-
-                    if version != __version__:
-                        log.warning(
-                            "The package 'tidy3d-extras' is required for this "
-                            "operation. The version of 'tidy3d-extras' should match "
-                            "the version of 'tidy3d'. You can install the correct "
-                            "version using 'pip install tidy3d[extras]'."
-                        )
-
-                    features = tidy3d_extras_mod.extension._features()
-
-                    tidy3d_extras["mod"] = tidy3d_extras_mod
-                    tidy3d_extras["use_local_subpixel"] = "local_subpixel" in features
-            else:
-                features = tidy3d_extras["mod"].extension._features()
-                tidy3d_extras["use_local_subpixel"] = "local_subpixel" in features
-
+        # local_subpixel is available
+        tidy3d_extras["use_local_subpixel"] = True
         return fn(*args, **kwargs)
 
     return _fn

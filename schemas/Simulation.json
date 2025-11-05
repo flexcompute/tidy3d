@@ -748,6 +748,7 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BroadbandPulse": "#/definitions/BroadbandPulse",
               "ContinuousWave": "#/definitions/ContinuousWave",
               "CustomSourceTime": "#/definitions/CustomSourceTime",
               "GaussianPulse": "#/definitions/GaussianPulse"
@@ -755,6 +756,9 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/definitions/BroadbandPulse"
+            },
             {
               "$ref": "#/definitions/ContinuousWave"
             },
@@ -1878,6 +1882,58 @@
       },
       "required": [
         "frequency_range"
+      ],
+      "type": "object"
+    },
+    "BroadbandPulse": {
+      "additionalProperties": false,
+      "properties": {
+        "amplitude": {
+          "default": 1.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "freq_range": {
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "minimum_amplitude": {
+          "default": 0.3,
+          "exclusiveMaximum": 0.5,
+          "exclusiveMinimum": 0.05,
+          "type": "number"
+        },
+        "offset": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "phase": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "type": {
+          "default": "BroadbandPulse",
+          "enum": [
+            "BroadbandPulse"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "freq_range"
       ],
       "type": "object"
     },
@@ -3244,6 +3300,7 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BroadbandPulse": "#/definitions/BroadbandPulse",
               "ContinuousWave": "#/definitions/ContinuousWave",
               "CustomSourceTime": "#/definitions/CustomSourceTime",
               "GaussianPulse": "#/definitions/GaussianPulse"
@@ -3251,6 +3308,9 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/definitions/BroadbandPulse"
+            },
             {
               "$ref": "#/definitions/ContinuousWave"
             },
@@ -3899,6 +3959,7 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BroadbandPulse": "#/definitions/BroadbandPulse",
               "ContinuousWave": "#/definitions/ContinuousWave",
               "CustomSourceTime": "#/definitions/CustomSourceTime",
               "GaussianPulse": "#/definitions/GaussianPulse"
@@ -3906,6 +3967,9 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/definitions/BroadbandPulse"
+            },
             {
               "$ref": "#/definitions/ContinuousWave"
             },
@@ -8118,6 +8182,7 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BroadbandPulse": "#/definitions/BroadbandPulse",
               "ContinuousWave": "#/definitions/ContinuousWave",
               "CustomSourceTime": "#/definitions/CustomSourceTime",
               "GaussianPulse": "#/definitions/GaussianPulse"
@@ -8125,6 +8190,9 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/definitions/BroadbandPulse"
+            },
             {
               "$ref": "#/definitions/ContinuousWave"
             },
@@ -12058,6 +12126,7 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BroadbandPulse": "#/definitions/BroadbandPulse",
               "ContinuousWave": "#/definitions/ContinuousWave",
               "CustomSourceTime": "#/definitions/CustomSourceTime",
               "GaussianPulse": "#/definitions/GaussianPulse"
@@ -12065,6 +12134,9 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/definitions/BroadbandPulse"
+            },
             {
               "$ref": "#/definitions/ContinuousWave"
             },
@@ -13711,6 +13783,7 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BroadbandPulse": "#/definitions/BroadbandPulse",
               "ContinuousWave": "#/definitions/ContinuousWave",
               "CustomSourceTime": "#/definitions/CustomSourceTime",
               "GaussianPulse": "#/definitions/GaussianPulse"
@@ -13718,6 +13791,9 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/definitions/BroadbandPulse"
+            },
             {
               "$ref": "#/definitions/ContinuousWave"
             },
@@ -13855,6 +13931,7 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BroadbandPulse": "#/definitions/BroadbandPulse",
               "ContinuousWave": "#/definitions/ContinuousWave",
               "CustomSourceTime": "#/definitions/CustomSourceTime",
               "GaussianPulse": "#/definitions/GaussianPulse"
@@ -13862,6 +13939,9 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/definitions/BroadbandPulse"
+            },
             {
               "$ref": "#/definitions/ContinuousWave"
             },
@@ -15763,6 +15843,7 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BroadbandPulse": "#/definitions/BroadbandPulse",
               "ContinuousWave": "#/definitions/ContinuousWave",
               "CustomSourceTime": "#/definitions/CustomSourceTime",
               "GaussianPulse": "#/definitions/GaussianPulse"
@@ -15770,6 +15851,9 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/definitions/BroadbandPulse"
+            },
             {
               "$ref": "#/definitions/ContinuousWave"
             },
@@ -16369,6 +16453,7 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BroadbandPulse": "#/definitions/BroadbandPulse",
               "ContinuousWave": "#/definitions/ContinuousWave",
               "CustomSourceTime": "#/definitions/CustomSourceTime",
               "GaussianPulse": "#/definitions/GaussianPulse"
@@ -16376,6 +16461,9 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/definitions/BroadbandPulse"
+            },
             {
               "$ref": "#/definitions/ContinuousWave"
             },

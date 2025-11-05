@@ -8,6 +8,7 @@ from tidy3d.config import config, reload_config
 from tidy3d.packaging import (
     Tidy3dImportError,
     check_import,
+    check_tidy3d_extras_licensed_feature,
     supports_local_subpixel,
     tidy3d_extras,
     verify_packages_import,
@@ -86,11 +87,24 @@ def test_tidy3d_extras():
             assert tidy3d_extras["mod"] is not None
             features = tidy3d_extras["mod"].extension._features()
             assert tidy3d_extras["use_local_subpixel"] == ("local_subpixel" in features)
+            if tidy3d_extras["use_local_subpixel"]:
+                check_tidy3d_extras_licensed_feature("local_subpixel")
         else:
             assert tidy3d_extras["use_local_subpixel"] is False
             assert tidy3d_extras["mod"] is None
 
     get_eps()
+
+
+def test_tidy3d_extras_broadband_feature():
+    import importlib
+
+    has_tidy3d_extras = importlib.util.find_spec("tidy3d_extras") is not None
+    print(f"has_tidy3d_extras = {has_tidy3d_extras}")
+    if has_tidy3d_extras:
+        features = tidy3d_extras["mod"].extension._features()
+        if "BroadbandPulse" in features:
+            check_tidy3d_extras_licensed_feature("BroadbandPulse")
 
 
 def test_supports_local_subpixel_respects_config_false():
@@ -106,9 +120,7 @@ def test_supports_local_subpixel_respects_config_false():
             return tidy3d_extras["use_local_subpixel"]
 
         assert get_flag() is False
-        assert tidy3d_extras["mod"] is None
     finally:
-        tidy3d_extras["mod"] = None
         tidy3d_extras["use_local_subpixel"] = None
         reload_config(profile="default")
 
