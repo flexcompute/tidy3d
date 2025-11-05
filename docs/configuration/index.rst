@@ -154,3 +154,10 @@ Next Steps
 - :doc:`reference`
 - :doc:`migration`
 - :doc:`../api/configuration`
+
+.. toctree::
+   :hidden:
+
+   reference
+   migration
+   nexus

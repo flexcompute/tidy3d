@@ -27,15 +27,52 @@ class ConfigLoader:
         self._docs: dict[Path, tomlkit.TOMLDocument] = {}
 
     def load_base(self) -> dict[str, Any]:
-        """Load base configuration from config.toml."""
+        """Load base configuration from config.toml.
+
+        If config.toml doesn't exist but the legacy flat config does,
+        automatically migrate to the new format.
+        """
 
         config_path = self.config_dir / "config.toml"
         data = self._read_toml(config_path)
         if data:
             return data
+
+        # Check for legacy flat config
         from .legacy import load_legacy_flat_config
 
+        legacy_path = self.config_dir / "config"
         legacy = load_legacy_flat_config(self.config_dir)
+
+        # Auto-migrate if legacy config exists
+        if legacy and legacy_path.exists():
+            log.info(
+                f"Detected legacy configuration at '{legacy_path}'. "
+                "Automatically migrating to new format..."
+            )
+
+            try:
+                # Save in new format
+                self.save_base(legacy)
+
+                # Rename old config to preserve it
+                backup_path = legacy_path.with_suffix(".migrated")
+                legacy_path.rename(backup_path)
+
+                log.info(
+                    f"Migration complete. Configuration saved to '{config_path}'. "
+                    f"Legacy config backed up as '{backup_path.name}'."
+                )
+
+                # Re-read the newly created config
+                return self._read_toml(config_path)
+            except Exception as exc:
+                log.warning(
+                    f"Failed to auto-migrate legacy configuration: {exc}. "
+                    "Using legacy data without migration."
+                )
+                return legacy
+
         if legacy:
             return legacy
         return {}
@@ -77,6 +114,49 @@ class ConfigLoader:
         """Return on-disk path for a profile."""
 
         return self.config_dir / "profiles" / f"{profile}.toml"
+
+    def get_default_profile(self) -> Optional[str]:
+        """Read the default_profile from config.toml.
+
+        Returns
+        -------
+        Optional[str]
+            The default profile name if set, None otherwise.
+        """
+
+        config_path = self.config_dir / "config.toml"
+        if not config_path.exists():
+            return None
+
+        try:
+            text = config_path.read_text(encoding="utf-8")
+            data = toml.loads(text)
+            return data.get("default_profile")
+        except Exception as exc:
+            log.warning(f"Failed to read default_profile from '{config_path}': {exc}")
+        return None
+
+    def set_default_profile(self, profile: Optional[str]) -> None:
+        """Set the default_profile in config.toml.
+
+        Parameters
+        ----------
+        profile : Optional[str]
+            The profile name to set as default, or None to remove the setting.
+        """
+
+        config_path = self.config_dir / "config.toml"
+        data = self._read_toml(config_path)
+
+        if profile is None:
+            # Remove default_profile if it exists
+            if "default_profile" in data:
+                del data["default_profile"]
+        else:
+            # Set default_profile as a top-level key
+            data["default_profile"] = profile
+
+        self._atomic_write(config_path, data)
 
     def _read_toml(self, path: Path) -> dict[str, Any]:
         if not path.exists():

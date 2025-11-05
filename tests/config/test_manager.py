@@ -130,3 +130,62 @@ def test_as_dict_includes_defaults(config_manager):
     assert "adjoint" in data
     assert data["adjoint"]["local_adjoint_dir"] == "adjoint_data"
     assert "simulation" in data
+
+
+def test_set_default_profile(config_manager):
+    """Test setting and getting the default profile."""
+    # Initially no default profile should be set
+    assert config_manager.get_default_profile() is None
+
+    # Set nexus as default
+    config_manager.set_default_profile("nexus")
+    assert config_manager.get_default_profile() == "nexus"
+
+    # Clear default profile
+    config_manager.set_default_profile(None)
+    assert config_manager.get_default_profile() is None
+
+
+def test_default_profile_used_on_init(tmp_path):
+    """Test that default_profile is used when initializing ConfigManager."""
+    from tidy3d.config import ConfigManager
+
+    # Create a manager with a temp config dir
+    manager = ConfigManager(config_dir=tmp_path)
+
+    # Set nexus as default and save
+    manager.set_default_profile("nexus")
+
+    # Create a new manager instance - should use nexus profile
+    new_manager = ConfigManager(config_dir=tmp_path)
+    assert new_manager.profile == "nexus"
+
+
+def test_env_var_overrides_default_profile(tmp_path, monkeypatch):
+    """Test that environment variables override default_profile."""
+    from tidy3d.config import ConfigManager
+
+    # Create a manager and set nexus as default
+    manager = ConfigManager(config_dir=tmp_path)
+    manager.set_default_profile("nexus")
+
+    # Set env var to use dev profile
+    monkeypatch.setenv("TIDY3D_CONFIG_PROFILE", "dev")
+
+    # Create new manager - should use dev from env var, not nexus from config
+    new_manager = ConfigManager(config_dir=tmp_path)
+    assert new_manager.profile == "dev"
+
+
+def test_set_default_profile_normalizes_name(config_manager):
+    """Test that profile names are normalized."""
+    # Set uppercase profile name
+    config_manager.set_default_profile("NEXUS")
+    # Should be normalized to lowercase
+    assert config_manager.get_default_profile() == "nexus"
+
+
+def test_set_default_profile_empty_raises(config_manager):
+    """Test that empty profile name raises ValueError."""
+    with pytest.raises(ValueError, match="Profile name cannot be empty"):
+        config_manager.set_default_profile("")

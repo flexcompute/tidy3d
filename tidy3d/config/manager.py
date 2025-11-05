@@ -128,6 +128,11 @@ class ConfigManager:
 
         attach_manager(self)
         self._reload()
+
+        # Notify users when using a non-default profile
+        if self._profile != "default":
+            log.info(f"Using configuration profile: '{self._profile}'", log_once=True)
+
         self._apply_handlers()
 
     @property
@@ -174,18 +179,61 @@ class ConfigManager:
             raise ValueError("Profile name cannot be empty")
         self._profile = normalized
         self._reload()
+
+        # Notify users when switching to a non-default profile
+        if self._profile != "default":
+            log.info(f"Switched to configuration profile: '{self._profile}'")
+
         self._apply_handlers()
 
-    def save(self, include_defaults: bool = False) -> None:
-        base_without_env = self._filter_persisted(self._compose_without_env())
-        if include_defaults:
-            defaults = self._filter_persisted(self._default_tree())
-            base_without_env = deep_merge(defaults, base_without_env)
+    def set_default_profile(self, profile: Optional[str]) -> None:
+        """Set the default profile to be used on startup.
 
+        Parameters
+        ----------
+        profile : Optional[str]
+            The profile name to use as default, or None to clear the default.
+            When set, this profile will be automatically loaded unless overridden
+            by environment variables (TIDY3D_CONFIG_PROFILE, TIDY3D_PROFILE, or TIDY3D_ENV).
+
+        Notes
+        -----
+        This setting is persisted to config.toml and survives across sessions.
+        Environment variables always take precedence over the default profile.
+        """
+
+        if profile is not None:
+            normalized = normalize_profile_name(profile)
+            if not normalized:
+                raise ValueError("Profile name cannot be empty")
+            self._loader.set_default_profile(normalized)
+        else:
+            self._loader.set_default_profile(None)
+
+    def get_default_profile(self) -> Optional[str]:
+        """Get the currently configured default profile.
+
+        Returns
+        -------
+        Optional[str]
+            The default profile name if set, None otherwise.
+        """
+
+        return self._loader.get_default_profile()
+
+    def save(self, include_defaults: bool = False) -> None:
         if self._profile == "default":
+            # For base config: only save fields marked with persist=True
+            base_without_env = self._filter_persisted(self._compose_without_env())
+            if include_defaults:
+                defaults = self._filter_persisted(self._default_tree())
+                base_without_env = deep_merge(defaults, base_without_env)
             self._loader.save_base(base_without_env)
         else:
-            baseline = self._filter_persisted(deep_merge(self._builtin_data, self._base_data))
+            # For profile overrides: save any field that differs from baseline
+            # (don't filter by persist flag - profiles should save all customizations)
+            base_without_env = self._compose_without_env()
+            baseline = deep_merge(self._builtin_data, self._base_data)
             diff = deep_diff(baseline, base_without_env)
             self._loader.save_profile(self._profile, diff)
         # refresh cached base/profile data after saving
@@ -302,13 +350,22 @@ class ConfigManager:
         if profile:
             return normalize_profile_name(str(profile))
 
-        candidate = (
+        # Check environment variables first (highest priority)
+        env_profile = (
             os.getenv("TIDY3D_CONFIG_PROFILE")
             or os.getenv("TIDY3D_PROFILE")
             or os.getenv("TIDY3D_ENV")
-            or "default"
         )
-        return normalize_profile_name(candidate)
+        if env_profile:
+            return normalize_profile_name(env_profile)
+
+        # Check for default_profile in config file
+        config_default = self._loader.get_default_profile()
+        if config_default:
+            return normalize_profile_name(config_default)
+
+        # Fall back to "default" profile
+        return "default"
 
     def _reload(self) -> None:
         self._env_overrides = load_environment_overrides()
