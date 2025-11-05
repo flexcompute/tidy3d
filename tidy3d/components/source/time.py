@@ -21,6 +21,7 @@ from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
+from tidy3d.packaging import check_tidy3d_extras_licensed_feature, tidy3d_extras
 
 # how many units of ``twidth`` from the ``offset`` until a gaussian pulse is considered "off"
 END_TIME_FACTOR_GAUSSIAN = 10
@@ -605,4 +606,80 @@ class CustomSourceTime(Pulse):
         return np.max(t_non_zero)
 
 
-SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]
+class BroadbandPulse(SourceTime):
+    """A source time injecting significant energy in the entire custom frequency range."""
+
+    freq_range: FreqBound = pydantic.Field(
+        ...,
+        title="Frequency Range",
+        description="Frequency range where the pulse should have significant energy.",
+        units=HERTZ,
+    )
+    minimum_amplitude: float = pydantic.Field(
+        0.3,
+        title="Minimum Amplitude",
+        description="Minimum amplitude of the pulse relative to the peak amplitude in the frequency range.",
+        gt=0.05,
+        lt=0.5,
+    )
+    offset: float = pydantic.Field(
+        0.0,
+        title="Offset",
+        description="An automatic time delay of the peak value of the pulse has been applied under the hood "
+        "to ensure smooth ramping up of the pulse at time = 0. This offfset is added on top of the automatic time delay "
+        "in units of 1 / [``2pi * (freq_range[1] - freq_range[0])``].",
+    )
+
+    @pydantic.validator("freq_range", always=True)
+    def _validate_freq_range(cls, val):
+        """Validate that freq_range is positive and properly ordered."""
+        if val[0] <= 0 or val[1] <= 0:
+            raise ValidationError("Both elements of 'freq_range' must be positive.")
+        if val[1] <= val[0]:
+            raise ValidationError(
+                f"'freq_range[1]' ({val[1]}) must be greater than 'freq_range[0]' ({val[0]})."
+            )
+        return val
+
+    @pydantic.root_validator()
+    def _check_broadband_pulse_available(cls, values):
+        """Check if BroadbandPulse is available."""
+        check_tidy3d_extras_licensed_feature("BroadbandPulse")
+        return values
+
+    @cached_property
+    def _source(self):
+        """Implementation of broadband pulse."""
+        return tidy3d_extras["mod"].extension.BroadbandPulse(
+            fmin=self.freq_range[0],
+            fmax=self.freq_range[1],
+            minRelAmp=self.minimum_amplitude,
+            amp=self.amplitude,
+            phase=self.phase,
+            offset=self.offset,
+        )
+
+    def end_time(self) -> float:
+        """Time after which the source is effectively turned off / close to zero amplitude."""
+        return self._source.end_time(END_TIME_FACTOR_GAUSSIAN)
+
+    def amp_time(self, time: float) -> complex:
+        """Complex-valued source amplitude as a function of time."""
+        return self._source.amp_time(time)
+
+    def amp_freq(self, freq: float) -> complex:
+        """Complex-valued source amplitude as a function of frequency."""
+        return self._source.amp_freq(freq)
+
+    def frequency_range_sigma(self, sigma: float = DEFAULT_SIGMA) -> FreqBound:
+        """Frequency range where the source amplitude is within ``exp(-sigma**2/2)`` of the peak amplitude."""
+        return self._source.frequency_range(sigma)
+
+    def frequency_range(self, num_fwidth: float = DEFAULT_SIGMA) -> FreqBound:
+        """Delegated to `frequency_range_sigma(sigma=num_fwidth)` for computing the frequency range where the source amplitude
+        is within ``exp(-num_fwidth**2/2)`` of the peak amplitude.
+        """
+        return self.frequency_range_sigma(num_fwidth)
+
+
+SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime, BroadbandPulse]
