@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.boundary import BroadbandModeABCFitterParam, BroadbandModeABCSpec
 from tidy3d.components.data.index import SimulationDataMap
 from tidy3d.components.frequency_extrapolation import LowFrequencySmoothingSpec
@@ -812,6 +813,7 @@ __all__ = [
     "TemperatureData",
     "TemperatureMonitor",
     "TetrahedralGridDataset",
+    "Tidy3dBaseModel",
     "Transformed",
     "TriangleMesh",
     "TriangularGridDataset",

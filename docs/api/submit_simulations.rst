@@ -94,7 +94,6 @@ Information Containers
    :template: module.rst
 
    tidy3d.web.core.task_info.TaskInfo
-   tidy3d.web.core.task_info.TaskStatus
 
 
 Mode Solver Web API

@@ -347,7 +347,7 @@ jobs:
           BRANCH_NAME="${STEPS_EXTRACT_BRANCH_NAME_OUTPUTS_BRANCH_NAME}"
           echo $BRANCH_NAME
           # Allow only Jira keys from known projects, even if the branch has an author prefix
-          ALLOWED_JIRA_PROJECTS=("FXC" "SCEM")
+          ALLOWED_JIRA_PROJECTS=("FXC" "SCEM" "SCRF")
           JIRA_PROJECT_PATTERN=$(IFS='|'; echo "${ALLOWED_JIRA_PROJECTS[*]}")
           JIRA_PATTERN="(${JIRA_PROJECT_PATTERN})-[0-9]+"
 

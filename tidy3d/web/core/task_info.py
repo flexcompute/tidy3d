@@ -10,31 +10,6 @@ from typing import Optional
 import pydantic.v1 as pydantic
 
 
-class TaskStatus(Enum):
-    """The statuses that the task can be in."""
-
-    INIT = "initialized"
-    """The task has been initialized."""
-
-    QUEUE = "queued"
-    """The task is in the queue."""
-
-    PRE = "preprocessing"
-    """The task is in the preprocessing stage."""
-
-    RUN = "running"
-    """The task is running."""
-
-    POST = "postprocessing"
-    """The task is in the postprocessing stage."""
-
-    SUCCESS = "success"
-    """The task has completed successfully."""
-
-    ERROR = "error"
-    """The task has completed with an error."""
-
-
 class TaskBase(pydantic.BaseModel, ABC):
     """Base configuration for all task objects."""
 
@@ -153,6 +128,9 @@ class TaskInfo(TaskBase):
     taskBlockInfo: TaskBlockInfo = None
     """Blocking information for the task."""
 
+    version: str = None
+    """Version of the task."""
+
 
 class RunInfo(TaskBase):
     """Information about the run of a task."""
@@ -170,41 +148,6 @@ class RunInfo(TaskBase):
 
 
 # ---------------------- Batch (Modeler) detail schema ---------------------- #
-
-
-class BatchStatus(str, Enum):
-    """Enumerates the possible statuses for a batch of tasks."""
-
-    draft = "draft"
-    """The batch is being configured and has not been submitted."""
-    preprocess = "preprocess"
-    """The batch is undergoing preprocessing."""
-    validating = "validating"
-    """The tasks within the batch are being validated."""
-    validate_success = "validate_success"
-    """All tasks in the batch passed validation."""
-    validate_warn = "validate_warn"
-    """Validation passed, but with warnings."""
-    validate_fail = "validate_fail"
-    """Validation failed for one or more tasks."""
-    blocked = "blocked"
-    """The batch is blocked and cannot run."""
-    running = "running"
-    """The batch is currently executing."""
-    aborting = "aborting"
-    """The batch is in the process of being aborted."""
-    run_success = "run_success"
-    """The batch completed successfully."""
-    postprocess = "postprocess"
-    """The batch is undergoing postprocessing."""
-    run_failed = "run_failed"
-    """The batch execution failed."""
-    diverged = "diverged"
-    """The simulation in the batch diverged."""
-    aborted = "aborted"
-    """The batch was successfully aborted."""
-    error = "error"
-    """An error occurred during the solver run."""
 
 
 class BatchTaskBlockInfo(TaskBlockInfo):
@@ -282,7 +225,6 @@ class BatchDetail(TaskBase):
         groupId: Identifier for the group the batch belongs to.
         name: The user-defined name of the batch.
         status: The current status of the batch.
-        totalStatus: The overall status, consolidating individual task statuses.
         totalTask: The total number of tasks in the batch.
         preprocessSuccess: The count of tasks that completed preprocessing.
         postprocessStatus: The status of the batch's postprocessing stage.
@@ -295,6 +237,7 @@ class BatchDetail(TaskBase):
         totalCheckMillis: Total time in milliseconds spent on checks.
         message: A general message providing information about the batch status.
         tasks: A list of `BatchMember` objects, one for each task in the batch.
+        taskType: The type of tasks contained in the batch.
     """
 
     refId: str = None
@@ -302,7 +245,6 @@ class BatchDetail(TaskBase):
     groupId: str = None
     name: str = None
     status: str = None
-    totalStatus: BatchStatus = None
     totalTask: int = 0
     preprocessSuccess: int = 0
     postprocessStatus: str = None
@@ -317,6 +259,8 @@ class BatchDetail(TaskBase):
     message: str = None
     tasks: list[BatchMember] = []
     validateErrors: dict = None
+    taskType: str = "RF"
+    version: str = None
 
 
 class AsyncJobDetail(TaskBase):
