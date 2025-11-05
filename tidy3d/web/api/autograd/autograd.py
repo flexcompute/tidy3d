@@ -252,9 +252,8 @@ def is_valid_for_autograd_async(simulations: dict[str, td.Simulation]) -> bool:
     return True
 
 
-def run(
+def run_custom(
     simulation: WorkflowType,
-    numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]] = None,
     task_name: typing.Optional[str] = None,
     folder_name: str = "default",
     path: PathLike = "simulation_data.hdf5",
@@ -272,6 +271,7 @@ def run(
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
     lazy: typing.Optional[bool] = None,
+    numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]] = None,
     user_vjp: typing.Optional[tuple[CustomVJPPathType, ...]] = None,
 ) -> WorkflowDataType:
     """
@@ -496,7 +496,103 @@ def run(
     )
 
 
+def run(
+    simulation: WorkflowType,
+    task_name: typing.Optional[str] = None,
+    folder_name: str = "default",
+    path: PathLike = "simulation_data.hdf5",
+    callback_url: typing.Optional[str] = None,
+    verbose: bool = True,
+    progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
+    progress_callback_download: typing.Optional[typing.Callable[[float], None]] = None,
+    solver_version: typing.Optional[str] = None,
+    worker_group: typing.Optional[str] = None,
+    simulation_type: str = "tidy3d",
+    parent_tasks: typing.Optional[list[str]] = None,
+    local_gradient: typing.Optional[bool] = None,
+    max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    reduce_simulation: typing.Literal["auto", True, False] = "auto",
+    pay_type: typing.Union[PayType, str] = PayType.AUTO,
+    priority: typing.Optional[int] = None,
+    lazy: typing.Optional[bool] = None,
+) -> WorkflowDataType:
+    """Wrapper for run_custom for usage without numerical_structures or user_vjp for public facing API."""
+    return run_custom(
+        simulation=simulation,
+        numerical_structures=None,
+        task_name=task_name,
+        folder_name=folder_name,
+        path=path,
+        callback_url=callback_url,
+        verbose=verbose,
+        progress_callback_upload=progress_callback_upload,
+        progress_callback_download=progress_callback_download,
+        solver_version=solver_version,
+        worker_group=worker_group,
+        simulation_type=simulation_type,
+        parent_tasks=parent_tasks,
+        local_gradient=local_gradient,
+        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+        reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
+        priority=priority,
+        lazy=lazy,
+        user_vjp=None,
+    )
+
+
 def run_async(
+    simulations: typing.Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
+    folder_name: str = "default",
+    path_dir: PathLike = DEFAULT_DATA_DIR,
+    callback_url: typing.Optional[str] = None,
+    num_workers: typing.Optional[int] = None,
+    verbose: bool = True,
+    simulation_type: str = "tidy3d",
+    solver_version: typing.Optional[str] = None,
+    parent_tasks: typing.Optional[dict[str, list[str]]] = None,
+    local_gradient: typing.Optional[bool] = None,
+    max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    reduce_simulation: typing.Literal["auto", True, False] = "auto",
+    pay_type: typing.Union[PayType, str] = PayType.AUTO,
+    priority: typing.Optional[int] = None,
+    lazy: typing.Optional[bool] = None,
+    numerical_structures: typing.Optional[
+        typing.Union[
+            dict[str, dict[int, dict[str, typing.Any]]],
+            typing.Sequence[typing.Optional[dict[int, dict[str, typing.Any]]]],
+        ]
+    ] = None,
+    user_vjp: typing.Optional[
+        typing.Union[
+            dict[str, typing.Any],
+            typing.Sequence[typing.Any],
+        ]
+    ] = None,
+) -> BatchData:
+    """Wrapper for run_async_custom for usage without numerical_structures or user_vjp for public facing API."""
+    return run_async_custom(
+        simulations=simulations,
+        folder_name=folder_name,
+        path_dir=path_dir,
+        callback_url=callback_url,
+        num_workers=num_workers,
+        verbose=verbose,
+        simulation_type=simulation_type,
+        solver_version=solver_version,
+        parent_tasks=parent_tasks,
+        local_gradient=local_gradient,
+        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+        reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
+        priority=priority,
+        lazy=lazy,
+        numerical_structures=None,
+        user_vjp=None,
+    )
+
+
+def run_async_custom(
     simulations: typing.Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
     folder_name: str = "default",
     path_dir: PathLike = DEFAULT_DATA_DIR,

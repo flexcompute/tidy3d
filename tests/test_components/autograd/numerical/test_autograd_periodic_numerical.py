@@ -122,7 +122,6 @@ def make_base_sim(
         )
     else:
         diffraction_monitor = td.DiffractionMonitor(
-            # center=(0, 0, -0.35 * sim_size_um[2]),
             center=(sim_center_um[0], sim_center_um[1], -0.35 * sim_size_um[2]),
             size=(np.inf, np.inf, 0),
             name="monitor_diffraction",
