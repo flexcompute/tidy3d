@@ -120,3 +120,89 @@ def test_download_s3_file_raises_oserror(
     assert not destination_path.exists()
     for p in destination_path.parent.iterdir():
         assert not p.name.endswith(s3utils.IN_TRANSIT_SUFFIX)  # no temporary files are present
+
+
+def test_s3_token_get_client_with_custom_endpoint(tmp_path, monkeypatch):
+    """Test that S3STSToken.get_client uses custom endpoint from config."""
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+
+    from tidy3d.config import ConfigManager
+    from tidy3d.web.core.s3utils import _S3STSToken, _UserCredential
+
+    # Create credential using proper Pydantic structure
+    credential_data = {
+        "accessKeyId": "test-access-key",
+        "secretAccessKey": "test-secret-key",
+        "sessionToken": "test-session-token",
+        "expiration": datetime.now(timezone.utc),
+    }
+    mock_credential = _UserCredential(**credential_data)
+
+    # Create token using proper Pydantic structure
+    token_data = {
+        "cloudpath": "s3://test-bucket/test-key",
+        "userCredentials": credential_data,
+    }
+    token = _S3STSToken(**token_data)
+
+    # Mock boto3.client
+    mock_boto_client = MagicMock()
+    monkeypatch.setattr("tidy3d.web.core.s3utils.boto3.client", mock_boto_client)
+
+    # Test 1: Without custom endpoint - use fresh config
+    test_config = ConfigManager(config_dir=tmp_path)
+    monkeypatch.setattr("tidy3d.web.core.s3utils.config", test_config)
+    token.get_client()
+
+    # Verify boto3.client was called without endpoint_url
+    call_kwargs = mock_boto_client.call_args[1]
+    assert "endpoint_url" not in call_kwargs
+    assert call_kwargs["service_name"] == "s3"
+
+    # Reset mock
+    mock_boto_client.reset_mock()
+
+    # Test 2: With custom endpoint - update config and test again
+    test_config.update_section("web", env_vars={"AWS_ENDPOINT_URL_S3": "http://localhost:9000"})
+    token.get_client()
+
+    # Verify boto3.client was called with endpoint_url
+    call_kwargs = mock_boto_client.call_args[1]
+    assert call_kwargs["endpoint_url"] == "http://localhost:9000"
+    assert call_kwargs["service_name"] == "s3"
+
+
+def test_s3_token_get_client_respects_ssl_verify(tmp_path, monkeypatch):
+    """Test that S3STSToken.get_client respects ssl_verify config."""
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+
+    from tidy3d.config import ConfigManager
+    from tidy3d.web.core.s3utils import _S3STSToken
+
+    # Create token using proper Pydantic structure
+    credential_data = {
+        "accessKeyId": "test-access-key",
+        "secretAccessKey": "test-secret-key",
+        "sessionToken": "test-session-token",
+        "expiration": datetime.now(timezone.utc),
+    }
+    token_data = {
+        "cloudpath": "s3://test-bucket/test-key",
+        "userCredentials": credential_data,
+    }
+    token = _S3STSToken(**token_data)
+
+    mock_boto_client = MagicMock()
+    monkeypatch.setattr("tidy3d.web.core.s3utils.boto3.client", mock_boto_client)
+
+    # Use fresh config with ssl_verify=False
+    test_config = ConfigManager(config_dir=tmp_path)
+    test_config.update_section("web", ssl_verify=False)
+    monkeypatch.setattr("tidy3d.web.core.s3utils.config", test_config)
+
+    token.get_client()
+
+    call_kwargs = mock_boto_client.call_args[1]
+    assert call_kwargs["verify"] is False

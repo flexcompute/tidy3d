@@ -419,7 +419,20 @@ def _maybe_str(value: Any) -> Optional[str]:
 
 
 def load_legacy_flat_config(config_dir: Path) -> dict[str, Any]:
-    """Load legacy flat configuration file (pre-migration format)."""
+    """Load legacy flat configuration file (pre-migration format).
+
+    This function now supports both the original flat config format and
+    Nexus custom deployment settings introduced in later versions.
+
+    Legacy key mappings:
+    - apikey -> web.apikey
+    - web_api_endpoint -> web.api_endpoint
+    - website_endpoint -> web.website_endpoint
+    - s3_region -> web.s3_region
+    - s3_endpoint -> web.env_vars.AWS_ENDPOINT_URL_S3
+    - ssl_verify -> web.ssl_verify
+    - enable_caching -> web.enable_caching
+    """
 
     legacy_path = config_dir / "config"
     if not legacy_path.exists():
@@ -438,9 +451,43 @@ def load_legacy_flat_config(config_dir: Path) -> dict[str, Any]:
         return {}
 
     legacy_data: dict[str, Any] = {}
+
+    # Migrate API key (original functionality)
     apikey = parsed.get("apikey")
     if apikey is not None:
         legacy_data.setdefault("web", {})["apikey"] = apikey
+
+    # Migrate Nexus API endpoint
+    web_api = parsed.get("web_api_endpoint")
+    if web_api is not None:
+        legacy_data.setdefault("web", {})["api_endpoint"] = web_api
+
+    # Migrate Nexus website endpoint
+    website = parsed.get("website_endpoint")
+    if website is not None:
+        legacy_data.setdefault("web", {})["website_endpoint"] = website
+
+    # Migrate S3 region
+    s3_region = parsed.get("s3_region")
+    if s3_region is not None:
+        legacy_data.setdefault("web", {})["s3_region"] = s3_region
+
+    # Migrate SSL verification setting
+    ssl_verify = parsed.get("ssl_verify")
+    if ssl_verify is not None:
+        legacy_data.setdefault("web", {})["ssl_verify"] = ssl_verify
+
+    # Migrate caching setting
+    enable_caching = parsed.get("enable_caching")
+    if enable_caching is not None:
+        legacy_data.setdefault("web", {})["enable_caching"] = enable_caching
+
+    # Migrate S3 endpoint to env_vars
+    s3_endpoint = parsed.get("s3_endpoint")
+    if s3_endpoint is not None:
+        env_vars = legacy_data.setdefault("web", {}).setdefault("env_vars", {})
+        env_vars["AWS_ENDPOINT_URL_S3"] = s3_endpoint
+
     return legacy_data
 
 

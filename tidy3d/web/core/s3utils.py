@@ -63,16 +63,26 @@ class _S3STSToken(BaseModel):
         return r.path[1:]
 
     def get_client(self) -> boto3.client:
-        """Get the boto client for this token."""
+        """Get the boto client for this token.
 
-        return boto3.client(
-            "s3",
-            region_name=config.web.s3_region,
-            aws_access_key_id=self.user_credential.access_key_id,
-            aws_secret_access_key=self.user_credential.secret_access_key,
-            aws_session_token=self.user_credential.session_token,
-            verify=config.web.ssl_verify,
-        )
+        Automatically configures custom S3 endpoint if specified in web.env_vars.
+        """
+
+        client_kwargs = {
+            "service_name": "s3",
+            "region_name": config.web.s3_region,
+            "aws_access_key_id": self.user_credential.access_key_id,
+            "aws_secret_access_key": self.user_credential.secret_access_key,
+            "aws_session_token": self.user_credential.session_token,
+            "verify": config.web.ssl_verify,
+        }
+
+        # Add custom S3 endpoint if configured (e.g., for Nexus deployments)
+        if config.web.env_vars and "AWS_ENDPOINT_URL_S3" in config.web.env_vars:
+            s3_endpoint = config.web.env_vars["AWS_ENDPOINT_URL_S3"]
+            client_kwargs["endpoint_url"] = s3_endpoint
+
+        return boto3.client(**client_kwargs)
 
     def is_expired(self) -> bool:
         """True if token is expired."""

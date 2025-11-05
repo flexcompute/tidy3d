@@ -27,7 +27,7 @@ jobs:
     with:
       release_tag: 'daily-0.0.0'
       release_type: 'draft'
-      workflow_control: 'start-tag'
+      workflow_control: 'only-tag-tests'
       client_tests: true
       cli_tests: true
       submodule_tests: false
