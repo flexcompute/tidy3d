@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import importlib
 import io
+import json
 import os
 import re
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -26,7 +28,15 @@ from tidy3d.web.api.autograd.autograd import run as run_autograd
 from tidy3d.web.api.autograd.constants import SIM_VJP_FILE
 from tidy3d.web.api.container import Batch, WebContainer
 from tidy3d.web.api.webapi import load_simulation_if_cached
-from tidy3d.web.cache import CACHE_ARTIFACT_NAME, clear, get_cache_entry_dir, resolve_local_cache
+from tidy3d.web.cache import (
+    CACHE_ARTIFACT_NAME,
+    CACHE_STATS_NAME,
+    TMP_BATCH_PREFIX,
+    TMP_PREFIX,
+    clear,
+    get_cache_entry_dir,
+    resolve_local_cache,
+)
 from tidy3d.web.core.task_core import BatchTask
 
 common.CONNECTION_RETRY_TIME = 0.1
@@ -147,6 +157,17 @@ def _patch_run_pipeline(monkeypatch):
         if sim is not None:
             PATH_TO_SIM[str(Path(path))] = sim
 
+    def _fake_load_simulation(task_id, path="simulation.json", verbose=True):
+        sim = TASK_TO_SIM.get(task_id)
+        if sim is None:
+            sim = next(iter(PATH_TO_SIM.values()), None)
+        if sim is None:
+            raise RuntimeError(f"No simulation mapped for task_id {task_id}")
+        path_obj = Path(path)
+        path_obj.parent.mkdir(parents=True, exist_ok=True)
+        path_obj.write_text("{}")
+        return sim
+
     def _fake__check_folder(*args, **kwargs):
         pass
 
@@ -170,6 +191,7 @@ def _patch_run_pipeline(monkeypatch):
     monkeypatch.setattr(web, "start", _fake_start)
     monkeypatch.setattr(web, "monitor", _fake_monitor)
     monkeypatch.setattr(web, "download", _fake_download)
+    monkeypatch.setattr(web, "load_simulation", _fake_load_simulation)
     monkeypatch.setattr(web, "estimate_cost", lambda *args, **kwargs: 0.0)
     monkeypatch.setattr(Job, "status", property(_fake_status))
     monkeypatch.setattr(engine, "upload_sim_fields_keys", lambda *args, **kwargs: None)
@@ -223,13 +245,16 @@ def _test_run_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data):
 def _test_load_simulation_if_cached(monkeypatch, tmp_path, basic_simulation):
     counters = _patch_run_pipeline(monkeypatch)
     out_path = tmp_path / "result_load_simulation_if_cached.hdf5"
-    clear()
+    cache = resolve_local_cache(True)
+    cache.clear()
 
     data = web.run(basic_simulation, task_name="demo", path=str(out_path))
     assert isinstance(data, _FakeStubData)
     assert counters == {"upload": 1, "start": 1, "monitor": 1, "download": 1}
+    assert len(cache) == 1
 
     sim_data_from_cache = load_simulation_if_cached(basic_simulation)
+    assert sim_data_from_cache is not None
     assert sim_data_from_cache.simulation == basic_simulation
 
     out_path2 = tmp_path / "result_load_simulation_if_cached2.hdf5"
@@ -549,6 +574,120 @@ def _test_cache_eviction_by_size(monkeypatch, tmp_path_factory, basic_simulation
     assert entries[0]["simulation_hash"] == sim2._hash_self()
 
 
+def _test_cache_stats_tracking(monkeypatch, tmp_path_factory, basic_simulation):
+    monkeypatch.setattr(config.local_cache, "max_entries", 10)
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    artifact = tmp_path_factory.mktemp("artifact_stats") / CACHE_ARTIFACT_NAME
+    payload = "stats-payload"
+    artifact.write_text(payload)
+
+    cache.store_result(_FakeStubData(basic_simulation), MOCK_TASK_ID, str(artifact), "FDTD")
+
+    stats_path = cache.root / CACHE_STATS_NAME
+    assert stats_path.exists()
+    stats = json.loads(stats_path.read_text())
+    assert stats["total_entries"] == 1
+    assert stats["total_size"] == len(payload)
+    key = next(iter(stats["last_used"]))
+    entry_last_used = stats["last_used"][key]
+    assert isinstance(entry_last_used, str)
+
+    time.sleep(0.001)
+    cache_entry = cache._fetch(key)
+    assert cache_entry is not None
+
+    updated_stats = json.loads(stats_path.read_text())
+    assert updated_stats["total_size"] == len(payload)
+    assert updated_stats["last_used"][key] != entry_last_used
+
+    cache.invalidate(key)
+    final_stats = json.loads(stats_path.read_text())
+    assert final_stats["total_entries"] == 0
+    assert final_stats["total_size"] == 0
+    assert final_stats["last_used"] == {}
+
+    cache.clear()
+
+
+def _test_cache_stats_sync(monkeypatch, tmp_path_factory, basic_simulation):
+    monkeypatch.setattr(config.local_cache, "max_entries", 10)
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    sim1 = basic_simulation
+    sim2 = basic_simulation.updated_copy(shutoff=2e-4)
+
+    artifact1 = tmp_path_factory.mktemp("artifact_sync1") / CACHE_ARTIFACT_NAME
+    payload1 = "sync-one"
+    artifact1.write_text(payload1)
+    cache.store_result(_FakeStubData(sim1), f"{MOCK_TASK_ID}-1", str(artifact1), "FDTD")
+
+    artifact2 = tmp_path_factory.mktemp("artifact_sync2") / CACHE_ARTIFACT_NAME
+    payload2 = "sync-two"
+    artifact2.write_text(payload2)
+    cache.store_result(_FakeStubData(sim2), f"{MOCK_TASK_ID}-2", str(artifact2), "FDTD")
+
+    stats_path = cache.root / CACHE_STATS_NAME
+    assert stats_path.exists()
+
+    stats_path.unlink()
+    assert not stats_path.exists()
+
+    rebuilt = cache.sync_stats()
+    assert stats_path.exists()
+    assert rebuilt.total_entries == 2
+    assert rebuilt.total_size == len(payload1) + len(payload2)
+
+    keys = {meta["cache_key"] for meta in cache.list()}
+    assert set(rebuilt.last_used.keys()) == keys
+    for info in rebuilt.last_used.values():
+        assert isinstance(info, str)
+
+    cache.clear()
+
+
+def _test_store_and_fetch_do_not_iterate(monkeypatch, tmp_path, basic_simulation):
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    original_iter = cache._iter_entries
+    iter_calls = {"count": 0}
+
+    def _counting_iter():
+        iter_calls["count"] += 1
+        yield from original_iter()
+
+    monkeypatch.setattr(cache, "_iter_entries", _counting_iter)
+
+    artifact = tmp_path / "iter_guard.hdf5"
+    artifact.write_text("payload")
+
+    cache.store_result(_FakeStubData(basic_simulation), MOCK_TASK_ID, str(artifact), "FDTD")
+    assert iter_calls["count"] == 0
+
+    entry_dirs = []
+    for prefix_dir in cache.root.iterdir():
+        if not prefix_dir.is_dir() or prefix_dir.name.startswith((TMP_PREFIX, TMP_BATCH_PREFIX)):
+            continue
+        # collect child entry dirs (support nested layout)
+        for child in prefix_dir.iterdir():
+            if not child.is_dir() or child.name.startswith((TMP_PREFIX, TMP_BATCH_PREFIX)):
+                continue
+            entry_dirs.append(child.name)
+
+    assert entry_dirs, "Expected stored cache entry"
+    key = entry_dirs[0]
+
+    before_fetch = iter_calls["count"]
+    fetched_entry = cache._fetch(key)
+    assert fetched_entry is not None
+    assert iter_calls["count"] == before_fetch
+
+    cache.clear()
+
+
 def _test_configure_cache_roundtrip(monkeypatch, tmp_path):
     monkeypatch.setattr(config.local_cache, "enabled", True)
     monkeypatch.setattr(config.local_cache, "directory", tmp_path)
@@ -591,18 +730,19 @@ def test_cache_sequential(
     """Run all critical cache tests in sequence to ensure stability."""
     monkeypatch.setattr(config.local_cache, "enabled", True)
 
-    # this at first as runtime changes overrides env
     _test_env_var_overrides(monkeypatch, tmp_path)
-
     _test_load_simulation_if_cached(monkeypatch, tmp_path, basic_simulation)
     _test_run_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data)
     _test_load_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data)
     _test_checksum_mismatch_triggers_refresh(monkeypatch, tmp_path, basic_simulation)
     _test_cache_eviction_by_entries(monkeypatch, tmp_path_factory, basic_simulation)
     _test_cache_eviction_by_size(monkeypatch, tmp_path_factory, basic_simulation)
+    _test_cache_stats_tracking(monkeypatch, tmp_path_factory, basic_simulation)
+    _test_cache_stats_sync(monkeypatch, tmp_path_factory, basic_simulation)
     _test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path)
     _test_job_run_cache(monkeypatch, basic_simulation, tmp_path)
     _test_autograd_cache(monkeypatch, request)
     _test_configure_cache_roundtrip(monkeypatch, tmp_path)
+    _test_store_and_fetch_do_not_iterate(monkeypatch, tmp_path, basic_simulation)
     _test_mode_solver_caching(monkeypatch, tmp_path)
     _test_verbosity(monkeypatch, basic_simulation)

@@ -8,12 +8,15 @@ import os
 import shutil
 import tempfile
 import threading
-from collections.abc import Iterable
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 
 from tidy3d import config
 from tidy3d.components.mode.mode_solver import ModeSolver
@@ -26,6 +29,7 @@ from tidy3d.web.core.types import TaskType
 
 CACHE_ARTIFACT_NAME = "simulation_data.hdf5"
 CACHE_METADATA_NAME = "metadata.json"
+CACHE_STATS_NAME = "stats.json"
 
 TMP_PREFIX = "tidy3d-cache-"
 TMP_BATCH_PREFIX = "tmp_batch"
@@ -41,13 +45,68 @@ def get_cache_entry_dir(root: os.PathLike, key: str) -> Path:
     return Path(root) / key[:3] / key
 
 
+class CacheStats(BaseModel):
+    """Lightweight summary of cache usage persisted in ``stats.json``."""
+
+    last_used: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping from cache entry key to the most recent ISO-8601 access timestamp.",
+    )
+    total_size: NonNegativeInt = Field(
+        default=0,
+        description="Aggregate size in bytes across cached artifacts captured in the stats file.",
+    )
+    updated_at: Optional[datetime] = Field(
+        default=None,
+        description="UTC timestamp indicating when the statistics were last refreshed.",
+    )
+
+    model_config = ConfigDict(extra="allow", validate_assignment=True)
+
+    @property
+    def total_entries(self) -> int:
+        return len(self.last_used)
+
+
+class CacheEntryMetadata(BaseModel):
+    """Schema for cache entry metadata persisted on disk."""
+
+    cache_key: str
+    checksum: str
+    created_at: datetime
+    last_used: datetime
+    file_size: int = Field(ge=0)
+    simulation_hash: str
+    workflow_type: str
+    versions: Any
+    task_id: str
+    path: str
+
+    model_config = ConfigDict(extra="allow", validate_assignment=True)
+
+    def bump_last_used(self) -> None:
+        self.last_used = datetime.now(timezone.utc)
+
+    def as_dict(self) -> dict[str, Any]:
+        return self.model_dump(mode="json")
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.as_dict().get(key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        data = self.as_dict()
+        if key not in data:
+            raise KeyError(key)
+        return data[key]
+
+
 @dataclass
 class CacheEntry:
     """Internal representation of a cache entry."""
 
     key: str
     root: Path
-    metadata: dict[str, Any]
+    metadata: CacheEntryMetadata
 
     @property
     def path(self) -> Path:
@@ -67,7 +126,7 @@ class CacheEntry:
     def verify(self) -> bool:
         if not self.exists():
             return False
-        checksum = self.metadata.get("checksum")
+        checksum = self.metadata.checksum
         if not checksum:
             return False
         try:
@@ -79,8 +138,8 @@ class CacheEntry:
                 "Simulation cache checksum mismatch for key '%s'. Removing stale entry.", self.key
             )
             return False
-        if int(self.metadata.get("file_size", file_size)) != file_size:
-            self.metadata["file_size"] = file_size
+        if self.metadata.file_size != file_size:
+            self.metadata.file_size = file_size
             _write_metadata(self.metadata_path, self.metadata)
         return True
 
@@ -100,6 +159,137 @@ class LocalCache:
         self.max_entries = max_entries
         self._root = Path(directory)
         self._lock = threading.RLock()
+        self._syncing_stats = False
+        self._sync_pending = False
+
+    @property
+    def _stats_path(self) -> Path:
+        return self._root / CACHE_STATS_NAME
+
+    def _schedule_sync(self) -> None:
+        self._sync_pending = True
+
+    def _run_pending_sync(self) -> None:
+        if self._sync_pending and not self._syncing_stats:
+            self._sync_pending = False
+            self.sync_stats()
+
+    @contextmanager
+    def _with_lock(self) -> Iterator[None]:
+        self._run_pending_sync()
+        with self._lock:
+            yield
+        self._run_pending_sync()
+
+    def _write_stats(self, stats: CacheStats) -> CacheStats:
+        updated = stats.model_copy(update={"updated_at": datetime.now(timezone.utc)})
+        payload = updated.model_dump(mode="json")
+        payload["total_entries"] = updated.total_entries
+        self._stats_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_metadata(self._stats_path, payload)
+        self._sync_pending = False
+        return updated
+
+    def _load_stats(self, *, rebuild: bool = False) -> CacheStats:
+        path = self._stats_path
+        if not path.exists():
+            if not self._syncing_stats:
+                self._schedule_sync()
+            return CacheStats()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if "last_used" not in data and "entries" in data:
+                data["last_used"] = data.pop("entries")
+            stats = CacheStats.model_validate(data)
+        except Exception:
+            if rebuild and not self._syncing_stats:
+                self._schedule_sync()
+            return CacheStats()
+        if stats.total_size < 0:
+            self._schedule_sync()
+            return CacheStats()
+        return stats
+
+    def _record_store_stats(
+        self,
+        key: str,
+        *,
+        last_used: str,
+        file_size: int,
+        previous_size: int,
+    ) -> None:
+        stats = self._load_stats()
+        entries = dict(stats.last_used)
+        entries[key] = last_used
+        total_size = stats.total_size - previous_size + file_size
+        if total_size < 0:
+            total_size = 0
+            self._schedule_sync()
+        updated = stats.model_copy(update={"last_used": entries, "total_size": total_size})
+        self._write_stats(updated)
+
+    def _record_touch_stats(
+        self, key: str, last_used: str, *, file_size: Optional[int] = None
+    ) -> None:
+        stats = self._load_stats()
+        entries = dict(stats.last_used)
+        existed = key in entries
+        total_size = stats.total_size
+        if not existed and file_size is not None:
+            total_size += file_size
+        if total_size < 0:
+            total_size = 0
+            self._schedule_sync()
+        entries[key] = last_used
+        updated = stats.model_copy(update={"last_used": entries, "total_size": total_size})
+        self._write_stats(updated)
+
+    def _record_remove_stats(self, key: str, file_size: int) -> None:
+        stats = self._load_stats()
+        entries = dict(stats.last_used)
+        entries.pop(key, None)
+        total_size = stats.total_size - file_size
+        if total_size < 0:
+            total_size = 0
+            self._schedule_sync()
+        updated = stats.model_copy(update={"last_used": entries, "total_size": total_size})
+        self._write_stats(updated)
+
+    def _enforce_limits_post_sync(self, entries: list[CacheEntry]) -> None:
+        if not entries:
+            return
+
+        entries_map = {entry.key: entry.metadata.last_used.isoformat() for entry in entries}
+
+        if self.max_entries > 0 and len(entries) > self.max_entries:
+            excess = len(entries) - self.max_entries
+            self._evict(entries_map, remove_count=excess, exclude_keys=set())
+
+        max_size_bytes = int(self.max_size_gb * (1024**3))
+        if max_size_bytes > 0:
+            total_size = sum(entry.metadata.file_size for entry in entries)
+            if total_size > max_size_bytes:
+                bytes_to_free = total_size - max_size_bytes
+                self._evict_by_size(entries_map, bytes_to_free, exclude_keys=set())
+
+    def sync_stats(self) -> CacheStats:
+        with self._lock:
+            self._syncing_stats = True
+            log.debug("Syncing stats.json of local cache")
+            try:
+                entries: list[CacheEntry] = []
+                last_used_map: dict[str, str] = {}
+                total_size = 0
+                for entry in self._iter_entries():
+                    entries.append(entry)
+                    total_size += entry.metadata.file_size
+                    last_used_map[entry.key] = entry.metadata.last_used.isoformat()
+                stats = CacheStats(last_used=last_used_map, total_size=total_size)
+                written = self._write_stats(stats)
+                self._enforce_limits_post_sync(entries)
+                return written
+            finally:
+                self._syncing_stats = False
 
     @property
     def root(self) -> Path:
@@ -107,12 +297,13 @@ class LocalCache:
 
     def list(self) -> list[dict[str, Any]]:
         """Return metadata for all cache entries."""
-        with self._lock:
-            return [entry.metadata for entry in self._iter_entries()]
+        with self._with_lock():
+            entries = [entry.metadata.model_dump(mode="json") for entry in self._iter_entries()]
+        return entries
 
     def clear(self, hard: bool = False) -> None:
-        """Remove all cache contents."""
-        with self._lock:
+        """Remove all cache contents. If set to hard, root directory is removed."""
+        with self._with_lock():
             if self._root.exists():
                 try:
                     shutil.rmtree(self._root)
@@ -120,10 +311,12 @@ class LocalCache:
                         self._root.mkdir(parents=True, exist_ok=True)
                 except (FileNotFoundError, OSError):
                     pass
+            if not hard:
+                self._write_stats(CacheStats())
 
     def _fetch(self, key: str) -> Optional[CacheEntry]:
         """Retrieve an entry by key, verifying checksum."""
-        with self._lock:
+        with self._with_lock():
             entry = self._load_entry(key)
             if not entry or not entry.exists():
                 return None
@@ -135,10 +328,13 @@ class LocalCache:
 
     def __len__(self) -> int:
         """Return number of valid cache entries."""
-        with self._lock:
-            return sum(1 for _ in self._iter_entries())
+        with self._with_lock():
+            count = self._load_stats().total_entries
+        return count
 
-    def _store(self, key: str, source_path: Path, metadata: dict[str, Any]) -> Optional[CacheEntry]:
+    def _store(
+        self, key: str, source_path: Path, metadata: CacheEntryMetadata
+    ) -> Optional[CacheEntry]:
         """Store a new cache entry from ``source_path``.
 
         Parameters
@@ -147,8 +343,8 @@ class LocalCache:
             Cache key computed from simulation hash and runtime context.
         source_path : Path
             Location of the artifact to cache.
-        metadata : dict[str, Any]
-            Additional metadata to persist alongside artifact.
+        metadata : CacheEntryMetadata
+            Metadata describing the cache entry to be persisted.
 
         Returns
         -------
@@ -165,83 +361,141 @@ class LocalCache:
         os.makedirs(tmp_dir, exist_ok=True)
 
         checksum, file_size = _copy_and_hash(source_path, tmp_artifact)
-        now_iso = _now()
-        metadata = dict(metadata)
-        metadata.setdefault("cache_key", key)
-        metadata.setdefault("created_at", now_iso)
-        metadata["last_used"] = now_iso
-        metadata["checksum"] = checksum
-        metadata["file_size"] = file_size
+        metadata.cache_key = key
+        metadata.created_at = datetime.now(timezone.utc)
+        metadata.last_used = metadata.created_at
+        metadata.checksum = checksum
+        metadata.file_size = file_size
 
         _write_metadata(tmp_meta, metadata)
+        entry: Optional[CacheEntry] = None
         try:
-            with self._lock:
+            with self._with_lock():
                 self._root.mkdir(parents=True, exist_ok=True)
-                self._ensure_limits(file_size)
+                existing_entry = self._load_entry(key)
+                previous_size = (
+                    existing_entry.metadata.file_size if existing_entry is not None else 0
+                )
+                self._ensure_limits(
+                    file_size,
+                    incoming_key=key,
+                    replacing_size=previous_size,
+                )
                 final_dir = get_cache_entry_dir(self._root, key)
                 final_dir.parent.mkdir(parents=True, exist_ok=True)
                 if final_dir.exists():
                     shutil.rmtree(final_dir)
                 os.replace(tmp_dir, final_dir)
                 entry = CacheEntry(key=key, root=self._root, metadata=metadata)
-                return entry
+
+                self._record_store_stats(
+                    key,
+                    last_used=metadata.last_used.isoformat(),
+                    file_size=file_size,
+                    previous_size=previous_size,
+                )
+                log.debug("Stored simulation cache entry '%s' (%d bytes).", key, file_size)
         finally:
             try:
                 if tmp_dir.exists():
                     shutil.rmtree(tmp_dir, ignore_errors=True)
             except FileNotFoundError:
                 pass
+        return entry
 
     def invalidate(self, key: str) -> None:
-        with self._lock:
+        with self._with_lock():
             entry = self._load_entry(key)
             if entry:
                 self._remove_entry(entry)
 
-    def _ensure_limits(self, incoming_size: int) -> None:
+    def _ensure_limits(
+        self,
+        incoming_size: int,
+        *,
+        incoming_key: Optional[str] = None,
+        replacing_size: int = 0,
+    ) -> None:
         max_entries = self.max_entries
         max_size_bytes = int(self.max_size_gb * (1024**3))
 
-        entries = list(self._iter_entries())
-        if len(entries) >= max_entries > 0:
-            self._evict(entries, keep=max_entries - 1)
-            entries = list(self._iter_entries())
+        try:
+            incoming_size_int = int(incoming_size)
+        except (TypeError, ValueError):
+            incoming_size_int = 0
+        if incoming_size_int < 0:
+            incoming_size_int = 0
+
+        stats = self._load_stats()
+        entries_info = dict(stats.last_used)
+        existing_keys = set(entries_info)
+        projected_entries = stats.total_entries
+        if not incoming_key or incoming_key not in existing_keys:
+            projected_entries += 1
+
+        if projected_entries > max_entries > 0:
+            excess = projected_entries - max_entries
+            exclude = {incoming_key} if incoming_key else set()
+            self._evict(entries_info, remove_count=excess, exclude_keys=exclude)
+            stats = self._load_stats()
+            entries_info = dict(stats.last_used)
+            existing_keys = set(entries_info)
 
         if max_size_bytes == 0:  # no limit
             return
 
-        existing_size = sum(int(e.metadata.get("file_size", 0)) for e in entries)
-        allowed_size = max(max_size_bytes - incoming_size, 0)
-        if existing_size > allowed_size:
-            self._evict_by_size(entries, existing_size, allowed_size)
+        existing_size = stats.total_size
+        try:
+            replacing_size_int = int(replacing_size)
+        except (TypeError, ValueError):
+            replacing_size_int = 0
+        if incoming_key and incoming_key in existing_keys:
+            projected_size = existing_size - replacing_size_int + incoming_size_int
+        else:
+            projected_size = existing_size + incoming_size_int
 
-    def _evict(self, entries: Iterable[CacheEntry], keep: int) -> None:
-        sorted_entries = sorted(entries, key=lambda e: e.metadata.get("last_used", ""))
-        to_remove = sorted_entries[: max(0, len(sorted_entries) - keep)]
-        for entry in to_remove:
-            self._remove_entry(entry)
+        if max_size_bytes > 0 and projected_size > max_size_bytes:
+            bytes_to_free = projected_size - max_size_bytes
+            exclude = {incoming_key} if incoming_key else set()
+            self._evict_by_size(entries_info, bytes_to_free, exclude_keys=exclude)
+
+    def _evict(self, entries: dict[str, str], *, remove_count: int, exclude_keys: set[str]) -> None:
+        if remove_count <= 0:
+            return
+        candidates = [(key, entries.get(key, "")) for key in entries if key not in exclude_keys]
+        if not candidates:
+            return
+        candidates.sort(key=lambda item: item[1] or "")
+        for key, _ in candidates[:remove_count]:
+            self._remove_entry_by_key(key)
 
     def _evict_by_size(
-        self, entries: Iterable[CacheEntry], current_size: int, allowed_size: float
+        self, entries: dict[str, str], bytes_to_free: int, *, exclude_keys: set[str]
     ) -> None:
-        if allowed_size < 0:
-            allowed_size = 0
-        sorted_entries = sorted(entries, key=lambda e: e.metadata.get("last_used", ""))
+        if bytes_to_free <= 0:
+            return
+        candidates = [(key, entries.get(key, "")) for key in entries if key not in exclude_keys]
+        if not candidates:
+            return
+        candidates.sort(key=lambda item: item[1] or "")
         reclaimed = 0
-        for entry in sorted_entries:
-            if current_size - reclaimed <= allowed_size:
+        for key, _ in candidates:
+            if reclaimed >= bytes_to_free:
                 break
-            size = int(entry.metadata.get("file_size", 0))
+            entry = self._load_entry(key)
+            if entry is None:
+                log.debug("Could not find entry for eviction.")
+                self._schedule_sync()
+                break
+            size = entry.metadata.file_size
             self._remove_entry(entry)
             reclaimed += size
-            log.info(f"Simulation cache evicted entry '{entry.key}' to reclaim {size} bytes.")
+            log.info(f"Simulation cache evicted entry '{key}' to reclaim {size} bytes.")
 
-    def _iter_entries(self) -> Iterable[CacheEntry]:
-        """Iterate over all cache entries, including those in prefix subdirectories."""
+    def _iter_entries(self) -> Iterator[CacheEntry]:
+        """Iterate lazily over all cache entries, including those in prefix subdirectories."""
         if not self._root.exists():
-            return []
-
-        entries: list[CacheEntry] = []
+            return
 
         for prefix_dir in self._root.iterdir():
             if not prefix_dir.is_dir() or prefix_dir.name.startswith(
@@ -249,8 +503,15 @@ class LocalCache:
             ):
                 continue
 
-            for child in prefix_dir.iterdir():
+            # if cache is directly flat (no prefix directories), include that level too
+            subdirs = [prefix_dir]
+            if any((prefix_dir / name).is_dir() for name in prefix_dir.iterdir()):
+                subdirs = prefix_dir.iterdir()
+
+            for child in subdirs:
                 if not child.is_dir():
+                    continue
+                if child.name.startswith((TMP_PREFIX, TMP_BATCH_PREFIX)):
                     continue
 
                 meta_path = child / CACHE_METADATA_NAME
@@ -258,32 +519,52 @@ class LocalCache:
                     continue
 
                 try:
-                    metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+                    metadata = _read_metadata(meta_path, child / CACHE_ARTIFACT_NAME)
                 except Exception:
-                    metadata = {}
+                    log.debug(
+                        "Failed to parse metadata for '%s'; scheduling stats sync.", child.name
+                    )
+                    self._schedule_sync()
+                    continue
 
-                entries.append(CacheEntry(key=child.name, root=self._root, metadata=metadata))
-
-        return entries
+                yield CacheEntry(key=child.name, root=self._root, metadata=metadata)
 
     def _load_entry(self, key: str) -> Optional[CacheEntry]:
         entry = CacheEntry(key=key, root=self._root, metadata={})
         if not entry.metadata_path.exists() or not entry.artifact_path.exists():
             return None
         try:
-            metadata = json.loads(entry.metadata_path.read_text(encoding="utf-8"))
+            metadata = _read_metadata(entry.metadata_path, entry.artifact_path)
         except Exception:
-            metadata = {}
-        entry.metadata = metadata
-        return entry
+            return None
+        return CacheEntry(key=key, root=self._root, metadata=metadata)
 
     def _touch(self, entry: CacheEntry) -> None:
-        entry.metadata["last_used"] = _now()
+        entry.metadata.bump_last_used()
         _write_metadata(entry.metadata_path, entry.metadata)
+        self._record_touch_stats(
+            entry.key,
+            entry.metadata.last_used.isoformat(),
+            file_size=entry.metadata.file_size,
+        )
+
+    def _remove_entry_by_key(self, key: str) -> None:
+        entry = self._load_entry(key)
+        if entry is None:
+            path = get_cache_entry_dir(self._root, key)
+            if path.exists():
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                log.debug("Could not find entry for key '%s' to delete.", key)
+            self._record_remove_stats(key, 0)
+            return
+        self._remove_entry(entry)
 
     def _remove_entry(self, entry: CacheEntry) -> None:
+        file_size = entry.metadata.file_size
         if entry.path.exists():
             shutil.rmtree(entry.path, ignore_errors=True)
+        self._record_remove_stats(entry.key, file_size)
 
     def try_fetch(
         self,
@@ -435,10 +716,15 @@ def _copy_and_hash(
     return sha256.hexdigest(), size
 
 
-def _write_metadata(path: Path, metadata: dict[str, Any]) -> None:
+def _write_metadata(path: Path, metadata: CacheEntryMetadata | dict[str, Any]) -> None:
     tmp_path = path.with_suffix(".tmp")
+    payload: dict[str, Any]
+    if isinstance(metadata, CacheEntryMetadata):
+        payload = metadata.model_dump(mode="json")
+    else:
+        payload = metadata
     with tmp_path.open("w", encoding="utf-8") as fh:
-        json.dump(metadata, fh, indent=2, sort_keys=True)
+        json.dump(payload, fh, indent=2, sort_keys=True)
     os.replace(tmp_path, path)
 
 
@@ -448,6 +734,19 @@ def _now() -> str:
 
 def _timestamp_suffix() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+
+
+def _read_metadata(meta_path: Path, artifact_path: Path) -> CacheEntryMetadata:
+    raw = json.loads(meta_path.read_text(encoding="utf-8"))
+    if "file_size" not in raw:
+        try:
+            raw["file_size"] = artifact_path.stat().st_size
+        except FileNotFoundError:
+            raw["file_size"] = 0
+    raw.setdefault("created_at", _now())
+    raw.setdefault("last_used", raw["created_at"])
+    raw.setdefault("cache_key", meta_path.parent.name)
+    return CacheEntryMetadata.model_validate(raw)
 
 
 class _Hasher:
@@ -513,17 +812,22 @@ def build_entry_metadata(
     task_id: str,
     version: str,
     path: Path,
-) -> dict[str, Any]:
-    """Create metadata dictionary for a cache entry."""
+) -> CacheEntryMetadata:
+    """Create metadata object for a cache entry."""
 
-    metadata: dict[str, Any] = {
-        "simulation_hash": simulation_hash,
-        "workflow_type": workflow_type,
-        "versions": _canonicalize(version),
-        "task_id": task_id,
-        "path": str(path),
-    }
-    return metadata
+    now = datetime.now(timezone.utc)
+    return CacheEntryMetadata(
+        cache_key="",
+        checksum="",
+        created_at=now,
+        last_used=now,
+        file_size=0,
+        simulation_hash=simulation_hash,
+        workflow_type=workflow_type,
+        versions=_canonicalize(version),
+        task_id=task_id,
+        path=str(path),
+    )
 
 
 def resolve_local_cache(use_cache: Optional[bool] = None) -> Optional[LocalCache]:
