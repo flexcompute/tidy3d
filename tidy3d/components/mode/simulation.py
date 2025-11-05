@@ -612,8 +612,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
         """
         return self._mode_solver.plot_pml(ax=ax)
 
-    def validate_pre_upload(self, source_required: bool = False) -> None:
+    def validate_pre_upload(self) -> None:
         super().validate_pre_upload()
-        self._mode_solver.validate_pre_upload(source_required=source_required)
+        self._mode_solver.validate_pre_upload()
 
     _boundaries_for_zero_dims = validate_boundaries_for_zero_dims(warn_on_change=False)

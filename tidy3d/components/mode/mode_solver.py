@@ -2655,7 +2655,7 @@ class ModeSolver(Tidy3dBaseModel):
                 "frequencies or modes."
             )
 
-    def validate_pre_upload(self, source_required: bool = True) -> None:
+    def validate_pre_upload(self) -> None:
         """Validate the fully initialized mode solver is ok for upload to our servers."""
         self._validate_modes_size()
 

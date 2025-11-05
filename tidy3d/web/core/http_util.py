@@ -43,6 +43,7 @@ class ResponseCodes(Enum):
 def get_version() -> str:
     """Get the version for the current environment."""
     return core_config.get_version()
+    # return "2.10.0rc2.1"
 
 
 def get_user_agent() -> str:

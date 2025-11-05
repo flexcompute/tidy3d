@@ -343,5 +343,9 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         )
         return data.smatrix()
 
+    def validate_pre_upload(self):
+        """Validate the modeler before upload."""
+        self.base_sim.validate_pre_upload(source_required=False)
+
 
 AbstractComponentModeler.update_forward_refs()

@@ -389,25 +389,7 @@ class Job(WebContainer):
         """Return current status of :class:`Job`."""
         if self.load_if_cached:
             return "success"
-        if web._is_modeler_batch(self.task_id):
-            detail = self.get_info()
-            status = detail.totalStatus.value
-            return status
-        else:
-            return self.get_info().status
-
-    @property
-    def postprocess_status(self) -> Optional[str]:
-        """Return current postprocess status of :class:`Job` if it is a Component Modeler."""
-        if web._is_modeler_batch(self.task_id):
-            detail = self.get_info()
-            return detail.postprocessStatus
-        else:
-            log.warning(
-                f"Task ID '{self.task_id}' is not a modeler batch job. "
-                "'postprocess_start' is only applicable to Component Modelers"
-            )
-            return
+        return self.get_info().status
 
     def start(self, priority: Optional[int] = None) -> None:
         """Start running a :class:`Job`.
@@ -547,37 +529,6 @@ class Job(WebContainer):
         if self.load_if_cached:
             return 0.0
         return web.estimate_cost(self.task_id, verbose=verbose, solver_version=self.solver_version)
-
-    def postprocess_start(self, worker_group: Optional[str] = None, verbose: bool = True) -> None:
-        """
-        If the job is a modeler batch, checks if the run is complete and starts
-        the postprocess phase.
-
-        This function does not wait for postprocessing to finish and is only
-        applicable to Component Modeler batch jobs.
-
-        Parameters
-        ----------
-        worker_group : Optional[str] = None
-            The specific worker group to run the postprocessing task on.
-        verbose : bool = True
-            Whether to print info messages. This overrides the Job's 'verbose' setting for this call.
-        """
-        # First, confirm that the task is a modeler batch job.
-        if not web._is_modeler_batch(self.task_id):
-            # If not, inform the user and exit.
-            # This warning is important and should not be suppressed.
-            log.warning(
-                f"Task ID '{self.task_id}' is not a modeler batch job. "
-                "'postprocess_start' is only applicable to Component Modelers"
-            )
-            return
-
-        # If it is a modeler batch, call the dedicated function to start postprocessing.
-        # The verbosity is a combination of the job's setting and the method's parameter.
-        web.postprocess_start(
-            batch_id=self.task_id, verbose=(self.verbose and verbose), worker_group=worker_group
-        )
 
     @staticmethod
     def _check_path_dir(path: PathLike) -> None:
@@ -1043,21 +994,6 @@ class Batch(WebContainer):
             run_info_dict[task_name] = run_info
         return run_info_dict
 
-    def postprocess_start(self, worker_group: Optional[str] = None, verbose: bool = True) -> None:
-        """
-        Start the postprocess phase for all applicable jobs in the batch.
-
-        This simply forwards to each Job's `postprocess_start(...)`. The Job decides
-        whether it's a Component Modeler task and whether it can/should start now.
-        This method does not wait for postprocessing to finish.
-        """
-        if self.verbose and verbose:
-            console = get_logging_console()
-            console.log("Attempting to start postprocessing for jobs in the batch.")
-
-        for job in self.jobs.values():
-            job.postprocess_start(worker_group=worker_group, verbose=verbose)
-
     def monitor(
         self,
         *,
@@ -1069,7 +1005,6 @@ class Batch(WebContainer):
         """
         Monitor progress of each running task.
 
-        - For Component Modeler jobs, automatically triggers postprocessing once run finishes.
         - Optionally downloads results as soon as a job reaches final success.
         - Rich progress bars in verbose mode; quiet polling otherwise.
 
@@ -1095,16 +1030,8 @@ class Batch(WebContainer):
             self._check_path_dir(path_dir=path_dir)
             download_executor = ThreadPoolExecutor(max_workers=self.num_workers)
 
-        def _should_download(job: Job) -> bool:
-            status = job.status
-            if not web._is_modeler_batch(job.task_id):
-                return status == "success"
-            if status == "success":
-                return True
-            return status == "run_success" and getattr(job, "postprocess_status", None) == "success"
-
         def schedule_download(job: Job) -> None:
-            if download_executor is None or not _should_download(job):
+            if download_executor is None or job.status not in COMPLETED_STATES:
                 return
             task_id = job.task_id
             if task_id in downloads_started:
@@ -1128,12 +1055,7 @@ class Batch(WebContainer):
         def check_continue_condition(job: Job) -> bool:
             if job.load_if_cached:
                 return False
-            status = job.status
-            if not web._is_modeler_batch(job.task_id):
-                return status not in END_STATES
-            if status == "run_success":
-                return job.postprocess_status not in END_STATES
-            return status not in END_STATES
+            return job.status not in END_STATES
 
         def pbar_description(
             task_name: str, status: str, max_name_length: int, status_width: int
@@ -1156,9 +1078,6 @@ class Batch(WebContainer):
 
         max_task_name = max(len(task_name) for task_name in self.jobs.keys())
         max_name_length = min(30, max(max_task_name, 15))
-
-        # track which modeler jobs we've already kicked into postprocess
-        postprocess_started_tasks: set[str] = set()
 
         try:
             console = None
@@ -1194,17 +1113,6 @@ class Batch(WebContainer):
                 while any(check_continue_condition(job) for job in self.jobs.values()):
                     for task_name, job in self.jobs.items():
                         status = job.status
-
-                        # auto-start postprocess for modeler jobs when run finishes
-                        if (
-                            web._is_modeler_batch(job.task_id)
-                            and status == "run_success"
-                            and job.task_id not in postprocess_started_tasks
-                        ):
-                            job.postprocess_start(
-                                worker_group=postprocess_worker_group, verbose=True
-                            )
-                            postprocess_started_tasks.add(job.task_id)
 
                         schedule_download(job)
 

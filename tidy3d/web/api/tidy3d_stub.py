@@ -181,7 +181,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         """Perform some pre-checks on instances of component"""
         if isinstance(self.simulation, Simulation):
             self.simulation.validate_pre_upload(source_required)
-        elif isinstance(self.simulation, EMESimulation):
+        else:
             self.simulation.validate_pre_upload()
 
     def get_default_task_name(self) -> str:
