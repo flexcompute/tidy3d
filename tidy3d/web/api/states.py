@@ -5,15 +5,17 @@ PRE_ERROR_STATES = {
 }
 
 ERROR_STATES = {
-    "validate_fail",
+    "validate_error",
     "error",
     "errored",
     "diverge",
     "diverged",
     "blocked",
-    "run_failed",
+    "preprocess_error",
+    "run_error",
     "aborted",
     "deleted",
+    "postprocess_error",
 }
 
 PRE_VALIDATE_STATES = {
@@ -30,7 +32,7 @@ POST_RUN_STATES = {
     "run_success",
 }
 
-COMPLETED_STATES = {"visualize", "success", "completed", "processed"}
+COMPLETED_STATES = {"visualize", "success", "completed", "processed", "postprocess_success"}
 
 END_STATES = ERROR_STATES | COMPLETED_STATES
 
@@ -87,6 +89,7 @@ STATE_PROGRESS_PERCENTAGE = {
     "visualize": round((11 / MAX_STEPS) * COMPLETED_PERCENT),  # 85%
     "success": COMPLETED_PERCENT,  # 100%
     "completed": COMPLETED_PERCENT,  # 100%
+    "postprocess_success": COMPLETED_PERCENT,  # 100%
     # --- Error States ---
     # All error states map to 0%
     "validate_fail": 0,

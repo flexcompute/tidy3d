@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import pathlib
 import tempfile
-import time
 from datetime import datetime
 from os import PathLike
 from typing import Callable, Optional, Union
@@ -17,7 +16,6 @@ from pydantic.v1 import Extra, Field, parse_obj_as
 import tidy3d as td
 from tidy3d.config import config
 from tidy3d.exceptions import ValidationError
-from tidy3d.web.common import REFRESH_TIME
 
 from . import http_util
 from .cache import FOLDER_CACHE
@@ -211,7 +209,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         simulation_type: str = "tidy3d",
         parent_tasks: Optional[list[str]] = None,
         file_type: str = "Gz",
-        port_name_list: Optional[list[str]] = None,
         projects_endpoint: str = "tidy3d/projects",
     ) -> SimulationTask:
         """Create a new task on the server.
@@ -246,20 +243,24 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             simulation_type = "tidy3d"
 
         folder = Folder.get(folder_name, create=True)
-        payload = {
-            "taskName": task_name,
-            "taskType": task_type,
-            "callbackUrl": callback_url,
-            "simulationType": simulation_type,
-            "parentTasks": parent_tasks,
-            "fileType": file_type,
-        }
-        # Component modeler: include port names if provided
-        if port_name_list:
-            # Align with backend contract: expect 'portNames' (not 'portNameList')
-            payload["portNames"] = port_name_list
 
-        resp = http.post(f"{projects_endpoint}/{folder.folder_id}/tasks", payload)
+        if task_type == "RF":
+            payload = {
+                "groupName": task_name,
+                "folderId": folder.folder_id,
+                "fileType": file_type,
+            }
+            resp = http.post("rf/task", payload)
+        else:
+            payload = {
+                "taskName": task_name,
+                "taskType": task_type,
+                "callbackUrl": callback_url,
+                "simulationType": simulation_type,
+                "parentTasks": parent_tasks,
+                "fileType": file_type,
+            }
+            resp = http.post(f"{projects_endpoint}/{folder.folder_id}/tasks", payload)
         # RF group creation may return group-level info without 'taskId'.
         # Use 'groupId' (or 'batchId' as fallback) as the resource id for subsequent uploads.
         if "taskId" not in resp and task_type == "RF":
@@ -694,7 +695,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         )
 
     def abort(self) -> requests.Response:
-        """Aborting current task from server."""
+        """Abort the current task on the server."""
         if not self.task_id:
             raise ValueError("Task id not found.")
         return http.put(
@@ -737,17 +738,13 @@ class BatchTask:
 
     This class acts as a wrapper around the API endpoints for a specific batch,
     allowing users to check, submit, monitor, and download data from it.
-
-    Note:
-        The 'batch_type' (e.g., "RF_SWEEP") must be provided by the caller to
-        most methods, as it dictates which backend service handles the request.
     """
 
     def __init__(self, batch_id: str) -> None:
         self.batch_id = batch_id
 
     @staticmethod
-    def is_batch(resource_id: str, batch_type: str) -> bool:
+    def is_batch(resource_id: str) -> bool:
         """Checks if a given resource ID corresponds to a valid batch task.
 
         This is a utility function to verify a batch task's existence before
@@ -757,8 +754,6 @@ class BatchTask:
         ----------
         resource_id : str
             The unique identifier for the resource.
-        batch_type : str
-            The type of the batch to check (e.g., "RF_SWEEP").
 
         Returns
         -------
@@ -769,8 +764,7 @@ class BatchTask:
             # TODO PROPERLY FIXME
             # Disable non critical logs due to check for resourceId, until we have a dedicated API for this
             resp = http.get(
-                f"tidy3d/tasks/{resource_id}/batch-detail",
-                params={"batchType": batch_type},
+                f"rf/task/{resource_id}/statistics",
                 suppress_404=True,
             )
             status = bool(resp and isinstance(resp, dict) and "status" in resp)
@@ -778,13 +772,8 @@ class BatchTask:
         except Exception:
             return False
 
-    def detail(self, batch_type: str) -> BatchDetail:
+    def detail(self) -> BatchDetail:
         """Fetches the detailed information and status of the batch.
-
-        Parameters
-        ----------
-        batch_type : str
-            The type of the batch (e.g., "RF_SWEEP").
 
         Returns
         -------
@@ -792,8 +781,7 @@ class BatchTask:
             An object containing the batch's latest data.
         """
         resp = http.get(
-            f"tidy3d/tasks/{self.batch_id}/batch-detail",
-            params={"batchType": batch_type},
+            f"rf/task/{self.batch_id}/statistics",
         )
         # Some backends may return null for collection fields; coerce to sensible defaults
         if isinstance(resp, dict):
@@ -805,7 +793,6 @@ class BatchTask:
         self,
         solver_version: Optional[str] = None,
         protocol_version: Optional[str] = None,
-        batch_type: str = "",
     ) -> requests.Response:
         """Submits a request to validate the batch configuration on the server.
 
@@ -815,8 +802,6 @@ class BatchTask:
             The version of the solver to use for validation.
         protocol_version : Optional[str], default=None
             The data protocol version. Defaults to the current version.
-        batch_type : str, default=""
-            The type of the batch (e.g., "RF_SWEEP").
 
         Returns
         -------
@@ -826,9 +811,8 @@ class BatchTask:
         if protocol_version is None:
             protocol_version = _get_protocol_version()
         return http.post(
-            f"tidy3d/projects/{self.batch_id}/batch-check",
+            f"rf/task/{self.batch_id}/check",
             {
-                "batchType": batch_type,
                 "solverVersion": solver_version,
                 "protocolVersion": protocol_version,
             },
@@ -839,7 +823,8 @@ class BatchTask:
         solver_version: Optional[str] = None,
         protocol_version: Optional[str] = None,
         worker_group: Optional[str] = None,
-        batch_type: str = "",
+        pay_type: Union[PayType, str] = PayType.AUTO,
+        priority: Optional[int] = None,
     ) -> requests.Response:
         """Submits the batch for execution on the server.
 
@@ -851,135 +836,33 @@ class BatchTask:
             The data protocol version. Defaults to the current version.
         worker_group : Optional[str], default=None
             Optional identifier for a specific worker group to run on.
-        batch_type : str, default=""
-            The type of the batch (e.g., "RF_SWEEP").
 
         Returns
         -------
         Any
             The server's response to the submit request.
         """
+
+        # TODO: add support for pay_type and priority arguments
+        if pay_type != PayType.AUTO:
+            raise NotImplementedError(
+                "The 'pay_type' argument is not yet supported and will be ignored."
+            )
+        if priority is not None:
+            raise NotImplementedError(
+                "The 'priority' argument is not yet supported and will be ignored."
+            )
+
         if protocol_version is None:
             protocol_version = _get_protocol_version()
         return http.post(
-            f"tidy3d/projects/{self.batch_id}/batch-submit",
+            f"rf/task/{self.batch_id}/submit",
             {
-                "batchType": batch_type,
                 "solverVersion": solver_version,
                 "protocolVersion": protocol_version,
                 "workerGroup": worker_group,
             },
         )
-
-    def postprocess(
-        self,
-        solver_version: Optional[str] = None,
-        protocol_version: Optional[str] = None,
-        worker_group: Optional[str] = None,
-        batch_type: str = "",
-    ) -> requests.Response:
-        """Initiates post-processing for a completed batch run.
-
-        Parameters
-        ----------
-        solver_version : Optional[str], default=None
-            The version of the solver to use for post-processing.
-        protocol_version : Optional[str], default=None
-            The data protocol version. Defaults to the current version.
-        worker_group : Optional[str], default=None
-            Optional identifier for a specific worker group to run on.
-        batch_type : str, default=""
-            The type of the batch (e.g., "RF_SWEEP").
-
-        Returns
-        -------
-        Any
-            The server's response to the post-process request.
-        """
-        if protocol_version is None:
-            protocol_version = _get_protocol_version()
-        return http.post(
-            f"tidy3d/projects/{self.batch_id}/postprocess",
-            {
-                "batchType": batch_type,
-                "solverVersion": solver_version,
-                "protocolVersion": protocol_version,
-                "workerGroup": worker_group,
-            },
-        )
-
-    def wait_for_validate(
-        self, timeout: Optional[float] = None, batch_type: str = ""
-    ) -> BatchDetail:
-        """Waits for the batch to complete the validation stage by polling its status.
-
-        Parameters
-        ----------
-        timeout : Optional[float], default=None
-            Maximum time in seconds to wait. If ``None``, waits indefinitely.
-        batch_type : str, default=""
-            The type of the batch (e.g., "RF_SWEEP").
-
-        Returns
-        -------
-        BatchDetail
-            The final object after validation completes or a timeout occurs.
-
-        Notes
-        -----
-        This method blocks until the batch status is 'validate_success',
-        'validate_warn', 'validate_fail', or another terminal state like 'blocked'
-        or 'aborted', or until the timeout is reached.
-        """
-        start = datetime.now().timestamp()
-        while True:
-            d = self.detail(batch_type=batch_type)
-            status = d.totalStatus
-            if status in ("validate_success", "validate_warn", "validate_fail"):
-                return d
-            if status in ("blocked", "aborting", "aborted"):
-                return d
-            if timeout is not None and (datetime.now().timestamp() - start) > timeout:
-                return d
-            time.sleep(REFRESH_TIME)
-
-    def wait_for_run(self, timeout: Optional[float] = None, batch_type: str = "") -> BatchDetail:
-        """Waits for the batch to complete the execution stage by polling its status.
-
-        Parameters
-        ----------
-        timeout : Optional[float], default=None
-            Maximum time in seconds to wait. If ``None``, waits indefinitely.
-        batch_type : str, default=""
-            The type of the batch (e.g., "RF_SWEEP").
-
-        Returns
-        -------
-        BatchDetail
-            The final object after the run completes or a timeout occurs.
-
-        Notes
-        -----
-        This method blocks until the batch status reaches a terminal run state like
-        'run_success', 'run_failed', 'diverged', 'blocked', or 'aborted',
-        or until the timeout is reached.
-        """
-        start = datetime.now().timestamp()
-        while True:
-            d = self.detail(batch_type=batch_type)
-            status = d.totalStatus
-            if status in (
-                "run_success",
-                "run_failed",
-                "diverged",
-                "blocked",
-                "aborting",
-                "aborted",
-            ):
-                return d
-            if timeout is not None and (datetime.now().timestamp() - start) > timeout:
-                return d
-            time.sleep(REFRESH_TIME)
 
     def get_data_hdf5(
         self,
@@ -1047,3 +930,9 @@ class BatchTask:
                 ) from e
 
         return file
+
+    def abort(self) -> requests.Response:
+        """Abort the current task on the server."""
+        if not self.batch_id:
+            raise ValueError("Batch id not found.")
+        return http.put(f"rf/task/{self.batch_id}/abort", {})

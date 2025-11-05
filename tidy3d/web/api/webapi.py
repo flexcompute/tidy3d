@@ -24,7 +24,6 @@ from tidy3d.web.api.states import (
     ALL_POST_VALIDATE_STATES,
     END_STATES,
     ERROR_STATES,
-    POST_VALIDATE_STATES,
     STATE_PROGRESS_PERCENTAGE,
 )
 from tidy3d.web.cache import CacheEntry, _store_mode_solver_in_cache, resolve_local_cache
@@ -39,11 +38,8 @@ from tidy3d.web.core.constants import (
     SIMULATION_DATA_HDF5_GZ,
     TaskId,
 )
-from tidy3d.web.core.exceptions import WebNotFoundError
-from tidy3d.web.core.http_util import get_version as _get_protocol_version
-from tidy3d.web.core.http_util import http
 from tidy3d.web.core.task_core import BatchDetail, BatchTask, Folder, SimulationTask
-from tidy3d.web.core.task_info import AsyncJobDetail, ChargeType, TaskInfo
+from tidy3d.web.core.task_info import ChargeType, TaskInfo
 from tidy3d.web.core.types import PayType, TaskType
 
 from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
@@ -97,11 +93,7 @@ def _build_website_url(path: str) -> str:
 
 def _is_modeler_batch(resource_id: str) -> bool:
     """Detect whether the given id corresponds to a modeler batch resource."""
-    return BatchTask.is_batch(resource_id, batch_type="RF_SWEEP")
-
-
-def _batch_detail(resource_id: str) -> BatchDetail:
-    return BatchTask(resource_id).detail(batch_type="RF_SWEEP")
+    return BatchTask.is_batch(resource_id)
 
 
 def _batch_detail_error(resource_id: str) -> Optional[WebError]:
@@ -115,26 +107,22 @@ def _batch_detail_error(resource_id: str) -> Optional[WebError]:
     Args:
         resource_id (str): The identifier of the batch resource that failed.
 
-    Returns:
-        An instance of `WebError` if the batch failed, otherwise `None`.
+    Raises:
+        An instance of ``WebError`` if the batch failed.
     """
+
+    # TODO: test properly
     try:
-        batch_detail = BatchTask(batch_id=resource_id).detail(batch_type="RF_SWEEP")
-        status = batch_detail.totalStatus.value
+        batch_detail = BatchTask(batch_id=resource_id).detail()
+        status = batch_detail.status.lower()
     except Exception as e:
         log.error(f"Could not retrieve batch details for '{resource_id}': {e}")
-        return WebError(f"Failed to retrieve status for batch '{resource_id}'.")
+        raise WebError(f"Failed to retrieve status for batch '{resource_id}'.") from e
 
     if status not in ERROR_STATES:
-        return None
+        return
 
-    log.error(f"The ComponentModeler batch '{resource_id}' has failed with status: {status}")
-
-    if (
-        status == "validate_fail"
-        and hasattr(batch_detail, "validateErrors")
-        and batch_detail.validateErrors
-    ):
+    if hasattr(batch_detail, "validateErrors") and batch_detail.validateErrors:
         error_details = []
         for key, error_str in batch_detail.validateErrors.items():
             try:
@@ -153,7 +141,7 @@ def _batch_detail_error(resource_id: str) -> Optional[WebError]:
             "One or more subtasks failed validation. Please fix the component modeler configuration.\n"
             f"Details:\n{details_string}"
         )
-        return WebError(full_error_msg)
+        raise WebError(full_error_msg)
 
     # Handle all other generic error states
     else:
@@ -161,168 +149,7 @@ def _batch_detail_error(resource_id: str) -> Optional[WebError]:
             f"Batch '{resource_id}' failed with status '{status}'. Check server "
             "logs for details or contact customer support."
         )
-        return WebError(error_msg)
-
-
-def _upload_component_modeler_subtasks(
-    resource_id: str, verbose: bool = True, solver_version: Optional[str] = None
-) -> Optional[WebError]:
-    """Kicks off and monitors the split and validation of component modeler tasks.
-
-    This function orchestrates a two-phase process. First, it initiates a
-    server-side asynchronous job to split the components of a modeler batch.
-    It monitors this job's progress by polling the API and parsing the
-    response into an `AsyncJobDetail` model until the job completes or fails.
-
-    If the split is successful, the function proceeds to the second phase:
-    triggering a batch validation via `batch.check()`. It then monitors this
-    validation process by polling for `BatchDetail` updates. The progress bar,
-    if verbose, reflects the status according to a predefined state mapping.
-
-    Finally, it processes the terminal state of the validation. If a
-    'validate_fail' status occurs, it parses detailed error messages for each
-    failed subtask and includes them in the raised exception.
-
-    Args:
-        resource_id (str): The identifier for the batch resource to be processed.
-        verbose (bool): If True, displays progress bars and logs detailed
-            status messages to the console during the operation.
-        solver_version (str): Solver version in which to run validation.
-
-    Raises:
-        RuntimeError: If the initial asynchronous split job fails.
-        WebError: If the subsequent batch validation fails, ends in an
-            unexpected state, or if a 'validate_fail' status is encountered.
-    """
-    console = get_logging_console() if verbose else None
-    final_error = None
-    batch_type = "RF_SWEEP"
-
-    split_path = "tidy3d/async-biz/component-modeler-split"
-    payload = {
-        "batchType": batch_type,
-        "batchId": resource_id,
-        "fileName": "modeler.hdf5.gz",
-        "protocolVersion": _get_protocol_version(),
-    }
-
-    if verbose:
-        console.log("Starting modeler and subtasks validation...")
-
-    initial_resp = http.post(split_path, payload)
-    split_job_detail = AsyncJobDetail(**initial_resp)
-    monitor_split_path = f"{split_path}?asyncId={split_job_detail.asyncId}"
-
-    if verbose:
-        progress_bar = Progress(
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeElapsedColumn(),
-            console=console,
-        )
-
-        with progress_bar as progress:
-            description = "Upload Subtasks"
-            pbar = progress.add_task(description, completed=split_job_detail.progress, total=100)
-            while True:
-                split_job_raw_result = http.get(monitor_split_path)
-                split_job_detail = AsyncJobDetail(**split_job_raw_result)
-
-                progress.update(
-                    pbar, completed=split_job_detail.progress, description=f"[blue]{description}"
-                )
-
-                if split_job_detail.status in END_STATES:
-                    progress.update(
-                        pbar,
-                        completed=split_job_detail.progress,
-                        description=f"[green]{description}",
-                    )
-                    break
-                time.sleep(RUN_REFRESH_TIME)
-
-            if split_job_detail.status in ERROR_STATES:
-                msg = split_job_detail.result or "An unknown error occurred."
-                final_error = WebError(
-                    f"Component modeler split job failed ({split_job_detail.status}): {msg}"
-                )
-
-            if not final_error:
-                description = "Validating"
-                pbar = progress.add_task(
-                    completed=10, total=100, description=f"[blue]{description}"
-                )
-                batch = BatchTask(resource_id)
-                batch.check(solver_version=solver_version, batch_type=batch_type)
-
-                while True:
-                    batch_detail = batch.detail(batch_type=batch_type)
-                    status = batch_detail.totalStatus
-                    progress_percent = STATE_PROGRESS_PERCENTAGE.get(status, 0)
-                    progress.update(
-                        pbar, completed=progress_percent, description=f"[blue]{description}"
-                    )
-
-                    if status in POST_VALIDATE_STATES:
-                        progress.update(pbar, completed=100, description=f"[green]{description}")
-                        task_mapping = json.loads(split_job_detail.result)
-                        console.log(
-                            f"Uploaded Subtasks: \n{_task_dict_to_url_bullet_list(task_mapping)}"
-                        )
-                        progress.refresh()
-                        break
-                    elif status in ERROR_STATES:
-                        progress.update(pbar, completed=0, description=f"[red]{description}")
-                        progress.refresh()
-                        break
-                    time.sleep(RUN_REFRESH_TIME)
-
-    else:
-        # Non-verbose mode: Poll for split job completion.
-        while True:
-            split_job_raw_result = http.get(monitor_split_path)
-            split_job_detail = AsyncJobDetail(**split_job_raw_result)
-            if split_job_detail.status in END_STATES:
-                break
-            time.sleep(RUN_REFRESH_TIME)
-
-        # Check for split job failure.
-        if split_job_detail.status in ERROR_STATES:
-            msg = split_job_detail.result or "An unknown error occurred."
-            final_error = WebError(
-                f"Component modeler split job failed ({split_job_detail.status}): {msg}"
-            )
-
-        # If split succeeded, poll for validation completion.
-        if not final_error:
-            batch = BatchTask(resource_id)
-            batch.check(solver_version=solver_version, batch_type=batch_type)
-            while True:
-                batch_detail = batch.detail(batch_type=batch_type)
-                status = batch_detail.totalStatus
-                if status in POST_VALIDATE_STATES or status in END_STATES:
-                    break
-                time.sleep(RUN_REFRESH_TIME)
-
-    return _batch_detail_error(resource_id=resource_id)
-
-
-def _task_dict_to_url_bullet_list(data_dict: dict) -> str:
-    """
-    Converts a dictionary into a string formatted as a bullet point list.
-
-    Args:
-      data_dict: The dictionary to convert.
-
-    Returns:
-      A string with each key-url/value pair as a bullet point.
-    """
-    # Use a list comprehension to format each key-value pair
-    # and then join them together with newline characters.
-    if data_dict is None:
-        raise WebError("Error in subtask dictionary data.")
-    return "\n".join([f"- {key}: '{value}'" for key, value in data_dict.items()])
+        raise WebError(error_msg)
 
 
 def _copy_simulation_data_from_cache_entry(entry: CacheEntry, path: PathLike) -> bool:
@@ -572,7 +399,6 @@ def run(
         )
         start(
             task_id,
-            verbose=verbose,
             solver_version=solver_version,
             worker_group=worker_group,
             pay_type=pay_type,
@@ -695,10 +521,8 @@ def upload(
 
     task_type = stub.get_type()
     # Component modeler compatibility: map to RF task type
-    port_name_list = None
     if task_type in ("COMPONENT_MODELER", "TERMINAL_COMPONENT_MODELER"):
         task_type = "RF"
-        port_name_list = tuple(simulation.sim_dict.keys())
 
     task = SimulationTask.create(
         task_type,
@@ -708,7 +532,6 @@ def upload(
         simulation_type,
         parent_tasks,
         "Gz",
-        port_name_list=port_name_list,
     )
 
     if task_type == "RF":
@@ -759,15 +582,10 @@ def upload(
         remote_sim_file=remote_sim_file,
     )
 
-    if task_type == "RF":
-        _upload_component_modeler_subtasks(resource_id=resource_id, verbose=verbose)
-
     estimate_cost(task_id=resource_id, solver_version=solver_version, verbose=verbose)
 
     task.validate_post_upload(parent_tasks=parent_tasks)
 
-    # log the url for the task in the web UI
-    log.debug(_build_website_url(f"folders/{task.folder_id}/tasks/{resource_id}"))
     return resource_id
 
 
@@ -849,7 +667,7 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
     """
     if _is_modeler_batch(task_id):
         batch = BatchTask(task_id)
-        return batch.detail(batch_type="RF_SWEEP")
+        return batch.detail()
     else:
         task = SimulationTask.get(task_id, verbose)
         if not task:
@@ -860,7 +678,6 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
 @wait_for_connection
 def start(
     task_id: TaskId,
-    verbose: bool = True,
     solver_version: Optional[str] = None,
     worker_group: Optional[str] = None,
     pay_type: Union[PayType, str] = PayType.AUTO,
@@ -889,30 +706,13 @@ def start(
     To monitor progress, can call :meth:`monitor` after starting simulation.
     """
 
-    console = get_logging_console() if verbose else None
-
-    # Component modeler batch path: hide split/check/submit
-    if _is_modeler_batch(task_id):
-        # split (modeler-specific)
-        batch = BatchTask(task_id)
-        detail = batch.wait_for_validate(batch_type="RF_SWEEP")
-        status = detail.totalStatus
-        status_str = status.value
-        if status_str in POST_VALIDATE_STATES:
-            pass
-        elif status_str not in POST_VALIDATE_STATES:
-            raise WebError(f"Batch task {task_id} is blocked: {status_str}")
-        # Submit batch to start runs after validation
-        batch.submit(
-            solver_version=solver_version, batch_type="RF_SWEEP", worker_group=worker_group
-        )
-        if verbose:
-            console.log(f"Component Modeler '{task_id}' validated. Solving...")
-        return
-
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
-    task = SimulationTask.get(task_id)
+
+    if _is_modeler_batch(task_id):
+        task = BatchTask(task_id)
+    else:
+        task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
     task.submit(
@@ -945,6 +745,16 @@ def get_run_info(task_id: TaskId) -> tuple[Optional[float], Optional[float]]:
     return task.get_running_info()
 
 
+def _get_batch_detail_handle_error_status(task_id: TaskId) -> BatchDetail:
+    """Get batch detail and raise error if status is in ERROR_STATES."""
+    batch = BatchTask(task_id)
+    detail = batch.detail()
+    status = detail.status.lower()
+    if status in ERROR_STATES:
+        raise _batch_detail_error(task_id)
+    return detail
+
+
 def get_status(task_id: TaskId) -> str:
     """Get the status of a task. Raises an error if status is "error".
 
@@ -954,21 +764,7 @@ def get_status(task_id: TaskId) -> str:
         Unique identifier of task on server.  Returned by :meth:`upload`.
     """
     if _is_modeler_batch(task_id):
-        # split (modeler-specific)
-        batch = BatchTask(task_id)
-        detail = batch.detail(batch_type="RF_SWEEP")
-        status = detail.totalStatus
-        if status == "visualize":
-            return "success"
-        if status in ERROR_STATES:
-            try:
-                # TODO Try to obtain the error message
-                pass
-            except Exception:
-                # If the error message could not be obtained, raise a generic error message
-                error_msg = "Error message could not be obtained, please contact customer support."
-
-            raise WebError(f"Error running task {task_id}! {error_msg}")
+        return _get_batch_detail_handle_error_status(task_id).status
     else:
         task_info = get_info(task_id)
         status = task_info.status
@@ -1018,8 +814,7 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
 
     # Batch/modeler monitoring path
     if _is_modeler_batch(task_id):
-        _monitor_modeler_batch(task_id, verbose=verbose, worker_group=worker_group)
-        return
+        return _monitor_modeler_batch(task_id, verbose=verbose)
 
     console = get_logging_console() if verbose else None
 
@@ -1178,29 +973,24 @@ def abort(task_id: TaskId) -> Optional[TaskInfo]:
         Object containing information about status, size, credits of task.
     """
     console = get_logging_console()
-    try:
-        task = SimulationTask.get(task_id, verbose=False)
-        if task:
-            task.abort()
-            url = _get_url(task.task_id)
-            console.log(
-                f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
-            )
-            return TaskInfo(**{"taskId": task.task_id, **task.dict()})
-    except WebNotFoundError:
-        pass  # Task not found, might be a batch task
 
-    is_batch = BatchTask.is_batch(task_id, batch_type="RF_SWEEP")
-    if is_batch:
+    if _is_modeler_batch(task_id):
+        task = BatchTask(task_id)
         url = _get_url_rf(task_id)
-        console.log(
-            f"Batch task abortion is not yet supported, contact customer support."
-            f" View task using web UI at [link={url}]'{url}'[/link]."
-        )
-        return
+    else:
+        task = SimulationTask.get(task_id, verbose=False)
+        url = _get_url(task_id)
 
-    console.log("Task ID cannot be found to be aborted.")
-    return
+    if task:
+        task.abort()
+        console.log(
+            f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
+        )
+        if _is_modeler_batch(task_id):
+            detail = task.detail()
+            return TaskInfo(**{"taskId": task_id, "taskType": "RF", **detail.dict()})
+        else:
+            return TaskInfo(**{"taskId": task_id, **task.dict()})
 
 
 @wait_for_connection
@@ -1229,39 +1019,16 @@ def download(
     if _is_modeler_batch(task_id):
         # Use a more descriptive default filename for component modeler downloads.
         # If the caller left the default as 'simulation_data.hdf5', prefer 'cm_data.hdf5'.
+        # TODO: seems like the default should then be maybe set to None and defined somewhere else
+        # per task type?
         if path.name == "simulation_data.hdf5":
             path = path.with_name("cm_data.hdf5")
-
-        def _download_cm() -> bool:
-            try:
-                BatchTask(task_id).get_data_hdf5(
-                    remote_data_file_gz=CM_DATA_HDF5_GZ,
-                    to_file=path,
-                    verbose=verbose,
-                    progress_callback=progress_callback,
-                )
-                return True
-            except Exception:
-                return False
-
-        if not _download_cm():
-            BatchTask(task_id).postprocess(batch_type="RF_SWEEP")
-            # wait for postprocess to finish
-            while True:
-                resp = BatchTask(task_id).detail(batch_type="RF_SWEEP")
-                total = resp.totalTask or 0
-                post_succ = resp.postprocessSuccess or 0
-                status = resp.totalStatus
-                status_str = status.value
-                if status_str in ERROR_STATES:
-                    raise WebError(
-                        f"Batch task {task_id} failed during postprocess: {status_str}"
-                    ) from None
-                if total > 0 and post_succ >= total:
-                    break
-                time.sleep(REFRESH_TIME)
-            if not _download_cm():
-                raise WebError("Failed to download 'cm_data' after postprocess completion.")
+        BatchTask(task_id).get_data_hdf5(
+            remote_data_file_gz=CM_DATA_HDF5_GZ,
+            to_file=path,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
         return
 
     # Regular single-task download
@@ -1429,7 +1196,7 @@ def load(
     if verbose and task_id is not None:
         console = get_logging_console()
         if _is_modeler_batch(task_id):
-            console.log(f"loading component modeler data from {path}")
+            console.log(f"Loading component modeler data from {path}")
         else:
             console.log(f"Loading simulation from {path}")
 
@@ -1461,74 +1228,48 @@ def load(
     return stub_data
 
 
+def _status_to_stage(status: str) -> tuple[str, int]:
+    """Map task status to monotonic stage for progress bars."""
+    s = (status or "").lower()
+    # Map a broader set of states to monotonic stages for progress bars
+    if s in ("draft", "created"):
+        return ("draft", 0)
+    if s in ("queue", "queued"):
+        return ("queued", 1)
+    if s in ("validating",):
+        return ("validating", 2)
+    if s in ("validate_success", "validate_warn", "preprocess", "preprocessing"):
+        return ("preprocess", 3)
+    if s in ("running", "preprocess_success"):
+        return ("running", 4)
+    if s in ("run_success", "postprocess"):
+        return ("postprocess", 5)
+    if s in ("success", "postprocess_success"):
+        return ("success", 6)
+    # Unknown states map to earliest stage to avoid showing 100% prematurely
+    return (s or "unknown", 0)
+
+
 def _monitor_modeler_batch(
     batch_id: str,
     verbose: bool = True,
     max_detail_tasks: int = 20,
-    worker_group: Optional[str] = None,
 ) -> None:
     """Monitor modeler batch progress with aggregate and per-task views."""
     console = get_logging_console() if verbose else None
-
-    def _status_to_stage(status: str) -> tuple[str, int]:
-        s = (status or "").lower()
-        # Map a broader set of states to monotonic stages for progress bars
-        if s in ("draft", "created"):
-            return ("draft", 0)
-        if s in ("queue", "queued"):
-            return ("queued", 1)
-        if s in ("preprocess",):
-            return ("preprocess", 1)
-        if s in ("validating",):
-            return ("validating", 2)
-        if s in ("validate_success", "validate_warn"):
-            return ("validate", 3)
-        if s in ("running",):
-            return ("running", 4)
-        if s in ("postprocess",):
-            return ("postprocess", 5)
-        if s in ("run_success", "success"):
-            return ("success", 6)
-        # Unknown states map to earliest stage to avoid showing 100% prematurely
-        return (s or "unknown", 0)
-
-    detail = _batch_detail(batch_id)
+    detail = _get_batch_detail_handle_error_status(batch_id)
     name = detail.name or "modeler_batch"
     group_id = detail.groupId
-
-    header = f"Subtasks status - {name}"
-    if group_id:
-        header += f"\nGroup ID: '{group_id}'"
-    if console is not None:
-        console.log(header)
+    status = detail.status.lower()
 
     # Non-verbose path: poll without progress bars then return
     if not verbose:
         # Run phase
-        while True:
-            d = _batch_detail(batch_id)
-            s = d.totalStatus.value
-            total = d.totalTask or 0
-            r = d.runSuccess or 0
-            if s in ERROR_STATES:
-                raise WebError(f"Batch {batch_id} terminated: {s}")
-            # Updated break condition for robustness
-            if s in ("run_success", "success") or (total and r >= total):
-                break
+        while _status_to_stage(status)[0] not in END_STATES:
             time.sleep(REFRESH_TIME)
+            detail = _get_batch_detail_handle_error_status(batch_id)
+            status = detail.status.lower()
 
-        postprocess_start(batch_id, verbose=False, worker_group=worker_group)
-
-        while True:
-            d = _batch_detail(batch_id)
-            postprocess_status = d.postprocessStatus
-            if postprocess_status == "success":
-                break
-            elif postprocess_status in ERROR_STATES:
-                raise WebError(
-                    f"Batch {batch_id} terminated. Please contact customer support and provide this Component Modeler batch ID: '{batch_id}'"
-                )
-            time.sleep(REFRESH_TIME)
         return
 
     progress_columns = (
@@ -1537,16 +1278,25 @@ def _monitor_modeler_batch(
         TaskProgressColumn(),
         TimeElapsedColumn(),
     )
+    # Make the header
+    header = f"Subtasks status - {name}"
+    if group_id:
+        header += f"\nGroup ID: '{group_id}'"
+    console.log(header)
     with Progress(*progress_columns, console=console, transient=False) as progress:
         # Phase: Run (aggregate + per-task)
         p_run = progress.add_task("Run Total", total=1.0)
         task_bars: dict[str, int] = {}
+        prev_status = status
+        console.log(f"Batch status = {status}")
 
-        while True:
-            detail = _batch_detail(batch_id)
-            status = detail.totalStatus.value
-            total = detail.totalTask or 0
+        # Note: get_status errors if an erroring status occurred
+        while _status_to_stage(status)[0] not in END_STATES:
+            total = len(detail.tasks)
             r = detail.runSuccess or 0
+            if status != prev_status:
+                prev_status = status
+                console.log(f"Batch status = {_status_to_stage(status)[0]}")
 
             # Create per-task bars as soon as tasks appear
             if total and total <= max_detail_tasks and detail.tasks:
@@ -1593,36 +1343,10 @@ def _monitor_modeler_batch(
                         refresh=False,
                     )
 
-            # Updated break condition for robustness
-            if status in ("run_success", "success") or (total and r >= total):
-                break
-            if status in ERROR_STATES:
-                raise WebError(f"Batch {batch_id} terminated: {status}")
             progress.refresh()
             time.sleep(REFRESH_TIME)
-
-        postprocess_start(batch_id, verbose=True, worker_group=worker_group)
-
-        p_post = progress.add_task("Postprocess", total=1.0)
-        while True:
-            detail = _batch_detail(batch_id)
-            postprocess_status = detail.postprocessStatus
-            if postprocess_status == "success":
-                progress.update(p_post, completed=1.0)
-                progress.refresh()
-                break
-            elif postprocess_status == "queued":
-                progress.update(p_post, completed=0.22)
-            elif postprocess_status == "preprocess":
-                progress.update(p_post, completed=0.33)
-            elif postprocess_status == "running":
-                progress.update(p_post, completed=0.55)
-            elif postprocess_status in ERROR_STATES:
-                raise WebError(
-                    f"Batch {batch_id} terminated. Please contact customer support and provide this Component Modeler batch ID: '{batch_id}'"
-                )
-            progress.refresh()
-            time.sleep(REFRESH_TIME)
+            detail = _get_batch_detail_handle_error_status(batch_id)
+            status = detail.status.lower()
 
         if console is not None:
             console.log("Modeler has finished running successfully.")
@@ -1780,11 +1504,17 @@ def estimate_cost(
     console = get_logging_console() if verbose else None
 
     if _is_modeler_batch(task_id):
-        d = _batch_detail(task_id)
-        status = d.totalStatus.value
+        batch = BatchTask(task_id)
+        _ = batch.check(solver_version=solver_version)
+        detail = batch.detail()
+        status = detail.status.lower()
+        while status not in ALL_POST_VALIDATE_STATES:
+            time.sleep(REFRESH_TIME)
+            detail = batch.detail()
+            status = detail.status.lower()
 
         if status in ALL_POST_VALIDATE_STATES:
-            est_flex_unit = _batch_detail(task_id).estFlexUnit
+            est_flex_unit = detail.estFlexUnit
             if verbose:
                 console.log(
                     f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Minimum cost depends on "
@@ -1793,8 +1523,8 @@ def estimate_cost(
                 )
             return est_flex_unit
 
-        elif status in ERROR_STATES:
-            return _batch_detail_error(resource_id=task_id)
+        if status in ERROR_STATES:
+            raise _batch_detail_error(resource_id=task_id)
 
         raise WebError("Could not get estimated cost!")
 
@@ -1891,42 +1621,24 @@ def real_cost(task_id: str, verbose: bool = True) -> float | None:
         )
 
     console = get_logging_console() if verbose else None
-    if _is_modeler_batch(task_id):
-        status = _batch_detail(task_id).totalStatus.value
-        flex_unit = _batch_detail(task_id).realFlexUnit or None
-        if (status not in ["success", "run_success"]) or (flex_unit is None):
-            log.warning(
-                f"Billed FlexCredit for task '{task_id}' is not available. If the task has been "
-                "successfully run, it should be available shortly. If this issue persists, contact customer support."
-            )
-        else:
-            if verbose:
-                console.log(
-                    f"Billed FlexCredit cost: {flex_unit:1.3f}. Minimum cost depends on "
-                    "task execution details. Use 'web.real_cost(task_id)' to get the billed FlexCredit "
-                    "cost after a simulation run."
-                )
-
-        return flex_unit
+    task_info = get_info(task_id)
+    flex_unit = task_info.realFlexUnit
+    ori_flex_unit = getattr(task_info, "oriRealFlexUnit", flex_unit)
+    if not flex_unit:
+        log.warning(
+            f"Billed FlexCredit for task '{task_id}' is not available. If the task has been "
+            "successfully run, it should be available shortly."
+        )
     else:
-        task_info = get_info(task_id)
-        flex_unit = task_info.realFlexUnit
-        ori_flex_unit = task_info.oriRealFlexUnit
-        if not flex_unit:
-            log.warning(
-                f"Billed FlexCredit for task '{task_id}' is not available. If the task has been "
-                "successfully run, it should be available shortly."
-            )
-        else:
-            if verbose:
-                console.log(f"Billed flex credit cost: {flex_unit:1.3f}.")
-                if flex_unit != ori_flex_unit and task_info.taskType == "FDTD":
-                    console.log(
-                        "Note: the task cost pro-rated due to early shutoff was below the minimum "
-                        "threshold, due to fast shutoff. Decreasing the simulation 'run_time' should "
-                        "decrease the estimated, and correspondingly the billed cost of such tasks."
-                    )
-        return flex_unit
+        if verbose:
+            console.log(f"Billed flex credit cost: {flex_unit:1.3f}.")
+            if flex_unit != ori_flex_unit and task_info.taskType == "FDTD":
+                console.log(
+                    "Note: the task cost pro-rated due to early shutoff was below the minimum "
+                    "threshold, due to fast shutoff. Decreasing the simulation 'run_time' should "
+                    "decrease the estimated, and correspondingly the billed cost of such tasks."
+                )
+    return flex_unit
 
 
 @wait_for_connection
@@ -1984,49 +1696,6 @@ def account(verbose: bool = True) -> Account:
         console.log(message)
 
     return account_info
-
-
-@wait_for_connection
-def postprocess_start(
-    batch_id: str,
-    verbose: bool = True,
-    worker_group: Optional[str] = None,
-) -> None:
-    """
-    Checks if a batch run is complete and starts the postprocess phase.
-
-    This function does not wait for postprocessing to finish.
-    """
-    console = get_logging_console() if verbose else None
-    if _is_modeler_batch(batch_id):
-        # Perform a single check on the run phase status
-        detail = _batch_detail(batch_id)
-        status = detail.totalStatus.value
-        total_tasks = detail.totalTask or 0
-        successful_runs = detail.runSuccess or 0
-
-        if status in ERROR_STATES:
-            raise WebError(f"Batch '{batch_id}' terminated with error status: {status}")
-
-        # Check if the run phase is complete before proceeding
-        is_run_complete = status in ("run_success", "success") or (
-            total_tasks > 0 and successful_runs >= total_tasks
-        )
-
-        if not is_run_complete:
-            if console:
-                console.log(
-                    f"Batch '{batch_id}' run phase is not yet complete (Status: {status}). "
-                    f"Cannot start postprocessing."
-                )
-            return  # Exit if the run is not done
-        BatchTask(batch_id).postprocess(batch_type="RF_SWEEP", worker_group=worker_group)
-        return
-    else:
-        raise WebError(
-            f"Batch ID '{batch_id}' is not a component modeler batch job. "
-            "'postprocess_start' is only applicable to those classes."
-        )
 
 
 @wait_for_connection

@@ -59,6 +59,11 @@ class ModalComponentModeler(AbstractComponentModeler):
         "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
     )
 
+    @property
+    def base_sim(self):
+        """The base simulation."""
+        return self.simulation
+
     @cached_property
     def sim_dict(self) -> SimulationMap:
         """Generates all :class:`.Simulation` objects for the S-matrix calculation.

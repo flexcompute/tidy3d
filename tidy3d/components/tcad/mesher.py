@@ -24,3 +24,6 @@ class VolumeMesher(Tidy3dBaseModel):
 
     def _get_simulation_types(self) -> list[TCADAnalysisTypes]:
         return [TCADAnalysisTypes.MESH]
+
+    def validate_pre_upload(self):
+        return
