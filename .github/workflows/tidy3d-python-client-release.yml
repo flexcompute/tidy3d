@@ -9,13 +9,15 @@ on:
         type: string
       
       release_type:
-        description: 'Release Type (draft=test, final=PyPI)'
+        description: 'Release Type (determines deployment targets)'
         type: choice
         default: 'draft'
         required: false
         options:
           - draft
-          - final
+          - codeartifact
+          - testpypi
+          - pypi
       
       workflow_control:
         description: 'Workflow Stage Control'
@@ -54,7 +56,7 @@ on:
         type: string
       
       release_type:
-        description: 'Release Type (draft=test, final=PyPI)'
+        description: 'Release Type (determines deployment targets)'
         type: string
         default: 'draft'
         required: false
@@ -79,6 +81,21 @@ on:
         description: 'Run submodule tests'
         type: boolean
         default: true
+      
+      deploy_testpypi:
+        description: 'Deploy to TestPyPI'
+        type: boolean
+        default: false
+      
+      deploy_pypi:
+        description: 'Deploy to production PyPI'
+        type: boolean
+        default: false
+      
+      deploy_aws:
+        description: 'Deploy to AWS CodeArtifact'
+        type: boolean
+        default: false
     
     outputs:
       workflow_success:
@@ -104,7 +121,9 @@ jobs:
       run_cli_tests: ${{ steps.determine-workflow-steps.outputs.run_cli_tests }}
       run_submodule_tests: ${{ steps.determine-workflow-steps.outputs.run_submodule_tests }}
       deploy_github_release: ${{ steps.determine-workflow-steps.outputs.deploy_github_release }}
+      deploy_testpypi: ${{ steps.determine-workflow-steps.outputs.deploy_testpypi }}
       deploy_pypi: ${{ steps.determine-workflow-steps.outputs.deploy_pypi }}
+      deploy_aws: ${{ steps.determine-workflow-steps.outputs.deploy_aws }}
       sync_readthedocs: ${{ steps.determine-workflow-steps.outputs.sync_readthedocs }}
       sync_branches: ${{ steps.determine-workflow-steps.outputs.sync_branches }}
     env:
@@ -114,6 +133,9 @@ jobs:
       CLIENT_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.client_tests || inputs.client_tests }}
       CLI_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.cli_tests || inputs.cli_tests }}
       SUBMODULE_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.submodule_tests || inputs.submodule_tests }}
+      DEPLOY_TESTPYPI: ${{ inputs.deploy_testpypi || false }}
+      DEPLOY_PYPI: ${{ inputs.deploy_pypi || false }}
+      DEPLOY_AWS: ${{ inputs.deploy_aws || false }}
     steps:
       - name: validate-tag-format
         run: |
@@ -122,9 +144,9 @@ jobs:
           echo "Release tag: $RELEASE_TAG"
           echo "Release type: $RELEASE_TYPE"
           
-          # Only enforce strict validation for final releases
-          if [[ "$RELEASE_TYPE" == "final" ]]; then
-            echo "Final release detected - applying strict tag validation"
+          # Only enforce strict validation for PyPI releases
+          if [[ "$RELEASE_TYPE" == "pypi" ]]; then
+            echo "PyPI release detected - applying strict tag validation"
             
             # Tag must match semantic versioning: v{major}.{minor}.{patch}[rc{num}]
             TAG_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$'
@@ -138,7 +160,7 @@ jobs:
             
             echo "Tag format is valid"
           else
-            echo "Draft release - skipping strict tag validation"
+            echo "Non-PyPI release - skipping strict tag validation"
             echo "Tag accepted: $RELEASE_TAG"
           fi
       
@@ -153,6 +175,9 @@ jobs:
           echo "CLIENT_TESTS: $CLIENT_TESTS"
           echo "CLI_TESTS: $CLI_TESTS"
           echo "SUBMODULE_TESTS: $SUBMODULE_TESTS"
+          echo "DEPLOY_TESTPYPI: $DEPLOY_TESTPYPI"
+          echo "DEPLOY_PYPI: $DEPLOY_PYPI"
+          echo "DEPLOY_AWS: $DEPLOY_AWS"
           echo ""
           
           # ============================================
@@ -220,19 +245,19 @@ jobs:
           SEMVER_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+$'
           
           # Only push to latest if:
-          # 1. Release type is final
+          # 1. Release type is pypi
           # 2. Not an RC release
           # 3. Tag matches semantic versioning pattern v{major}.{minor}.{patch}
-          if [[ "$RELEASE_TYPE" == "final" && "$is_rc_release" == "false" && "$RELEASE_TAG" =~ $SEMVER_REGEX ]]; then
+          if [[ "$RELEASE_TYPE" == "pypi" && "$is_rc_release" == "false" && "$RELEASE_TAG" =~ $SEMVER_REGEX ]]; then
             push_to_latest=true
             echo "=== Push to Latest ==="
             echo "Will push to 'latest' branch in readthedocs"
-            echo "   Conditions met: final release + non-RC + semantic version tag"
+            echo "   Conditions met: pypi release + non-RC + semantic version tag"
           else
             echo "=== Push to Latest ==="
             echo " Will NOT push to 'latest' branch"
-            if [[ "$RELEASE_TYPE" != "final" ]]; then
-              echo "   Reason: Not a final release (is $RELEASE_TYPE)"
+            if [[ "$RELEASE_TYPE" != "pypi" ]]; then
+              echo "   Reason: Not a PyPI release (is $RELEASE_TYPE)"
             elif [[ "$is_rc_release" == "true" ]]; then
               echo "   Reason: RC release"
             elif [[ ! "$RELEASE_TAG" =~ $SEMVER_REGEX ]]; then
@@ -252,13 +277,13 @@ jobs:
             [[ "$CLIENT_TESTS" == "true" ]] && run_client_tests=true
             [[ "$CLI_TESTS" == "true" ]] && run_cli_tests=true
             
-            # Submodule tests: user input OR auto-enable for final non-RC releases
+            # Submodule tests: user input OR auto-enable for PyPI non-RC releases
             if [[ "$SUBMODULE_TESTS" == "true" ]]; then
               run_submodule_tests=true
               echo "??  Submodule tests enabled by user input"
             elif [[ "$push_to_latest" == "true" ]]; then
               run_submodule_tests=true
-              echo "??  Submodule tests auto-enabled for final non-RC release (push_to_latest=true)"
+              echo "??  Submodule tests auto-enabled for PyPI non-RC release (push_to_latest=true)"
             fi
           fi
           
@@ -272,7 +297,9 @@ jobs:
           # PART 4: DEPLOYMENT CONTROL
           # ============================================
           deploy_github_release=false
+          deploy_testpypi=false
           deploy_pypi=false
+          deploy_aws=false
           sync_readthedocs=false
           sync_branches=false
           
@@ -281,16 +308,56 @@ jobs:
             deploy_github_release=true
             sync_readthedocs=true
             
-            # Only publish to PyPI and sync branches on final releases
-            if [[ "$RELEASE_TYPE" == "final" ]]; then
-              deploy_pypi=true
+            # Deployment target logic:
+            # 1. If any deployment checkbox is explicitly set, use those
+            # 2. Otherwise, use automatic defaults based on release_type
+            
+            if [[ "$DEPLOY_TESTPYPI" == "true" || "$DEPLOY_PYPI" == "true" || "$DEPLOY_AWS" == "true" ]]; then
+              # Manual override: use checkbox selections
+              echo "Using manual deployment target selections"
+              deploy_testpypi=$DEPLOY_TESTPYPI
+              deploy_pypi=$DEPLOY_PYPI
+              deploy_aws=$DEPLOY_AWS
+            else
+              # Automatic defaults based on release_type
+              echo "Using automatic deployment defaults for release_type: $RELEASE_TYPE"
+              case "$RELEASE_TYPE" in
+                pypi)
+                  # PyPI releases: deploy to all targets (TestPyPI, PyPI, AWS CodeArtifact)
+                  deploy_testpypi=true
+                  deploy_pypi=true
+                  deploy_aws=true
+                  ;;
+                testpypi)
+                  # TestPyPI releases: deploy to TestPyPI and AWS CodeArtifact
+                  deploy_testpypi=true
+                  deploy_aws=true
+                  ;;
+                codeartifact)
+                  # CodeArtifact only
+                  deploy_aws=true
+                  ;;
+                draft)
+                  # Draft releases: no deployment
+                  echo "Draft release - no automatic deployments"
+                  ;;
+                *)
+                  echo "Unknown release_type: $RELEASE_TYPE - no automatic deployments"
+                  ;;
+              esac
+            fi
+            
+            # Sync branches on PyPI releases if deploying to PyPI
+            if [[ "$RELEASE_TYPE" == "pypi" && "$deploy_pypi" == "true" ]]; then
               sync_branches=true
             fi
           fi
           
           echo "=== Deployment Control ==="
           echo "deploy_github_release: $deploy_github_release"
+          echo "deploy_testpypi: $deploy_testpypi"
           echo "deploy_pypi: $deploy_pypi"
+          echo "deploy_aws: $deploy_aws"
           echo "sync_readthedocs: $sync_readthedocs"
           echo "sync_branches: $sync_branches"
           echo ""
@@ -307,7 +374,9 @@ jobs:
           echo "run_cli_tests=$run_cli_tests" >> $GITHUB_OUTPUT
           echo "run_submodule_tests=$run_submodule_tests" >> $GITHUB_OUTPUT
           echo "deploy_github_release=$deploy_github_release" >> $GITHUB_OUTPUT
+          echo "deploy_testpypi=$deploy_testpypi" >> $GITHUB_OUTPUT
           echo "deploy_pypi=$deploy_pypi" >> $GITHUB_OUTPUT
+          echo "deploy_aws=$deploy_aws" >> $GITHUB_OUTPUT
           echo "sync_readthedocs=$sync_readthedocs" >> $GITHUB_OUTPUT
           echo "sync_branches=$sync_branches" >> $GITHUB_OUTPUT
           
@@ -441,44 +510,23 @@ jobs:
       #   env:
       #     GITHUB_TOKEN: ${{ secrets.GH_PAT }}
   
-  pypi-release:
-    name: publish-to-pypi
+  deploy-packages:
+    name: deploy-to-package-repositories
     needs: [determine-workflow-scope, compile-tests-results]
     if: |
       always() &&
       (needs.compile-tests-results.outputs.proceed_deploy == 'true' || needs.compile-tests-results.result == 'skipped') &&
-      needs.determine-workflow-scope.outputs.deploy_pypi == 'true'
-    runs-on: ubuntu-latest
-    env:
-      RELEASE_TAG: ${{ needs.determine-workflow-scope.outputs.release_tag }}
-    steps:
-      - name: checkout-tag
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.RELEASE_TAG }}
-          persist-credentials: false
-      
-      - name: setup-python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      
-      - name: install-build-tools
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install setuptools wheel twine build
-      
-      - name: build-package
-        run: |
-          echo "Building package from tag $RELEASE_TAG..."
-          python -m build
-          ls -lh dist/
-      
-      - name: publish-to-pypi
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: | # zizmor: ignore[use-trusted-publishing]
-          echo "Publishing to PyPI..."
-          python -m twine upload --repository pypi dist/*
-          echo "Published to PyPI"
+      needs.determine-workflow-scope.outputs.run_deploy == 'true' &&
+      (needs.determine-workflow-scope.outputs.deploy_testpypi == 'true' || 
+       needs.determine-workflow-scope.outputs.deploy_pypi == 'true' || 
+       needs.determine-workflow-scope.outputs.deploy_aws == 'true')
+    uses: ./.github/workflows/tidy3d-python-client-deploy.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      release_tag: ${{ needs.determine-workflow-scope.outputs.release_tag }}
+      deploy_testpypi: ${{ needs.determine-workflow-scope.outputs.deploy_testpypi == 'true' }}
+      deploy_pypi: ${{ needs.determine-workflow-scope.outputs.deploy_pypi == 'true' }}
+      deploy_aws: ${{ needs.determine-workflow-scope.outputs.deploy_aws == 'true' }}
+    secrets: inherit

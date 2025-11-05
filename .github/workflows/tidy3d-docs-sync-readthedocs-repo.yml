@@ -32,17 +32,6 @@ on:
       synced_ref:
         description: 'The ref that was synced to the mirror'
         value: ${{ jobs.build-and-deploy.outputs.synced_ref }}
-  
-  push:
-    branches:
-      - main
-      - latest
-      - develop
-      - 'pre/*'
-      - 'demo/*'
-    tags:
-      - 'v*'
-      - 'demo/*'
 
 permissions:
   contents: read
