@@ -842,8 +842,16 @@ def resolve_local_cache(use_cache: Optional[bool] = None) -> Optional[LocalCache
         return None
 
     if _CACHE is not None and _CACHE._root != Path(config.local_cache.directory):
-        log.debug(f"Clearing old cache directory {_CACHE._root}")
-        _CACHE.clear(hard=True)
+        old_root = _CACHE._root
+        new_root = Path(config.local_cache.directory)
+        log.debug(f"Moving cache directory from {old_root} → {new_root}")
+        try:
+            new_root.parent.mkdir(parents=True, exist_ok=True)
+            if old_root.exists():
+                shutil.move(old_root, new_root)
+        except Exception as e:
+            log.warning(f"Failed to move cache directory: {e}. Delete old cache.")
+            shutil.rmtree(old_root)
 
     _CACHE = LocalCache(
         directory=config.local_cache.directory,
