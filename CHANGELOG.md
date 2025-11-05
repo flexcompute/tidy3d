@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added configurable local simulation result caching with checksum validation, eviction limits, and per-call overrides across `web.run`, `web.load`, and job workflows.
 - Added `DirectivityMonitorSpec` for automated creation and configuration of directivity radiation monitors in `TerminalComponentModeler`.
 - Added multimode support to `WavePort` in the smatrix plugin, allowing multiple modes to be analyzed per port.
+- Added support for `.lydrc` files for design rule checking in the `klayout` plugin.
 
 ### Breaking Changes
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.

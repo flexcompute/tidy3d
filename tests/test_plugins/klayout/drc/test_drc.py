@@ -54,6 +54,25 @@ class TestDRCRunner:
         """
 
     @staticmethod
+    def wrap_drc_to_lydrc(body: str):
+        """Return the XML-wrapped .lydrc runset content."""
+        xml = f"""\
+        <?xml version="1.0" encoding="utf-8"?>
+        <klayout-macro>
+        <description>Test DRC runset</description>
+        <version/>
+        <category>drc</category>
+        <prolog/>
+        <epilog/>
+        <text>
+        {body}
+        </text>
+        </klayout-macro>
+        """
+
+        return xml
+
+    @staticmethod
     @pytest.fixture(scope="class")
     def bad_drcrunset_content_source():
         """The content of a DRC file with a bad source declaration"""
@@ -147,15 +166,26 @@ class TestDRCRunner:
         )
 
     @pytest.mark.parametrize("verbose", [True, False])
+    @pytest.mark.parametrize("drc_file_suffix", [".drc", ".lydrc"])
     def test_valid_run_on_gds(
-        self, monkeypatch, tmp_path, verbose, geom, geom_to_gds_kwargs, good_drcrunset_content
+        self,
+        monkeypatch,
+        tmp_path,
+        verbose,
+        geom,
+        geom_to_gds_kwargs,
+        good_drcrunset_content,
+        drc_file_suffix,
     ):
         """Test that no error is raised when runs on a gds are valid"""
         geom.to_gds_file(tmp_path / "test.gds", **geom_to_gds_kwargs)
-        self.write_drcrunset(tmp_path, "good_drcfile.drc", good_drcrunset_content)
+        drc_content = good_drcrunset_content
+        if drc_file_suffix == ".lydrc":
+            drc_content = TestDRCRunner.wrap_drc_to_lydrc(drc_content)
+        self.write_drcrunset(tmp_path, f"good_drcfile{drc_file_suffix}", drc_content)
         self.run(
             monkeypatch=monkeypatch,
-            drc_runsetfile=tmp_path / "good_drcfile.drc",
+            drc_runsetfile=tmp_path / f"good_drcfile{drc_file_suffix}",
             verbose=verbose,
             source=tmp_path / "test.gds",
             td_object_gds_savefile=tmp_path / "test.gds",
@@ -163,6 +193,7 @@ class TestDRCRunner:
         )
 
     @pytest.mark.parametrize("verbose", [True, False])
+    @pytest.mark.parametrize("drc_file_suffix", [".drc", ".lydrc"])
     @pytest.mark.parametrize(
         "td_object, obj_to_gds_kwargs",
         [
@@ -180,12 +211,16 @@ class TestDRCRunner:
         td_object,
         obj_to_gds_kwargs,
         good_drcrunset_content,
+        drc_file_suffix,
     ):
         """Test that no error is raised when runs on a Geometry, Structure, or Simulation are valid"""
-        self.write_drcrunset(tmp_path, "good_drcfile.drc", good_drcrunset_content)
+        drc_content = good_drcrunset_content
+        if drc_file_suffix == ".lydrc":
+            drc_content = TestDRCRunner.wrap_drc_to_lydrc(drc_content)
+        self.write_drcrunset(tmp_path, f"good_drcfile{drc_file_suffix}", drc_content)
         self.run(
             monkeypatch=monkeypatch,
-            drc_runsetfile=tmp_path / "good_drcfile.drc",
+            drc_runsetfile=tmp_path / f"good_drcfile{drc_file_suffix}",
             verbose=verbose,
             source=request.getfixturevalue(td_object),
             td_object_gds_savefile=tmp_path / "test.gds",
@@ -196,18 +231,27 @@ class TestDRCRunner:
     @pytest.mark.parametrize(
         "bad_drcrunset_content", ["bad_drcrunset_content_source", "bad_drcrunset_content_report"]
     )
+    @pytest.mark.parametrize("drc_file_suffix", [".drc", ".lydrc"])
     def test_check_drcfile_format_invalid(
-        self, request, monkeypatch, tmp_path, geom, geom_to_gds_kwargs, bad_drcrunset_content
+        self,
+        request,
+        monkeypatch,
+        tmp_path,
+        geom,
+        geom_to_gds_kwargs,
+        bad_drcrunset_content,
+        drc_file_suffix,
     ):
         """Tests that ValidationError is raised when the drc file content is invalid"""
         geom.to_gds_file(tmp_path / "test.gds", **geom_to_gds_kwargs)
-        self.write_drcrunset(
-            tmp_path, "bad_drcrunset.drc", request.getfixturevalue(bad_drcrunset_content)
-        )
+        drc_content = request.getfixturevalue(bad_drcrunset_content)
+        if drc_file_suffix == ".lydrc":
+            drc_content = TestDRCRunner.wrap_drc_to_lydrc(drc_content)
+        self.write_drcrunset(tmp_path, f"bad_drcrunset{drc_file_suffix}", drc_content)
         with pytest.raises(pd.ValidationError) as e:
             self.run(
                 monkeypatch=monkeypatch,
-                drc_runsetfile=tmp_path / "bad_drcrunset.drc",
+                drc_runsetfile=tmp_path / f"bad_drcrunset{drc_file_suffix}",
                 verbose=True,
                 source=tmp_path / "test.gds",
                 td_object_gds_savefile=None,
