@@ -13,6 +13,7 @@ import autograd as ag
 import pytest
 import xarray as xr
 from autograd.core import defvjp
+from click.testing import CliRunner
 from rich.console import Console
 
 import tidy3d as td
@@ -37,6 +38,7 @@ from tidy3d.web.cache import (
     get_cache_entry_dir,
     resolve_local_cache,
 )
+from tidy3d.web.cli.app import tidy3d_cli
 from tidy3d.web.core.task_core import BatchTask
 
 common.CONNECTION_RETRY_TIME = 0.1
@@ -724,6 +726,49 @@ def _test_env_var_overrides(monkeypatch, tmp_path):
     manager._reload()
 
 
+def _test_cache_cli_commands(monkeypatch, tmp_path_factory, basic_simulation):
+    runner = CliRunner()
+    cache_dir = tmp_path_factory.mktemp("cli_cache")
+    artifact_dir = tmp_path_factory.mktemp("cli_cache_artifact")
+
+    monkeypatch.setattr(config.local_cache, "enabled", True)
+    monkeypatch.setattr(config.local_cache, "directory", cache_dir)
+    monkeypatch.setattr(config.local_cache, "max_entries", 3)
+    monkeypatch.setattr(config.local_cache, "max_size_gb", 2.5)
+
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    artifact = artifact_dir / CACHE_ARTIFACT_NAME
+    artifact.write_text("payload_cli")
+    cache.store_result(
+        _FakeStubData(basic_simulation), f"{MOCK_TASK_ID}-cli", str(artifact), "FDTD"
+    )
+
+    info_result = runner.invoke(tidy3d_cli, ["cache", "info"])
+    assert info_result.exit_code == 0
+    assert "Enabled: yes" in info_result.output
+    assert "Entries: 1" in info_result.output
+    assert "Max entries: 3" in info_result.output
+    assert "Max size: 2.50 GB" in info_result.output
+
+    list_result = runner.invoke(tidy3d_cli, ["cache", "list"])
+    assert list_result.exit_code == 0
+    out = list_result.output
+    assert "Cache Entry #1" in out
+    assert "Workflow type: FDTD" in out
+    assert "File size:" in out
+
+    clear_result = runner.invoke(tidy3d_cli, ["cache", "clear"])
+    assert clear_result.exit_code == 0
+    assert "Local cache cleared." in clear_result.output
+    assert len(cache) == 0
+
+    list_after = runner.invoke(tidy3d_cli, ["cache", "list"])
+    assert list_after.exit_code == 0
+    assert "Cache is empty." in list_after.output
+
+
 def test_cache_sequential(
     monkeypatch, tmp_path, tmp_path_factory, basic_simulation, fake_data, request
 ):
@@ -746,3 +791,4 @@ def test_cache_sequential(
     _test_store_and_fetch_do_not_iterate(monkeypatch, tmp_path, basic_simulation)
     _test_mode_solver_caching(monkeypatch, tmp_path)
     _test_verbosity(monkeypatch, basic_simulation)
+    _test_cache_cli_commands(monkeypatch, tmp_path_factory, basic_simulation)

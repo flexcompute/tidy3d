@@ -18,6 +18,7 @@ from tidy3d.config.loader import (
     legacy_config_directory,
     migrate_legacy_config,
 )
+from tidy3d.web.cli.cache import cache_group
 from tidy3d.web.cli.constants import TIDY3D_DIR
 from tidy3d.web.core.constants import HEADER_APIKEY
 
@@ -217,3 +218,4 @@ tidy3d_cli.add_command(configure)
 tidy3d_cli.add_command(convert)
 tidy3d_cli.add_command(develop)
 tidy3d_cli.add_command(config_group, name="config")
+tidy3d_cli.add_command(cache_group)

@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validation for `run_only` field in component modelers to catch duplicate or invalid matrix indices early with clear error messages.
 - Introduced a profile-based configuration manager with TOML persistence and runtime overrides exposed via `tidy3d.config`.
 - Added support of `os.PathLike` objects as paths like `pathlib.Path` alongside `str` paths in all path-related functions.
-- Added configurable local simulation result caching with checksum validation, eviction limits, and per-call overrides across `web.run`, `web.load`, and job workflows.
+- Added local simulation result caching to avoid rerunning identical simulations. Enable and configure it through `td.config.local_cache` (size limits, cache directory). Use CLI commands `tidy3d cache {info, list, clear}` to inspect or clear the cache.
 - Added `DirectivityMonitorSpec` for automated creation and configuration of directivity radiation monitors in `TerminalComponentModeler`.
 - Added multimode support to `WavePort` in the smatrix plugin, allowing multiple modes to be analyzed per port.
 - Added support for `.lydrc` files for design rule checking in the `klayout` plugin.
