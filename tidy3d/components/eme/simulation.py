@@ -43,11 +43,11 @@ from .monitor import (
 from .sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep, EMEPeriodicitySweep, EMESweepSpecType
 
 # maximum numbers of simulation parameters
-MAX_GRID_CELLS = 20e9
 WARN_MONITOR_DATA_SIZE_GB = 10
 MAX_MONITOR_INTERNAL_DATA_SIZE_GB = 50
 MAX_SIMULATION_DATA_SIZE_GB = 50
 WARN_MODE_NUM_CELLS = 1e5
+MAX_MODE_NUM_CELLS = 5e6
 
 
 # eme specific simulation parameters
@@ -807,14 +807,6 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
-
-        num_comp_cells = self.num_cells / 2 ** (np.sum(np.abs(self.symmetry)))
-        if num_comp_cells > MAX_GRID_CELLS:
-            raise SetupError(
-                f"Simulation has {num_comp_cells:.2e} computational cells, "
-                f"a maximum of {MAX_GRID_CELLS:.2e} are allowed."
-            )
-
         num_freqs = len(self.freqs)
         if num_freqs > MAX_NUM_FREQS:
             raise SetupError(
@@ -876,6 +868,12 @@ class EMESimulation(AbstractYeeGridSimulation):
         def warn_mode_size(monitor: AbstractModeMonitor, msg_header: str, custom_loc: list) -> None:
             """Warn if a mode component has a large number of points."""
             num_cells = np.prod(self.discretize_monitor(monitor).num_cells)
+            if num_cells > MAX_MODE_NUM_CELLS:
+                raise SetupError(
+                    msg_header + f"has {num_cells:.2e} computational cells "
+                    "in the transverse directions, "
+                    f"a maximum of {MAX_MODE_NUM_CELLS:.2e} are allowed."
+                )
             if num_cells > WARN_MODE_NUM_CELLS:
                 consolidated_logger.warning(
                     msg_header + f"has a large number ({num_cells:1.2e}) of grid points. "
