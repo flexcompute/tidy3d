@@ -24,6 +24,8 @@ from tidy3d.plugins.klayout.drc.defaults import (
 from tidy3d.plugins.klayout.drc.results import DRCResults
 from tidy3d.plugins.klayout.util import check_installation
 
+SUPPORTED_DRC_SUFFIXES: frozenset[str] = frozenset({".drc", ".lydrc"})
+
 
 class DRCConfig(Tidy3dBaseModel):
     """Configuration for KLayout DRC."""
@@ -54,9 +56,11 @@ class DRCConfig(Tidy3dBaseModel):
 
     @validator("drc_runset")
     def _validate_drc_runset_filetype(cls, v: pd.FilePath) -> pd.FilePath:
-        """Check DRC runset filetype is ``.drc``."""
-        if v.suffix != ".drc":
-            raise ValidationError(f"DRC runset file '{v}' must end with '.drc'.")
+        """Check DRC runset filetype is ``.drc`` or ``.lydrc``."""
+        if v.suffix not in SUPPORTED_DRC_SUFFIXES:
+            raise ValidationError(
+                f"DRC runset file '{v}' must end with one of {', '.join(SUPPORTED_DRC_SUFFIXES)}."
+            )
         return v
 
     @validator("drc_runset")
