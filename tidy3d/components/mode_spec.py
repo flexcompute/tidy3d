@@ -433,7 +433,7 @@ class ModeInterpSpec(Tidy3dBaseModel):
         >>> interp_spec = ModeInterpSpec.cheb(num_points=10)
         >>> sampling_freqs = interp_spec.sampling_points(freqs)
         """
-        if self.num_points > len(freqs):
+        if self.num_points >= len(freqs):
             return freqs
         return self.sampling_spec.sampling_points(freqs)
 
@@ -737,6 +737,14 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     def _is_interp_spec_applied(self, freqs: FreqArray) -> bool:
         """Whether interp_spec is used to compute modes at the given frequencies."""
         return self.interp_spec is not None and self.interp_spec.num_points < len(freqs)
+
+    def _same_nontrivial_interp_spec(self, other: ModeSpec) -> bool:
+        """Whether two mode specs have identical nontrivial interp specs."""
+        return (
+            self.interp_spec is not None
+            and other.interp_spec is not None
+            and self.interp_spec == other.interp_spec
+        )
 
 
 class ModeSpec(AbstractModeSpec):

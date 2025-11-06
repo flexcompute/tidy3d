@@ -26,7 +26,6 @@ from tidy3d.components.simulation import (
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.types import TYPE_TAG_STR, Ax, Direction, EMField, FreqArray
 from tidy3d.components.types.mode_spec import ModeSpecType
-from tidy3d.components.validators import validate_interp_num_points
 from tidy3d.constants import C_0
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -234,8 +233,6 @@ class ModeSimulation(AbstractYeeGridSimulation):
         if not sim_box.intersects(val):
             raise SetupError("'ModeSimulation.plane' must intersect 'ModeSimulation.geometry.")
         return val
-
-    _warn_interp_num_points = validate_interp_num_points()
 
     def _post_init_validators(self) -> None:
         """Call validators taking `self` that get run after init."""

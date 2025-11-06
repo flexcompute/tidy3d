@@ -75,7 +75,6 @@ from tidy3d.components.types import (
 from tidy3d.components.types.mode_spec import ModeSpecType
 from tidy3d.components.types.monitor_data import ModeSolverDataType
 from tidy3d.components.validators import (
-    _warn_interp_num_points,
     validate_freqs_min,
     validate_freqs_not_empty,
 )
@@ -514,9 +513,6 @@ class ModeSolver(Tidy3dBaseModel):
         ModeSolverDataType
             A mode solver data type object containing the effective index and mode fields.
         """
-
-        if self.mode_spec.interp_spec is not None:
-            _warn_interp_num_points(self.mode_spec.interp_spec, self.freqs)
 
         if self.mode_spec.angle_rotation and np.abs(self.mode_spec.angle_theta) > 0:
             return self.rotated_mode_solver_data

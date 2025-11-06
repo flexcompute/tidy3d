@@ -5294,7 +5294,18 @@
             {
               "$ref": "#/definitions/ModeInterpSpec"
             }
-          ]
+          ],
+          "default": {
+            "attrs": {},
+            "method": "poly",
+            "reduce_data": true,
+            "sampling_spec": {
+              "attrs": {},
+              "num_points": 3,
+              "type": "ChebSampling"
+            },
+            "type": "ModeInterpSpec"
+          }
         },
         "num_modes": {
           "default": 1,
