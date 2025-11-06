@@ -1914,7 +1914,7 @@ class ModeSolver(Tidy3dBaseModel):
     def _intersecting_media(self) -> list:
         """List of media (including simulation background) intersecting the mode plane."""
         total_structures = [self.simulation.scene.background_structure]
-        total_structures += list(self.simulation.structures)
+        total_structures += list(self.simulation.volumetric_structures)
         return self.simulation.scene.intersecting_media(self.plane, total_structures)
 
     @cached_property
