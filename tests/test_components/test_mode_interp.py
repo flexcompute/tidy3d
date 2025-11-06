@@ -244,14 +244,14 @@ def test_mode_solver_monitor_valid_with_tracking():
 
 
 def test_interp_num_points_less_than_freqs():
-    """Test that num_points must be less than total freqs."""
+    """Test that num_points can be greater than total freqs."""
     mode_spec = td.ModeSpec(
         num_modes=2,
         sort_spec=td.ModeSortSpec(track_freq="central"),
         interp_spec=td.ModeInterpSpec.uniform(num_points=25, method="linear"),
     )
 
-    with AssertLogLevel("WARNING", contains_str="num_points"):
+    with AssertLogLevel(None):
         td.ModeSolverMonitor(
             center=(0, 0, 0),
             size=SIZE_2D,
@@ -262,14 +262,14 @@ def test_interp_num_points_less_than_freqs():
 
 
 def test_interp_num_points_equal_to_freqs():
-    """Test that num_points equal to freqs is rejected."""
+    """Test that num_points equal to freqs is not rejected."""
     mode_spec = td.ModeSpec(
         num_modes=2,
         sort_spec=td.ModeSortSpec(track_freq="central"),
         interp_spec=td.ModeInterpSpec.uniform(num_points=20, method="linear"),
     )
 
-    with AssertLogLevel("WARNING", contains_str="num_points"):
+    with AssertLogLevel(None):
         td.ModeSolverMonitor(
             center=(0, 0, 0),
             size=SIZE_2D,
@@ -354,7 +354,7 @@ def test_mode_solver_valid_with_tracking():
 
 @td.packaging.disable_local_subpixel
 def test_mode_solver_warns_num_points():
-    """Test that ModeSolver warns when num_points >= num_freqs."""
+    """Test that ModeSolver does not warn when num_points >= num_freqs."""
     sim = get_simple_sim()
     mode_spec = td.ModeSpec(
         num_modes=2,
@@ -363,14 +363,14 @@ def test_mode_solver_warns_num_points():
     )
     plane = td.Box(center=(0, 0, 0), size=SIZE_2D)
 
-    with AssertLogLevel("WARNING", contains_str="Interpolation will be skipped"):
+    with AssertLogLevel(None):
         ms = ModeSolver(
             simulation=sim,
             plane=plane,
             freqs=FREQS_DENSE,
             mode_spec=mode_spec,
         )
-        _ = ms.data_raw
+    _ = ms.data_raw
 
 
 def test_mode_solver_interp_spec_none():
@@ -1041,7 +1041,7 @@ def test_mode_solver_monitor_with_interp_spec():
 
 
 def test_mode_monitor_warns_redundant_num_points():
-    """Test warning when num_points >= number of frequencies in ModeMonitor."""
+    """Test no warning when num_points >= number of frequencies in ModeMonitor."""
     freqs = np.linspace(1e14, 2e14, 5)
     mode_spec = td.ModeSpec(
         num_modes=2,
@@ -1049,7 +1049,7 @@ def test_mode_monitor_warns_redundant_num_points():
         interp_spec=td.ModeInterpSpec.uniform(num_points=5, method="linear"),
     )
 
-    with AssertLogLevel("WARNING", contains_str="Interpolation will be skipped"):
+    with AssertLogLevel(None):
         td.ModeMonitor(
             center=(0, 0, 0),
             size=SIZE_2D,
@@ -1060,7 +1060,7 @@ def test_mode_monitor_warns_redundant_num_points():
 
 
 def test_mode_solver_monitor_warns_redundant_num_points():
-    """Test warning when num_points >= number of frequencies in ModeSolverMonitor."""
+    """Test no warning when num_points >= number of frequencies in ModeSolverMonitor."""
     freqs = np.linspace(1e14, 2e14, 5)
     mode_spec = td.ModeSpec(
         num_modes=2,
@@ -1068,7 +1068,7 @@ def test_mode_solver_monitor_warns_redundant_num_points():
         interp_spec=td.ModeInterpSpec.uniform(num_points=6, method="linear"),
     )
 
-    with AssertLogLevel("WARNING", contains_str="Interpolation will be skipped"):
+    with AssertLogLevel(None):
         td.ModeSolverMonitor(
             center=(0, 0, 0),
             size=SIZE_2D,

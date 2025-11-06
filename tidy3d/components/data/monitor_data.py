@@ -1286,6 +1286,22 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         return e_x, e_y
 
+    def _interpolated_copies_if_needed(
+        self, other: ElectromagneticFieldData
+    ) -> tuple[ElectromagneticFieldData, ElectromagneticFieldData]:
+        """Return interpolated copies of self, other if needed (different interp_spec)."""
+        mode_spec1 = self.monitor.mode_spec if isinstance(self, ModeSolverData) else None
+        mode_spec2 = other.monitor.mode_spec if isinstance(other, ModeSolverData) else None
+        if (
+            mode_spec1 is not None
+            and mode_spec2 is not None
+            and self.monitor.mode_spec._same_nontrivial_interp_spec(other=other.monitor.mode_spec)
+        ):
+            return self, other
+        self_copy = self.interpolated_copy if isinstance(self, ModeSolverData) else self
+        other_copy = other.interpolated_copy if isinstance(other, ModeSolverData) else other
+        return self_copy, other_copy
+
 
 class FieldData(FieldDataset, ElectromagneticFieldData):
     """
@@ -2685,6 +2701,8 @@ class ModeSolverData(ModeData):
     @property
     def interpolated_copy(self) -> ModeSolverData:
         """Return a copy of the data with interpolated fields."""
+        if self.monitor.mode_spec.interp_spec is None:
+            return self
         if not self._reduced_data:
             return self
         interpolated_data = self.interp_in_freq(

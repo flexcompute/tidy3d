@@ -37,7 +37,6 @@ from .validators import (
     assert_plane,
     validate_freqs_min,
     validate_freqs_not_empty,
-    validate_interp_num_points,
 )
 from .viz import ARROW_ALPHA, ARROW_COLOR_MONITOR
 
@@ -429,15 +428,20 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
             )
         return val
 
+    @property
+    def _stored_freqs(self) -> list[float]:
+        """Return actually stored frequencies of the data."""
+        return self.mode_spec._sampling_freqs_mode_solver_data(freqs=self.freqs)
+
     def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of intermediate data recorded by the monitor during a solver run."""
         # Need to store all fields on the mode surface
-        bytes_single = BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes * 6
+        bytes_single = (
+            BYTES_COMPLEX * num_cells * len(self._stored_freqs) * self.mode_spec.num_modes * 6
+        )
         if self.mode_spec.precision == "double":
             return 2 * bytes_single
         return bytes_single
-
-    _warn_interp_num_points = validate_interp_num_points()
 
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):

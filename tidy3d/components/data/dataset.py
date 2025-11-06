@@ -139,6 +139,10 @@ class FreqDataset(Dataset, ABC):
         DataArray
             Interpolated data array with the same structure but new frequency points.
         """
+        # if dataarray is already stored at the correct frequencies, do nothing
+        if np.array_equal(freqs, data.f):
+            return data
+
         # Map 'poly' to xarray's 'barycentric' method
         xr_method = "barycentric" if method == "poly" else method
 

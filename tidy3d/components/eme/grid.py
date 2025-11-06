@@ -11,9 +11,9 @@ import pydantic.v1 as pd
 from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords1D
-from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.mode_spec import ModeInterpSpec, ModeSpec
 from tidy3d.components.structure import Structure
-from tidy3d.components.types import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq
+from tidy3d.components.types import ArrayFloat1D, Axis, Coordinate, Size
 from tidy3d.constants import RADIAN, fp_eps, inf
 from tidy3d.exceptions import SetupError, ValidationError
 
@@ -26,13 +26,14 @@ MAX_NUM_REPS = 100000
 class EMEModeSpec(ModeSpec):
     """Mode spec for EME cells. Overrides some of the defaults and allowed values."""
 
-    track_freq: Union[TrackFreq, None] = pd.Field(
-        None,
-        title="Mode Tracking Frequency",
-        description="Parameter that turns on/off mode tracking based on their similarity. "
-        "Can take values ``'lowest'``, ``'central'``, or ``'highest'``, which correspond to "
-        "mode tracking based on the lowest, central, or highest frequency. "
-        "If ``None`` no mode tracking is performed, which is the default for best performance.",
+    interp_spec: Optional[ModeInterpSpec] = pd.Field(
+        ModeInterpSpec.cheb(num_points=3, reduce_data=True),
+        title="Mode frequency interpolation specification",
+        description="Specification for computing modes at a reduced set of frequencies and "
+        "interpolating to obtain results at all requested frequencies. This can significantly "
+        "reduce computational cost for broadband simulations where modes vary smoothly with "
+        "frequency. Requires frequency tracking to be enabled (``sort_spec.track_freq`` must "
+        "not be ``None``) to ensure consistent mode ordering across frequencies.",
     )
 
     angle_theta: Literal[0.0] = pd.Field(

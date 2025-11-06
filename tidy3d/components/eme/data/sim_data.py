@@ -197,10 +197,18 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             modes1 = port_modes1
         if not modes2_provided:
             modes2 = port_modes2
-        f1 = list(modes1.field_components.values())[0].f.values
-        f2 = list(modes2.field_components.values())[0].f.values
+        f1 = list(modes1.monitor.freqs)
+        f2 = list(modes2.monitor.freqs)
 
         f = np.array(sorted(set(f1).intersection(f2).intersection(self.simulation.freqs)))
+
+        mode_spec1 = modes1.monitor.mode_spec if isinstance(modes1, ModeData) else None
+        mode_spec2 = modes2.monitor.mode_spec if isinstance(modes2, ModeData) else None
+
+        interp_spec1 = mode_spec1.interp_spec if mode_spec1 is not None else None
+        interp_spec2 = mode_spec2.interp_spec if mode_spec2 is not None else None
+
+        modes1, modes2 = modes1._interpolated_copies_if_needed(other=modes2)
 
         modes_in_1 = "mode_index" in list(modes1.field_components.values())[0].coords
         modes_in_2 = "mode_index" in list(modes2.field_components.values())[0].coords
@@ -259,6 +267,10 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 overlaps1 = modes1.outer_dot(port_modes1, conjugate=False)
                 if not modes_in_1:
                     overlaps1 = overlaps1.expand_dims(dim={"mode_index_0": mode_index_1}, axis=1)
+                if interp_spec1 is not None:
+                    overlaps1 = modes1._interp_dataarray_in_freq(
+                        overlaps1, freqs=f, method=interp_spec1.method
+                    )
                 O1 = overlaps1.sel(f=f, mode_index_1=keep_mode_inds1)
 
                 O1out = O1.rename(mode_index_0="mode_index_out", mode_index_1="mode_index_out_old")
@@ -288,6 +300,10 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 overlaps2 = modes2.outer_dot(port_modes2, conjugate=False)
                 if not modes_in_2:
                     overlaps2 = overlaps2.expand_dims(dim={"mode_index_0": mode_index_2}, axis=1)
+                if interp_spec2 is not None:
+                    overlaps2 = modes2._interp_dataarray_in_freq(
+                        overlaps2, freqs=f, method=interp_spec2.method
+                    )
                 O2 = overlaps2.sel(f=f, mode_index_1=keep_mode_inds2)
 
                 O2out = O2.rename(mode_index_0="mode_index_out", mode_index_1="mode_index_out_old")

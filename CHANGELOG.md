@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `interp_spec` in `ModeSpec` to allow downsampling and interpolation of waveguide modes in frequency.
 - Added warning if port mesh refinement is incompatible with the `GridSpec` in the `TerminalComponentModeler`.
 - Various types, e.g. different `Simulation` or `SimulationData` sub-classes, can be loaded from file directly with `Tidy3dBaseModel.from_file()`.
+- Added `interp_spec` in `EMEModeSpec` to enable faster multi-frequency EME simulations. Note that the default is now `ModeInterpSpec.cheb(num_points=3, reduce_data=True)`; previously the computation was repeated at all frequencies.
 
 ### Breaking Changes
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.
@@ -64,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simulation data of batch jobs are now automatically downloaded upon their individual completion in `Batch.run()`, avoiding waiting for the entire batch to reach completion.
 - Port names in `ModalComponentModeler` and `TerminalComponentModeler` can no longer include the `@` symbol.
 - Improved speed of convolutions for large inputs.
+- Default value of `EMEModeSpec.interp_spec` is `ModeInterpSpec.cheb(num_points=3, reduce_data=True)` for faster multi-frequency EME simulations.
 
 ### Fixed
 - Ensured the legacy `Env` proxy mirrors `config.web` profile switches and preserves API URL.

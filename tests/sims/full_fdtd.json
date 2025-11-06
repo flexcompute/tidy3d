@@ -2075,6 +2075,7 @@
                     "track_freq": "central",
                     "type": "ModeSortSpec"
                 },
+                "interp_spec": null,
                 "type": "ModeSpec"
             },
             "mode_index": 0,
@@ -2666,6 +2667,7 @@
                     "track_freq": "central",
                     "type": "ModeSortSpec"
                 },
+                "interp_spec": null,
                 "type": "ModeSpec"
             },
             "store_fields_direction": null,

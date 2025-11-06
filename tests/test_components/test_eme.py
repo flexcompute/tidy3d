@@ -568,7 +568,8 @@ def test_eme_simulation():
     sim = sim_no_field.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[1, 2]))
     assert not sim._sweep_modes
     assert sim._num_sweep == 2
-    sim = sim.updated_copy(sweep_spec=td.EMEFreqSweep(freq_scale_factors=[1, 2]))
+    with AssertLogLevel("WARNING", contains_str="'EMEFreqSweep' is deprecated"):
+        sim = sim.updated_copy(sweep_spec=td.EMEFreqSweep(freq_scale_factors=[1, 2]))
     assert sim._sweep_modes
     assert sim._num_sweep == 2
     assert sim._monitor_num_sweep(sim.monitors[0]) == 1
@@ -911,7 +912,9 @@ def _get_mode_solver_data(modes_out=False, num_modes=3):
         size=(td.inf, td.inf, 0),
         center=(0, 0, offset),
         freqs=[td.C_0],
-        mode_spec=td.ModeSpec(num_modes=num_modes),
+        mode_spec=td.ModeSpec(
+            num_modes=num_modes, interp_spec=td.ModeInterpSpec.cheb(num_points=3, reduce_data=True)
+        ),
         name=name,
     )
     eme_mode_data = _get_eme_mode_solver_data()

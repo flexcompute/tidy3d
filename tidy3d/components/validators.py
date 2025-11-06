@@ -494,35 +494,3 @@ def _warn_unsupported_traced_argument(name: str):
         return val
 
     return _warn_traced_arg
-
-
-def _warn_interp_num_points(interp_spec, freqs) -> None:
-    """Warn if the number of sampling points for interpolation is greater than or equal to the number of target frequencies."""
-
-    num_freqs = len(freqs)
-
-    if interp_spec.num_points >= num_freqs:
-        log.warning(
-            f"'interp_spec.num_points' ({interp_spec.num_points}) is greater than or equal to "
-            f"the number of frequencies ({num_freqs}). Interpolation will be skipped and "
-            f"modes will be computed at all {num_freqs} frequencies.",
-            custom_loc=["mode_spec", "interp_spec", "num_points"],
-        )
-
-
-def validate_interp_num_points():
-    @pydantic.root_validator(allow_reuse=True)
-    @skip_if_fields_missing(["freqs", "mode_spec"], root=True)
-    def _validate_warn_interp_num_points(cls, values):
-        """Warn if the number of sampling points for interpolation is greater than or equal to the number of target frequencies."""
-
-        interp_spec = values.get("mode_spec").interp_spec
-        if interp_spec is None:
-            return values
-
-        freqs = values.get("freqs")
-        _warn_interp_num_points(interp_spec, freqs)
-
-        return values
-
-    return _validate_warn_interp_num_points

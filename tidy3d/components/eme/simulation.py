@@ -722,6 +722,12 @@ class EMESimulation(AbstractYeeGridSimulation):
                         "which is not compatible with 'EMELengthSweep'."
                     )
         elif isinstance(self.sweep_spec, EMEFreqSweep):
+            log.warning(
+                "'EMEFreqSweep' is deprecated. Instead, it is recommended to use "
+                "'EMESimulation.freqs' directly, and set "
+                "'EMEModeSpec.interp_spec' as desired to balance "
+                "performance and accuracy."
+            )
             for i, scale_factor in enumerate(self.sweep_spec.freq_scale_factors):
                 scaled_freqs = np.array(self.freqs) * scale_factor
                 if np.min(scaled_freqs) < MIN_FREQUENCY:
@@ -1006,6 +1012,18 @@ class EMESimulation(AbstractYeeGridSimulation):
         if monitor.freqs is None:
             return list(self.freqs)
         return list(monitor.freqs)
+
+    def _monitor_mode_freqs(self, monitor: EMEModeSolverMonitor) -> list[pd.NonNegativeFloat]:
+        """Monitor frequencies."""
+        freqs = set()
+        cell_inds = self._monitor_eme_cell_indices(monitor=monitor)
+        for cell_ind in cell_inds:
+            interp_spec = self.eme_grid.mode_specs[cell_ind].interp_spec
+            if interp_spec is None:
+                freqs |= set(self.freqs)
+            else:
+                freqs |= set(interp_spec.sampling_points(self.freqs))
+        return list(freqs)
 
     def _monitor_num_freqs(self, monitor: Monitor) -> int:
         """Total number of freqs included in monitor."""
