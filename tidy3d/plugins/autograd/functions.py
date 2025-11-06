@@ -66,24 +66,15 @@ def _get_pad_indices(
     if n == 0:
         return numpy_module.zeros(total_pad, dtype=int)
 
-    idx = numpy_module.arange(-pad_width[0], n + pad_width[1])
-
+    pad_left, pad_right = pad_width
     if mode == "constant":
-        return idx
-    if mode == "edge":
-        return numpy_module.clip(idx, 0, n - 1)
-    if mode == "reflect":
-        period = 2 * n - 2 if n > 1 else 1
-        idx = numpy_module.mod(idx, period)
-        return numpy_module.where(idx >= n, period - idx, idx)
-    if mode == "symmetric":
-        period = 2 * n if n > 1 else 1
-        idx = numpy_module.mod(idx, period)
-        return numpy_module.where(idx >= n, period - idx - 1, idx)
-    if mode == "wrap":
-        return numpy_module.mod(idx, n)
+        return numpy_module.arange(-pad_left, n + pad_right)
 
-    raise ValueError(f"Unsupported padding mode: {mode}")
+    try:
+        indices = onp.pad(onp.arange(n), (pad_left, pad_right), mode=mode)
+    except ValueError as error:
+        raise ValueError(f"Unsupported padding mode: {mode}") from error
+    return numpy_module.asarray(indices, dtype=int)
 
 
 def pad(
