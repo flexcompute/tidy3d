@@ -282,9 +282,9 @@ class TestDRCResults:
         return DRCResults.load(filepath / "drc_results.lyrdb")
 
     @pytest.fixture(scope="class")
-    def drc_results_widthonly_clean(self):
+    def drc_results_clean(self):
         """Load the DRC results"""
-        return DRCResults.load(filepath / "drc_results_widthonly_clean.lyrdb")
+        return DRCResults.load(filepath / "drc_results_clean.lyrdb")
 
     def test_result_file_load(self, tmp_path):
         """Test that result file loading works"""
@@ -303,10 +303,10 @@ class TestDRCResults:
         with pytest.raises(ET.ParseError):
             DRCResults.load(tmp_path / "bad_resultsfile.lyrdb")
 
-    def test_is_drc_clean(self, drc_results, drc_results_widthonly_clean):
+    def test_is_drc_clean(self, drc_results, drc_results_clean):
         """Test DRCResults.is_clean"""
         assert not drc_results.is_clean
-        assert drc_results_widthonly_clean.is_clean
+        assert drc_results_clean.is_clean
 
     def test_count_drc_violations(self, drc_results):
         """Test that counting violations works"""

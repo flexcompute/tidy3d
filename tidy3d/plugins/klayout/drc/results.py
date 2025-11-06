@@ -350,13 +350,22 @@ def violations_from_file(resultsfile: Union[str, Path]) -> dict[str, DRCViolatio
     # Initialize violations dict with all the categories
     violations = {}
     for category in xmltree.getroot().findall(".//categories/category/name"):
-        violations[category.text] = DRCViolation(category=category.text, markers=())
+        category_name = category.text
+        if category_name is None:
+            raise FileError("Encountered DRC category without a name in results file.")
+        category_name = category_name.strip().strip("'\"")
+        violations[category_name] = DRCViolation(category=category_name, markers=())
 
     # Parse markers
     for item in xmltree.getroot().findall(".//item"):
-        category = item.find("category").text
+        category_el = item.find("category")
+        if category_el is None or category_el.text is None:
+            raise FileError("Encountered DRC item without a category in results file.")
+        category = category_el.text.strip().strip("'\"")
         value = item.find("values/value").text
         marker = parse_violation_value(value)
+        if category not in violations:
+            violations[category] = DRCViolation(category=category, markers=())
         violations[category] = DRCViolation(
             category=category,
             markers=(*violations[category].markers, marker),
