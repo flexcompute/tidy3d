@@ -11,11 +11,28 @@ import pytest
 
 import tidy3d as td
 from tidy3d.exceptions import FileError
-from tidy3d.plugins.klayout.drc.drc import DRCRunner
+from tidy3d.plugins.klayout.drc.drc import DRCConfig, DRCRunner, run_drc_on_gds
 from tidy3d.plugins.klayout.drc.results import DRCResults, parse_violation_value
 from tidy3d.plugins.klayout.util import check_installation
 
 filepath = Path(os.path.dirname(os.path.abspath(__file__)))
+KLAYOUT_PLUGIN_PATH = "tidy3d.plugins.klayout"
+
+
+def _basic_drc_config_kwargs(tmp_path: Path) -> dict[str, Path | bool]:
+    """Return minimal kwargs needed to instantiate DRCConfig in tests."""
+
+    drc_runset = tmp_path / "test.drc"
+    drc_runset.write_text('source($gdsfile)\nreport("DRC", $resultsfile)\n')
+    gdsfile = tmp_path / "test.gds"
+    gdsfile.write_text("")
+    resultsfile = tmp_path / "results.lyrdb"
+    return {
+        "gdsfile": gdsfile,
+        "drc_runset": drc_runset,
+        "resultsfile": resultsfile,
+        "verbose": False,
+    }
 
 
 def test_check_klayout_not_installed(monkeypatch):
@@ -23,7 +40,7 @@ def test_check_klayout_not_installed(monkeypatch):
 
     Use monkeypatch to simulate absence, avoiding reliance on CI environment.
     """
-    monkeypatch.setattr("tidy3d.plugins.klayout.util.which", lambda _cmd: None)
+    monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.util.which", lambda _cmd: None)
     with pytest.raises(RuntimeError):
         check_installation(raise_error=True)
 
@@ -31,8 +48,114 @@ def test_check_klayout_not_installed(monkeypatch):
 def test_check_klayout_installed(monkeypatch):
     """check_installation returns a path and does not raise when present."""
     fake_path = "/usr/local/bin/klayout"
-    monkeypatch.setattr("tidy3d.plugins.klayout.util.which", lambda _cmd: fake_path)
+    monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.util.which", lambda _cmd: fake_path)
     assert check_installation(raise_error=True) == fake_path
+
+
+def test_runner_passes_drc_args_to_config(monkeypatch, tmp_path):
+    """Ensure DRCRunner forwards drc_args into the generated DRCConfig."""
+
+    drc_runset = tmp_path / "test.drc"
+    drc_runset.write_text('source($gdsfile)\nreport("DRC", $resultsfile)\n')
+    gdsfile = tmp_path / "test.gds"
+    gdsfile.write_text("")
+    resultsfile = tmp_path / "results.lyrdb"
+    captured_config = {}
+
+    def mock_run_drc_on_gds(config):
+        captured_config["config"] = config
+        return DRCResults.load(filepath / "drc_results.lyrdb")
+
+    monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.drc.drc.run_drc_on_gds", mock_run_drc_on_gds)
+
+    runner = DRCRunner(drc_runset=drc_runset, verbose=False)
+    user_args = {"foo": "bar", "baz": "1"}
+    runner.run(source=gdsfile, resultsfile=resultsfile, drc_args=user_args)
+
+    assert captured_config["config"].drc_args == user_args
+
+
+def test_run_drc_on_gds_appends_custom_args(monkeypatch, tmp_path):
+    """run_drc_on_gds adds extra -rd pairs for drc_args."""
+
+    drc_runset = tmp_path / "test.drc"
+    drc_runset.write_text('source($gdsfile)\nreport("DRC", $resultsfile)\n')
+    gdsfile = tmp_path / "test.gds"
+    gdsfile.write_text("")
+    resultsfile = tmp_path / "results.lyrdb"
+
+    monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.drc.drc.check_installation", lambda **_: None)
+
+    captured_cmd = {}
+
+    class DummyCompleted:
+        def __init__(self):
+            self.returncode = 0
+            self.stdout = b""
+            self.stderr = b""
+
+    def fake_run(cmd, capture_output):
+        captured_cmd["cmd"] = cmd
+        return DummyCompleted()
+
+    monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.drc.drc.run", fake_run)
+    monkeypatch.setattr(
+        f"{KLAYOUT_PLUGIN_PATH}.drc.drc.DRCResults.load",
+        lambda resultsfile: DRCResults(violations_by_category={}),
+    )
+
+    config = DRCConfig(
+        gdsfile=gdsfile,
+        drc_runset=drc_runset,
+        resultsfile=resultsfile,
+        verbose=False,
+        drc_args={"string_arg": "text", "numeric_value": 1},
+    )
+
+    run_drc_on_gds(config)
+
+    expected_tail = ["-rd", "string_arg=text", "-rd", "numeric_value=1"]
+    assert captured_cmd["cmd"][-len(expected_tail) :] == expected_tail
+
+
+def test_drc_config_args_require_mapping(tmp_path):
+    """drc_args must be a mapping and refuses other iterables."""
+
+    kwargs = _basic_drc_config_kwargs(tmp_path)
+    with pytest.raises(pd.ValidationError):
+        DRCConfig(**kwargs, drc_args=["not", "a", "mapping"])
+
+
+def test_drc_config_args_reject_reserved_keys(tmp_path):
+    """Reserved keys such as gdsfile cannot be overridden via drc_args."""
+
+    kwargs = _basic_drc_config_kwargs(tmp_path)
+    with pytest.raises(pd.ValidationError):
+        DRCConfig(**kwargs, drc_args={"gdsfile": "custom.gds"})
+
+
+def test_drc_config_args_stringify_values(tmp_path):
+    """Non-string keys and values are coerced to strings by the validator."""
+
+    kwargs = _basic_drc_config_kwargs(tmp_path)
+    config = DRCConfig(**kwargs, drc_args={1: Path("foo"), "flag": True})
+
+    assert config.drc_args == {"1": "foo", "flag": "True"}
+
+
+def test_drc_config_args_unstringifiable_value(tmp_path):
+    """Non-stringifiable drc_args values should raise a ValidationError."""
+
+    class Unstringifiable:
+        def __str__(self):
+            raise RuntimeError("cannot stringify")
+
+    kwargs = _basic_drc_config_kwargs(tmp_path)
+
+    with pytest.raises(
+        pd.ValidationError, match="Could not coerce keys and values of drc_args to strings."
+    ):
+        DRCConfig(**kwargs, drc_args={"bad": Unstringifiable()})
 
 
 class TestDRCRunner:
@@ -147,6 +270,7 @@ class TestDRCRunner:
         source,
         td_object_gds_savefile,
         resultsfile,
+        drc_args=None,
         **to_gds_file_kwargs,
     ):
         """Calls DRCRunner.run with dummy run_drc_on_gds()"""
@@ -155,13 +279,14 @@ class TestDRCRunner:
         def mock_run_drc_on_gds(config):
             return DRCResults.load(filepath / "drc_results.lyrdb")
 
-        monkeypatch.setattr("tidy3d.plugins.klayout.drc.drc.run_drc_on_gds", mock_run_drc_on_gds)
+        monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.drc.drc.run_drc_on_gds", mock_run_drc_on_gds)
 
         runner = DRCRunner(drc_runset=drc_runsetfile, verbose=verbose)
         return runner.run(
             source=source,
             td_object_gds_savefile=td_object_gds_savefile,
             resultsfile=resultsfile,
+            drc_args=drc_args,
             **to_gds_file_kwargs,
         )
 

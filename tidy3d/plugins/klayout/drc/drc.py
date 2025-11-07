@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from subprocess import run
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import pydantic.v1 as pd
 from pydantic.v1 import validator
@@ -46,6 +47,11 @@ class DRCConfig(Tidy3dBaseModel):
         title="Verbose",
         description="Whether to print logging.",
     )
+    drc_args: dict[str, str] = pd.Field(
+        default_factory=dict,
+        title="DRC File Arguments",
+        description="Optional key/value pairs forwarded to KLayout as -rd <key>=<value> definitions.",
+    )
 
     @validator("gdsfile")
     def _validate_gdsfile_filetype(cls, v: pd.FilePath) -> pd.FilePath:
@@ -80,6 +86,34 @@ class DRCConfig(Tidy3dBaseModel):
                 raise ValidationError(
                     "DRC runset is not formatted correctly. The report must be defined as 'report(\"<your report name>\", $resultsfile)'. Please refer to the documentation at 'tidy3d/plugins/klayout/drc/README.md' for more details."
                 )
+        return v
+
+    @validator("drc_args", pre=True)
+    def _validate_drc_args_stringable(cls, v: Any) -> dict[str, str]:
+        """Coerce all keys and values in drc_args to strings."""
+        if v is None:
+            return {}
+        if not isinstance(v, Mapping):
+            raise ValidationError("drc_args must be a mapping of keys to values.")
+        try:
+            v = {str(k): str(v) for k, v in v.items()}
+        except Exception as e:
+            raise ValidationError("Could not coerce keys and values of drc_args to strings.") from e
+        return v
+
+    @validator("drc_args")
+    def _validate_drc_args_reserved(cls, v: dict[str, str]) -> dict[str, str]:
+        """Ensure user arguments do not override the reserved keys."""
+
+        reserved_keys = {"gdsfile", "resultsfile"}
+        conflicts = reserved_keys.intersection(v)
+        if conflicts:
+            conflict_str = ", ".join(sorted(conflicts))
+            raise ValidationError(
+                f"Invalid DRC argument key(s) {conflict_str}: these names are reserved and automatically "
+                "managed by Tidy3D."
+            )
+
         return v
 
 
@@ -125,8 +159,9 @@ class DRCRunner(Tidy3dBaseModel):
         source: Union[Geometry, Structure, Simulation, Path],
         td_object_gds_savefile: Path = DEFAULT_GDSFILE,
         resultsfile: Path = DEFAULT_RESULTSFILE,
+        drc_args: Optional[dict[str, str]] = None,
         **to_gds_file_kwargs: Any,
-    ) -> None:
+    ) -> DRCResults:
         """Runs KLayout's DRC on a GDS file or a Tidy3D object. The Tidy3D object can be a :class:`.Geometry`, :class:`.Structure`, or :class:`.Simulation`.
 
         Parameters
@@ -137,6 +172,8 @@ class DRCRunner(Tidy3dBaseModel):
             The path to save the Tidy3D object to. Defaults to ``"layout.gds"``.
         resultsfile : Path
             The path to save the KLayout DRC results file to. Defaults to ``"drc_results.lyrdb"``.
+        drc_args : Optional[dict[str, str]] = None
+            Additional key/value pairs passed through to KLayout as ``-rd key=value`` CLI arguments.
         **to_gds_file_kwargs
             Additional keyword arguments to pass to the Tidy3D object-specific ``to_gds_file()`` method.
 
@@ -176,6 +213,7 @@ class DRCRunner(Tidy3dBaseModel):
             drc_runset=self.drc_runset,
             resultsfile=resultsfile,
             verbose=self.verbose,
+            drc_args={} if drc_args is None else drc_args,
         )
         return run_drc_on_gds(config=config)
 
@@ -208,19 +246,21 @@ def run_drc_on_gds(config: DRCConfig) -> DRCResults:
             f"Running KLayout DRC on GDS file '{config.gdsfile}' with runset '{config.drc_runset}' and saving results to '{config.resultsfile}'..."
         )
     # run klayout DRC as a subprocess
-    output = run(
-        [
-            "klayout",
-            "-b",
-            "-r",
-            config.drc_runset,
-            "-rd",
-            f"gdsfile={config.gdsfile}",
-            "-rd",
-            f"resultsfile={config.resultsfile}",
-        ],
-        capture_output=True,
-    )
+    cmd = [
+        "klayout",
+        "-b",
+        "-r",
+        config.drc_runset,
+        "-rd",
+        f"gdsfile={config.gdsfile}",
+        "-rd",
+        f"resultsfile={config.resultsfile}",
+    ]
+
+    for key, value in config.drc_args.items():
+        cmd.extend(["-rd", f"{key}={value}"])
+
+    output = run(cmd, capture_output=True)
 
     if output.returncode != 0:
         raise RuntimeError(f"KLayout DRC failed with error message: '{output.stderr}'.")
