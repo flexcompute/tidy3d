@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 from importlib import import_module
+from importlib.util import find_spec
 from typing import Any, Literal
 
 import numpy as np
@@ -185,7 +186,7 @@ def get_numpy_major_version(module=np):
 
 def supports_local_subpixel(fn):
     """When decorating a method, checks that 'tidy3d-extras' is available,
-    conditioned on 'config.use_local_subpixel'."""
+    conditioned on 'config.simulation.use_local_subpixel'."""
 
     @functools.wraps(fn)
     def _fn(*args: Any, **kwargs: Any):
@@ -195,23 +196,32 @@ def supports_local_subpixel(fn):
             tidy3d_extras["use_local_subpixel"] = False
             tidy3d_extras["mod"] = None
         else:
-            # first try to import the module
             if tidy3d_extras["mod"] is None:
-                try:
-                    import tidy3d_extras as tidy3d_extras_mod
+                tidy3d_extras["use_local_subpixel"] = False
+                tidy3d_extras["mod"] = None
+                module_exists = find_spec("tidy3d_extras") is not None
 
-                except ImportError as exc:
-                    tidy3d_extras["mod"] = None
-                    tidy3d_extras["use_local_subpixel"] = False
-                    if preference is True:
+                if preference is True and not module_exists:
+                    raise Tidy3dImportError(
+                        "The package 'tidy3d-extras' is required for this "
+                        "operation when 'config.simulation.use_local_subpixel' is 'True'. "
+                        "Please install the 'tidy3d-extras' package using, for "
+                        "example, 'pip install tidy3d[extras]'."
+                    )
+
+                if module_exists:
+                    try:
+                        import tidy3d_extras as tidy3d_extras_mod
+
+                    except ImportError as exc:
+                        tidy3d_extras["mod"] = None
+                        tidy3d_extras["use_local_subpixel"] = False
                         raise Tidy3dImportError(
-                            "The package 'tidy3d-extras' is required for this "
-                            "operation when 'config.use_local_subpixel' is 'True'. "
-                            "Please install the 'tidy3d-extras' package using, for "
-                            "example, 'pip install tidy3d[extras]'."
+                            "The package 'tidy3d-extras' did not initialize correctly. "
+                            "To suppress this error, you can set "
+                            "'config.simulation.use_local_subpixel=False'."
                         ) from exc
 
-                else:
                     version = tidy3d_extras_mod.__version__
 
                     if version is None:
@@ -219,7 +229,8 @@ def supports_local_subpixel(fn):
                         tidy3d_extras["use_local_subpixel"] = False
                         raise Tidy3dImportError(
                             "The package 'tidy3d-extras' did not initialize correctly, "
-                            "likely due to an invalid API key."
+                            "likely due to an invalid API key. To suppress this error, "
+                            "you can set 'config.simulation.use_local_subpixel=False'."
                         )
 
                     if version != __version__:
