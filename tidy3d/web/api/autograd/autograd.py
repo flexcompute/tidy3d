@@ -878,7 +878,6 @@ def _run_async(
     **run_async_kwargs: Any,
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""
-
     task_names = simulations.keys()
 
     traced_fields_sim_dict: dict[str, AutogradFieldMap] = {}
@@ -1295,7 +1294,6 @@ def _run_bwd(
         td.log.info(f"Running {len(sims_adj)} adjoint simulations")
 
         vjp_traced_fields = {}
-
         if local_gradient:
             # Run all adjoint sims in batch
             td.log.info("Starting local batch adjoint simulations")
@@ -1471,6 +1469,7 @@ def _run_async_bwd(
 
                 # Compute VJP contribution
                 task_user_vjp = user_vjp_map.get(task_name)
+
                 vjp_results[adj_task_name] = postprocess_adj(
                     sim_data_adj=sim_data_adj,
                     sim_data_orig=sim_data_orig,
