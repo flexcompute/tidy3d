@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added multimode support to `WavePort` in the smatrix plugin, allowing multiple modes to be analyzed per port.
 - Added support for `.lydrc` files for design rule checking in the `klayout` plugin.
 - Added a Gaussian inverse design filter option with autograd gradients and complete padding mode coverage.
+- Added support for argument passing to DRC file when running checks with `DRCRunner.run(..., drc_args={key: value})` in klayout plugin.
 
 ### Breaking Changes
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.
