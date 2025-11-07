@@ -40,7 +40,7 @@ Other Simulation Types
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.plugins.mode.ModeSolver
+   tidy3d.ModeSimulation
    tidy3d.EMESimulation
    tidy3d.HeatSimulation
    tidy3d.HeatChargeSimulation

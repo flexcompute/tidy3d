@@ -20,6 +20,7 @@ API |:computer:|
     utilities
     configuration
     mesh/index
+    mode/index
     heat/index
     charge/index
     eme/index
