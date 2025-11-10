@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional, Union
 
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqDataArray
@@ -25,8 +25,7 @@ class AbstractTerminalPort(MicrowaveBaseModel, ABC):
     terminals, and the current flowing from one terminal into the other.
     """
 
-    name: str = pd.Field(
-        ...,
+    name: str = Field(
         title="Name",
         description="Unique name for the port.",
         min_length=1,

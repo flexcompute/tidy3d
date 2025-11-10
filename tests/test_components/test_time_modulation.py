@@ -5,8 +5,8 @@ from __future__ import annotations
 from math import isclose
 
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 
@@ -115,7 +115,7 @@ def test_space_modulation():
     check_sp_reduction(SP_UNIFORM)
 
     # uniform in phase, but custom in amplitude
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         sp = SP_UNIFORM.updated_copy(amplitude=ARRAY_CMP)
 
     sp = SP_UNIFORM.updated_copy(amplitude=ARRAY)
@@ -123,14 +123,14 @@ def test_space_modulation():
     check_sp_reduction(sp)
 
     # uniform in amplitude, but custom in phase
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         sp = SP_UNIFORM.updated_copy(phase=ARRAY_CMP)
     sp = SP_UNIFORM.updated_copy(phase=ARRAY)
     assert isclose(sp.max_modulation, 1)
     check_sp_reduction(sp)
 
     # custom in both
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         sp = SP_UNIFORM.updated_copy(phase=ARRAY_CMP, amplitude=ARRAY_CMP)
     sp = SP_UNIFORM.updated_copy(phase=ARRAY, amplitude=ARRAY)
     check_sp_reduction(sp)
@@ -174,7 +174,7 @@ def test_modulated_medium():
     # permittivity modulated
     modulation_spec = MODULATION_SPEC.updated_copy(permittivity=ST)
     # modulated permitivity <= 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         medium = td.Medium(modulation_spec=modulation_spec)
     medium = td.Medium(permittivity=2, modulation_spec=modulation_spec)
     assert isclose(medium.n_cfl, np.sqrt(2 - AMP_TIME))
@@ -183,7 +183,7 @@ def test_modulated_medium():
     # conductivity modulated
     modulation_spec = MODULATION_SPEC.updated_copy(conductivity=ST)
     # modulated conductivity <= 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         medium = td.Medium(modulation_spec=modulation_spec)
     medium_sometimes_active = td.Medium(modulation_spec=modulation_spec, allow_gain=True)
     medium = td.Medium(conductivity=2, modulation_spec=modulation_spec)
@@ -194,7 +194,7 @@ def test_modulated_medium():
     st_freq2 = ST.updated_copy(
         time_modulation=td.ContinuousWaveTimeModulation(freq0=2e12, amplitude=2)
     )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         modulation_spec = MODULATION_SPEC.updated_copy(permittivity=ST, conductivity=st_freq2)
     # both modulated, but different space modulation: fine
     st_space2 = ST.updated_copy(space_modulation=td.SpaceModulation(amplitude=0.1))
@@ -212,30 +212,30 @@ def test_unsupported_modulated_medium_types():
     modulation_spec = MODULATION_SPEC.updated_copy(permittivity=ST)
 
     # PEC cannot be modulated
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.PECMedium(modulation_spec=modulation_spec)
 
     # PMC cannot be modulated
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.PMCMedium(modulation_spec=modulation_spec)
 
     # For Anisotropic medium, one should modulate the components, not the whole medium
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.AnisotropicMedium(
             xx=td.Medium(), yy=td.Medium(), zz=td.Medium(), modulation_spec=modulation_spec
         )
 
     # Modulation to fully Anisotropic medium unsupported
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.FullyAnisotropicMedium(modulation_spec=modulation_spec)
 
     # 2D material
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         drude_medium = td.Drude(eps_inf=2.0, coeffs=[(1, 2), (3, 4)])
         td.Medium2D(ss=drude_medium, tt=drude_medium, modulation_spec=modulation_spec)
 
     # together with nonlinear_spec
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.Medium(
             permittivity=2,
             nonlinear_spec=td.NonlinearSusceptibility(chi3=1),
@@ -257,10 +257,10 @@ def test_supported_modulated_medium_types(unstructured, z):
     assert mat_p.is_time_modulated
     assert isclose(mat_p.n_cfl, np.sqrt(2 - AMP_TIME))
     # too much modulation resulting in eps_inf < 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         mat = mat_p.updated_copy(eps_inf=1.0)
     # conductivity modulation
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         mat = mat_p.updated_copy(modulation_spec=modulation_both_spec)
     mat = mat_p.updated_copy(modulation_spec=modulation_both_spec, allow_gain=True)
     check_med_reduction(mat)
@@ -276,10 +276,10 @@ def test_supported_modulated_medium_types(unstructured, z):
     assert mat_c.is_time_modulated
     assert isclose(mat_c.n_cfl, np.sqrt(2 - AMP_TIME))
     # too much modulation resulting in eps_inf < 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         mat = mat_c.updated_copy(permittivity=permittivity * 0.5)
     # conductivity modulation
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         mat = mat_c.updated_copy(modulation_spec=modulation_both_spec)
     mat = mat_c.updated_copy(modulation_spec=modulation_both_spec, allow_gain=True)
     check_med_reduction(mat_c)

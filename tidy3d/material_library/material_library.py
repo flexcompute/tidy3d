@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 from os import PathLike
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 from rich.panel import Panel
 from rich.table import Table
 
@@ -75,13 +75,13 @@ def export_matlib_to_file(fname: PathLike = "matlib.json") -> None:
 class AbstractVariantItem(Tidy3dBaseModel):
     """Reference, and data_source for a variant of a material."""
 
-    reference: list[ReferenceData] = pd.Field(
+    reference: Optional[list[ReferenceData]] = Field(
         None,
         title="Reference information",
         description="A list of references related to this variant model.",
     )
 
-    data_url: str = pd.Field(
+    data_url: Optional[str] = Field(
         None,
         title="Dispersion data URL",
         description="The URL to access the dispersion data upon which the material "
@@ -105,8 +105,7 @@ class AbstractVariantItem(Tidy3dBaseModel):
 class VariantItem(AbstractVariantItem):
     """Reference, data_source, and material model for a variant of a material."""
 
-    medium: Union[PoleResidue, MultiPhysicsMedium] = pd.Field(
-        ...,
+    medium: Union[PoleResidue, MultiPhysicsMedium] = Field(
         title="Material dispersion model",
         description="A dispersive medium described by the pole-residue pair model.",
     )
@@ -119,26 +118,23 @@ class VariantItem(AbstractVariantItem):
 class MaterialItem(Tidy3dBaseModel):
     """A material that includes several variants."""
 
-    name: str = pd.Field(..., title="Name", description="Unique name for the medium.")
-    variants: dict[str, VariantItem] = pd.Field(
-        ...,
+    name: str = Field(title="Name", description="Unique name for the medium.")
+    variants: dict[str, VariantItem] = Field(
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
         "that maps from a key to the variant model.",
     )
-    default: str = pd.Field(
-        ..., title="default variant", description="The default type of variant."
-    )
+    default: str = Field(title="default variant", description="The default type of variant.")
 
-    @pd.validator("default", always=True)
-    def _default_in_variants(cls, val: str, values: dict[str, Any]) -> Any:
+    @model_validator(mode="after")
+    def _default_in_variants(self):
         """Make sure the default variant is already included in the ``variants``."""
-        if val not in values["variants"]:
+        if self.default not in self.variants:
             raise SetupError(
-                f"The data of the default variant '{val}' is not supplied; "
+                f"The data of the default variant '{self.default}' is not supplied; "
                 "please include it in the 'variants'."
             )
-        return val
+        return self
 
     def __getitem__(self, variant_name: str) -> Union[PoleResidue, MultiPhysicsMedium]:
         """Helper function to easily access the medium of a variant"""
@@ -167,8 +163,7 @@ class MaterialItem(Tidy3dBaseModel):
 class VariantItem2D(AbstractVariantItem):
     """Reference, data_source, and material model for a variant of a 2D material."""
 
-    medium: Medium2D = pd.Field(
-        ...,
+    medium: Medium2D = Field(
         title="Material dispersion model",
         description="A dispersive 2D medium described by a surface conductivity model, "
         "which is handled as an anisotropic medium with pole-residue pair models "
@@ -183,8 +178,7 @@ class VariantItem2D(AbstractVariantItem):
 class MaterialItem2D(MaterialItem):
     """A 2D material that includes several variants."""
 
-    variants: dict[str, VariantItem2D] = pd.Field(
-        ...,
+    variants: dict[str, VariantItem2D] = Field(
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
         "that maps from a key to the variant model.",
@@ -194,14 +188,12 @@ class MaterialItem2D(MaterialItem):
 class VariantItemUniaxial(AbstractVariantItem):
     """Reference, data_source, and material model for a variant of an uniaxial material."""
 
-    ordinary: PoleResidue = pd.Field(
-        ...,
+    ordinary: PoleResidue = Field(
         title="Ordinary Component",
         description="Medium describing the ordinary component.",
     )
 
-    extraordinary: PoleResidue = pd.Field(
-        ...,
+    extraordinary: PoleResidue = Field(
         title="Extraordinary Component",
         description="Medium describing the extraordinary component.",
     )
@@ -224,7 +216,7 @@ class VariantItemUniaxial(AbstractVariantItem):
         components = ["xx", "yy", "zz"]
         mat_dict = dict.fromkeys(components, self.ordinary)
         mat_dict.update({components[optical_axis]: self.extraordinary})
-        return AnisotropicMedium.parse_obj(mat_dict)
+        return AnisotropicMedium.model_validate(mat_dict)
 
     @property
     def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
@@ -234,8 +226,7 @@ class VariantItemUniaxial(AbstractVariantItem):
 class MaterialItemUniaxial(MaterialItem):
     """A material that includes several variants."""
 
-    variants: dict[str, VariantItemUniaxial] = pd.Field(
-        ...,
+    variants: dict[str, VariantItemUniaxial] = Field(
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
         "that maps from a key to the variant model.",

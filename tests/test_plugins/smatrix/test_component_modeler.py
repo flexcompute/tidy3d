@@ -3,12 +3,13 @@ from __future__ import annotations
 import gdstk
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d import SimulationDataMap
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
+from tidy3d.plugins.smatrix import Port
 from tidy3d.plugins.smatrix import ModalComponentModeler, ModalComponentModelerData, Port
 from tidy3d.web.api.container import Batch
 
@@ -127,7 +128,7 @@ def make_coupler():
 
     # in-plane field monitor (optional, increases required data storage)
     domain_monitor = td.FieldMonitor(
-        center=[0, 0, wg_height / 2], size=[td.inf, td.inf, 0], freqs=freqs, name="field"
+        center=(0, 0, wg_height / 2), size=(td.inf, td.inf, 0), freqs=freqs, name="field"
     )
 
     # initialize the simulation
@@ -213,13 +214,13 @@ def test_validate_no_sources():
         source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14), polarization="Ex"
     )
     sim_w_source = modeler.simulation.copy(update={"sources": (source,)})
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = modeler.copy(update={"simulation": sim_w_source})
 
 
 def test_element_mappings_none():
     modeler = make_component_modeler()
-    modeler = modeler.updated_copy(ports=[], element_mappings=())
+    modeler = modeler.updated_copy(ports=(), element_mappings=())
     _ = modeler.matrix_indices_run_sim
 
 
@@ -301,7 +302,7 @@ def test_component_modeler_run_only(monkeypatch):
     _ = make_coupler()
     _ = make_ports()
     ONLY_SOURCE = (port_run_only, mode_index_run_only) = ("right_bot", 0)
-    run_only = [ONLY_SOURCE]
+    run_only = (ONLY_SOURCE,)
     modeler = make_component_modeler(run_only=run_only)
     modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
     s_matrix = modeler_data.smatrix()
@@ -380,14 +381,14 @@ def test_mapping_exclusion(monkeypatch):
     mapping = ((("right_bot", 1), ("right_bot", 1)), (EXCLUDE_INDEX, EXCLUDE_INDEX), +1)
     element_mappings.append(mapping)
 
-    modeler = make_component_modeler(element_mappings=element_mappings)
+    modeler = make_component_modeler(element_mappings=tuple(element_mappings))
     modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
     s_matrix = modeler_data.smatrix()
 
     run_sim_indices = modeler.matrix_indices_run_sim
     assert EXCLUDE_INDEX not in run_sim_indices, "mapping didnt exclude row properly"
 
-    _test_mappings(element_mappings, s_matrix)
+    _test_mappings(tuple(element_mappings), s_matrix)
 
 
 def test_mapping_with_run_only():
@@ -416,7 +417,7 @@ def test_mapping_with_run_only():
     _ = make_component_modeler(element_mappings=element_mappings, run_only=run_only)
 
     run_only.remove(EXCLUDE_INDEX)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = make_component_modeler(element_mappings=element_mappings, run_only=run_only)
 
 
@@ -490,7 +491,7 @@ def test_validate_run_only_uniqueness_modal():
     port1_idx = (modeler.ports[1].name, 0)
 
     # Test with duplicate entries - should raise ValidationError
-    with pytest.raises(pydantic.ValidationError, match="duplicate entries"):
+    with pytest.raises(ValidationError, match="duplicate entries"):
         modeler.updated_copy(run_only=(port0_idx, port0_idx, port1_idx))
 
 
@@ -499,11 +500,11 @@ def test_validate_run_only_membership_modal():
     modeler = make_component_modeler()
 
     # Test with invalid port name
-    with pytest.raises(pydantic.ValidationError, match="not present in"):
+    with pytest.raises(ValidationError, match="not present in"):
         modeler.updated_copy(run_only=(("invalid_port", 0),))
 
     # Test with invalid mode index
     port0_name = modeler.ports[0].name
     invalid_mode = modeler.ports[0].mode_spec.num_modes + 1
-    with pytest.raises(pydantic.ValidationError, match="not present in"):
+    with pytest.raises(ValidationError, match="not present in"):
         modeler.updated_copy(run_only=((port0_name, invalid_mode),))

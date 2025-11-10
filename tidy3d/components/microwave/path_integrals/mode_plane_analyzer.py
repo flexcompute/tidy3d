@@ -5,7 +5,7 @@ from __future__ import annotations
 from itertools import chain
 from math import isclose
 
-import pydantic.v1 as pd
+from pydantic import Field
 import shapely
 from shapely.geometry import LineString, Polygon
 
@@ -35,7 +35,7 @@ class ModePlaneAnalyzer(Box):
 
     _plane_validator = assert_plane()
 
-    field_data_colocated: bool = pd.Field(
+    field_data_colocated: bool = Field(
         False,
         title="Field Data Colocated",
         description="Whether field data is colocated with grid points. When 'True', bounding boxes "

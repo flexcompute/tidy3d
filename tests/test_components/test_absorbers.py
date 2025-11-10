@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pydantic
+from pydantic import ValidationError
 import pytest
 
 import tidy3d as td
@@ -18,12 +18,12 @@ def test_port_absorbers_alone():
         direction="+", size=(1, 1, 0), boundary_spec=td.ABCBoundary(permittivity=1)
     )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.InternalAbsorber(
             direction="+", size=(1, 1, 1), boundary_spec=td.ABCBoundary(permittivity=1)
         )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.InternalAbsorber(direction="+", size=(1, 1, 0), boundary_spec=td.ABCBoundary())
 
     absorber = td.InternalAbsorber(
@@ -84,7 +84,7 @@ def test_port_absorbers_simulations():
     sim.plot(x=0)
 
     # validate no fully anisotropic mediums
-    with pytest.raises(SetupError):
+    with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
             size=[1, 1, 1],
@@ -103,7 +103,7 @@ def test_port_absorbers_simulations():
         )
 
     # disallow ABC ports in zero dimensions
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
             size=[1, 1, 0],
@@ -193,13 +193,13 @@ def test_abc_boundaries_alone():
     _ = td.ABCBoundary(permittivity=2)
     _ = td.ABCBoundary(permittivity=2, conductivity=0.1)
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ABCBoundary(permittivity=0)
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ABCBoundary(permittivity=2, conductivity=-0.1)
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ABCBoundary(permittivity=None, conductivity=-0.1)
 
     # test mode abc
@@ -212,7 +212,7 @@ def test_abc_boundaries_alone():
         freq_spec=freq0,
     )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ModeABCBoundary(
             plane=td.Box(size=(1, 1, 0)),
             mode_spec=td.ModeSpec(num_modes=2),
@@ -220,7 +220,7 @@ def test_abc_boundaries_alone():
             freq_spec=-1,
         )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ModeABCBoundary(
             plane=td.Box(size=(1, 1, 0)),
             mode_spec=td.ModeSpec(num_modes=2),
@@ -228,7 +228,7 @@ def test_abc_boundaries_alone():
             freq_spec=freq0,
         )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ModeABCBoundary(
             plane=td.Box(size=(1, 1, 1)),
             mode_spec=td.ModeSpec(num_modes=2),
@@ -274,10 +274,10 @@ def test_abc_boundaries_alone():
     assert abc_boundary == abc_boundary_from_source
     assert abc_boundary == abc_boundary_from_monitor
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Boundary(minus=td.Periodic(), plus=td.ABCBoundary())
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Boundary(minus=td.Periodic(), plus=td.ModeABCBoundary(plane=td.Box(size=(1, 1, 0))))
 
 
@@ -307,7 +307,7 @@ def test_abc_boundaries_simulations():
     sim.plot(x=0)
 
     # validate ABC medium is not anisotorpic
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
             size=[1, 1, 1],
@@ -357,7 +357,7 @@ def test_abc_boundaries_simulations():
         boundary_spec=td.BoundarySpec.all_sides(td.ABCBoundary(permittivity=2)),
     )
     # not ok if ABC boundary is crossed
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
             size=[1, 1, 1],
@@ -470,7 +470,7 @@ def test_abc_boundaries_simulations():
             ),
         )
     # error if no frequency
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
             size=[1, 1, 1],
@@ -485,7 +485,7 @@ def test_abc_boundaries_simulations():
             ),
         )
     # error if no frequency for automatic abc from interesected mediums
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
             size=[1, 1, 1],
@@ -521,7 +521,7 @@ def test_abc_boundaries_simulations():
         boundary_spec=td.BoundarySpec.all_sides(td.ABCBoundary(permittivity=2, conductivity=0)),
     )
     # not ok if non-zerp conductivity
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Simulation(
             center=[0, 0, 0],
             size=[1, 1, 1],
@@ -544,21 +544,21 @@ def test_abc_boundaries_broadband():
     )
 
     # test max num poles > 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.BroadbandModeABCFitterParam(max_num_poles=0)
     # test max num poles <= 10
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.BroadbandModeABCFitterParam(max_num_poles=11)
 
     # test tolerance rms >= 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.BroadbandModeABCFitterParam(tolerance_rms=-1)
 
     # test frequency sampling points > 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.BroadbandModeABCFitterParam(frequency_sampling_points=0)
     # test frequency sampling points <= 21
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.BroadbandModeABCFitterParam(frequency_sampling_points=102)
 
     # test basic instance
@@ -571,11 +571,11 @@ def test_abc_boundaries_broadband():
     )
 
     # test max frequency > min frequency
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.BroadbandModeABCSpec(frequency_range=(fmax, fmin))
 
     # test min frequency > 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.BroadbandModeABCSpec(frequency_range=(0, fmax))
 
     # test from_wavelength_range

@@ -34,9 +34,6 @@ class Expression(Tidy3dBaseModel, ABC):
     It provides common functionality and operator overloading for derived classes.
     """
 
-    class Config:
-        smart_union = True
-
     @abstractmethod
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
         pass
@@ -46,12 +43,12 @@ class Expression(Tidy3dBaseModel, ABC):
 
     def __init_subclass__(cls, **kwargs: dict[str, Any]) -> None:
         super().__init_subclass__(**kwargs)
-        type_value = cls.__fields__.get(TYPE_TAG_STR)
+        type_value = cls.model_fields.get(TYPE_TAG_STR)
         if type_value and type_value.default:
             TYPE_TO_CLASS_MAP[type_value.default] = cls
 
     @classmethod
-    def parse_obj(cls, obj: dict[str, Any]) -> ExpressionType:
+    def model_validate(cls, obj: dict[str, Any]) -> ExpressionType:
         if not isinstance(obj, dict):
             raise TypeError("Input must be a dict")
         type_value = obj.get(TYPE_TAG_STR)
@@ -89,8 +86,8 @@ class Expression(Tidy3dBaseModel, ABC):
                         yield value
                 else:
                     yield expr
-            for field in expr.__fields__.values():
-                value = getattr(expr, field.name)
+            for name in type(expr).model_fields:
+                value = getattr(expr, name)
                 if isinstance(value, Expression):
                     yield from _find_instances(value)
                 elif isinstance(value, list):
@@ -109,7 +106,7 @@ class Expression(Tidy3dBaseModel, ABC):
         if isinstance(other, Expression):
             return other
         if isinstance(other, dict):
-            return Expression.parse_obj(other)
+            return Expression.model_validate(other)
         from .variables import Constant
 
         return Constant(other)

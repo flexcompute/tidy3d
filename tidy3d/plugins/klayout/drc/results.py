@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Union
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.types import Coordinate2D
@@ -187,7 +187,7 @@ def parse_violation_value(value: str) -> Union[EdgeMarker, EdgePairMarker, Multi
 class EdgeMarker(Tidy3dBaseModel):
     """A class for storing KLayout DRC edge marker results."""
 
-    edge: DRCEdge = pd.Field(
+    edge: DRCEdge = Field(
         title="DRC Edge Marker",
         description="The edge marker of the DRC violation. The format is ((x1, y1), (x2, y2)).",
     )
@@ -196,7 +196,7 @@ class EdgeMarker(Tidy3dBaseModel):
 class EdgePairMarker(Tidy3dBaseModel):
     """A class for storing KLayout DRC edge pair marker results."""
 
-    edge_pair: DRCEdgePair = pd.Field(
+    edge_pair: DRCEdgePair = Field(
         title="DRC Edge Pair Marker",
         description="The edge pair marker of the DRC violation. The format is (edge1, edge2), where an edge has format ((x1, y1), (x2, y2)).",
     )
@@ -205,7 +205,7 @@ class EdgePairMarker(Tidy3dBaseModel):
 class MultiPolygonMarker(Tidy3dBaseModel):
     """A class for storing KLayout DRC multi-polygon marker results."""
 
-    polygons: DRCMultiPolygon = pd.Field(
+    polygons: DRCMultiPolygon = Field(
         title="DRC Multi-Polygon Marker",
         description="The multi-polygon marker of the DRC violation. The format is (polygon1, polygon2, ...), where each polygon has format ((x1, y1), (x2, y2), ...).",
     )
@@ -217,10 +217,10 @@ DRCMarker = Union[EdgeMarker, EdgePairMarker, MultiPolygonMarker]
 class DRCViolation(Tidy3dBaseModel):
     """A class for storing KLayout DRC violation results for a single category."""
 
-    category: str = pd.Field(
+    category: str = Field(
         title="DRC Violation Category", description="The category of the DRC violation."
     )
-    markers: tuple[DRCMarker, ...] = pd.Field(
+    markers: tuple[DRCMarker, ...] = Field(
         title="DRC Markers", description="Tuple of DRC markers in this category."
     )
 
@@ -237,7 +237,7 @@ class DRCViolation(Tidy3dBaseModel):
 class DRCResults(Tidy3dBaseModel):
     """A class for loading and storing KLayout DRC results."""
 
-    violations_by_category: dict[str, DRCViolation] = pd.Field(
+    violations_by_category: dict[str, DRCViolation] = Field(
         title="DRC Violations", description="Dictionary of DRC violations by category."
     )
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pydantic
+from pydantic import ValidationError
 import pytest
 
 import tidy3d as td
@@ -10,7 +10,7 @@ import tidy3d as td
 
 def test_source_absorber_frames():
     _ = td.PECFrame()
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.PECFrame(length=0)
 
     wvl_um = 1

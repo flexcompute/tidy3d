@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from pydantic import model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.config import config
@@ -12,7 +12,7 @@ from tidy3d.log import log
 class MicrowaveBaseModel(Tidy3dBaseModel):
     """Base model that all RF and microwave specific components inherit from."""
 
-    @pd.root_validator(pre=False)
+    @model_validator(mode="before")
     def _warn_rf_license(cls, values):
         from tidy3d.config import config
 

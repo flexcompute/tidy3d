@@ -654,7 +654,7 @@ def upload(
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     simulation_type : str = "tidy3d"
         Type of simulation being uploaded.
-    parent_tasks : List[str]
+    parent_tasks : list[str]
         List of related task ids.
     source_required: bool = True
         If ``True``, simulations without sources will raise an error before being uploaded.
@@ -854,7 +854,7 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
         task = SimulationTask.get(task_id, verbose)
         if not task:
             raise ValueError("Task not found.")
-        return TaskInfo(**{"taskId": task.task_id, "taskType": task.task_type, **task.dict()})
+        return TaskInfo(**{"taskId": task.task_id, "taskType": task.task_type, **task.model_dump()})
 
 
 @wait_for_connection
@@ -1650,7 +1650,7 @@ def delete(task_id: TaskId, versions: bool = False) -> TaskInfo:
         raise ValueError("Task id not found.")
     task = SimulationTask.get(task_id, verbose=False)
     task.delete(versions)
-    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
+    return TaskInfo(**{"taskId": task.task_id, **task.model_dump()})
 
 
 @wait_for_connection
@@ -1707,7 +1707,7 @@ def get_tasks(
 
     Returns
     -------
-    List[Dict]
+    list[dict]
         List of dictionaries storing the information for each of the tasks last ``num_tasks`` tasks.
     """
     folder = Folder.get(folder, create=True)
@@ -1720,7 +1720,7 @@ def get_tasks(
         tasks = sorted(tasks, key=lambda t: t.created_at)
     if num_tasks is not None:
         tasks = tasks[:num_tasks]
-    return [task.dict() for task in tasks]
+    return [task.model_dump() for task in tasks]
 
 
 @wait_for_connection

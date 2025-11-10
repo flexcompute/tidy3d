@@ -6,8 +6,8 @@ from functools import lru_cache, partial
 from typing import Annotated, Any, Callable, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
 from numpy.typing import NDArray
+from pydantic import Field, PositiveInt
 
 import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
@@ -20,14 +20,19 @@ from tidy3d.plugins.autograd.utilities import get_kernel_size_px, make_kernel
 class AbstractFilter(Tidy3dBaseModel, abc.ABC):
     """An abstract class for creating and applying convolution filters."""
 
-    kernel_size: Union[pd.PositiveInt, tuple[pd.PositiveInt, ...]] = pd.Field(
-        ..., title="Kernel Size", description="Size of the kernel in pixels for each dimension."
+    kernel_size: Union[PositiveInt, tuple[PositiveInt, ...]] = Field(
+        title="Kernel Size",
+        description="Size of the kernel in pixels for each dimension.",
     )
-    normalize: bool = pd.Field(
-        True, title="Normalize", description="Whether to normalize the kernel so that it sums to 1."
+    normalize: bool = Field(
+        True,
+        title="Normalize",
+        description="Whether to normalize the kernel so that it sums to 1.",
     )
-    padding: PaddingType = pd.Field(
-        "reflect", title="Padding", description="The padding mode to use."
+    padding: PaddingType = Field(
+        "reflect",
+        title="Padding",
+        description="The padding mode to use.",
     )
 
     @classmethod
@@ -41,9 +46,9 @@ class AbstractFilter(Tidy3dBaseModel, abc.ABC):
 
         Parameters
         ----------
-        radius : Union[float, Tuple[float, ...]]
+        radius : Union[float, tuple[float, ...]]
             The radius of the kernel. Can be a scalar or a tuple.
-        dl : Union[float, Tuple[float, ...]]
+        dl : Union[float, tuple[float, ...]]
             The grid spacing. Can be a scalar or a tuple.
         **kwargs
             Additional keyword arguments to pass to the filter constructor.
@@ -136,16 +141,16 @@ def _get_kernel_size(
 
     Parameters
     ----------
-    radius : Union[float, Tuple[float, ...]]
+    radius : Union[float, tuple[float, ...]]
         The radius of the kernel. Can be a scalar or a tuple.
-    dl : Union[float, Tuple[float, ...]]
+    dl : Union[float, tuple[float, ...]]
         The grid spacing. Can be a scalar or a tuple.
-    size_px : Union[int, Tuple[int, ...]]
+    size_px : Union[int, tuple[int, ...]]
         The size of the kernel in pixels for each dimension. Can be a scalar or a tuple.
 
     Returns
     -------
-    Tuple[int, ...]
+    tuple[int, ...]
         The size of the kernel in pixels for each dimension.
 
     Raises
@@ -178,11 +183,11 @@ def make_filter(
 
     Parameters
     ----------
-    radius : Union[float, Tuple[float, ...]] = None
+    radius : Union[float, tuple[float, ...]] = None
         The radius of the kernel. Can be a scalar or a tuple.
-    dl : Union[float, Tuple[float, ...]] = None
+    dl : Union[float, tuple[float, ...]] = None
         The grid spacing. Can be a scalar or a tuple.
-    size_px : Union[int, Tuple[int, ...]] = None
+    size_px : Union[int, tuple[int, ...]] = None
         The size of the kernel in pixels for each dimension. Can be a scalar or a tuple.
     normalize : bool = True
         Whether to normalize the kernel so that it sums to 1.
@@ -228,4 +233,4 @@ See Also
 :func:`~filters.make_filter` : Function to create a filter based on the specified kernel type and size.
 """
 
-FilterType = Annotated[Union[ConicFilter, CircularFilter], pd.Field(discriminator=TYPE_TAG_STR)]
+FilterType = Annotated[Union[ConicFilter, CircularFilter], Field(discriminator=TYPE_TAG_STR)]

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-import pydantic.v1 as pd
+from pydantic import NonNegativeInt
 
 # S matrix indices and entries for the ModalComponentModeler
-MatrixIndex = tuple[str, pd.NonNegativeInt]  # the 'i' in S_ij
+MatrixIndex = tuple[str, NonNegativeInt]  # the 'i' in S_ij
 Element = tuple[MatrixIndex, MatrixIndex]  # the 'ij' in S_ij
 # S matrix indices and entries for the TerminalComponentModeler
 NetworkIndex = str  # the 'i' in S_ij

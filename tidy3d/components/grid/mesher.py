@@ -10,7 +10,7 @@ from math import isclose
 from typing import Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import NonNegativeFloat, NonNegativeInt, PositiveFloat
 from pyroots import Brentq
 from shapely.errors import ShapelyDeprecationWarning
 from shapely.geometry import box as shapely_box
@@ -39,17 +39,17 @@ class Mesher(Tidy3dBaseModel, ABC):
         self,
         axis: Axis,
         structures: list[StructureType],
-        wavelength: pd.PositiveFloat,
-        min_steps_per_wvl: pd.NonNegativeInt,
-        dl_min: pd.NonNegativeFloat,
-        dl_max: pd.NonNegativeFloat,
+        wavelength: PositiveFloat,
+        min_steps_per_wvl: NonNegativeInt,
+        dl_min: NonNegativeFloat,
+        dl_max: NonNegativeFloat,
     ) -> tuple[ArrayFloat1D, ArrayFloat1D]:
         """Calculate the positions of all bounding box interfaces along a given axis."""
 
     @abstractmethod
     def insert_snapping_points(
         self,
-        dl_min: pd.NonNegativeFloat,
+        dl_min: NonNegativeFloat,
         axis: Axis,
         interval_coords: ArrayFloat1D,
         max_dl_list: ArrayFloat1D,
@@ -99,7 +99,7 @@ class GradedMesher(Mesher):
 
     def insert_snapping_points(
         self,
-        dl_min: pd.NonNegativeFloat,
+        dl_min: NonNegativeFloat,
         axis: Axis,
         interval_coords: ArrayFloat1D,
         max_dl_list: ArrayFloat1D,
@@ -109,7 +109,7 @@ class GradedMesher(Mesher):
 
         Parameters
         ----------
-        dl_min: pd.NonNegativeFloat
+        dl_min: NonNegativeFloat
             Lower bound of grid size.
         axis : Axis
             Axis index along which to operate.
@@ -117,7 +117,7 @@ class GradedMesher(Mesher):
             Coordinate of interval boundaries.
         max_dl_list : ArrayFloat1D
             Maximal allowed step size of each interval generated from `parse_structures`.
-        snapping_points : List[CoordinateOptional]
+        snapping_points : list[CoordinateOptional]
             A set of points that enforce grid boundaries to pass through them.
 
         Returns
@@ -184,10 +184,10 @@ class GradedMesher(Mesher):
         self,
         axis: Axis,
         structures: list[StructureType],
-        wavelength: pd.PositiveFloat,
-        min_steps_per_wvl: pd.NonNegativeInt,
-        dl_min: pd.NonNegativeFloat,
-        dl_max: pd.NonNegativeFloat,
+        wavelength: PositiveFloat,
+        min_steps_per_wvl: NonNegativeInt,
+        dl_min: NonNegativeFloat,
+        dl_max: NonNegativeFloat,
     ) -> tuple[ArrayFloat1D, ArrayFloat1D]:
         """Calculate the positions of all bounding box interfaces along a given axis.
         In this implementation, in most cases the complexity should be O(len(structures)**2),
@@ -198,15 +198,15 @@ class GradedMesher(Mesher):
         ----------
         axis : Axis
             Axis index along which to operate.
-        structures : List[StructureType]
+        structures : list[StructureType]
             List of structures, with the simulation structure being the first item.
-        wavelength : pd.PositiveFloat
+        wavelength : PositiveFloat
             Wavelength to use for the step size and for dispersive media epsilon.
-        min_steps_per_wvl : pd.NonNegativeInt
+        min_steps_per_wvl : NonNegativeInt
             Minimum requested steps per wavelength.
-        dl_min: pd.NonNegativeFloat
+        dl_min: NonNegativeFloat
             Lower bound of grid size.
-        dl_max: pd.NonNegativeFloat
+        dl_max: NonNegativeFloat
             Upper bound of grid size.
 
         Returns
@@ -406,14 +406,14 @@ class GradedMesher(Mesher):
 
         Parameters
         ----------
-        intervals : Dict[str, List]
+        intervals : dict[str, List]
             Dictionary containing the coordinates of the interval boundaries, and a list
             of lists of structures contained in each interval.
         str_ind : int
             Index of the current structure.
         str_bbox : ArrayFloat1D
             Bounding box of the current structure.
-        bbox_contained_2d : List[ArrayFloat1D]
+        bbox_contained_2d : list[ArrayFloat1D]
             List of 3D bounding boxes that contain the current structure in 2D.
         min_step : float
             Absolute minimum interval size to impose.
@@ -521,12 +521,12 @@ class GradedMesher(Mesher):
 
         Parameters
         ----------
-        structures : List[StructureType]
+        structures : list[StructureType]
             List of structures, with the simulation structure being the first item.
 
         Returns
         -------
-        Tuple[int, List[StructureType]]
+        tuple[int, list[StructureType]]
             The number of unenforced structures, reordered structure list
 
         """
@@ -576,14 +576,14 @@ class GradedMesher(Mesher):
 
         Parameters
         ----------
-        structures : List[StructureType]
+        structures : list[StructureType]
             List of structures, with the simulation structure being the first item.
         axis : Axis
             Axis index to place last.
 
         Returns
         -------
-        List[StructureType]
+        list[StructureType]
             A list of filtered structures whose ``dl`` along this axis is not ``None``.
         """
 
@@ -629,8 +629,8 @@ class GradedMesher(Mesher):
         structures: list[StructureType],
         wavelength: float,
         min_steps_per_wvl: float,
-        dl_min: pd.NonNegativeFloat,
-        dl_max: pd.NonNegativeFloat,
+        dl_min: NonNegativeFloat,
+        dl_max: NonNegativeFloat,
         axis: Axis,
     ) -> ArrayFloat1D:
         """Get the minimum mesh required in each structure. Special media are set to index of 1,
@@ -639,15 +639,15 @@ class GradedMesher(Mesher):
 
         Parameters
         ----------
-        structures : List[Structure]
+        structures : list[Structure]
             List of structures, with the simulation structure being the first item.
         wavelength : float
             Wavelength to use for the step size and for dispersive media epsilon.
         min_steps_per_wvl : float
             Minimum requested steps per wavelength.
-        dl_min: pd.NonNegativeFloat
+        dl_min: NonNegativeFloat
             Lower bound of grid size.
-        dl_max: pd.NonNegativeFloat
+        dl_max: NonNegativeFloat
             Upper bound of grid size.
         axis : Axis
             Axis index along which to operate.
@@ -670,14 +670,14 @@ class GradedMesher(Mesher):
 
         Parameters
         ----------
-        structures : List[StructureType]
+        structures : list[StructureType]
             List of structures, with the simulation structure being the first item.
         axis : Axis
             Axis index to place last.
 
         Returns
         -------
-        List[ArrayFloat1D]
+        list[ArrayFloat1D]
             A list of the bounding boxes of shape ``(2, 3)`` for each structure, with the bounds
             along ``axis`` being ``(:, 2)``.
         """
@@ -805,7 +805,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        List[ArrayFloat1D]
+        list[ArrayFloat1D]
             A list of of step sizes in each interval.
         """
 
@@ -900,7 +900,7 @@ class GradedMesher(Mesher):
 
         Returns
         -------
-        Tuple[ArrayFloat1D, ArrayFloat1D]
+        tuple[ArrayFloat1D, ArrayFloat1D]
             left and right step sizes of each interval.
         """
 

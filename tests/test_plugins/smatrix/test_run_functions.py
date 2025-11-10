@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
-import pydantic.v1 as pd
+from pydantic import ValidationError
 import pytest
 
 import tidy3d
@@ -133,7 +133,7 @@ def test_compose_modeler_data_keys_mismatch():
         ),
     )
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         TerminalComponentModelerData(
             modeler=make_terminal_component_modeler(planar_pec=True), data=dummy_sim_data_map
         )

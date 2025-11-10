@@ -6,14 +6,23 @@ from abc import ABC, abstractmethod
 from typing import Any, Literal, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
 
-from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.base import Box, ClipOperation
 from tidy3d.components.geometry.utils_2d import increment_float
 from tidy3d.components.lumped_element import LumpedElementType
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import MeshOverrideStructure, Structure, StructureType
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types import (
     TYPE_TAG_STR,
     ArrayFloat1D,
@@ -24,7 +33,6 @@ from tidy3d.components.types import (
     PriorityMode,
     Symmetry,
     Undefined,
-    annotate_type,
 )
 from tidy3d.constants import C_0, MICROMETER, dp_eps, fp_eps, inf
 from tidy3d.exceptions import SetupError
@@ -54,8 +62,8 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         structures: list[StructureType],
         symmetry: tuple[Symmetry, Symmetry, Symmetry],
         periodic: bool,
-        wavelength: pd.PositiveFloat,
-        num_pml_layers: tuple[pd.NonNegativeInt, pd.NonNegativeInt],
+        wavelength: PositiveFloat,
+        num_pml_layers: tuple[NonNegativeInt, NonNegativeInt],
         snapping_points: tuple[CoordinateOptional, ...],
     ) -> Coords1D:
         """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
@@ -65,9 +73,9 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         ----------
         axis : Axis
             Axis of this direction.
-        structures : List[StructureType]
+        structures : list[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
-        symmetry : Tuple[Symmetry, Symmetry, Symmetry]
+        symmetry : tuple[Symmetry, Symmetry, Symmetry]
             Reflection symmetry across a plane bisecting the simulation domain
             normal to each of the three axes.
         periodic : bool
@@ -75,9 +83,9 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
             Only relevant for autogrids.
         wavelength : float
             Free-space wavelength.
-        num_pml_layers : Tuple[int, int]
+        num_pml_layers : tuple[int, int]
             number of layers in the absorber + and - direction along one dimension.
-        snapping_points : Tuple[CoordinateOptional, ...]
+        snapping_points : tuple[CoordinateOptional, ...]
             A set of points that enforce grid boundaries to pass through them.
 
         Returns
@@ -127,7 +135,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        structures : List[StructureType]
+        structures : list[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
         **kwargs
             Other arguments
@@ -145,7 +153,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        num_layers : Tuple[int, int]
+        num_layers : tuple[int, int]
             number of layers in the absorber + and - direction along one dimension.
         bound_coords : np.ndarray
             coordinates specifying boundaries between cells along one dimension.
@@ -178,7 +186,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         ----------
         axis : Axis
             Axis of this direction.
-        structures : List[StructureType]
+        structures : list[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
         machine_error_relaxation : bool
             When operations such as translation are applied to the 1d grids, fix the bounds
@@ -246,9 +254,9 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         ----------
         wavelength : float
             Wavelength to use for the step size and for dispersive media epsilon.
-        structure_list : List[Structure]
+        structure_list : list[Structure]
             List of structures present in the simulation.
-        sim_size : Tuple[float, 3]
+        sim_size : tuple[float, 3]
             Simulation domain size.
 
         Returns
@@ -279,15 +287,14 @@ class UniformGrid(GridSpec1d):
         * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
     """
 
-    dl: pd.PositiveFloat = pd.Field(
-        ...,
+    dl: PositiveFloat = Field(
         title="Grid Size",
         description="Grid size for uniform grid generation.",
         units=MICROMETER,
     )
 
-    @pd.validator("dl", always=True)
-    def _validate_dl(cls, val):
+    @field_validator("dl")
+    def _validate_dl(val):
         """
         Ensure 'dl' is not too small.
         """
@@ -311,7 +318,7 @@ class UniformGrid(GridSpec1d):
         ----------
         axis : Axis
             Axis of this direction.
-        structures : List[StructureType]
+        structures : list[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
 
         Returns
@@ -342,9 +349,9 @@ class UniformGrid(GridSpec1d):
         ----------
         wavelength : float
             Wavelength to use for the step size and for dispersive media epsilon.
-        structure_list : List[Structure]
+        structure_list : list[Structure]
             List of structures present in the simulation.
-        sim_size : Tuple[float, 3]
+        sim_size : tuple[float, 3]
             Simulation domain size.
 
         Returns
@@ -364,8 +371,7 @@ class CustomGridBoundaries(GridSpec1d):
     >>> grid_1d = CustomGridBoundaries(coords=[-0.2, 0.0, 0.2, 0.4, 0.5, 0.6, 0.7])
     """
 
-    coords: Coords1D = pd.Field(
-        ...,
+    coords: Coords1D = Field(
         title="Grid Boundary Coordinates",
         description="An array of grid boundary coordinates.",
         units=MICROMETER,
@@ -383,7 +389,7 @@ class CustomGridBoundaries(GridSpec1d):
         ----------
         axis : Axis
             Axis of this direction.
-        structures : List[StructureType]
+        structures : list[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
 
         Returns
@@ -408,9 +414,9 @@ class CustomGridBoundaries(GridSpec1d):
         ----------
         wavelength : float
             Wavelength to use for the step size and for dispersive media epsilon.
-        structure_list : List[Structure]
+        structure_list : list[Structure]
             List of structures present in the simulation.
-        sim_size : Tuple[float, 3]
+        sim_size : tuple[float, 3]
             Simulation domain size.
 
         Returns
@@ -421,8 +427,8 @@ class CustomGridBoundaries(GridSpec1d):
 
         return min(np.diff(self.coords))
 
-    @pd.validator("coords", always=True)
-    def _validate_coords(cls, val):
+    @field_validator("coords")
+    def _validate_coords(val):
         """
         Ensure 'coords' is sorted and has at least 2 entries.
         """
@@ -447,8 +453,7 @@ class CustomGrid(GridSpec1d):
     >>> grid_1d = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])
     """
 
-    dl: tuple[pd.PositiveFloat, ...] = pd.Field(
-        ...,
+    dl: tuple[PositiveFloat, ...] = Field(
         title="Customized grid sizes.",
         description="An array of custom nonuniform grid sizes. The resulting grid is centered on "
         "the simulation center such that it spans the region "
@@ -458,7 +463,7 @@ class CustomGrid(GridSpec1d):
         units=MICROMETER,
     )
 
-    custom_offset: float = pd.Field(
+    custom_offset: Optional[float] = Field(
         None,
         title="Customized grid offset.",
         description="The starting coordinate of the grid which defines the simulation center. "
@@ -479,7 +484,7 @@ class CustomGrid(GridSpec1d):
         ----------
         axis : Axis
             Axis of this direction.
-        structures : List[StructureType]
+        structures : list[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
 
         Returns
@@ -517,9 +522,9 @@ class CustomGrid(GridSpec1d):
         ----------
         wavelength : float
             Wavelength to use for the step size and for dispersive media epsilon.
-        structure_list : List[Structure]
+        structure_list : list[Structure]
             List of structures present in the simulation.
-        sim_size : Tuple[float, 3]
+        sim_size : tuple[float, 3]
             Simulation domain size.
 
         Returns
@@ -533,7 +538,7 @@ class CustomGrid(GridSpec1d):
 class AbstractAutoGrid(GridSpec1d):
     """Specification for non-uniform or quasi-uniform grid along a given dimension."""
 
-    max_scale: float = pd.Field(
+    max_scale: float = Field(
         1.4,
         title="Maximum Grid Size Scaling",
         description="Sets the maximum ratio between any two consecutive grid steps.",
@@ -541,13 +546,13 @@ class AbstractAutoGrid(GridSpec1d):
         lt=2.0,
     )
 
-    mesher: MesherType = pd.Field(
-        GradedMesher(),
+    mesher: MesherType = Field(
+        default_factory=GradedMesher,
         title="Grid Construction Tool",
         description="The type of mesher to use to generate the grid automatically.",
     )
 
-    dl_min: pd.NonNegativeFloat = pd.Field(
+    dl_min: Optional[NonNegativeFloat] = Field(
         None,
         title="Lower Bound of Grid Size",
         description="Lower bound of the grid size along this dimension regardless of "
@@ -604,16 +609,16 @@ class AbstractAutoGrid(GridSpec1d):
         ----------
         axis : Axis
             Axis of this direction.
-        structures : List[StructureType]
+        structures : list[StructureType]
             List of structures present in simulation.
         wavelength : float
             Free-space wavelength.
-        symmetry : Tuple[Symmetry, Symmetry, Symmetry]
+        symmetry : tuple[Symmetry, Symmetry, Symmetry]
             Reflection symmetry across a plane bisecting the simulation domain
             normal to each of the three axes.
         is_periodic : bool
             Apply periodic boundary condition or not.
-        snapping_points : Tuple[CoordinateOptional, ...]
+        snapping_points : tuple[CoordinateOptional, ...]
             A set of points that enforce grid boundaries to pass through them.
 
         Returns
@@ -716,8 +721,7 @@ class QuasiUniformGrid(AbstractAutoGrid):
         * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
     """
 
-    dl: pd.PositiveFloat = pd.Field(
-        ...,
+    dl: PositiveFloat = Field(
         title="Grid Size",
         description="Grid size for quasi-uniform grid generation. Grid size at some locations can be "
         "slightly smaller.",
@@ -769,9 +773,9 @@ class QuasiUniformGrid(AbstractAutoGrid):
         ----------
         wavelength : float
             Wavelength to use for the step size and for dispersive media epsilon.
-        structure_list : List[Structure]
+        structure_list : list[Structure]
             List of structures present in the simulation.
-        sim_size : Tuple[float, 3]
+        sim_size : tuple[float, 3]
             Simulation domain size.
 
         Returns
@@ -807,14 +811,14 @@ class AutoGrid(AbstractAutoGrid):
         *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
     """
 
-    min_steps_per_wvl: float = pd.Field(
+    min_steps_per_wvl: float = Field(
         10.0,
         title="Minimal Number of Steps Per Wavelength",
         description="Minimal number of steps per wavelength in each medium.",
         ge=6.0,
     )
 
-    min_steps_per_sim_size: float = pd.Field(
+    min_steps_per_sim_size: float = Field(
         10.0,
         title="Minimal Number of Steps Per Simulation Domain Size",
         description="Minimal number of steps per longest edge length of simulation domain "
@@ -861,9 +865,9 @@ class AutoGrid(AbstractAutoGrid):
         ----------
         wavelength : float
             Wavelength to use for the step size and for dispersive media epsilon.
-        structure_list : List[Structure]
+        structure_list : list[Structure]
             List of structures present in the simulation.
-        sim_size : Tuple[float, 3]
+        sim_size : tuple[float, 3]
             Simulation domain size.
 
         Returns
@@ -900,27 +904,27 @@ class GridRefinement(Tidy3dBaseModel):
 
     """
 
-    refinement_factor: Optional[pd.PositiveFloat] = pd.Field(
+    refinement_factor: Optional[PositiveFloat] = Field(
         None,
         title="Mesh Refinement Factor",
         description="Refine grid step size in vacuum by this factor.",
     )
 
-    dl: Optional[pd.PositiveFloat] = pd.Field(
+    dl: Optional[PositiveFloat] = Field(
         None,
         title="Grid Size",
         description="Grid step size in the refined region.",
         units=MICROMETER,
     )
 
-    num_cells: pd.PositiveInt = pd.Field(
+    num_cells: PositiveInt = Field(
         3,
         title="Number of Refined Grid Cells",
         description="Number of grid cells in the refinement region.",
     )
 
     @property
-    def _refinement_factor(self) -> pd.PositiveFloat:
+    def _refinement_factor(self) -> PositiveFloat:
         """Refinement factor applied internally."""
         if self.refinement_factor is None and self.dl is None:
             return DEFAULT_REFINEMENT_FACTOR
@@ -1007,20 +1011,19 @@ class LayerRefinementSpec(Box):
 
     """
 
-    axis: Axis = pd.Field(
-        ...,
+    axis: Axis = Field(
         title="Axis",
         description="Specifies dimension of the layer normal axis (0,1,2) -> (x,y,z).",
     )
 
-    min_steps_along_axis: Optional[pd.PositiveFloat] = pd.Field(
+    min_steps_along_axis: Optional[PositiveFloat] = Field(
         None,
         title="Minimal Number Of Steps Along Axis",
         description="If not ``None`` and the thickness of the layer is nonzero, set minimal "
         "number of steps discretizing the layer thickness.",
     )
 
-    bounds_refinement: Optional[GridRefinement] = pd.Field(
+    bounds_refinement: Optional[GridRefinement] = Field(
         None,
         title="Mesh Refinement Factor Around Layer Bounds",
         description="If not ``None``, refine mesh around minimum and maximum positions "
@@ -1028,35 +1031,35 @@ class LayerRefinementSpec(Box):
         "refinement here is only applied if it sets a smaller grid size.",
     )
 
-    bounds_snapping: Optional[Literal["bounds", "lower", "upper", "center"]] = pd.Field(
+    bounds_snapping: Optional[Literal["bounds", "lower", "upper", "center"]] = Field(
         "lower",
         title="Placing Grid Snapping Point Along Axis",
         description="If not ``None``, enforcing grid boundaries to pass through ``lower``, "
         "``center``, or ``upper`` position of the layer; or both ``lower`` and ``upper`` with ``bounds``.",
     )
 
-    corner_finder: Optional[CornerFinderSpec] = pd.Field(
-        CornerFinderSpec(),
+    corner_finder: Optional[CornerFinderSpec] = Field(
+        default_factory=CornerFinderSpec,
         title="Inplane Corner Detection Specification",
         description="Specification for inplane corner detection. Inplane mesh refinement "
         "is based on the coordinates of those corners.",
     )
 
-    corner_snapping: bool = pd.Field(
+    corner_snapping: bool = Field(
         True,
         title="Placing Grid Snapping Point At Corners",
         description="If ``True`` and ``corner_finder`` is not ``None``, enforcing inplane "
         "grid boundaries to pass through corners of geometries specified by ``corner_finder``.",
     )
 
-    corner_refinement: Optional[GridRefinement] = pd.Field(
-        GridRefinement(),
+    corner_refinement: Optional[GridRefinement] = Field(
+        default_factory=GridRefinement,
         title="Inplane Mesh Refinement Factor Around Corners",
         description="If not ``None`` and ``corner_finder`` is not ``None``, refine mesh around "
         "corners of geometries specified by ``corner_finder``. ",
     )
 
-    refinement_inside_sim_only: bool = pd.Field(
+    refinement_inside_sim_only: bool = Field(
         True,
         title="Apply Refinement Only To Features Inside Simulation Domain",
         description="If ``True``, only apply mesh refinement to features such as corners inside "
@@ -1065,21 +1068,21 @@ class LayerRefinementSpec(Box):
         "and the projection of the simulation domain overlaps.",
     )
 
-    gap_meshing_iters: pd.NonNegativeInt = pd.Field(
+    gap_meshing_iters: NonNegativeInt = Field(
         1,
         title="Gap Meshing Iterations",
         description="Number of recursive iterations for resolving thin gaps. "
         "The underlying algorithm detects gaps contained in a single cell and places a snapping plane at the gaps's centers.",
     )
 
-    dl_min_from_gap_width: bool = pd.Field(
+    dl_min_from_gap_width: bool = Field(
         True,
         title="Set ``dl_min`` from Estimated Gap Width",
         description="Take into account autodetected minimal PEC gap width when determining ``dl_min``. "
         "This only applies if ``dl_min`` in ``AutoGrid`` specification is not set.",
     )
 
-    interior_disjoint_geometries: bool = pd.Field(
+    interior_disjoint_geometries: bool = Field(
         True,
         title="Geometries Are Interior-Disjoint",
         description="If ``True``, geometries made of different materials on the plane must not be overlapping. "
@@ -1087,13 +1090,14 @@ class LayerRefinementSpec(Box):
         "of corner finder when there are many structures crossing the plane.",
     )
 
-    @pd.validator("axis", always=True)
-    @skip_if_fields_missing(["size"])
-    def _finite_size_along_axis(cls, val, values):
+    @model_validator(mode="after")
+    def _finite_size_along_axis(self):
+        if self.size is None:
+            return self
         """size must be finite along axis."""
-        if np.isinf(values["size"][val]):
+        if np.isinf(self.size[self.axis]):
             raise SetupError("'size' must take finite values along 'axis' dimension.")
-        return val
+        return self
 
     @classmethod
     def from_layer_bounds(
@@ -1107,7 +1111,7 @@ class LayerRefinementSpec(Box):
         corner_snapping: bool = True,
         corner_refinement: Union[GridRefinement, None, object] = Undefined,
         refinement_inside_sim_only: bool = True,
-        gap_meshing_iters: pd.NonNegativeInt = 1,
+        gap_meshing_iters: NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
         **kwargs: Any,
     ):
@@ -1118,7 +1122,7 @@ class LayerRefinementSpec(Box):
         ----------
         axis : Axis
             Specifies dimension of the layer normal axis (0,1,2) -> (x,y,z).
-        bounds : Tuple[float, float]
+        bounds : tuple[float, float]
             Minimum and maximum positions of the layer along axis dimension.
         min_steps_along_axis : np.PositiveFloat = None
             Minimal number of steps along axis.
@@ -1183,7 +1187,7 @@ class LayerRefinementSpec(Box):
         corner_snapping: bool = True,
         corner_refinement: GridRefinement = Undefined,
         refinement_inside_sim_only: bool = True,
-        gap_meshing_iters: pd.NonNegativeInt = 1,
+        gap_meshing_iters: NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
         **kwargs: Any,
     ):
@@ -1191,9 +1195,9 @@ class LayerRefinementSpec(Box):
 
         Parameters
         ----------
-        rmin : Tuple[float, float, float]
+        rmin : tuple[float, float, float]
             (x, y, z) coordinate of the minimum values.
-        rmax : Tuple[float, float, float]
+        rmax : tuple[float, float, float]
             (x, y, z) coordinate of the maximum values.
         axis : Axis
             Specifies dimension of the layer normal axis (0,1,2) -> (x,y,z). If ``None``, apply the dimension
@@ -1260,7 +1264,7 @@ class LayerRefinementSpec(Box):
         corner_snapping: bool = True,
         corner_refinement: GridRefinement = Undefined,
         refinement_inside_sim_only: bool = True,
-        gap_meshing_iters: pd.NonNegativeInt = 1,
+        gap_meshing_iters: NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
         **kwargs: Any,
     ):
@@ -1268,7 +1272,7 @@ class LayerRefinementSpec(Box):
 
         Parameters
         ----------
-        structures : List[Structure]
+        structures : list[Structure]
             A list of structures whose overall bounding box is used to define mesh refinement
         axis : Axis
             Specifies dimension of the layer normal axis (0,1,2) -> (x,y,z). If ``None``, apply the dimension
@@ -2147,28 +2151,28 @@ class GridSpec(Tidy3dBaseModel):
         *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
     """
 
-    grid_x: GridType = pd.Field(
-        AutoGrid(),
+    grid_x: GridType = Field(
+        default_factory=AutoGrid,
         title="Grid specification along x-axis",
         description="Grid specification along x-axis",
         discriminator=TYPE_TAG_STR,
     )
 
-    grid_y: GridType = pd.Field(
-        AutoGrid(),
+    grid_y: GridType = Field(
+        default_factory=AutoGrid,
         title="Grid specification along y-axis",
         description="Grid specification along y-axis",
         discriminator=TYPE_TAG_STR,
     )
 
-    grid_z: GridType = pd.Field(
-        AutoGrid(),
+    grid_z: GridType = Field(
+        default_factory=AutoGrid,
         title="Grid specification along z-axis",
         description="Grid specification along z-axis",
         discriminator=TYPE_TAG_STR,
     )
 
-    wavelength: float = pd.Field(
+    wavelength: Optional[PositiveFloat] = Field(
         None,
         title="Free-space wavelength",
         description="Free-space wavelength for automatic nonuniform grid. It can be ``None`` "
@@ -2179,7 +2183,7 @@ class GridSpec(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    override_structures: tuple[annotate_type(StructureType), ...] = pd.Field(
+    override_structures: tuple[discriminated_union(StructureType), ...] = Field(
         (),
         title="Grid specification override structures",
         description="A set of structures that is added on top of the simulation structures in "
@@ -2189,7 +2193,7 @@ class GridSpec(Tidy3dBaseModel):
         "uses :class:`.AutoGrid` or :class:`.QuasiUniformGrid`.",
     )
 
-    snapping_points: tuple[CoordinateOptional, ...] = pd.Field(
+    snapping_points: tuple[CoordinateOptional, ...] = Field(
         (),
         title="Grid specification snapping_points",
         description="A set of points that enforce grid boundaries to pass through them. "
@@ -2200,7 +2204,7 @@ class GridSpec(Tidy3dBaseModel):
         "uses :class:`.AutoGrid` or :class:`.QuasiUniformGrid`.",
     )
 
-    layer_refinement_specs: tuple[LayerRefinementSpec, ...] = pd.Field(
+    layer_refinement_specs: tuple[LayerRefinementSpec, ...] = Field(
         (),
         title="Mesh Refinement In Layered Structures",
         description="Automatic mesh refinement according to layer specifications. The material "
@@ -2230,7 +2234,7 @@ class GridSpec(Tidy3dBaseModel):
         return np.any([isinstance(mesh, (CustomGrid, CustomGridBoundaries)) for mesh in grid_list])
 
     @staticmethod
-    def wavelength_from_sources(sources: list[SourceType]) -> pd.PositiveFloat:
+    def wavelength_from_sources(sources: list[SourceType]) -> PositiveFloat:
         """Define a wavelength based on supplied sources. Called if auto mesh is used and
         ``self.wavelength is None``."""
 
@@ -2309,16 +2313,16 @@ class GridSpec(Tidy3dBaseModel):
 
         Parameters
         ----------
-        structures : List[Structure]
+        structures : list[Structure]
             List of physical structures.
-        lumped_elements : List[LumpedElementType]
+        lumped_elements : list[LumpedElementType]
             List of lumped elements.
         cached_corners_and_convexity : Optional[list[CachedCornersAndConvexity]]
             Cached corners and convexity data.
 
         Returns
         -------
-        List[CoordinateOptional]
+        list[CoordinateOptional]
             List of snapping points coordinates.
         """
 
@@ -2353,16 +2357,16 @@ class GridSpec(Tidy3dBaseModel):
 
         Parameters
         ----------
-        structures : List[Structure]
+        structures : list[Structure]
             List of physical structures.
-        lumped_elements : List[LumpedElementType]
+        lumped_elements : list[LumpedElementType]
             List of lumped elements.
-        internal_snapping_points : List[CoordinateOptional]
+        internal_snapping_points : list[CoordinateOptional]
             If `None`, recomputes internal snapping points.
 
         Returns
         -------
-        List[CoordinateOptional]
+        list[CoordinateOptional]
             List of snapping points coordinates.
         """
 
@@ -2380,7 +2384,7 @@ class GridSpec(Tidy3dBaseModel):
     def internal_override_structures(
         self,
         structures: list[Structure],
-        wavelength: pd.PositiveFloat,
+        wavelength: PositiveFloat,
         sim_size: tuple[float, 3],
         lumped_elements: list[LumpedElementType],
         cached_corners_and_convexity=None,
@@ -2390,20 +2394,20 @@ class GridSpec(Tidy3dBaseModel):
 
         Parameters
         ----------
-        structures : List[Structure]
+        structures : list[Structure]
             List of structures, with the simulation structure being the first item.
-        wavelength : pd.PositiveFloat
+        wavelength : PositiveFloat
             Wavelength to use for minimal step size in vaccum.
-        sim_size : Tuple[float, 3]
+        sim_size : tuple[float, 3]
             Simulation domain size.
-        lumped_elements : List[LumpedElementType]
+        lumped_elements : list[LumpedElementType]
             List of lumped elements.
         cached_corners_and_convexity : Optional[list[CachedCornersAndConvexity]]
             Cached corners and convexity data.
 
         Returns
         -------
-        List[StructureType]
+        list[StructureType]
             List of override structures.
         """
 
@@ -2432,7 +2436,7 @@ class GridSpec(Tidy3dBaseModel):
     def all_override_structures(
         self,
         structures: list[Structure],
-        wavelength: pd.PositiveFloat,
+        wavelength: PositiveFloat,
         sim_size: tuple[float, 3],
         lumped_elements: list[LumpedElementType],
         structure_priority_mode: PriorityMode = "equal",
@@ -2443,22 +2447,22 @@ class GridSpec(Tidy3dBaseModel):
 
         Parameters
         ----------
-        structures : List[Structure]
+        structures : list[Structure]
             List of structures, with the simulation structure being the first item.
-        wavelength : pd.PositiveFloat
+        wavelength : PositiveFloat
             Wavelength to use for minimal step size in vaccum.
-        sim_size : Tuple[float, 3]
+        sim_size : tuple[float, 3]
             Simulation domain size.
-        lumped_elements : List[LumpedElementType]
+        lumped_elements : list[LumpedElementType]
             List of lumped elements.
         structure_priority_mode : PriorityMode
             Structure priority setting.
-        internal_override_structures : List[MeshOverrideStructure]
+        internal_override_structures : list[MeshOverrideStructure]
             If `None`, recomputes internal override structures.
 
         Returns
         -------
-        List[StructureType]
+        list[StructureType]
             List of sorted override structures.
         """
 
@@ -2533,7 +2537,7 @@ class GridSpec(Tidy3dBaseModel):
         symmetry: tuple[Symmetry, Symmetry, Symmetry],
         periodic: tuple[bool, bool, bool],
         sources: list[SourceType],
-        num_pml_layers: list[tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
+        num_pml_layers: list[tuple[NonNegativeInt, NonNegativeInt]],
         lumped_elements: list[LumpedElementType] = (),
         internal_override_structures: Optional[list[MeshOverrideStructure]] = None,
         internal_snapping_points: Optional[list[CoordinateOptional]] = None,
@@ -2548,26 +2552,26 @@ class GridSpec(Tidy3dBaseModel):
 
         Parameters
         ----------
-        structures : List[Structure]
+        structures : list[Structure]
             List of structures present in the simulation. The first structure must be the
             simulation geometry with the simulation background medium.
-        symmetry : Tuple[Symmetry, Symmetry, Symmetry]
+        symmetry : tuple[Symmetry, Symmetry, Symmetry]
             Reflection symmetry across a plane bisecting the simulation domain
             normal to each of the three axes.
-        periodic: Tuple[bool, bool, bool]
+        periodic: tuple[bool, bool, bool]
             Apply periodic boundary condition or not along each of the dimensions.
             Only relevant for autogrids.
-        sources : List[SourceType]
+        sources : list[SourceType]
             List of sources.
-        num_pml_layers : List[Tuple[float, float]]
+        num_pml_layers : list[tuple[float, float]]
             List containing the number of absorber layers in - and + boundaries.
-        lumped_elements : List[LumpedElementType]
+        lumped_elements : list[LumpedElementType]
             List of lumped elements.
-        internal_override_structures : List[MeshOverrideStructure]
-            If `None`, recomputes internal override structures.
-        internal_snapping_points : List[CoordinateOptional]
-            If `None`, recomputes internal snapping points.
-        boundary_types : Tuple[Tuple[str, str], Tuple[str, str], Tuple[str, str]] = [[None, None], [None, None], [None, None]]
+        internal_override_structures : list[MeshOverrideStructure]
+            If ``None``, recomputes internal override structures.
+        internal_snapping_points : list[CoordinateOptional]
+            If ``None``, recomputes internal snapping points.
+        boundary_types : tuple[tuple[str, str], tuple[str, str], tuple[str, str]] = [[None, None], [None, None], [None, None]]
             Type of boundary conditions along each dimension: "pec/pmc", "periodic", or
             None for any other. This is relevant only for gap meshing.
         structure_priority_mode : PriorityMode
@@ -2599,7 +2603,7 @@ class GridSpec(Tidy3dBaseModel):
         symmetry: tuple[Symmetry, Symmetry, Symmetry],
         periodic: tuple[bool, bool, bool],
         sources: list[SourceType],
-        num_pml_layers: list[tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
+        num_pml_layers: list[tuple[NonNegativeInt, NonNegativeInt]],
         lumped_elements: list[LumpedElementType] = (),
         internal_override_structures: Optional[list[MeshOverrideStructure]] = None,
         internal_snapping_points: Optional[list[CoordinateOptional]] = None,
@@ -2615,26 +2619,26 @@ class GridSpec(Tidy3dBaseModel):
 
         Parameters
         ----------
-        structures : List[Structure]
+        structures : list[Structure]
             List of structures present in the simulation. The first structure must be the
             simulation geometry with the simulation background medium.
-        symmetry : Tuple[Symmetry, Symmetry, Symmetry]
+        symmetry : tuple[Symmetry, Symmetry, Symmetry]
             Reflection symmetry across a plane bisecting the simulation domain
             normal to each of the three axes.
-        periodic: Tuple[bool, bool, bool]
+        periodic: tuple[bool, bool, bool]
             Apply periodic boundary condition or not along each of the dimensions.
             Only relevant for autogrids.
-        sources : List[SourceType]
+        sources : list[SourceType]
             List of sources.
-        num_pml_layers : List[Tuple[float, float]]
+        num_pml_layers : list[tuple[float, float]]
             List containing the number of absorber layers in - and + boundaries.
-        lumped_elements : List[LumpedElementType]
+        lumped_elements : list[LumpedElementType]
             List of lumped elements.
-        internal_override_structures : List[MeshOverrideStructure]
+        internal_override_structures : list[MeshOverrideStructure]
             If `None`, recomputes internal override structures.
-        internal_snapping_points : List[CoordinateOptional]
+        internal_snapping_points : list[CoordinateOptional]
             If `None`, recomputes internal snapping points.
-        boundary_types : Tuple[Tuple[str, str], Tuple[str, str], Tuple[str, str]] = [[None, None], [None, None], [None, None]]
+        boundary_types : tuple[tuple[str, str], tuple[str, str], tuple[str, str]] = [[None, None], [None, None], [None, None]]
             Type of boundary conditions along each dimension: "pec/pmc", "periodic", or
             None for any other. This is relevant only for gap meshing.
         structure_priority_mode : PriorityMode
@@ -2642,7 +2646,7 @@ class GridSpec(Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[Grid, List[CoordinateOptional]]:
+        tuple[Grid, list[CoordinateOptional]]:
             Entire simulation grid and snapping points generated during iterative gap meshing.
         """
 
@@ -2719,37 +2723,37 @@ class GridSpec(Tidy3dBaseModel):
         symmetry: tuple[Symmetry, Symmetry, Symmetry],
         periodic: tuple[bool, bool, bool],
         sources: list[SourceType],
-        num_pml_layers: list[tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
+        num_pml_layers: list[tuple[NonNegativeInt, NonNegativeInt]],
         lumped_elements: list[LumpedElementType] = (),
         internal_override_structures: Optional[list[MeshOverrideStructure]] = None,
         internal_snapping_points: Optional[list[CoordinateOptional]] = None,
-        dl_min_from_gaps: pd.PositiveFloat = inf,
+        dl_min_from_gaps: PositiveFloat = inf,
         structure_priority_mode: PriorityMode = "equal",
     ) -> Grid:
         """Make the entire simulation grid based on some simulation parameters.
 
         Parameters
         ----------
-        structures : List[Structure]
+        structures : list[Structure]
             List of structures present in the simulation. The first structure must be the
             simulation geometry with the simulation background medium.
-        symmetry : Tuple[Symmetry, Symmetry, Symmetry]
+        symmetry : tuple[Symmetry, Symmetry, Symmetry]
             Reflection symmetry across a plane bisecting the simulation domain
             normal to each of the three axes.
-        periodic: Tuple[bool, bool, bool]
+        periodic: tuple[bool, bool, bool]
             Apply periodic boundary condition or not along each of the dimensions.
             Only relevant for autogrids.
-        sources : List[SourceType]
+        sources : list[SourceType]
             List of sources.
-        num_pml_layers : List[Tuple[float, float]]
+        num_pml_layers : list[tuple[float, float]]
             List containing the number of absorber layers in - and + boundaries.
-        lumped_elements : List[LumpedElementType]
+        lumped_elements : list[LumpedElementType]
             List of lumped elements.
-        internal_override_structures : List[MeshOverrideStructure]
+        internal_override_structures : list[MeshOverrideStructure]
             If `None`, recomputes internal override structures.
-        internal_snapping_points : List[CoordinateOptional]
+        internal_snapping_points : list[CoordinateOptional]
             If `None`, recomputes internal snapping points.
-        dl_min_from_gaps : pd.PositiveFloat
+        dl_min_from_gaps : PositiveFloat
             Minimal grid size computed based on autodetected gaps.
         structure_priority_mode : PriorityMode
             Structure priority setting.
@@ -2865,39 +2869,39 @@ class GridSpec(Tidy3dBaseModel):
     @classmethod
     def auto(
         cls,
-        wavelength: pd.PositiveFloat = None,
-        min_steps_per_wvl: pd.PositiveFloat = 10.0,
-        max_scale: pd.PositiveFloat = 1.4,
+        wavelength: PositiveFloat = None,
+        min_steps_per_wvl: PositiveFloat = 10.0,
+        max_scale: PositiveFloat = 1.4,
         override_structures: list[StructureType] = (),
         snapping_points: tuple[CoordinateOptional, ...] = (),
         layer_refinement_specs: list[LayerRefinementSpec] = (),
-        dl_min: pd.NonNegativeFloat = 0.0,
-        min_steps_per_sim_size: pd.PositiveFloat = 10.0,
+        dl_min: NonNegativeFloat = 0.0,
+        min_steps_per_sim_size: PositiveFloat = 10.0,
         mesher: MesherType = Undefined,
     ) -> GridSpec:
         """Use the same :class:`.AutoGrid` along each of the three directions.
 
         Parameters
         ----------
-        wavelength : pd.PositiveFloat, optional
+        wavelength : PositiveFloat, optional
             Free-space wavelength for automatic nonuniform grid. It can be 'None'
             if there is at least one source in the simulation, in which case it is defined by
             the source central frequency.
-        min_steps_per_wvl : pd.PositiveFloat, optional
+        min_steps_per_wvl : PositiveFloat, optional
             Minimal number of steps per wavelength in each medium.
-        max_scale : pd.PositiveFloat, optional
+        max_scale : PositiveFloat, optional
             Sets the maximum ratio between any two consecutive grid steps.
-        override_structures : List[StructureType]
+        override_structures : list[StructureType]
             A list of structures that is added on top of the simulation structures in
             the process of generating the grid. This can be used to refine the grid or make it
             coarser depending than the expected need for higher/lower resolution regions.
-        snapping_points : Tuple[CoordinateOptional, ...]
+        snapping_points : tuple[CoordinateOptional, ...]
             A set of points that enforce grid boundaries to pass through them.
-        layer_refinement_specs: List[LayerRefinementSpec]
+        layer_refinement_specs: list[LayerRefinementSpec]
             Mesh refinement according to layer specifications.
-        dl_min: pd.NonNegativeFloat
+        dl_min: NonNegativeFloat
             Lower bound of grid size.
-        min_steps_per_sim_size : pd.PositiveFloat, optional
+        min_steps_per_sim_size : PositiveFloat, optional
             Minimal number of steps per longest edge length of simulation domain.
         mesher : MesherType = GradedMesher()
             The type of mesher to use to generate the grid automatically.
@@ -2949,7 +2953,7 @@ class GridSpec(Tidy3dBaseModel):
     def quasiuniform(
         cls,
         dl: float,
-        max_scale: pd.PositiveFloat = 1.4,
+        max_scale: PositiveFloat = 1.4,
         override_structures: list[StructureType] = (),
         snapping_points: tuple[CoordinateOptional, ...] = (),
         mesher: MesherType = Undefined,
@@ -2960,13 +2964,13 @@ class GridSpec(Tidy3dBaseModel):
         ----------
         dl : float
             Grid size for quasi-uniform grid generation.
-        max_scale : pd.PositiveFloat, optional
+        max_scale : PositiveFloat, optional
             Sets the maximum ratio between any two consecutive grid steps.
-        override_structures : List[StructureType]
+        override_structures : list[StructureType]
             A list of structures that is added on top of the simulation structures in
             the process of generating the grid. This can be used to snap grid points to
             the bounding box boundary.
-        snapping_points : Tuple[CoordinateOptional, ...]
+        snapping_points : tuple[CoordinateOptional, ...]
             A set of points that enforce grid boundaries to pass through them.
         mesher : MesherType = GradedMesher()
             The type of mesher to use to generate the grid automatically.

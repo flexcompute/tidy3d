@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union
+from typing import Optional, Union
 
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat, NonNegativeFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import (
@@ -22,7 +22,7 @@ from tidy3d.constants import (
 class AbstractHeatMedium(ABC, Tidy3dBaseModel):
     """Abstract heat material specification."""
 
-    name: str = pd.Field(None, title="Name", description="Optional unique name for medium.")
+    name: Optional[str] = Field(None, title="Name", description="Optional unique name for medium.")
 
     @property
     def heat(self):
@@ -86,31 +86,31 @@ class FluidMedium(AbstractHeatMedium):
     ... )
     """
 
-    thermal_conductivity: pd.NonNegativeFloat = pd.Field(
+    thermal_conductivity: Optional[NonNegativeFloat] = Field(
         default=None,
         title="Fluid Thermal Conductivity",
         description="Thermal conductivity (k) of the fluid.",
         units=THERMAL_CONDUCTIVITY,
     )
-    viscosity: pd.NonNegativeFloat = pd.Field(
+    viscosity: Optional[NonNegativeFloat] = Field(
         default=None,
         title="Fluid Dynamic Viscosity",
         description="Dynamic viscosity (μ) of the fluid.",
         units=DYNAMIC_VISCOSITY,
     )
-    specific_heat: pd.NonNegativeFloat = pd.Field(
+    specific_heat: Optional[NonNegativeFloat] = Field(
         default=None,
         title="Fluid Specific Heat",
         description="Specific heat of the fluid at constant pressure.",
         units=SPECIFIC_HEAT,
     )
-    density: pd.NonNegativeFloat = pd.Field(
+    density: Optional[NonNegativeFloat] = Field(
         default=None,
         title="Fluid Density",
         description="Density (ρ) of the fluid.",
         units=DENSITY,
     )
-    expansivity: pd.NonNegativeFloat = pd.Field(
+    expansivity: Optional[NonNegativeFloat] = Field(
         default=None,
         title="Fluid Thermal Expansivity",
         description="Thermal expansion coefficient (β) of the fluid.",
@@ -118,11 +118,11 @@ class FluidMedium(AbstractHeatMedium):
     )
 
     def from_si_units(
-        thermal_conductivity: pd.NonNegativeFloat,
-        viscosity: pd.NonNegativeFloat,
-        specific_heat: pd.NonNegativeFloat,
-        density: pd.NonNegativeFloat,
-        expansivity: pd.NonNegativeFloat,
+        thermal_conductivity: NonNegativeFloat,
+        viscosity: NonNegativeFloat,
+        specific_heat: NonNegativeFloat,
+        density: NonNegativeFloat,
+        expansivity: NonNegativeFloat,
     ):
         thermal_conductivity_tidy = thermal_conductivity / 1e6  # W/(m*K) -> W/(um*K)
         viscosity_tidy = viscosity / 1e6  # Pa*s -> kg/(um*s)
@@ -154,20 +154,20 @@ class SolidMedium(AbstractHeatMedium):
     ... )
     """
 
-    capacity: pd.PositiveFloat = pd.Field(
+    capacity: Optional[PositiveFloat] = Field(
         None,
         title="Heat capacity",
         description=f"Specific heat capacity in unit of {SPECIFIC_HEAT_CAPACITY}.",
         units=SPECIFIC_HEAT_CAPACITY,
     )
 
-    conductivity: pd.PositiveFloat = pd.Field(
+    conductivity: PositiveFloat = Field(
         title="Thermal conductivity",
         description=f"Thermal conductivity of material in units of {THERMAL_CONDUCTIVITY}.",
         units=THERMAL_CONDUCTIVITY,
     )
 
-    density: pd.PositiveFloat = pd.Field(
+    density: Optional[PositiveFloat] = Field(
         None,
         title="Density",
         description=f"Mass density of material in units of {DENSITY}.",
@@ -175,9 +175,9 @@ class SolidMedium(AbstractHeatMedium):
     )
 
     def from_si_units(
-        conductivity: pd.PositiveFloat,
-        capacity: pd.PositiveFloat = None,
-        density: pd.PositiveFloat = None,
+        conductivity: PositiveFloat,
+        capacity: PositiveFloat = None,
+        density: PositiveFloat = None,
     ):
         """Create a SolidMedium using SI units"""
         new_conductivity = conductivity * 1e-6  # Convert from W/(m*K) to W/(um*K)

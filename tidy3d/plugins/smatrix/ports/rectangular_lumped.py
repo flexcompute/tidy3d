@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 from shapely import union_all
 from shapely.geometry.base import BaseMultipartGeometry
 
@@ -54,14 +54,13 @@ class LumpedPort(AbstractLumpedPort, Box):
         The lumped element representing the load of the port.
     """
 
-    voltage_axis: Axis = pd.Field(
-        ...,
+    voltage_axis: Axis = Field(
         title="Voltage Integration Axis",
         description="Specifies the axis along which the E-field line integral is performed when "
         "computing the port voltage. The integration axis must lie in the plane of the port.",
     )
 
-    snap_perimeter_to_grid: bool = pd.Field(
+    snap_perimeter_to_grid: bool = Field(
         True,
         title="Snap Perimeter to Grid",
         description="When enabled, the perimeter of the port is snapped to the simulation grid, "
@@ -69,7 +68,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         "is always snapped to the grid along its injection axis.",
     )
 
-    dist_type: LumpDistType = pd.Field(
+    dist_type: LumpDistType = Field(
         "on",
         title="Distribute Type",
         description="Optional field that is passed directly to the :class:`.LinearLumpedElement` used to model the port's load. "
@@ -88,13 +87,12 @@ class LumpedPort(AbstractLumpedPort, Box):
         """Injection axis of the port."""
         return self.size.index(0.0)
 
-    @pd.validator("voltage_axis", always=True)
-    def _voltage_axis_in_plane(cls, val, values):
+    @model_validator(mode="after")
+    def _voltage_axis_in_plane(self):
         """Ensure voltage integration axis is in the port's plane."""
-        size = values.get("size")
-        if val == size.index(0.0):
+        if self.voltage_axis == self.size.index(0.0):
             raise ValidationError("'voltage_axis' must lie in the port's plane.")
-        return val
+        return self
 
     @cached_property
     def current_axis(self) -> Axis:
@@ -170,10 +168,10 @@ class LumpedPort(AbstractLumpedPort, Box):
         e_component = "xyz"[self.voltage_axis]
         # Create a voltage monitor
         return FieldMonitor(
-            center=center,
-            size=size,
+            center=tuple(center),
+            size=tuple(size),
             freqs=freqs,
-            fields=[f"E{e_component}"],
+            fields=(f"E{e_component}",),
             name=self._voltage_monitor_name,
             colocate=False,
         )
@@ -204,10 +202,10 @@ class LumpedPort(AbstractLumpedPort, Box):
         h_cap_component = "xyz"[self.injection_axis]
         # Create a current monitor
         return FieldMonitor(
-            center=center,
-            size=size,
+            center=tuple(center),
+            size=tuple(size),
             freqs=freqs,
-            fields=[f"H{h_component}", f"H{h_cap_component}"],
+            fields=(f"H{h_component}", f"H{h_cap_component}"),
             name=self._current_monitor_name,
             colocate=False,
         )

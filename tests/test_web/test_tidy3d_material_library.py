@@ -4,7 +4,7 @@ import pytest
 import responses
 
 import tidy3d as td
-from tidy3d.web.api.material_libray import MaterialLibray
+from tidy3d.web.api.material_library import MaterialLibrary
 from tidy3d.web.core.environment import Env
 
 Env.dev.active()
@@ -27,6 +27,6 @@ def test_lib(set_api_key):
         json={"data": [{"id": "3eb06d16-208b-487b-864b-e9b1d3e010a7", "name": "medium1"}]},
         status=200,
     )
-    libs = MaterialLibray.list()
+    libs = MaterialLibrary.list()
     lib = libs[0]
     assert lib.name == "medium1"
