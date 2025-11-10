@@ -28,6 +28,7 @@ from tidy3d.plugins.autograd import (
     threshold,
     trapz,
 )
+from tidy3d.plugins.autograd.functions import _normalize_axes
 from tidy3d.plugins.autograd.types import PaddingType
 
 _mode_to_scipy = {
@@ -37,6 +38,15 @@ _mode_to_scipy = {
     "symmetric": "reflect",
     "wrap": "wrap",
 }
+
+CONV_MODES = ["full", "same", "valid"]
+
+_CONVOLVE_AXES_CASES = [
+    ([0], [0]),
+    ([1], [1]),
+    ([1], [0]),
+    ([-1], [-1]),
+]
 
 
 @pytest.mark.parametrize("mode", PaddingType.__args__)
@@ -94,7 +104,7 @@ class TestPadExceptions:
             pad(self.array, (1, 1), axis=-3)
 
 
-@pytest.mark.parametrize("mode", ["full", "valid", "same"])
+@pytest.mark.parametrize("mode", CONV_MODES)
 @pytest.mark.parametrize("padding", PaddingType.__args__)
 @pytest.mark.parametrize(
     "ary_size", [7, 8, (7, 7), (8, 8), (7, 8), (7, 7, 7), (8, 8, 8), (7, 8, 9)]
@@ -117,22 +127,10 @@ class TestConvolve:
         """Test convolution values against SciPy for various modes, padding, array sizes, and kernel sizes."""
         x, k = self._ary_and_kernel(rng, ary_size, kernel_size, square_kernel)
 
-        if mode in ("full", "same"):
-            pad_widths = [(k // 2, k // 2) for k in k.shape]
-            x_padded = x
-            for axis, pad_width in enumerate(pad_widths):
-                x_padded = pad(x_padded, pad_width, mode=padding, axis=axis)
-            conv_sp = convolve_sp(x_padded, k, mode="valid" if mode == "same" else mode)
-        else:
-            conv_sp = convolve_sp(x, k, mode=mode)
-
         conv_td = convolve(x, k, padding=padding, mode=mode)
+        conv_sp = _reference_convolution(x, k, mode, padding, axes=None)
 
-        npt.assert_allclose(
-            conv_td,
-            conv_sp,
-            atol=1e-12,  # scipy's "full" somehow is not zero at the edges...
-        )
+        npt.assert_allclose(conv_td, conv_sp, atol=1e-12)
 
     def test_convolve_grad(self, rng, mode, padding, ary_size, kernel_size, square_kernel):
         """Test gradients of convolution function for various modes, padding, array sizes, and kernel sizes."""
@@ -166,6 +164,114 @@ class TestConvolveExceptions:
         kernel_mismatch = np.array([[[1, 1, 1], [1, 1, 1], [1, 1, 1]]])
         with pytest.raises(ValueError, match="Kernel dimensions must match array dimensions"):
             convolve(self.array, kernel_mismatch)
+
+
+def _reference_convolve_with_axes(array, kernel, axes_array, axes_kernel, mode):
+    """Construct a SciPy reference for convolutions with explicit axes."""
+
+    array_batch_axes = tuple(ax for ax in range(array.ndim) if ax not in axes_array)
+    kernel_batch_axes = tuple(ax for ax in range(kernel.ndim) if ax not in axes_kernel)
+
+    array_perm = array_batch_axes + axes_array
+    kernel_perm = kernel_batch_axes + axes_kernel
+
+    array_reordered = np.transpose(array, array_perm)
+    kernel_reordered = np.transpose(kernel, kernel_perm)
+
+    len_array_batch = len(array_batch_axes)
+    len_kernel_batch = len(kernel_batch_axes)
+
+    array_batch_shape = array_reordered.shape[:len_array_batch]
+    kernel_batch_shape = kernel_reordered.shape[:len_kernel_batch]
+
+    sample_conv = convolve_sp(
+        array_reordered[(0,) * len_array_batch],
+        kernel_reordered[(0,) * len_kernel_batch],
+        mode=mode,
+    )
+    conv_shape = sample_conv.shape
+
+    expected = np.empty(array_batch_shape + kernel_batch_shape + conv_shape)
+
+    for idx_array in np.ndindex(array_batch_shape):
+        array_slice = array_reordered[idx_array]
+        for idx_kernel in np.ndindex(kernel_batch_shape):
+            kernel_slice = kernel_reordered[idx_kernel]
+            expected[idx_array + idx_kernel] = convolve_sp(array_slice, kernel_slice, mode=mode)
+
+    return expected
+
+
+def _prepare_reference_inputs(array, kernel, mode, padding, axes):
+    """Apply padding logic to match tidy3d's convolution before building a reference."""
+
+    axes_array, axes_kernel = _normalize_axes(array.ndim, kernel.ndim, axes)
+
+    working_array = array
+    scipy_mode = mode
+
+    if mode in ("same", "full"):
+        for ax_array, ax_kernel in zip(axes_array, axes_kernel):
+            pad_width = (
+                kernel.shape[ax_kernel] // 2 if mode == "same" else kernel.shape[ax_kernel] - 1
+            )
+            if pad_width > 0:
+                working_array = pad(
+                    working_array, (pad_width, pad_width), mode=padding, axis=ax_array
+                )
+        scipy_mode = "valid"
+
+    working_array_np = np.asarray(working_array)
+    kernel_np = np.asarray(kernel)
+
+    return working_array_np, kernel_np, axes_array, axes_kernel, scipy_mode
+
+
+def _reference_convolution(array, kernel, mode, padding, axes):
+    """Full reference that mimics tidy3d padding rules before SciPy convolution."""
+
+    working_array_np, kernel_np, axes_array, axes_kernel, scipy_mode = _prepare_reference_inputs(
+        array,
+        kernel,
+        mode,
+        padding,
+        axes,
+    )
+
+    return _reference_convolve_with_axes(
+        working_array_np,
+        kernel_np,
+        axes_array,
+        axes_kernel,
+        scipy_mode,
+    )
+
+
+@pytest.mark.parametrize("mode", CONV_MODES)
+@pytest.mark.parametrize("padding", PaddingType.__args__)
+@pytest.mark.parametrize("axes", _CONVOLVE_AXES_CASES)
+class TestConvolveAxes:
+    def test_convolve_axes_val(self, rng, mode, padding, axes):
+        """Test convolution with explicit axes against NumPy implementations."""
+        array = rng.random((2, 5))
+        kernel = rng.random((3, 3))
+
+        conv_td = convolve(array, kernel, padding=padding, mode=mode, axes=axes)
+        expected = _reference_convolution(array, kernel, mode, padding, axes)
+
+        npt.assert_allclose(conv_td, expected, atol=1e-12)
+
+    def test_convolve_axes_grad(self, rng, axes, mode, padding):
+        """Test gradients of convolution when specific axes are provided."""
+        array = rng.random((2, 5))
+        kernel = rng.random((3, 3))
+        check_grads(convolve, modes=["rev"], order=2)(
+            array,
+            kernel,
+            padding=padding,
+            mode=mode,
+            axes=axes,
+        )
 
 
 @pytest.mark.parametrize(

@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `web.Batch(ComponentModeler)` and `web.Job(ComponentModeler)` native support
 - Simulation data of batch jobs are now automatically downloaded upon their individual completion in `Batch.run()`, avoiding waiting for the entire batch to reach completion.
 - Port names in `ModalComponentModeler` and `TerminalComponentModeler` can no longer include the `@` symbol.
+- Improved speed of convolutions for large inputs.
 
 ### Fixed
 - Ensured the legacy `Env` proxy mirrors `config.web` profile switches and preserves API URL.
