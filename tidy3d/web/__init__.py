@@ -11,11 +11,9 @@ from .core import core_config
 # set logger to tidy3d.log before it's invoked in other imports
 core_config.set_config(log, get_logging_console(), __version__)
 
-from .api.autograd.autograd import (
-    run,  # as run
-    run_async,
-)
+from .api.autograd.autograd import run_async
 from .api.container import Batch, BatchData, Job
+from .api.run import run
 from .api.webapi import (
     abort,
     account,

@@ -16,7 +16,10 @@ from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.web import Batch, BatchData
-from tidy3d.web.api.autograd import has_traced_numerical_structures
+from tidy3d.web.api.autograd import (
+    has_traced_numerical_structures,
+    insert_numerical_structures_static,
+)
 
 DEFAULT_DATA_DIR = "."
 
@@ -218,6 +221,9 @@ def _run_local(
 
         local_gradient = kwargs.get("local_gradient", True)
 
+        if (user_vjp is not None) and (not local_gradient):
+            raise AdjointError("User VJP specified for a remote gradient not supported.")
+
         if (not local_gradient) and has_traced_numerical_structures(numerical_structures_modeler):
             raise AdjointError(
                 "ComponentModeler autograd with traced numerical structures requires local_gradient=True."
@@ -250,6 +256,13 @@ def _run_local(
         )
 
         return compose_modeler_data_from_batch_data(modeler=modeler, batch_data=sim_data_map)
+
+    if numerical_structures is not None:
+        modeler = modeler.updated_copy(
+            simulation=insert_numerical_structures_static(
+                simulation=modeler.simulation, numerical_structures=numerical_structures
+            )
+        )
 
     # Filter kwargs to only include valid Batch parameters
     batch_kwargs = {

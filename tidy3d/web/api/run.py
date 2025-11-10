@@ -268,6 +268,7 @@ def run(
         key_prefix = f"{task_name}_" if task_name else ""
         sims = {f"{key_prefix}{h}": s for h, s in h2sim.items()}
         path_dir = Path(path) if path is not None else Path(DEFAULT_DATA_DIR)
+
         data = run_async(
             simulations=sims,
             folder_name=folder_name,
