@@ -74,7 +74,7 @@ def _build_sim(theta_deg: float, axis: int, reference_plane: str) -> td.Simulati
 def _objective(theta_deg: float, axis: int, reference_plane: str, case_dir, verbose: bool) -> float:
     sim = _build_sim(theta_deg, axis=axis, reference_plane=reference_plane)
     task_name = f"obj_axis{axis}_ref{reference_plane}_t{float(theta_deg):+0.3f}"
-    out_path = case_dir / "objective.hdf5"
+    out_path = case_dir / f"{task_name}.hdf5"
     data = web.run(
         sim,
         task_name=task_name,
@@ -89,13 +89,16 @@ def _objective(theta_deg: float, axis: int, reference_plane: str, case_dir, verb
 @pytest.mark.parametrize("axis", AXES)
 @pytest.mark.parametrize("reference_plane", REF_PLANES)
 @pytest.mark.parametrize("theta0_deg", THETAS_DEG)
-def test_autograd_polyslab_sidewall_vs_fd(axis, reference_plane, theta0_deg, tmp_path):
+def test_autograd_polyslab_sidewall_vs_fd(axis, reference_plane, theta0_deg, numerical_case_dir):
     """Adjoint dJ/dtheta matches centered FD for PolySlab.sidewall_angle across axes/ref planes."""
 
     verbose = False
 
     # objective and adjoint grad
-    obj_fun = lambda tdeg: _objective(tdeg, axis, reference_plane, tmp_path, verbose)
+    objective_dir = numerical_case_dir / "objective"
+    objective_dir.mkdir(parents=True, exist_ok=True)
+
+    obj_fun = lambda tdeg: _objective(tdeg, axis, reference_plane, objective_dir, verbose)
     obj, grad_adj = value_and_grad(obj_fun)(anp.array(theta0_deg))
 
     # centered finite difference
@@ -104,9 +107,12 @@ def test_autograd_polyslab_sidewall_vs_fd(axis, reference_plane, theta0_deg, tmp
         f"plus_{uid}": _build_sim(theta0_deg + H, axis=axis, reference_plane=reference_plane),
         f"minus_{uid}": _build_sim(theta0_deg - H, axis=axis, reference_plane=reference_plane),
     }
+    fd_dir = numerical_case_dir / "finite_difference"
+    fd_dir.mkdir(parents=True, exist_ok=True)
+
     datas = web.run_async(
         sims,
-        path_dir=str(tmp_path),
+        path_dir=str(fd_dir),
         local_gradient=True,
         verbose=verbose,
     )

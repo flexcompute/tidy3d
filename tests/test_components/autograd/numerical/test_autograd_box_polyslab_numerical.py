@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import autograd.numpy as anp
 import numpy as np
@@ -38,6 +39,12 @@ else:
 
 if SHOW_PRINT_STATEMENTS:
     sys.stdout = sys.stderr
+
+
+def case_identifier(is_3d: bool, infinite_dim_2d: int | None, shift_box_center: bool) -> str:
+    geometry_tag = "3d" if is_3d else f"2d_infinite_dim_{infinite_dim_2d}"
+    shift_tag = "shifted" if shift_box_center else "centered"
+    return f"box_polyslab_{geometry_tag}_{shift_tag}"
 
 
 def dimension_permutation(infinite_dim: int) -> tuple[int, int]:
@@ -191,11 +198,13 @@ def run_parameter_simulations(
     tag: str,
     base_sim: td.Simulation,
     fom,
-    tmp_path,
+    artifact_dir: Path,
     *,
     local_gradient: bool,
 ):
     simulation_dict = {}
+    output_dir = artifact_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     for idx, param_values in enumerate(parameter_sets):
         geometry = make_geometry(param_values, box_center)
@@ -209,9 +218,11 @@ def run_parameter_simulations(
 
     if len(simulation_dict) == 1:
         key, sim = next(iter(simulation_dict.items()))
+        result_path = output_dir / f"{key}.hdf5"
         sim_data = web.run(
             sim,
             task_name=key,
+            path=str(result_path),
             local_gradient=local_gradient,
             verbose=VERBOSE,
         )
@@ -219,6 +230,7 @@ def run_parameter_simulations(
 
     sim_data_map = web.run_async(
         simulation_dict,
+        path_dir=str(output_dir),
         local_gradient=local_gradient,
         verbose=VERBOSE,
     )
@@ -232,10 +244,13 @@ def make_objective(
     tag: str,
     base_sim: td.Simulation,
     fom,
-    tmp_path,
+    case_dir: Path,
     *,
     local_gradient: bool,
 ):
+    artifact_dir = case_dir / tag
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+
     def objective(parameters):
         results = run_parameter_simulations(
             parameters,
@@ -244,7 +259,7 @@ def make_objective(
             tag,
             base_sim,
             fom,
-            tmp_path,
+            artifact_dir,
             local_gradient=local_gradient,
         )
 
@@ -304,7 +319,9 @@ def squeeze_dimension(array: np.ndarray, is_3d: bool, infinite_dim: int | None) 
     ],
 )
 @pytest.mark.parametrize("shift_box_center", (True, False))
-def test_box_and_polyslab_gradients_match(is_3d, infinite_dim_2d, shift_box_center, tmp_path):
+def test_box_and_polyslab_gradients_match(
+    is_3d, infinite_dim_2d, shift_box_center, numerical_case_dir
+):
     """Test that the box and polyslab gradients match for rectangular slab geometries. Allow
     comparison as well to finite difference values."""
 
@@ -330,13 +347,17 @@ def test_box_and_polyslab_gradients_match(is_3d, infinite_dim_2d, shift_box_cent
             box_center[infinite_dim_2d] = 0.5 * INFINITE_DIM_SIZE_UM
             box_center[final_dim_2d] = 0.5 * PERIODS_UM[0]
 
+    case_id = case_identifier(is_3d, None if is_3d else infinite_dim_2d, shift_box_center)
+    case_dir = numerical_case_dir / case_id
+    case_dir.mkdir(parents=True, exist_ok=True)
+
     box_objective = make_objective(
         make_box_geometry,
         box_center,
         "box",
         base_sim,
         fom,
-        tmp_path,
+        case_dir,
         local_gradient=LOCAL_GRADIENT,
     )
     polyslab_objective = make_objective(
@@ -345,7 +366,7 @@ def test_box_and_polyslab_gradients_match(is_3d, infinite_dim_2d, shift_box_cent
         "polyslab",
         base_sim,
         fom,
-        tmp_path,
+        case_dir,
         local_gradient=LOCAL_GRADIENT,
     )
 
@@ -355,7 +376,7 @@ def test_box_and_polyslab_gradients_match(is_3d, infinite_dim_2d, shift_box_cent
         "box_fd",
         base_sim,
         fom,
-        tmp_path,
+        case_dir,
         local_gradient=False,
     )
     polyslab_objective_fd = make_objective(
@@ -364,7 +385,7 @@ def test_box_and_polyslab_gradients_match(is_3d, infinite_dim_2d, shift_box_cent
         "polyslab_fd",
         base_sim,
         fom,
-        tmp_path,
+        case_dir,
         local_gradient=False,
     )
 
@@ -396,10 +417,10 @@ def test_box_and_polyslab_gradients_match(is_3d, infinite_dim_2d, shift_box_cent
     }
 
     if SAVE_OUTPUT_DATA:
-        np.savez(
-            f"test_diff_init_{'3' if is_3d else '2'}d_infinite_dim_{infinite_dim_2d}.npz",
-            **test_data,
+        npz_path = case_dir / (
+            f"test_diff_init_{'3' if is_3d else '2'}d_infinite_dim_{infinite_dim_2d}.npz"
         )
+        np.savez(npz_path, **test_data)
 
     def angled_overlap_deg(v1, v2):
         norm_v1 = np.linalg.norm(v1)
