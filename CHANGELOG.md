@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a Gaussian inverse design filter option with autograd gradients and complete padding mode coverage.
 - Added support for argument passing to DRC file when running checks with `DRCRunner.run(..., drc_args={key: value})` in klayout plugin.
 - Added support for `nonlinear_spec` in `CustomMedium` and `CustomDispersiveMedium`.
+- `tidy3d.plugins.design.DesignSpace.run(..., fn_post=...)` now accepts a `priority` keyword to propagate vGPU queue priority to all automatically batched simulations.
 
 ### Breaking Changes
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.
