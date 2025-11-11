@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import operator
 import sys
+from pathlib import Path
 
 import autograd as ag
 import matplotlib.pylab as plt
@@ -19,7 +20,6 @@ SAVE_FD_LOC = 0
 SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = False
 VERBOSE = False
-NUMERICAL_RESULTS_DATA_DIR = "./numerical_symmetry_test/"
 SHOW_PRINT_STATEMENTS = True
 
 RMS_THRESHOLD = 0.25
@@ -127,6 +127,9 @@ def make_base_sim(
 
 
 def create_objective_functions(geometry, create_sim_base, eval_fn, sim_path_dir):
+    sim_path_dir = Path(sim_path_dir)
+    sim_path_dir.mkdir(parents=True, exist_ok=True)
+
     def objective_(perm_array, symmetry):
         sim_base = create_sim_base(symmetry)
 
@@ -137,9 +140,13 @@ def create_objective_functions(geometry, create_sim_base, eval_fn, sim_path_dir)
 
         sim_with_block = sim_base.updated_copy(structures=(*sim_base.structures, block_structure))
 
+        symmetry_tag = "_".join(str(val) for val in symmetry)
+        result_path = sim_path_dir / f"symmetry_{symmetry_tag}.hdf5"
+
         sim_data = web.run(
             sim_with_block,
             task_name="symmetry_field_testing",
+            path=str(result_path),
             local_gradient=LOCAL_GRADIENT,
             verbose=VERBOSE,
         )
@@ -221,18 +228,8 @@ for idx in range(len(mesh_wvls_um)):
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize(
-    "field_symmetry_test_parameters, dir_name",
-    zip(
-        field_symmetry_test_parameters,
-        ([NUMERICAL_RESULTS_DATA_DIR] if SAVE_FD_ADJ_DATA else [None])
-        * len(field_symmetry_test_parameters),
-    ),
-    indirect=["dir_name"],
-)
-def test_adjoint_difference_symmetry(
-    field_symmetry_test_parameters, rng, tmp_path, create_directory
-):
+@pytest.mark.parametrize("field_symmetry_test_parameters", field_symmetry_test_parameters)
+def test_adjoint_difference_symmetry(field_symmetry_test_parameters, rng, numerical_case_dir):
     """Test the gradient is not affected by symmetry when using field sources."""
 
     num_tests = 0
@@ -278,8 +275,8 @@ def test_adjoint_difference_symmetry(
 
     eval_fns, eval_fn_names = make_eval_fns(monitor_size_wvl)
 
-    sim_path_dir = tmp_path / f"test{test_number}"
-    sim_path_dir.mkdir()
+    sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
+    sim_path_dir.mkdir(parents=True, exist_ok=True)
 
     objective_no_symmetry, objective_x_symmetry, objective_y_symmetry, objective_xy_symmetry = (
         create_objective_functions(

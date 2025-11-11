@@ -20,7 +20,7 @@ SAVE_FD_LOC = 0
 SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_DATA_DIR = "./numerical_mode_polyslab_test/"
+NUMERICAL_RESULTS_SUBDIR = "numerical_mode_polyslab_test"
 SHOW_PRINT_STATEMENTS = False
 
 NUM_MODE_MONITOR_FREQUENCIES = 4
@@ -301,18 +301,8 @@ for idx in range(len(mesh_wvls_um)):
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize(
-    "mode_data_test_parameters, dir_name",
-    zip(
-        mode_data_test_parameters,
-        ([NUMERICAL_RESULTS_DATA_DIR] if SAVE_FD_ADJ_DATA else [None])
-        * len(mode_data_test_parameters),
-    ),
-    indirect=["dir_name"],
-)
-def test_finite_difference_mode_data_polyslab(
-    mode_data_test_parameters, rng, tmp_path, create_directory
-):
+@pytest.mark.parametrize("mode_data_test_parameters", mode_data_test_parameters)
+def test_finite_difference_mode_data_polyslab(mode_data_test_parameters, rng, numerical_case_dir):
     """Test a variety of autograd permittivity gradients for ModeData in combination with polyslab by"""
     """comparing them to numerical finite difference."""
 
@@ -351,8 +341,8 @@ def test_finite_difference_mode_data_polyslab(
         size=(np.inf, np.inf, MODE_LAYER_HEIGHT_WVL * mesh_wvl_um + mesh_wvl_um),
     )
 
-    sim_path_dir = tmp_path / f"test{test_number}"
-    sim_path_dir.mkdir()
+    sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
+    sim_path_dir.mkdir(parents=True, exist_ok=True)
 
     # Weights for creating a random objective function over multiple frequencies by
     # summing their contributions by random weights. This helps verify gradient errors
@@ -471,10 +461,21 @@ def test_finite_difference_mode_data_polyslab(
     print("-" * 20)
     print("\n" * 3)
 
-    assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
-
     test_results[SAVE_FD_LOC, :] = fd_grad
     test_results[SAVE_ADJ_LOC, :] = pattern_dot_adj_gradient
+
+    save_idx = test_number + 1
+    save_path = None
+    if SAVE_FD_ADJ_DATA:
+        results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
+        results_dir.mkdir(parents=True, exist_ok=True)
+        save_path = results_dir / f"results_{save_idx}.npy"
+
+    try:
+        assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
+    finally:
+        if save_path is not None:
+            np.save(save_path, test_results)
 
     test_number += 1
 
@@ -487,6 +488,3 @@ def test_finite_difference_mode_data_polyslab(
         plt.ylabel("Gradient value")
         plt.legend()
         plt.show()
-
-    if SAVE_FD_ADJ_DATA:
-        np.save(f"{NUMERICAL_RESULTS_DATA_DIR}/results_{test_number}.npy", test_results)

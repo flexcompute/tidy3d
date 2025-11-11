@@ -20,7 +20,7 @@ SAVE_FD_LOC = 0
 SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = False
 VERBOSE = False
-NUMERICAL_RESULTS_DATA_DIR = "./numerical_field_test/"
+NUMERICAL_RESULTS_SUBDIR = "numerical_field_test"
 SHOW_PRINT_STATEMENTS = False
 
 RMS_THRESHOLD = 0.25
@@ -218,16 +218,8 @@ for idx in range(len(mesh_wvls_um)):
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize(
-    "field_data_test_parameters, dir_name",
-    zip(
-        field_data_test_parameters,
-        ([NUMERICAL_RESULTS_DATA_DIR] if SAVE_FD_ADJ_DATA else [None])
-        * len(field_data_test_parameters),
-    ),
-    indirect=["dir_name"],
-)
-def test_finite_difference_field_data(field_data_test_parameters, rng, tmp_path, create_directory):
+@pytest.mark.parametrize("field_data_test_parameters", field_data_test_parameters)
+def test_finite_difference_field_data(field_data_test_parameters, rng, numerical_case_dir):
     """Test a variety of autograd permittivity gradients for FieldData by"""
     """comparing them to numerical finite difference."""
 
@@ -274,8 +266,8 @@ def test_finite_difference_field_data(field_data_test_parameters, rng, tmp_path,
 
     eval_fns, eval_fn_names = make_eval_fns(monitor_size_wvl)
 
-    sim_path_dir = tmp_path / f"test{test_number}"
-    sim_path_dir.mkdir()
+    sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
+    sim_path_dir.mkdir(parents=True, exist_ok=True)
 
     objective = create_objective_function(
         block,
@@ -349,10 +341,21 @@ def test_finite_difference_field_data(field_data_test_parameters, rng, tmp_path,
     print("-" * 20)
     print("\n" * 3)
 
-    assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
-
     test_results[SAVE_FD_LOC, :] = fd_grad
     test_results[SAVE_ADJ_LOC, :] = pattern_dot_adj_gradient
+
+    save_idx = test_number + 1
+    save_path = None
+    if SAVE_FD_ADJ_DATA:
+        results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
+        results_dir.mkdir(parents=True, exist_ok=True)
+        save_path = results_dir / f"results_{save_idx}.npy"
+
+    try:
+        assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
+    finally:
+        if save_path is not None:
+            np.save(save_path, test_results)
 
     test_number += 1
 
@@ -365,6 +368,3 @@ def test_finite_difference_field_data(field_data_test_parameters, rng, tmp_path,
         plt.ylabel("Gradient value")
         plt.legend()
         plt.show()
-
-    if SAVE_FD_ADJ_DATA:
-        np.save(f"{NUMERICAL_RESULTS_DATA_DIR}/results_{test_number}.npy", test_results)

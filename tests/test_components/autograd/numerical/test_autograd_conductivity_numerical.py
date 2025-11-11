@@ -37,7 +37,7 @@ SAVE_FD_LOC = 0
 SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_DATA_DIR = "./numerical_conductivity_test/"
+NUMERICAL_RESULTS_SUBDIR = "numerical_conductivity_test"
 SHOW_PRINT_STATEMENTS = False
 
 RMS_THRESHOLD = 0.6
@@ -325,17 +325,9 @@ for idx in range(len(mesh_wvls_um)):
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize(
-    "conductivity_data_test_parameters, dir_name",
-    zip(
-        conductivity_data_test_parameters,
-        ([NUMERICAL_RESULTS_DATA_DIR] if SAVE_FD_ADJ_DATA else [None])
-        * len(conductivity_data_test_parameters),
-    ),
-    indirect=["dir_name"],
-)
+@pytest.mark.parametrize("conductivity_data_test_parameters", conductivity_data_test_parameters)
 def test_finite_difference_conductivity_data(
-    conductivity_data_test_parameters, rng, tmp_path, create_directory
+    conductivity_data_test_parameters, rng, numerical_case_dir
 ):
     """Test autograd conductivity gradients by comparing to numerical finite difference.
 
@@ -356,17 +348,14 @@ def test_finite_difference_conductivity_data(
         Test parameters including wavelengths, monitor configuration, etc.
     rng : numpy.random.Generator
         Random number generator for creating perturbation patterns
-    tmp_path : pathlib.Path
-        Temporary directory for simulation files
-    create_directory : fixture
-        Pytest fixture for creating directories
+    numerical_case_dir : pathlib.Path
+        Case-specific artifact directory for simulation and result files
     """
 
     # Create directory for plots if plotting is enabled
+    results_dir = numerical_case_dir / NUMERICAL_RESULTS_SUBDIR
     if PLOT_FD_ADJ_COMPARISON or SAVE_FD_ADJ_DATA:
-        import os
-
-        os.makedirs(NUMERICAL_RESULTS_DATA_DIR, exist_ok=True)
+        results_dir.mkdir(parents=True, exist_ok=True)
 
     num_tests = 0
     for monitor_size_wvl in monitor_sizes_3d_wvl:
@@ -414,8 +403,8 @@ def test_finite_difference_conductivity_data(
 
     eval_fns, eval_fn_names = make_eval_fns(monitor_size_wvl)
 
-    sim_path_dir = tmp_path / f"test{test_number}"
-    sim_path_dir.mkdir()
+    sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
+    sim_path_dir.mkdir(parents=True, exist_ok=True)
 
     objective = create_objective_function(
         block,
@@ -494,10 +483,20 @@ def test_finite_difference_conductivity_data(
     print("-" * 20)
     print("\n" * 3)
 
-    assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
-
     test_results[SAVE_FD_LOC, :] = fd_grad
     test_results[SAVE_ADJ_LOC, :] = pattern_dot_adj_gradient
+
+    save_idx = test_number + 1
+    save_path = None
+    if SAVE_FD_ADJ_DATA:
+        results_dir.mkdir(parents=True, exist_ok=True)
+        save_path = results_dir / f"results_{save_idx}.npy"
+
+    try:
+        assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
+    finally:
+        if save_path is not None:
+            np.save(save_path, test_results)
 
     test_number += 1
 
@@ -512,12 +511,9 @@ def test_finite_difference_conductivity_data(
         plt.grid(True, alpha=0.3)
 
         # Save the plot
-        plot_filename = f"{NUMERICAL_RESULTS_DATA_DIR}/gradient_comparison_test_{test_number}_{eval_fn_name}.png"
+        plot_filename = results_dir / (f"gradient_comparison_test_{test_number}_{eval_fn_name}.png")
         plt.savefig(plot_filename, dpi=150, bbox_inches="tight")
         print(f"Plot saved to: {plot_filename}")
 
         plt.show()
         plt.close()
-
-    if SAVE_FD_ADJ_DATA:
-        np.save(f"{NUMERICAL_RESULTS_DATA_DIR}/results_{test_number}.npy", test_results)
