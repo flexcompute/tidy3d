@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
-from pydantic import ValidationError
 import pytest
+from pydantic import ValidationError
 
 import tidy3d
 from tests.test_plugins.smatrix.terminal_component_modeler_def import (

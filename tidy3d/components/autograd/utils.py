@@ -11,10 +11,10 @@ __all__ = [
     "asarray1d",
     "contains",
     "get_static",
+    "hasbox",
     "is_tidy_box",
     "pack_complex_vec",
     "split_list",
-    "hasbox",
 ]
 
 

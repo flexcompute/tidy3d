@@ -10,11 +10,12 @@ from pydantic import (
     Field,
     NonNegativeFloat,
     NonNegativeInt,
+    PositiveFloat,
     field_validator,
     model_validator,
-    PositiveFloat,
 )
 
+from tidy3d.compat import Self
 from tidy3d.components.validators import _assert_min_freq, assert_plane
 from tidy3d.components.viz import (
     ARROW_ALPHA,
@@ -22,7 +23,6 @@ from tidy3d.components.viz import (
     PlotParams,
     plot_params_absorber,
 )
-from tidy3d.compat import Self
 from tidy3d.constants import C_0, CONDUCTIVITY, EPSILON_0, HERTZ, MU_0, PML_SIGMA
 from tidy3d.exceptions import DataError, SetupError, ValidationError
 from tidy3d.log import log
@@ -132,7 +132,7 @@ class ABCBoundary(AbstractABCBoundary):
         units=CONDUCTIVITY,
     )
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def _conductivity_only_with_float_permittivity(self):
         """Validate that conductivity can be provided only with float permittivity."""
         if self.conductivity is not None and self.permittivity is None:
@@ -203,6 +203,7 @@ class BroadbandModeABCSpec(Tidy3dBaseModel):
     )
 
     @field_validator("frequency_range", mode="after")
+    @classmethod
     def validate_frequency_range(cls, val):
         """Validate that max frequency is greater than min frequency."""
         _assert_min_freq(val[0], "min frequency")

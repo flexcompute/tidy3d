@@ -109,7 +109,8 @@ class ResonanceFinder(Tidy3dBaseModel):
     )
 
     @field_validator("freq_window")
-    def _check_freq_window(val):
+    @classmethod
+    def _check_freq_window(cls, val):
         """Validate ``freq_window``"""
         if val[1] < val[0]:
             raise ValidationError(

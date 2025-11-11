@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Optional
 
 import xarray as xr
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from tidy3d.components.data.data_array import FieldProjectionAngleDataArray, FreqDataArray
 from tidy3d.components.data.monitor_data import DirectivityData, ModeData, ModeSolverData

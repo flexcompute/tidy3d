@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import abc
-from typing import Callable, Optional, Union
-from typing import Any
+from typing import Any, Callable, Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
@@ -132,6 +131,7 @@ class InverseDesign(AbstractInverseDesign):
     )
 
     @field_validator("output_monitor_names", mode="before")
+    @classmethod
     def _convert_list_to_tuple(cls, v):
         """Convert list to tuple for output_monitor_names."""
         if isinstance(v, list):
@@ -272,6 +272,7 @@ class InverseDesignMulti(AbstractInverseDesign):
     )
 
     @field_validator("output_monitor_names", mode="before")
+    @classmethod
     def _convert_list_to_tuple(cls, v):
         """Convert lists to tuples for output_monitor_names."""
         if v is None:

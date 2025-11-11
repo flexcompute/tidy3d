@@ -326,7 +326,8 @@ class HeatChargeSimulation(AbstractSimulation):
     )
 
     @field_validator("structures")
-    def check_unsupported_geometries(val):
+    @classmethod
+    def check_unsupported_geometries(cls, val):
         """Error if structures contain unsupported yet geometries."""
         for ind, structure in enumerate(val):
             bbox = structure.geometry.bounding_box
@@ -450,6 +451,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @field_validator("boundary_spec")
+    @classmethod
     def check_single_ssac(cls, boundary_spec):
         ssac_present = False
         for bc in boundary_spec:
@@ -540,7 +542,8 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @field_validator("size")
-    def check_zero_dim_domain(val):
+    @classmethod
+    def check_zero_dim_domain(cls, val):
         """Error if heat domain have zero dimensions."""
 
         dim_names = ["x", "y", "z"]
@@ -596,6 +599,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @field_validator("boundary_spec")
+    @classmethod
     def check_only_one_voltage_array_provided(cls, val):
         """Issue error if more than one voltage array is provided.
         Currently we only allow to sweep over one voltage array.
@@ -938,7 +942,6 @@ class HeatChargeSimulation(AbstractSimulation):
         max_nodes = 2e6
         nodes_estimate = 0
 
-        structures = self.structures
         grid_spec = self.grid_spec
 
         non_refined_structures = grid_spec.non_refined_structures

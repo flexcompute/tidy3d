@@ -9,7 +9,6 @@ from pydantic import ValidationError
 import tidy3d as td
 from tidy3d import SimulationDataMap
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
-from tidy3d.plugins.smatrix import Port
 from tidy3d.plugins.smatrix import ModalComponentModeler, ModalComponentModelerData, Port
 from tidy3d.web.api.container import Batch
 

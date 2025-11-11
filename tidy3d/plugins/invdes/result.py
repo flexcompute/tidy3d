@@ -67,7 +67,8 @@ class InverseDesignResult(InvdesBaseModel):
     )
 
     @field_validator("params")
-    def _validate_and_clip_params(params_tuple):
+    @classmethod
+    def _validate_and_clip_params(cls, params_tuple):
         """Ensure all parameters in history are within [0,1] bounds, clipping if necessary."""
         if not params_tuple:
             return params_tuple

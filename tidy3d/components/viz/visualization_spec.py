@@ -51,11 +51,13 @@ class VisualizationSpec(Tidy3dBaseModel):
     )
 
     @field_validator("facecolor")
-    def _validate_facecolor(value: str) -> str:
+    @classmethod
+    def _validate_facecolor(cls, value: str) -> str:
         return is_valid_color(value)
 
     @field_validator("edgecolor")
-    def _ensure_edgecolor(value, info) -> str:
+    @classmethod
+    def _ensure_edgecolor(cls, value, info) -> str:
         # if no explicit edgecolor given, fall back to facecolor
         if (value == "") and "facecolor" in info.data:
             return is_valid_color(info.data["facecolor"])

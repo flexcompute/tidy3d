@@ -6,8 +6,8 @@ import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from pydantic import ValidationError
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.exceptions import FileError

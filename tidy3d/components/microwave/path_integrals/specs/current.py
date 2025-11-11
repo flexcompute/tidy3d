@@ -362,6 +362,7 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
         return ax
 
     @field_validator("path_specs")
+    @classmethod
     def _path_specs_not_empty(cls, val):
         """Makes sure at least one path spec has been supplied"""
         # overall shape of vertices

@@ -194,7 +194,8 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
     )
 
     @field_validator("loss_bounds")
-    def _max_loss_geq_min_loss(val):
+    @classmethod
+    def _max_loss_geq_min_loss(cls, val):
         """Must have max_loss >= min_loss."""
         if val[0] > val[1]:
             raise ValidationError(
@@ -203,7 +204,8 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
         return val
 
     @field_validator("weights")
-    def _weights_average_to_one(val):
+    @classmethod
+    def _weights_average_to_one(cls, val):
         """Weights must average to one."""
         if val is None:
             return None

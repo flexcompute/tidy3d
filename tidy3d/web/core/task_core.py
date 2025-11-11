@@ -12,7 +12,7 @@ from typing import Callable, Optional, Union
 
 import requests
 from botocore.exceptions import ClientError
-from pydantic import Field, TypeAdapter, model_validator
+from pydantic import Field, TypeAdapter
 
 import tidy3d as td
 from tidy3d.config import config

@@ -97,7 +97,8 @@ class GridRefinementLine(Tidy3dBaseModel, ABC):
     )
 
     @field_validator("r1", "r2")
-    def _not_inf(val, info):
+    @classmethod
+    def _not_inf(cls, val):
         """Make sure the point is not infinitiy."""
         if any(np.isinf(v) for v in val):
             raise ValidationError("Point can not contain 'td.inf' terms.")

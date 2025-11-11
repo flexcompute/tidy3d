@@ -5,8 +5,8 @@ from __future__ import annotations
 from itertools import chain
 from math import isclose
 
-from pydantic import Field
 import shapely
+from pydantic import Field
 from shapely.geometry import LineString, Polygon
 
 from tidy3d.components.base import cached_property

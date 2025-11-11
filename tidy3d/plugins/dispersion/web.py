@@ -348,7 +348,8 @@ class StableDispersionFitter(DispersionFitter):
     """Deprecated."""
 
     @model_validator(mode="before")
-    def _deprecate_stable_fitter(data):
+    @classmethod
+    def _deprecate_stable_fitter(cls, data):
         log.warning(
             "'StableDispersionFitter' has been deprecated. Use 'DispersionFitter' with "
             "'tidy3d.plugins.dispersion.web.run' to access the stable fitter from the web server."

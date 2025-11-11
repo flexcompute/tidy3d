@@ -48,7 +48,8 @@ class HeatSimulation(HeatChargeSimulation):
     """
 
     @model_validator(mode="before")
-    def issue_warning_deprecated(data):
+    @classmethod
+    def issue_warning_deprecated(cls, data):
         """Issue warning for 'HeatSimulations'."""
         log.warning(
             "Setting up deprecated 'HeatSimulation'. "

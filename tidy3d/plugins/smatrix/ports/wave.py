@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional, Union
 
-from pydantic import Field, NonNegativeInt, field_validator, model_validator, NonNegativeFloat
+from pydantic import Field, NonNegativeFloat, NonNegativeInt, field_validator, model_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import ABCBoundary, InternalAbsorber, ModeABCBoundary
@@ -343,6 +343,7 @@ class WavePort(AbstractTerminalPort, Box):
         return self
 
     @field_validator("mode_index")
+    @classmethod
     def _mode_index_deprecated(cls, val):
         """Warn that 'mode_index' is deprecated in favor of 'mode_selection'."""
         if val is not None:

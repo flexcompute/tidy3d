@@ -213,7 +213,6 @@ def test_logging_warning_capture():
 
     sim_dict["monitors"] = monitors
 
-    
     sim = td.Simulation.model_validate(sim_dict)
     print(sim.monitors_data_size)
     sim.validate_pre_upload()

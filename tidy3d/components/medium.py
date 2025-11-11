@@ -71,6 +71,7 @@ from .dispersion_fitter import (
 )
 from .geometry.base import Geometry
 from .grid.grid import Coords, Grid
+from .material.tcad.heat import ThermalSpecType
 from .nonlinear import (  # noqa: F401
     KerrNonlinearity,
     NonlinearModel,
@@ -78,7 +79,6 @@ from .nonlinear import (  # noqa: F401
     NonlinearSusceptibility,
     TwoPhotonAbsorption,
 )
-from .material.tcad.heat import ThermalSpecType
 from .parameter_perturbation import (
     IndexPerturbation,
     ParameterPerturbation,
@@ -1176,7 +1176,8 @@ class PECMedium(AbstractMedium):
     """
 
     @field_validator("modulation_spec")
-    def _validate_modulation_spec(cls, val, info):
+    @classmethod
+    def _validate_modulation_spec(cls, val):
         """Check compatibility with modulation_spec."""
         if val is not None:
             raise ValidationError(
@@ -1222,7 +1223,8 @@ class PMCMedium(AbstractMedium):
     """
 
     @field_validator("modulation_spec")
-    def _validate_modulation_spec(cls, val, info):
+    @classmethod
+    def _validate_modulation_spec(cls, val):
         """Check compatibility with modulation_spec."""
         if val is not None:
             raise ValidationError(
@@ -1491,7 +1493,8 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
     _no_nans = validate_no_nans("permittivity", "conductivity")
 
     @field_validator("permittivity")
-    def _eps_inf_greater_no_less_than_one(val):
+    @classmethod
+    def _eps_inf_greater_no_less_than_one(cls, val):
         """Assert any eps_inf must be >=1"""
 
         if not CustomIsotropicMedium._validate_isreal_dataarray(val):
@@ -1671,6 +1674,7 @@ class CustomMedium(AbstractCustomMedium):
     _no_nans = validate_no_nans("eps_dataset", "permittivity", "conductivity")
 
     @model_validator(mode="before")
+    @classmethod
     def _warn_if_none(cls, data: dict) -> dict:
         """Warn if the data array fails to load, and return a vacuum medium."""
         fail_load = False
@@ -1747,7 +1751,8 @@ class CustomMedium(AbstractCustomMedium):
         return self
 
     @field_validator("eps_dataset")
-    def _eps_dataset_single_frequency(val):
+    @classmethod
+    def _eps_dataset_single_frequency(cls, val):
         """Assert only one frequency supplied."""
         if val is None:
             return val
@@ -1884,7 +1889,8 @@ class CustomMedium(AbstractCustomMedium):
         return self
 
     @field_validator("permittivity", "conductivity")
-    def _check_permittivity_conductivity_interpolate(val, info):
+    @classmethod
+    def _check_permittivity_conductivity_interpolate(cls, val, info):
         """Check that the custom medium 'SpatialDataArrays' can be interpolated."""
 
         if isinstance(val, SpatialDataArray):
@@ -2646,6 +2652,7 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
         """
 
         @model_validator(mode="before")
+        @classmethod
         def _warn_if_none(cls, data: dict):
             is_not_loaded = AbstractCustomMedium._not_loaded
 
@@ -2781,7 +2788,8 @@ class PoleResidue(DispersiveMedium):
     )
 
     @field_validator("poles")
-    def _causality_validation(val):
+    @classmethod
+    def _causality_validation(cls, val):
         """Assert causal medium."""
         for a, _ in val:
             if np.any(np.real(_get_numpy_array(a)) > 0):
@@ -2789,6 +2797,7 @@ class PoleResidue(DispersiveMedium):
         return val
 
     @field_validator("poles")
+    @classmethod
     def _poles_largest_value(cls, val):
         """Assert pole parameters are not too large."""
         for a, c in val:
@@ -3372,7 +3381,8 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("poles")
 
     @field_validator("eps_inf")
-    def _eps_inf_positive(val):
+    @classmethod
+    def _eps_inf_positive(cls, val):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
             raise SetupError("'eps_inf' must be real.")
@@ -3657,7 +3667,8 @@ class Sellmeier(DispersiveMedium):
         return self
 
     @field_validator("modulation_spec")
-    def _validate_permittivity_modulation(val):
+    @classmethod
+    def _validate_permittivity_modulation(cls, val):
         """Assert modulated permittivity cannot be <= 0."""
 
         if val is None or val.permittivity is None:
@@ -3842,7 +3853,8 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
     @field_validator("coeffs")
-    def _correct_shape_and_sign(val):
+    @classmethod
+    def _correct_shape_and_sign(cls, val):
         """every term in coeffs must have the same shape, and B>=0 and C>0."""
         if len(val) == 0:
             return val
@@ -3874,6 +3886,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         return self
 
     @field_validator("coeffs")
+    @classmethod
     def _coeffs_C_all_near_zero_or_much_greater(cls, val):
         """We restrict either all C~=0, or very different from 0."""
         for _, C in val:
@@ -4114,6 +4127,7 @@ class Lorentz(DispersiveMedium):
     )
 
     @field_validator("coeffs")
+    @classmethod
     def _coeffs_unequal_f_delta(cls, val):
         """f**2 and delta**2 cannot be exactly the same."""
         for _, f, delta in val:
@@ -4356,7 +4370,8 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
     @field_validator("eps_inf")
-    def _eps_inf_positive(val):
+    @classmethod
+    def _eps_inf_positive(cls, val):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
             raise SetupError("'eps_inf' must be real.")
@@ -4365,6 +4380,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         return val
 
     @field_validator("coeffs")
+    @classmethod
     def _coeffs_unequal_f_delta(cls, val):
         """f and delta cannot be exactly the same.
         Not needed for now because we have a more strict
@@ -4391,7 +4407,8 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         return self
 
     @field_validator("coeffs")
-    def _coeffs_delta_all_smaller_or_larger_than_fi(val):
+    @classmethod
+    def _coeffs_delta_all_smaller_or_larger_than_fi(cls, val):
         """We restrict either all f**2>delta**2 or all f**2<delta**2 for now."""
         for _, f, delta in val:
             f2 = f**2
@@ -4756,7 +4773,8 @@ class CustomDrude(CustomDispersiveMedium, Drude):
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
     @field_validator("eps_inf")
-    def _eps_inf_positive(val):
+    @classmethod
+    def _eps_inf_positive(cls, val):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
             raise SetupError("'eps_inf' must be real.")
@@ -5101,7 +5119,8 @@ class CustomDebye(CustomDispersiveMedium, Debye):
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
     @field_validator("eps_inf")
-    def _eps_inf_positive(val):
+    @classmethod
+    def _eps_inf_positive(cls, val):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
             raise SetupError("'eps_inf' must be real.")
@@ -5126,6 +5145,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         return self
 
     @field_validator("coeffs")
+    @classmethod
     def _coeffs_tau_all_sufficient_positive(cls, val):
         """We restrict either all tau is sufficently greater than 0."""
         for _, tau in val:
@@ -5570,7 +5590,8 @@ class LossyMetalMedium(Medium):
     )
 
     @field_validator("frequency_range")
-    def _validate_frequency_range(val):
+    @classmethod
+    def _validate_frequency_range(cls, val):
         """Validate that frequency range is finite and non-zero."""
         for freq in val:
             if not np.isfinite(freq):
@@ -6028,7 +6049,8 @@ class FullyAnisotropicMedium(AbstractMedium):
         return val
 
     @field_validator("permittivity")
-    def permittivity_spd_and_ge_one(val):
+    @classmethod
+    def permittivity_spd_and_ge_one(cls, val):
         """Check that provided permittivity tensor is symmetric positive definite
         with eigenvalues >= 1.
         """
@@ -6324,7 +6346,8 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     )
 
     @field_validator("xx", "yy", "zz")
-    def _isotropic_xx(val, info):
+    @classmethod
+    def _isotropic_xx(cls, val, info):
         """If it's `CustomMedium`, make sure it's isotropic."""
         if isinstance(val, CustomMedium) and not val.is_isotropic:
             raise SetupError(f"The {info.field_name}-component medium type is not isotropic.")

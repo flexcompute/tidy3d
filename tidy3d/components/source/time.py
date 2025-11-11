@@ -479,7 +479,8 @@ class CustomSourceTime(Pulse):
     _source_time_dataset_none_warning = warn_if_dataset_none("source_time_dataset")
 
     @field_validator("source_time_dataset")
-    def _more_than_one_time(val):
+    @classmethod
+    def _more_than_one_time(cls, val):
         """Must have more than one time to interpolate."""
         if val is None:
             return val

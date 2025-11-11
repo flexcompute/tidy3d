@@ -13,6 +13,7 @@ class MicrowaveBaseModel(Tidy3dBaseModel):
     """Base model that all RF and microwave specific components inherit from."""
 
     @model_validator(mode="before")
+    @classmethod
     def _warn_rf_license(cls, values):
         from tidy3d.config import config
 

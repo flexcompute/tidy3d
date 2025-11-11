@@ -14,7 +14,6 @@ from tidy3d.log import log
 from .autograd.utils import get_static, hasbox
 from .base import DATA_ARRAY_MAP
 from .geometry.base import Box
-from .mode_spec import ModeSpec
 
 """ Explanation of pydantic validators:
 
@@ -108,6 +107,7 @@ def assert_volumetric():
     """makes sure a field's ``size`` attribute has no zero entry"""
 
     @field_validator("size")
+    @classmethod
     def is_volumetric(cls, val):
         """Raise validation error if volume is 0."""
         if val.count(0.0) > 0:
@@ -126,7 +126,8 @@ def validate_name_str():
     """make sure the name does not include [, ] (used for default names)"""
 
     @field_validator("name")
-    def field_has_unique_names(val):
+    @classmethod
+    def field_has_unique_names(cls, val):
         """raise exception if '[' or ']' in name"""
         # if val and ('[' in val or ']' in val):
         #     raise SetupError(f"'[' or ']' not allowed in name: {val} (used for defaults)")
@@ -139,7 +140,8 @@ def validate_unique(*field_names: str):
     """Make sure the given field has unique entries."""
 
     @field_validator(*field_names)
-    def field_has_unique_entries(val, info):
+    @classmethod
+    def field_has_unique_entries(cls, val, info):
         """Check if the field has unique entries."""
         if len(set(val)) != len(val):
             raise SetupError(f"Entries of '{info.field_name}' must be unique.")
@@ -183,7 +185,8 @@ def assert_unique_names(*field_names: str):
     """makes sure all elements of a field have unique .name values"""
 
     @field_validator(*field_names)
-    def field_has_unique_names(val, info):
+    @classmethod
+    def field_has_unique_names(cls, val, info):
         """make sure each element of val has a unique name (if specified)."""
         field_names = [field.name for field in val if field.name]
         unique_names = set(field_names)
@@ -299,7 +302,8 @@ def warn_if_dataset_none(field_name: str):
     """Warn if a Dataset field has None in its dictionary."""
 
     @field_validator(field_name, mode="before")
-    def _warn_if_none(val: dict) -> Optional[dict]:
+    @classmethod
+    def _warn_if_none(cls, val: dict) -> Optional[dict]:
         """Warn if the DataArrays fail to load."""
         if isinstance(val, dict):
             if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
@@ -384,7 +388,8 @@ def validate_parameter_perturbation(
     """Assert perturbations do not drive a parameter out of physical bounds."""
 
     @field_validator(field_name)
-    def _warn_perturbed_val_range(val, info):
+    @classmethod
+    def _warn_perturbed_val_range(cls, val, info):
         """Assert perturbations do not drive a parameter out of physical bounds."""
 
         if val is not None:

@@ -89,14 +89,16 @@ class CustomInitializationSpec(AbstractInitializationSpec):
     )
 
     @field_validator("params")
-    def _validate_params_range(val):
+    @classmethod
+    def _validate_params_range(cls, val):
         """Ensure that all parameter values are between 0 and 1."""
         if np.any((val < 0) | (val > 1)):
             raise ValidationError("'params' need to be between 0 and 1.")
         return val
 
     @field_validator("params")
-    def _validate_params_dtype(val):
+    @classmethod
+    def _validate_params_dtype(cls, val):
         """Ensure that params is real-valued."""
         if np.issubdtype(val.dtype, np.bool_):
             td.log.warning(
@@ -108,7 +110,8 @@ class CustomInitializationSpec(AbstractInitializationSpec):
         return val
 
     @field_validator("params")
-    def _validate_params_3d(val):
+    @classmethod
+    def _validate_params_3d(cls, val):
         """Ensure that params is a 3D array."""
         if val.ndim != 3:
             raise ValidationError(f"'params' must be 3D, but got {val.ndim}D.")

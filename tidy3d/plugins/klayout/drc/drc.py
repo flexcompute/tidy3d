@@ -53,6 +53,7 @@ class DRCConfig(Tidy3dBaseModel):
     )
 
     @field_validator("gdsfile")
+    @classmethod
     def _validate_gdsfile_filetype(cls, v: FilePath) -> FilePath:
         """Check GDS filetype is ``.gds``."""
         if v.suffix != ".gds":
@@ -60,6 +61,7 @@ class DRCConfig(Tidy3dBaseModel):
         return v
 
     @field_validator("drc_runset")
+    @classmethod
     def _validate_drc_runset_filetype(cls, v: FilePath) -> FilePath:
         """Check DRC runset filetype is ``.drc`` or ``.lydrc``."""
         if v.suffix not in SUPPORTED_DRC_SUFFIXES:
@@ -69,6 +71,7 @@ class DRCConfig(Tidy3dBaseModel):
         return v
 
     @field_validator("drc_runset")
+    @classmethod
     def _validate_drc_runset_format(cls, v: FilePath) -> FilePath:
         """Check if the DRC runset file is formatted correctly.
         The checks are:
@@ -88,6 +91,7 @@ class DRCConfig(Tidy3dBaseModel):
         return v
 
     @field_validator("drc_args", mode="before")
+    @classmethod
     def _validate_drc_args_stringable(cls, v: Any) -> dict[str, str]:
         """Coerce all keys and values in drc_args to strings."""
         if v is None:
@@ -101,6 +105,7 @@ class DRCConfig(Tidy3dBaseModel):
         return v
 
     @field_validator("drc_args")
+    @classmethod
     def _validate_drc_args_reserved(cls, v: dict[str, str]) -> dict[str, str]:
         """Ensure user arguments do not override the reserved keys."""
 

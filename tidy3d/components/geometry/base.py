@@ -1571,7 +1571,8 @@ class Centered(Geometry, ABC):
         return val
 
     @field_validator("center")
-    def _center_not_inf(val: tuple[float, float, float]) -> tuple[float, float, float]:
+    @classmethod
+    def _center_not_inf(cls, val: tuple[float, float, float]) -> tuple[float, float, float]:
         """Make sure center is not infinitiy."""
         if any(np.isinf(v) for v in val):
             raise ValidationError("center can not contain td.inf terms.")
@@ -1680,7 +1681,8 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
     )
 
     @field_validator("sidewall_angle")
-    def validate_angle(val) -> float:
+    @classmethod
+    def validate_angle(cls, val: float) -> float:
         lower_bound = -np.pi / 2
         upper_bound = np.pi / 2
         if (val <= lower_bound) or (val >= upper_bound):
@@ -1847,7 +1849,8 @@ class Circular(Geometry):
     )
 
     @field_validator("radius")
-    def _radius_not_inf(val: float) -> float:
+    @classmethod
+    def _radius_not_inf(cls, val: float) -> float:
         """Make sure center is not infinitiy."""
         if np.isinf(val):
             raise ValidationError("radius can not be 'td.inf'.")
@@ -2931,13 +2934,15 @@ class Transformed(Geometry):
     )
 
     @field_validator("transform")
-    def _transform_is_invertible(val: MatrixReal4x4) -> MatrixReal4x4:
+    @classmethod
+    def _transform_is_invertible(cls, val: MatrixReal4x4) -> MatrixReal4x4:
         # If the transform is not invertible, this will raise an error
         _ = np.linalg.inv(val)
         return val
 
     @field_validator("geometry")
-    def _geometry_is_finite(val: GeometryType) -> GeometryType:
+    @classmethod
+    def _geometry_is_finite(cls, val: GeometryType) -> GeometryType:
         if not np.isfinite(val.bounds).all():
             raise ValidationError(
                 "Transformations are only supported on geometries with finite dimensions. "
@@ -3230,7 +3235,8 @@ class ClipOperation(Geometry):
     )
 
     @field_validator("geometry_a", "geometry_b")
-    def _geometries_untraced(val: GeometryType) -> GeometryType:
+    @classmethod
+    def _geometries_untraced(cls, val: GeometryType) -> GeometryType:
         """Make sure that ``ClipOperation`` geometries do not contain tracers."""
         traced = val._strip_traced_fields()
         if traced:
@@ -3492,7 +3498,8 @@ class GeometryGroup(Geometry):
     )
 
     @field_validator("geometries")
-    def _geometries_not_empty(val: tuple[GeometryType, ...]) -> tuple[GeometryType, ...]:
+    @classmethod
+    def _geometries_not_empty(cls, val: tuple[GeometryType, ...]) -> tuple[GeometryType, ...]:
         """make sure geometries are not empty."""
         if not len(val) > 0:
             raise ValidationError("GeometryGroup.geometries must not be empty.")

@@ -69,7 +69,8 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         return self
 
     @field_validator("data")
-    def validate_no_ambiguity(val):
+    @classmethod
+    def validate_no_ambiguity(cls, val):
         """Ensure all :class:`AbstractMonitorData` entries in ``.data`` correspond to different
         monitors in ``.simulation``.
         """

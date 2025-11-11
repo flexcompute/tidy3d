@@ -74,9 +74,9 @@ from tidy3d.components.types import (
     PlotScale,
     Symmetry,
 )
+from tidy3d.components.types.base import TYPE_TAG_STR, discriminated_union
 from tidy3d.components.types.mode_spec import ModeSpecType
 from tidy3d.components.types.monitor_data import ModeSolverDataType
-from tidy3d.components.types.base import TYPE_TAG_STR, discriminated_union
 from tidy3d.components.validators import (
     validate_freqs_min,
     validate_freqs_not_empty,
@@ -205,6 +205,7 @@ class ModeSolver(Tidy3dBaseModel):
     )
 
     @field_validator("simulation")
+    @classmethod
     def _convert_to_simulation(val):
         """Convert to regular Simulation if e.g. JaxSimulation given."""
         if hasattr(val, "to_simulation"):
@@ -216,6 +217,7 @@ class ModeSolver(Tidy3dBaseModel):
         return val
 
     @field_validator("plane")
+    @classmethod
     def is_plane(val):
         """Raise validation error if not planar."""
         if val.size.count(0.0) != 1:
@@ -271,7 +273,7 @@ class ModeSolver(Tidy3dBaseModel):
     def _validate_rotate_structures_after(self):
         self._validate_rotate_structures()
         return self
-    
+
     @model_validator(mode="after")
     def _validate_num_grid_points(self):
         """Upper bound of the product of the number of grid points and the number of modes. The bound is very loose: subspace
@@ -341,7 +343,6 @@ class ModeSolver(Tidy3dBaseModel):
         if np.abs(self.mode_spec.angle_theta) > 0 and self.mode_spec.angle_rotation:
             _ = self._rotate_structures
 
-    
     @staticmethod
     def _make_rotated_structures(
         structures: list[Structure], translate_kwargs: dict, rotate_kwargs: dict

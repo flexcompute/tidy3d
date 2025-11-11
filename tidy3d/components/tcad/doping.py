@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Union
 
 import numpy as np
-from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 import xarray as xr
+from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.autograd import TracedSize
 from tidy3d.components.base import cached_property

@@ -15,6 +15,7 @@ from tidy3d.components.types.base import ArrayComplex, ArrayFloat, discriminated
 from tidy3d.constants import C_0, CMCUBE, EPSILON_0, HERTZ, KELVIN, PERCMCUBE, inf
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
+
 from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import (
     ChargeDataArray,

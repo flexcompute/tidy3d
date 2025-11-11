@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import collections.abc
 
-from pydantic import ValidationError
 import pytest
+from pydantic import ValidationError
 
 from tidy3d import SimulationMap
 

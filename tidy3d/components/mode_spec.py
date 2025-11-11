@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 from math import isclose
-from typing import Literal, Optional, Optional, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 from pydantic import (
@@ -212,14 +212,16 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     )
 
     @field_validator("group_index_step", mode="before")
-    def _validate_group_index_step_default(val):
+    @classmethod
+    def _validate_group_index_step_default(cls, val):
         """If ``True``, replace with default fractional step."""
         if val is True:
             return GROUP_INDEX_STEP
         return val
 
     @field_validator("group_index_step")
-    def _validate_group_index_step_size(val):
+    @classmethod
+    def _validate_group_index_step_size(cls, val):
         """Ensure group-index step is < 1."""
         if val is not False and val >= 1:
             raise ValidationError(
@@ -228,14 +230,16 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         return val
 
     @field_validator("bend_radius")
-    def _validate_bend_radius_not_zero(v):
+    @classmethod
+    def _validate_bend_radius_not_zero(cls, v):
         """`bend_radius` magnitude must be non-zero."""
         if v is not None and isclose(v, 0):
             raise SetupError("The magnitude of 'bend_radius' must be larger than 0.")
         return v
 
     @field_validator("angle_theta")
-    def _validate_angle_theta_glancing(val):
+    @classmethod
+    def _validate_angle_theta_glancing(cls, val):
         """Disallow incidence too close to glancing."""
         if abs(np.pi / 2 - val) < GLANCING_CUTOFF:
             raise SetupError(
@@ -259,7 +263,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
                 "'angle_phi' must be a multiple of 'π/2' when 'angle_rotation' is enabled."
             )
         return self
-    
+
     @model_validator(mode="after")
     def check_precision(self):
         """Verify critical ModeSpec settings for group index calculation."""
@@ -295,6 +299,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         return self
 
     @field_validator("filter_pol")
+    @classmethod
     def _filter_pol_deprecated(cls, val):
         """Warn that 'filter_pol' is deprecated in favor of 'sort_spec'."""
         if val is not None:
@@ -305,6 +310,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         return val
 
     @field_validator("track_freq")
+    @classmethod
     def _track_freq_deprecated(cls, val):
         """Warn that 'track_freq' on ModeSpec is deprecated in favor of 'sort_spec.track_freq'."""
         if val is not None:

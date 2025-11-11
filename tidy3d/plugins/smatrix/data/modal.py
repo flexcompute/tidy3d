@@ -1,7 +1,6 @@
 """Data structures for post-processing modal component simulations to calculate S-matrices."""
 
 from __future__ import annotations
-from typing import Optional
 
 from pydantic import Field
 

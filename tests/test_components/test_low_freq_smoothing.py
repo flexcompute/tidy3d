@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from pydantic import ValidationError
-
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 

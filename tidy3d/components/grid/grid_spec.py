@@ -22,7 +22,6 @@ from tidy3d.components.geometry.utils_2d import increment_float
 from tidy3d.components.lumped_element import LumpedElementType
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import MeshOverrideStructure, Structure, StructureType
-from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types import (
     TYPE_TAG_STR,
     ArrayFloat1D,
@@ -34,6 +33,7 @@ from tidy3d.components.types import (
     Symmetry,
     Undefined,
 )
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import C_0, MICROMETER, dp_eps, fp_eps, inf
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
@@ -294,7 +294,8 @@ class UniformGrid(GridSpec1d):
     )
 
     @field_validator("dl")
-    def _validate_dl(val):
+    @classmethod
+    def _validate_dl(cls, val):
         """
         Ensure 'dl' is not too small.
         """
@@ -428,7 +429,8 @@ class CustomGridBoundaries(GridSpec1d):
         return min(np.diff(self.coords))
 
     @field_validator("coords")
-    def _validate_coords(val):
+    @classmethod
+    def _validate_coords(cls, val):
         """
         Ensure 'coords' is sorted and has at least 2 entries.
         """

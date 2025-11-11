@@ -374,7 +374,6 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
         """Maps the field components to their associated data."""
         return {"E": self.E}
 
-
     @model_validator(mode="after")
     def check_correct_data_type(self):
         """Issue error if incorrect data type is used"""

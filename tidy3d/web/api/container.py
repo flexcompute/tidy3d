@@ -600,7 +600,8 @@ class Job(WebContainer):
             parent_dir.mkdir(parents=True, exist_ok=True)
 
     @model_validator(mode="before")
-    def set_task_name_if_none(data: dict[str, Any]) -> dict[str, Any]:
+    @classmethod
+    def set_task_name_if_none(cls, data: dict[str, Any]) -> dict[str, Any]:
         """
         Auto-assign a task_name if user did not provide one.
         """

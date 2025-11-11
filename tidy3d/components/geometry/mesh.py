@@ -47,11 +47,13 @@ class TriangleMesh(base.Geometry, ABC):
 
     @model_validator(mode="before")
     @verify_packages_import(["trimesh"])
-    def _validate_trimesh_library(data: dict[str, Any]) -> dict[str, Any]:
+    @classmethod
+    def _validate_trimesh_library(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Check if the trimesh package is imported as a validator."""
         return data
 
     @field_validator("mesh_dataset", mode="before")
+    @classmethod
     def _warn_if_none(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
         """Warn if the Dataset fails to load."""
         if isinstance(val, dict):
@@ -61,6 +63,7 @@ class TriangleMesh(base.Geometry, ABC):
         return val
 
     @field_validator("mesh_dataset")
+    @classmethod
     def _check_mesh(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
         """Check that the mesh is valid."""
         if val is None:

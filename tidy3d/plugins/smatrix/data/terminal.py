@@ -227,6 +227,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         return self.change_port_reference_planes(self.smatrix(), port_shifts=port_shifts)
 
     @model_validator(mode="before")
+    @classmethod
     def _warn_rf_license(cls, values):
         log.warning(
             "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",

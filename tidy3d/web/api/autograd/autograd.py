@@ -9,11 +9,8 @@ from autograd.extend import defvjp, primitive
 
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap
-from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
-from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.types import TracedDict
-from tidy3d.components.data.data_array import DataArray
-from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError

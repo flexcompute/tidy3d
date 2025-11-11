@@ -6,11 +6,18 @@ from abc import ABC, abstractmethod
 from typing import Optional, Union
 
 import numpy as np
-from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, field_validator, model_validator, conint
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    PositiveFloat,
+    PositiveInt,
+    conint,
+    field_validator,
+    model_validator,
+)
 from scipy.signal.windows import blackman, blackmanharris, chebwin, hamming, hann, kaiser, taylor
 from scipy.special import j0, jn_zeros
 
-from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box, Geometry
@@ -753,6 +760,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
     )
 
     @field_validator("array_size", "spacings", "phase_shifts", "amp_multipliers", mode="before")
+    @classmethod
     def _convert_list_to_tuple(cls, v):
         """Convert lists to tuples for tuple fields."""
         if isinstance(v, list):
@@ -1232,7 +1240,7 @@ class RectangularTaper(AbstractTaper):
         """
         return cls(window_x=window, window_y=window, window_z=window)
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def check_at_least_one_window(self):
         if not any([self.window_x, self.window_y, self.window_z]):
             raise ValueError("At least one window (x, y, or z) must be provided.")

@@ -15,7 +15,6 @@ except ImportError:
 from pydantic import Field, NonNegativeInt, field_validator
 
 from tidy3d.compat import Self
-
 from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
     SemiconductorMedium,
@@ -45,9 +44,6 @@ from .geometry.base import Box, ClipOperation, GeometryGroup
 from .geometry.utils import flatten_groups, merging_geometries_on_plane, traverse_geometries
 from .grid.grid import Coords, Grid
 from .material.multi_physics import MultiPhysicsMedium
-from .material.tcad.charge import ChargeConductorMedium, SemiconductorMedium
-from .material.tcad.heat import SolidMedium, SolidSpec
-from .material.types import MultiPhysicsMediumType3D, StructureMediumType
 from .medium import (
     AbstractCustomMedium,
     AbstractMedium,
@@ -56,8 +52,6 @@ from .medium import (
     Medium2D,
 )
 from .structure import Structure
-from .tcad.doping import ConstantDoping, GaussianDoping
-from .tcad.viz import HEAT_SOURCE_CMAP
 from .types import (
     TYPE_TAG_STR,
     Ax,
@@ -165,7 +159,8 @@ class Scene(Tidy3dBaseModel):
     _unique_structure_names = assert_unique_names("structures")
 
     @field_validator("structures")
-    def _validate_mediums(val):
+    @classmethod
+    def _validate_mediums(cls, val):
         """Error if too many mediums present. Warn if different mediums have the same name."""
 
         if val is None:
@@ -189,7 +184,8 @@ class Scene(Tidy3dBaseModel):
         return val
 
     @field_validator("structures")
-    def _validate_num_geometries(val):
+    @classmethod
+    def _validate_num_geometries(cls, val):
         """Error if too many geometries in a single structure."""
 
         if val is None:
@@ -212,6 +208,7 @@ class Scene(Tidy3dBaseModel):
         return val
 
     @field_validator("structures")
+    @classmethod
     def _validate_structures_per_medium(cls, val):
         """Error if too many structures share the same medium; suggest using GeometryGroup."""
         if val is None:

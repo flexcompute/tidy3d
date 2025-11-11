@@ -9,8 +9,8 @@ from math import isclose
 from typing import Any, Optional, Union
 
 import numpy as np
-from pydantic import Field, NonNegativeInt
 import shapely
+from pydantic import Field, NonNegativeInt
 from shapely.geometry import (
     Polygon,
 )
@@ -449,9 +449,7 @@ class SnappingSpec(Tidy3dBaseModel):
         description="Describes how snapping positions will be chosen.",
     )
 
-    margin: Optional[
-        tuple[NonNegativeInt, NonNegativeInt, NonNegativeInt]
-    ] = Field(
+    margin: Optional[tuple[NonNegativeInt, NonNegativeInt, NonNegativeInt]] = Field(
         (0, 0, 0),
         title="Margin",
         description="Number of additional grid points to consider when expanding or contracting "

@@ -1,7 +1,6 @@
 """Backwards compatibility - import from tidy3d.components.microwave.path_integrals.integrals instead."""
 
 from __future__ import annotations
-from pydantic import Field, field_validator
 
 from tidy3d.components.data.data_array import (
     CurrentIntegralResultType,

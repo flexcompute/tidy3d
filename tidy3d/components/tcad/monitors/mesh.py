@@ -22,7 +22,8 @@ class VolumeMeshMonitor(HeatChargeMonitor):
     )
 
     @field_validator("size")
-    def _at_least_2d(val):
+    @classmethod
+    def _at_least_2d(cls, val):
         """Validate that the monitor has at least two non-zero dimensions."""
         if len([d for d in val if isclose(d, 0)]) > 1:
             raise ValueError("'VolumeMeshMonitor' must have at least two nonzero dimensions.")

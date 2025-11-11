@@ -179,24 +179,6 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
     )
 
-    run_only: Optional[tuple[NetworkIndex, ...]] = Field(
-        None,
-        title="Run Only",
-        description="Set of matrix indices that define the simulations to run. "
-        "If ``None``, simulations will be run for all indices in the scattering matrix. "
-        "If a tuple is given, simulations will be run only for the given matrix indices.",
-    )
-
-    element_mappings: tuple[tuple[NetworkElement, NetworkElement, Complex], ...] = Field(
-        (),
-        title="Element Mappings",
-        description="Tuple of S matrix element mappings, each described by a tuple of "
-        "(input_element, output_element, coefficient), where the coefficient is the "
-        "element_mapping coefficient describing the relationship between the input and output "
-        "matrix element. If all elements of a given column of the scattering matrix are defined "
-        "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
-    )
-
     radiation_monitors: tuple[
         discriminated_union(Union[DirectivityMonitor, DirectivityMonitorSpec]), ...
     ] = Field(
@@ -232,6 +214,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     )
 
     @model_validator(mode="before")
+    @classmethod
     def _warn_refactor_2_10(cls, values):
         log.warning(
             f"ℹ️ ⚠️ The {cls.__name__} class was refactored in tidy3d version 2.10. Migration documentation will be provided, and existing functionality can be accessed in a different way.",

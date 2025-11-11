@@ -46,7 +46,8 @@ class StructureStructureInterface(AbstractBCPlacement):
     )
 
     @field_validator("structures")
-    def unique_names(val):
+    @classmethod
+    def unique_names(cls, val):
         """Error if the same structure is provided twice"""
         if val[0] == val[1]:
             raise SetupError(
@@ -69,7 +70,8 @@ class MediumMediumInterface(AbstractBCPlacement):
     )
 
     @field_validator("mediums")
-    def unique_names(val):
+    @classmethod
+    def unique_names(cls, val):
         """Error if the same structure is provided twice"""
         if val[0] == val[1]:
             raise SetupError("The same medium is provided twice in 'MediumMediumInterface'.")

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 from typing import Optional, Union
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator
@@ -322,6 +320,7 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     # DEPRECATION VALIDATORS
     @field_validator("N_c")
+    @classmethod
     def check_nc_uses_model(cls, val):
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
@@ -333,6 +332,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         return val
 
     @field_validator("N_v")
+    @classmethod
     def check_nv_uses_model(cls, val):
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
@@ -344,6 +344,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         return val
 
     @field_validator("E_g")
+    @classmethod
     def check_eg_uses_model(cls, val):
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
@@ -355,6 +356,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         return val
 
     @field_validator("N_d")
+    @classmethod
     def check_nd_uses_model(cls, val):
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
@@ -366,6 +368,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         return val
 
     @field_validator("N_a")
+    @classmethod
     def check_na_uses_model(cls, val):
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):

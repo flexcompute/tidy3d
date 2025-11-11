@@ -65,7 +65,8 @@ class DCVoltageSource(Tidy3dBaseModel):
     units: Literal[VOLT] = VOLT
 
     @field_validator("voltage")
-    def check_voltage(val):
+    @classmethod
+    def check_voltage(cls, val):
         for v in val:
             if v == inf:
                 raise ValueError(f"Voltages must be finite. Currently  voltage={val}.")

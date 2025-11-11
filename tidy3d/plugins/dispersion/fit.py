@@ -53,7 +53,8 @@ class DispersionFitter(Tidy3dBaseModel):
     )
 
     @field_validator("wvl_um")
-    def _setup_wvl(val):
+    @classmethod
+    def _setup_wvl(cls, val):
         """Convert wvl_um to a numpy array."""
         if val.size == 0:
             raise ValidationError("Wavelength data cannot be empty.")

@@ -87,14 +87,16 @@ class LobeMeasurer(MicrowaveBaseModel):
     )
 
     @field_validator("angle")
-    def _sorted_angle(val):
+    @classmethod
+    def _sorted_angle(cls, val):
         """Ensure the angle array is sorted."""
         if not np.all(np.diff(val) >= 0):
             raise ValidationError("The angle array must be sorted in ascending order.")
         return val
 
     @field_validator("radiation_pattern")
-    def _nonnegative_radiation_pattern(val):
+    @classmethod
+    def _nonnegative_radiation_pattern(cls, val):
         """Ensure the radiation pattern is nonnegative."""
         if not np.all(val >= 0):
             raise ValidationError("Radiation pattern must be nonnegative.")

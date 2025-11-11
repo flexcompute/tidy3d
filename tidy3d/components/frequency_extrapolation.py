@@ -75,6 +75,7 @@ class LowFrequencySmoothingSpec(AbstractLowFrequencySmoothingSpec):
     )
 
     @field_validator("monitors")
+    @classmethod
     def _validate_monitors(cls, val):
         """Validate the monitors list is not empty."""
         if not val:

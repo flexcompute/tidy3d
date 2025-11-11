@@ -6,14 +6,12 @@ from abc import ABC
 from typing import TYPE_CHECKING, Optional, Union
 
 import autograd.numpy as np
-from pydantic import NonNegativeFloat, PositiveFloat, Field, PositiveInt, field_validator
+from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, field_validator
 
 from tidy3d.constants import MICROMETER, SECOND, VOLT, WATT
 from tidy3d.exceptions import SetupError, ValidationError
 
 from .base import Tidy3dBaseModel
-
-from tidy3d.log import log
 
 if TYPE_CHECKING:
     from .medium import AbstractMedium
@@ -122,7 +120,8 @@ class NonlinearSusceptibility(NonlinearModel):
     )
 
     @field_validator("numiters")
-    def _validate_numiters(val):
+    @classmethod
+    def _validate_numiters(cls, val):
         """Check that numiters is not too large."""
         if val is None:
             return val
@@ -363,7 +362,8 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
     )
 
     @field_validator("models")
-    def _no_duplicate_models(val):
+    @classmethod
+    def _no_duplicate_models(cls, val):
         """Ensure each type of model appears at most once."""
         if val is None:
             return val
@@ -378,7 +378,8 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
         return val
 
     @field_validator("num_iters")
-    def _validate_num_iters(val):
+    @classmethod
+    def _validate_num_iters(cls, val):
         """Check that num_iters is not too large."""
         if val > NONLINEAR_MAX_NUM_ITERS:
             raise ValidationError(
@@ -396,6 +397,7 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
         return fields
 
     @field_validator("models")
+    @classmethod
     def _consistent_models(cls, val):
         """Ensure that parameters shared between models are consistent."""
         if val is None:

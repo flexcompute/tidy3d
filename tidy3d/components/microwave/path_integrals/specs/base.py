@@ -5,9 +5,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import numpy as np
-from pydantic import Field, field_validator
 import shapely
 import xarray as xr
+from pydantic import Field, field_validator
 from typing_extensions import Self
 
 from tidy3d.components.base import cached_property
@@ -224,6 +224,7 @@ class Custom2DPathIntegralSpec(AbstractAxesRH):
         return self.axis
 
     @field_validator("vertices")
+    @classmethod
     def _correct_shape(cls, val):
         """Makes sure vertices size is correct."""
         # overall shape of vertices

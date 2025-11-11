@@ -62,7 +62,8 @@ class Source(Box, AbstractSource, ABC):
     _warn_traced_size = _warn_unsupported_traced_argument("size")
 
     @field_validator("source_time")
-    def _freqs_lower_bound(val):
+    @classmethod
+    def _freqs_lower_bound(cls, val):
         """Raise validation error if central frequency is too low."""
         _assert_min_freq(val._freq0_sigma_centroid, msg_start="'source_time.freq0'")
         return val

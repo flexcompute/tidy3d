@@ -33,7 +33,8 @@ class StructureBasedHeatChargeSource(AbstractHeatChargeSource):
     )
 
     @field_validator("structures")
-    def check_non_empty_structures(val):
+    @classmethod
+    def check_non_empty_structures(cls, val):
         """Error if source doesn't point at any structures."""
         if len(val) == 0:
             raise SetupError("List of structures for heat source is empty.")

@@ -1368,8 +1368,8 @@ def test_too_many_traced_structures(monkeypatch, use_emulated_run):
     def make_sim(*args):
         structure = make_structures(*args)[structure_key]
         return SIM_BASE.updated_copy(
-            structures=(config.adjoint.max_traced_structures + 1) * (structure,), 
-            monitors=(monitor,)
+            structures=(config.adjoint.max_traced_structures + 1) * (structure,),
+            monitors=(monitor,),
         )
 
     def objective(*args):

@@ -40,7 +40,8 @@ class UniformHeatSource(HeatSource):
     # NOTE: wrapper for backwards compatibility.
 
     @model_validator(mode="before")
-    def issue_warning_deprecated(data):
+    @classmethod
+    def issue_warning_deprecated(cls, data):
         """Issue warning for 'UniformHeatSource'."""
         log.warning(
             "'UniformHeatSource' is deprecated and will be discontinued. You can use "

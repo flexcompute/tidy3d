@@ -215,18 +215,21 @@ class ModeSimulation(AbstractYeeGridSimulation):
     )
 
     @field_validator("grid_spec")
-    def _validate_auto_grid_wavelength(val):
+    @classmethod
+    def _validate_auto_grid_wavelength(cls, val):
         # abstract override, logic is handled in post-init to ensure freqs is defined
         return val
 
     @field_validator("plane")
-    def _validate_planar(val):
+    @classmethod
+    def _validate_planar(cls, val):
         if val.size.count(0.0) != 1:
             raise ValidationError(f"'ModeSimulation.plane' must be planar, given 'size={val.size}'")
         return val
 
     @model_validator(mode="before")
-    def is_plane(data):
+    @classmethod
+    def is_plane(cls, data):
         """Raise validation error if not planar."""
         if hasattr(data, "get") and data.get("plane") is None:
             val = Box(size=data.get("size"), center=data.get("center"))

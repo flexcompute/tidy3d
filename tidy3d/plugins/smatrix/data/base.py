@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import DataArray
@@ -53,7 +53,7 @@ class AbstractComponentModelerData(ABC, Tidy3dBaseModel):
 
         # It's good practice to handle cases where 'modeler' might not be present
         if not modeler or not hasattr(modeler, "sim_dict"):
-            return val
+            return self
 
         # Use sets for an order-insensitive comparison
         modeler_keys = set(modeler.sim_dict.keys())

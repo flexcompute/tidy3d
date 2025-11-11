@@ -7,7 +7,12 @@ from typing import Any, Callable, Union
 
 from pydantic import Field
 
-from tidy3d.components.autograd.types import AutogradFieldMap, TracedArrayLike, TracedComplex, TracedFloat
+from tidy3d.components.autograd.types import (
+    AutogradFieldMap,
+    TracedArrayLike,
+    TracedComplex,
+    TracedFloat,
+)
 from tidy3d.components.base import Tidy3dBaseModel
 
 

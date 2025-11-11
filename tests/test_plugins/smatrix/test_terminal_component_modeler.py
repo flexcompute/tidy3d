@@ -1197,7 +1197,9 @@ def test_antenna_helpers(monkeypatch, tmp_path):
         theta=theta,
         phi=phi,
     )
-    modeler: TerminalComponentModeler = modeler.updated_copy(radiation_monitors=(radiation_monitor,))
+    modeler: TerminalComponentModeler = modeler.updated_copy(
+        radiation_monitors=(radiation_monitor,)
+    )
 
     # Run simulation to get data
     modeler_data = run_component_modeler(monkeypatch, modeler)

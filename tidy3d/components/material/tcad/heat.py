@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import Optional, Union
 
-from pydantic import Field, PositiveFloat, NonNegativeFloat
+from pydantic import Field, NonNegativeFloat, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import (

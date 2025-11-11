@@ -87,7 +87,8 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         return self.normal_axis
 
     @field_validator("center")
-    def _center_not_inf(val):
+    @classmethod
+    def _center_not_inf(cls, val):
         """Make sure center is not infinity."""
         if any(np.isinf(v) for v in val):
             raise ValidationError("'center' can not contain 'td.inf' terms.")

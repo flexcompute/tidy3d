@@ -120,7 +120,8 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
     )
 
     @field_validator("num_reps")
-    def _validate_num_reps(val):
+    @classmethod
+    def _validate_num_reps(cls, val):
         """Check num_reps is not too large."""
         if val > MAX_NUM_REPS:
             raise SetupError(
@@ -696,7 +697,8 @@ class EMEGrid(Box):
     )
 
     @field_validator("mode_specs")
-    def _validate_size(val):
+    @classmethod
+    def _validate_size(cls, val):
         """Check grid size and num modes."""
         num_eme_cells = len(val)
         if num_eme_cells > MAX_NUM_EME_CELLS:

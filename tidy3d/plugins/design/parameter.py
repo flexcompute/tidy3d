@@ -26,7 +26,8 @@ class Parameter(Tidy3dBaseModel, ABC):
     )
 
     @field_validator("values")
-    def _values_unique(val):
+    @classmethod
+    def _values_unique(cls, val):
         """Supplied unique values."""
         if (val is not None) and (len(set(val)) != len(val)):
             raise ValueError("Supplied 'values' were not unique.")
@@ -64,7 +65,8 @@ class ParameterNumeric(Parameter, ABC):
     )
 
     @field_validator("span")
-    def _span_valid(val):
+    @classmethod
+    def _span_valid(cls, val):
         """Span min <= span max."""
         span_min, span_max = val
         if span_min > span_max:
@@ -102,7 +104,8 @@ class ParameterFloat(ParameterNumeric):
     )
 
     @field_validator("span")
-    def _span_is_float(val):
+    @classmethod
+    def _span_is_float(cls, val):
         """Make sure the span contains floats."""
         low, high = val
         return float(low), float(high)
@@ -142,7 +145,8 @@ class ParameterInt(ParameterNumeric):
     )
 
     @field_validator("span")
-    def _span_is_int(val):
+    @classmethod
+    def _span_is_int(cls, val):
         """Make sure the span contains ints."""
         low, high = val
         return int(low), int(high)
@@ -178,13 +182,15 @@ class ParameterAny(Parameter):
     )
 
     @field_validator("allowed_values")
-    def _given_any_allowed_values(val):
+    @classmethod
+    def _given_any_allowed_values(cls, val):
         """Need at least one allowed value."""
         if not len(val):
             raise ValueError("Given empty tuple of allowed values. Must have at least one.")
         return val
 
     @field_validator("allowed_values")
+    @classmethod
     def _no_duplicate_allowed_values(cls, val):
         """No duplicates in allowed_values."""
         if len(val) != len(set(val)):

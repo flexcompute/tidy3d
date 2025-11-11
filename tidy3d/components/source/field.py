@@ -290,7 +290,8 @@ class AngledFieldSource(DirectionalSource, ABC):
     )
 
     @field_validator("angle_theta")
-    def glancing_incidence(val):
+    @classmethod
+    def glancing_incidence(cls, val):
         """Warn if close to glancing incidence."""
         if np.abs(np.pi / 2 - val) < GLANCING_CUTOFF:
             log.warning(

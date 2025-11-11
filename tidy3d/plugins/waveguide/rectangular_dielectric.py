@@ -205,7 +205,8 @@ class RectangularDielectric(Tidy3dBaseModel):
     )
 
     @field_validator("wavelength", "core_width", "gap")
-    def _set_non_negative_array(val):
+    @classmethod
+    def _set_non_negative_array(cls, val):
         """Ensure values are not negative and convert to numpy arrays."""
         val = numpy.array(val, ndmin=1)
         if any(val < 0):
@@ -213,7 +214,8 @@ class RectangularDielectric(Tidy3dBaseModel):
         return val
 
     @field_validator("core_medium", "clad_medium", "box_medium")
-    def _check_non_metallic(val, info):
+    @classmethod
+    def _check_non_metallic(cls, val, info):
         if val is None:
             return val
         media = val if isinstance(val, tuple) else (val,)

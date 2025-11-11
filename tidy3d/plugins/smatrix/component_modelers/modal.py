@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 import autograd.numpy as np
-from pydantic import Field, NonNegativeInt, field_validator
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.sim_data import SimulationData
@@ -179,7 +179,9 @@ class ModalComponentModeler(AbstractComponentModeler):
             name=port.name,
         )
 
-    def to_source(self, port: Port, mode_index: int, num_freqs: int = 1, **kwargs: Any) -> ModeSource:
+    def to_source(
+        self, port: Port, mode_index: int, num_freqs: int = 1, **kwargs: Any
+    ) -> ModeSource:
         """Creates a mode source from a given port.
 
         This source is used to excite a specific mode at the port.

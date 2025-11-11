@@ -93,7 +93,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         return val
 
     @field_validator("points")
-    def points_right_indexing(val: PointDataArray) -> PointDataArray:
+    @classmethod
+    def points_right_indexing(cls, val: PointDataArray) -> PointDataArray:
         """Check that points are indexed corrrectly."""
         indices_expected = np.arange(len(val.data))
         indices_given = val.index.data
@@ -106,14 +107,16 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         return val
 
     @field_validator("values")
-    def first_values_dim_is_index(val: IndexedDataArrayTypes) -> IndexedDataArrayTypes:
+    @classmethod
+    def first_values_dim_is_index(cls, val: IndexedDataArrayTypes) -> IndexedDataArrayTypes:
         """Check that the number of data values matches the number of grid points."""
         if val.dims[0] != "index":
             raise ValidationError("First dimension of array 'values' must be 'index'.")
         return val
 
     @field_validator("values")
-    def values_right_indexing(val: IndexedDataArrayTypes) -> IndexedDataArrayTypes:
+    @classmethod
+    def values_right_indexing(cls, val: IndexedDataArrayTypes) -> IndexedDataArrayTypes:
         """Check that data values are indexed correctly."""
         # currently support only simple ordered indexing of points, that is, 0, 1, 2, ...
         indices_expected = np.arange(len(val.index.data))
@@ -140,7 +143,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         return self
 
     @field_validator("cells")
-    def match_cells_to_vtk_type(val: CellDataArray) -> CellDataArray:
+    @classmethod
+    def match_cells_to_vtk_type(cls, val: CellDataArray) -> CellDataArray:
         """Check that cell connections does not have duplicate points."""
         if vtk is None:
             return val
@@ -185,6 +189,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         return self
 
     @field_validator("cells")
+    @classmethod
     def warn_degenerate_cells(cls, val: CellDataArray) -> CellDataArray:
         """Check that cell connections does not have duplicate points."""
         degenerate_cells = cls._find_degenerate_cells(val)
@@ -228,6 +233,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         return data
 
     @model_validator(mode="before")
+    @classmethod
     def _add_default_coords(cls, data: dict) -> dict:
         def _add_default_coords(da: DataArray) -> DataArray:
             """Add 0..N-1 coordinates to any dimension that does not already have one.

@@ -106,7 +106,8 @@ class FreqMonitor(Monitor, ABC):
     _freqs_lower_bound = validate_freqs_min()
 
     @field_validator("freqs")
-    def _warn_num_freqs(val, info):
+    @classmethod
+    def _warn_num_freqs(cls, val, info):
         """Warn if number of frequencies is too large."""
         if len(val) > WARN_NUM_FREQS:
             log.warning(
@@ -406,7 +407,8 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         return direction.index(1)
 
     @field_validator("mode_spec")
-    def _warn_num_modes(val, info):
+    @classmethod
+    def _warn_num_modes(cls, val, info):
         """Warn if number of modes is too large."""
         if val.num_modes > WARN_NUM_MODES:
             log.warning(
@@ -537,60 +539,6 @@ class AuxFieldTimeMonitor(AbstractAuxFieldMonitor, TimeMonitor):
         # stores 1 real number per grid cell, per time step, per field
         num_steps = self.num_steps(tmesh)
         return BYTES_REAL * num_steps * num_cells * len(self.fields)
-
-
-class AbstractMediumPropertyMonitor(FreqMonitor, ABC):
-    """:class:`Monitor` that records material properties in the frequency domain."""
-
-    colocate: Literal[False] = Field(
-        False,
-        title="Colocate Fields",
-        description="Colocation turned off, since colocated medium property values do not have a "
-        "physical meaning - they do not correspond to the subpixel-averaged ones.",
-    )
-
-    interval_space: tuple[PositiveInt, PositiveInt, PositiveInt] = Field(
-        (1, 1, 1),
-        title="Spatial Interval",
-        description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, the step will be applied, but the "
-        "first and last point of the monitor grid are always included.",
-    )
-
-    apodization: ApodizationSpec = Field(
-        default_factory=ApodizationSpec,
-        title="Apodization Specification",
-        description="This field is ignored in this monitor.",
-    )
-
-
-class MediumMonitor(AbstractMediumPropertyMonitor):
-    """:class:`Monitor` that records the diagonal components of the complex-valued relative
-    permittivity and permeability tensor in the frequency domain. The recorded data has the same shape as a
-    :class:`.FieldMonitor` of the same geometry: the permittivity and permeability values are saved at the
-    Yee grid locations, and can be interpolated to any point inside the monitor.
-
-    Notes
-    -----
-
-        If 2D materials are present, then the permittivity values correspond to the
-        volumetric equivalent of the 2D materials.
-
-        .. TODO add links to relevant areas
-
-    Example
-    -------
-    >>> monitor = MediumMonitor(
-    ...     center=(1,2,3),
-    ...     size=(2,2,2),
-    ...     freqs=[250e12, 300e12],
-    ...     name='medium_monitor')
-    """
-
-    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
-        """Size of monitor storage given the number of points after discretization."""
-        # stores 6 complex number per grid cell, per frequency
-        return BYTES_COMPLEX * num_cells * len(self.freqs) * 6
 
 
 class AbstractMediumPropertyMonitor(FreqMonitor, ABC):
@@ -944,7 +892,8 @@ class FieldProjectionSurface(Tidy3dBaseModel):
         return self.monitor.size.index(0.0)
 
     @field_validator("monitor")
-    def is_plane(val):
+    @classmethod
+    def is_plane(cls, val):
         """Ensures that the monitor is a plane, i.e., its ``size`` attribute has exactly 1 zero"""
         size = val.size
         if size.count(0.0) != 1:
@@ -1031,7 +980,8 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         return self
 
     @field_validator("window_size")
-    def window_size_leq_one(val, info):
+    @classmethod
+    def window_size_leq_one(cls, val, info):
         """Ensures that each component of the window size is less than or equal to 1."""
         if val[0] > 1 or val[1] > 1:
             raise ValidationError(
@@ -1618,7 +1568,8 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     )
 
     @field_validator("size")
-    def diffraction_monitor_size(val):
+    @classmethod
+    def diffraction_monitor_size(cls, val):
         """Ensure that the monitor is infinite in the transverse direction."""
         if val.count(inf) != 2:
             raise SetupError(

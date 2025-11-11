@@ -10,10 +10,6 @@ from os import PathLike
 from typing import Any, Literal, Optional, Union, get_args
 
 import autograd.numpy as np
-
-from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
-
-from .types.monitor import MonitorType
 import xarray as xr
 from pydantic import (
     Field,
@@ -25,6 +21,7 @@ from pydantic import (
 )
 
 from tidy3d.compat import Self
+from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dImportError, ValidationError
@@ -127,6 +124,7 @@ from .types import (
     PermittivityComponent,
     Symmetry,
 )
+from .types.monitor import MonitorType
 from .validators import (
     assert_objects_contained_in_sim_bounds,
     assert_objects_in_sim_bounds,
@@ -323,7 +321,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ", or ``False`` to apply staircasing.",
     )
 
-
     """
     Supply :class:`.SubpixelSpec` to select subpixel averaging methods separately for dielectric, metal, and
     PEC material interfaces. Alternatively, supply ``True`` to use default subpixel averaging methods,
@@ -368,13 +365,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
     """
 
-    simulation_type: Optional[Literal["autograd_fwd", "autograd_bwd", "tidy3d", None]] = (
-        Field(
-            "tidy3d",
-            title="Simulation Type",
-            description="Tag used internally to distinguish types of simulations for "
-            "``autograd`` gradient processing.",
-        )
+    simulation_type: Optional[Literal["autograd_fwd", "autograd_bwd", "tidy3d", None]] = Field(
+        "tidy3d",
+        title="Simulation Type",
+        description="Tag used internally to distinguish types of simulations for "
+        "``autograd`` gradient processing.",
     )
 
     post_norm: Union[float, FreqDataArray] = Field(
@@ -392,7 +387,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     )
 
     @field_validator("simulation_type")
-    def _validate_simulation_type_tidy3d(val):
+    @classmethod
+    def _validate_simulation_type_tidy3d(cls, val):
         """Enforce the simulation_type is 'tidy3d' if passed as None for bkwrds compatibility."""
         return "tidy3d" if val is None else val
 
@@ -2955,7 +2951,8 @@ class Simulation(AbstractYeeGridSimulation):
     """ Validating setup """
 
     @model_validator(mode="before")
-    def _update_simulation(data):
+    @classmethod
+    def _update_simulation(cls, data):
         """Update the simulation if it is an earlier version."""
 
         # if no version, assume it's already updated
@@ -3231,7 +3228,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         return self
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def _validate_frequency_mode_abc(self):
         """Warn if ModeABCBoundary expects a frequency from a source, but there are multiple sources with different central frequencies."""
 
@@ -3272,7 +3269,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         return self
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def _validate_absorber_in_zero_dims(self):
         """Error if internal absorber is oriented along zero size dim."""
         val = self.internal_absorbers
@@ -3289,7 +3286,8 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @field_validator("sources")
-    def _validate_num_sources(val):
+    @classmethod
+    def _validate_num_sources(cls, val):
         """Error if too many sources present."""
 
         if val is None:
@@ -3305,7 +3303,8 @@ class Simulation(AbstractYeeGridSimulation):
         return val
 
     @field_validator("structures")
-    def _validate_2d_geometry_has_2d_medium(val):
+    @classmethod
+    def _validate_2d_geometry_has_2d_medium(cls, val):
         """Warn if a geometry bounding box has zero size in a certain dimension."""
 
         if val is None:
@@ -3330,7 +3329,8 @@ class Simulation(AbstractYeeGridSimulation):
         return val
 
     @field_validator("structures")
-    def _validate_incompatible_material_intersections(val):
+    @classmethod
+    def _validate_incompatible_material_intersections(cls, val):
         """Check for intersections of incompatible materials."""
         structures = val
         incompatible_indices = []
@@ -3616,7 +3616,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         return mediums
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def _abc_boundaries_homogeneous(self):
         """Error if abc boundaries intersect multiple mediums or anisotropic mediums."""
         val = self.boundary_spec
@@ -3668,7 +3668,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @field_validator("monitors")
     @classmethod
-    def _projection_direction(cls, val, values):
+    def _projection_direction(cls, val):
         """Warn if field projection observation points are behind surface projection monitors."""
         # This validator is in simulation.py rather than monitor.py because volume monitors are
         # eventually converted to their bounding surface projection monitors, in which case we
@@ -5832,19 +5832,19 @@ class Simulation(AbstractYeeGridSimulation):
 
     def padded_copy(
         self,
-        x: Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None,
-        y: Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None,
-        z: Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None,
+        x: Optional[tuple[NonNegativeFloat, NonNegativeFloat]] = None,
+        y: Optional[tuple[NonNegativeFloat, NonNegativeFloat]] = None,
+        z: Optional[tuple[NonNegativeFloat, NonNegativeFloat]] = None,
     ) -> Simulation:
         """Created a copy of simulation with padded simulation domain.
 
         Parameters
         ----------
-        x : Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None
+        x : Optional[tuple[NonNegativeFloat, NonNegativeFloat]] = None
             Padding sizes at the left and right boundaries of the simulation along x-axis.
-        y : Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None
+        y : Optional[tuple[NonNegativeFloat, NonNegativeFloat]] = None
             Padding sizes at the left and right boundaries of the simulation along y-axis.
-        z : Optional[tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]] = None
+        z : Optional[tuple[NonNegativeFloat, NonNegativeFloat]] = None
             Padding sizes at the left and right boundaries of the simulation along z-axis.
 
         Returns
@@ -5858,12 +5858,12 @@ class Simulation(AbstractYeeGridSimulation):
 
         return self.updated_copy(size=padded_box.size, center=padded_box.center)
 
-    def uniformly_padded_copy(self, padding: pydantic.NonNegativeFloat) -> Simulation:
+    def uniformly_padded_copy(self, padding: NonNegativeFloat) -> Simulation:
         """Create copy of simulation with uniformly padded simulation domain.
 
         Parameters
         ----------
-        padding : pydantic.NonNegativeFloat
+        padding : NonNegativeFloat
             Padding size applied uniformly at all simulation boundaries.
 
         Returns

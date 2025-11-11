@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import numpy as np
-from pydantic import ValidationError
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components.boundary import DEFAULT_BROADBAND_MODE_ABC_NUM_FREQS

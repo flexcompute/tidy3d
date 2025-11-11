@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Literal, Union
 
 import numpy as np
-
 from pydantic import Field, PositiveFloat, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel

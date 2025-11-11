@@ -152,7 +152,8 @@ class SpaceModulation(AbstractSpaceModulation):
     _no_nans = validate_no_nans("amplitude", "phase")
 
     @field_validator("amplitude", "phase")
-    def _validate_fields_real(val, info):
+    @classmethod
+    def _validate_fields_real(cls, val, info):
         """Assert that the amplitude is real."""
         if np.iscomplexobj(val):
             raise ValidationError(f"'{info.field_name}' must be real.")

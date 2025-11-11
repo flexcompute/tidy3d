@@ -105,7 +105,8 @@ class EMEPeriodicitySweep(EMESweepSpec):
     )
 
     @field_validator("num_reps")
-    def _validate_num_reps(val):
+    @classmethod
+    def _validate_num_reps(cls, val):
         """Check num_reps is not too large."""
         for num_reps_dict in val:
             for value in num_reps_dict.values():

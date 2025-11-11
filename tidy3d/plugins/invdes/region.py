@@ -69,7 +69,8 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
     )
 
     @field_validator("eps_bounds")
-    def _validate_ge_one(v):
+    @classmethod
+    def _validate_ge_one(cls, v):
         if any(vi < 1 for vi in v):
             raise ValueError("Each value in 'eps_bounds' must be '>=1.0'.")
         return v

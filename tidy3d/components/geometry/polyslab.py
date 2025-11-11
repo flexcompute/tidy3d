@@ -105,7 +105,8 @@ class PolySlab(base.Planar):
         return shapely.Polygon(vertices)
 
     @field_validator("slab_bounds")
-    def slab_bounds_order(val: tuple[float, float]) -> tuple[float, float]:
+    @classmethod
+    def slab_bounds_order(cls, val: tuple[float, float]) -> tuple[float, float]:
         """Maximum position of the slab should be no smaller than its minimal position."""
         if val[1] < val[0]:
             raise SetupError(

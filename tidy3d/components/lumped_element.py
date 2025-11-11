@@ -32,9 +32,9 @@ from .geometry.utils import (
     snap_point_to_grid,
 )
 from .geometry.utils_2d import increment_float
-from .microwave.base import MicrowaveBaseModel
 from .grid.grid import Grid
 from .medium import PEC2D, Debye, Drude, Lorentz, Medium, Medium2D, PoleResidue
+from .microwave.base import MicrowaveBaseModel
 from .microwave.formulas.circuit_parameters import (
     capacitance_colinear_cylindrical_wire_segments,
     capacitance_rectangular_sheets,
@@ -398,7 +398,8 @@ class CoaxialLumpedResistor(LumpedElement):
         ]
 
     @field_validator("center")
-    def _center_not_inf(val):
+    @classmethod
+    def _center_not_inf(cls, val):
         """Make sure center is not infinitiy."""
         if any(np.isinf(v) for v in val):
             raise ValidationError("'center' can not contain 'td.inf' terms.")

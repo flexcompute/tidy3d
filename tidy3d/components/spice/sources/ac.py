@@ -54,6 +54,7 @@ class SSACVoltageSource(Tidy3dBaseModel):
     )
 
     @field_validator("voltage")
+    @classmethod
     def validate_voltage(cls, val):
         for v in val:
             if v == td_inf:
@@ -61,6 +62,7 @@ class SSACVoltageSource(Tidy3dBaseModel):
         return val
 
     @field_validator("amplitude")
+    @classmethod
     def validate_amplitude(cls, val):
         if val == td_inf:
             raise ValueError(f"Signal amplitude must be finite. Current amplitude={val}.")

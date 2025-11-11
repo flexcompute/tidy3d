@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from typing import Optional, Union
 
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from tidy3d.components.data.data_array import (
     DataArray,
-    IndexedDataArray,
-    IndexedTimeDataArray,
     ScalarFieldTimeDataArray,
     SpatialDataArray,
 )

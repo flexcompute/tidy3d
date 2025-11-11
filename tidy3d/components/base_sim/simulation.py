@@ -136,6 +136,7 @@ class AbstractSimulation(Box, ABC):
     """ Validating setup """
 
     @model_validator(mode="before")
+    @classmethod
     def _update_simulation(cls, data):
         """Update the simulation if it is an earlier version."""
         # dummy upgrade of version number

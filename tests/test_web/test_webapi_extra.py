@@ -59,7 +59,7 @@ def test_get_tasks_order_old(monkeypatch):
 
         def dict(self):
             return {"task_id": self.task_id, "created_at": self.created_at}
-        
+
         def model_dump(self):
             return self.dict()
 

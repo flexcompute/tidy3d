@@ -282,20 +282,23 @@ class EMESimulation(AbstractYeeGridSimulation):
     _freqs_lower_bound = validate_freqs_min()
 
     @field_validator("grid_spec")
-    def _validate_auto_grid_wavelength(val):
+    @classmethod
+    def _validate_auto_grid_wavelength(cls, val):
         """Handle the case where grid_spec is auto and wavelength is not provided."""
         # this is handled instead post-init to ensure freqs is defined
         return val
 
     @field_validator("freqs")
-    def _validate_freqs(val):
+    @classmethod
+    def _validate_freqs(cls, val):
         """Freqs cannot contain duplicates."""
         if len(set(val)) != len(val):
             raise SetupError(f"'EMESimulation' 'freqs={val}' cannot contain duplicate frequencies.")
         return val
 
     @field_validator("structures")
-    def _validate_structures(val):
+    @classmethod
+    def _validate_structures(cls, val):
         """Validate and warn for certain medium types."""
         for ind, structure in enumerate(val):
             medium = structure.medium

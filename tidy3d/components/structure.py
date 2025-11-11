@@ -120,7 +120,8 @@ class AbstractStructure(Tidy3dBaseModel):
     _name_validator = validate_name_str()
 
     @field_validator("geometry")
-    def _transformed_slanted_polyslabs_not_allowed(val):
+    @classmethod
+    def _transformed_slanted_polyslabs_not_allowed(cls, val):
         """Prevents the creation of slanted polyslabs rotated out of plane."""
         validate_no_transformed_polyslabs(val)
         return val
@@ -713,7 +714,8 @@ class MeshOverrideStructure(AbstractStructure):
     )
 
     @field_validator("geometry")
-    def _box_only(val):
+    @classmethod
+    def _box_only(cls, val):
         """Ensure this is a box."""
         if isinstance(val, Geometry):
             if not isinstance(val, Box):

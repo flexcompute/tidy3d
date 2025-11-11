@@ -15,7 +15,7 @@ from functools import total_ordering, wraps
 from math import ceil
 from os import PathLike
 from pathlib import Path
-from typing import Any, Callable, Literal, Literal, Optional, TypeVar, Union, get_args, get_origin
+from typing import Any, Callable, Literal, Optional, TypeVar, Union, get_args, get_origin
 
 import h5py
 import numpy as np
@@ -24,7 +24,6 @@ import xarray as xr
 import yaml
 from autograd.tracer import isbox
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
-from typing_extensions import Self
 
 from tidy3d.compat import Self
 from tidy3d.exceptions import FileError
@@ -174,7 +173,8 @@ class Tidy3dBaseModel(BaseModel):
     _has_tracers: Optional[bool] = PrivateAttr(default=None)
 
     @field_validator("name", check_fields=False)
-    def _validate_name_no_special_characters(name):
+    @classmethod
+    def _validate_name_no_special_characters(cls, name):
         if name is None:
             return name
         for character in FORBID_SPECIAL_CHARACTERS:
@@ -1270,7 +1270,7 @@ class Tidy3dBaseModel(BaseModel):
         json_str = make_json_compatible(json_str)
 
         return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
-    
+
     @cached_property_guarded(lambda self: self._attrs_digest())
     def _json_string(self) -> str:
         """Returns string representation of a :class:`Tidy3dBaseModel`.
@@ -1586,7 +1586,7 @@ class Tidy3dBaseModel(BaseModel):
         console.print(self)
         output = sio.getvalue()
         return output.rstrip("\n")
-    
+
 
 def _make_lazy_proxy(
     target_cls: type,
@@ -1675,4 +1675,3 @@ def _make_lazy_proxy(
 
     _LazyProxy.__name__ = proxy_name
     return _LazyProxy
-

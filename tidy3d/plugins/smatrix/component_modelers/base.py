@@ -100,24 +100,6 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "Otherwise, a default source time will be constructed.",
     )
 
-    run_only: Optional[tuple[IndexType, ...]] = Field(
-        None,
-        title="Run Only",
-        description="Set of matrix indices that define the simulations to run. "
-        "If ``None``, simulations will be run for all indices in the scattering matrix. "
-        "If a tuple is given, simulations will be run only for the given matrix indices.",
-    )
-
-    element_mappings: tuple[tuple[ElementType, ElementType, Complex], ...] = Field(
-        (),
-        title="Element Mappings",
-        description="Tuple of S matrix element mappings, each described by a tuple of "
-        "(input_element, output_element, coefficient), where the coefficient is the "
-        "element_mapping coefficient describing the relationship between the input and output "
-        "matrix element. If all elements of a given column of the scattering matrix are defined "
-        "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
-    )
-
     @field_validator("simulation")
     @classmethod
     def _sim_has_no_sources(cls, val):
