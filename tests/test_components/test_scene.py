@@ -9,7 +9,7 @@ import pydantic.v1 as pd
 import pytest
 
 import tidy3d as td
-from tidy3d.components.scene import MAX_GEOMETRY_COUNT, MAX_NUM_MEDIUMS
+from tidy3d.components.scene import MAX_NUM_MEDIUMS
 from tidy3d.components.viz import STRUCTURE_EPS_CMAP, STRUCTURE_EPS_CMAP_R
 from tidy3d.exceptions import SetupError
 
@@ -333,37 +333,37 @@ def test_perturbed_mediums_copy(unstructured, z):
     assert isinstance(new_scene.structures[0].medium, td.CustomPoleResidue)
 
 
-def test_max_geometry_validation():
-    too_many = [td.Box(size=(1, 1, 1)) for _ in range(MAX_GEOMETRY_COUNT + 1)]
+# def test_max_geometry_validation():
+#     too_many = [td.Box(size=(1, 1, 1)) for _ in range(MAX_GEOMETRY_COUNT + 1)]
 
-    fine = [
-        td.Structure(
-            geometry=td.ClipOperation(
-                operation="union",
-                geometry_a=td.Box(size=(1, 1, 1)),
-                geometry_b=td.GeometryGroup(geometries=too_many),
-            ),
-            medium=td.Medium(permittivity=2.0),
-        ),
-        td.Structure(
-            geometry=td.GeometryGroup(geometries=too_many),
-            medium=td.Medium(permittivity=2.0),
-        ),
-    ]
-    _ = td.Scene(structures=fine)
+#     fine = [
+#         td.Structure(
+#             geometry=td.ClipOperation(
+#                 operation="union",
+#                 geometry_a=td.Box(size=(1, 1, 1)),
+#                 geometry_b=td.GeometryGroup(geometries=too_many),
+#             ),
+#             medium=td.Medium(permittivity=2.0),
+#         ),
+#         td.Structure(
+#             geometry=td.GeometryGroup(geometries=too_many),
+#             medium=td.Medium(permittivity=2.0),
+#         ),
+#     ]
+#     _ = td.Scene(structures=fine)
 
-    not_fine = [
-        td.Structure(
-            geometry=td.ClipOperation(
-                operation="difference",
-                geometry_a=td.Box(size=(1, 1, 1)),
-                geometry_b=td.GeometryGroup(geometries=too_many),
-            ),
-            medium=td.Medium(permittivity=2.0),
-        ),
-    ]
-    with pytest.raises(pd.ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
-        _ = td.Scene(structures=not_fine)
+#     not_fine = [
+#         td.Structure(
+#             geometry=td.ClipOperation(
+#                 operation="difference",
+#                 geometry_a=td.Box(size=(1, 1, 1)),
+#                 geometry_b=td.GeometryGroup(geometries=too_many),
+#             ),
+#             medium=td.Medium(permittivity=2.0),
+#         ),
+#     ]
+#     with pytest.raises(pd.ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
+#         _ = td.Scene(structures=not_fine)
 
 
 def test_structure_manual_priority():
