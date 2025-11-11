@@ -870,8 +870,9 @@ class Batch(WebContainer):
                 self.start(priority=priority)
             self.monitor(path_dir=path_dir, download_on_success=True)
         else:
-            console = get_logging_console()
-            console.log("Found all simulations in cache.")
+            if self.verbose:
+                console = get_logging_console()
+                console.log("Found all simulations in cache.")
             self.download(path_dir=path_dir)  # moves cache files
         return self.load(path_dir=path_dir, skip_download=True)
 

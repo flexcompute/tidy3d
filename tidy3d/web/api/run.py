@@ -37,7 +37,7 @@ def _collect_by_hash(
     if found is None:
         found = {}
     if isinstance(node, WorkflowType):
-        found[str(hash(node))] = node
+        found[node._hash_self()] = node
         return found
     if isinstance(node, (list, tuple)):
         for v in node:
@@ -63,7 +63,7 @@ def _reconstruct_by_hash(node: RunInput, h2data: dict[str, WorkflowDataType]) ->
 
     def _recur(n: RunInput) -> RunOutput:
         if isinstance(n, WorkflowType):
-            h = str(hash(n))
+            h = n._hash_self()
             data = h2data[h]
             if h in seen:
                 return data.copy()
