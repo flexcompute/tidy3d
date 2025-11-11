@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
-import xarray as xr
 from numpy._typing import ArrayLike, NDArray
 from typing_extensions import Self
 
@@ -29,13 +28,8 @@ from tidy3d.components.autograd import (
     TracedSize,
     get_static,
 )
-from tidy3d.components.autograd.derivative_utils import (
-    DerivativeInfo,
-    FieldData,
-    integrate_within_bounds,
-)
+from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
-from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
 from tidy3d.components.types import (
@@ -66,7 +60,7 @@ from tidy3d.components.viz import (
     polygon_patch,
     set_default_labels_and_title,
 )
-from tidy3d.constants import EPSILON_0, LARGE_NUMBER, MICROMETER, MU_0, RADIAN, fp_eps, inf
+from tidy3d.constants import LARGE_NUMBER, MICROMETER, RADIAN, fp_eps, inf
 from tidy3d.exceptions import (
     SetupError,
     Tidy3dError,
@@ -2501,11 +2495,15 @@ class Box(SimplePlaneIntersection, Centered):
     def _derivative_faces(self, derivative_info: DerivativeInfo) -> Bound:
         """Derivative with respect to normal position of 6 faces of ``Box``."""
 
+        axes_to_compute = (0, 1, 2)
+        if len(derivative_info.paths[0]) > 1:
+            axes_to_compute = tuple(info[1] for info in derivative_info.paths)
+
         # change in permittivity between inside and outside
         vjp_faces = np.zeros((2, 3))
 
         for min_max_index, _ in enumerate((0, -1)):
-            for axis in range(3):
+            for axis in axes_to_compute:
                 vjp_face = self._derivative_face(
                     min_max_index=min_max_index,
                     axis_normal=axis,
@@ -2525,374 +2523,148 @@ class Box(SimplePlaneIntersection, Centered):
     ) -> float:
         """Compute the derivative w.r.t. shifting a face in the normal direction."""
 
-        # normal and tangential dims
-        dim_normal, dims_perp = self.pop_axis("xyz", axis=axis_normal)
-        fld_E_normal, flds_E_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal)
+        interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
+        _, axis_perp = self.pop_axis((0, 1, 2), axis=axis_normal)
 
-        # fields and bounds
-        D_normal = derivative_info.D_der_map[fld_E_normal]
-        Es_perp = tuple(derivative_info.E_der_map[key] for key in flds_E_perp)
+        # First, check if the face is outside the simulation domain in which case set the
+        # face gradient to 0.
         bounds_normal, bounds_perp = self.pop_axis(
             np.array(derivative_info.bounds).T, axis=axis_normal
         )
-
-        # define the integration plane
         coord_normal_face = bounds_normal[min_max_index]
-        bounds_perp = np.array(bounds_perp).T  # put (min / max) first dimension for integrator
-
-        # normal field data coordinates
-        fld_coords_normal = D_normal.coords[dim_normal]
-
-        # condition: a face is entirely outside of the domain, skip!
-        sign = (-1, 1)[min_max_index]
-        normal_coord_positive = sign * coord_normal_face
-        fld_coords_positive = sign * fld_coords_normal
-        if all(fld_coords_positive < normal_coord_positive):
-            log.info(
-                f"skipping VJP for 'Box' face '{dim_normal}{'-+'[min_max_index]}' "
-                "as it is entirely outside of the simulation domain."
-            )
-            return 0.0
-
-        # permittivity data
-        eps_xyz = [derivative_info.eps_data[f"eps_{dim}{dim}"] for dim in "xyz"]
-
-        # number of cells from the edge of data to register "inside" (index = num_cells_in - 1)
-        num_cells_in = 4
-
-        # if not enough data, just use best guess using eps in medium and simulation
-        needs_eps_approx = any(len(eps.coords[dim_normal]) <= num_cells_in for eps in eps_xyz)
-
-        if derivative_info.eps_approx or needs_eps_approx:
-            eps_xyz_inside = 3 * [derivative_info.eps_in]
-            eps_xyz_outside = 3 * [derivative_info.eps_out]
-            # TODO: not tested...
-
-        # otherwise, try to grab the data at the edges
-        else:
-            if min_max_index == 0:
-                index_out, index_in = (0, num_cells_in - 1)
-            else:
-                index_out, index_in = (-1, -num_cells_in)
-            eps_xyz_inside = [eps.isel(**{dim_normal: index_in}) for eps in eps_xyz]
-            eps_xyz_outside = [eps.isel(**{dim_normal: index_out}) for eps in eps_xyz]
-
-        # put in normal / tangential basis
-        eps_in_normal, eps_in_perps = self.pop_axis(eps_xyz_inside, axis=axis_normal)
-        eps_out_normal, eps_out_perps = self.pop_axis(eps_xyz_outside, axis=axis_normal)
-
-        if derivative_info.is_medium_pec:
-            return self._derivative_face_pec(
-                dim_normal=dim_normal,
-                axis_normal=axis_normal,
-                min_max_index=min_max_index,
-                coord_normal_face=coord_normal_face,
-                dims_perp=dims_perp,
-                bounds_perp=bounds_perp,
-                D_normal=D_normal,
-                H_der_map=derivative_info.H_der_map,
-                eps_out_normal=eps_out_normal,
-            )
-        else:
-            return self._derivative_face_dielectric(
-                dim_normal=dim_normal,
-                coord_normal_face=coord_normal_face,
-                dims_perp=dims_perp,
-                bounds_perp=bounds_perp,
-                D_normal=D_normal,
-                Es_perp=Es_perp,
-                eps_in_normal=eps_in_normal,
-                eps_out_normal=eps_out_normal,
-                eps_in_perps=eps_in_perps,
-                eps_out_perps=eps_out_perps,
-            )
-
-    @staticmethod
-    def _arr_at_face(arr: xr.DataArray, interp_point: float, dim_normal: str) -> xr.DataArray:
-        """Interpolate the array at the given coordinate unless it only has a single value in the normal
-        dimension already in which case just return the array itself."""
-        arr_at_face = (
-            arr
-            if (len(arr.coords[dim_normal]) == 1)
-            else arr.interp(**{dim_normal: float(interp_point)}, assume_sorted=True)
-        )
-
-        return arr_at_face
-
-    @staticmethod
-    def _integrate_face(
-        arr_at_face: xr.DataArray,
-        integration_dims: Union[tuple[str], tuple[str, str]],
-        integration_bounds: Union[tuple[Coordinate2D], tuple[Coordinate2D, Coordinate2D]],
-    ) -> complex:
-        """Perform the integration of the surface and sum over the frequency component of the gradient."""
-
-        integral_result = integrate_within_bounds(
-            arr=arr_at_face,
-            dims=integration_dims,
-            bounds=integration_bounds,
-        )
-
-        return complex(integral_result.sum("f"))
-
-    @staticmethod
-    def _snap_coords_outside(
-        min_max_index: int, snap_coords_values: NDArray, coord_normal_face: float
-    ) -> float:
-        """Snap interpolation coordinate for a PEC face integration to be just outside the surface boundary.
-        This ensures we don't interpolate with fields that are zero inside of the PEC."""
 
         if min_max_index == 0:
-            min_boundary_mapping = np.where(snap_coords_values > coord_normal_face)[0]
-            index_face = (
-                0
-                if (len(min_boundary_mapping) == 0)
-                else np.maximum(0, min_boundary_mapping[0] - 1)
-            )
-
-            if snap_coords_values[index_face] > coord_normal_face:
-                log.warning("Unable to snap coordinates outside of min face.")
+            if coord_normal_face < derivative_info.simulation_bounds[0][axis_normal]:
+                return 0.0
         else:
-            max_boundary_mapping = np.where(snap_coords_values < coord_normal_face)[0]
-            index_face = (
-                len(snap_coords_values) - 1
-                if (len(max_boundary_mapping) == 0)
-                else np.minimum(len(snap_coords_values) - 1, max_boundary_mapping[-1] + 1)
-            )
+            if coord_normal_face > derivative_info.simulation_bounds[1][axis_normal]:
+                return 0.0
 
-            if snap_coords_values[index_face] < coord_normal_face:
-                log.warning("Unable to snap coordinates outside of max face.")
+        intersect_min, intersect_max = map(np.asarray, derivative_info.bounds_intersect)
+        extents = intersect_max - intersect_min
+        _, intersect_min_perp = self.pop_axis(np.array(intersect_min), axis=axis_normal)
+        _, intersect_max_perp = self.pop_axis(np.array(intersect_max), axis=axis_normal)
 
-        snapped_point = snap_coords_values[index_face]
-
-        return snapped_point
-
-    @staticmethod
-    def _check_singularity_correction_pec(
-        size: TracedSize, axis_normal: Axis
-    ) -> tuple[bool, str, bool]:
-        """Checks if the box is 2D (i.e. - one of the dimensions is zero) and
-        identifies the zero dimension if any. Then, checks if we should apply singularity
-        correction if we are integrating a face with that contains the zero dimension."""
-
-        # detect whether the box is 2-dimensional
-        zero_size_map = [s == 0.0 for s in size]
-
-        dimension = 3 - np.sum(zero_size_map)
-        if dimension < 2:
-            log.error(
-                "Derivative of PEC material with less than 2 dimensions is unsupported. "
-                f"Specified PEC box is {dimension}-dimesional"
-            )
-
-        do_singularity_correction = False
-        is_2d = np.any(zero_size_map)
-        zero_dimension = None
-        if is_2d:
-            zero_dim_idx = np.where(zero_size_map)[0][0]
-            zero_dimension = "xyz"[zero_dim_idx]
-
-            # for singularity correction, need 2-dimensional box and that
-            # the face we are integrating over is the 1-dimensional (i.e. -
-            # the normal for the face is not the same as the flat dimension
-            do_singularity_correction = not (axis_normal == zero_dim_idx)
-
-        return is_2d, zero_dimension, do_singularity_correction
-
-    @staticmethod
-    def _trim_dims_and_bounds_edge(
-        dims_perp: tuple[str, str],
-        bounds_perp: tuple[Coordinate2D, Coordinate2D],
-        zero_dimension: str,
-    ) -> tuple[tuple[str], tuple[tuple[float], tuple[float]]]:
-        """Trim the dimensions and bounds for integration along the edge."""
-
-        # if we are correcting for singularity and integrating over the line, then adjust
-        # integration dimensions and bounds to exclude the flat dimension
-        integration_dims = [dim for dim in dims_perp if (not (dim == zero_dimension))]
-
-        integration_bounds = []
-        zero_dim_idx = 0
-        # find the index into the bounds that corresponds to the flat dimension
-        for dim in dims_perp:
-            if dim == zero_dimension:
-                break
-            zero_dim_idx += 1
-
-        # trim the zero dimension from the integration bounds
-        for bound in bounds_perp:
-            new_bound = [b for b_idx, b in enumerate(bound) if b_idx != zero_dim_idx]
-
-            integration_bounds.append(new_bound)
-
-        return integration_dims, integration_bounds
-
-    def _derivative_face_dielectric(
-        self,
-        dim_normal: str,
-        coord_normal_face: float,
-        dims_perp: tuple[str, str],
-        bounds_perp: tuple[Coordinate2D, Coordinate2D],
-        D_normal: ScalarFieldDataArray,
-        Es_perp: tuple[ScalarFieldDataArray, ScalarFieldDataArray],
-        eps_in_normal: ScalarFieldDataArray,
-        eps_out_normal: ScalarFieldDataArray,
-        eps_in_perps: tuple[ScalarFieldDataArray, ScalarFieldDataArray],
-        eps_out_perps: tuple[ScalarFieldDataArray, ScalarFieldDataArray],
-    ) -> float:
-        """Compute derivative with respect to the face using the dielectric form of the gradient.
-
-        Parameters
-        ----------
-        dim_normal : str
-            Surface normal of the face
-        coord_normal_face : float
-            The coordinate at which to interpolate the surface fields
-        dims_perp : tuple[str, str]
-            The perpendicular dimensions of the face
-        bounds_perp : tuple[Coordinate2D, Coordinate2D]
-            Bounds of integration along the face
-        D_normal : ScalarFieldDataArray
-            D-field component normal to the surface
-        Es_perp : tuple[ScalarFieldDataArray, ScalarFieldDataArray]
-            E-field components tangential to the surface
-        eps_in_normal : ScalarFieldDataArray
-            Normal component of permittivity inside the surface
-        eps_out_normal : ScalarFieldDataArray
-            Normal component of permittivity outside the surface
-        eps_in_perps : tuple[ScalarFieldDataArray, ScalarFieldDataArray]
-            Tangential components of permittivity inside the surface
-        eps_out_perps : tuple[ScalarFieldDataArray, ScalarFieldDataArray]
-            Tangential components of permittivity outside the surface
-
-        Returns
-        -------
-        float
-            Surface gradient vjp value
-        """
-
-        delta_eps_inv_normal = 1.0 / eps_in_normal - 1.0 / eps_out_normal
-
-        # compute integration pre-factors
-        delta_eps_perps = [eps_in - eps_out for eps_in, eps_out in zip(eps_in_perps, eps_out_perps)]
-
-        integrand_D = -delta_eps_inv_normal * D_normal
-        integral_D = self._integrate_face(
-            self._arr_at_face(integrand_D, coord_normal_face, dim_normal),
-            integration_dims=dims_perp,
-            integration_bounds=bounds_perp,
-        )
-
-        vjp_value = integral_D
-
-        # perform E-perpendicular integrals
-        for E_perp, delta_eps_perp in zip(Es_perp, delta_eps_perps):
-            integrand_E = E_perp * delta_eps_perp
-            integral_E = self._integrate_face(
-                self._arr_at_face(integrand_E, coord_normal_face, dim_normal),
-                integration_dims=dims_perp,
-                integration_bounds=bounds_perp,
-            )
-
-            vjp_value += integral_E
-
-        return np.real(vjp_value)
-
-    def _derivative_face_pec(
-        self,
-        dim_normal: str,
-        axis_normal: Axis,
-        min_max_index: int,
-        coord_normal_face: float,
-        dims_perp: tuple[str, str],
-        bounds_perp: tuple[Coordinate2D, Coordinate2D],
-        D_normal: ScalarFieldDataArray,
-        H_der_map: FieldData,
-        eps_out_normal: ScalarFieldDataArray,
-    ) -> float:
-        """Compute derivative with respect to the face using the PEC form of the gradient.
-
-        Parameters
-        ----------
-        dim_normal : str
-            Surface normal of the face
-        axis_normal : Axis
-            Axis (index) corresponding to the normal of the face
-        min_max_index : int
-            Indicator for if the face is on the minimum of the box (0) or the maximum of the Box (1)
-        coord_normal_face : float
-            The coordinate at which to interpolate the surface fields
-        dims_perp : tuple[str, str]
-            The perpendicular dimensions of the face
-        bounds_perp : tuple[Coordinate2D, Coordinate2D]
-            Bounds of integration along the face
-        D_normal : ScalarFieldDataArray
-            D-field component normal to the surface
-        H_der_map : FieldData
-            Multiplication of H-field components in the Box region
-        eps_out_normal : ScalarFieldDataArray
-            Normal component of permittivity outside the surface
-
-        Returns
-        -------
-        float
-            Surface gradient vjp value
-        """
-
-        fld_H_normal, flds_H_perp = self.pop_axis(("Hx", "Hy", "Hz"), axis=axis_normal)
-        Hs_perp = tuple(H_der_map[key] for key in flds_H_perp)
-
-        is_2d, zero_dimension, do_singularity_correction = self._check_singularity_correction_pec(
-            self.size, axis_normal
-        )
-
-        integration_dims = dims_perp
-        integration_bounds = bounds_perp
-        if do_singularity_correction:
-            integration_dims, integration_bounds = self._trim_dims_and_bounds_edge(
-                dims_perp, bounds_perp, zero_dimension
-            )
-
-        integrand_E = D_normal / np.real(eps_out_normal)
-
-        # apply singularity correction only when integrating along the line
-        def _apply_singularity_correction(interp_point: float) -> float:
-            edge_distance = np.abs(interp_point - coord_normal_face)
-            return (0.5 * np.pi * edge_distance) if do_singularity_correction else 1.0
-
-        snap_E_coord = self._snap_coords_outside(
-            min_max_index, integrand_E.coords[dim_normal].values, coord_normal_face
-        )
-
-        integral_E = self._integrate_face(
-            self._arr_at_face(integrand_E, snap_E_coord, dim_normal),
-            integration_dims=integration_dims,
-            integration_bounds=integration_bounds,
-        )
-
-        vjp_value = _apply_singularity_correction(snap_E_coord) * integral_E
-
-        for H_perp_idx, H_perp in enumerate(Hs_perp):
-            integrand_H = MU_0 * H_perp / EPSILON_0
-
-            if (is_2d and not (flds_H_perp[H_perp_idx] == f"H{zero_dimension}")) and (
-                dim_normal != zero_dimension
-            ):
+        is_2d_map = []
+        for axis_idx in range(3):
+            if axis_idx == axis_normal:
                 continue
+            is_2d_map.append(np.isclose(extents[axis_idx], 0.0))
 
-            snap_H_coord = self._snap_coords_outside(
-                min_max_index, integrand_H.coords[dim_normal].values, coord_normal_face
+        if np.all(is_2d_map):
+            return 0.0
+
+        is_2d = np.any(is_2d_map)
+
+        sim_bounds_normal, sim_bounds_perp = self.pop_axis(
+            np.array(derivative_info.simulation_bounds).T, axis=axis_normal
+        )
+
+        # Build point grid
+        adaptive_spacing = derivative_info.adaptive_vjp_spacing()
+
+        def spacing_to_grid_points(
+            spacing: float, min_coord: float, max_coord: float
+        ) -> NDArray[float]:
+            N = np.maximum(3, 1 + int((max_coord - min_coord) / spacing))
+
+            points = np.linspace(min_coord, max_coord, N)
+            centers = 0.5 * (points[0:-1] + points[1:])
+
+            return centers
+
+        def verify_integration_interval(bound: tuple[float, float]) -> bool:
+            # assume the bounds should not be equal or else this integration interval
+            # would be the flat dimension of a 2D geometry.
+            return bound[1] > bound[0]
+
+        def compute_integration_weight(grid_points: NDArray[float]) -> float:
+            grid_spacing = grid_points[1] - grid_points[0]
+            if grid_spacing == 0.0:
+                integration_weight = 1.0 / len(grid_points)
+            else:
+                integration_weight = grid_points[1] - grid_points[0]
+
+            return integration_weight
+
+        if is_2d:
+            # build 1D grid for sampling points along the face, which is an edge in the 2D case
+            zero_dim = np.where(is_2d_map)[0][0]
+            # zero dim is one of the perpendicular directions, so the other perpendicular direction
+            # is the nonzero dimension
+            nonzero_dim = 1 - zero_dim
+
+            # clip at simulation bounds for integration dimension
+            integration_bounds_perp = (
+                intersect_min_perp[nonzero_dim],
+                intersect_max_perp[nonzero_dim],
             )
 
-            integral_H = self._integrate_face(
-                self._arr_at_face(integrand_H, snap_H_coord, dim_normal),
-                integration_dims=integration_dims,
-                integration_bounds=integration_bounds,
+            if not verify_integration_interval(integration_bounds_perp):
+                return 0.0
+
+            grid_points_linear = spacing_to_grid_points(
+                adaptive_spacing, integration_bounds_perp[0], integration_bounds_perp[1]
+            )
+            integration_weight = compute_integration_weight(grid_points_linear)
+
+            grid_points = np.repeat(np.expand_dims(grid_points_linear.copy(), 1), 3, axis=1)
+
+            # set up grid points to pass into evaluate_gradient_at_points
+            grid_points[:, axis_perp[nonzero_dim]] = grid_points_linear
+            grid_points[:, axis_perp[zero_dim]] = intersect_min_perp[zero_dim]
+            grid_points[:, axis_normal] = coord_normal_face
+        else:
+            # build 3D grid for sampling points along the face
+
+            # clip at simulation bounds for each integration dimension
+            integration_bounds_perp = (
+                (intersect_min_perp[0], intersect_max_perp[0]),
+                (intersect_min_perp[1], intersect_max_perp[1]),
             )
 
-            vjp_value += _apply_singularity_correction(snap_H_coord) * integral_H
+            if not np.all([verify_integration_interval(b) for b in integration_bounds_perp]):
+                return 0.0
 
-        return np.real(vjp_value)
+            grid_points_perp_1 = spacing_to_grid_points(
+                adaptive_spacing, integration_bounds_perp[0][0], integration_bounds_perp[0][1]
+            )
+            grid_points_perp_2 = spacing_to_grid_points(
+                adaptive_spacing, integration_bounds_perp[1][0], integration_bounds_perp[1][1]
+            )
+            integration_weight = compute_integration_weight(
+                grid_points_perp_1
+            ) * compute_integration_weight(grid_points_perp_2)
+
+            mesh_perp1, mesh_perp2 = np.meshgrid(grid_points_perp_1, grid_points_perp_2)
+
+            zip_perp_coords = np.array(list(zip(mesh_perp1.flatten(), mesh_perp2.flatten())))
+
+            grid_points = np.pad(zip_perp_coords.copy(), ((0, 0), (1, 0)), mode="constant")
+
+            # set up grid points to pass into evaluate_gradient_at_points
+            grid_points[:, axis_perp[0]] = zip_perp_coords[:, 0]
+            grid_points[:, axis_perp[1]] = zip_perp_coords[:, 1]
+            grid_points[:, axis_normal] = coord_normal_face
+
+        normals = np.zeros_like(grid_points)
+        perps1 = np.zeros_like(grid_points)
+        perps2 = np.zeros_like(grid_points)
+
+        normals[:, axis_normal] = 1
+        perps1[:, axis_perp[0]] = 1
+        perps2[:, axis_perp[1]] = 1
+
+        gradient_at_points = derivative_info.evaluate_gradient_at_points(
+            spatial_coords=grid_points,
+            normals=normals,
+            perps1=perps1,
+            perps2=perps2,
+            interpolators=interpolators,
+        )
+
+        vjp_value = np.sum(integration_weight * np.real(gradient_at_points))
+        return vjp_value
 
 
 """Compound subclasses"""
