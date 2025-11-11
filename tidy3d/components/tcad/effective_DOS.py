@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import HBAR, K_B, M_E_EV
@@ -32,8 +32,8 @@ class EffectiveDOS(Tidy3dBaseModel, ABC):
 class ConstantEffectiveDOS(EffectiveDOS):
     """Constant effective density of states model."""
 
-    N: pd.PositiveFloat = pd.Field(
-        ..., title="Effective DOS", description="Effective density of states", units="cm^(-3)"
+    N: PositiveFloat = Field(
+        title="Effective DOS", description="Effective density of states", units="cm^(-3)"
     )
 
     def calc_eff_dos(self, T: float):
@@ -51,7 +51,7 @@ class IsotropicEffectiveDOS(EffectiveDOS):
         \\end{equation}
     """
 
-    m_eff: pd.PositiveFloat = pd.Field(
+    m_eff: PositiveFloat = Field(
         ...,
         title="Effective mass",
         description="Effective mass of the carriers relative to the electron mass at rest",
@@ -72,20 +72,18 @@ class MultiValleyEffectiveDOS(EffectiveDOS):
         \\end{equation}
     """
 
-    m_eff_long: pd.PositiveFloat = pd.Field(
-        ...,
+    m_eff_long: PositiveFloat = Field(
         title="Longitudinal effective mass",
         description="Relative effective mass of the carriers in the longitudinal direction. This is a relative value compared to the electron mass at rest.",
     )
 
-    m_eff_trans: pd.PositiveFloat = pd.Field(
-        ...,
+    m_eff_trans: PositiveFloat = Field(
         title="Transverse effective mass",
         description="Relative effective mass of the carriers in the transverse direction. This is a relative value compared to the electron mass at rest.",
     )
 
-    N_valley: pd.PositiveFloat = pd.Field(
-        ..., title="Number of valleys", description="Number of effective valleys"
+    N_valley: PositiveFloat = Field(
+        title="Number of valleys", description="Number of effective valleys"
     )
 
     def calc_eff_dos(self, T: float):
@@ -108,13 +106,13 @@ class DualValleyEffectiveDOS(EffectiveDOS):
         \\end{equation}
     """
 
-    m_eff_lh: pd.PositiveFloat = pd.Field(
+    m_eff_lh: PositiveFloat = Field(
         ...,
         title="Light hole effective mass",
         description="Relative effective mass of the light holes. This is a relative value compared to the electron mass at rest.",
     )
 
-    m_eff_hh: pd.PositiveFloat = pd.Field(
+    m_eff_hh: PositiveFloat = Field(
         ...,
         title="Heavy hole effective mass",
         description="Relative effective mass of the heavy holes. This is a relative value compared to the electron mass at rest.",

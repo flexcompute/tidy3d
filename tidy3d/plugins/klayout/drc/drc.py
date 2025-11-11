@@ -8,8 +8,7 @@ from pathlib import Path
 from subprocess import run
 from typing import Any, Optional, Union
 
-import pydantic.v1 as pd
-from pydantic.v1 import validator
+from pydantic import Field, FilePath, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Geometry
@@ -31,37 +30,37 @@ SUPPORTED_DRC_SUFFIXES: frozenset[str] = frozenset({".drc", ".lydrc"})
 class DRCConfig(Tidy3dBaseModel):
     """Configuration for KLayout DRC."""
 
-    gdsfile: pd.FilePath = pd.Field(
+    gdsfile: FilePath = Field(
         title="GDS File",
         description="The path to the GDS file to write the Tidy3D object to.",
     )
-    drc_runset: pd.FilePath = pd.Field(
+    drc_runset: FilePath = Field(
         title="DRC Runset file",
         description="Path to the KLayout DRC runset file.",
     )
-    resultsfile: Path = pd.Field(
+    resultsfile: Path = Field(
         title="DRC Results File",
         description="Path to the KLayout DRC results file.",
     )
-    verbose: bool = pd.Field(
+    verbose: bool = Field(
         title="Verbose",
         description="Whether to print logging.",
     )
-    drc_args: dict[str, str] = pd.Field(
+    drc_args: dict[str, str] = Field(
         default_factory=dict,
         title="DRC File Arguments",
         description="Optional key/value pairs forwarded to KLayout as -rd <key>=<value> definitions.",
     )
 
-    @validator("gdsfile")
-    def _validate_gdsfile_filetype(cls, v: pd.FilePath) -> pd.FilePath:
+    @field_validator("gdsfile")
+    def _validate_gdsfile_filetype(cls, v: FilePath) -> FilePath:
         """Check GDS filetype is ``.gds``."""
         if v.suffix != ".gds":
             raise ValidationError(f"GDS file '{v}' must end with '.gds'.")
         return v
 
-    @validator("drc_runset")
-    def _validate_drc_runset_filetype(cls, v: pd.FilePath) -> pd.FilePath:
+    @field_validator("drc_runset")
+    def _validate_drc_runset_filetype(cls, v: FilePath) -> FilePath:
         """Check DRC runset filetype is ``.drc`` or ``.lydrc``."""
         if v.suffix not in SUPPORTED_DRC_SUFFIXES:
             raise ValidationError(
@@ -69,8 +68,8 @@ class DRCConfig(Tidy3dBaseModel):
             )
         return v
 
-    @validator("drc_runset")
-    def _validate_drc_runset_format(cls, v: pd.FilePath) -> pd.FilePath:
+    @field_validator("drc_runset")
+    def _validate_drc_runset_format(cls, v: FilePath) -> FilePath:
         """Check if the DRC runset file is formatted correctly.
         The checks are:
         1. The GDS source must be loaded with 'source($gdsfile)'.
@@ -88,7 +87,7 @@ class DRCConfig(Tidy3dBaseModel):
                 )
         return v
 
-    @validator("drc_args", pre=True)
+    @field_validator("drc_args", mode="before")
     def _validate_drc_args_stringable(cls, v: Any) -> dict[str, str]:
         """Coerce all keys and values in drc_args to strings."""
         if v is None:
@@ -101,7 +100,7 @@ class DRCConfig(Tidy3dBaseModel):
             raise ValidationError("Could not coerce keys and values of drc_args to strings.") from e
         return v
 
-    @validator("drc_args")
+    @field_validator("drc_args")
     def _validate_drc_args_reserved(cls, v: dict[str, str]) -> dict[str, str]:
         """Ensure user arguments do not override the reserved keys."""
 
@@ -144,11 +143,11 @@ class DRCRunner(Tidy3dBaseModel):
     >>> print(results) # doctest: +SKIP
     """
 
-    drc_runset: pd.FilePath = pd.Field(
+    drc_runset: FilePath = Field(
         title="DRC Runset file",
         description="Path to the KLayout DRC runset file.",
     )
-    verbose: bool = pd.Field(
+    verbose: bool = Field(
         default=DEFAULT_VERBOSE,
         title="Verbose",
         description="Whether to print logging.",

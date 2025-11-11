@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Union
 
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.tcad.source.abstract import StructureBasedHeatChargeSource
@@ -21,7 +21,7 @@ class HeatSource(StructureBasedHeatChargeSource):
     >>> heat_source = HeatSource(rate=1, structures=["box"])
     """
 
-    rate: Union[float, SpatialDataArray] = pd.Field(
+    rate: Union[float, SpatialDataArray] = Field(
         title="Volumetric Heat Rate",
         description="Volumetric rate of heating or cooling (if negative).",
         units=VOLUMETRIC_HEAT_RATE,
@@ -39,11 +39,11 @@ class UniformHeatSource(HeatSource):
 
     # NOTE: wrapper for backwards compatibility.
 
-    @pd.root_validator(skip_on_failure=True)
-    def issue_warning_deprecated(cls, values):
+    @model_validator(mode="before")
+    def issue_warning_deprecated(data):
         """Issue warning for 'UniformHeatSource'."""
         log.warning(
             "'UniformHeatSource' is deprecated and will be discontinued. You can use "
             "'HeatSource' instead."
         )
-        return values
+        return data

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Union
+from typing import TYPE_CHECKING, Union
 
-from pydantic.v1 import Field
-
-from tidy3d.components.types import TYPE_TAG_STR, ArrayLike, Complex
+from tidy3d.components.types import Complex
+from tidy3d.components.types.base import ArrayLikeStrict, discriminated_union
 
 if TYPE_CHECKING:
     from .functions import Cos, Exp, Log, Log10, Sin, Sqrt, Tan
@@ -23,9 +22,9 @@ if TYPE_CHECKING:
     )
     from .variables import Constant, Variable
 
-NumberType = Union[int, float, Complex, ArrayLike]
+NumberType = Union[int, float, Complex, ArrayLikeStrict]
 
-OperatorType = Annotated[
+OperatorType = discriminated_union(
     Union[
         "Add",
         "Subtract",
@@ -37,11 +36,10 @@ OperatorType = Annotated[
         "MatMul",
         "Negate",
         "Abs",
-    ],
-    Field(discriminator=TYPE_TAG_STR),
-]
+    ]
+)
 
-FunctionType = Annotated[
+FunctionType = discriminated_union(
     Union[
         "Sin",
         "Cos",
@@ -50,19 +48,17 @@ FunctionType = Annotated[
         "Log",
         "Log10",
         "Sqrt",
-    ],
-    Field(discriminator=TYPE_TAG_STR),
-]
+    ]
+)
 
-MetricType = Annotated[
+MetricType = discriminated_union(
     Union[
         "Constant",
         "Variable",
         "ModeAmp",
         "ModePower",
-    ],
-    Field(discriminator=TYPE_TAG_STR),
-]
+    ]
+)
 
 ExpressionType = Union[
     OperatorType,
@@ -70,4 +66,4 @@ ExpressionType = Union[
     MetricType,
 ]
 
-NumberOrExpression = Union[NumberType, ExpressionType]
+NumberOrExpression = Union[ExpressionType, NumberType]

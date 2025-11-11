@@ -1,11 +1,11 @@
 # utilities for working with autograd
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 import autograd.numpy as anp
-from autograd.tracer import getval
+from autograd.tracer import getval, isbox
 
 __all__ = [
     "asarray1d",
@@ -14,12 +14,24 @@ __all__ = [
     "is_tidy_box",
     "pack_complex_vec",
     "split_list",
+    "hasbox",
 ]
 
 
-def get_static(x: Any) -> Any:
-    """Get the 'static' (untraced) version of some value."""
-    return getval(x)
+def get_static(item: Any) -> Any:
+    """
+    Get the 'static' (untraced) version of some value by recursively calling getval
+    on Box instances within a nested structure.
+    """
+    if isbox(item):
+        return getval(item)
+    elif isinstance(item, list):
+        return [get_static(x) for x in item]
+    elif isinstance(item, tuple):
+        return tuple(get_static(x) for x in item)
+    elif isinstance(item, dict):
+        return {k: get_static(v) for k, v in item.items()}
+    return item
 
 
 def split_list(x: list[Any], index: int) -> (list[Any], list[Any]):
@@ -41,6 +53,16 @@ def contains(target: Any, seq: Iterable[Any]) -> bool:
         if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
             if contains(target, x):
                 return True
+
+
+def hasbox(obj: Any) -> bool:
+    """True if any element inside obj is an autograd Box."""
+    if isbox(obj):
+        return True
+    if isinstance(obj, Mapping):
+        return any(hasbox(v) for v in obj.values())
+    if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
+        return any(hasbox(i) for i in obj)
     return False
 
 

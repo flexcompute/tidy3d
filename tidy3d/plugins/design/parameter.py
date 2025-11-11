@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, PositiveInt, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 
@@ -14,20 +14,19 @@ from tidy3d.components.base import Tidy3dBaseModel
 class Parameter(Tidy3dBaseModel, ABC):
     """Specification for a single variable / dimension in a design problem."""
 
-    name: str = pd.Field(
-        ...,
+    name: str = Field(
         title="Name",
         description="Unique name for the variable. Used as a key into the parameter sweep results.",
     )
 
-    values: tuple[Any, ...] = pd.Field(
+    values: Optional[tuple[Any, ...]] = Field(
         None,
         title="Custom Values",
         description="If specified, the parameter scan uses these values for grid search methods.",
     )
 
-    @pd.validator("values", always=True)
-    def _values_unique(cls, val):
+    @field_validator("values")
+    def _values_unique(val):
         """Supplied unique values."""
         if (val is not None) and (len(set(val)) != len(val)):
             raise ValueError("Supplied 'values' were not unique.")
@@ -59,14 +58,13 @@ class Parameter(Tidy3dBaseModel, ABC):
 class ParameterNumeric(Parameter, ABC):
     """A variable with numeric values."""
 
-    span: tuple[Union[float, int], Union[float, int]] = pd.Field(
-        ...,
+    span: tuple[Union[float, int], Union[float, int]] = Field(
         title="Span",
         description="(min, max) range within which are allowed values for the variable. Is inclusive of max value.",
     )
 
-    @pd.validator("span", always=True)
-    def _span_valid(cls, val):
+    @field_validator("span")
+    def _span_valid(val):
         """Span min <= span max."""
         span_min, span_max = val
         if span_min > span_max:
@@ -96,15 +94,15 @@ class ParameterFloat(ParameterNumeric):
     >>> var = tdd.ParameterFloat(name="x", num_points=10, span=(1, 2.5))
     """
 
-    num_points: pd.PositiveInt = pd.Field(
+    num_points: Optional[PositiveInt] = Field(
         None,
         title="Number of Points",
         description="Number of uniform sampling points for this variable. "
         "Only used for 'MethodGrid'. ",
     )
 
-    @pd.validator("span", always=True)
-    def _span_is_float(cls, val):
+    @field_validator("span")
+    def _span_is_float(val):
         """Make sure the span contains floats."""
         low, high = val
         return float(low), float(high)
@@ -136,16 +134,15 @@ class ParameterInt(ParameterNumeric):
     >>> var = tdd.ParameterInt(name="x", span=(1, 4))
     """
 
-    span: tuple[int, int] = pd.Field(
-        ...,
+    span: tuple[int, int] = Field(
         title="Span",
         description="``(min, max)`` range within which are allowed values for the variable. "
         "The ``min`` value is inclusive and the ``max`` value is exclusive. In other words, "
         "a grid search over this variable will iterate over ``np.arange(min, max)``.",
     )
 
-    @pd.validator("span", always=True)
-    def _span_is_int(cls, val):
+    @field_validator("span")
+    def _span_is_int(val):
         """Make sure the span contains ints."""
         low, high = val
         return int(low), int(high)
@@ -175,20 +172,19 @@ class ParameterAny(Parameter):
     >>> var = tdd.ParameterAny(name="x", allowed_values=("a", "b", "c"))
     """
 
-    allowed_values: tuple[Any, ...] = pd.Field(
-        ...,
+    allowed_values: tuple[Any, ...] = Field(
         title="Allowed Values",
         description="The discrete set of values that this variable can take on.",
     )
 
-    @pd.validator("allowed_values", always=True)
-    def _given_any_allowed_values(cls, val):
+    @field_validator("allowed_values")
+    def _given_any_allowed_values(val):
         """Need at least one allowed value."""
         if not len(val):
             raise ValueError("Given empty tuple of allowed values. Must have at least one.")
         return val
 
-    @pd.validator("allowed_values", always=True)
+    @field_validator("allowed_values")
     def _no_duplicate_allowed_values(cls, val):
         """No duplicates in allowed_values."""
         if len(val) != len(set(val)):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import collections.abc
 
-import pydantic.v1 as pydantic
+from pydantic import ValidationError
 import pytest
 
 from tidy3d import SimulationMap
@@ -33,7 +33,7 @@ def test_simulation_map_creation():
 def test_simulation_map_invalid_type_raises_error():
     """Tests that a ValidationError is raised for incorrect value types."""
     invalid_data = {"sim_A": "not a simulation"}
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         SimulationMap(keys=tuple(invalid_data.keys()), values=tuple(invalid_data.values()))
 
 

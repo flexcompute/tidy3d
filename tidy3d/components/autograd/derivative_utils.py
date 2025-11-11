@@ -9,7 +9,7 @@ import numpy as np
 import xarray as xr
 
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
-from tidy3d.components.types import ArrayLike, Bound, tidycomplex
+from tidy3d.components.types import ArrayLike, Bound, Complex
 from tidy3d.config import config
 from tidy3d.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
 from tidy3d.log import log
@@ -19,7 +19,7 @@ from .utils import get_static
 
 FieldData = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
-EpsType = Union[tidycomplex, FreqDataArray]
+EpsType = Union[Complex, FreqDataArray]
 
 
 class LazyInterpolator:

@@ -8,8 +8,7 @@ from os import PathLike
 from pathlib import Path
 from typing import Callable, Optional
 
-import pydantic.v1 as pd
-from pydantic.v1 import BaseModel
+from pydantic import BaseModel, Field
 
 from tidy3d import log
 from tidy3d.components.base import _get_valid_extension
@@ -72,7 +71,7 @@ def task_type_name_of(simulation: WorkflowType) -> str:
 
 
 class Tidy3dStub(BaseModel, TaskStub):
-    simulation: WorkflowType = pd.Field(discriminator="type")
+    simulation: WorkflowType = Field(discriminator="type")
 
     @classmethod
     def from_file(cls, file_path: PathLike) -> WorkflowType:
@@ -156,7 +155,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         fname : PathLike
             Full path to the .hdf5.gz file to save
             the Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] to.
-        custom_encoders : List[Callable]
+        custom_encoders : list[Callable]
             List of functions accepting (fname: PathLike, group_path: str, value: Any) that take
             the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
 

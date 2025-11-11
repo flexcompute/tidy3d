@@ -6,11 +6,10 @@ import inspect
 from contextlib import contextmanager
 from datetime import datetime
 from os import PathLike
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from rich.console import Console
 from rich.text import Text
-from typing_extensions import Literal
 
 # Note: "SUPPORT" and "USER" levels are meant for backend runs only.
 # Logging in frontend code should just use the standard debug/info/warning/error/critical.

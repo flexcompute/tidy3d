@@ -357,7 +357,7 @@ def mock_webapi(
 
 @responses.activate
 def test_source_validation(monkeypatch, mock_upload, mock_get_info, mock_metadata):
-    sim = make_sim().copy(update={"sources": []})
+    sim = make_sim().copy(update={"sources": ()})
 
     assert upload(sim, TASK_NAME, PROJECT_NAME, source_required=False)
     with pytest.raises(SetupError):
@@ -497,7 +497,7 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
         pass
 
     def get_str(*args, **kwargs):
-        return sim.json().encode("utf-8")
+        return sim.model_dump_json().encode("utf-8")
 
     monkeypatch.setattr(f"{task_core_path}.download_gz_file", mock_download)
     monkeypatch.setattr(f"{task_core_path}.read_simulation_from_hdf5", get_str)

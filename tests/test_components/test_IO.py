@@ -24,6 +24,7 @@ from ..utils import run_emulated
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
+SIM_STATIC = SIM.to_static()
 
 
 @pytest.fixture
@@ -35,7 +36,7 @@ def split_string(monkeypatch):
 
 
 def set_datasets_to_none(sim):
-    sim_dict = sim.dict()
+    sim_dict = sim.model_dump()
     for src in sim_dict["sources"]:
         if src["type"] == "CustomFieldSource":
             src["field_dataset"] = None
@@ -62,21 +63,21 @@ def set_datasets_to_none(sim):
                 structure["medium"]["poles"] = []
             else:
                 structure["medium"]["coeffs"] = []
-    return td.Simulation.parse_obj(sim_dict)
+    return td.Simulation.model_validate(sim_dict)
 
 
 def test_simulation_load_export(split_string, tmp_path):
     major, minor, patch = __version__.split(".")
     path = os.path.join(tmp_path, f"simulation_{major}_{minor}_{patch}.json")
     path_hdf5 = os.path.join(tmp_path, f"simulation_{major}_{minor}_{patch}.h5")
-    SIM.to_file(path)
-    SIM.to_hdf5(path_hdf5)
+    SIM_STATIC.to_file(path)
+    SIM_STATIC.to_hdf5(path_hdf5)
     SIM2 = td.Simulation.from_file(path)
     SIM_HDF5 = td.Simulation.from_hdf5(path_hdf5)
-    assert set_datasets_to_none(SIM)._json_string == SIM2._json_string, (
+    assert set_datasets_to_none(SIM_STATIC)._json_string == SIM2._json_string, (
         "original and loaded simulations are not the same"
     )
-    assert SIM == SIM_HDF5, "original and loaded from hdf5 simulations are not the same"
+    assert SIM_STATIC == SIM_HDF5, "original and loaded from hdf5 simulations are not the same"
 
 
 def test_simulation_load_export_yaml(tmp_path):
@@ -104,30 +105,30 @@ def test_component_load_export_yaml(tmp_path):
 
 def test_simulation_load_export_hdf5(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5")
-    SIM.to_file(path)
+    SIM_STATIC.to_file(path)
     SIM2 = td.Simulation.from_file(path)
-    assert SIM == SIM2, "original and loaded simulations are not the same"
+    assert SIM_STATIC == SIM2, "original and loaded simulations are not the same"
 
 
 def test_simulation_load_export_hdf5_gz(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5.gz")
-    SIM.to_file(path)
+    SIM_STATIC.to_file(path)
     SIM2 = td.Simulation.from_file(path)
-    assert SIM == SIM2, "original and loaded simulations are not the same"
+    assert SIM_STATIC == SIM2, "original and loaded simulations are not the same"
 
 
 def test_simulation_load_export_hdf5_explicit(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5")
-    SIM.to_hdf5(path)
+    SIM_STATIC.to_hdf5(path)
     SIM2 = td.Simulation.from_hdf5(path)
-    assert SIM == SIM2, "original and loaded simulations are not the same"
+    assert SIM_STATIC == SIM2, "original and loaded simulations are not the same"
 
 
 def test_simulation_load_export_hdf5_gz_explicit(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5.gz")
-    SIM.to_hdf5_gz(path)
+    SIM_STATIC.to_hdf5_gz(path)
     SIM2 = td.Simulation.from_hdf5_gz(path)
-    assert SIM == SIM2, "original and loaded simulations are not the same"
+    assert SIM_STATIC == SIM2, "original and loaded simulations are not the same"
 
 
 def test_simulation_load_export_pckl(tmp_path):
@@ -192,7 +193,7 @@ def test_validation_speed(tmp_path):
         for i in range(n):
             new_structure = SIM.structures[0].copy(update={"name": str(i)})
             new_structures.append(new_structure)
-        S = SIM.copy(update={"structures": new_structures})
+        S = SIM.copy(update={"structures": tuple(new_structures)})
 
         S.to_file(path)
         time_start = time()
@@ -226,7 +227,9 @@ def test_simulation_updater(sim_file):
 def test_yaml(tmp_path):
     path = str(tmp_path / "simulation.json")
     SIM.to_file(path)
+    SIM.to_file("simulation.json")
     sim = td.Simulation.from_file(path)
+
     path1 = str(tmp_path / "simulation.yaml")
     sim.to_yaml(path1)
     sim1 = td.Simulation.from_yaml(path1)

@@ -100,7 +100,7 @@ def get_kernel_size_px(
 
     Returns
     -------
-    Union[int, List[int]]
+    Union[int, list[int]]
         The size of the kernel in pixels for each dimension. Returns an integer if the radius is scalar, otherwise a list of integers.
 
     Raises

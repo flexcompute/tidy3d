@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import numpy as np
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import EpsSpecType, ModeSolverType, Numpy
+from tidy3d.components.types import EpsSpecType, ModeSolverType
 from tidy3d.constants import C_0, ETA_0, fp_eps, pec_val
 
 from .derivatives import create_d_matrices as d_mats
@@ -54,7 +54,7 @@ class EigSolver(Tidy3dBaseModel):
         direction="+",
         solver_basis_fields=None,
         plane_center: Optional[tuple[float, float]] = None,
-    ) -> tuple[Numpy, Numpy, EpsSpecType]:
+    ) -> tuple[np.ndarray, np.ndarray, EpsSpecType]:
         """
         Solve for the modes of a waveguide cross-section.
 
@@ -64,7 +64,7 @@ class EigSolver(Tidy3dBaseModel):
             Either a single 2D array defining the relative permittivity in the cross-section,
             or nine 2D arrays defining the permittivity at the Ex, Ey, and Ez locations
             of the Yee grid in the order xx, xy, xz, yx, yy, yz, zx, zy, zz.
-        coords : List[Numpy]
+        coords : List[np.ndarray]
             Two 1D arrays with each with size one larger than the corresponding axis of
             ``eps_cross``.
             Defines a (potentially non-uniform) Cartesian grid on which the modes are computed.
@@ -96,7 +96,7 @@ class EigSolver(Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[Numpy, Numpy, str]
+        tuple[np.ndarray, np.ndarray, str]
             The first array gives the E and H fields for all modes, the second one gives the complex
             effective index. The last variable describes permittivity characterization on the mode
             solver's plane ("diagonal", "tensorial_real", or "tensorial_complex").
@@ -1000,19 +1000,19 @@ class EigSolver(Tidy3dBaseModel):
         return vec_init.flatten("F")
 
     @classmethod
-    def eigs_to_effective_index(cls, eig_list: Numpy, mode_solver_type: ModeSolverType):
+    def eigs_to_effective_index(cls, eig_list: np.ndarray, mode_solver_type: ModeSolverType):
         """Convert obtained eigenvalues to n_eff and k_eff.
 
         Parameters
         ----------
-        eig_list : Numpy
+        eig_list : np.ndarray
             Array of eigenvalues
         mode_solver_type : ModeSolverType
             The type of mode solver problems
 
         Returns
         -------
-        Tuple[Numpy, Numpy]
+        tuple[np.ndarray, np.ndarray]
             n_eff and k_eff
         """
         if eig_list.size == 0:
@@ -1037,7 +1037,7 @@ class EigSolver(Tidy3dBaseModel):
         the property at the E(H)x, E(H)y, and E(H)z locations of the Yee grid in the order
         xx, xy, xz, yx, yy, yz, zx, zy, zz.
         """
-        if isinstance(mat_data, Numpy):
+        if isinstance(mat_data, np.ndarray):
             return (mat_data[i, :, :] for i in range(9))
         if len(mat_data) == 9:
             return (np.copy(e) for e in mat_data)
@@ -1090,6 +1090,6 @@ class EigSolver(Tidy3dBaseModel):
         return np.any(np.abs(material_response) > GOOD_CONDUCTOR_THRESHOLD * np.abs(pec_val))
 
 
-def compute_modes(*args: Any, **kwargs: Any) -> tuple[Numpy, Numpy, str]:
+def compute_modes(*args: Any, **kwargs: Any) -> tuple[np.ndarray, np.ndarray, str]:
     """A wrapper around ``EigSolver.compute_modes``, which is used in :class:`.ModeSolver`."""
     return EigSolver.compute_modes(*args, **kwargs)

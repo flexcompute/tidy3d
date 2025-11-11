@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pd
 import pytest
 from matplotlib import pyplot as plt
+from pydantic import ValidationError
 
 from ..utils import AssertLogLevel, cartesian_to_unstructured
 
@@ -62,7 +62,7 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     assert tri_grid.name == ds_name
 
     # wrong points dimensionality
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         tri_grid_points_bad = td.PointDataArray(
             np.random.random((4, 3)),
             coords={"index": np.arange(4), "axis": np.arange(3)},
@@ -117,7 +117,7 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         [[0, 1, 2, 3]],
         coords={"cell_index": np.arange(1), "vertex_index": np.arange(4)},
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = dataset_type(
             normal_axis=2,
             normal_pos=-3,
@@ -130,7 +130,7 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         [[0, 1, 5], [1, 2, 3]],
         coords={"cell_index": np.arange(2), "vertex_index": np.arange(3)},
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = dataset_type(
             normal_axis=2,
             normal_pos=-3,
@@ -144,7 +144,7 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         np.random.rand(3, *[len(coord) for coord in extra_dims.values()]),
         coords=dict(index=np.arange(3), **extra_dims),
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = dataset_type(
             normal_axis=0,
             normal_pos=0,
@@ -289,7 +289,6 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
 
     # writing/reading
     tri_grid.to_file(tmp_path / "tri_grid_test.hdf5")
-
     tri_grid_loaded = dataset_type.from_file(tmp_path / "tri_grid_test.hdf5")
     assert tri_grid == tri_grid_loaded
 
@@ -387,7 +386,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         np.random.random((8, 2)),
         coords={"index": np.arange(8), "axis": np.arange(2)},
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = dataset_type(
             points=tet_grid_points_bad,
             cells=tet_grid_cells,
@@ -433,7 +432,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         [[0, 1, 3], [0, 2, 3], [0, 2, 6], [0, 4, 6], [0, 4, 5], [0, 1, 5]],
         coords={"cell_index": np.arange(6), "vertex_index": np.arange(3)},
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = dataset_type(
             points=tet_grid_points,
             cells=tet_grid_cells_bad,
@@ -444,7 +443,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         [[0, 1, 3, 17], [0, 2, 3, 7], [0, 2, 6, 7], [0, 4, 6, 7], [0, 4, 5, 7], [0, 1, 5, 7]],
         coords={"cell_index": np.arange(6), "vertex_index": np.arange(4)},
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = dataset_type(
             points=tet_grid_points,
             cells=tet_grid_cells_bad,
@@ -456,7 +455,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         np.random.rand(5, *[len(coord) for coord in extra_dims.values()]),
         coords=dict(index=np.arange(5), **extra_dims),
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = dataset_type(
             points=tet_grid_points,
             cells=tet_grid_cells_bad,

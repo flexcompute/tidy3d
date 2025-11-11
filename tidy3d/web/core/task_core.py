@@ -12,7 +12,7 @@ from typing import Callable, Optional, Union
 
 import requests
 from botocore.exceptions import ClientError
-from pydantic.v1 import Extra, Field, parse_obj_as
+from pydantic import Field, TypeAdapter, model_validator
 
 import tidy3d as td
 from tidy3d.config import config
@@ -38,12 +38,18 @@ from .task_info import BatchDetail
 from .types import PayType, Queryable, ResourceLifecycle, Submittable, Tidy3DResource
 
 
-class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
+class Folder(Tidy3DResource, Queryable, extra="allow"):
     """Tidy3D Folder."""
 
-    folder_id: str = Field(..., title="Folder id", description="folder id", alias="projectId")
+    folder_id: str = Field(
+        title="Folder id",
+        description="folder id",
+        alias="projectId",
+    )
     folder_name: str = Field(
-        ..., title="Folder name", description="folder name", alias="projectName"
+        title="Folder name",
+        description="folder name",
+        alias="projectName",
     )
 
     @classmethod
@@ -56,14 +62,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
             List of folders
         """
         resp = http.get(projects_endpoint)
-        return (
-            parse_obj_as(
-                list[Folder],
-                resp,
-            )
-            if resp
-            else None
-        )
+        return TypeAdapter(list[Folder]).validate_python(resp) if resp else None
 
     @classmethod
     def get(
@@ -131,25 +130,18 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
 
         Returns
         -------
-        tasks : List[:class:`.SimulationTask`]
+        tasks : list[:class:`.SimulationTask`]
             List of tasks in this folder
         """
         resp = http.get(f"{projects_endpoint}/{self.folder_id}/tasks")
-        return (
-            parse_obj_as(
-                list[SimulationTask],
-                resp,
-            )
-            if resp
-            else None
-        )
+        return TypeAdapter(list[SimulationTask]).validate_python(resp) if resp else None
 
 
-class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
+class SimulationTask(ResourceLifecycle, Submittable, extra="allow"):
     """Interface for managing the running of a :class:`.Simulation` task on server."""
 
     task_id: Optional[str] = Field(
-        ...,
+        None,
         title="task_id",
         description="Task ID number, set when the task is uploaded, leave as None.",
         alias="taskId",
@@ -160,18 +152,31 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         description="Folder ID number, set when the task is uploaded, leave as None.",
         alias="folderId",
     )
-    status: Optional[str] = Field(title="status", description="Simulation task status.")
+    status: Optional[str] = Field(
+        None,
+        title="status",
+        description="Simulation task status.",
+    )
 
-    real_flex_unit: float = Field(
-        None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
+    real_flex_unit: Optional[float] = Field(
+        None,
+        title="real FlexCredits",
+        description="Billed FlexCredits.",
+        alias="realCost",
     )
 
     created_at: Optional[datetime] = Field(
-        title="created_at", description="Time at which this task was created.", alias="createdAt"
+        None,
+        title="created_at",
+        description="Time at which this task was created.",
+        alias="createdAt",
     )
 
     task_type: Optional[str] = Field(
-        title="task_type", description="The type of task.", alias="taskType"
+        None,
+        title="task_type",
+        description="The type of task.",
+        alias="taskType",
     )
 
     folder_name: Optional[str] = Field(
@@ -181,7 +186,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         alias="folderName",
     )
 
-    callback_url: str = Field(
+    callback_url: Optional[str] = Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
@@ -189,13 +194,13 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    # simulation_type: str = pd.Field(
+    # simulation_type: str = Field(
     #     None,
     #     title="Simulation Type",
     #     description="Type of simulation, used internally only.",
     # )
 
-    # parent_tasks: Tuple[TaskId, ...] = pd.Field(
+    # parent_tasks: tuple[TaskId, ...] = Field(
     #     None,
     #     title="Parent Tasks",
     #     description="List of parent task ids for the simulation, used internally only."
@@ -229,7 +234,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
         simulation_type : str
             Type of simulation being uploaded.
-        parent_tasks : List[str]
+        parent_tasks : list[str]
             List of related task ids.
         file_type: str
             the simulation file type Json, Hdf5, Gz
@@ -311,7 +316,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         resp = http.get("tidy3d/py/tasks")
         if not resp:
             return []
-        return parse_obj_as(list[SimulationTask], resp)
+        return TypeAdapter(list[SimulationTask]).validate_python(resp)
 
     def delete(self, versions: bool = False) -> None:
         """Delete current task from server.

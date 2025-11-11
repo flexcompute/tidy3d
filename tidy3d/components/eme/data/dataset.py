@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from typing import Optional
+
+from pydantic import Field
 
 from tidy3d.components.data.data_array import (
     EMECoefficientDataArray,
@@ -17,23 +19,19 @@ from tidy3d.components.data.dataset import Dataset, ElectromagneticFieldDataset
 class EMESMatrixDataset(Dataset):
     """Dataset storing S matrix."""
 
-    S11: EMESMatrixDataArray = pd.Field(
-        ...,
+    S11: EMESMatrixDataArray = Field(
         title="S11 matrix",
         description="S matrix relating output modes at port 1 to input modes at port 1.",
     )
-    S12: EMESMatrixDataArray = pd.Field(
-        ...,
+    S12: EMESMatrixDataArray = Field(
         title="S12 matrix",
         description="S matrix relating output modes at port 1 to input modes at port 2.",
     )
-    S21: EMESMatrixDataArray = pd.Field(
-        ...,
+    S21: EMESMatrixDataArray = Field(
         title="S21 matrix",
         description="S matrix relating output modes at port 2 to input modes at port 1.",
     )
-    S22: EMESMatrixDataArray = pd.Field(
-        ...,
+    S22: EMESMatrixDataArray = Field(
         title="S22 matrix",
         description="S matrix relating output modes at port 2 to input modes at port 2.",
     )
@@ -44,13 +42,11 @@ class EMECoefficientDataset(Dataset):
     These are defined at the cell centers.
     """
 
-    A: EMECoefficientDataArray = pd.Field(
-        ...,
+    A: EMECoefficientDataArray = Field(
         title="A coefficient",
         description="Coefficient for forward mode in this cell.",
     )
-    B: EMECoefficientDataArray = pd.Field(
-        ...,
+    B: EMECoefficientDataArray = Field(
         title="B coefficient",
         description="Coefficient for backward mode in this cell.",
     )
@@ -59,32 +55,32 @@ class EMECoefficientDataset(Dataset):
 class EMEFieldDataset(ElectromagneticFieldDataset):
     """Dataset storing scalar components of E and H fields as a function of freq, mode_index, and port_index."""
 
-    Ex: EMEScalarFieldDataArray = pd.Field(
+    Ex: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
-    Ey: EMEScalarFieldDataArray = pd.Field(
+    Ey: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
-    Ez: EMEScalarFieldDataArray = pd.Field(
+    Ez: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
-    Hx: EMEScalarFieldDataArray = pd.Field(
+    Hx: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
-    Hy: EMEScalarFieldDataArray = pd.Field(
+    Hy: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
-    Hz: EMEScalarFieldDataArray = pd.Field(
+    Hz: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
@@ -94,39 +90,32 @@ class EMEFieldDataset(ElectromagneticFieldDataset):
 class EMEModeSolverDataset(ElectromagneticFieldDataset):
     """Dataset storing EME modes as a function of freq, mode_index, and cell_index."""
 
-    n_complex: EMEModeIndexDataArray = pd.Field(
-        ...,
+    n_complex: EMEModeIndexDataArray = Field(
         title="Propagation Index",
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    Ex: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Ex: EMEScalarModeFieldDataArray = Field(
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
-    Ey: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Ey: EMEScalarModeFieldDataArray = Field(
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
-    Ez: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Ez: EMEScalarModeFieldDataArray = Field(
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
-    Hx: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Hx: EMEScalarModeFieldDataArray = Field(
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
-    Hy: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Hy: EMEScalarModeFieldDataArray = Field(
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
-    Hz: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Hz: EMEScalarModeFieldDataArray = Field(
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
     )
