@@ -39,8 +39,8 @@ from .data.utils import (
     TriangularGridDataset,
     UnstructuredGridDataset,
 )
-from .geometry.base import Box, ClipOperation, GeometryGroup
-from .geometry.utils import flatten_groups, merging_geometries_on_plane, traverse_geometries
+from .geometry.base import Box
+from .geometry.utils import merging_geometries_on_plane
 from .grid.grid import Coords, Grid
 from .material.multi_physics import MultiPhysicsMedium
 from .medium import (
@@ -82,8 +82,8 @@ from .viz import (
 # maximum number of mediums supported
 MAX_NUM_MEDIUMS = 65530
 
-# maximum geometry count in a single structure
-MAX_GEOMETRY_COUNT = 5000
+# # maximum geometry count in a single structure
+# MAX_GEOMETRY_COUNT = 5000
 
 # warn and error out if the same medium is present in too many structures
 WARN_STRUCTURES_PER_MEDIUM = 200
@@ -175,28 +175,28 @@ class Scene(Tidy3dBaseModel):
 
         return val
 
-    @pd.validator("structures", always=True)
-    def _validate_num_geometries(cls, val):
-        """Error if too many geometries in a single structure."""
+    # @pd.validator("structures", always=True)
+    # def _validate_num_geometries(cls, val):
+    #     """Error if too many geometries in a single structure."""
 
-        if val is None:
-            return val
+    #     if val is None:
+    #         return val
 
-        for i, structure in enumerate(val):
-            for geometry in flatten_groups(structure.geometry, flatten_transformed=True):
-                count = sum(
-                    1
-                    for g in traverse_geometries(geometry)
-                    if not isinstance(g, (GeometryGroup, ClipOperation))
-                )
-                if count > MAX_GEOMETRY_COUNT:
-                    raise SetupError(
-                        f"Structure at 'structures[{i}]' has {count} geometries that cannot be "
-                        f"flattened. A maximum of {MAX_GEOMETRY_COUNT} is supported due to "
-                        f"preprocessing performance."
-                    )
+    #     for i, structure in enumerate(val):
+    #         for geometry in flatten_groups(structure.geometry, flatten_transformed=True):
+    #             count = sum(
+    #                 1
+    #                 for g in traverse_geometries(geometry)
+    #                 if not isinstance(g, (GeometryGroup, ClipOperation))
+    #             )
+    #             if count > MAX_GEOMETRY_COUNT:
+    #                 raise SetupError(
+    #                     f"Structure at 'structures[{i}]' has {count} geometries that cannot be "
+    #                     f"flattened. A maximum of {MAX_GEOMETRY_COUNT} is supported due to "
+    #                     f"preprocessing performance."
+    #                 )
 
-        return val
+    #     return val
 
     @pd.validator("structures", always=True)
     def _validate_structures_per_medium(cls, val):
