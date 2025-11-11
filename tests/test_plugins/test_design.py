@@ -463,6 +463,22 @@ def test_sweep(sweep_method, monkeypatch):
     assert float_label in sweep_results_df, "didn't assign column header properly for float"
 
 
+def test_priority_forwarded_to_batch(monkeypatch):
+    captured_priority = {}
+
+    def run_with_priority(batch, path_dir: Optional[str] = None, priority: Optional[int] = None):
+        captured_priority["value"] = priority
+        return emulated_batch_run(batch, path_dir=path_dir)
+
+    monkeypatch.setattr(web.Batch, "run", run_with_priority)
+
+    design_space = init_design_space(sweep_method=tdd.MethodGrid())
+
+    design_space.run(scs_pre, scs_post, verbose=False, priority=7)
+
+    assert captured_priority["value"] == 7
+
+
 def emulated_estimate_cost_return(self, verbose=True):
     return 0.5
 

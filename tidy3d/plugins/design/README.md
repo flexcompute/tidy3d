@@ -95,6 +95,10 @@ With the design parameters and our method defined, we can combine everything int
 design_space = tdd.DesignSpace(parameters=[param_n, param_r], method=method)
 ```
 
+Execution-time options such as vGPU queue priority are supplied when calling `run`. For example,
+`design_space.run(fn_pre, fn_post, priority=7)` forwards that priority to every automatically batched
+simulation (only available when both `fn` and `fn_post` are provided).
+
 ## Results
 
 The `DesignSpace.run()` function returns a `Result` object, which is basically a dataset containing the function inputs, outputs, source code, and any task ID information corresponding to each data point.
