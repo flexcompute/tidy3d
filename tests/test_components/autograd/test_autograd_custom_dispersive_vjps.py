@@ -48,6 +48,7 @@ def _deriv_info(freq):
         "eps_inf_structure": eps_inf,
         "bounds_intersect": ((-1, -1, -1), (1, 1, 1)),
         "simulation_bounds": ((-2, -2, -2), (2, 2, 2)),
+        "updated_epsilon": None,
     }
 
 
