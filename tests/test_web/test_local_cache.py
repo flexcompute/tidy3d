@@ -415,6 +415,13 @@ def _test_verbosity(monkeypatch, basic_simulation):
             f"Expected 'Got 1 simulation from cache' in log, got '{buf.getvalue()}'"
         )
 
+        # if some found
+        buf.truncate(0)
+        buf.seek(0)
+        run([basic_simulation, sim2], verbose=False)
+        assert buf.getvalue().strip() == "", f"Expected empty log, got '{buf.getvalue()}'"
+
+        # if all found
         buf.truncate(0)
         buf.seek(0)
         run([basic_simulation, sim2], verbose=False)
