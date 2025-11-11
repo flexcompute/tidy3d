@@ -13,6 +13,7 @@ import h5py
 import numpy as np
 import xarray as xr
 from autograd.tracer import isbox
+from numpy.typing import NDArray
 from pydantic.annotated_handlers import GetCoreSchemaHandler
 from pydantic.json_schema import GetJsonSchemaHandler, JsonSchemaValue
 from pydantic_core import core_schema
@@ -24,7 +25,13 @@ from xarray.core.utils import OrderedSet, either_dict_or_kwargs
 from xarray.core.variable import as_variable
 
 from tidy3d.compat import alignment
-from tidy3d.components.autograd import TidyArrayBox, get_static, interpn, is_tidy_box
+from tidy3d.components.autograd import (
+    InterpolationType,
+    TidyArrayBox,
+    get_static,
+    interpn,
+    is_tidy_box,
+)
 from tidy3d.components.geometry.bound_ops import bounds_contains
 from tidy3d.components.types import Axis, Bound
 from tidy3d.constants import (
@@ -80,7 +87,7 @@ class DataArray(xr.DataArray):
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: dict[str, str] = {}
 
-    def __init__(self, data, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, data: Any, *args: Any, **kwargs: Any) -> None:
         # if data is a vanilla autograd box, convert to our box
         if isbox(data) and not is_tidy_box(data):
             data = TidyArrayBox.from_arraybox(data)
@@ -217,7 +224,7 @@ class DataArray(xr.DataArray):
                     f"'{field_name}={field_name}.drop_duplicates(dim=\"{dim}\")'."
                 )
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: Any) -> bool:
         """Whether two data array objects are equal."""
 
         if not isinstance(other, xr.DataArray):
@@ -231,7 +238,7 @@ class DataArray(xr.DataArray):
         return True
 
     @property
-    def values(self):
+    def values(self) -> NDArray:
         """
         The array's data converted to a numpy.ndarray.
 
@@ -247,18 +254,18 @@ class DataArray(xr.DataArray):
         self.variable.values = value
 
     @property
-    def abs(self):
+    def abs(self) -> Self:
         """Absolute value of data array."""
         return abs(self)
 
     @property
-    def angle(self):
+    def angle(self) -> Self:
         """Angle or phase value of data array."""
         values = np.angle(self.values)
         return type(self)(values, coords=self.coords)
 
     @property
-    def is_uniform(self):
+    def is_uniform(self) -> bool:
         """Whether each element is of equal value in the data array"""
         raw_data = self.data.ravel()
         return np.allclose(raw_data, raw_data[0])
@@ -471,7 +478,12 @@ class DataArray(xr.DataArray):
         return self._from_temp_dataset(ds)
 
     @staticmethod
-    def _ag_interp_func(var, indexes_coords, method, **kwargs: Any):
+    def _ag_interp_func(
+        var: xr.Variable,
+        indexes_coords: dict[str, tuple[xr.Variable, xr.Variable]],
+        method: InterpolationType,
+        **kwargs: Any,
+    ) -> xr.Variable:
         """
         Interpolate the variable `var` along the coordinates specified in `indexes_coords` using the given `method`.
 
@@ -486,7 +498,7 @@ class DataArray(xr.DataArray):
             The variable to be interpolated.
         indexes_coords : dict
             A dictionary mapping dimension names to coordinate values for interpolation.
-        method : str
+        method : Literal["nearest", "linear"]
             The interpolation method to use.
         **kwargs : dict
             Additional keyword arguments to pass to the interpolation function.

@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional, Union, get_args
 
 import numpy as np
 import xarray as xr
+from numpy.typing import ArrayLike
 from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -83,7 +84,7 @@ class AbstractFieldDataset(Dataset, ABC):
         """How to package the dictionary of fields computed via self.colocate()."""
         return xr.Dataset(centered_fields)
 
-    def colocate(self, x=None, y=None, z=None) -> xr.Dataset:
+    def colocate(self, x: ArrayLike = None, y: ArrayLike = None, z: ArrayLike = None) -> xr.Dataset:
         """Colocate all of the data at a set of x, y, z coordinates.
 
         Parameters

@@ -1,10 +1,11 @@
 # special validators for Datasets
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Callable, Optional
 
 import numpy as np
 from pydantic import field_validator
+from pydantic_core.core_schema import ValidationInfo
 
 from tidy3d.exceptions import ValidationError
 
@@ -13,20 +14,20 @@ from .dataset import AbstractFieldDataset, ScalarFieldDataArray
 
 
 # this can't go in validators.py because that file imports dataset.py
-def validate_no_nans(*field_names: str):
+def validate_no_nans(*field_names: str) -> Callable[[Any, ValidationInfo], Any]:
     """Raise validation error if nans found in Dataset, or other data-containing item."""
 
     @field_validator(*field_names)
-    def no_nans(val, info):
+    def no_nans(val: Any, info: ValidationInfo) -> Any:
         """Raise validation error if nans found in Dataset, or other data-containing item."""
 
         if val is None:
             return val
 
-        def error_if_has_nans(value, identifier: Optional[str] = None) -> None:
+        def error_if_has_nans(value: Any, identifier: Optional[str] = None) -> None:
             """Recursively check if value (or iterable) has nans and error if so."""
 
-            def has_nans(values) -> bool:
+            def has_nans(values: Any) -> bool:
                 """Base case: do these values contain NaN?"""
                 try:
                     return np.any(np.isnan(values))
@@ -65,7 +66,9 @@ def validate_no_nans(*field_names: str):
     return no_nans
 
 
-def validate_can_interpolate(*field_names: str):
+def validate_can_interpolate(
+    *field_names: str,
+) -> Callable[[AbstractFieldDataset], AbstractFieldDataset]:
     """Make sure the data in ``field_name`` can be interpolated."""
 
     @field_validator(*field_names)

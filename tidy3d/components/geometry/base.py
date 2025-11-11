@@ -10,10 +10,10 @@ from os import PathLike
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 import autograd.numpy as np
+import pydantic
 import shapely
 import xarray as xr
-from numpy._typing import ArrayLike, NDArray
-from typing_extensions import Self
+from numpy.typing import ArrayLike, NDArray
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -22,6 +22,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from typing_extensions import Self
 
 from tidy3d.compat import _package_is_older_than
 from tidy3d.components.autograd import (
@@ -1172,7 +1173,10 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     @verify_packages_import(["gdstk"])
     def load_gds_vertices_gdstk(
-        gds_cell: Cell, gds_layer: int, gds_dtype: Optional[int] = None, gds_scale: PositiveFloat = 1.0
+        gds_cell: Cell,
+        gds_layer: int,
+        gds_dtype: Optional[int] = None,
+        gds_scale: PositiveFloat = 1.0,
     ) -> list[ArrayFloat2D]:
         """Load polygon vertices from a ``gdstk.Cell``.
 
@@ -1560,7 +1564,7 @@ class Centered(Geometry, ABC):
 
     @field_validator("center", mode="before")
     @classmethod
-    def _center_default(cls, val):
+    def _center_default(cls, val: Any) -> Any:
         """Make sure center is not infinitiy."""
         if val is None:
             val = (0.0, 0.0, 0.0)
@@ -3488,9 +3492,7 @@ class GeometryGroup(Geometry):
     )
 
     @field_validator("geometries")
-    def _geometries_not_empty(
-        val: tuple[annotate_type(GeometryType), ...]
-    ) -> tuple[annotate_type(GeometryType), ...]:
+    def _geometries_not_empty(val: tuple[GeometryType, ...]) -> tuple[GeometryType, ...]:
         """make sure geometries are not empty."""
         if not len(val) > 0:
             raise ValidationError("GeometryGroup.geometries must not be empty.")

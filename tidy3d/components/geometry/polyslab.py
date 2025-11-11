@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from copy import copy
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 import autograd.numpy as np
 import shapely
@@ -140,7 +140,7 @@ class PolySlab(base.Planar):
         return val
 
     @model_validator(mode="after")
-    def no_complex_self_intersecting_polygon_at_reference_plane(self):
+    def no_complex_self_intersecting_polygon_at_reference_plane(self: Self) -> Self:
         """At the reference plane, check if the polygon is self-intersecting.
 
         There are two types of self-intersection that can occur during dilation:
@@ -190,7 +190,7 @@ class PolySlab(base.Planar):
         return self
 
     @model_validator(mode="after")
-    def no_self_intersecting_polygon_during_extrusion(self):
+    def no_self_intersecting_polygon_during_extrusion(self: Self) -> Self:
         """In this simple polyslab, we don't support self-intersecting polygons yet, meaning that
         any normal cross section of the PolySlab cannot be self-intersecting. This part checks
         if any self-interction will occur during extrusion with non-zero sidewall angle.
@@ -2355,7 +2355,7 @@ class ComplexPolySlabBase(PolySlab):
     :class:`plugins.polyslab.ComplexPolySlab`."""
 
     @model_validator(mode="after")
-    def no_self_intersecting_polygon_during_extrusion(self):
+    def no_self_intersecting_polygon_during_extrusion(self: Self) -> Self:
         """Turn off the validation for this class."""
         return self
 

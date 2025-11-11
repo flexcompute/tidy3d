@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from os import PathLike
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Optional, Self, Union
 
 from pydantic import Field, model_validator
 from rich.panel import Panel
@@ -127,7 +127,7 @@ class MaterialItem(Tidy3dBaseModel):
     default: str = Field(title="default variant", description="The default type of variant.")
 
     @model_validator(mode="after")
-    def _default_in_variants(self):
+    def _default_in_variants(self: Self) -> Self:
         """Make sure the default variant is already included in the ``variants``."""
         if self.default not in self.variants:
             raise SetupError(

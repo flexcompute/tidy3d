@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
 from pydantic import PositiveInt
+from xarray import DataArray
 from xarray import DataArray as XrDataArray
 
 from tidy3d.components.base import cached_property
@@ -16,6 +17,9 @@ from tidy3d.packaging import requires_vtk, vtk
 
 from .base import UnstructuredGridDataset
 from .triangular import TriangularGridDataset
+
+if TYPE_CHECKING:
+    from vtkmodules.vtkCommonDataModel import vtkUnstructuredGrid
 
 
 class TetrahedralGridDataset(UnstructuredGridDataset):
@@ -79,7 +83,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
     @classmethod
     @requires_vtk
-    def _vtk_cell_type(cls):
+    def _vtk_cell_type(cls) -> int:
         """VTK cell type to use in the VTK representation."""
         return vtk["mod"].VTK_TETRA
 
@@ -87,11 +91,11 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
     @requires_vtk
     def _from_vtk_obj(
         cls,
-        vtk_obj,
-        field=None,
+        vtk_obj: vtkUnstructuredGrid,
+        field: Optional[str] = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
-        values_type=IndexedDataArray,
+        values_type: type = IndexedDataArray,
         expect_complex: bool = False,
         ignore_invalid_cells: bool = False,
     ) -> TetrahedralGridDataset:
@@ -297,7 +301,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         x: Union[float, ArrayLike] = None,
         y: Union[float, ArrayLike] = None,
         z: Union[float, ArrayLike] = None,
-        method=None,
+        method: Optional[Literal["nearest", "pad", "ffill", "backfill", "bfill"]] = None,
         **sel_kwargs: Any,
     ) -> Union[TriangularGridDataset, XrDataArray]:
         """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument
@@ -313,7 +317,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
             y-coordinate of the slice.
         z : Union[float, ArrayLike] = None
             z-coordinate of the slice.
-        method: Literal[None, "nearest", "pad", "ffill", "backfill", "bfill"] = None
+        method: Optional[Literal["nearest", "pad", "ffill", "backfill", "bfill"]] = None
             Method to use in xarray sel() function.
         **sel_kwargs : dict
             Keyword arguments to pass to the xarray sel() function.
@@ -357,7 +361,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         return self_after_non_spatial_sel
 
-    def get_cell_volumes(self):
+    def get_cell_volumes(self) -> DataArray:
         """Get the volumes associated to each cell in the grid"""
         v0 = self.points[self.cells.sel(vertex_index=0)]
         e01 = self.points[self.cells.sel(vertex_index=1)] - v0

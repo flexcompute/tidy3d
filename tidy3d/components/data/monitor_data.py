@@ -7,10 +7,11 @@ import warnings
 from abc import ABC
 from math import isclose
 from os import PathLike
-from typing import Any, Callable, Literal, Optional, Union, get_args
+from typing import Any, Callable, Literal, Optional, Self, SupportsComplex, Union, get_args
 
 import autograd.numpy as np
 import xarray as xr
+from numpy.typing import NDArray
 from pandas import DataFrame
 from pydantic import Field, model_validator
 
@@ -103,6 +104,14 @@ MIN_ANGULAR_SAMPLES_SPHERE = 10
 # Threshold for cos(theta) to avoid unphysically large amplitudes near grazing angles
 COS_THETA_THRESH = 1e-5
 
+GRID_CORRECTION_TYPE = Union[
+    float,
+    FreqDataArray,
+    TimeDataArray,
+    FreqModeDataArray,
+    EMEFreqModeDataArray,
+]
+
 
 class MonitorData(AbstractMonitorData, ABC):
     """
@@ -171,7 +180,7 @@ class MonitorData(AbstractMonitorData, ABC):
         return "-" if direction == "+" else "+"
 
     @staticmethod
-    def get_amplitude(x) -> complex:
+    def get_amplitude(x: Union[DataArray, SupportsComplex]) -> complex:
         """Get the complex amplitude out of some data."""
 
         if isinstance(x, DataArray):
@@ -213,7 +222,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
     )
 
     @model_validator(mode="after")
-    def warn_missing_grid_expanded(self):
+    def warn_missing_grid_expanded(self) -> Self:
         """If ``grid_expanded`` not provided and fields data is present, warn that some methods
         will break."""
         field_comps = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
@@ -226,15 +235,15 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
             )
         return self
 
-    _require_sym_center = required_if_symmetry_present("symmetry_center")
-    _require_grid_expanded = required_if_symmetry_present("grid_expanded")
+    _require_sym_center: Callable[[Any], Any] = required_if_symmetry_present("symmetry_center")
+    _require_grid_expanded: Callable[[Any], Any] = required_if_symmetry_present("grid_expanded")
 
     def _expanded_grid_field_coords(self, field_name: str) -> Coords:
         """Coordinates in the expanded grid corresponding to a given field component."""
         return self.grid_expanded[self.grid_locations[field_name]]
 
     @property
-    def symmetry_expanded(self):
+    def symmetry_expanded(self) -> Self:
         """Return the :class:`.AbstractFieldData` with fields expanded based on symmetry. If
         any symmetry is nonzero (i.e. expanded), the interpolation implicitly creates a copy of the
         data array. However, if symmetry is not expanded, the returned array contains a view of
@@ -391,13 +400,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
 class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, ABC):
     """Collection of electromagnetic fields."""
 
-    grid_primal_correction: Union[
-        float,
-        FreqDataArray,
-        TimeDataArray,
-        FreqModeDataArray,
-        EMEFreqModeDataArray,
-    ] = Field(
+    grid_primal_correction: GRID_CORRECTION_TYPE = Field(
         1.0,
         title="Field correction factor",
         description="Correction factor that needs to be applied for data corresponding to a 2D "
@@ -405,13 +408,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         "which the data was computed. The factor is applied to fields defined on the primal grid "
         "locations along the normal direction.",
     )
-    grid_dual_correction: Union[
-        float,
-        FreqDataArray,
-        TimeDataArray,
-        FreqModeDataArray,
-        EMEFreqModeDataArray,
-    ] = Field(
+    grid_dual_correction: GRID_CORRECTION_TYPE = Field(
         1.0,
         title="Field correction factor",
         description="Correction factor that needs to be applied for data corresponding to a 2D "
@@ -420,7 +417,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         "locations along the normal direction.",
     )
 
-    def _expanded_grid_field_coords(self, field_name: str):
+    def _expanded_grid_field_coords(self, field_name: str) -> Coords:
         """Coordinates in the expanded grid corresponding to a given field component."""
         if self.monitor.colocate:
             bounds_dict = self.grid_expanded.boundaries.to_dict
@@ -428,7 +425,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return self.grid_expanded[self.grid_locations[field_name]]
 
     @property
-    def _grid_correction_dict(self):
+    def _grid_correction_dict(self) -> dict[str, GRID_CORRECTION_TYPE]:
         """Return the primal and dual finite grid correction factors as a dictionary."""
         return {
             "grid_primal_correction": self.grid_primal_correction,
@@ -937,7 +934,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         d_area = self._diff_area.expand_dims(dim={"f": f}, axis=2).to_numpy()
 
         # function to apply at each pair of mode indices before integrating
-        def fn(fields_1, fields_2):
+        def fn(fields_1: dict[str, NDArray], fields_2: dict[str, NDArray]) -> NDArray:
             e_self_1 = fields_1[e_1]
             e_self_2 = fields_1[e_2]
             h_self_1 = fields_1[h_1]
@@ -978,7 +975,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         outer_dim_1: str,
         outer_dim_2: str,
         sum_dims: list[str],
-        fn: Callable,
+        fn: Callable[[dict[str, NDArray], NDArray], NDArray],
     ) -> DataArray:
         """
         Loop over ``outer_dim_1`` and ``outer_dim_2``, apply ``fn`` to ``fields_1`` and ``fields_2``, and sum over ``sum_dims``.
@@ -1676,7 +1673,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
     )
 
     @model_validator(mode="after")
-    def eps_spec_match_mode_spec(self):
+    def eps_spec_match_mode_spec(self) -> Self:
         """Raise validation error if frequencies in eps_spec does not match frequency list"""
         if self.eps_spec:
             mode_data_freqs = self.monitor.freqs
@@ -1686,7 +1683,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 )
         return self
 
-    def normalize(self, source_spectrum_fn) -> ModeData:
+    def normalize(self, source_spectrum_fn: Callable[[DataArray], NDArray]) -> Self:
         """Return copy of self after normalization is applied using source spectrum function."""
         source_freq_amps = source_spectrum_fn(self.amps.f)[None, :, None]
         new_amps = (self.amps / source_freq_amps).astype(self.amps.dtype)
@@ -1808,7 +1805,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return data_reordered.updated_copy(monitor=monitor_updated, deep=False, validate=False)
 
-    def _isel(self, **isel_kwargs: Any):
+    def _isel(self, **isel_kwargs: Any) -> Self:
         """Wraps ``xarray.DataArray.isel`` for all data fields that are defined over frequency and
         mode index. Used in ``overlap_sort`` but not officially supported since for example
         ``self.monitor.mode_spec`` and ``self.monitor.freqs`` will no longer be matching the
@@ -1822,12 +1819,11 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         }
         return self.updated_copy(**update_dict, deep=False, validate=False)
 
-    def _assign_coords(self, **assign_coords_kwargs: Any):
+    def _assign_coords(self, **assign_coords_kwargs: Any) -> Self:
         """Wraps ``xarray.DataArray.assign_coords`` for all data fields that are defined over frequency and
         mode index. Used in ``overlap_sort`` but not officially supported since for example
         ``self.monitor.mode_spec`` and ``self.monitor.freqs`` will no longer be matching the
         newly created data."""
-
         update_dict = dict(self._grid_correction_dict, **self.field_components)
         update_dict = {
             key: field.assign_coords(**assign_coords_kwargs) for key, field in update_dict.items()
@@ -2243,7 +2239,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return src_adj
 
-    def _apply_mode_reorder(self, sort_inds_2d):
+    def _apply_mode_reorder(self, sort_inds_2d: NDArray) -> Self:
         """Apply a mode reordering along mode_index for all frequency indices.
 
         Parameters
@@ -2342,7 +2338,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         sort_inds_2d = np.tile(identity, (num_freqs, 1))
 
         # Helper to compute ordered indices within a subset
-        def _order_indices(indices, vals_all):
+        def _order_indices(indices: NDArray, vals_all: DataArray) -> NDArray:
             if indices.size == 0:
                 return indices
             vals = vals_all.isel(mode_index=indices)
@@ -2461,7 +2457,7 @@ class ModeSolverData(ModeData):
         description="Unused for ModeSolverData.",
     )
 
-    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> ModeSolverData:
+    def normalize(self, source_spectrum_fn: Callable[[DataArray], NDArray]) -> ModeSolverData:
         """Return copy of self after normalization is applied using source spectrum function."""
         return self.copy()
 
@@ -2554,7 +2550,7 @@ class FluxData(MonitorData):
             "computation."
         )
 
-    def normalize(self, source_spectrum_fn) -> FluxData:
+    def normalize(self, source_spectrum_fn: Callable[[DataArray], NDArray]) -> FluxData:
         """Return copy of self after normalization is applied using source spectrum function."""
         source_freq_amps = source_spectrum_fn(self.flux.f)
         source_power = abs(source_freq_amps) ** 2
@@ -3164,7 +3160,7 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
         return self.Etheta.z.values
 
     @property
-    def tangential_dims(self):
+    def tangential_dims(self) -> list[str]:
         tangential_dims = ["x", "y", "z"]
         tangential_dims.pop(self.monitor.proj_axis)
         return tangential_dims

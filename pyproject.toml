@@ -328,7 +328,8 @@ files = [
   "tidy3d/web",
   "tidy3d/config",
   "tidy3d/material_library",
-  "tidy3d/components/geometry"
+  "tidy3d/components/geometry",
+  "tidy3d/components/data",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

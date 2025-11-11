@@ -600,13 +600,13 @@ class Job(WebContainer):
             parent_dir.mkdir(parents=True, exist_ok=True)
 
     @model_validator(mode="before")
-    def set_task_name_if_none(data):
+    def set_task_name_if_none(data: dict[str, Any]) -> dict[str, Any]:
         """
         Auto-assign a task_name if user did not provide one.
         """
         if not isinstance(data, dict):
             return data
-        
+
         if data.get("task_name") is None:
             sim = data.get("simulation")
             stub = Tidy3dStub(simulation=sim)
@@ -754,7 +754,8 @@ class Batch(WebContainer):
     """
 
     simulations: Union[
-        dict[TaskName, discriminated_union(WorkflowType)], tuple[discriminated_union(WorkflowType), ...]
+        dict[TaskName, discriminated_union(WorkflowType)],
+        tuple[discriminated_union(WorkflowType), ...],
     ] = Field(
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",

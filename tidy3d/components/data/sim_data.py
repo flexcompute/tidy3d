@@ -13,6 +13,7 @@ from typing import Any, Callable, Optional, Union
 import h5py
 import numpy as np
 import xarray as xr
+from numpy.typing import NDArray
 from pydantic import Field
 
 from tidy3d.components.autograd.utils import split_list
@@ -25,7 +26,6 @@ from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import Structure
-from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types import (
     Ax,
     Axis,
@@ -33,12 +33,13 @@ from tidy3d.components.types import (
     FieldVal,
     PlotScale,
 )
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.monitor_data import MonitorDataType, MonitorDataTypes
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError, FileError, SetupError, Tidy3dKeyError
 from tidy3d.log import log
 
-from .data_array import FreqDataArray, TimeDataArray
+from .data_array import DataArray, FreqDataArray, TimeDataArray
 from .monitor_data import AbstractFieldData, FieldTimeData
 
 DATA_TYPE_MAP = {data.model_fields["monitor"].annotation: data for data in MonitorDataTypes}
@@ -249,7 +250,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         field_name: str,
         val: FieldVal,
         phase: float = 0.0,
-    ):
+    ) -> xr.DataArray:
         """return ``xarray.DataArray`` of the scalar field of a given monitor at Yee cell centers.
 
         Parameters
@@ -280,7 +281,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         field_name: str,
         val: FieldVal,
         phase: float = 0.0,
-    ):
+    ) -> xr.DataArray:
         """return ``xarray.DataArray`` of the scalar field of a given monitor at Yee cell centers.
 
         Parameters
@@ -351,7 +352,6 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
                     f"'val' of {val} not supported. "
                     "Must be one of 'real', 'imag', 'abs', 'abs^2', or 'phase'."
                 )
-
             return derived_data
 
         raise Tidy3dKeyError(
@@ -984,7 +984,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         dt = self.simulation.dt
 
         # plug in mornitor_data frequency domain information
-        def source_spectrum_fn(freqs):
+        def source_spectrum_fn(freqs: DataArray) -> NDArray:
             """Source amplitude as function of frequency."""
             spectrum = source_time.spectrum(times, freqs, dt)
 
@@ -1012,7 +1012,7 @@ class SimulationData(AbstractYeeGridSimulationData):
                 f"of length {num_sources}"
             )
 
-        def source_spectrum_fn(freqs):
+        def source_spectrum_fn(freqs: DataArray) -> NDArray:
             """Normalization function that also removes previous normalization if needed."""
             new_spectrum_fn = self.source_spectrum(normalize_index)
             old_spectrum_fn = self.source_spectrum(self.simulation.normalize_index)

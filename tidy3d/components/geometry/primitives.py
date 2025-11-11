@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Any, Optional
+from typing import Any, Optional, Self
 
 import autograd.numpy as anp
 import numpy as np
 import shapely
-from shapely.geometry.base import BaseGeometry
 from pydantic import Field, model_validator
+from shapely.geometry.base import BaseGeometry
 
 from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
@@ -211,7 +211,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     )
 
     @model_validator(mode="after")
-    def _only_middle_for_infinite_length_slanted_cylinder(self):
+    def _only_middle_for_infinite_length_slanted_cylinder(self: Self) -> Self:
         """For a slanted cylinder of infinite length, ``reference_plane`` can only
         be ``middle``; otherwise, the radius at ``center`` is either td.inf or 0.
         """
