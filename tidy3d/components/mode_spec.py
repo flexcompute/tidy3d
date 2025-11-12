@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from math import isclose
 from typing import Literal, Optional, Union
 
@@ -14,7 +14,7 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 from .base import Tidy3dBaseModel, skip_if_fields_missing
-from .types import Axis2D, TrackFreq
+from .types import Axis2D, FreqArray, TrackFreq
 
 GROUP_INDEX_STEP = 0.005
 MODE_DATA_KEYS = Literal[
@@ -84,6 +84,358 @@ class ModeSortSpec(Tidy3dBaseModel):
         "frequencies. The mode sorting would then be exact at the specified frequency, "
         "while at other frequencies it can change depending on the mode tracking.",
     )
+
+
+class FrequencySamplingSpec(Tidy3dBaseModel, ABC):
+    """Abstract base class for frequency sampling specifications."""
+
+    @abstractmethod
+    def sampling_points(self, freqs: FreqArray) -> FreqArray:
+        """Compute frequency sampling points.
+
+        Parameters
+        ----------
+        freqs : FreqArray
+            Target frequency array.
+
+        Returns
+        -------
+        FreqArray
+            Array of sampling frequency points.
+        """
+
+    @property
+    @abstractmethod
+    def _num_points(self) -> int:
+        """Number of sampling points (internal property)."""
+
+
+class UniformSampling(FrequencySamplingSpec):
+    """Uniform frequency sampling specification."""
+
+    num_points: int = pd.Field(
+        ...,
+        title="Number of Points",
+        description="Number of uniformly spaced frequency sampling points.",
+        ge=2,
+    )
+
+    @property
+    def _num_points(self) -> int:
+        """Number of sampling points (internal property)."""
+        return self.num_points
+
+    def sampling_points(self, freqs: FreqArray) -> FreqArray:
+        """Compute uniformly spaced frequency sampling points.
+
+        Parameters
+        ----------
+        freqs : FreqArray
+            Target frequency array. Sampling points will span from min(freqs) to max(freqs).
+
+        Returns
+        -------
+        FreqArray
+            Array of uniformly spaced frequency points.
+        """
+        freqs_array = np.asarray(freqs)
+        f_min, f_max = float(freqs_array.min()), float(freqs_array.max())
+        return np.linspace(f_min, f_max, self.num_points)
+
+
+class ChebSampling(FrequencySamplingSpec):
+    """Chebyshev node frequency sampling specification."""
+
+    num_points: int = pd.Field(
+        ...,
+        title="Number of Points",
+        description="Number of Chebyshev nodes for frequency sampling.",
+        ge=3,
+    )
+
+    @property
+    def _num_points(self) -> int:
+        """Number of sampling points (internal property)."""
+        return self.num_points
+
+    def sampling_points(self, freqs: FreqArray) -> FreqArray:
+        """Compute Chebyshev node frequency sampling points.
+
+        Parameters
+        ----------
+        freqs : FreqArray
+            Target frequency array. Sampling points will span from min(freqs) to max(freqs).
+
+        Returns
+        -------
+        FreqArray
+            Array of Chebyshev node frequency points (second kind) in ascending order.
+        """
+        freqs_array = np.asarray(freqs)
+        f_min, f_max = float(freqs_array.min()), float(freqs_array.max())
+
+        # Chebyshev nodes of the second kind: x_k = cos(k*pi/(n-1)) for k=0,...,n-1
+        # This generates nodes from +1 (f_max) to -1 (f_min), descending order
+        k = np.arange(self.num_points)
+        nodes_normalized = np.cos(k * np.pi / (self.num_points - 1))
+        # Map from [-1, 1] to [f_min, f_max]
+        cheb_freqs = 0.5 * (f_min + f_max) + 0.5 * (f_max - f_min) * nodes_normalized
+        # Sort to return ascending order
+        return cheb_freqs[::-1]
+
+
+class CustomSampling(FrequencySamplingSpec):
+    """Custom frequency sampling specification."""
+
+    freqs: FreqArray = pd.Field(
+        ...,
+        title="Frequencies",
+        description="Custom array of frequency sampling points.",
+    )
+
+    @pd.validator("freqs", always=True)
+    def _validate_freqs(cls, val):
+        """Validate custom frequencies."""
+        freqs_array = np.asarray(val)
+        if freqs_array.size < 2:
+            raise ValidationError("Custom sampling requires at least 2 frequency points.")
+        return val
+
+    def sampling_points(self, freqs: FreqArray) -> FreqArray:
+        """Return the custom frequency sampling points.
+
+        Parameters
+        ----------
+        freqs : FreqArray
+            Target frequency array (not used, custom frequencies are returned as-is).
+
+        Returns
+        -------
+        FreqArray
+            Array of custom frequency points.
+        """
+        return np.asarray(self.freqs)
+
+    @property
+    def _num_points(self) -> int:
+        """Number of custom sampling points (internal property)."""
+        return len(np.asarray(self.freqs))
+
+
+class ModeInterpSpec(Tidy3dBaseModel):
+    """Specification for mode frequency interpolation.
+
+    Allows computing modes at a reduced set of frequencies and interpolating
+    to obtain results at all requested frequencies. This can significantly
+    reduce computational cost for broadband simulations where modes vary
+    smoothly with frequency.
+
+    Note
+    ----
+        Requires frequency tracking to be enabled (``mode_spec.sort_spec.track_freq``
+        must not be ``None``) to ensure mode ordering is consistent across frequencies.
+
+    Example
+    -------
+    >>> # Uniform sampling with linear interpolation
+    >>> interp_spec = ModeInterpSpec(
+    ...     method='linear',
+    ...     sampling_spec=UniformSampling(num_points=10)
+    ... )
+    >>> # Chebyshev sampling with polynomial interpolation
+    >>> interp_spec = ModeInterpSpec.cheb(num_points=10)
+    >>> # Custom sampling with cubic interpolation
+    >>> custom_freqs = [1e14, 1.5e14, 2e14, 2.5e14]
+    >>> interp_spec = ModeInterpSpec.custom(method='cubic', freqs=custom_freqs)
+
+    See Also
+    --------
+
+    :class:`ModeSolver`:
+        Mode solver that can use this specification for efficient broadband computation.
+
+    :class:`ModeSolverMonitor`:
+        Monitor that can use this specification to reduce mode computation cost.
+
+    :class:`ModeMonitor`:
+        Monitor that can use this specification to reduce mode computation cost.
+    """
+
+    sampling_spec: Union[UniformSampling, ChebSampling, CustomSampling] = pd.Field(
+        ...,
+        title="Sampling Specification",
+        description="Specification for frequency sampling points.",
+        discriminator="type",
+    )
+
+    method: Literal["linear", "cubic", "poly"] = pd.Field(
+        "linear",
+        title="Interpolation Method",
+        description="Method for interpolating mode data between computed frequencies. "
+        "'linear' uses linear interpolation (faster, requires 2+ points). "
+        "'cubic' uses cubic spline interpolation (smoother, more accurate, requires 4+ points). "
+        "'poly' uses polynomial interpolation with barycentric formula "
+        "(optimal for Chebyshev nodes, requires 3+ points). "
+        "For complex-valued data, real and imaginary parts are interpolated independently.",
+    )
+
+    reduce_data: bool = pd.Field(
+        False,
+        title="Reduce Data",
+        description="Applies only to :class:`ModeSolverData`. If ``True``, fields and quantities "
+        "are only recorded at interpolation source frequency points. "
+        "The data at requested frequencies can be obtained through interpolation. "
+        "This can significantly reduce storage and computational costs for broadband simulations. "
+        "Does not apply if the number of sampling points is greater than the number of monitor frequencies.",
+    )
+
+    @pd.validator("method", always=True)
+    @skip_if_fields_missing(["sampling_spec"])
+    def _validate_method_needs_points(cls, val, values):
+        """Validate that the method has enough points."""
+        sampling_spec = values.get("sampling_spec")
+        if sampling_spec is None:
+            return val
+
+        num_points = sampling_spec._num_points
+        if val == "cubic" and num_points < 4:
+            raise ValidationError(
+                "Cubic interpolation requires at least 4 frequency points. "
+                f"Got {num_points} points. "
+                "Use method='linear' or increase num_points."
+            )
+        if val == "poly" and num_points < 3:
+            raise ValidationError(
+                "Polynomial interpolation requires at least 3 frequency points. "
+                f"Got {num_points} points. "
+                "Use method='linear' or increase num_points."
+            )
+        return val
+
+    @classmethod
+    def uniform(
+        cls,
+        num_points: int,
+        method: Literal["linear", "cubic", "poly"] = "linear",
+        reduce_data: bool = False,
+    ) -> ModeInterpSpec:
+        """Create a ModeInterpSpec with uniform frequency sampling.
+
+        Parameters
+        ----------
+        num_points : int
+            Number of uniformly spaced sampling points.
+        method : Literal["linear", "cubic", "poly"]
+            Interpolation method. Default is 'linear'.
+        reduce_data : bool
+            Whether to reduce data storage. Default is False.
+
+        Returns
+        -------
+        ModeInterpSpec
+            Interpolation specification with uniform sampling.
+
+        Example
+        -------
+        >>> interp_spec = ModeInterpSpec.uniform(num_points=10, method='cubic')
+        """
+        return cls(
+            method=method,
+            sampling_spec=UniformSampling(num_points=num_points),
+            reduce_data=reduce_data,
+        )
+
+    @classmethod
+    def cheb(cls, num_points: int, reduce_data: bool = False) -> ModeInterpSpec:
+        """Create a ModeInterpSpec with Chebyshev node sampling and polynomial interpolation.
+
+        Chebyshev nodes provide optimal sampling for polynomial interpolation,
+        minimizing interpolation error for smooth functions.
+
+        Parameters
+        ----------
+        num_points : int
+            Number of Chebyshev nodes (minimum 3).
+        reduce_data : bool
+            Whether to reduce data storage. Default is False.
+
+        Returns
+        -------
+        ModeInterpSpec
+            Interpolation specification with Chebyshev sampling and polynomial interpolation.
+
+        Example
+        -------
+        >>> interp_spec = ModeInterpSpec.cheb(num_points=10)
+        """
+        return cls(
+            method="poly",
+            sampling_spec=ChebSampling(num_points=num_points),
+            reduce_data=reduce_data,
+        )
+
+    @classmethod
+    def custom(
+        cls,
+        freqs: FreqArray,
+        method: Literal["linear", "cubic", "poly"] = "linear",
+        reduce_data: bool = False,
+    ) -> ModeInterpSpec:
+        """Create a ModeInterpSpec with custom frequency sampling.
+
+        Parameters
+        ----------
+        freqs : FreqArray
+            Custom array of frequency sampling points.
+        method : Literal["linear", "cubic", "poly"]
+            Interpolation method. Default is 'linear'.
+        reduce_data : bool
+            Whether to reduce data storage. Default is False.
+
+        Returns
+        -------
+        ModeInterpSpec
+            Interpolation specification with custom sampling.
+
+        Example
+        -------
+        >>> custom_freqs = [1e14, 1.5e14, 1.8e14, 2e14]
+        >>> interp_spec = ModeInterpSpec.custom(freqs=custom_freqs, method='cubic')
+        """
+        return cls(
+            method=method,
+            sampling_spec=CustomSampling(freqs=freqs),
+            reduce_data=reduce_data,
+        )
+
+    @property
+    def num_points(self) -> int:
+        """Number of sampling points."""
+        return self.sampling_spec._num_points
+
+    def sampling_points(self, freqs: FreqArray) -> FreqArray:
+        """Compute frequency sampling points.
+
+        Parameters
+        ----------
+        freqs : FreqArray
+            Target frequency array.
+
+        Returns
+        -------
+        FreqArray
+            Array of frequency sampling points.
+
+        Example
+        -------
+        >>> import numpy as np
+        >>> freqs = np.linspace(1e14, 2e14, 100)
+        >>> interp_spec = ModeInterpSpec.cheb(num_points=10)
+        >>> sampling_freqs = interp_spec.sampling_points(freqs)
+        """
+        if self.num_points > len(freqs):
+            return freqs
+        return self.sampling_spec.sampling_points(freqs)
 
 
 class AbstractModeSpec(Tidy3dBaseModel, ABC):
@@ -199,6 +551,16 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "frequencies it can change depending on the mode tracking.",
     )
 
+    interp_spec: Optional[ModeInterpSpec] = pd.Field(
+        None,
+        title="Mode frequency interpolation specification",
+        description="Specification for computing modes at a reduced set of frequencies and "
+        "interpolating to obtain results at all requested frequencies. This can significantly "
+        "reduce computational cost for broadband simulations where modes vary smoothly with "
+        "frequency. Requires frequency tracking to be enabled (``sort_spec.track_freq`` must "
+        "not be ``None``) to ensure consistent mode ordering across frequencies.",
+    )
+
     @pd.validator("bend_axis", always=True)
     @skip_if_fields_missing(["bend_radius"])
     def bend_axis_given(cls, val, values):
@@ -310,15 +672,71 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
             )
         return val
 
+    @classmethod
+    def _track_freq_from_specs(
+        cls, track_freq: Optional[TrackFreq], sort_spec: Optional[ModeSortSpec]
+    ) -> Optional[TrackFreq]:
+        """Resolver for tracking frequency: prefers track_freq if set,
+        otherwise falls back to sort_spec.track_freq."""
+        if track_freq is not None:
+            return track_freq
+        if sort_spec is not None:
+            return sort_spec.track_freq
+        return None
+
+    @pd.validator("interp_spec", always=True)
+    @skip_if_fields_missing(["sort_spec", "track_freq"])
+    def _interp_spec_needs_tracking(cls, val, values):
+        """Ensure frequency tracking is enabled when using interpolation."""
+        if val is None:
+            return val
+
+        # Check if track_freq is enabled (prefer ModeSpec.track_freq, else sort_spec.track_freq)
+        track_freq = values.get("track_freq")
+        sort_spec = values.get("sort_spec")
+        if cls._track_freq_from_specs(track_freq, sort_spec) is None:
+            raise ValidationError(
+                "Mode frequency interpolation requires frequency tracking to be enabled. "
+                "Please set 'sort_spec.track_freq' to 'central', 'lowest', or 'highest'."
+            )
+
+        return val
+
     @property
     def _track_freq(self) -> Optional[TrackFreq]:
         """Private resolver for tracking frequency: prefers ModeSpec.track_freq if set,
         otherwise falls back to ModeSortSpec.track_freq."""
-        if self.track_freq is not None:
-            return self.track_freq
-        if self.sort_spec is not None:
-            return self.sort_spec.track_freq
-        return None
+        return self._track_freq_from_specs(self.track_freq, self.sort_spec)
+
+    def _freqs_for_group_index(self, freqs: list[float]) -> list[float]:
+        """Get frequencies used to compute group index."""
+        fractional_steps = (1 - self.group_index_step, 1, 1 + self.group_index_step)
+        return np.outer(freqs, fractional_steps).flatten()
+
+    def _sampling_freqs_mode_solver_data(self, freqs: list[float]) -> list[float]:
+        """Frequencies that will be stored in ModeSolverData after group index calculation and, possibly, interpolation is applied."""
+        if self.interp_spec is not None and self.interp_spec.reduce_data:
+            # note that if len(freqs) < interp_spec.num_points, the result will be freqs itself
+            freqs = self.interp_spec.sampling_points(freqs)
+        return freqs
+
+    def _sampling_freqs_mode_solver(
+        self,
+        freqs: list[float],
+    ) -> list[float]:
+        """Frequencies that mode solver needs to compute modes at."""
+        if self.interp_spec is not None:
+            # note that if len(freqs) < interp_spec.num_points, the result will be freqs itself
+            freqs = self.interp_spec.sampling_points(freqs)
+
+        if self.group_index_step > 0:
+            freqs = self._freqs_for_group_index(freqs=freqs)
+
+        return freqs
+
+    def _is_interp_spec_applied(self, freqs: FreqArray) -> bool:
+        """Whether interp_spec is used to compute modes at the given frequencies."""
+        return self.interp_spec is not None and self.interp_spec.num_points < len(freqs)
 
 
 class ModeSpec(AbstractModeSpec):

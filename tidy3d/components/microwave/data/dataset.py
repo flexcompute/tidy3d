@@ -9,10 +9,10 @@ from tidy3d.components.data.data_array import (
     ImpedanceFreqModeDataArray,
     VoltageFreqModeDataArray,
 )
-from tidy3d.components.data.dataset import Dataset
+from tidy3d.components.data.dataset import ModeFreqDataset
 
 
-class TransmissionLineDataset(Dataset):
+class TransmissionLineDataset(ModeFreqDataset):
     """Holds mode data that is specific to transmission lines in microwave and RF applications,
     like characteristic impedance.
 

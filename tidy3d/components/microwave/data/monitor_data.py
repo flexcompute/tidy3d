@@ -4,7 +4,7 @@ reflection efficiency, gain, and realized gain.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 import pydantic.v1 as pd
 import xarray as xr
@@ -14,7 +14,7 @@ from tidy3d.components.data.monitor_data import DirectivityData, ModeData, ModeS
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
-from tidy3d.components.types import PolarizationBasis
+from tidy3d.components.types import FreqArray, PolarizationBasis
 
 
 class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
@@ -305,6 +305,25 @@ class MicrowaveModeData(ModeData, MicrowaveBaseModel):
             super_data = super_data.updated_copy(**update_dict, path="transmission_line_data")
         return super_data
 
+    def _apply_mode_reorder(self, sort_inds_2d):
+        """Apply a mode reordering along mode_index for all frequency indices.
+
+        Parameters
+        ----------
+        sort_inds_2d : np.ndarray
+            Array of shape (num_freqs, num_modes) where each row is the
+            permutation to apply to the mode_index for that frequency.
+        """
+        main_data_reordered = super()._apply_mode_reorder(sort_inds_2d)
+        if self.transmission_line_data is not None:
+            transmission_line_data_reordered = self.transmission_line_data._apply_mode_reorder(
+                sort_inds_2d
+            )
+            main_data_reordered = main_data_reordered.updated_copy(
+                transmission_line_data=transmission_line_data_reordered
+            )
+        return main_data_reordered
+
 
 class MicrowaveModeSolverData(ModeSolverData, MicrowaveModeData):
     """
@@ -378,3 +397,81 @@ class MicrowaveModeSolverData(ModeSolverData, MicrowaveModeData):
     monitor: MicrowaveModeSolverMonitor = pd.Field(
         ..., title="Monitor", description="Mode monitor associated with the data."
     )
+
+    def interp_in_freq(
+        self,
+        freqs: FreqArray,
+        method: Literal["linear", "cubic", "poly"] = "linear",
+        renormalize: bool = True,
+        recalculate_grid_correction: bool = True,
+        assume_sorted: bool = False,
+    ) -> MicrowaveModeData:
+        """Interpolate mode data to new frequency points.
+
+        Interpolates all stored mode data (effective indices, field components, group indices,
+        and dispersion) from the current frequency grid to a new set of frequencies. This is
+        useful for obtaining mode data at many frequencies from computations at fewer frequencies,
+        when modes vary smoothly with frequency.
+
+        Parameters
+        ----------
+        freqs : FreqArray
+            New frequency points to interpolate to. Should generally span a similar range
+            as the original frequencies to avoid extrapolation.
+        method : Literal["linear", "cubic", "cheb"]
+            Interpolation method. ``"linear"`` for linear interpolation (requires 2+ source
+            frequencies), ``"cubic"`` for cubic spline interpolation (requires 4+ source
+            frequencies), ``"cheb"`` for Chebyshev polynomial interpolation using barycentric
+            formula (requires 3+ source frequencies at Chebyshev nodes).
+            For complex-valued data, real and imaginary parts are interpolated independently.
+        renormalize : Optional[bool] = True
+            Whether to renormalize the mode profiles to unity power after interpolation.
+        recalculate_grid_correction : bool = True
+            Whether to recalculate the grid correction factors after interpolation or use interpolated
+            grid corrections.
+        assume_sorted: bool = False,
+            Whether to assume the frequency points are sorted.
+
+        Returns
+        -------
+        ModeSolverData
+            New :class:`ModeSolverData` object with data interpolated to the requested frequencies.
+
+        Raises
+        ------
+        DataError
+            If interpolation parameters are invalid (e.g., too few source frequencies for the
+            chosen method, or source frequencies not at Chebyshev nodes for 'cheb' method).
+
+        Note
+        ----
+            Interpolation assumes modes vary smoothly with frequency. Results may be inaccurate
+            near mode crossings or regions of rapid mode variation. Use frequency tracking
+            (``mode_spec.sort_spec.track_freq``) to help maintain mode ordering consistency.
+
+            For Chebyshev interpolation, source frequencies must be at Chebyshev nodes of the
+            second kind within the frequency range.
+
+        Example
+        -------
+        >>> # Compute modes at 5 frequencies
+        >>> import numpy as np
+        >>> freqs_sparse = np.linspace(1e14, 2e14, 5)
+        >>> # ... create mode_solver and compute modes ...
+        >>> # mode_data = mode_solver.solve()
+        >>> # Interpolate to 50 frequencies
+        >>> freqs_dense = np.linspace(1e14, 2e14, 50)
+        >>> # mode_data_interp = mode_data.interp(freqs=freqs_dense, method='linear')
+        """
+        main_data_interp = super().interp_in_freq(
+            freqs, method, renormalize, recalculate_grid_correction, assume_sorted
+        )
+        if self.transmission_line_data is not None:
+            update_dict = self.transmission_line_data._interp_in_freq_update_dict(
+                freqs, method, assume_sorted
+            )
+            transmission_line_data_interp = self.transmission_line_data.updated_copy(**update_dict)
+            main_data_interp = main_data_interp.updated_copy(
+                transmission_line_data=transmission_line_data_interp
+            )
+        return main_data_interp

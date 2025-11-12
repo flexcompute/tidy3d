@@ -33,7 +33,12 @@ from .types import (
     ObsGridArray,
     Size,
 )
-from .validators import assert_plane, validate_freqs_min, validate_freqs_not_empty
+from .validators import (
+    assert_plane,
+    validate_freqs_min,
+    validate_freqs_not_empty,
+    validate_interp_num_points,
+)
 from .viz import ARROW_ALPHA, ARROW_COLOR_MONITOR
 
 BYTES_REAL = 4
@@ -432,6 +437,8 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
             return 2 * bytes_single
         return bytes_single
 
+    _warn_interp_num_points = validate_interp_num_points()
+
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     """:class:`Monitor` that records electromagnetic fields in the frequency domain.
@@ -805,12 +812,20 @@ class ModeMonitor(AbstractModeMonitor):
         stepping."""
         return self.updated_copy(colocate=False)
 
+    @property
+    def _stored_freqs(self) -> list[float]:
+        """Return actually stored frequencies of the data."""
+        # always stored at original frequencies, no matter whether interp_spec is used
+        return self.freqs
+
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        amps_size = 3 * BYTES_COMPLEX * len(self.freqs) * self.mode_spec.num_modes
+        amps_size = 3 * BYTES_COMPLEX * len(self._stored_freqs) * self.mode_spec.num_modes
         fields_size = 0
         if self.store_fields_direction is not None:
-            fields_size = 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
+            fields_size = (
+                6 * BYTES_COMPLEX * num_cells * len(self._stored_freqs) * self.mode_spec.num_modes
+            )
             if self.mode_spec.precision == "double":
                 fields_size *= 2
         return amps_size + fields_size
@@ -846,6 +861,11 @@ class ModeSolverMonitor(AbstractModeMonitor):
         "like ``mode_area`` require all E-field components.",
     )
 
+    @property
+    def _stored_freqs(self) -> list[float]:
+        """Return actually stored frequencies of the data."""
+        return self.mode_spec._sampling_freqs_mode_solver_data(freqs=self.freqs)
+
     @pydantic.root_validator(skip_on_failure=True)
     def set_store_fields(cls, values):
         """Ensure 'store_fields_direction' is compatible with 'direction'."""
@@ -862,7 +882,9 @@ class ModeSolverMonitor(AbstractModeMonitor):
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        bytes_single = 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
+        bytes_single = (
+            6 * BYTES_COMPLEX * num_cells * len(self._stored_freqs) * self.mode_spec.num_modes
+        )
         if self.mode_spec.precision == "double":
             return 2 * bytes_single
         return bytes_single
