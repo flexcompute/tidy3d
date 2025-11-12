@@ -57,6 +57,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         wavelength: pd.PositiveFloat,
         num_pml_layers: tuple[pd.NonNegativeInt, pd.NonNegativeInt],
         snapping_points: tuple[CoordinateOptional, ...],
+        cached_parsed_intervals: Optional[tuple[ArrayFloat1D, ArrayFloat1D]] = None,
     ) -> Coords1D:
         """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
         Symmetry, and PML layers will be treated here.
@@ -79,6 +80,9 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
             number of layers in the absorber + and - direction along one dimension.
         snapping_points : Tuple[CoordinateOptional, ...]
             A set of points that enforce grid boundaries to pass through them.
+        cached_parsed_intervals : Optional[tuple[ArrayFloat1D, ArrayFloat1D]]
+            Cached results from parse_structures to avoid repeated parsing.
+            Contains (interval_coords, max_dl_list).
 
         Returns
         -------
@@ -98,6 +102,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
             symmetry=symmetry,
             is_periodic=is_periodic,
             snapping_points=snapping_points,
+            cached_parsed_intervals=cached_parsed_intervals,
         )
 
         # incorporate symmetries
@@ -589,16 +594,14 @@ class AbstractAutoGrid(GridSpec1d):
         """Grid step size after applying minimal and maximal filtering."""
         return max(min(dl, self._dl_max(sim_size)), self._dl_min)
 
-    def _make_coords_initial(
+    def _parse_structures_for_axis(
         self,
         axis: Axis,
         structures: list[StructureType],
         wavelength: float,
         symmetry: Symmetry,
-        is_periodic: bool,
-        snapping_points: tuple[CoordinateOptional, ...],
-    ) -> Coords1D:
-        """Customized 1D coords to be used as grid boundaries.
+    ) -> tuple[ArrayFloat1D, ArrayFloat1D]:
+        """Parse structures and return interval coordinates and max dl list.
 
         Parameters
         ----------
@@ -611,17 +614,14 @@ class AbstractAutoGrid(GridSpec1d):
         symmetry : Tuple[Symmetry, Symmetry, Symmetry]
             Reflection symmetry across a plane bisecting the simulation domain
             normal to each of the three axes.
-        is_periodic : bool
-            Apply periodic boundary condition or not.
-        snapping_points : Tuple[CoordinateOptional, ...]
-            A set of points that enforce grid boundaries to pass through them.
 
         Returns
         -------
-        :class:`.Coords1D`:
-            1D coords to be used as grid boundaries.
+        interval_coords : ArrayFloat1D
+            Interval coordinates from parsed structures.
+        max_dl_list : ArrayFloat1D
+            Maximum dl list from parsed structures.
         """
-
         sim_cent = list(structures[0].geometry.center)
         sim_size = list(structures[0].geometry.size)
 
@@ -657,6 +657,63 @@ class AbstractAutoGrid(GridSpec1d):
             self._dl_min,
             dl_max,
         )
+
+        return interval_coords, max_dl_list
+
+    def _make_coords_initial(
+        self,
+        axis: Axis,
+        structures: list[StructureType],
+        wavelength: float,
+        symmetry: Symmetry,
+        is_periodic: bool,
+        snapping_points: tuple[CoordinateOptional, ...],
+        cached_parsed_intervals: Optional[tuple[ArrayFloat1D, ArrayFloat1D]] = None,
+    ) -> Coords1D:
+        """Customized 1D coords to be used as grid boundaries.
+
+        Parameters
+        ----------
+        axis : Axis
+            Axis of this direction.
+        structures : List[StructureType]
+            List of structures present in simulation.
+        wavelength : float
+            Free-space wavelength.
+        symmetry : Tuple[Symmetry, Symmetry, Symmetry]
+            Reflection symmetry across a plane bisecting the simulation domain
+            normal to each of the three axes.
+        is_periodic : bool
+            Apply periodic boundary condition or not.
+        snapping_points : Tuple[CoordinateOptional, ...]
+            A set of points that enforce grid boundaries to pass through them.
+        cached_parsed_intervals : Optional[tuple[ArrayFloat1D, ArrayFloat1D]]
+            Cached results from parse_structures to avoid repeated parsing.
+            Contains (interval_coords, max_dl_list).
+
+        Returns
+        -------
+        :class:`.Coords1D`:
+            1D coords to be used as grid boundaries.
+        """
+
+        # Compute sim_cent, sim_size, and symmetry_domain (needed for boundary fixing)
+        sim_cent = list(structures[0].geometry.center)
+        sim_size = list(structures[0].geometry.size)
+        for dim, sym in enumerate(symmetry):
+            if sym != 0:
+                sim_cent[dim] += sim_size[dim] / 4
+                sim_size[dim] /= 2
+        symmetry_domain = Box(center=sim_cent, size=sim_size)
+
+        # Use cached parsed intervals if available, otherwise parse now
+        if cached_parsed_intervals is not None:
+            interval_coords, max_dl_list = cached_parsed_intervals
+        else:
+            interval_coords, max_dl_list = self._parse_structures_for_axis(
+                axis, structures, wavelength, symmetry
+            )
+
         # insert snapping_points
         interval_coords, max_dl_list = self.mesher.insert_snapping_points(
             self._dl_min, axis, interval_coords, max_dl_list, snapping_points
@@ -2646,6 +2703,31 @@ class GridSpec(Tidy3dBaseModel):
             Entire simulation grid and snapping points generated during iterative gap meshing.
         """
 
+        # Pre-compute parsed structures for each axis to avoid repeated parsing
+        cached_parsed_intervals = {}
+        if len(self.layer_refinement_specs) > 0:
+            wavelength = self.get_wavelength(sources)
+            sim_size = list(structures[0].geometry.size)
+            all_structures = list(structures) + self.all_override_structures(
+                list(structures),
+                wavelength,
+                sim_size,
+                lumped_elements,
+                structure_priority_mode,
+                internal_override_structures,
+            )
+
+            grids_1d = [self.grid_x, self.grid_y, self.grid_z]
+            for idim, grid_1d in enumerate(grids_1d):
+                # Only cache for AbstractAutoGrid instances since those use parse_structures
+                if isinstance(grid_1d, AbstractAutoGrid):
+                    cached_parsed_intervals[idim] = grid_1d._parse_structures_for_axis(
+                        axis=idim,
+                        structures=all_structures,
+                        wavelength=wavelength,
+                        symmetry=symmetry,
+                    )
+
         old_grid = self._make_grid_one_iteration(
             structures=structures,
             symmetry=symmetry,
@@ -2656,6 +2738,7 @@ class GridSpec(Tidy3dBaseModel):
             internal_override_structures=internal_override_structures,
             internal_snapping_points=internal_snapping_points,
             structure_priority_mode=structure_priority_mode,
+            cached_parsed_intervals=cached_parsed_intervals if cached_parsed_intervals else None,
         )
 
         snapping_lines = []
@@ -2698,6 +2781,7 @@ class GridSpec(Tidy3dBaseModel):
                     internal_snapping_points=snapping_lines + internal_snapping_points,
                     dl_min_from_gaps=0.45 * min_gap_width,
                     structure_priority_mode=structure_priority_mode,
+                    cached_parsed_intervals=cached_parsed_intervals,
                 )
 
                 same = old_grid == new_grid
@@ -2725,6 +2809,7 @@ class GridSpec(Tidy3dBaseModel):
         internal_snapping_points: Optional[list[CoordinateOptional]] = None,
         dl_min_from_gaps: pd.PositiveFloat = inf,
         structure_priority_mode: PriorityMode = "equal",
+        cached_parsed_intervals: Optional[dict[int, tuple[ArrayFloat1D, ArrayFloat1D]]] = None,
     ) -> Grid:
         """Make the entire simulation grid based on some simulation parameters.
 
@@ -2753,6 +2838,9 @@ class GridSpec(Tidy3dBaseModel):
             Minimal grid size computed based on autodetected gaps.
         structure_priority_mode : PriorityMode
             Structure priority setting.
+        cached_parsed_intervals : Optional[dict[int, tuple[ArrayFloat1D, ArrayFloat1D]]]
+            Cached parse_structures results for each axis to avoid repeated parsing in iterative refinement.
+            Keys are axis indices (0, 1, 2), values are (interval_coords, max_dl_list).
 
         Returns
         -------
@@ -2839,6 +2927,11 @@ class GridSpec(Tidy3dBaseModel):
 
         coords_dict = {}
         for idim, (dim, grid_1d) in enumerate(zip("xyz", grids_1d)):
+            # Get cached parsed structures for this axis if available
+            axis_cache = None
+            if cached_parsed_intervals is not None and idim in cached_parsed_intervals:
+                axis_cache = cached_parsed_intervals[idim]
+
             coords_dict[dim] = grid_1d.make_coords(
                 axis=idim,
                 structures=all_structures,
@@ -2849,6 +2942,7 @@ class GridSpec(Tidy3dBaseModel):
                 snapping_points=self.all_snapping_points(
                     structures, lumped_elements, internal_snapping_points
                 ),
+                cached_parsed_intervals=axis_cache,
             )
 
         coords = Coords(**coords_dict)
