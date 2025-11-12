@@ -29,7 +29,7 @@ from tidy3d.plugins.smatrix.data.data_array import PortNameDataArray
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.utils import s_to_z, validate_square_matrix
 
-from ...utils import run_emulated
+from ...utils import AssertLogLevel, run_emulated
 from .terminal_component_modeler_def import (
     make_basic_filter_terminals,
     make_coaxial_component_modeler,
@@ -521,14 +521,16 @@ def test_ab_to_s_component_modeler():
     assert np.isclose(S_matrix, b_matrix).all()
 
 
-def test_port_snapping(tmp_path):
+def test_port_snapping():
     """Make sure that the snapping behavior of the load resistor is mirrored
     by all other components in the modeler simulations with rectangular ports.
     """
     y_z_grid = td.UniformGrid(dl=0.1 * 1e3)
     x_grid = td.UniformGrid(dl=11 * 1e3)
     grid_spec = td.GridSpec(grid_x=x_grid, grid_y=y_z_grid, grid_z=y_z_grid)
-    modeler = make_component_modeler(planar_pec=True, port_refinement=False, grid_spec=grid_spec)
+    modeler = make_component_modeler(
+        planar_pec=True, port_refinement=False, port_snapping=False, grid_spec=grid_spec
+    )
     check_lumped_port_components_snapped_correctly(modeler=modeler)
 
 
@@ -548,7 +550,7 @@ def test_coaxial_port_source_size(axis):
     assert np.isclose(source.size[axis], 0)
 
 
-def test_coarse_grid_at_port(monkeypatch, tmp_path):
+def test_coarse_grid_at_port(monkeypatch):
     modeler = make_component_modeler(planar_pec=True, port_refinement=False, port_snapping=False)
     # Without port refinement the grid is much too coarse for these port sizes
     with pytest.raises(SetupError):
@@ -823,8 +825,7 @@ def test_make_coaxial_component_modeler_with_wave_ports(tmp_path):
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
     _ = make_coaxial_component_modeler(
-        port_types=(WavePort, WavePort),
-        grid_spec=grid_spec,
+        port_types=(WavePort, WavePort), grid_spec=grid_spec, port_refinement=False
     )
 
 
@@ -844,6 +845,7 @@ def test_run_coaxial_component_modeler_with_wave_ports(
                 grid_spec=grid_spec,
                 use_voltage=voltage_enabled,
                 use_current=current_enabled,
+                port_refinement=False,
             )
         return
 
@@ -852,6 +854,7 @@ def test_run_coaxial_component_modeler_with_wave_ports(
         grid_spec=grid_spec,
         use_voltage=voltage_enabled,
         use_current=current_enabled,
+        port_refinement=False,
     )
     s_matrix = get_terminal_port_data_array(monkeypatch, modeler)
 
@@ -895,7 +898,9 @@ def test_run_mixed_component_modeler_with_wave_ports(monkeypatch, tmp_path):
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
     modeler = make_coaxial_component_modeler(
-        port_types=(CoaxialLumpedPort, WavePort), grid_spec=grid_spec
+        port_types=(CoaxialLumpedPort, WavePort),
+        grid_spec=grid_spec,
+        port_refinement=False,
     )
     s_matrix = get_terminal_port_data_array(monkeypatch, modeler)
 
@@ -1363,7 +1368,9 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
     modeler = make_coaxial_component_modeler(
-        port_types=(CoaxialLumpedPort, CoaxialLumpedPort), grid_spec=grid_spec
+        port_types=(CoaxialLumpedPort, CoaxialLumpedPort),
+        grid_spec=grid_spec,
+        port_refinement=False,
     )
     port0_idx = modeler.network_index(modeler.ports[0])
     port1_idx = modeler.network_index(modeler.ports[1])
@@ -1677,7 +1684,11 @@ def test_S_parameter_deembedding(monkeypatch, tmp_path):
     z_grid = td.UniformGrid(dl=1 * 1e3)
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
-    modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort), grid_spec=grid_spec)
+    modeler = make_coaxial_component_modeler(
+        port_types=(WavePort, WavePort),
+        grid_spec=grid_spec,
+        port_refinement=False,
+    )
 
     # Make sure the smatrix and impedance calculations work for reduced simulations
     modeler_data = run_component_modeler(monkeypatch, modeler)
@@ -1977,7 +1988,11 @@ def test_validate_run_only_with_wave_ports():
     z_grid = td.UniformGrid(dl=1 * 1e3)
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
-    modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort), grid_spec=grid_spec)
+    modeler = make_coaxial_component_modeler(
+        port_types=(WavePort, WavePort),
+        grid_spec=grid_spec,
+        port_refinement=False,
+    )
 
     port0_idx = modeler.network_index(modeler.ports[0], 0)
     port1_idx = modeler.network_index(modeler.ports[1], 0)
@@ -2212,6 +2227,7 @@ def test_wave_port_mode_index_with_modeler():
         mode_spec=mode_spec,
         direction="+",
         mode_selection=(0, 2),  # Only modes 0 and 2
+        num_grid_cells=None,
     )
 
     # Verify the port has only the selected modes
@@ -2232,6 +2248,8 @@ def test_wave_port_mode_index_with_modeler():
         size=(1, 1, 0),
         voltage_axis=0,  # x-direction since port is in x-y plane
         name="lumped_port",
+        num_grid_cells=None,
+        enable_snapping_points=False,
     )
 
     modeler = TerminalComponentModeler(
@@ -2306,3 +2324,12 @@ def test_get_task_name():
     # Test with wave port (no mode_index) - should work
     task_name = TerminalComponentModeler.get_task_name(port=wave_port)
     assert task_name == "wave@1"
+
+
+def test_validate_port_refinement_with_uniform_grid():
+    """Test that port refinement options raise error with uniform grid."""
+    uniform_grid = td.GridSpec.uniform(dl=0.5 * mm)
+    with AssertLogLevel("WARNING", contains_str="mesh refinement options enabled"):
+        make_coaxial_component_modeler(
+            port_types=(CoaxialLumpedPort, WavePort), grid_spec=uniform_grid
+        )

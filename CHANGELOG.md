@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tidy3d.plugins.design.DesignSpace.run(..., fn_post=...)` now accepts a `priority` keyword to propagate vGPU queue priority to all automatically batched simulations.
 - Introduced `BroadbandPulse` for exciting simulations across a wide frequency spectrum.
 - Added `interp_spec` in `ModeSpec` to allow downsampling and interpolation of waveguide modes in frequency.
+- Added warning if port mesh refinement is incompatible with the `GridSpec` in the `TerminalComponentModeler`.
 
 ### Breaking Changes
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.

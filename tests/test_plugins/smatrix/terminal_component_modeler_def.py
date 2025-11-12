@@ -267,8 +267,10 @@ def make_coaxial_component_modeler(
     def make_port(center, direction, type, name) -> Union[CoaxialLumpedPort, WavePort]:
         if type is CoaxialLumpedPort:
             port_cells = None
+            enable_snapping_points = False
             if port_refinement:
                 port_cells = 21
+                enable_snapping_points = True
             port = CoaxialLumpedPort(
                 center=center,
                 outer_diameter=2 * Router,
@@ -278,6 +280,7 @@ def make_coaxial_component_modeler(
                 name="coax" + name,
                 num_grid_cells=port_cells,
                 impedance=reference_impedance,
+                enable_snapping_points=enable_snapping_points,
             )
         else:
             mean_radius = (Router + Rinner) / 2

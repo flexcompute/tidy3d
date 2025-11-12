@@ -742,6 +742,31 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             )
         return val
 
+    @pd.validator("ports")
+    @skip_if_fields_missing(["simulation"])
+    def _validate_port_refinement_usage(cls, val, values):
+        """Warn if port refinement options are enabled, but the supplied simulation
+        does not contain a grid type that will make use of them."""
+
+        sim: Simulation = values.get("simulation")
+        # If grid spec is using AutoGrid
+        # then set up is acceptable
+        if sim.grid_spec.auto_grid_used:
+            return val
+
+        for port in val:
+            if port._is_using_mesh_refinement:
+                log.warning(
+                    f"A port with name '{port.name}' has mesh refinement options enabled, but the "
+                    "'Simulation' passed to the 'TerminalComponentModeler' was setup with a 'GridSpec' which "
+                    "does not support mesh refinement. For accurate simulations, please setup the "
+                    "'Simulation' to use an 'AutoGrid'. To suppress this warning, please explicitly disable "
+                    "mesh refinement options in the port, which are by default enabled. For example, set "
+                    "the 'enable_snapping_points=False' and 'num_grid_cells=None' for lumped ports."
+                )
+
+        return val
+
     @pd.validator("radiation_monitors")
     @skip_if_fields_missing(["freqs"])
     def _validate_radiation_monitors(cls, val, values):
