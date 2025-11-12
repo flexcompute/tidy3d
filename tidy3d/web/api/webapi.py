@@ -68,6 +68,55 @@ SOLVER_NAME = {
     "VOLUME_MESH": "VolumeMesher",
 }
 
+# map task_type to default data filename
+DEFAULT_DATA_FILENAME = {
+    "FDTD": "simulation_data.hdf5",
+    "MODE_SOLVER": "simulation_data.hdf5",
+    "MODE": "simulation_data.hdf5",
+    "EME": "simulation_data.hdf5",
+    "HEAT": "simulation_data.hdf5",
+    "HEAT_CHARGE": "simulation_data.hdf5",
+    "VOLUME_MESH": "simulation_data.hdf5",
+    "COMPONENT_MODELER": "cm_data.hdf5",
+    "TERMINAL_COMPONENT_MODELER": "cm_data.hdf5",
+    "RF": "cm_data.hdf5",
+}
+
+
+def _get_default_path(task_id: str, provided_path: Optional[PathLike]) -> Path:
+    """Get the appropriate default path based on task type.
+
+    If the user provided a path, returns it as-is.
+    If no path is provided (None), returns the task-type-specific default filename.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.
+    provided_path : Optional[PathLike]
+        Path provided by the user, or None to use task-type default.
+
+    Returns
+    -------
+    Path
+        The appropriate path to use for this task type.
+    """
+    # If user provided a path, respect it exactly
+    if provided_path is not None:
+        return Path(provided_path)
+
+    # Determine task type for default filename
+    if _is_modeler_batch(task_id):
+        task_type = "RF"
+    else:
+        task_info = get_info(task_id)
+        task_type = task_info.taskType
+
+    # Get the task-type-specific default filename
+    default_filename = DEFAULT_DATA_FILENAME.get(task_type, "simulation_data.hdf5")
+
+    return Path(default_filename)
+
 
 def _get_url(task_id: str) -> str:
     """Get the URL for a task on our server."""
@@ -279,7 +328,7 @@ def run(
     simulation: WorkflowType,
     task_name: Optional[str] = None,
     folder_name: str = "default",
-    path: PathLike = "simulation_data.hdf5",
+    path: Optional[PathLike] = None,
     callback_url: Optional[str] = None,
     verbose: bool = True,
     progress_callback_upload: Optional[Callable[[float], None]] = None,
@@ -305,8 +354,9 @@ def run(
         Name of task. If not provided, a default name will be generated.
     folder_name : str = "default"
         Name of folder to store task on web UI.
-    path : PathLike = "simulation_data.hdf5"
+    path : Optional[PathLike] = None
         Path to download results file (.hdf5), including filename.
+        If not provided, uses a task-type-specific default filename.
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
@@ -331,7 +381,7 @@ def run(
         It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
     lazy : bool = False
         Whether to load the actual data (``lazy=False``) or return a proxy that loads
-        the data when accessed (``lazy=True``).
+        the data when accessed (``lazy=True`).
 
     Returns
     -------
@@ -996,7 +1046,7 @@ def abort(task_id: TaskId) -> Optional[TaskInfo]:
 @wait_for_connection
 def download(
     task_id: TaskId,
-    path: PathLike = "simulation_data.hdf5",
+    path: Optional[PathLike] = None,
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
@@ -1006,23 +1056,19 @@ def download(
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : PathLike = "simulation_data.hdf5"
+    path : Optional[PathLike] = None
         Download path to .hdf5 data file (including filename).
+        If not provided, uses a task-type-specific default filename.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
-    path = Path(path)
+    # Get the appropriate default path based on task type
+    path = _get_default_path(task_id, path)
 
     if _is_modeler_batch(task_id):
-        # Use a more descriptive default filename for component modeler downloads.
-        # If the caller left the default as 'simulation_data.hdf5', prefer 'cm_data.hdf5'.
-        # TODO: seems like the default should then be maybe set to None and defined somewhere else
-        # per task type?
-        if path.name == "simulation_data.hdf5":
-            path = path.with_name("cm_data.hdf5")
         BatchTask(task_id).get_data_hdf5(
             remote_data_file_gz=CM_DATA_HDF5_GZ,
             to_file=path,
@@ -1135,7 +1181,7 @@ def download_log(
 @wait_for_connection
 def load(
     task_id: Optional[TaskId],
-    path: PathLike = "simulation_data.hdf5",
+    path: Optional[PathLike] = None,
     replace_existing: bool = True,
     verbose: bool = True,
     progress_callback: Optional[Callable[[float], None]] = None,
@@ -1161,8 +1207,10 @@ def load(
     ----------
     task_id : Optional[str] = None
         Unique identifier of task on server. Returned by :meth:`upload`. If None, file is assumed to exist already from cache.
-    path : PathLike
+    path : Optional[PathLike] = None
         Download path to .hdf5 data file (including filename).
+        If not provided and task_id is given, uses a task-type-specific default filename.
+        If not provided and task_id is None, defaults to "simulation_data.hdf5".
     replace_existing : bool = True
         Downloads the data even if path exists (overwriting the existing).
     verbose : bool = True
@@ -1178,14 +1226,12 @@ def load(
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing simulation data.
     """
-    path = Path(path)
-    # For component modeler batches, default to a clearer filename if the default was used.
-    if (
-        task_id
-        and _is_modeler_batch(task_id)
-        and path.name in {"simulation_data.hdf5", "simulation_data.hdf5.gz"}
-    ):
-        path = path.with_name(path.name.replace("simulation", "cm"))
+    # Get the appropriate default path based on task type
+    if task_id is not None:
+        path = _get_default_path(task_id, path)
+    else:
+        # When no task_id, use provided path or fall back to generic default
+        path = Path(path) if path is not None else Path("simulation_data.hdf5")
 
     if task_id is None:
         if not path.exists():
