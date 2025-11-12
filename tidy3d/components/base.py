@@ -42,6 +42,7 @@ JSON_TAG = "JSON_STRING"
 MAX_STRING_LENGTH = 1_000_000_000
 FORBID_SPECIAL_CHARACTERS = ["/"]
 TRACED_FIELD_KEYS_ATTR = "__tidy3d_traced_field_keys__"
+TYPE_TO_CLASS_MAP: dict[str, Any] = {}
 
 
 def cache(prop):
@@ -195,6 +196,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         cls.add_type_field()
         cls.generate_docstring()
+        type_value = cls.__fields__.get(TYPE_TAG_STR)
+        if type_value and type_value.default:
+            TYPE_TO_CLASS_MAP[type_value.default] = cls
+
+    @classmethod
+    def parse_obj(cls, obj: dict[str, Any]) -> Tidy3dBaseModel:
+        if not isinstance(obj, dict):
+            raise TypeError("Input must be a dict")
+        type_value = obj.get(TYPE_TAG_STR)
+        if type_value is None:
+            raise ValueError('Missing "type" in data')
+        subclass = TYPE_TO_CLASS_MAP.get(type_value)
+        if subclass is None:
+            raise ValueError(f"Unknown type: {type_value}")
+        return subclass(**obj)
 
     class Config:
         """Sets config for all :class:`Tidy3dBaseModel` objects.

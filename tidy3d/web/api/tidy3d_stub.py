@@ -2,30 +2,22 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from os import PathLike
-from pathlib import Path
 from typing import Callable, Optional
 
 import pydantic.v1 as pd
 from pydantic.v1 import BaseModel
 
 from tidy3d import log
-from tidy3d.components.base import _get_valid_extension
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.eme.data.sim_data import EMESimulationData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.microwave.data.monitor_data import MicrowaveModeSolverData
 from tidy3d.components.mode.data.sim_data import ModeSimulationData
 from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.components.simulation import Simulation
-from tidy3d.components.tcad.data.sim_data import (
-    HeatChargeSimulationData,
-    HeatSimulationData,
-    VolumeMesherData,
-)
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
@@ -42,11 +34,6 @@ from tidy3d.plugins.smatrix.data.modal import (
 )
 from tidy3d.plugins.smatrix.data.terminal import (
     TerminalComponentModelerData,
-)
-from tidy3d.web.core.file_util import (
-    read_simulation_from_hdf5,
-    read_simulation_from_hdf5_gz,
-    read_simulation_from_json,
 )
 from tidy3d.web.core.stub import TaskStub, TaskStubData
 from tidy3d.web.core.types import TaskType
@@ -76,93 +63,41 @@ class Tidy3dStub(BaseModel, TaskStub):
 
     @classmethod
     def from_file(cls, file_path: PathLike) -> WorkflowType:
-        """Loads a Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
-        from .yaml, .json, or .hdf5 file.
+        """Loads a ``WorkflowType`` instance from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
         file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to load the
-            Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] from.
+            ``WorkflowType``from.
 
         Returns
         -------
-        Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
+        WorkflowType
             An instance of the component class calling ``load``.
-
-        Example
-        -------
-        >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
-        path = Path(file_path)
-        extension = _get_valid_extension(path)
-        if extension == ".json":
-            json_str = read_simulation_from_json(path)
-        elif extension == ".hdf5":
-            json_str = read_simulation_from_hdf5(path)
-        elif extension == ".hdf5.gz":
-            json_str = read_simulation_from_hdf5_gz(path)
-
-        data = json.loads(json_str)
-        type_ = data["type"]
-
-        supported_classes = [
-            Simulation,
-            ModeSolver,
-            HeatSimulation,
-            HeatChargeSimulation,
-            EMESimulation,
-            ModeSimulation,
-            VolumeMesher,
-            ModalComponentModeler,
-            TerminalComponentModeler,
-        ]
-
-        class_map = {cls.__name__: cls for cls in supported_classes}
-
-        if type_ not in class_map:
-            raise ValueError(
-                f"Unsupported type '{type_}'. Supported types: {list(class_map.keys())}"
-            )
-
-        sim_class = class_map[type_]
-        sim = sim_class.from_file(path)
-
-        return sim
+        return Tidy3dBaseModel.from_file(file_path)
 
     def to_file(
         self,
         file_path: PathLike,
     ) -> None:
-        """Exports Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] instance to .yaml, .json,
-        or .hdf5 file
+        """Exports ``WorkflowType`` instance to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
         file_path : PathLike
-            Full path to the .yaml or .json or .hdf5 file to save the :class:`Stub` to.
-
-        Example
-        -------
-        >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
+            Full path to the .yaml or .json or .hdf5 file to save the ``WorkflowType`` to.
         """
         self.simulation.to_file(file_path)
 
-    def to_hdf5_gz(self, fname: PathLike, custom_encoders: Optional[list[Callable]] = None) -> None:
-        """Exports Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] instance to .hdf5.gz file.
+    def to_hdf5_gz(self, fname: PathLike) -> None:
+        """Exports ``WorkflowType`` instance to .hdf5.gz file.
 
         Parameters
         ----------
         fname : PathLike
-            Full path to the .hdf5.gz file to save
-            the Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] to.
-        custom_encoders : List[Callable]
-            List of functions accepting (fname: PathLike, group_path: str, value: Any) that take
-            the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
-
-        Example
-        -------
-        >>> simulation.to_hdf5_gz(fname='folder/sim.hdf5.gz') # doctest: +SKIP
+            Full path to the .hdf5.gz file to save the ``WorkflowType`` to.
         """
 
         self.simulation.to_hdf5_gz(fname)
@@ -215,14 +150,13 @@ class Tidy3dStubData(BaseModel, TaskStubData):
     def from_file(
         cls, file_path: PathLike, lazy: bool = False, on_load: Optional[Callable] = None
     ) -> WorkflowDataType:
-        """Loads a Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
-        from .yaml, .json, or .hdf5 file.
+        """Loads a ``WorkflowDataType`` instance from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
         file_path : PathLike
-            Full path to the .yaml or .json or .hdf5 file to load the
-            Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] from.
+            Full path to the .yaml or .json or .hdf5 file to load the ``WorkflowDataType`` instance
+            from.
         lazy : bool = False
             Whether to load the actual data (``lazy=False``) or return a proxy that loads
             the data when accessed (``lazy=True``).
@@ -234,82 +168,41 @@ class Tidy3dStubData(BaseModel, TaskStubData):
 
         Returns
         -------
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
+        ``WorkflowDataType`` instance
             An instance of the component class calling ``load``.
         """
-        path = Path(file_path)
-        extension = _get_valid_extension(path)
-        if extension == ".json":
-            json_str = read_simulation_from_json(path)
-        elif extension == ".hdf5":
-            json_str = read_simulation_from_hdf5(path)
-        elif extension == ".hdf5.gz":
-            json_str = read_simulation_from_hdf5_gz(path)
-
-        data = json.loads(json_str)
-        type_ = data["type"]
-
-        supported_data_classes = [
-            SimulationData,
-            ModeSolverData,
-            MicrowaveModeSolverData,
-            HeatSimulationData,
-            HeatChargeSimulationData,
-            EMESimulationData,
-            ModeSimulationData,
-            VolumeMesherData,
-            ModalComponentModelerData,
-            TerminalComponentModelerData,
-        ]
-
-        data_class_map = {cls.__name__: cls for cls in supported_data_classes}
-
-        if type_ not in data_class_map:
-            raise ValueError(
-                f"Unsupported data type '{type_}'. Supported types: {list(data_class_map.keys())}"
-            )
-
-        data_class = data_class_map[type_]
-        sim_data = data_class.from_file(path, lazy=lazy, on_load=on_load)
-
-        return sim_data
+        return Tidy3dBaseModel.from_file(file_path, lazy=lazy, on_load=on_load)
 
     def to_file(self, file_path: PathLike) -> None:
-        """Exports Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] instance
+        """Exports ``WorkflowDataType`` instance instance
         to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
         file_path : PathLike
-            Full path to the .yaml or .json or .hdf5 file to save the
-            Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] to.
-
-        Example
-        -------
-        >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
+            Full path to the .yaml or .json or .hdf5 file to save the ``WorkflowDataType`` instance to.
         """
         self.data.to_file(file_path)
 
     @classmethod
     def postprocess(cls, file_path: PathLike, lazy: bool = True) -> WorkflowDataType:
         """Load .yaml, .json, or .hdf5 file to
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] instance.
+        ``WorkflowDataType`` instance instance.
 
         Parameters
         ----------
         file_path : PathLike
-            Full path to the .yaml or .json or .hdf5 file to save the
-            Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] to.
+            Full path to the .yaml or .json or .hdf5 file to save the ``WorkflowDataType`` instance to.
         lazy : bool = False
             Whether to load the actual data (``lazy=False``) or return a proxy that loads
             the data when accessed (``lazy=True``).
 
         Returns
         -------
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
+        ``WorkflowDataType`` instance
             An instance of the component class calling ``load``.
         """
-        stub_data = Tidy3dStubData.from_file(
+        stub_data = Tidy3dBaseModel.from_file(
             file_path, lazy=lazy, on_load=cls._check_convergence_and_warnings
         )
         return stub_data
