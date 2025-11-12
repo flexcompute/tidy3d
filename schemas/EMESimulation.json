@@ -8152,6 +8152,12 @@
           ],
           "type": "string"
         },
+        "qtem_polarization_threshold": {
+          "default": 0.95,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "type": "number"
+        },
         "sort_spec": {
           "allOf": [
             {
@@ -8172,6 +8178,12 @@
         },
         "target_neff": {
           "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "tem_polarization_threshold": {
+          "default": 0.995,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
           "type": "number"
         },
         "track_freq": {

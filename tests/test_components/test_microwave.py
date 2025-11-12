@@ -384,6 +384,7 @@ def make_mw_sim(
         boundary_spec=boundary_spec,
         plot_length_units="mm",
         symmetry=(0, 0, 0),
+        subpixel=False,
     )
     return sim
 
@@ -1099,16 +1100,15 @@ def test_mode_solver_with_microwave_mode_spec():
     num_modes = 3
     impedance_specs = td.AutoImpedanceSpec()
     mode_spec = td.MicrowaveModeSpec(
-        num_modes=num_modes,
-        target_neff=2.2,
-        impedance_specs=impedance_specs,
+        num_modes=num_modes, target_neff=2.2, impedance_specs=impedance_specs
     )
+    freqs = (1e9, 5e9, 10e9)
     mms = ModeSolver(
         simulation=stripline_sim,
         plane=plane,
         mode_spec=mode_spec,
         colocate=False,
-        freqs=[1e9, 5e9, 10e9],
+        freqs=freqs,
     )
 
     # _, ax = plt.subplots(1, 1, tight_layout=True, figsize=(15, 15))
@@ -1144,6 +1144,50 @@ def test_mode_solver_with_microwave_mode_spec():
     assert np.all(
         np.isclose(mms_data.transmission_line_data.Z0.real.sel(mode_index=0), 28.6, rtol=0.2)
     )
+
+    # Test RF-specific mode characteristics
+    e_r = 4.4
+    k0 = 1e6 * 2 * np.pi * np.array(freqs) / td.C_0
+    n_eff = np.sqrt(e_r)
+    # 1. Mode classification (stripline should support TEM mode)
+    assert mms_data.mode_classifications[0] == "TEM", (
+        f"Expected TEM mode for stripline, got {mms_data.mode_classifications[0]}"
+    )
+
+    assert np.allclose(mms_data.effective_relative_permittivity.sel(mode_index=0).real, e_r)
+    assert np.allclose(
+        mms_data.effective_relative_permittivity.sel(mode_index=0).imag, 0.0, atol=1e-6
+    )
+
+    # Attenuation constant (nearly zero for lossless line)
+    alpha = mms_data.alpha.sel(mode_index=0)
+    assert np.allclose(alpha, 0.0, atol=1e-6)
+
+    # Phase constant (positive, increases with frequency)
+    beta = mms_data.beta.sel(mode_index=0)
+    assert np.allclose(beta, k0 * n_eff)
+
+    # Propagation constant (gamma = -alpha + j*beta)
+    gamma = mms_data.gamma.sel(mode_index=0)
+    assert np.allclose(gamma.real, 0.0, atol=1e-6)
+    assert np.allclose(gamma.imag, k0 * n_eff)
+
+    # Phase velocity (v_p ~ c/n_eff)
+    v_p = mms_data.phase_velocity.sel(mode_index=0)
+    expected_v_p = td.C_0 * 1e-6 / n_eff
+    assert np.allclose(v_p, expected_v_p, rtol=1e-6)
+
+    # Wave impedance (should be positive and physically reasonable)
+    Z_wave = mms_data.wave_impedance.sel(mode_index=0)
+    assert np.allclose(Z_wave.real, td.ETA_0 / n_eff, rtol=1e-4)
+    assert np.allclose(Z_wave.imag, 0.0, atol=1e-6)
+
+    # Distance for 40dB (very large for low-loss line)
+    d_40dB = mms_data.distance_40dB.sel(mode_index=0)
+    assert np.all(d_40dB > 100)
+
+    with AssertLogLevel("WARNING", contains_str="The 'group_velocity' was not computed."):
+        mms_data.group_velocity
 
     # Make sure a single spec can be used
     microwave_spec_custom = td.MicrowaveModeSpec(
@@ -1207,6 +1251,7 @@ def test_mode_solver_with_microwave_group_index():
 
     # Verify that group index was calculated
     assert mms_data.n_group is not None, "Group index should be calculated"
+    assert mms_data.group_velocity is not None, "Group velocity should be calculated"
 
     # Verify that transmission line data exists
     assert mms_data.transmission_line_data is not None, "Transmission line data should exist"

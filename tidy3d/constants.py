@@ -111,6 +111,11 @@ METER = "m"
 SI unit of length.
 """
 
+PERMETER = "1/m"
+"""
+SI unit of inverse length.
+"""
+
 MICROMETER = "um"
 """
 One millionth (10^-6) of a meter.
@@ -145,6 +150,17 @@ RADPERSEC = "rad/sec"
 """
 One radian per second.
 """
+
+RADPERMETER = "rad/m"
+"""
+One radian per meter.
+"""
+
+NEPERPERMETER = "Np/m"
+"""
+SI unit for attenuation constant.
+"""
+
 
 ELECTRON_VOLT = "eV"
 """
@@ -249,6 +265,11 @@ Square micrometers per (square second Kelvin).
 THERMAL_EXPANSIVITY = "1/K"
 """
 Inverse Kelvin.
+"""
+
+VELOCITY_SI = "m/s"
+"""
+SI unit of velocity
 """
 
 ACCELERATION = "um/s^2"
