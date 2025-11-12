@@ -216,7 +216,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     def parse_obj(cls, obj: dict[str, Any]) -> Tidy3dBaseModel:
         """Specialized parse_obj to handle any Tidy3D component, but only if called from
         ``Tidy3dBaseModel``. Otherwise, call the regular pyadantic parse_obj."""
-        if cls.__fields__.get(TYPE_TAG_STR) == "Tidy3dBaseModel":
+        if cls.__name__ == "Tidy3dBaseModel":
             return cls._parse_obj(obj)
         return super().parse_obj(obj)
 
