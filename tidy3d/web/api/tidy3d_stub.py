@@ -174,7 +174,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         return Tidy3dBaseModel.from_file(file_path, lazy=lazy, on_load=on_load)
 
     def to_file(self, file_path: PathLike) -> None:
-        """Exports ``WorkflowDataType`` instance instance
+        """Exports ``WorkflowDataType`` instance
         to .yaml, .json, or .hdf5 file
 
         Parameters
