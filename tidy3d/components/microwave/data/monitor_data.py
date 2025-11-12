@@ -6,16 +6,31 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
+import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 from typing_extensions import Self
 
-from tidy3d.components.data.data_array import FieldProjectionAngleDataArray, FreqDataArray
+from tidy3d.components.data.data_array import (
+    FieldProjectionAngleDataArray,
+    FreqDataArray,
+    FreqModeDataArray,
+    ImpedanceFreqModeDataArray,
+)
 from tidy3d.components.data.monitor_data import DirectivityData, ModeData, ModeSolverData
 from tidy3d.components.microwave.base import MicrowaveBaseModel
+from tidy3d.components.microwave.data.data_array import (
+    AttenuationConstantArray,
+    GroupVelocityArray,
+    PhaseConstantArray,
+    PhaseVelocityArray,
+    PropagationConstantArray,
+)
 from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
-from tidy3d.components.types import FreqArray, PolarizationBasis
+from tidy3d.components.types import FreqArray, ModeClassification, PolarizationBasis
+from tidy3d.constants import C_0
+from tidy3d.log import log
 
 
 class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
@@ -241,6 +256,164 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
             super_info["Re(Z0)"] = self.transmission_line_data.Z0.real
             super_info["Im(Z0)"] = self.transmission_line_data.Z0.imag
         return super_info
+
+    @property
+    def mode_classifications(self) -> list[ModeClassification]:
+        """List of mode classifications (TEM, quasi-TEM, TE, TM, or Hybrid) for each mode."""
+        return [self._classify_mode(mode_index) for mode_index in self.n_complex.mode_index]
+
+    @property
+    def free_space_wavenumber(self) -> FreqDataArray:
+        """The free space wavenumber (k_0) in rad/m."""
+        freqs = self.n_complex.f.values
+        C_0_meters = C_0 * 1e-6
+        return FreqDataArray(2 * np.pi * freqs / C_0_meters, coords={"f": freqs})
+
+    @property
+    def gamma(self) -> PropagationConstantArray:
+        r"""The propagation constant with SI units.
+
+        In the physics convention, where time-harmonic fields evolve with :math:`e^{-j\omega t}`,
+        a wave propagating in the +z direction varies as:
+
+        .. math::
+
+           E(z) = E_0 e^{\gamma z} = E_0 e^{-\alpha z} e^{j\beta z}
+
+        where :math:`\gamma = -\alpha + j\beta`.
+        """
+        data = 1j * self.n_complex * self.free_space_wavenumber
+        return PropagationConstantArray(data, coords=self.n_complex.coords)
+
+    @property
+    def alpha(self) -> AttenuationConstantArray:
+        r"""The attenuation constant (real part of :math:`-\gamma`).
+
+        Causes exponential decay of the field amplitude:
+
+        .. math::
+
+           E(z) = E_0 e^{-\alpha z} e^{j\beta z}
+
+        Units: Nepers/meter (Np/m).
+        """
+        return -self.gamma.real
+
+    @property
+    def beta(self) -> PhaseConstantArray:
+        r"""The phase constant (imaginary part of :math:`\gamma`).
+
+        Determines the phase variation of the field:
+
+        .. math::
+
+           E(z) = E_0 e^{-\alpha z} e^{j\beta z}
+
+        Units: radians/meter (rad/m).
+        """
+        return self.gamma.imag
+
+    @property
+    def distance_40dB(self) -> FreqModeDataArray:
+        r"""Distance at which the field amplitude drops by 40 dB.
+
+        For a lossy transmission line, this is the distance where the signal
+        attenuates by 40 dB:
+
+        .. math::
+
+           d_{40\text{dB}} = \frac{40\,\text{dB}}{20 \log_{10}(e) \cdot \alpha} = \frac{40}{8.686 \cdot \alpha}
+
+        where :math:`\alpha` is the attenuation constant in Nepers/meter.
+
+        Units: meters.
+        """
+        # Convert attenuation from Nepers/m to dB/m: dB/m = 20*log10(e)*Np/m ≈ 8.686*Np/m
+        # Then: distance_40dB = 40 dB / (attenuation in dB/m)
+        attenuation_dB_per_m = 20 * np.log10(np.e) * self.alpha
+        distance_meters = 40 / attenuation_dB_per_m
+        return FreqModeDataArray(distance_meters.values, coords=self.alpha.coords)
+
+    @property
+    def effective_relative_permittivity(self) -> FreqModeDataArray:
+        """Effective relative permittivity (real part of n_eff²)."""
+        e_r_complex = self.n_complex * self.n_complex
+        return FreqModeDataArray(e_r_complex.values, coords=self.n_complex.coords)
+
+    @property
+    def phase_velocity(self) -> PhaseVelocityArray:
+        """Phase velocity (v_p = c/n_eff) in m/s."""
+        C_0_meters = C_0 * 1e-6
+        v_p = C_0_meters / self.n_eff
+        return PhaseVelocityArray(v_p.values, coords=self.n_eff.coords)
+
+    @property
+    def group_velocity(self) -> Optional[GroupVelocityArray]:
+        """Group velocity (v_g = c/n_group) in m/s."""
+        if self.n_group_raw is None:
+            log.warning(
+                "The 'group_velocity' was not computed. To calculate 'group_velocity' index, pass "
+                "'group_index_step = True' in the 'MicrowaveModeSpec'.",
+                log_once=True,
+            )
+            return None
+        C_0_meters = C_0 * 1e-6
+        v_g = C_0_meters / self.n_group
+        return GroupVelocityArray(v_g.values, coords=self.n_eff.coords)
+
+    @property
+    def wave_impedance(self) -> ImpedanceFreqModeDataArray:
+        r"""Compute the wave impedance associated with the waveguide mode.
+        The wave impedance is defined as:
+
+        .. math::
+
+           Z_{\rm wave} = \frac{\int |E_t|^2 \, {\rm d}S}{2 P}.
+
+        where :math:`E_t` is the transverse electric field and :math:`P` is the complex power flow.
+        """
+        self._check_fields_stored(["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"])
+
+        tan_fields = self._colocated_tangential_fields
+        dim1, dim2 = self._tangential_dims
+        e1 = tan_fields["E" + dim1]
+        e2 = tan_fields["E" + dim2]
+        diff_area = self._diff_area
+        field_int = [np.abs(e_field) ** 2 for e_field in [e1, e2]]
+        tangential_intensity = (diff_area * (field_int[0] + field_int[1])).sum(
+            dim=self._tangential_dims
+        )
+        direction = self.monitor.store_fields_direction
+        P = self.complex_flux if direction == "+" else -self.complex_flux
+        Z_wave = tangential_intensity / P / 2
+        return ImpedanceFreqModeDataArray(Z_wave.values, coords=self.flux.coords)
+
+    def _classify_mode(self, mode_index: int) -> ModeClassification:
+        """Classify mode as TEM, quasi-TEM, TE, TM, or Hybrid based on TE/TM fractions."""
+        # Make quasi-TEM classification choice based on lowest frequency available
+        min_f_idx = self.wg_TE_fraction.f.argmin()
+        low_f_TE_frac = self.wg_TE_fraction.sel(mode_index=mode_index).isel(f=min_f_idx).values
+        low_f_TM_frac = self.wg_TM_fraction.sel(mode_index=mode_index).isel(f=min_f_idx).values
+        # Otherwise we use the average value of the fraction across frequencies
+        mean_TE_frac = self.wg_TE_fraction.sel(mode_index=mode_index).mean().values
+        mean_TM_frac = self.wg_TM_fraction.sel(mode_index=mode_index).mean().values
+
+        if (
+            mean_TE_frac >= self.monitor.mode_spec.tem_polarization_threshold
+            and mean_TM_frac >= self.monitor.mode_spec.tem_polarization_threshold
+        ):
+            return "TEM"
+        elif (
+            low_f_TE_frac >= self.monitor.mode_spec.qtem_polarization_threshold
+            and low_f_TM_frac >= self.monitor.mode_spec.qtem_polarization_threshold
+        ):
+            return "quasi-TEM"
+        elif mean_TE_frac >= self.monitor.mode_spec.tem_polarization_threshold:
+            return "TE"
+        elif mean_TM_frac >= self.monitor.mode_spec.tem_polarization_threshold:
+            return "TM"
+        else:
+            return "Hybrid"
 
     def _group_index_post_process(self, frequency_step: float) -> Self:
         """Calculate group index and remove added frequencies used only for this calculation.

@@ -20,6 +20,9 @@ from tidy3d.components.types import annotate_type
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError
 
+TEM_POLARIZATION_THRESHOLD = 0.995
+QTEM_POLARIZATION_THRESHOLD = 0.95
+
 
 class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     """
@@ -62,6 +65,27 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
         "(one per mode). The number of impedance specifications should match the number of modes field. "
         "When an impedance specification of ``None`` is used, the impedance calculation will be "
         "ignored for the associated mode.",
+    )
+
+    tem_polarization_threshold: float = pd.Field(
+        TEM_POLARIZATION_THRESHOLD,
+        gt=0.0,
+        le=1.0,
+        title="TEM Polarization Threshold",
+        description="Threshold for classifying modes as TEM, TE, or TM based on mean TE/TM fraction "
+        "across frequencies. A mode is classified as TEM if both mean TE and TM fractions are greater "
+        "than or equal to this threshold. Similarly, a mode is classified as TE (or TM) if the mean TE "
+        "(or TM) fraction is greater than or equal to this threshold.",
+    )
+
+    qtem_polarization_threshold: float = pd.Field(
+        QTEM_POLARIZATION_THRESHOLD,
+        gt=0.0,
+        le=1.0,
+        title="Quasi-TEM Polarization Threshold",
+        description="Threshold for classifying modes as quasi-TEM based on TE/TM fraction at the lowest "
+        "frequency. A mode is classified as quasi-TEM if both TE and TM fractions at the lowest frequency "
+        "are greater than or equal to this threshold.",
     )
 
     @cached_property
