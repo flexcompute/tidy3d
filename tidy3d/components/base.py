@@ -206,10 +206,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             raise TypeError("Input must be a dict")
         type_value = obj.get(TYPE_TAG_STR)
         if type_value is None:
-            raise ValueError('Missing "type" in data')
+            return cls(**obj)
         subclass = TYPE_TO_CLASS_MAP.get(type_value)
         if subclass is None:
-            raise ValueError(f"Unknown type: {type_value}")
+            return cls(**obj)
         return subclass(**obj)
 
     class Config:
