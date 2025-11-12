@@ -69,7 +69,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         ----------
         file_path : PathLike
             Full path to the .yaml or .json or .hdf5 file to load the
-            ``WorkflowType``from.
+            ``WorkflowType`` from.
 
         Returns
         -------
