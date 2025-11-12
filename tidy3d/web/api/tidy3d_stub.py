@@ -202,10 +202,10 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         ``WorkflowDataType`` instance
             An instance of the component class calling ``load``.
         """
-        stub_data = Tidy3dBaseModel.from_file(
+        workflow_data = Tidy3dBaseModel.from_file(
             file_path, lazy=lazy, on_load=cls._check_convergence_and_warnings
         )
-        return stub_data
+        return workflow_data
 
     @staticmethod
     def _check_convergence_and_warnings(stub_data: WorkflowDataType) -> None:
