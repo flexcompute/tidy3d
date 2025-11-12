@@ -201,7 +201,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             TYPE_TO_CLASS_MAP[type_value.default] = cls
 
     @classmethod
-    def parse_obj(cls, obj: dict[str, Any]) -> Tidy3dBaseModel:
+    def _parse_obj(cls, obj: dict[str, Any]) -> Tidy3dBaseModel:
         if not isinstance(obj, dict):
             raise TypeError("Input must be a dict")
         type_value = obj.get(TYPE_TAG_STR)
@@ -211,6 +211,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         if subclass is None:
             return cls(**obj)
         return subclass(**obj)
+
+    @classmethod
+    def parse_obj(cls, obj: dict[str, Any]) -> Tidy3dBaseModel:
+        """Specialized parse_obj to handle any Tidy3D component, but only if called from
+        ``Tidy3dBaseModel``. Otherwise, call the regular pyadantic parse_obj."""
+        if cls.__fields__.get(TYPE_TAG_STR) == "Tidy3dBaseModel":
+            return cls._parse_obj(obj)
+        return super().parse_obj(obj)
 
     class Config:
         """Sets config for all :class:`Tidy3dBaseModel` objects.
