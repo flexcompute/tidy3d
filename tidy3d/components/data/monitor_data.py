@@ -18,7 +18,7 @@ from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
-from tidy3d.components.mode_spec import ModeSortSpec
+from tidy3d.components.mode_spec import ModeSortSpec, ModeSpec
 from tidy3d.components.monitor import (
     AuxFieldTimeMonitor,
     DiffractionMonitor,
@@ -45,8 +45,10 @@ from tidy3d.components.types import (
     ArrayFloat1D,
     ArrayFloat2D,
     Coordinate,
+    Direction,
     EMField,
     EpsSpecType,
+    FreqArray,
     Numpy,
     PolarizationBasis,
     Size,
@@ -78,6 +80,7 @@ from .data_array import (
     MixedModeDataArray,
     ModeAmpsDataArray,
     ModeDispersionDataArray,
+    ModeIndexDataArray,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
     TimeDataArray,
@@ -103,6 +106,7 @@ AXIAL_RATIO_CAP = 100
 MIN_ANGULAR_SAMPLES_SPHERE = 10
 # Threshold for cos(theta) to avoid unphysically large amplitudes near grazing angles
 COS_THETA_THRESH = 1e-5
+MODE_INTERP_EXTRAPOLATION_TOLERANCE = 1e-2
 
 
 class MonitorData(AbstractMonitorData, ABC):
@@ -1672,11 +1676,11 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
     )
 
     @pd.validator("eps_spec", always=True)
-    @skip_if_fields_missing(["monitor"])
+    @skip_if_fields_missing(["n_complex"])
     def eps_spec_match_mode_spec(cls, val, values):
         """Raise validation error if frequencies in eps_spec does not match frequency list"""
         if val:
-            mode_data_freqs = values["monitor"].freqs
+            mode_data_freqs = values["n_complex"].coords["f"].values
             if len(val) != len(mode_data_freqs):
                 raise ValidationError(
                     "eps_spec must be provided at the same frequencies as mode solver data."
@@ -1719,7 +1723,8 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         """
         if len(self.field_components) == 0:
             return self.copy()
-        num_freqs = len(self.monitor.freqs)
+
+        num_freqs = len(self.monitor._stored_freqs)
         num_modes = self.monitor.mode_spec.num_modes
 
         if track_freq == "lowest":
@@ -1759,7 +1764,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 # Get next frequency to sort
                 data_to_sort = data_expanded._isel(f=[freq_id])
                 # Assign to the base frequency so that outer_dot will compare them
-                data_to_sort = data_to_sort._assign_coords(f=[self.monitor.freqs[f0_ind]])
+                data_to_sort = data_to_sort._assign_coords(f=[self.monitor._stored_freqs[f0_ind]])
 
                 # Compute "sorting w.r.t. to neighbor" and overlap values
                 sorting_one_mode, amps_one_mode = data_template._find_ordering_one_freq(
@@ -1777,8 +1782,8 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 for mode_ind in list(np.nonzero(overlap[freq_id, :] < overlap_thresh)[0]):
                     log.warning(
                         f"Mode '{mode_ind}' appears to undergo a discontinuous change "
-                        f"between frequencies '{data_expanded.monitor.freqs[freq_id]}' "
-                        f"and '{data_expanded.monitor.freqs[freq_id - step]}' "
+                        f"between frequencies '{self.monitor._stored_freqs[freq_id]}' "
+                        f"and '{self.monitor._stored_freqs[freq_id - step]}' "
                         f"(overlap: '{overlap[freq_id, mode_ind]:.2f}')."
                     )
 
@@ -2455,9 +2460,241 @@ class ModeSolverData(ModeData):
         None, title="Amplitudes", description="Unused for ModeSolverData."
     )
 
+    grid_distances_primal: Union[tuple[float], tuple[float, float]] = pd.Field(
+        (0.0,),
+        title="Distances to the Primal Grid",
+        description="Relative distances to the primal grid locations along the normal direction in "
+        "the original simulation grid. Needed to recalculate grid corrections after "
+        "interpolating in frequency.",
+    )
+
+    grid_distances_dual: Union[tuple[float], tuple[float, float]] = pd.Field(
+        (0.0,),
+        title="Distances to the Dual Grid",
+        description="Relative distances to the dual grid locations along the normal direction in "
+        "the original simulation grid. Needed to recalculate grid corrections after "
+        "interpolating in frequency.",
+    )
+
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> ModeSolverData:
         """Return copy of self after normalization is applied using source spectrum function."""
         return self.copy()
+
+    def _normalize_modes(self):
+        """Normalize modes. Note: this modifies ``self`` in-place."""
+        scaling = np.sqrt(np.abs(self.flux))
+        for field in self.field_components.values():
+            field /= scaling
+
+    @staticmethod
+    def _grid_correction_factors(
+        primal_distances: tuple[float, ...],
+        dual_distances: tuple[float, ...],
+        mode_spec: ModeSpec,
+        n_complex: ModeIndexDataArray,
+        direction: Direction,
+        normal_dim: str,
+    ) -> tuple[FreqModeDataArray, FreqModeDataArray]:
+        """Calculate the grid correction factors for the primal and dual grid.
+
+        Parameters
+        ----------
+        primal_distances : tuple[float, ...]
+            Relative distances to the primal grid locations along the normal direction in the original simulation grid.
+        dual_distances : tuple[float, ...]
+            Relative distances to the dual grid locations along the normal direction in the original simulation grid.
+        mode_spec : ModeSpec
+            Mode specification.
+        n_complex : ModeIndexDataArray
+            Effective indices of the modes.
+        direction : Direction
+            Direction of the propagation.
+        normal_dim : str
+            Name of the normal dimension.
+
+        Returns
+        -------
+        tuple[FreqModeDataArray, FreqModeDataArray]
+            Grid correction factors for the primal and dual grid.
+        """
+
+        distances_primal = xr.DataArray(primal_distances, coords={normal_dim: primal_distances})
+        distances_dual = xr.DataArray(dual_distances, coords={normal_dim: dual_distances})
+
+        # Propagation phase at the primal and dual locations. The k-vector is along the propagation
+        # direction, so angle_theta has to be taken into account. The distance along the propagation
+        # direction is the distance along the normal direction over cosine(theta).
+        cos_theta = np.cos(mode_spec.angle_theta)
+        k_vec = cos_theta * 2 * np.pi * n_complex * n_complex.f / C_0
+        if direction == "-":
+            k_vec *= -1
+        phase_primal = np.exp(1j * k_vec * distances_primal)
+        phase_dual = np.exp(1j * k_vec * distances_dual)
+
+        # Fields are modified by a linear interpolation to the exact monitor position
+        if distances_primal.size > 1:
+            phase_primal = phase_primal.interp(**{normal_dim: 0})
+        else:
+            phase_primal = phase_primal.squeeze(dim=normal_dim)
+        if distances_dual.size > 1:
+            phase_dual = phase_dual.interp(**{normal_dim: 0})
+        else:
+            phase_dual = phase_dual.squeeze(dim=normal_dim)
+
+        return FreqModeDataArray(phase_primal), FreqModeDataArray(phase_dual)
+
+    def interp_in_freq(
+        self,
+        freqs: FreqArray,
+        method: Literal["linear", "cubic", "poly"] = "linear",
+        renormalize: bool = True,
+        recalculate_grid_correction: bool = True,
+        assume_sorted: bool = False,
+    ) -> ModeSolverData:
+        """Interpolate mode data to new frequency points.
+
+        Interpolates all stored mode data (effective indices, field components, group indices,
+        and dispersion) from the current frequency grid to a new set of frequencies. This is
+        useful for obtaining mode data at many frequencies from computations at fewer frequencies,
+        when modes vary smoothly with frequency.
+
+        Parameters
+        ----------
+        freqs : FreqArray
+            New frequency points to interpolate to. Should generally span a similar range
+            as the original frequencies to avoid extrapolation.
+        method : Literal["linear", "cubic", "poly"]
+            Interpolation method. ``"linear"`` for linear interpolation (requires 2+ source
+            frequencies), ``"cubic"`` for cubic spline interpolation (requires 4+ source
+            frequencies), ``"poly"`` for polynomial interpolation using barycentric
+            formula (requires 3+ source frequencies).
+            For complex-valued data, real and imaginary parts are interpolated independently.
+        renormalize : bool = True
+            Whether to renormalize the mode profiles to unity power after interpolation.
+        recalculate_grid_correction : bool = True
+            Whether to recalculate the grid correction factors after interpolation or use interpolated
+            grid corrections.
+        assume_sorted: bool = False,
+            Whether to assume the frequency points are sorted.
+
+        Returns
+        -------
+        ModeSolverData
+            New :class:`ModeSolverData` object with data interpolated to the requested frequencies.
+
+        Note
+        ----
+            Interpolation assumes modes vary smoothly with frequency. Results may be inaccurate
+            near mode crossings or regions of rapid mode variation. Use frequency tracking
+            (``mode_spec.sort_spec.track_freq``) to help maintain mode ordering consistency.
+
+        Example
+        -------
+        >>> # Compute modes at 5 frequencies
+        >>> import numpy as np
+        >>> freqs_sparse = np.linspace(1e14, 2e14, 5)
+        >>> # ... create mode_solver and compute modes ...
+        >>> # mode_data = mode_solver.solve()
+        >>> # Interpolate to 50 frequencies
+        >>> freqs_dense = np.linspace(1e14, 2e14, 50)
+        >>> # mode_data_interp = mode_data.interp(freqs=freqs_dense, method='linear')
+        """
+        # Validate input
+        freqs = np.array(freqs)
+
+        source_freqs = self.monitor._stored_freqs
+
+        # Validate method-specific requirements
+        if method == "cubic" and len(source_freqs) < 4:
+            raise DataError(
+                f"Cubic interpolation requires at least 4 source frequency points. "
+                f"Got {len(source_freqs)}. Use method='linear' instead."
+            )
+
+        if method == "poly":
+            if len(source_freqs) < 3:
+                raise DataError(
+                    f"Polynomial interpolation requires at least 3 source frequency points. "
+                    f"Got {len(source_freqs)}. Use method='linear' instead."
+                )
+
+        if method not in ["linear", "cubic", "poly"]:
+            raise DataError(
+                f"Invalid interpolation method '{method}'. Use 'linear', 'cubic', or 'poly'."
+            )
+
+        # Check if we're extrapolating significantly and warn
+        freq_min, freq_max = np.min(source_freqs), np.max(source_freqs)
+        new_freq_min, new_freq_max = np.min(freqs), np.max(freqs)
+
+        if new_freq_min < freq_min * (
+            1 - MODE_INTERP_EXTRAPOLATION_TOLERANCE
+        ) or new_freq_max > freq_max * (1 + MODE_INTERP_EXTRAPOLATION_TOLERANCE):
+            log.warning(
+                f"Interpolating to frequencies outside original range "
+                f"[{freq_min:.3e}, {freq_max:.3e}] Hz. New range: "
+                f"[{new_freq_min:.3e}, {new_freq_max:.3e}] Hz. "
+                "Results may be inaccurate due to extrapolation."
+            )
+
+        # Build update dictionary
+        update_dict = self._interp_in_freq_update_dict(freqs, method, assume_sorted)
+
+        # Handle eps_spec if present - use nearest neighbor interpolation
+        if self.eps_spec is not None:
+            update_dict["eps_spec"] = list(
+                self._interp_dataarray_in_freq(
+                    FreqDataArray(self.eps_spec, coords={"f": source_freqs}),
+                    freqs,
+                    "nearest",
+                ).data
+            )
+
+        # Update monitor with new frequencies, remove interp_spece
+        update_dict["monitor"] = self.monitor.updated_copy(
+            freqs=list(freqs),
+            mode_spec=self.monitor.mode_spec.updated_copy(interp_spec=None),
+        )
+
+        if recalculate_grid_correction:
+            update_dict["grid_primal_correction"], update_dict["grid_dual_correction"] = (
+                self._grid_correction_factors(
+                    list(self.grid_distances_primal),
+                    list(self.grid_distances_dual),
+                    self.monitor.mode_spec,
+                    update_dict["n_complex"],
+                    self.monitor.direction,
+                    "xyz"[self.monitor._normal_axis],
+                )
+            )
+
+        updated_data = self.updated_copy(**update_dict)
+        if renormalize:
+            updated_data._normalize_modes()
+
+        return updated_data
+
+    @property
+    def _reduced_data(self) -> bool:
+        """Whether data will be stored at fewer frequencies than the original number of frequencies."""
+        return (
+            self.monitor.mode_spec._is_interp_spec_applied(self.monitor.freqs)
+            and self.monitor.mode_spec.interp_spec.reduce_data
+        )
+
+    @property
+    def interpolated_copy(self) -> ModeSolverData:
+        """Return a copy of the data with interpolated fields."""
+        if not self._reduced_data:
+            return self
+        interpolated_data = self.interp_in_freq(
+            freqs=self.monitor.freqs,
+            method=self.monitor.mode_spec.interp_spec.method,
+            renormalize=True,
+            recalculate_grid_correction=True,
+            assume_sorted=True,
+        )
+        return interpolated_data
 
     @property
     def time_reversed_copy(self) -> FieldData:

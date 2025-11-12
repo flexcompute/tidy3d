@@ -1800,6 +1800,30 @@
       },
       "type": "object"
     },
+    "ChebSampling": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "num_points": {
+          "minimum": 3,
+          "type": "integer"
+        },
+        "type": {
+          "default": "ChebSampling",
+          "enum": [
+            "ChebSampling"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "num_points"
+      ],
+      "type": "object"
+    },
     "ClipOperation": {
       "additionalProperties": false,
       "properties": {
@@ -3999,6 +4023,39 @@
       },
       "required": [
         "eps_inf"
+      ],
+      "type": "object"
+    },
+    "CustomSampling": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "freqs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "ArrayLike"
+            }
+          ]
+        },
+        "type": {
+          "default": "CustomSampling",
+          "enum": [
+            "CustomSampling"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "freqs"
       ],
       "type": "object"
     },
@@ -7232,6 +7289,13 @@
             }
           ]
         },
+        "interp_spec": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModeInterpSpec"
+            }
+          ]
+        },
         "num_modes": {
           "default": 1,
           "exclusiveMinimum": 0,
@@ -7338,6 +7402,7 @@
             "bend_radius": null,
             "filter_pol": null,
             "group_index_step": false,
+            "interp_spec": null,
             "num_modes": 1,
             "num_pml": [
               0,
@@ -7395,6 +7460,60 @@
       },
       "required": [
         "plane"
+      ],
+      "type": "object"
+    },
+    "ModeInterpSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "method": {
+          "default": "linear",
+          "enum": [
+            "cubic",
+            "linear",
+            "poly"
+          ],
+          "type": "string"
+        },
+        "reduce_data": {
+          "default": false,
+          "type": "boolean"
+        },
+        "sampling_spec": {
+          "discriminator": {
+            "mapping": {
+              "ChebSampling": "#/definitions/ChebSampling",
+              "CustomSampling": "#/definitions/CustomSampling",
+              "UniformSampling": "#/definitions/UniformSampling"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/ChebSampling"
+            },
+            {
+              "$ref": "#/definitions/CustomSampling"
+            },
+            {
+              "$ref": "#/definitions/UniformSampling"
+            }
+          ]
+        },
+        "type": {
+          "default": "ModeInterpSpec",
+          "enum": [
+            "ModeInterpSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "sampling_spec"
       ],
       "type": "object"
     },
@@ -7534,6 +7653,7 @@
             "bend_radius": null,
             "filter_pol": null,
             "group_index_step": false,
+            "interp_spec": null,
             "num_modes": 1,
             "num_pml": [
               0,
@@ -7795,6 +7915,7 @@
             "bend_radius": null,
             "filter_pol": null,
             "group_index_step": false,
+            "interp_spec": null,
             "num_modes": 1,
             "num_pml": [
               0,
@@ -8048,6 +8169,7 @@
             "bend_radius": null,
             "filter_pol": null,
             "group_index_step": false,
+            "interp_spec": null,
             "num_modes": 1,
             "num_pml": [
               0,
@@ -8228,6 +8350,13 @@
             }
           ],
           "default": false
+        },
+        "interp_spec": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModeInterpSpec"
+            }
+          ]
         },
         "num_modes": {
           "default": 1,
@@ -11816,6 +11945,30 @@
       },
       "required": [
         "dl"
+      ],
+      "type": "object"
+    },
+    "UniformSampling": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "num_points": {
+          "minimum": 2,
+          "type": "integer"
+        },
+        "type": {
+          "default": "UniformSampling",
+          "enum": [
+            "UniformSampling"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "num_points"
       ],
       "type": "object"
     },

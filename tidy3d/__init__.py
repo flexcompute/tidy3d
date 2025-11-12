@@ -339,7 +339,14 @@ from .components.mode.data.sim_data import ModeSimulationData
 from .components.mode.simulation import ModeSimulation
 
 # modes
-from .components.mode_spec import ModeSortSpec, ModeSpec
+from .components.mode_spec import (
+    ChebSampling,
+    CustomSampling,
+    ModeInterpSpec,
+    ModeSortSpec,
+    ModeSpec,
+    UniformSampling,
+)
 
 # monitors
 from .components.monitor import (
@@ -524,6 +531,7 @@ __all__ = [
     "ChargeDataArray",
     "ChargeInsulatorMedium",
     "ChargeToleranceSpec",
+    "ChebSampling",
     "ClipOperation",
     "CoaxialLumpedResistor",
     "CompositeCurrentIntegral",
@@ -558,6 +566,7 @@ __all__ = [
     "CustomLorentz",
     "CustomMedium",
     "CustomPoleResidue",
+    "CustomSampling",
     "CustomSellmeier",
     "CustomSourceTime",
     "Cylinder",
@@ -702,6 +711,7 @@ __all__ = [
     "ModeAmpsDataArray",
     "ModeData",
     "ModeIndexDataArray",
+    "ModeInterpSpec",
     "ModeMonitor",
     "ModeSimulation",
     "ModeSimulationData",
@@ -809,6 +819,7 @@ __all__ = [
     "UniformCurrentSource",
     "UniformGrid",
     "UniformHeatSource",
+    "UniformSampling",
     "UniformUnstructuredGrid",
     "UnsteadyHeatAnalysis",
     "UnsteadySpec",

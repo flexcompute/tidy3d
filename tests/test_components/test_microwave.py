@@ -1876,3 +1876,337 @@ def test_RF_license_suppression():
     with AssertLogLevel(None):
         mode_spec = td.MicrowaveModeSpec._default_without_license_warning()
     td.config.microwave.suppress_rf_license_warning = original_setting
+
+
+def test_microwave_mode_data_reordering_with_transmission_line_data():
+    """Test that transmission_line_data is correctly reordered when modes are reordered."""
+    from tidy3d.components.data.data_array import (
+        CurrentFreqModeDataArray,
+        ImpedanceFreqModeDataArray,
+        ModeIndexDataArray,
+        ScalarModeFieldDataArray,
+        VoltageFreqModeDataArray,
+    )
+    from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+
+    # Setup coordinates
+    x = [-1, 1, 3]
+    y = [-2, 0]
+    z = [-3, -1, 1, 3, 5]
+    f = [2e14, 3e14]
+    mode_index = np.arange(3)
+
+    grid = td.Grid(boundaries=td.Coords(x=x, y=y, z=z))
+    field_coords = {"x": x[:-1], "y": y[:-1], "z": z[:-1], "f": f, "mode_index": mode_index}
+    index_coords = {"f": f, "mode_index": mode_index}
+
+    # Create field data with distinct values for each mode
+    field_values = np.zeros((2, 1, 4, 2, 3), dtype=complex)
+    for mode_idx in range(3):
+        # Each mode gets a unique value to track reordering
+        field_values[:, :, :, :, mode_idx] = (mode_idx + 1) * (1 + 1j)
+
+    field = ScalarModeFieldDataArray(field_values, coords=field_coords)
+
+    # Create mode index data with distinct values for each mode
+    index_values = np.zeros((2, 3), dtype=complex)
+    for mode_idx in range(3):
+        index_values[:, mode_idx] = (mode_idx + 1) * 1.5 + 0.1j
+    index_data = ModeIndexDataArray(index_values, coords=index_coords)
+
+    # Create transmission line data with distinct values for each mode
+    impedance_values = np.zeros((2, 3))
+    voltage_values = np.zeros((2, 3), dtype=complex)
+    current_values = np.zeros((2, 3), dtype=complex)
+
+    for mode_idx in range(3):
+        # Each mode gets unique impedance, voltage, and current values
+        impedance_values[:, mode_idx] = 50 * (mode_idx + 1)
+        voltage_values[:, mode_idx] = (mode_idx + 1) * (10 + 5j)
+        current_values[:, mode_idx] = (mode_idx + 1) * (0.2 + 0.1j)
+
+    impedance_data = ImpedanceFreqModeDataArray(impedance_values, coords=index_coords)
+    voltage_data = VoltageFreqModeDataArray(voltage_values, coords=index_coords)
+    current_data = CurrentFreqModeDataArray(current_values, coords=index_coords)
+
+    tl_data = TransmissionLineDataset(
+        Z0=impedance_data, voltage_coeffs=voltage_data, current_coeffs=current_data
+    )
+
+    # Create monitor
+    monitor = td.MicrowaveModeSolverMonitor(
+        center=(0, 0, 0),
+        size=(2, 0, 6),
+        freqs=[2e14, 3e14],
+        mode_spec=td.MicrowaveModeSpec(num_modes=3, impedance_specs=td.AutoImpedanceSpec()),
+        name="microwave_mode_solver",
+    )
+
+    # Create MicrowaveModeSolverData
+    data = td.MicrowaveModeSolverData(
+        monitor=monitor,
+        Ex=field,
+        Ey=field,
+        Ez=field,
+        Hx=field,
+        Hy=field,
+        Hz=field,
+        n_complex=index_data,
+        grid_expanded=grid,
+        transmission_line_data=tl_data,
+    )
+
+    # Define a reordering: reverse the mode order for each frequency
+    # Shape: (num_freqs, num_modes) = (2, 3)
+    # Original order: [0, 1, 2] -> New order: [2, 1, 0]
+    sort_inds_2d = np.array([[2, 1, 0], [2, 1, 0]])
+
+    # Apply mode reordering
+    reordered_data = data._apply_mode_reorder(sort_inds_2d)
+
+    # Verify that the main mode data is reordered correctly
+    # Original mode 2 should now be at index 0
+    original_mode_2_value = (2 + 1) * (1 + 1j)  # Mode 2 had value 3*(1+1j)
+    assert np.allclose(
+        reordered_data.Ex.isel(mode_index=0, x=0, y=0, z=0).values, original_mode_2_value
+    ), "Main field data not reordered correctly"
+
+    # Original mode 0 should now be at index 2
+    original_mode_0_value = (0 + 1) * (1 + 1j)  # Mode 0 had value 1*(1+1j)
+    assert np.allclose(
+        reordered_data.Ex.isel(mode_index=2, x=0, y=0, z=0).values, original_mode_0_value
+    ), "Main field data not reordered correctly"
+
+    # Verify that transmission_line_data is also reordered correctly
+    assert reordered_data.transmission_line_data is not None, (
+        "transmission_line_data should not be None"
+    )
+
+    # Check Z0 reordering
+    # Original mode 2 had Z0 = 50 * 3 = 150
+    assert np.allclose(reordered_data.transmission_line_data.Z0.isel(mode_index=0).values, 150.0), (
+        "transmission_line_data.Z0 not reordered correctly"
+    )
+
+    # Original mode 0 had Z0 = 50 * 1 = 50
+    assert np.allclose(reordered_data.transmission_line_data.Z0.isel(mode_index=2).values, 50.0), (
+        "transmission_line_data.Z0 not reordered correctly"
+    )
+
+    # Check voltage_coeffs reordering
+    # Original mode 2 had voltage = 3 * (10 + 5j)
+    assert np.allclose(
+        reordered_data.transmission_line_data.voltage_coeffs.isel(mode_index=0).values,
+        3 * (10 + 5j),
+    ), "transmission_line_data.voltage_coeffs not reordered correctly"
+
+    # Original mode 0 had voltage = 1 * (10 + 5j)
+    assert np.allclose(
+        reordered_data.transmission_line_data.voltage_coeffs.isel(mode_index=2).values,
+        1 * (10 + 5j),
+    ), "transmission_line_data.voltage_coeffs not reordered correctly"
+
+    # Check current_coeffs reordering
+    # Original mode 2 had current = 3 * (0.2 + 0.1j)
+    assert np.allclose(
+        reordered_data.transmission_line_data.current_coeffs.isel(mode_index=0).values,
+        3 * (0.2 + 0.1j),
+    ), "transmission_line_data.current_coeffs not reordered correctly"
+
+    # Original mode 0 had current = 1 * (0.2 + 0.1j)
+    assert np.allclose(
+        reordered_data.transmission_line_data.current_coeffs.isel(mode_index=2).values,
+        1 * (0.2 + 0.1j),
+    ), "transmission_line_data.current_coeffs not reordered correctly"
+
+    # Verify mode index data is also reordered
+    # Original mode 2 had n_complex = 3 * 1.5 + 0.1j
+    assert np.allclose(reordered_data.n_complex.isel(mode_index=0).values, 3 * 1.5 + 0.1j), (
+        "n_complex not reordered correctly"
+    )
+
+
+def test_microwave_mode_data_interpolation():
+    """Test that MicrowaveModeSolverData interpolation correctly handles transmission_line_data."""
+    from tidy3d.components.data.data_array import (
+        CurrentFreqModeDataArray,
+        ImpedanceFreqModeDataArray,
+        ModeIndexDataArray,
+        ScalarModeFieldDataArray,
+        VoltageFreqModeDataArray,
+    )
+    from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+
+    # Setup coordinates with sparse frequencies
+    x = [-1, 1, 3]
+    y = [-2, 0]
+    z = [-3, -1, 1, 3, 5]
+    f_sparse = np.array([1e14, 1.5e14, 2e14])  # 3 source frequencies
+    mode_index = np.arange(2)
+
+    grid = td.Grid(boundaries=td.Coords(x=x, y=y, z=z))
+    field_coords = {"x": x[:-1], "y": y[:-1], "z": z[:-1], "f": f_sparse, "mode_index": mode_index}
+    index_coords = {"f": f_sparse, "mode_index": mode_index}
+
+    # Create field data with frequency-dependent values
+    field_values = np.zeros(
+        (len(x) - 1, len(y) - 1, len(z) - 1, len(f_sparse), len(mode_index)), dtype=complex
+    )
+    for f_idx, freq in enumerate(f_sparse):
+        for mode_idx in range(len(mode_index)):
+            # Value depends on both frequency and mode: (freq/1e14) * (mode+1) * (1+1j)
+            field_values[:, :, :, f_idx, mode_idx] = (freq / 1e14) * (mode_idx + 1) * (1 + 1j)
+
+    field = ScalarModeFieldDataArray(field_values, coords=field_coords)
+
+    # Create mode index data with frequency dependence
+    index_values = np.zeros((len(f_sparse), len(mode_index)), dtype=complex)
+    for f_idx, freq in enumerate(f_sparse):
+        for mode_idx in range(len(mode_index)):
+            # n_eff increases with frequency: 1.5 + (freq/1e14)*0.1 + mode_idx*0.2
+            index_values[f_idx, mode_idx] = 1.5 + (freq / 1e14) * 0.1 + mode_idx * 0.2 + 0.01j
+    index_data = ModeIndexDataArray(index_values, coords=index_coords)
+
+    # Create transmission line data with frequency dependence
+    impedance_values = np.zeros((len(f_sparse), len(mode_index)))
+    voltage_values = np.zeros((len(f_sparse), len(mode_index)), dtype=complex)
+    current_values = np.zeros((len(f_sparse), len(mode_index)), dtype=complex)
+
+    for f_idx, freq in enumerate(f_sparse):
+        for mode_idx in range(len(mode_index)):
+            # Impedance varies with frequency: 50 + (freq/1e14)*10 + mode_idx*20
+            impedance_values[f_idx, mode_idx] = 50 + (freq / 1e14) * 10 + mode_idx * 20
+            # Voltage varies with frequency
+            voltage_values[f_idx, mode_idx] = ((freq / 1e14) + mode_idx) * (10 + 5j)
+            # Current varies with frequency
+            current_values[f_idx, mode_idx] = ((freq / 1e14) + mode_idx) * (0.2 + 0.1j)
+
+    impedance_data = ImpedanceFreqModeDataArray(impedance_values, coords=index_coords)
+    voltage_data = VoltageFreqModeDataArray(voltage_values, coords=index_coords)
+    current_data = CurrentFreqModeDataArray(current_values, coords=index_coords)
+
+    tl_data = TransmissionLineDataset(
+        Z0=impedance_data, voltage_coeffs=voltage_data, current_coeffs=current_data
+    )
+
+    # Create monitor
+    monitor = td.MicrowaveModeSolverMonitor(
+        center=(0, 0, 0),
+        size=(2, 0, 6),
+        freqs=f_sparse,
+        mode_spec=td.MicrowaveModeSpec(num_modes=2, impedance_specs=td.AutoImpedanceSpec()),
+        name="microwave_mode_solver",
+    )
+
+    # Create MicrowaveModeSolverData
+    data = td.MicrowaveModeSolverData(
+        monitor=monitor,
+        Ex=field,
+        Ey=field,
+        Ez=field,
+        Hx=field,
+        Hy=field,
+        Hz=field,
+        n_complex=index_data,
+        grid_expanded=grid,
+        transmission_line_data=tl_data,
+    )
+
+    # Interpolate to denser frequency grid
+    f_dense = np.linspace(1e14, 2e14, 11)
+
+    # Test linear interpolation
+    data_interp_linear = data.interp_in_freq(freqs=f_dense, method="linear", renormalize=False)
+
+    # Verify that interpolated data has correct shape
+    assert len(data_interp_linear.monitor.freqs) == len(f_dense), (
+        "Interpolated data should have new frequency count"
+    )
+    assert data_interp_linear.Ex.shape[-1] == len(mode_index), "Mode count should be preserved"
+    assert data_interp_linear.Ex.shape[-2] == len(f_dense), (
+        "Frequency dimension should match target"
+    )
+
+    # Verify that transmission_line_data is also interpolated
+    assert data_interp_linear.transmission_line_data is not None, (
+        "transmission_line_data should be interpolated"
+    )
+    assert len(data_interp_linear.transmission_line_data.Z0.coords["f"]) == len(f_dense), (
+        "transmission_line_data.Z0 should be interpolated to new frequencies"
+    )
+    assert len(data_interp_linear.transmission_line_data.voltage_coeffs.coords["f"]) == len(
+        f_dense
+    ), "transmission_line_data.voltage_coeffs should be interpolated to new frequencies"
+    assert len(data_interp_linear.transmission_line_data.current_coeffs.coords["f"]) == len(
+        f_dense
+    ), "transmission_line_data.current_coeffs should be interpolated to new frequencies"
+
+    # Test interpolation accuracy at midpoint
+    f_mid = 1.5e14
+
+    # Check that field interpolation is reasonable
+    # At f=1.5e14, mode 0 should have value approximately (1.5) * 1 * (1+1j) = 1.5*(1+1j)
+    field_at_mid_mode0 = data_interp_linear.Ex.sel(
+        f=f_mid, mode_index=0, x=0, y=0, z=0, method="nearest"
+    ).values
+    expected_field_mode0 = 1.5 * 1 * (1 + 1j)
+    assert np.allclose(field_at_mid_mode0, expected_field_mode0, rtol=0.01), (
+        f"Field interpolation for mode 0: expected {expected_field_mode0}, got {field_at_mid_mode0}"
+    )
+
+    # Check that n_complex interpolation is reasonable
+    # At f=1.5e14, mode 0 should have n_eff approximately 1.5 + 1.5*0.1 + 0*0.2 = 1.65
+    n_complex_at_mid_mode0 = data_interp_linear.n_complex.sel(
+        f=f_mid, mode_index=0, method="nearest"
+    ).values
+    expected_n_complex_mode0 = 1.5 + 1.5 * 0.1 + 0 * 0.2 + 0.01j
+    assert np.allclose(n_complex_at_mid_mode0, expected_n_complex_mode0, rtol=0.01), (
+        f"n_complex interpolation for mode 0: expected {expected_n_complex_mode0}, got {n_complex_at_mid_mode0}"
+    )
+
+    # Check that transmission line data interpolation is reasonable
+    # At f=1.5e14, mode 0 should have Z0 approximately 50 + 1.5*10 + 0*20 = 65
+    Z0_at_mid_mode0 = data_interp_linear.transmission_line_data.Z0.sel(
+        f=f_mid, mode_index=0, method="nearest"
+    ).values
+    expected_Z0_mode0 = 50 + 1.5 * 10 + 0 * 20
+    assert np.allclose(Z0_at_mid_mode0, expected_Z0_mode0, rtol=0.01), (
+        f"Z0 interpolation for mode 0: expected {expected_Z0_mode0}, got {Z0_at_mid_mode0}"
+    )
+
+    # At f=1.5e14, mode 0 should have voltage approximately (1.5 + 0) * (10 + 5j) = 1.5*(10+5j)
+    voltage_at_mid_mode0 = data_interp_linear.transmission_line_data.voltage_coeffs.sel(
+        f=f_mid, mode_index=0, method="nearest"
+    ).values
+    expected_voltage_mode0 = 1.5 * (10 + 5j)
+    assert np.allclose(voltage_at_mid_mode0, expected_voltage_mode0, rtol=0.01), (
+        f"voltage_coeffs interpolation for mode 0: expected {expected_voltage_mode0}, got {voltage_at_mid_mode0}"
+    )
+
+    # At f=1.5e14, mode 0 should have current approximately (1.5 + 0) * (0.2 + 0.1j) = 1.5*(0.2+0.1j)
+    current_at_mid_mode0 = data_interp_linear.transmission_line_data.current_coeffs.sel(
+        f=f_mid, mode_index=0, method="nearest"
+    ).values
+    expected_current_mode0 = 1.5 * (0.2 + 0.1j)
+    assert np.allclose(current_at_mid_mode0, expected_current_mode0, rtol=0.01), (
+        f"current_coeffs interpolation for mode 0: expected {expected_current_mode0}, got {current_at_mid_mode0}"
+    )
+
+    # Test at endpoints to ensure they match original values
+    # At f=1e14, mode 1 should have Z0 = 50 + 1*10 + 1*20 = 80
+    Z0_at_start_mode1 = data_interp_linear.transmission_line_data.Z0.sel(
+        f=1e14, mode_index=1, method="nearest"
+    ).values
+    expected_Z0_start_mode1 = 50 + 1 * 10 + 1 * 20
+    assert np.allclose(Z0_at_start_mode1, expected_Z0_start_mode1, rtol=1e-6), (
+        f"Z0 at endpoint should match original: expected {expected_Z0_start_mode1}, got {Z0_at_start_mode1}"
+    )
+
+    # At f=2e14, mode 1 should have Z0 = 50 + 2*10 + 1*20 = 90
+    Z0_at_end_mode1 = data_interp_linear.transmission_line_data.Z0.sel(
+        f=2e14, mode_index=1, method="nearest"
+    ).values
+    expected_Z0_end_mode1 = 50 + 2 * 10 + 1 * 20
+    assert np.allclose(Z0_at_end_mode1, expected_Z0_end_mode1, rtol=1e-6), (
+        f"Z0 at endpoint should match original: expected {expected_Z0_end_mode1}, got {Z0_at_end_mode1}"
+    )

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, Union, get_args
+from typing import Any, Callable, Literal, Optional, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import Axis, xyz
+from tidy3d.components.types import Axis, FreqArray, xyz
 from tidy3d.constants import C_0, PICOSECOND_PER_NANOMETER_PER_KILOMETER, UnitScaling
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
@@ -48,6 +48,139 @@ class Dataset(Tidy3dBaseModel, ABC):
             if isinstance(data, DataArray):
                 data_arrs[key] = data
         return data_arrs
+
+
+class FreqDataset(Dataset, ABC):
+    """Abstract base class for objects that store collections of `:class:`.DataArray`s."""
+
+    def _interp_in_freq_update_dict(
+        self,
+        freqs: FreqArray,
+        method: Literal["linear", "cubic", "poly"] = "linear",
+        assume_sorted: bool = False,
+    ) -> dict[str, DataArray]:
+        """Interpolate mode data to new frequency points.
+
+        Interpolates all stored mode data (effective indices, field components, group indices,
+        and dispersion) from the current frequency grid to a new set of frequencies. This is
+        useful for obtaining mode data at many frequencies from computations at fewer frequencies,
+        when modes vary smoothly with frequency.
+
+        Parameters
+        ----------
+        freqs : FreqArray
+            New frequency points to interpolate to. Should generally span a similar range
+            as the original frequencies to avoid extrapolation.
+        method : Literal["linear", "cubic", "poly"]
+            Interpolation method. ``"linear"`` for linear interpolation (requires 2+ source
+            frequencies), ``"cubic"`` for cubic spline interpolation (requires 4+ source
+            frequencies), ``"poly"`` for polynomial interpolation using barycentric
+            formula (requires 3+ source frequencies).
+            For complex-valued data, real and imaginary parts are interpolated independently.
+        assume_sorted: bool = False,
+            Whether to assume the frequency points are sorted.
+
+        Returns
+        -------
+        ModeSolverData
+            New :class:`ModeSolverData` object with data interpolated to the requested frequencies.
+
+        Note
+        ----
+            Interpolation assumes modes vary smoothly with frequency. Results may be inaccurate
+            near mode crossings or regions of rapid mode variation. Use frequency tracking
+            (``mode_spec.sort_spec.track_freq``) to help maintain mode ordering consistency.
+
+            For polynomial interpolation, source frequencies at Chebyshev nodes provide
+            optimal accuracy within the frequency range.
+
+        Example
+        -------
+        >>> # Compute modes at 5 frequencies
+        >>> import numpy as np
+        >>> freqs_sparse = np.linspace(1e14, 2e14, 5)
+        >>> # ... create mode_solver and compute modes ...
+        >>> # mode_data = mode_solver.solve()
+        >>> # Interpolate to 50 frequencies
+        >>> freqs_dense = np.linspace(1e14, 2e14, 50)
+        >>> # mode_data_interp = mode_data.interp(freqs=freqs_dense, method='linear')
+        """
+        freqs = np.array(freqs)
+
+        modify_data = {}
+        for key, data in self.data_arrs.items():
+            modify_data[key] = self._interp_dataarray_in_freq(data, freqs, method, assume_sorted)
+
+        return modify_data
+
+    @staticmethod
+    def _interp_dataarray_in_freq(
+        data: DataArray,
+        freqs: FreqArray,
+        method: Literal["linear", "cubic", "poly", "nearest"],
+        assume_sorted: bool = False,
+    ) -> DataArray:
+        """Interpolate a DataArray along the frequency coordinate.
+
+        Parameters
+        ----------
+        data : DataArray
+            Data array to interpolate. Must have a frequency coordinate ``"f"``.
+        freqs : FreqArray
+            New frequency points.
+        method : Literal["linear", "cubic", "poly", "nearest"]
+            Interpolation method (``"linear"``, ``"cubic"``, ``"poly"``, or ``"nearest"``).
+            For ``"poly"``, uses barycentric formula for polynomial interpolation.
+        assume_sorted: bool = False,
+            Whether to assume the frequency points are sorted.
+
+        Returns
+        -------
+        DataArray
+            Interpolated data array with the same structure but new frequency points.
+        """
+        # Map 'poly' to xarray's 'barycentric' method
+        xr_method = "barycentric" if method == "poly" else method
+
+        # Use xarray's built-in interpolation
+        # For complex data, this automatically interpolates real and imaginary parts
+        interp_kwargs = {"method": xr_method}
+
+        if method == "nearest":
+            return data.sel(f=freqs, method="nearest")
+        else:
+            if method != "poly":
+                interp_kwargs["kwargs"] = {"fill_value": "extrapolate"}
+            return data.interp(f=freqs, assume_sorted=assume_sorted, **interp_kwargs)
+
+
+class ModeFreqDataset(FreqDataset, ABC):
+    """Abstract base class for objects that store collections of `:class:`.DataArray`s."""
+
+    def _apply_mode_reorder(self, sort_inds_2d):
+        """Apply a mode reordering along mode_index for all frequency indices.
+
+        Parameters
+        ----------
+        sort_inds_2d : np.ndarray
+            Array of shape (num_freqs, num_modes) where each row is the
+            permutation to apply to the mode_index for that frequency.
+        """
+        num_freqs, num_modes = sort_inds_2d.shape
+        modify_data = {}
+        for key, data in self.data_arrs.items():
+            if "mode_index" not in data.dims or "f" not in data.dims:
+                continue
+            dims_orig = data.dims
+            f_coord = data.coords["f"]
+            slices = []
+            for ifreq in range(num_freqs):
+                sl = data.isel(f=ifreq, mode_index=sort_inds_2d[ifreq])
+                slices.append(sl.assign_coords(mode_index=np.arange(num_modes)))
+            # Concatenate along the 'f' dimension name and then restore original frequency coordinates
+            data = xr.concat(slices, dim="f").assign_coords(f=f_coord).transpose(*dims_orig)
+            modify_data[key] = data
+        return self.updated_copy(**modify_data)
 
 
 class AbstractFieldDataset(Dataset, ABC):
@@ -492,7 +625,7 @@ class AuxFieldTimeDataset(AuxFieldDataset):
     )
 
 
-class ModeSolverDataset(ElectromagneticFieldDataset):
+class ModeSolverDataset(ElectromagneticFieldDataset, ModeFreqDataset):
     """Dataset storing scalar components of E and H fields as a function of freq. and mode_index.
 
     Example
