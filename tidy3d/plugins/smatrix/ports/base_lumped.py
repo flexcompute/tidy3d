@@ -94,3 +94,11 @@ class AbstractLumpedPort(AbstractTerminalPort):
     @abstractmethod
     def _check_grid_size(self, yee_grid: YeeGrid) -> None:
         """Raises :class:`SetupError` if the grid is too coarse at port locations."""
+
+    @property
+    def _is_using_mesh_refinement(self) -> bool:
+        """Check if this lumped port is using any mesh refinement options.
+
+        Returns ``True`` if snapping points are enabled or custom grid cell count is specified.
+        """
+        return self.enable_snapping_points or self.num_grid_cells is not None

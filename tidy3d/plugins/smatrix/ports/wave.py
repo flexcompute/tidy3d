@@ -365,3 +365,11 @@ class WavePort(AbstractTerminalPort, Box):
                 f"'mode_spec.num_modes' ({num_modes}). Valid range is 0 to {num_modes - 1}."
             )
         return val
+
+    @property
+    def _is_using_mesh_refinement(self) -> bool:
+        """Check if this wave port is using mesh refinement options.
+
+        Returns ``True`` if a custom grid cell count is specified.
+        """
+        return self.num_grid_cells is not None

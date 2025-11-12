@@ -197,6 +197,8 @@ def build_terminal_modeler(scale: float) -> TerminalComponentModeler:
         voltage_axis=1,
         name="lp1",
         impedance=50.0,
+        num_grid_cells=None,
+        enable_snapping_points=False,
     )
     p2 = RectLumpedPort(
         center=(0.0, 0.0, 1.5),
@@ -204,6 +206,8 @@ def build_terminal_modeler(scale: float) -> TerminalComponentModeler:
         voltage_axis=1,
         name="lp2",
         impedance=50.0,
+        num_grid_cells=None,
+        enable_snapping_points=False,
     )
 
     freqs = [2.0e14]
