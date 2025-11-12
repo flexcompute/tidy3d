@@ -187,7 +187,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
     @classmethod
     def postprocess(cls, file_path: PathLike, lazy: bool = True) -> WorkflowDataType:
         """Load .yaml, .json, or .hdf5 file to
-        ``WorkflowDataType`` instance instance.
+        ``WorkflowDataType`` instance.
 
         Parameters
         ----------
