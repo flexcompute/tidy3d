@@ -42,6 +42,7 @@ JSON_TAG = "JSON_STRING"
 MAX_STRING_LENGTH = 1_000_000_000
 FORBID_SPECIAL_CHARACTERS = ["/"]
 TRACED_FIELD_KEYS_ATTR = "__tidy3d_traced_field_keys__"
+TYPE_TO_CLASS_MAP: dict[str, type[Tidy3dBaseModel]] = {}
 
 
 def cache(prop):
@@ -195,6 +196,76 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         cls.add_type_field()
         cls.generate_docstring()
+        type_value = cls.__fields__.get(TYPE_TAG_STR)
+        if type_value and type_value.default:
+            TYPE_TO_CLASS_MAP[type_value.default] = cls
+
+    @classmethod
+    def _get_type_value(cls, obj: dict[str, Any]) -> str:
+        """Return the type tag from a raw dictionary."""
+        if not isinstance(obj, dict):
+            raise TypeError("Input must be a dict")
+        try:
+            type_value = obj[TYPE_TAG_STR]
+        except KeyError as exc:
+            raise ValueError(f'Missing "{TYPE_TAG_STR}" in data') from exc
+        if not isinstance(type_value, str) or not type_value:
+            raise ValueError(f'Invalid "{TYPE_TAG_STR}" value: {type_value!r}')
+        return type_value
+
+    @classmethod
+    def _get_registered_class(cls, type_value: str) -> type[Tidy3dBaseModel]:
+        try:
+            return TYPE_TO_CLASS_MAP[type_value]
+        except KeyError as exc:
+            raise ValueError(f"Unknown type: {type_value}") from exc
+
+    @classmethod
+    def _should_dispatch_to(cls, target_cls: type[Tidy3dBaseModel]) -> bool:
+        """Return True if ``cls`` allows auto-dispatch to ``target_cls``."""
+        return issubclass(target_cls, cls)
+
+    @classmethod
+    def _resolve_dispatch_target(cls, obj: dict[str, Any]) -> type[Tidy3dBaseModel]:
+        """Determine which subclass should receive ``obj``."""
+        type_value = cls._get_type_value(obj)
+        target_cls = cls._get_registered_class(type_value)
+        if cls._should_dispatch_to(target_cls):
+            return target_cls
+        if target_cls is cls:
+            return cls
+        raise ValueError(
+            f'Cannot parse type "{type_value}" using {cls.__name__}; expected subclass of {cls.__name__}.'
+        )
+
+    @classmethod
+    def _target_cls_from_file(
+        cls, fname: PathLike, group_path: Optional[str] = None
+    ) -> type[Tidy3dBaseModel]:
+        """Peek the file metadata to determine the subclass to instantiate."""
+        model_dict = cls.dict_from_file(
+            fname=fname,
+            group_path=group_path,
+            load_data_arrays=False,
+        )
+        return cls._resolve_dispatch_target(model_dict)
+
+    @classmethod
+    def _parse_obj(cls, obj: dict[str, Any], **parse_obj_kwargs: Any) -> Tidy3dBaseModel:
+        """Dispatch ``obj`` to the correct subclass registered in the type map."""
+        target_cls = cls._resolve_dispatch_target(obj)
+        if target_cls is cls:
+            return super().parse_obj(obj, **parse_obj_kwargs)
+        return target_cls.parse_obj(obj, **parse_obj_kwargs)
+
+    @classmethod
+    def _parse_model_dict(
+        cls, model_dict: dict[str, Any], **parse_obj_kwargs: Any
+    ) -> Tidy3dBaseModel:
+        """Parse ``model_dict`` while optionally auto-dispatching when called on the base class."""
+        if cls is Tidy3dBaseModel:
+            return cls._parse_obj(model_dict, **parse_obj_kwargs)
+        return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
     class Config:
         """Sets config for all :class:`Tidy3dBaseModel` objects.
@@ -404,16 +475,19 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
         if lazy:
-            Proxy = _make_lazy_proxy(cls, on_load=on_load)  # staticmethod usage
+            target_cls = cls._target_cls_from_file(fname=fname, group_path=group_path)
+            Proxy = _make_lazy_proxy(target_cls, on_load=on_load)
             return Proxy(fname, group_path, parse_obj_kwargs)
         model_dict = cls.dict_from_file(fname=fname, group_path=group_path)
-        obj = cls.parse_obj(model_dict, **parse_obj_kwargs)
+        obj = cls._parse_model_dict(model_dict, **parse_obj_kwargs)
         if not lazy and on_load is not None:
             on_load(obj)
         return obj
 
     @classmethod
-    def dict_from_file(cls, fname: PathLike, group_path: Optional[str] = None) -> dict:
+    def dict_from_file(
+        cls, fname: PathLike, group_path: Optional[str] = None, *, load_data_arrays: bool = True
+    ) -> dict:
         """Loads a dictionary containing the model from a .yaml, .json, .hdf5, or .hdf5.gz file.
 
         Parameters
@@ -437,10 +511,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         kwargs = {"fname": fname_path}
 
         if group_path is not None:
-            if extension == ".hdf5" or extension == ".hdf5.gz":
+            if extension in {".hdf5", ".hdf5.gz", ".h5"}:
                 kwargs["group_path"] = group_path
             else:
                 log.warning("'group_path' provided, but this feature only works with hdf5 files.")
+
+        if extension in {".hdf5", ".hdf5.gz", ".h5"}:
+            kwargs["load_data_arrays"] = load_data_arrays
 
         converter = {
             ".json": cls.dict_from_json,
@@ -493,7 +570,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation = Simulation.from_json(fname='folder/sim.json') # doctest: +SKIP
         """
         model_dict = cls.dict_from_json(fname=fname)
-        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+        return cls._parse_model_dict(model_dict, **parse_obj_kwargs)
 
     @classmethod
     def dict_from_json(cls, fname: PathLike) -> dict:
@@ -558,7 +635,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation = Simulation.from_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
         model_dict = cls.dict_from_yaml(fname=fname)
-        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+        return cls._parse_model_dict(model_dict, **parse_obj_kwargs)
 
     @classmethod
     def dict_from_yaml(cls, fname: PathLike) -> dict:
@@ -679,6 +756,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         fname: PathLike,
         group_path: str = "",
         custom_decoders: Optional[list[Callable]] = None,
+        load_data_arrays: bool = True,
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
 
@@ -752,7 +830,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         model_dict = json.loads(cls._json_string_from_hdf5(fname=fname_path))
         group_path = cls._construct_group_path(group_path)
         model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
-        load_data_from_file(model_dict=model_dict, group_path=group_path)
+        if load_data_arrays:
+            load_data_from_file(model_dict=model_dict, group_path=group_path)
         return model_dict
 
     @classmethod
@@ -790,7 +869,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             group_path=group_path,
             custom_decoders=custom_decoders,
         )
-        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+        return cls._parse_model_dict(model_dict, **parse_obj_kwargs)
 
     def to_hdf5(
         self,
@@ -861,6 +940,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         fname: PathLike,
         group_path: str = "",
         custom_decoders: Optional[list[Callable]] = None,
+        load_data_arrays: bool = True,
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5.gz file.
 
@@ -893,6 +973,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 extracted_path,
                 group_path=group_path,
                 custom_decoders=custom_decoders,
+                load_data_arrays=load_data_arrays,
             )
         finally:
             extracted_path.unlink(missing_ok=True)
@@ -934,7 +1015,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             group_path=group_path,
             custom_decoders=custom_decoders,
         )
-        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+        return cls._parse_model_dict(model_dict, **parse_obj_kwargs)
 
     def to_hdf5_gz(
         self, fname: PathLike | io.BytesIO, custom_encoders: Optional[list[Callable]] = None
@@ -1148,7 +1229,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         for path, value in field_mapping.items():
             insert_value(value, path=path, sub_dict=self_dict)
 
-        return self.parse_obj(self_dict)
+        return type(self)._parse_model_dict(self_dict)
 
     def _serialized_traced_field_keys(
         self, field_mapping: AutogradFieldMap | None = None
@@ -1360,6 +1441,7 @@ def _make_lazy_proxy(
         A class named ``<TargetClsName>Proxy`` with init args:
         ``(fname, group_path, parse_obj_kwargs)``.
     """
+
     proxy_name = f"{target_cls.__name__}Proxy"
 
     class _LazyProxy(target_cls):
@@ -1398,11 +1480,11 @@ def _make_lazy_proxy(
                 kwargs = d["_lazy_parse_obj_kwargs"]
 
                 model_dict = target_cls.dict_from_file(fname=fname, group_path=group_path)
-                target = target_cls.parse_obj(model_dict, **kwargs)
+                target = target_cls._parse_model_dict(model_dict, **kwargs)
 
                 d.clear()
                 d.update(target.__dict__)
-                object.__setattr__(self, "__class__", target_cls)
+                object.__setattr__(self, "__class__", target.__class__)
                 object.__setattr__(self, "__fields_set__", set(target.__fields_set__))
                 private_attrs = getattr(target, "__private_attributes__", {}) or {}
                 for attr_name in private_attrs:

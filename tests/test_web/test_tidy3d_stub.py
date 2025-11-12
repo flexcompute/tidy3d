@@ -42,6 +42,15 @@ def make_sim():
     )
 
 
+def is_lazy_object(data):
+    assert set(data.__dict__.keys()) == {
+        "_lazy_fname",
+        "_lazy_group_path",
+        "_lazy_parse_obj_kwargs",
+    }
+    return True
+
+
 def make_sim_data(file_size_gb=0.001):
     """Makes a simulation data."""
     N = int(2.528e8 / 4 * file_size_gb)
@@ -146,22 +155,16 @@ def test_stub_data_lazy_loading(tmp_path):
         sim_data = Tidy3dStubData.postprocess(file_path, lazy=True)
 
     sim_data_copy = sim_data.copy()
-    assert type(sim_data).__name__ == "SimulationDataProxy"
-    assert type(sim_data_copy).__name__ == "SimulationDataProxy"
+
+    # variable dict should only contain metadata to load the data, not the data itself
+    assert is_lazy_object(sim_data)
 
     # the type should be still SimulationData despite being lazy
     assert isinstance(sim_data, SimulationData)
 
-    # variable dict should only contain metadata to load the data, not the data itself
-    assert set(sim_data.__dict__.keys()) == {
-        "_lazy_fname",
-        "_lazy_group_path",
-        "_lazy_parse_obj_kwargs",
-    }
-
     # we expect a warning from the lazy object if some field is accessed
     with AssertLogLevel("WARNING", contains_str=sim_diverged_log):
-        _ = sim_data.monitor_data
+        _ = sim_data_copy.monitor_data
 
 
 @pytest.mark.parametrize(
@@ -185,6 +188,7 @@ def test_stub_pathlike_roundtrip(tmp_path, path_builder):
 
     # Simulation data stub roundtrip
     sim_data = make_sim_data()
+    sim_data = sim_data.updated_copy(log="log")
     stub_data = Tidy3dStubData(data=sim_data)
     data_path = path_builder(tmp_path, "pathlike_data.hdf5")
     stub_data.to_file(data_path)
