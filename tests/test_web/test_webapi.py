@@ -15,6 +15,7 @@ from _pytest import monkeypatch
 from responses import matchers
 
 import tidy3d as td
+from tests.test_web.test_tidy3d_stub import is_lazy_object
 from tidy3d import Simulation
 from tidy3d.__main__ import main
 from tidy3d.components.data.data_array import ScalarFieldDataArray
@@ -958,21 +959,18 @@ def test_run_with_flexible_containers_offline_lazy(monkeypatch, tmp_path):
     apply_common_patches(monkeypatch, tmp_path, taskid_to_sim=taskid_to_sim)
 
     data = run(sim_container, task_name=task_name, folder_name="PROJECT", path=str(out_dir))
-
+    assert is_lazy_object(data[0])
     assert isinstance(data, list) and len(data) == 3
-
-    assert isinstance(data[0], SimulationData)
-    assert data[0].__class__.__name__ == "SimulationDataProxy"
 
     assert isinstance(data[1], dict)
     assert "sim2" in data[1]
+    assert is_lazy_object(data[1]["sim2"])
     assert isinstance(data[1]["sim2"], SimulationData)
-    assert data[1]["sim2"].__class__.__name__ == "SimulationDataProxy"
 
+    assert is_lazy_object(data[2][0])
     assert isinstance(data[2], tuple)
-    assert data[2][0].__class__.__name__ == "SimulationDataProxy"
+    assert is_lazy_object(data[2][1][0])
     assert isinstance(data[2][1], list)
-    assert data[2][1][0].__class__.__name__ == "SimulationDataProxy"
 
     assert data[0].simulation == sim1
     assert data[1]["sim2"].simulation == sim2

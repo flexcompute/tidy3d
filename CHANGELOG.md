@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Introduced `BroadbandPulse` for exciting simulations across a wide frequency spectrum.
 - Added `interp_spec` in `ModeSpec` to allow downsampling and interpolation of waveguide modes in frequency.
 - Added warning if port mesh refinement is incompatible with the `GridSpec` in the `TerminalComponentModeler`.
+- Various types, e.g. different `Simulation` or `SimulationData` sub-classes, can be loaded from file directly with `Tidy3dBaseModel.from_file()`.
 
 ### Breaking Changes
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.

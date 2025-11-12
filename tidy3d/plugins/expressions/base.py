@@ -5,7 +5,6 @@ from collections.abc import Generator
 from typing import TYPE_CHECKING, Any, Optional
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import TYPE_TAG_STR
 
 from .types import ExpressionType, NumberOrExpression, NumberType
 
@@ -22,8 +21,6 @@ if TYPE_CHECKING:
         Power,
         Subtract,
     )
-
-TYPE_TO_CLASS_MAP: dict[str, Any] = {}
 
 
 class Expression(Tidy3dBaseModel, ABC):
@@ -44,23 +41,9 @@ class Expression(Tidy3dBaseModel, ABC):
     def __call__(self, *args: Any, **kwargs: Any) -> NumberType:
         return self.evaluate(*args, **kwargs)
 
-    def __init_subclass__(cls, **kwargs: dict[str, Any]) -> None:
-        super().__init_subclass__(**kwargs)
-        type_value = cls.__fields__.get(TYPE_TAG_STR)
-        if type_value and type_value.default:
-            TYPE_TO_CLASS_MAP[type_value.default] = cls
-
     @classmethod
     def parse_obj(cls, obj: dict[str, Any]) -> ExpressionType:
-        if not isinstance(obj, dict):
-            raise TypeError("Input must be a dict")
-        type_value = obj.get(TYPE_TAG_STR)
-        if type_value is None:
-            raise ValueError('Missing "type" in data')
-        subclass = TYPE_TO_CLASS_MAP.get(type_value)
-        if subclass is None:
-            raise ValueError(f"Unknown type: {type_value}")
-        return subclass(**obj)
+        return super()._parse_obj(obj)
 
     def filter(
         self, target_type: type[Expression], target_field: Optional[str] = None
