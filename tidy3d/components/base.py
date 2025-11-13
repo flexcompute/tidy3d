@@ -1405,7 +1405,6 @@ def _make_lazy_proxy(
             )
 
         def __getattribute__(self, name: str):
-            print("getattribute", name)
             if name in (
                 "__dict__",
                 "__weakref__",
