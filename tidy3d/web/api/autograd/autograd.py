@@ -54,7 +54,13 @@ from .io_utils import (
 from .io_utils import (
     upload_sim_fields_keys as _upload_sim_fields_keys_impl,
 )
-from .types import SetupRunResult, UserVjpEntry, UserVjpSpec
+from .types import (
+    NumericalStructureConfig,
+    SetupRunResult,
+    UserVJPConfig,
+    UserVjpEntry,
+    UserVjpSpec,
+)
 
 
 def _resolve_local_gradient(value: typing.Optional[bool]) -> bool:
@@ -156,7 +162,6 @@ def has_traced_numerical_structures(
 
 def validate_numerical_structures(
     numerical_structures: dict[int, dict[str, typing.Any]],
-    user_vjp: tuple[CustomVJPPathType, ...],
     simulation: td.Simulation,
 ) -> None:
     """Validate user-supplied numerical structure configuration."""
@@ -167,14 +172,6 @@ def validate_numerical_structures(
             raise AdjointError(
                 f"Parameters for numerical structure index {index} must be 1D array-like."
             )
-
-    # Reject user_vjp entries that try to target numerical namespace
-    if user_vjp:
-        for entry in user_vjp:
-            if entry.path and entry.path[0] == "numerical":
-                raise AdjointError(
-                    "Global 'user_vjp' cannot target 'numerical' namespace; specify VJP via numerical structure entry."
-                )
 
 
 def is_valid_for_autograd(simulation: td.Simulation) -> bool:
@@ -237,8 +234,12 @@ def run_custom(
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
     lazy: typing.Optional[bool] = None,
-    numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]] = None,
-    user_vjp: typing.Optional[tuple[CustomVJPPathType, ...]] = None,
+    # numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]] = None,
+    # user_vjp: typing.Optional[tuple[CustomVJPPathType, ...]] = None,
+    numerical_structures: typing.Optional[
+        typing.Union[NumericalStructureConfig, tuple[NumericalStructureConfig]]
+    ] = None,
+    user_vjp: typing.Optional[typing.Union[UserVJPConfig, tuple[UserVJPConfig]]] = None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -344,23 +345,34 @@ def run_custom(
         stub = Tidy3dStub(simulation=simulation)
         task_name = stub.get_default_task_name()
 
-    user_vjp_normalized = None
+    ##### put numerical_structures and user_vjp into tuple form if only a single is specified
+
+    if numerical_structures is not None:
+        if isinstance(numerical_structures, NumericalStructureConfig):
+            numerical_structures = (numerical_structures,)
+
     if user_vjp is not None:
-        user_vjp_normalized = normalize_user_vjp_spec(user_vjp)
+        if isinstance(user_vjp, UserVJPConfig):
+            user_vjp = (user_vjp,)
+
+    #####
+
+    # user_vjp_normalized = None
+    # if user_vjp is not None:
+    #     user_vjp_normalized = normalize_user_vjp_spec(user_vjp)
 
     numerical_structures_validated = None
     if isinstance(simulation, td.Simulation):
         if numerical_structures is not None:
             validate_numerical_structures(
                 numerical_structures=numerical_structures,
-                user_vjp=user_vjp_normalized,
                 simulation=simulation,
             )
             numerical_structures_validated = numerical_structures
         else:
             numerical_structures_validated = {}
 
-    numerical_vjp_map = user_vjp_normalized
+    # numerical_vjp_map = user_vjp_normalized
 
     # component modeler path: route autograd-valid modelers to local run
     from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
@@ -432,7 +444,7 @@ def run_custom(
             parent_tasks=parent_tasks,
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
-            user_vjp=numerical_vjp_map,
+            user_vjp=user_vjp,
             pay_type=pay_type,
             priority=priority,
             lazy=lazy,
@@ -536,10 +548,18 @@ def run_async_custom(
     ] = None,
     user_vjp: typing.Optional[
         typing.Union[
-            dict[str, typing.Any],
-            typing.Sequence[typing.Any],
+            UserVJPConfig,
+            dict[str, UserVJPConfig],
+            tuple[UserVJPConfig],
+            list[UserVJPConfig],
         ]
     ] = None,
+    # user_vjp: typing.Optional[
+    #     typing.Union[
+    #         dict[str, typing.Any],
+    #         typing.Sequence[typing.Any],
+    #     ]
+    # ] = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -607,6 +627,29 @@ def run_async_custom(
 
     lazy = True if lazy is None else bool(lazy)
 
+    if isinstance(user_vjp, UserVJPConfig):
+        if isinstance(simulations, (tuple, list)):
+            user_vjp = (type(simulations)(user_vjp)) * len(simulations)
+        else:
+            user_vjp = dict.fromkeys(simulations.keys(), user_vjp)
+
+    if isinstance(simulations, (tuple, list, dict)):
+        if type(user_vjp) is not type(simulations):
+            raise AdjointError(
+                f"user_vjp type ({type(user_vjp)}) should match simulations type ({type(simulations)})"
+            )
+
+        if isinstance(simulations, dict):
+            check_keys = user_vjp.keys() == simulations.keys()
+
+            if not check_keys:
+                raise AdjointError("user vjp keys do not match simulations keys")
+        else:
+            if not (len(user_vjp) == len(simulations)):
+                raise AdjointError(
+                    f"user vjp is not the same length as simulations ({len(user_vjp)} vs. {len(simulations)})"
+                )
+
     if isinstance(simulations, (tuple, list)):
         sim_dict = {}
         for i, sim in enumerate(simulations, 1):
@@ -614,17 +657,10 @@ def run_async_custom(
             sim_dict[task_name] = sim
 
         if user_vjp is not None:
-            if type(user_vjp) is not type(simulations):
-                raise AdjointError(
-                    f"user_vjp type ({type(user_vjp)}) should match simulations type ({type(simulations)})"
-                )
-
             # set up the user_vjp_dict to have the same keys as the simulation dict
-            user_vjp_dict = {}
-            for task_idx, task_name in enumerate(sim_dict):
-                user_vjp_dict[task_name] = user_vjp[task_idx]
-
-            user_vjp = user_vjp_dict
+            user_vjp = {
+                task_name: user_vjp[task_idx] for task_idx, task_name in enumerate(sim_dict)
+            }
 
         if numerical_structures is not None:
             if type(numerical_structures) is not type(simulations):
@@ -649,17 +685,16 @@ def run_async_custom(
         dict.fromkeys(name_mapping) if numerical_structures is None else numerical_structures
     )
 
-    user_vjp_norm = _normalize_user_vjp_input(
-        simulations=simulations,
-        user_vjp=user_vjp,
-        name_mapping=name_mapping,
-    )
+    # user_vjp_norm = _normalize_user_vjp_input(
+    #     simulations=simulations,
+    #     user_vjp=user_vjp,
+    #     name_mapping=name_mapping,
+    # )
 
     for name, numerical_structures_config in numerical_structures.items():
         cfg = numerical_structures_config or {}
         validate_numerical_structures(
             numerical_structures=cfg,
-            user_vjp=user_vjp_norm.get(name),
             simulation=simulations_norm[name],
         )
 
@@ -697,7 +732,7 @@ def run_async_custom(
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
             numerical_structures=numerical_structures,
-            user_vjp=user_vjp_norm,
+            user_vjp=user_vjp,
             pay_type=pay_type,
             priority=priority,
             lazy=lazy,
@@ -781,7 +816,7 @@ def _run(
     numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]] = None,
     local_gradient: bool = False,
     max_num_adjoint_per_fwd: typing.Optional[int] = None,
-    user_vjp: typing.Optional[tuple[CustomVJPPathType, ...]] = None,
+    user_vjp: typing.Optional[tuple[UserVJPConfig]] = None,
     **run_kwargs: Any,
 ) -> td.SimulationData:
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
@@ -789,7 +824,6 @@ def _run(
     setup_result = setup_run(
         simulation=simulation,
         numerical_structures=numerical_structures,
-        user_vjp=user_vjp,
     )
     traced_fields_sim = setup_result.sim_fields
     simulation = setup_result.simulation
@@ -836,7 +870,14 @@ def _run_async(
     local_gradient: bool = False,
     max_num_adjoint_per_fwd: typing.Optional[int] = None,
     numerical_structures: typing.Optional[dict[str, dict[int, dict[str, typing.Any]]]] = None,
-    user_vjp: typing.Optional[dict[str, typing.Optional[UserVjpSpec]]] = None,
+    user_vjp: typing.Optional[
+        typing.Union[
+            UserVJPConfig,
+            dict[str, UserVJPConfig],
+            tuple[UserVJPConfig],
+            list[UserVJPConfig],
+        ]
+    ] = None,
     **run_async_kwargs: Any,
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""
@@ -850,14 +891,13 @@ def _run_async(
         max_num_adjoint_per_fwd = config.adjoint.max_adjoint_per_fwd
 
     numerical_structures = numerical_structures or {}
-    user_vjp = user_vjp or {}
+    # user_vjp = user_vjp or {}
 
     for task_name in task_names:
         sim = simulations[task_name]
         setup_result = setup_run(
             simulation=sim,
             numerical_structures=numerical_structures.get(task_name),
-            user_vjp=user_vjp.get(task_name),
         )
         sim_prepared = setup_result.simulation
         traced_fields = setup_result.sim_fields
@@ -887,7 +927,7 @@ def _run_async(
     numerical_info_map = {
         name: numerical_info_map_full.get(name, {}) for name in traced_fields_sim_dict.keys()
     }
-    user_vjp = {name: user_vjp.get(name) for name in traced_fields_sim_dict.keys()}
+    # user_vjp = {name: user_vjp.get(name) for name in traced_fields_sim_dict.keys()}
 
     aux_data_dict = {task_name: {} for task_name in task_names}
     traced_fields_data_dict = _run_async_primitive(
@@ -917,7 +957,6 @@ def _run_async(
 def setup_run(
     simulation: td.Simulation,
     numerical_structures: typing.Optional[dict[int, dict[str, typing.Any]]] = None,
-    user_vjp: typing.Optional[tuple[CustomVJPPathType, ...]] = None,
 ) -> SetupRunResult:
     """Prepare simulation and traced fields, including numerical structure insertions."""
 
@@ -995,7 +1034,7 @@ def _run_primitive(
     aux_data: dict,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    user_vjp: tuple[CustomVJPPathType, ...],
+    user_vjp: typing.Optional[typing.Union[UserVJPConfig, tuple[UserVJPConfig]]] = None,
     **run_kwargs: Any,
 ) -> AutogradFieldMap:
     """Autograd-traced 'run()' function: runs simulation, strips tracer data, caches fwd data."""
@@ -1064,7 +1103,15 @@ def _run_async_primitive(
     aux_data_dict: dict[dict[str, typing.Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    user_vjp: typing.Optional[dict[str, typing.Optional[UserVjpSpec]]] = None,
+    # user_vjp: typing.Optional[dict[str, typing.Optional[UserVjpSpec]]] = None,
+    user_vjp: typing.Optional[
+        typing.Union[
+            UserVJPConfig,
+            dict[str, UserVJPConfig],
+            tuple[UserVJPConfig],
+            list[UserVJPConfig],
+        ]
+    ] = None,
     numerical_structures_info: typing.Optional[dict[str, dict[int, NumericalStructureInfo]]] = None,
     **run_async_kwargs: Any,
 ) -> dict[str, AutogradFieldMap]:
@@ -1176,7 +1223,7 @@ def _run_bwd(
     aux_data: dict,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    user_vjp: tuple[CustomVJPPathType, ...],
+    user_vjp: tuple[UserVJPConfig],
     **run_kwargs: Any,
 ) -> typing.Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulations, computes grad."""
@@ -1303,7 +1350,14 @@ def _run_async_bwd(
     aux_data_dict: dict[str, dict[str, typing.Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    user_vjp: typing.Optional[dict[str, typing.Optional[UserVjpSpec]]] = None,
+    user_vjp: typing.Optional[
+        typing.Union[
+            UserVJPConfig,
+            dict[str, UserVJPConfig],
+            tuple[UserVJPConfig],
+            list[UserVJPConfig],
+        ]
+    ] = None,
     numerical_structures_info: typing.Optional[dict[str, dict[int, NumericalStructureInfo]]] = None,
     **run_async_kwargs: Any,
 ) -> typing.Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
@@ -1317,10 +1371,11 @@ def _run_async_bwd(
     if numerical_structures_info is None:
         numerical_structures_info = {}
 
-    if isinstance(user_vjp, dict):
-        user_vjp_map = user_vjp
-    else:
-        user_vjp_map = dict.fromkeys(task_names, user_vjp)
+    user_vjp = user_vjp or {}
+    # if isinstance(user_vjp, dict):
+    #     user_vjp_map = user_vjp
+    # else:
+    #     user_vjp_map = dict.fromkeys(task_names, user_vjp)
 
     # get the fwd epsilon and field data from the cached aux_data
     sim_data_orig_dict = {}
@@ -1402,7 +1457,9 @@ def _run_async_bwd(
                 sim_fields_keys = sim_fields_keys_dict[task_name]
 
                 # Compute VJP contribution
-                task_user_vjp = user_vjp_map.get(task_name)
+                task_user_vjp = user_vjp.get(task_name)
+                if isinstance(task_user_vjp, UserVJPConfig):
+                    task_user_vjp = (task_user_vjp,)
 
                 vjp_results[adj_task_name] = postprocess_adj(
                     sim_data_adj=sim_data_adj,

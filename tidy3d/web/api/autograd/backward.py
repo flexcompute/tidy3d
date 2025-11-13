@@ -17,10 +17,13 @@ from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
 from tidy3d.packaging import disable_local_subpixel
 
+from .types import (
+    UserVJPConfig,
+)
 from .utils import E_to_D, get_derivative_maps
 
 if typing.TYPE_CHECKING:
-    from .autograd import UserVjpSpec
+    pass
 
 
 def setup_adj(
@@ -111,19 +114,43 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
-    user_vjp: typing.Optional[UserVjpSpec],
+    user_vjp: tuple[UserVJPConfig],
     numerical_info: dict[int, NumericalStructureInfo],
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
     # prepare lookup for user-provided VJPs keyed by structure and field entry
+
+    ####
+
+    # here is where we can decide if we are using the vjp for all entries or not
+    # we might want to do some checking on the user_vjp to make sure we don't have collisions
+    # runtime validation of it
+
+    ####
+
+    # todo: fix this return typing
+    def get_all_paths(match_structure_index: int) -> tuple[str, ...]:
+        all_paths = tuple(
+            tuple(structure_path)
+            for namespace, structure_index, *structure_path in sim_fields_keys
+            if structure_index == match_structure_index
+        )
+
+        return all_paths
+
     user_vjp_lookup: dict[int, dict[typing.Hashable, typing.Callable[..., typing.Any]]] = {}
     if user_vjp:
-        for structure_index, path, vjp_fn in user_vjp:
-            if not path:
-                continue
-            field_key = path[0]
-            user_vjp_lookup.setdefault(structure_index, {})[field_key] = vjp_fn
+        for vjp_config in user_vjp:
+            structure_index = vjp_config.structure_index
+            vjp_fn = vjp_config.compute_derivatives
+            path = vjp_config.path_key
+
+            if path is None:
+                for match_path in get_all_paths(structure_index):
+                    user_vjp_lookup.setdefault(structure_index, {})[match_path[0:2]] = vjp_fn
+            else:
+                user_vjp_lookup.setdefault(structure_index, {})[path] = vjp_fn
 
     # map of index into 'structures' and 'numerical' to the paths we need VJPs for
     sim_vjp_map = defaultdict(list)

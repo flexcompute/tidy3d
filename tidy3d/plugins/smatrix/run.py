@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import copy
 import json
+import typing
 from os import PathLike
-from typing import Any
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.index import SimulationDataMap
@@ -20,6 +20,7 @@ from tidy3d.web.api.autograd import (
     has_traced_numerical_structures,
     insert_numerical_structures_static,
 )
+from tidy3d.web.api.autograd.types import UserVJPConfig
 
 DEFAULT_DATA_DIR = "."
 
@@ -133,7 +134,7 @@ def compose_modeler_data_from_batch_data(
 
 def create_batch(
     modeler: ComponentModelerType,
-    **kwargs: Any,
+    **kwargs: typing.Any,
 ) -> Batch:
     """Create a simulation Batch from a component modeler.
 
@@ -161,8 +162,8 @@ def _run_local(
     modeler: ComponentModelerType,
     path_dir: str = DEFAULT_DATA_DIR,
     numerical_structures=None,
-    user_vjp=None,
-    **kwargs: Any,
+    user_vjp: typing.Optional[typing.Union[UserVJPConfig, tuple[UserVJPConfig]]] = None,
+    **kwargs: typing.Any,
 ) -> ComponentModelerDataType:
     """Execute the full simulation workflow for a given component modeler.
 
@@ -193,10 +194,6 @@ def _run_local(
     sims = modeler.sim_dict
 
     numerical_structures_modeler = numerical_structures or {}
-    user_vjp_modeler = user_vjp
-    user_vjp_modeler_normalized = None
-    if user_vjp_modeler is not None:
-        user_vjp_modeler_normalized = web_ag.normalize_user_vjp_spec(user_vjp_modeler)
 
     should_use_autograd = any(web_ag.is_valid_for_autograd(sim) for sim in sims.values())
 
@@ -233,7 +230,6 @@ def _run_local(
             first_sim = next(iter(sims.values()))
             web_ag.validate_numerical_structures(
                 numerical_structures=numerical_structures_modeler,
-                user_vjp=user_vjp_modeler_normalized,
                 simulation=first_sim,
             )
 
@@ -243,15 +239,16 @@ def _run_local(
         else:
             numerical_structures_broadcast = None
 
-        if user_vjp_modeler_normalized is not None:
-            user_vjp_broadcast = dict.fromkeys(sims, user_vjp_modeler_normalized)
-        else:
-            user_vjp_broadcast = None
+        if isinstance(user_vjp, UserVJPConfig):
+            user_vjp = (user_vjp,)
+
+        if user_vjp:
+            user_vjp = dict.fromkeys(sims, user_vjp)
 
         sim_data_map = _run_async(
             simulations=sims,
             numerical_structures=numerical_structures_broadcast,
-            user_vjp=user_vjp_broadcast,
+            user_vjp=user_vjp,
             **kwargs,
         )
 

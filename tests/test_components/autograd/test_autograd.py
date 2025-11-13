@@ -738,11 +738,16 @@ def make_polyslab_user_vjp(user_vjp_val):
     def polyslab_user_vjp(polyslab, derivative_info):
         vjps = {}
 
+        # should there only be one path here since that is how user_vjp is specified?
         for path in derivative_info.paths:
-            if path[0] == "vertices":
+            # print(f'working on path = {path}')
+            if path[0:2] == ("geometry", "vertices"):
                 vjps[path] = user_vjp_val * np.ones(polyslab.vertices.shape)
-            elif path[0] == "slab_bounds":
-                vjps[path] = (user_vjp_val, user_vjp_val)
+            elif path[0:2] == ("geometry", "slab_bounds"):
+                if len(path) == 3:
+                    vjps[path] = (user_vjp_val, user_vjp_val)[path[2]]
+                else:
+                    vjps[path] = (user_vjp_val, user_vjp_val)
 
         return vjps
 
@@ -751,11 +756,14 @@ def make_polyslab_user_vjp(user_vjp_val):
 
 user_vjp_args = [("polyslab", "mode")]
 
+from tidy3d.web.api.autograd.types import UserVJPConfig
+
 
 @pytest.mark.parametrize("structure_key, monitor_key", user_vjp_args)
 @pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
 @pytest.mark.parametrize("use_run_async", [True, False])
 @pytest.mark.parametrize("use_task_names", [True, False])
+@pytest.mark.parametrize("use_single_user_vjp", [True, False])
 @pytest.mark.parametrize("local_gradient", [True, False])
 def test_autograd_user_vjp(
     use_emulated_run,
@@ -764,6 +772,7 @@ def test_autograd_user_vjp(
     polyslab_axis,
     use_run_async,
     use_task_names,
+    use_single_user_vjp,
     local_gradient,
 ):
     """Test that we can override a vjp with a user defined function."""
@@ -777,24 +786,51 @@ def test_autograd_user_vjp(
     def make_objective(user_vjp_val):
         polyslab_user_vjp = make_polyslab_user_vjp(user_vjp_val)
 
+        user_vjp_tuple = (
+            UserVJPConfig(
+                structure_index=1,
+                compute_derivatives=polyslab_user_vjp,
+                path_key=(
+                    (
+                        "geometry",
+                        "vertices",
+                    )
+                ),
+            ),
+            UserVJPConfig(
+                structure_index=1,
+                compute_derivatives=polyslab_user_vjp,
+                path_key=(
+                    (
+                        "geometry",
+                        "slab_bounds",
+                    )
+                ),
+            ),
+        )
+
+        user_vjp_single = UserVJPConfig(
+            structure_index=1,
+            compute_derivatives=polyslab_user_vjp,
+        )
+
+        user_vjp_element = user_vjp_single if use_single_user_vjp else user_vjp_tuple
+
         def objective(*args):
             if use_task_names:
                 sims = {
                     task_name: make_sim(*args, polyslab_axis=polyslab_axis)
                     for task_name in task_names
                 }
-                user_vjp = dict.fromkeys(
-                    task_names,
-                    ((1, "vertices", polyslab_user_vjp), (1, "slab_bounds", polyslab_user_vjp)),
-                )
+                user_vjp = dict.fromkeys(sims.keys(), user_vjp_element)
             else:
                 sims = [make_sim(*args, polyslab_axis=polyslab_axis)] * len(task_names)
-                user_vjp = [
-                    ((1, "vertices", polyslab_user_vjp), (1, "slab_bounds", polyslab_user_vjp))
-                ] * len(task_names)
-
+                user_vjp = [user_vjp_element] * len(task_names)
             batch_data = {}
             if use_run_async:
+                # print(f'user vjp = {user_vjp}')
+                # asdf
+
                 batch_data = run_async_custom(
                     sims, user_vjp=user_vjp, local_gradient=local_gradient
                 )
@@ -843,8 +879,15 @@ def test_autograd_user_vjp(
 @pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
 @pytest.mark.parametrize("use_run_async", [True, False])
 @pytest.mark.parametrize("use_task_names", [True, False])
+@pytest.mark.parametrize("use_single_user_vjp", [True, False])
 def test_autograd_user_vjp_selective(
-    use_emulated_run, structure_key, monitor_key, polyslab_axis, use_run_async, use_task_names
+    use_emulated_run,
+    structure_key,
+    monitor_key,
+    polyslab_axis,
+    use_run_async,
+    use_task_names,
+    use_single_user_vjp,
 ):
     """Test that we can selectively override a vjp with a user defined function that covers some of, but not all, gradient keys."""
 
@@ -857,16 +900,42 @@ def test_autograd_user_vjp_selective(
     def make_objective(user_vjp_val):
         polyslab_user_vjp = make_polyslab_user_vjp(user_vjp_val)
 
+        user_vjp_tuple = (
+            UserVJPConfig(
+                structure_index=1,
+                compute_derivatives=polyslab_user_vjp,
+                path_key=(
+                    (
+                        "geometry",
+                        "vertices",
+                    )
+                ),
+            ),
+        )
+
+        user_vjp_single = UserVJPConfig(
+            structure_index=1,
+            compute_derivatives=polyslab_user_vjp,
+            path_key=(
+                (
+                    "geometry",
+                    "vertices",
+                )
+            ),
+        )
+
+        user_vjp_element = user_vjp_single if use_single_user_vjp else user_vjp_tuple
+
         def objective(*args):
             if use_task_names:
                 sims = {
                     task_name: make_sim(*args, polyslab_axis=polyslab_axis)
                     for task_name in task_names
                 }
-                user_vjp = dict.fromkeys(task_names, ((1, "vertices", polyslab_user_vjp),))
+                user_vjp = dict.fromkeys(task_names, user_vjp_element)
             else:
                 sims = [make_sim(*args, polyslab_axis=polyslab_axis)] * len(task_names)
-                user_vjp = [((1, "vertices", polyslab_user_vjp),)] * len(task_names)
+                user_vjp = [user_vjp_element] * len(task_names)
 
             batch_data = {}
             if use_run_async:
@@ -909,9 +978,10 @@ def test_autograd_user_vjp_selective(
 
 @pytest.mark.parametrize("structure_key, monitor_key", user_vjp_args)
 @pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
+@pytest.mark.parametrize("use_single_user_vjp", [True, False])
 @pytest.mark.parametrize("local_gradient", [True, False])
 def test_autograd_cm_user_vjp(
-    use_emulated_run, structure_key, monitor_key, polyslab_axis, local_gradient
+    use_emulated_run, structure_key, monitor_key, polyslab_axis, use_single_user_vjp, local_gradient
 ):
     """Test that we can override a vjp with a user defined function in component modeler simulations."""
 
@@ -921,6 +991,36 @@ def test_autograd_cm_user_vjp(
 
     def make_objective(user_vjp_val):
         polyslab_user_vjp = make_polyslab_user_vjp(user_vjp_val)
+
+        user_vjp_tuple = (
+            UserVJPConfig(
+                structure_index=1,
+                compute_derivatives=polyslab_user_vjp,
+                path_key=(
+                    (
+                        "geometry",
+                        "vertices",
+                    )
+                ),
+            ),
+            UserVJPConfig(
+                structure_index=1,
+                compute_derivatives=polyslab_user_vjp,
+                path_key=(
+                    (
+                        "geometry",
+                        "slab_bounds",
+                    )
+                ),
+            ),
+        )
+
+        user_vjp_single = UserVJPConfig(
+            structure_index=1,
+            compute_derivatives=polyslab_user_vjp,
+        )
+
+        user_vjp_element = user_vjp_single if use_single_user_vjp else user_vjp_tuple
 
         def objective(*args):
             base_sim = make_sim(*args, polyslab_axis=polyslab_axis)
@@ -948,10 +1048,7 @@ def test_autograd_cm_user_vjp(
 
             smatrix = _run_local(
                 modeler,
-                user_vjp=(
-                    (1, "vertices", polyslab_user_vjp),
-                    (1, "slab_bounds", polyslab_user_vjp),
-                ),
+                user_vjp=user_vjp_element,
                 local_gradient=local_gradient,
             )
             return np.sum(np.abs(smatrix.smatrix().values) ** 2)

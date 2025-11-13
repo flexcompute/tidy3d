@@ -384,8 +384,15 @@ class Structure(AbstractStructure):
             for path_key, paths in collect_paths_by_keys.items():
                 info = derivative_info.updated_copy(paths=paths, deep=False)
 
-                if (vjp_fns is not None) and (path_key in vjp_fns):
-                    derivative_values_map.update(vjp_fns[path_key](med_or_geo_field, info))
+                full_path = (med_or_geo, path_key)
+                if (vjp_fns is not None) and (full_path in vjp_fns):
+                    full_paths = ((med_or_geo, *path) for path in paths)
+                    info = derivative_info.updated_copy(paths=full_paths, deep=False)
+
+                    vjp = vjp_fns[full_path](med_or_geo_field, info)
+                    vjp_strip_med_or_geo = {key[1:]: val for key, val in vjp.items()}
+
+                    derivative_values_map.update(vjp_strip_med_or_geo)
                 else:
                     derivative_values_map.update(
                         med_or_geo_field._compute_derivatives(derivative_info=info)
