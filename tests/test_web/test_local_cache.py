@@ -26,7 +26,11 @@ from tidy3d.web import Job, common, run, run_async
 from tidy3d.web.api import webapi as web
 from tidy3d.web.api.autograd import autograd, engine, io_utils
 from tidy3d.web.api.autograd.autograd import run as run_autograd
-from tidy3d.web.api.autograd.constants import SIM_VJP_FILE
+from tidy3d.web.api.autograd.constants import (
+    AUX_KEY_SIM_DATA_FWD,
+    AUX_KEY_SIM_DATA_ORIGINAL,
+    SIM_VJP_FILE,
+)
 from tidy3d.web.api.container import Batch, WebContainer
 from tidy3d.web.api.webapi import load_simulation_if_cached
 from tidy3d.web.cache import (
@@ -181,13 +185,37 @@ def _patch_run_pipeline(monkeypatch):
         if str(remote_filename) == SIM_VJP_FILE:
             counters["download"] += 1
 
-    def _fake_from_file(*args, **kwargs):
-        field_map = FieldMap(tracers=())
-        return field_map
+    def _fake_postprocess_fwd(*, sim_data_combined=None, sim_original=None, aux_data=None, **_):
+        """Mimic ``autograd.postprocess_fwd`` side effects for tests."""
+        if sim_original is None:
+            sim_original = next(iter(PATH_TO_SIM.values()), None)
+        if sim_original is None:
+            sim_original = td.Simulation(
+                size=(1, 1, 1),
+                grid_spec=td.GridSpec.auto(wavelength=1.0),
+                run_time=1e-12,
+            )
+        stub_data = _FakeStubData(sim_original)
+        if aux_data is not None:
+            aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = stub_data
+            aux_data[AUX_KEY_SIM_DATA_FWD] = stub_data
+        return stub_data._strip_traced_fields()
+
+    def _fake_postprocess_adj(
+        sim_data_adj=None, sim_data_orig=None, sim_data_fwd=None, sim_fields_keys=None, **_
+    ):
+        """Return zeros for every requested field key."""
+        counters["download"] += 1  # mimic VJP file download per autograd run
+        sim_fields_keys = sim_fields_keys or []
+        return dict.fromkeys(sim_fields_keys, 0.0)
+
+    def _fake_field_map_from_file(*args, **kwargs):
+        return FieldMap(tracers=())
 
     monkeypatch.setattr(io_utils, "download_file", _fake_download_file)
-    monkeypatch.setattr(autograd, "postprocess_fwd", _fake_from_file)
-    monkeypatch.setattr(FieldMap, "from_file", _fake_from_file)
+    monkeypatch.setattr(autograd, "postprocess_fwd", _fake_postprocess_fwd)
+    monkeypatch.setattr(autograd, "postprocess_adj", _fake_postprocess_adj)
+    monkeypatch.setattr(FieldMap, "from_file", _fake_field_map_from_file)
     monkeypatch.setattr(WebContainer, "_check_folder", _fake__check_folder)
     monkeypatch.setattr(web, "upload", _fake_upload)
     monkeypatch.setattr(web, "start", _fake_start)

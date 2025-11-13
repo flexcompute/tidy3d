@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import numpy as np
 import pytest
+from pydantic.v1 import ValidationError
 
 import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
@@ -275,3 +278,19 @@ def test_updated_hash_and_json_with_changed_attr():
 
     assert new_hash != old_hash
     assert json_old != json_new
+
+
+def test_parse_obj_respects_subclasses():
+    class DispatchBase(Tidy3dBaseModel):
+        type: Literal["DispatchBase"] = "DispatchBase"
+        value: int
+
+    class DispatchChild(DispatchBase):
+        type: Literal["DispatchChild"] = "DispatchChild"
+
+    data = {"type": "DispatchChild", "value": 1}
+    parsed = Tidy3dBaseModel._parse_model_dict(data)
+    assert isinstance(parsed, DispatchChild)
+
+    with pytest.raises(ValidationError):
+        DispatchChild.parse_obj({"type": "DispatchBase", "value": 2})

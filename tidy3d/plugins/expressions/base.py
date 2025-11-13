@@ -43,7 +43,7 @@ class Expression(Tidy3dBaseModel, ABC):
 
     @classmethod
     def parse_obj(cls, obj: dict[str, Any]) -> ExpressionType:
-        return Tidy3dBaseModel._parse_obj(obj)
+        return super()._parse_obj(obj)
 
     def filter(
         self, target_type: type[Expression], target_field: Optional[str] = None
