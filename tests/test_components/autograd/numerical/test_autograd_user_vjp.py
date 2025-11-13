@@ -12,6 +12,7 @@ import xarray as xr
 
 import tidy3d as td
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom
+from tidy3d.web.api.autograd.types import UserVJPConfig
 
 PLOT_FD_ADJ_COMPARISON = True
 NUM_FINITE_DIFFERENCE = 10
@@ -158,15 +159,18 @@ def vjp_sphere(sphere, derivative_info):
 
     vjps = {}
     for path in derivative_info.paths:
-        if path == ("radius",):
+        if path[0:2] == (
+            "geometry",
+            "radius",
+        ):
             sphere_up = sphere.updated_copy(radius=sphere.radius + step_size)
             sphere_down = sphere.updated_copy(radius=sphere.radius - step_size)
             vjps[path] = finite_difference_gradient(sphere_up, sphere_down, derivative_info)
-        elif "center" in path:
-            if len(path) == 1:
+        elif path[0:2] == ("geometry", "center"):
+            if len(path) == 2:
                 center_indices = (0, 1, 2)
             else:
-                _, center_index = path
+                _, center_index = path[1:]
                 center_indices = [center_index]
 
             vjp_result = []
@@ -184,7 +188,7 @@ def vjp_sphere(sphere, derivative_info):
                     finite_difference_gradient(sphere_up, sphere_down, derivative_info)
                 )
 
-            vjps[path] = vjp_result if len(path) == 1 else vjp_result[0]
+            vjps[path] = vjp_result if len(path) == 2 else vjp_result[0]
 
     return vjps
 
@@ -206,6 +210,11 @@ def create_objective_function(geometry, create_sim_base, eval_fn, run_fn, sim_pa
 
             simulation_dict[f"numerical_user_vjp_testing_{idx}"] = sim_with_sphere.copy()
 
+        user_vjp_single = UserVJPConfig(
+            structure_index=1,
+            compute_derivatives=vjp_sphere,
+        )
+
         assert (run_fn == "run_custom") or (run_fn == "run_async_custom"), (
             "Unrecognized run function!"
         )
@@ -216,18 +225,15 @@ def create_objective_function(geometry, create_sim_base, eval_fn, run_fn, sim_pa
                     sim_val,
                     local_gradient=LOCAL_GRADIENT,
                     verbose=VERBOSE,
-                    user_vjp=((1, "radius", vjp_sphere), (1, "center", vjp_sphere)),
+                    user_vjp=user_vjp_single,
                 )
         elif run_fn == "run_async_custom":
-            user_vjp_dict = {}
-            for key in simulation_dict:
-                user_vjp_dict[key] = ((1, "radius", vjp_sphere), (1, "center", vjp_sphere))
             sim_data = run_async_custom(
                 simulation_dict,
                 path_dir=sim_path_dir,
                 local_gradient=LOCAL_GRADIENT,
                 verbose=VERBOSE,
-                user_vjp=user_vjp_dict,
+                user_vjp=user_vjp_single,
             )
 
         objective_vals = []

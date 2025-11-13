@@ -14,6 +14,7 @@ import xarray as xr
 import tidy3d as td
 from tidy3d.plugins.smatrix import ComponentModeler, Port
 from tidy3d.plugins.smatrix.run import _run_local
+from tidy3d.web.api.autograd.types import UserVJPConfig
 
 PLOT_FD_ADJ_COMPARISON = True
 NUM_FINITE_DIFFERENCE = 10
@@ -155,15 +156,18 @@ def vjp_sphere(sphere, derivative_info):
 
     vjps = {}
     for path in derivative_info.paths:
-        if path == ("radius",):
+        if path[0:2] == (
+            "geometry",
+            "radius",
+        ):
             sphere_up = sphere.updated_copy(radius=sphere.radius + step_size)
             sphere_down = sphere.updated_copy(radius=sphere.radius - step_size)
             vjps[path] = finite_difference_gradient(sphere_up, sphere_down, derivative_info)
-        elif "center" in path:
-            if len(path) == 1:
+        elif path[0:2] == ("geometry", "center"):
+            if len(path) == 2:
                 center_indices = (0, 1, 2)
             else:
-                _, center_index = path
+                _, center_index = path[1:]
                 center_indices = [center_index]
 
             vjp_result = []
@@ -181,7 +185,7 @@ def vjp_sphere(sphere, derivative_info):
                     finite_difference_gradient(sphere_up, sphere_down, derivative_info)
                 )
 
-            vjps[path] = vjp_result if len(path) == 1 else vjp_result[0]
+            vjps[path] = vjp_result if len(path) == 2 else vjp_result[0]
 
     return vjps
 
@@ -283,11 +287,16 @@ def create_objective_function(geometry, create_sim_base, adj_wvl_um, sim_path_di
                 }
             }
 
+            user_vjp_single = UserVJPConfig(
+                structure_index=3,
+                compute_derivatives=vjp_sphere,
+            )
+
             sim_data[key] = _run_local(
                 modeler,
                 local_gradient=LOCAL_GRADIENT,
                 verbose=VERBOSE,
-                user_vjp=((3, "radius", vjp_sphere), (3, "center", vjp_sphere)),
+                user_vjp=user_vjp_single,
                 numerical_structures=ring_generator,
             )
 

@@ -33,6 +33,7 @@ from tidy3d.plugins.smatrix.run import _run_local
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd import autograd as autograd_module
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom
+from tidy3d.web.api.autograd.types import UserVJPConfig
 
 from ...utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
 
@@ -755,8 +756,6 @@ def make_polyslab_user_vjp(user_vjp_val):
 
 
 user_vjp_args = [("polyslab", "mode")]
-
-from tidy3d.web.api.autograd.types import UserVJPConfig
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", user_vjp_args)
