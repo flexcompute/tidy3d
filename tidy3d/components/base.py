@@ -1384,7 +1384,6 @@ def _make_lazy_proxy(
         A class named ``<TargetClsName>Proxy`` with init args:
         ``(fname, group_path, parse_obj_kwargs)``.
     """
-    proxy_name = f"{target_cls.__name__}Proxy"
 
     class _LazyProxy(target_cls):
         def __init__(
@@ -1406,8 +1405,8 @@ def _make_lazy_proxy(
             )
 
         def __getattribute__(self, name: str):
+            print("getattribute", name)
             if name in (
-                "__class__",
                 "__dict__",
                 "__weakref__",
                 "__post_root_validators__",
@@ -1426,7 +1425,7 @@ def _make_lazy_proxy(
 
                 d.clear()
                 d.update(target.__dict__)
-                object.__setattr__(self, "__class__", target_cls)
+                object.__setattr__(self, "__class__", target.__class__)
                 object.__setattr__(self, "__fields_set__", set(target.__fields_set__))
                 private_attrs = getattr(target, "__private_attributes__", {}) or {}
                 for attr_name in private_attrs:
@@ -1437,5 +1436,5 @@ def _make_lazy_proxy(
 
             return object.__getattribute__(self, name)
 
-    _LazyProxy.__name__ = proxy_name
+    _LazyProxy.__name__ = "LazyProxy"
     return _LazyProxy

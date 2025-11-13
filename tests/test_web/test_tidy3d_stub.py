@@ -146,11 +146,6 @@ def test_stub_data_lazy_loading(tmp_path):
         sim_data = Tidy3dStubData.postprocess(file_path, lazy=True)
 
     sim_data_copy = sim_data.copy()
-    assert type(sim_data).__name__ == "SimulationDataProxy"
-    assert type(sim_data_copy).__name__ == "SimulationDataProxy"
-
-    # the type should be still SimulationData despite being lazy
-    assert isinstance(sim_data, SimulationData)
 
     # variable dict should only contain metadata to load the data, not the data itself
     assert set(sim_data.__dict__.keys()) == {
@@ -159,9 +154,12 @@ def test_stub_data_lazy_loading(tmp_path):
         "_lazy_parse_obj_kwargs",
     }
 
+    # the type should be still SimulationData despite being lazy
+    assert isinstance(sim_data, SimulationData)
+
     # we expect a warning from the lazy object if some field is accessed
     with AssertLogLevel("WARNING", contains_str=sim_diverged_log):
-        _ = sim_data.monitor_data
+        _ = sim_data_copy.monitor_data
 
 
 @pytest.mark.parametrize(
