@@ -168,6 +168,7 @@ include_patterns = [
     "tidy3d/*",
     "faq/docs/**",
     "notebooks/*.ipynb",
+    "notebooks/**/*.ipynb",
     "notebooks/docs/*",
     "**.rst",
     "**.png",
