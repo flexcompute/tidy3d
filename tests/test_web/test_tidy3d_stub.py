@@ -42,6 +42,15 @@ def make_sim():
     )
 
 
+def is_lazy_object(data):
+    assert set(data.__dict__.keys()) == {
+        "_lazy_fname",
+        "_lazy_group_path",
+        "_lazy_parse_obj_kwargs",
+    }
+    return True
+
+
 def make_sim_data(file_size_gb=0.001):
     """Makes a simulation data."""
     N = int(2.528e8 / 4 * file_size_gb)
@@ -148,11 +157,7 @@ def test_stub_data_lazy_loading(tmp_path):
     sim_data_copy = sim_data.copy()
 
     # variable dict should only contain metadata to load the data, not the data itself
-    assert set(sim_data.__dict__.keys()) == {
-        "_lazy_fname",
-        "_lazy_group_path",
-        "_lazy_parse_obj_kwargs",
-    }
+    assert is_lazy_object(sim_data)
 
     # the type should be still SimulationData despite being lazy
     assert isinstance(sim_data, SimulationData)
@@ -183,6 +188,7 @@ def test_stub_pathlike_roundtrip(tmp_path, path_builder):
 
     # Simulation data stub roundtrip
     sim_data = make_sim_data()
+    sim_data = sim_data.updated_copy(log="log")
     stub_data = Tidy3dStubData(data=sim_data)
     data_path = path_builder(tmp_path, "pathlike_data.hdf5")
     stub_data.to_file(data_path)
