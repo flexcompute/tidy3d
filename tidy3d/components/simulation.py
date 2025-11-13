@@ -2535,6 +2535,12 @@ class Simulation(AbstractYeeGridSimulation):
         *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
     """
 
+    extra_dt_reduction: pydantic.PositiveFloat = pydantic.Field(
+        1.0,
+        title="dt reduction",
+        description="dt reduction.",
+    )
+
     precision: Literal["hybrid", "double"] = pydantic.Field(
         "hybrid",
         title="Floating-point Precision",
@@ -5447,7 +5453,7 @@ class Simulation(AbstractYeeGridSimulation):
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
         n_cfl = min(min(mat.n_cfl for mat in self.scene.mediums), 1)
-        return self._dt_fixed_angle_reduction_factor * n_cfl * self.scaled_courant * dl_avg / C_0
+        return self.extra_dt_reduction * self._dt_fixed_angle_reduction_factor * n_cfl * self.scaled_courant * dl_avg / C_0
 
     @cached_property
     def tmesh(self) -> Coords1D:
