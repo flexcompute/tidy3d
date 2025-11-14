@@ -246,7 +246,7 @@ def check_tidy3d_extras_licensed_feature(feature_name: str):
         _check_tidy3d_extras_available()
     except Tidy3dImportError as exc:
         raise Tidy3dImportError(
-            "The package 'tidy3d-extras' is required for this feature '{feature_name}'."
+            f"The package 'tidy3d-extras' is required for this feature '{feature_name}'."
         ) from exc
 
     features = tidy3d_extras["mod"].extension._features()
@@ -275,7 +275,7 @@ def supports_local_subpixel(fn):
             tidy3d_extras["use_local_subpixel"] = False
             if preference is True:
                 raise Tidy3dImportError(
-                    f"{exc!s} To suppress this error, you can set "
+                    "To suppress this error, you can set "
                     "'config.simulation.use_local_subpixel=False'."
                 ) from exc
             # preference is None, so we can just return
