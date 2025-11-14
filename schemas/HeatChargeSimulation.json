@@ -1377,6 +1377,16 @@
           "default": {},
           "type": "object"
         },
+        "derived_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PerturbationMedium"
+            },
+            {
+              "$ref": "#/definitions/PerturbationPoleResidue"
+            }
+          ]
+        },
         "frequency_range": {
           "items": [
             {
@@ -1706,6 +1716,16 @@
           },
           "type": "array"
         },
+        "derived_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PerturbationMedium"
+            },
+            {
+              "$ref": "#/definitions/PerturbationPoleResidue"
+            }
+          ]
+        },
         "eps_inf": {
           "anyOf": [
             {
@@ -2025,6 +2045,16 @@
           },
           "type": "array"
         },
+        "derived_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PerturbationMedium"
+            },
+            {
+              "$ref": "#/definitions/PerturbationPoleResidue"
+            }
+          ]
+        },
         "eps_inf": {
           "anyOf": [
             {
@@ -2291,6 +2321,16 @@
           },
           "type": "array"
         },
+        "derived_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PerturbationMedium"
+            },
+            {
+              "$ref": "#/definitions/PerturbationPoleResidue"
+            }
+          ]
+        },
         "eps_inf": {
           "anyOf": [
             {
@@ -2443,6 +2483,16 @@
             }
           ]
         },
+        "derived_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PerturbationMedium"
+            },
+            {
+              "$ref": "#/definitions/PerturbationPoleResidue"
+            }
+          ]
+        },
         "eps_dataset": {
           "allOf": [
             {
@@ -2572,6 +2622,16 @@
         "attrs": {
           "default": {},
           "type": "object"
+        },
+        "derived_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PerturbationMedium"
+            },
+            {
+              "$ref": "#/definitions/PerturbationPoleResidue"
+            }
+          ]
         },
         "eps_inf": {
           "anyOf": [
@@ -2819,6 +2879,16 @@
             "type": "array"
           },
           "type": "array"
+        },
+        "derived_from": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PerturbationMedium"
+            },
+            {
+              "$ref": "#/definitions/PerturbationPoleResidue"
+            }
+          ]
         },
         "frequency_range": {
           "items": [

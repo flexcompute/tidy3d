@@ -2216,15 +2216,38 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     @cached_property
     def _finalized(self) -> Simulation:
         """Return the finalized version of the simulation setup. That is, including automatic frames around mode sources and internal absorbers, and 2d strutures converted into volumetric analogues."""
-
-        modal_frames = self._modal_plane_frames
-
-        if len(modal_frames) == 0 and not self._contains_converted_volumetric_structures:
+        if (
+            len(self._modal_plane_frames) == 0
+            and not self._contains_converted_volumetric_structures
+        ):
             return self
+        return self.updated_copy(
+            grid_spec=GridSpec.from_grid(self.grid),
+            structures=self._finalized_volumetric_structures,
+        )
 
-        structures = list(self.volumetric_structures) + modal_frames
+    @cached_property
+    def _finalized_volumetric_structures(self) -> list[Structure]:
+        """Volumetric structures in the simulation, including automatic frames around mode sources and internal absorbers, and 2d strutures converted into volumetric analogues."""
+        modal_frames = self._modal_plane_frames
+        if not self._contains_converted_volumetric_structures:
+            return list(self.structures) + modal_frames
+        return list(self.volumetric_structures) + modal_frames
 
-        return self.updated_copy(grid_spec=GridSpec.from_grid(self.grid), structures=structures)
+    @cached_property
+    def _finalized_optical_medium_map(self) -> dict[MediumType, pydantic.NonNegativeInt]:
+        """Returns dict mapping medium to index in material in finalized simulation.
+
+        Returns
+        -------
+        Dict[:class:`.AbstractMedium`, int]
+            Mapping between distinct mediums to index in finalized simulation.
+        """
+        medium_set = {
+            structure._optical_medium for structure in self._finalized_volumetric_structures
+        }
+        medium_set.add(Structure._get_optical_medium(self.medium))
+        return {medium: index for index, medium in enumerate(medium_set)}
 
     def _validate_finalized(self) -> None:
         """Validate that after adding pec frames simulation setup is still valid."""

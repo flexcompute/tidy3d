@@ -362,3 +362,56 @@ def test_correct_values(dispersive):
 
     assert np.isclose(si_n + pp_large_sampled, si_index_perturb_n)
     assert np.isclose(si_k + pp_small_sampled, si_index_perturb_k)
+
+
+@pytest.mark.parametrize("unstructured", [False, True])
+def test_from_medium_field(unstructured):
+    """Test that derived_from field is properly set when calling perturbed_copy."""
+    # Setup fields to sample at
+    coords = {"x": [1, 2], "y": [3, 4], "z": [5, 6]}
+    temperature = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=coords)
+    electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, 2)), coords=coords)
+    hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, 2)), coords=coords)
+
+    if unstructured:
+        temperature = cartesian_to_unstructured(temperature, seed=7747)
+        electron_density = cartesian_to_unstructured(electron_density, seed=7747)
+        hole_density = cartesian_to_unstructured(hole_density, seed=7747)
+
+    # Test PerturbationMedium
+    pp_real = td.ParameterPerturbation(
+        heat=td.LinearHeatPerturbation(
+            coeff=-0.01,
+            temperature_ref=300,
+            temperature_range=(200, 500),
+        ),
+    )
+
+    pmed = td.PerturbationMedium(permittivity=10, permittivity_perturbation=pp_real)
+
+    # Test without any perturbation data (returns self)
+    cmed_no_perturb = pmed.perturbed_copy()
+    assert isinstance(cmed_no_perturb, td.PerturbationMedium)
+
+    # Test with perturbation data (returns CustomMedium)
+    cmed_with_perturb = pmed.perturbed_copy(temperature, electron_density, hole_density)
+    assert isinstance(cmed_with_perturb, td.CustomMedium)
+    assert cmed_with_perturb.derived_from is pmed
+    assert hash(cmed_with_perturb.derived_from) == hash(pmed)
+
+    # Test PerturbationPoleResidue
+    pmed_pole = td.PerturbationPoleResidue(
+        eps_inf=10,
+        poles=[(1j, 3), (2j, 4)],
+        eps_inf_perturbation=pp_real,
+    )
+
+    # Test without any perturbation data (returns self)
+    cmed_pole_no_perturb = pmed_pole.perturbed_copy()
+    assert isinstance(cmed_pole_no_perturb, td.PerturbationPoleResidue)
+
+    # Test with perturbation data (returns CustomPoleResidue)
+    cmed_pole_with_perturb = pmed_pole.perturbed_copy(temperature, electron_density, hole_density)
+    assert isinstance(cmed_pole_with_perturb, td.CustomPoleResidue)
+    assert cmed_pole_with_perturb.derived_from is pmed_pole
+    assert hash(cmed_pole_with_perturb.derived_from) == hash(pmed_pole)
