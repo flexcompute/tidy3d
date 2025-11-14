@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.data.base import AbstractComponentModelerData
@@ -17,8 +17,7 @@ class ModalComponentModelerData(AbstractComponentModelerData):
     compute the S-matrix from the simulation data.
     """
 
-    modeler: ModalComponentModeler = pd.Field(
-        ...,
+    modeler: ModalComponentModeler = Field(
         title="ModalComponentModeler",
         description="The original :class:`ModalComponentModeler` object that defines the simulation setup "
         "and from which this data was generated.",

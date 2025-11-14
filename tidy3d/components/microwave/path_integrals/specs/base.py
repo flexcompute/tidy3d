@@ -5,9 +5,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import numpy as np
-import pydantic.v1 as pd
 import shapely
 import xarray as xr
+from pydantic import Field, field_validator
 from typing_extensions import Self
 
 from tidy3d.components.base import cached_property
@@ -68,7 +68,7 @@ class AxisAlignedPathIntegralSpec(AbstractAxesRH, Box):
 
     _line_validator = assert_line()
 
-    extrapolate_to_endpoints: bool = pd.Field(
+    extrapolate_to_endpoints: bool = Field(
         False,
         title="Extrapolate to Endpoints",
         description="If the endpoints of the path integral terminate at or near a material interface, "
@@ -76,7 +76,7 @@ class AxisAlignedPathIntegralSpec(AbstractAxesRH, Box):
         "of the integral are ignored. Should be enabled when computing voltage between two conductors.",
     )
 
-    snap_path_to_grid: bool = pd.Field(
+    snap_path_to_grid: bool = Field(
         False,
         title="Snap Path to Grid",
         description="It might be desirable to integrate exactly along the Yee grid associated with "
@@ -126,18 +126,16 @@ class Custom2DPathIntegralSpec(AbstractAxesRH):
     If the path is not closed, forward and backward differences are used at the endpoints.
     """
 
-    axis: Axis = pd.Field(
-        ..., title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
+    axis: Axis = Field(
+        title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
     )
 
-    position: float = pd.Field(
-        ...,
+    position: float = Field(
         title="Position",
         description="Position of the plane along the ``axis``.",
     )
 
-    vertices: ArrayFloat2D = pd.Field(
-        ...,
+    vertices: ArrayFloat2D = Field(
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the path. "
         "The index of dimension should be in the ascending order, which means "
@@ -225,7 +223,8 @@ class Custom2DPathIntegralSpec(AbstractAxesRH):
         """Axis for performing integration."""
         return self.axis
 
-    @pd.validator("vertices", always=True)
+    @field_validator("vertices")
+    @classmethod
     def _correct_shape(cls, val):
         """Makes sure vertices size is correct."""
         # overall shape of vertices

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Optional, Union
 
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeFloat, NonNegativeInt, field_validator, model_validator
 
-from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import ABCBoundary, InternalAbsorber, ModeABCBoundary
 from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
 from tidy3d.components.data.sim_data import SimulationData
@@ -34,20 +34,19 @@ DEFAULT_WAVE_PORT_FRAME = PECFrame()
 class WavePort(AbstractTerminalPort, Box):
     """Class representing a single wave port"""
 
-    direction: Direction = pd.Field(
-        ...,
+    direction: Direction = Field(
         title="Direction",
         description="'+' or '-', defining which direction is considered 'input'.",
     )
 
-    mode_spec: MicrowaveModeSpec = pd.Field(
+    mode_spec: MicrowaveModeSpec = Field(
         default_factory=MicrowaveModeSpec._default_without_license_warning,
         title="Mode Specification",
         description="Parameters to feed to mode solver which determine modes and how transmission line "
         "quantities, e.g., charateristic impedance, are computed.",
     )
 
-    num_grid_cells: Optional[int] = pd.Field(
+    num_grid_cells: Optional[int] = Field(
         DEFAULT_WAVE_PORT_NUM_CELLS,
         ge=MIN_WAVE_PORT_NUM_CELLS,
         title="Number of Grid Cells",
@@ -56,32 +55,32 @@ class WavePort(AbstractTerminalPort, Box):
         "Must be greater than or equal to 3. When set to `None`, no grid refinement is performed.",
     )
 
-    conjugated_dot_product: bool = pd.Field(
+    conjugated_dot_product: bool = Field(
         False,
         title="Conjugated Dot Product",
         description="Use conjugated or non-conjugated dot product for mode decomposition.",
     )
 
-    frame: Optional[PECFrame] = pd.Field(
+    frame: Optional[PECFrame] = Field(
         DEFAULT_WAVE_PORT_FRAME,
         title="Source Frame",
         description="Add a thin frame around the source during FDTD run for an improved injection.",
     )
 
-    absorber: Union[bool, ABCBoundary, ModeABCBoundary] = pd.Field(
+    absorber: Union[bool, ABCBoundary, ModeABCBoundary] = Field(
         True,
         title="Absorber",
         description="Place a mode absorber in the port. If ``True``, an automatically generated mode absorber is placed in the port. "
         "If :class:`.ABCBoundary` or :class:`.ModeABCBoundary`, a mode absorber is placed in the port with the specified boundary conditions.",
     )
 
-    extrude_structures: bool = pd.Field(
+    extrude_structures: bool = Field(
         False,
         title="Extrude Structures",
         description="Extrudes structures that intersect the wave port plane by a few grid cells when ``True``, improving mode injection accuracy.",
     )
 
-    mode_index: Optional[pd.NonNegativeInt] = pd.Field(
+    mode_index: Optional[NonNegativeInt] = Field(
         None,
         title="Mode Index (deprecated)",
         description="Index into the collection of modes returned by mode solver. "
@@ -89,7 +88,7 @@ class WavePort(AbstractTerminalPort, Box):
         "Deprecated. Use the 'mode_selection' field instead.",
     )
 
-    mode_selection: Optional[tuple[int, ...]] = pd.Field(
+    mode_selection: Optional[tuple[int, ...]] = Field(
         None,
         title="Mode Selection",
         description="Selects specific mode(s) to use from the mode solver. "
@@ -136,7 +135,7 @@ class WavePort(AbstractTerminalPort, Box):
         if snap_center:
             center[self.injection_axis] = snap_center
         return ModeSource(
-            center=center,
+            center=tuple(center),
             size=self.size,
             source_time=source_time,
             mode_spec=self.mode_spec,
@@ -179,7 +178,7 @@ class WavePort(AbstractTerminalPort, Box):
         return mode_solver
 
     def to_absorber(
-        self, snap_center: Optional[float] = None, freq_spec: Optional[pd.NonNegativeFloat] = None
+        self, snap_center: Optional[float] = None, freq_spec: Optional[NonNegativeFloat] = None
     ) -> InternalAbsorber:
         """Create an internal absorber from the wave port."""
         center = list(self.center)
@@ -281,26 +280,27 @@ class WavePort(AbstractTerminalPort, Box):
             )
         ]
 
-    @pd.validator("mode_spec", always=True)
-    def _validate_path_integrals_within_port(cls, val, values):
+    @model_validator(mode="after")
+    def _validate_path_integrals_within_port(self):
         """Validate that the microwave mode spec contains path specs all within the port bounds."""
-        center = values["center"]
-        size = values["size"]
+        val = self.mode_spec
+        center = self.center
+        size = self.size
         self_plane = Box(size=size, center=center)
         try:
             val._check_path_integrals_within_box(self_plane)
         except SetupError as e:
             raise SetupError(
-                f"Failed to setup '{cls.__name__}' with the suppled 'MicrowaveModeSpec'. {e!s}"
+                f"Failed to setup '{self.__class__.__name__}' with the suppled 'MicrowaveModeSpec'. {e!s}"
             ) from e
-        return val
+        return self
 
-    @skip_if_fields_missing(["mode_spec"])
-    @pd.validator("mode_selection", always=True)
-    def _validate_mode_selection(cls, val, values):
+    @model_validator(mode="after")
+    def _validate_mode_selection(self):
         """Validate that mode_selection contains valid, unique indices within range."""
+        val = self.mode_selection
         if val is None:
-            return val
+            return self
 
         indices = val
 
@@ -319,7 +319,7 @@ class WavePort(AbstractTerminalPort, Box):
             )
 
         # Check that indices are within range of num_modes
-        mode_spec = values["mode_spec"]
+        mode_spec = self.mode_spec
         num_modes = mode_spec.num_modes
         invalid_indices = [idx for idx in indices if idx >= num_modes]
         if invalid_indices:
@@ -328,21 +328,22 @@ class WavePort(AbstractTerminalPort, Box):
                 f"'mode_spec.num_modes' ({num_modes}). Valid range is 0 to {num_modes - 1}."
             )
 
-        return val
+        return self
 
-    @pd.root_validator(pre=False)
-    def _check_absorber_if_extruding_structures(cls, values):
+    @model_validator(mode="after")
+    def _check_absorber_if_extruding_structures(self):
         """Raise validation error when ``extrude_structures`` is set to ``True``
         while ``absorber`` is set to ``False``."""
 
-        if values.get("extrude_structures") and not values.get("absorber"):
+        if self.extrude_structures and not self.absorber:
             raise ValidationError(
                 "Structure extrusion for a waveport requires an internal absorber. Set `absorber=True` to enable it."
             )
 
-        return values
+        return self
 
-    @pd.validator("mode_index", always=True)
+    @field_validator("mode_index")
+    @classmethod
     def _mode_index_deprecated(cls, val):
         """Warn that 'mode_index' is deprecated in favor of 'mode_selection'."""
         if val is not None:
@@ -352,19 +353,19 @@ class WavePort(AbstractTerminalPort, Box):
             )
         return val
 
-    @skip_if_fields_missing(["mode_spec"])
-    @pd.validator("mode_index", always=True)
-    def _validate_mode_index(cls, val, values):
+    @model_validator(mode="after")
+    def _validate_mode_index(self):
         """Validate that mode_selection contains valid, unique indices within range."""
+        val = self.mode_index
         if val is None:
-            return val
-        num_modes = values["mode_spec"].num_modes
+            return self
+        num_modes = self.mode_spec.num_modes
         if val >= num_modes:
             raise ValidationError(
                 f"'mode_index' is >= "
                 f"'mode_spec.num_modes' ({num_modes}). Valid range is 0 to {num_modes - 1}."
             )
-        return val
+        return self
 
     @property
     def _is_using_mesh_refinement(self) -> bool:

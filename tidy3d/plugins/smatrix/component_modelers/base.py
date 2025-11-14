@@ -5,9 +5,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
-import pydantic.v1 as pd
+from pydantic import Field, field_validator, model_validator
 
-from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.utils import _shift_value_signed
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import SourceTimeType
@@ -42,32 +42,30 @@ TaskNameFormat = Literal["RF", "PF"]
 class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     """Tool for modeling devices and computing port parameters."""
 
-    name: str = pd.Field(
+    name: str = Field(
         "",
         title="Name",
     )
 
-    simulation: Simulation = pd.Field(
-        ...,
+    simulation: Simulation = Field(
         title="Simulation",
         description="Simulation describing the device without any sources present.",
     )
 
-    ports: tuple[Union[Port, TerminalPortType], ...] = pd.Field(
+    ports: tuple[Union[Port, TerminalPortType], ...] = Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
         "For each input mode, one simulation will be run with a modal source.",
     )
 
-    freqs: FreqArray = pd.Field(
-        ...,
+    freqs: FreqArray = Field(
         title="Frequencies",
         description="Array or list of frequencies at which to compute port parameters.",
         units=HERTZ,
     )
 
-    remove_dc_component: bool = pd.Field(
+    remove_dc_component: bool = Field(
         True,
         title="Remove DC Component",
         description="Whether to remove the DC component in the Gaussian pulse spectrum. "
@@ -78,7 +76,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "pulse spectrum which can have a nonzero DC component.",
     )
 
-    run_only: Optional[tuple[IndexType, ...]] = pd.Field(
+    run_only: Optional[tuple[IndexType, ...]] = Field(
         None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
@@ -86,7 +84,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "If a tuple is given, simulations will be run only for the given matrix indices.",
     )
 
-    element_mappings: tuple[tuple[ElementType, ElementType, Complex], ...] = pd.Field(
+    element_mappings: tuple[tuple[ElementType, ElementType, Complex], ...] = Field(
         (),
         title="Element Mappings",
         description="Tuple of S matrix element mappings, each described by a tuple of "
@@ -95,26 +93,28 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "matrix element. If all elements of a given column of the scattering matrix are defined "
         "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
     )
-    custom_source_time: Optional[SourceTimeType] = pd.Field(
+    custom_source_time: Optional[SourceTimeType] = Field(
         None,
         title="Custom Source Time",
         description="If provided, this will be used as specification of the source time-dependence in simulations. "
         "Otherwise, a default source time will be constructed.",
     )
 
-    @pd.validator("simulation", always=True)
+    @field_validator("simulation")
+    @classmethod
     def _sim_has_no_sources(cls, val):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
             raise SetupError(f"'{cls.__name__}.simulation' must not have any sources.")
         return val
 
-    @pd.validator("element_mappings", always=True)
-    def _validate_element_mappings(cls, element_mappings, values):
+    @field_validator("element_mappings")
+    @classmethod
+    def _validate_element_mappings(cls, element_mappings, info):
         """
         Validate that each source index referenced in element_mappings is included in run_only.
         """
-        run_only = values.get("run_only")
+        run_only = info.data.get("run_only")
         if run_only is None:
             return element_mappings
 
@@ -133,12 +133,12 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
             )
         return element_mappings
 
-    @pd.validator("run_only", always=True)
-    @skip_if_fields_missing(["ports"])
-    def _validate_run_only(cls, val, values):
+    @model_validator(mode="after")
+    def _validate_run_only(self):
         """Validate that run_only entries are unique and exist in matrix_indices_monitor."""
+        val = self.run_only
         if val is None:
-            return val
+            return self
 
         # Check uniqueness
         if len(val) != len(set(val)):
@@ -149,9 +149,9 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
             )
 
         # Check membership - use the helper method to get valid indices
-        ports = values["ports"]
+        ports = self.ports
 
-        valid_indices = set(cls._construct_matrix_indices_monitor(ports))
+        valid_indices = set(self._construct_matrix_indices_monitor(ports))
         invalid_indices = [idx for idx in val if idx not in valid_indices]
 
         if invalid_indices:
@@ -160,26 +160,26 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
                 f"'matrix_indices_monitor'. Valid indices are: {sorted(valid_indices)}"
             )
 
-        return val
+        return self
 
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
     _freqs_unique = validate_freqs_unique()
 
-    @pd.validator("custom_source_time", always=True)
-    @skip_if_fields_missing(["freqs"])
-    def _freqs_in_custom_source_time(cls, val, values):
+    @model_validator(mode="after")
+    def _freqs_in_custom_source_time(self):
         """Make sure freqs is in the range of the custom source time."""
+        val = self.custom_source_time
         if val is None:
-            return val
+            return self
         freq_range = val._frequency_range_sigma_cached
-        freqs = values["freqs"]
+        freqs = self.freqs
 
         if freq_range[0] > min(freqs) or max(freqs) > freq_range[1]:
             log.warning(
                 "Custom source time does not cover all 'freqs'.",
             )
-        return val
+        return self
 
     @staticmethod
     def get_task_name(port: PortType, mode_index: Optional[int] = None) -> str:
@@ -344,4 +344,4 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         return data.smatrix()
 
 
-AbstractComponentModeler.update_forward_refs()
+AbstractComponentModeler.model_rebuild()

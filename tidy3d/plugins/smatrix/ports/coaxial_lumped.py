@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
@@ -22,7 +22,6 @@ from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Axis, Coordinate, Direction, FreqArray, Size
-from tidy3d.components.validators import skip_if_fields_missing
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 
@@ -46,35 +45,31 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
     ...         )
     """
 
-    center: Coordinate = pd.Field(
+    center: Coordinate = Field(
         (0.0, 0.0, 0.0),
         title="Center",
         description="Center of object in x, y, and z.",
         units=MICROMETER,
     )
 
-    outer_diameter: pd.PositiveFloat = pd.Field(
-        ...,
+    outer_diameter: PositiveFloat = Field(
         title="Outer Diameter",
         description="Diameter of the outer coaxial circle.",
         units=MICROMETER,
     )
 
-    inner_diameter: pd.PositiveFloat = pd.Field(
-        ...,
+    inner_diameter: PositiveFloat = Field(
         title="Inner Diameter",
         description="Diameter of the inner coaxial circle.",
         units=MICROMETER,
     )
 
-    normal_axis: Axis = pd.Field(
-        ...,
+    normal_axis: Axis = Field(
         title="Normal Axis",
         description="Specifies the axis which is normal to the concentric circles.",
     )
 
-    direction: Direction = pd.Field(
-        ...,
+    direction: Direction = Field(
         title="Direction",
         description="The direction of the signal travelling in the transmission line. "
         "This is needed in order to position the path integral, which is used for computing "
@@ -91,25 +86,24 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         """Required for inheriting from AbstractTerminalPort."""
         return self.normal_axis
 
-    @pd.validator("center", always=True)
+    @field_validator("center")
+    @classmethod
     def _center_not_inf(cls, val):
         """Make sure center is not infinity."""
         if any(np.isinf(v) for v in val):
             raise ValidationError("'center' can not contain 'td.inf' terms.")
         return val
 
-    @pd.validator("inner_diameter", always=True)
-    @skip_if_fields_missing(["outer_diameter"])
-    def _ensure_inner_diameter_is_smaller(cls, val, values):
+    @model_validator(mode="after")
+    def _ensure_inner_diameter_is_smaller(self):
         """Ensures that the inner diameter is smaller than the outer diameter, so that the final
         shape is an annulus."""
-        outer_diameter = values.get("outer_diameter")
-        if val >= outer_diameter:
+        if self.inner_diameter >= self.outer_diameter:
             raise ValidationError(
-                f"The 'inner_diameter' {val} of a coaxial lumped element must be less than its "
-                f"'outer_diameter' {outer_diameter}."
+                f"The 'inner_diameter' {self.inner_diameter} of a coaxial lumped element "
+                f"must be less than its 'outer_diameter' {self.outer_diameter}."
             )
-        return val
+        return self
 
     def to_source(
         self, source_time: GaussianPulse, snap_center: Optional[float] = None, grid: Grid = None
@@ -238,7 +232,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             center=self._voltage_path_center(center),
             size=self._voltage_path_size,
             freqs=freqs,
-            fields=[E1, E2],
+            fields=(E1, E2),
             name=self._voltage_monitor_name,
             colocate=False,
         )
@@ -266,10 +260,10 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
 
         # Create a current monitor
         return FieldMonitor(
-            center=center,
+            center=tuple(center),
             size=current_mon_size,
             freqs=freqs,
-            fields=[H1, H2],
+            fields=(H1, H2),
             name=self._current_monitor_name,
             colocate=False,
         )

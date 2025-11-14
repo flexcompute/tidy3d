@@ -5,13 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pydantic.v1 import Extra, Field
+from pydantic import Field
 
 from .http_util import http
 from .types import Tidy3DResource
 
 
-class Account(Tidy3DResource, extra=Extra.allow):
+class Account(Tidy3DResource, extra="allow"):
     """Tidy3D User Account."""
 
     allowance_cycle_type: Optional[str] = Field(

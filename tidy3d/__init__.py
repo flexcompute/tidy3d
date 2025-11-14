@@ -479,9 +479,9 @@ def set_logging_level(level: str) -> None:
 
 log.info(f"Using client version: {__version__}")
 
-Transformed.update_forward_refs()
-ClipOperation.update_forward_refs()
-GeometryGroup.update_forward_refs()
+Transformed.model_rebuild()
+ClipOperation.model_rebuild()
+GeometryGroup.model_rebuild()
 
 __all__ = [
     "C_0",

@@ -1,16 +1,15 @@
 # autograd wrapper for web functions
 from __future__ import annotations
 
-import typing
 from os import PathLike
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Literal, Optional, Union, get_args
 
-from autograd.builtins import dict as dict_ag
 from autograd.extend import defvjp, primitive
 
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap
+from tidy3d.components.autograd.types import TracedDict
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.config import config
@@ -52,7 +51,7 @@ from .io_utils import (
 )
 
 
-def _resolve_local_gradient(value: typing.Optional[bool]) -> bool:
+def _resolve_local_gradient(value: Optional[bool]) -> bool:
     if value is not None:
         return bool(value)
 
@@ -102,23 +101,23 @@ def is_valid_for_autograd_async(simulations: dict[str, td.Simulation]) -> bool:
 
 def run(
     simulation: WorkflowType,
-    task_name: typing.Optional[str] = None,
+    task_name: Optional[str] = None,
     folder_name: str = "default",
     path: PathLike = "simulation_data.hdf5",
-    callback_url: typing.Optional[str] = None,
+    callback_url: Optional[str] = None,
     verbose: bool = True,
-    progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
-    progress_callback_download: typing.Optional[typing.Callable[[float], None]] = None,
-    solver_version: typing.Optional[str] = None,
-    worker_group: typing.Optional[str] = None,
+    progress_callback_upload: Optional[Callable[[float], None]] = None,
+    progress_callback_download: Optional[Callable[[float], None]] = None,
+    solver_version: Optional[str] = None,
+    worker_group: Optional[str] = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: typing.Optional[list[str]] = None,
-    local_gradient: typing.Optional[bool] = None,
-    max_num_adjoint_per_fwd: typing.Optional[int] = None,
-    reduce_simulation: typing.Literal["auto", True, False] = "auto",
-    pay_type: typing.Union[PayType, str] = PayType.AUTO,
-    priority: typing.Optional[int] = None,
-    lazy: typing.Optional[bool] = None,
+    parent_tasks: Optional[list[str]] = None,
+    local_gradient: Optional[bool] = None,
+    max_num_adjoint_per_fwd: Optional[int] = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: Union[PayType, str] = PayType.AUTO,
+    priority: Optional[int] = None,
+    lazy: Optional[bool] = None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -155,11 +154,11 @@ def run(
         but apply the configuration overrides defined in ``config.adjoint``; remote gradients ignore
         those overrides and enforce backend defaults.
         more stable with experimental features.
-    max_num_adjoint_per_fwd: typing.Optional[int] = None
+    max_num_adjoint_per_fwd: Optional[int] = None
         Maximum number of adjoint simulations allowed to run automatically. Uses the autograd configuration when None.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: typing.Union[PayType, str] = PayType.AUTO
+    pay_type: Union[PayType, str] = PayType.AUTO
         Which method to pay for the simulation.
     priority: int = None
         Task priority for vGPU queue (1=lowest, 10=highest).
@@ -229,7 +228,7 @@ def run(
 
     path = Path(path)
 
-    if isinstance(simulation, typing.get_args(ComponentModelerType)):
+    if isinstance(simulation, get_args(ComponentModelerType)):
         if any(is_valid_for_autograd(s) for s in simulation.sim_dict.values()):
             from tidy3d.plugins.smatrix import run as smatrix_run
 
@@ -289,21 +288,21 @@ def run(
 
 
 def run_async(
-    simulations: typing.Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
+    simulations: Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
     folder_name: str = "default",
     path_dir: PathLike = DEFAULT_DATA_DIR,
-    callback_url: typing.Optional[str] = None,
-    num_workers: typing.Optional[int] = None,
+    callback_url: Optional[str] = None,
+    num_workers: Optional[int] = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
-    solver_version: typing.Optional[str] = None,
-    parent_tasks: typing.Optional[dict[str, list[str]]] = None,
-    local_gradient: typing.Optional[bool] = None,
-    max_num_adjoint_per_fwd: typing.Optional[int] = None,
-    reduce_simulation: typing.Literal["auto", True, False] = "auto",
-    pay_type: typing.Union[PayType, str] = PayType.AUTO,
-    priority: typing.Optional[int] = None,
-    lazy: typing.Optional[bool] = None,
+    solver_version: Optional[str] = None,
+    parent_tasks: Optional[dict[str, list[str]]] = None,
+    local_gradient: Optional[bool] = None,
+    max_num_adjoint_per_fwd: Optional[int] = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: Union[PayType, str] = PayType.AUTO,
+    priority: Optional[int] = None,
+    lazy: Optional[bool] = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -333,13 +332,13 @@ def run_async(
         Whether to perform gradient calculations locally. Defaults to
         ``config.adjoint.local_gradient`` when not provided. Local gradients require more downloads
         but ensure autograd overrides take effect; remote gradients ignore those overrides.
-    max_num_adjoint_per_fwd: typing.Optional[int] = None
+    max_num_adjoint_per_fwd: Optional[int] = None
         Maximum number of adjoint simulations allowed to run automatically. Uses the autograd configuration when None.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: typing.Union[PayType, str] = PayType.AUTO
+    pay_type: Union[PayType, str] = PayType.AUTO
         Specify the payment method.
-    priority: typing.Optional[int] = None
+    priority: Optional[int] = None
         Queue priority for vGPU simulations (1=lowest, 10=highest).
     lazy: Optional[bool] = None
         Whether to return lazy data proxies. Defaults to ``True`` for batch runs when
@@ -422,7 +421,7 @@ def _run(
     simulation: td.Simulation,
     task_name: str,
     local_gradient: bool = False,
-    max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    max_num_adjoint_per_fwd: Optional[int] = None,
     **run_kwargs: Any,
 ) -> td.SimulationData:
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
@@ -465,7 +464,7 @@ def _run(
 def _run_async(
     simulations: dict[str, td.Simulation],
     local_gradient: bool = False,
-    max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    max_num_adjoint_per_fwd: Optional[int] = None,
     **run_async_kwargs: Any,
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""
@@ -483,7 +482,7 @@ def _run_async(
         if payload:
             sim_static.attrs[TRACED_FIELD_KEYS_ATTR] = payload
         sims_original[task_name] = sim_static
-    traced_fields_sim_dict = dict_ag(traced_fields_sim_dict)
+    traced_fields_sim_dict = TracedDict(traced_fields_sim_dict)
 
     # TODO: shortcut primitive running for any items with no tracers?
 
@@ -511,7 +510,6 @@ def _run_async(
 
 def setup_run(simulation: td.Simulation) -> AutogradFieldMap:
     """Process a user-supplied ``Simulation`` into inputs to ``_run_primitive``."""
-
     # get a mapping of all the traced fields in the provided simulation
     return simulation._strip_traced_fields(
         include_untraced_data_arrays=False, starting_path=("structures",)
@@ -602,7 +600,7 @@ def _run_primitive(
 def _run_async_primitive(
     sim_fields_dict: dict[str, AutogradFieldMap],
     sims_original: dict[str, td.Simulation],
-    aux_data_dict: dict[dict[str, typing.Any]],
+    aux_data_dict: dict[dict[str, Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     **run_async_kwargs: Any,
@@ -711,7 +709,7 @@ def _run_bwd(
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     **run_kwargs: Any,
-) -> typing.Callable[[AutogradFieldMap], AutogradFieldMap]:
+) -> Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulations, computes grad."""
 
     # indicate this is an adjoint run
@@ -832,11 +830,11 @@ def _run_async_bwd(
     data_fields_original_dict: dict[str, AutogradFieldMap],
     sim_fields_original_dict: dict[str, AutogradFieldMap],
     sims_original: dict[str, td.Simulation],
-    aux_data_dict: dict[str, dict[str, typing.Any]],
+    aux_data_dict: dict[str, dict[str, Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     **run_async_kwargs: Any,
-) -> typing.Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
+) -> Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulation, computes grad."""
 
     # indicate this is an adjoint run

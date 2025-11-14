@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 
-import pydantic.v1 as pydantic
+from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
 
@@ -12,7 +12,7 @@ from tidy3d.components.base import Tidy3dBaseModel
 class AbstractSourceFrame(Tidy3dBaseModel, ABC):
     """Abstract base class for all source frames."""
 
-    length: int = pydantic.Field(
+    length: int = Field(
         2,
         title="Length",
         description="The length of the frame, specified as the number of cells along the source "

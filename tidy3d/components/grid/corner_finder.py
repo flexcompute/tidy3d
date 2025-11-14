@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal, Optional
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat, PositiveInt
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.base import Box, ClipOperation
@@ -21,7 +21,7 @@ CORNER_ANGLE_THRESOLD = 0.25 * np.pi
 class CornerFinderSpec(Tidy3dBaseModel):
     """Specification for corner detection on a 2D plane."""
 
-    medium: Literal["metal", "dielectric", "all"] = pd.Field(
+    medium: Literal["metal", "dielectric", "all"] = Field(
         "metal",
         title="Material Type For Corner Identification",
         description="Find corners of structures made of :class:`.Medium`, "
@@ -29,7 +29,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         "for non-metallic materials, and ``all`` for all materials.",
     )
 
-    angle_threshold: float = pd.Field(
+    angle_threshold: float = Field(
         CORNER_ANGLE_THRESOLD,
         title="Angle Threshold In Corner Identification",
         description="A vertex is qualified as a corner if the angle spanned by its two edges "
@@ -39,28 +39,28 @@ class CornerFinderSpec(Tidy3dBaseModel):
         lt=np.pi,
     )
 
-    distance_threshold: Optional[pd.PositiveFloat] = pd.Field(
+    distance_threshold: Optional[PositiveFloat] = Field(
         None,
         title="Distance Threshold In Corner Identification",
         description="If not ``None`` and the distance of the vertex to its neighboring vertices "
         "is below the threshold value based on Douglas-Peucker algorithm, the vertex is disqualified as a corner.",
     )
 
-    concave_resolution: Optional[pd.PositiveInt] = pd.Field(
+    concave_resolution: Optional[PositiveInt] = Field(
         None,
         title="Concave Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on concave featues."
         "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",
     )
 
-    convex_resolution: Optional[pd.PositiveInt] = pd.Field(
+    convex_resolution: Optional[PositiveInt] = Field(
         None,
         title="Convex Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on convex featues."
         "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",
     )
 
-    mixed_resolution: Optional[pd.PositiveInt] = pd.Field(
+    mixed_resolution: Optional[PositiveInt] = Field(
         None,
         title="Mixed Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on mixed featues."
@@ -95,18 +95,18 @@ class CornerFinderSpec(Tidy3dBaseModel):
             Axis normal to the 2D plane.
         coord : float
             Position of plane along the normal axis.
-        structure_list : List[Structure]
+        structure_list : list[Structure]
             List of structures present in simulation.
-        center : Tuple[float, float] = [0, 0, 0]
+        center : tuple[float, float] = [0, 0, 0]
             Center of the 2D plane (coordinate along ``axis`` is ignored)
-        size : Tuple[float, float, float] = [inf, inf, inf]
+        size : tuple[float, float, float] = [inf, inf, inf]
             Size of the 2D plane (size along ``axis`` is ignored)
         interior_disjoint_geometries: bool = False
             If ``True``, geometries on the plane must not be overlapping.
 
         Returns
         -------
-        List[Tuple[Any, Shapely]]
+        list[tuple[Any, Shapely]]
             List of shapes and their property value on the plane after merging.
         """
 
@@ -150,7 +150,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
             Axis normal to the 2D plane.
         coord : float
             Position of plane along the normal axis.
-        structure_list : List[Structure]
+        structure_list : list[Structure]
             List of structures present in simulation.
         ravel : bool
             Whether to put the resulting corners in a single list or per polygon.
@@ -159,7 +159,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[ArrayFloat2D, ArrayFloat1D]
+        tuple[ArrayFloat2D, ArrayFloat1D]
             Corner coordinates and their convexity.
         """
 
@@ -221,7 +221,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
             Axis normal to the 2D plane.
         coord : float
             Position of plane along the normal axis.
-        structure_list : List[Structure]
+        structure_list : list[Structure]
             List of structures present in simulation.
         interior_disjoint_geometries: bool = False
             If ``True``, geometries made of different materials on the plane must not be overlapping.

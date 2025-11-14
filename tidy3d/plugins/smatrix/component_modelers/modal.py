@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 import autograd.numpy as np
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.sim_data import SimulationData
@@ -34,14 +34,14 @@ class ModalComponentModeler(AbstractComponentModeler):
         * `Computing the scattering matrix of a device <../../notebooks/SMatrix.html>`_
     """
 
-    ports: tuple[Port, ...] = pd.Field(
+    ports: tuple[Port, ...] = Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
         "For each input mode, one simulation will be run with a modal source.",
     )
 
-    run_only: Optional[tuple[MatrixIndex, ...]] = pd.Field(
+    run_only: Optional[tuple[MatrixIndex, ...]] = Field(
         None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
@@ -49,7 +49,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         "If a tuple is given, simulations will be run only for the given matrix indices.",
     )
 
-    element_mappings: tuple[tuple[Element, Element, Complex], ...] = pd.Field(
+    element_mappings: tuple[tuple[Element, Element, Complex], ...] = Field(
         (),
         title="Element Mappings",
         description="Tuple of S matrix element mappings, each described by a tuple of "
@@ -181,7 +181,7 @@ class ModalComponentModeler(AbstractComponentModeler):
 
     def to_source(
         self, port: Port, mode_index: int, num_freqs: int = 1, **kwargs: Any
-    ) -> list[ModeSource]:
+    ) -> ModeSource:
         """Creates a mode source from a given port.
 
         This source is used to excite a specific mode at the port.
@@ -276,7 +276,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         for port_source in self.ports:
             mode_source_0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(mode_source_0)
-        sim_plot = self.simulation.copy(update={"sources": plot_sources})
+        sim_plot = self.simulation.copy(update={"sources": tuple(plot_sources)})
         return sim_plot.plot(x=x, y=y, z=z, ax=ax)
 
     @equal_aspect
@@ -317,7 +317,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         for port_source in self.ports:
             mode_source_0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(mode_source_0)
-        sim_plot = self.simulation.copy(update={"sources": plot_sources})
+        sim_plot = self.simulation.copy(update={"sources": tuple(plot_sources)})
         return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
     def _normalization_factor(self, port_source: Port, sim_data: SimulationData) -> complex:
