@@ -199,7 +199,7 @@ def _check_tidy3d_extras_available():
         raise Tidy3dImportError(
             "The package 'tidy3d-extras' is absent. "
             "Please install the 'tidy3d-extras' package using, for "
-            "example, 'pip install tidy3d[extras]'."
+            r"example, 'pip install tidy3d\[extras]'."
         )
 
     try:
@@ -209,6 +209,13 @@ def _check_tidy3d_extras_available():
         raise Tidy3dImportError(
             "The package 'tidy3d-extras' did not initialize correctly."
         ) from exc
+
+    if not hasattr(tidy3d_extras_mod, "__version__"):
+        raise Tidy3dImportError(
+            "The package 'tidy3d-extras' did not initialize correctly. "
+            "Please install the 'tidy3d-extras' package using, for "
+            r"example, 'pip install tidy3d\[extras]'."
+        )
 
     version = tidy3d_extras_mod.__version__
 
@@ -222,7 +229,7 @@ def _check_tidy3d_extras_available():
         raise Tidy3dImportError(
             f"The version of 'tidy3d-extras' is {version}, but the version of 'tidy3d' is {__version__}. "
             "They must match. You can install the correct "
-            "version using 'pip install tidy3d[extras]'."
+            r"version using 'pip install tidy3d\[extras]'."
         )
 
     tidy3d_extras["mod"] = tidy3d_extras_mod
