@@ -26,6 +26,7 @@ from .data.data_array import ScalarFieldDataArray
 from .geometry.base import Box, Geometry
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .grid.grid import Coords
+from .material.multi_physics import MultiPhysicsMedium
 from .material.types import StructureMediumType
 from .medium import AbstractCustomMedium, CustomMedium, LossyMetalMedium, Medium, Medium2D
 from .monitor import FieldMonitor, PermittivityMonitor
@@ -256,6 +257,16 @@ class Structure(AbstractStructure):
         if isinstance(self.medium, AbstractCustomMedium):
             return self.medium.eps_diagonal_on_grid(frequency=frequency, coords=coords)
         return self.medium.eps_diagonal(frequency=frequency)
+
+    @staticmethod
+    def _get_optical_medium(medium):
+        """Get optical medium."""
+        return medium.optical if isinstance(medium, MultiPhysicsMedium) else medium
+
+    @property
+    def _optical_medium(self) -> StructureMediumType:
+        """Optical medium of the structure."""
+        return self._get_optical_medium(self.medium)
 
     @pydantic.validator("medium", always=True)
     @skip_if_fields_missing(["geometry"])

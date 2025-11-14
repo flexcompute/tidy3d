@@ -91,6 +91,7 @@ from .types import (
     PermittivityComponent,
     PoleAndResidue,
     TensorReal,
+    annotate_type,
 )
 from .validators import _warn_potential_error, validate_name_str, validate_parameter_perturbation
 from .viz import VisualizationSpec, add_ax_if_none
@@ -873,6 +874,12 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         "``Simulation``'s field ``subpixel`` for this type of material on the "
         "interface of the structure, including exterior boundary and "
         "intersection interfaces with other structures.",
+    )
+
+    derived_from: Optional[annotate_type(PerturbationMediumType)] = pd.Field(
+        None,
+        title="Parent Medium",
+        description="If not ``None``, it records the parent medium from which this medium was derived.",
     )
 
     @cached_property
@@ -6748,7 +6755,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         electron_density: CustomSpatialDataType = None,
         hole_density: CustomSpatialDataType = None,
         interp_method: InterpMethod = "linear",
-    ) -> Union[Medium, CustomMedium]:
+    ) -> Union[PerturbationMedium, CustomMedium]:
         """Sample perturbations on provided heat and/or charge data and return 'CustomMedium'.
         Any of temperature, electron_density, and hole_density can be 'None'. If all passed
         arguments are 'None' then a 'Medium' object is returned. All provided fields must have
@@ -6780,9 +6787,13 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
 
         Returns
         -------
-        Union[Medium, CustomMedium]
+        Union[PerturbationMedium, CustomMedium]
             Medium specification after application of heat and/or charge data.
         """
+
+        # in the absence of perturbation
+        if all(x is None for x in [temperature, electron_density, hole_density]):
+            return self
 
         new_dict = self.dict(
             exclude={
@@ -6792,10 +6803,6 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
                 "type",
             }
         )
-
-        if all(x is None for x in [temperature, electron_density, hole_density]):
-            new_dict.pop("subpixel")
-            return Medium.parse_obj(new_dict)
 
         permittivity_field = self.permittivity + ParameterPerturbation._zeros_like(
             temperature, electron_density, hole_density
@@ -6836,6 +6843,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         new_dict["permittivity"] = permittivity_field
         new_dict["conductivity"] = conductivity_field
         new_dict["interp_method"] = interp_method
+        new_dict["derived_from"] = self
 
         return CustomMedium.parse_obj(new_dict)
 
@@ -6959,7 +6967,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         electron_density: CustomSpatialDataType = None,
         hole_density: CustomSpatialDataType = None,
         interp_method: InterpMethod = "linear",
-    ) -> Union[PoleResidue, CustomPoleResidue]:
+    ) -> Union[PerturbationPoleResidue, CustomPoleResidue]:
         """Sample perturbations on provided heat and/or charge data and return 'CustomPoleResidue'.
         Any of temperature, electron_density, and hole_density can be 'None'. If all passed
         arguments are 'None' then a 'PoleResidue' object is returned. All provided fields must have
@@ -6991,17 +6999,17 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 
         Returns
         -------
-        Union[PoleResidue, CustomPoleResidue]
+        Union[PerturbationPoleResidue, CustomPoleResidue]
             Medium specification after application of heat and/or charge data.
         """
+
+        # in the absence of perturbation
+        if all(x is None for x in [temperature, electron_density, hole_density]):
+            return self
 
         new_dict = self.dict(
             exclude={"eps_inf_perturbation", "poles_perturbation", "perturbation_spec", "type"}
         )
-
-        if all(x is None for x in [temperature, electron_density, hole_density]):
-            new_dict.pop("subpixel")
-            return PoleResidue.parse_obj(new_dict)
 
         zeros = ParameterPerturbation._zeros_like(temperature, electron_density, hole_density)
 
@@ -7050,12 +7058,28 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         new_dict["eps_inf"] = eps_inf_field
         new_dict["poles"] = poles_field
         new_dict["interp_method"] = interp_method
+        new_dict["derived_from"] = self
 
         return CustomPoleResidue.parse_obj(new_dict)
 
 
 # types of mediums that can be used in Simulation and Structures
 
+PerturbationMediumType = Union[PerturbationMedium, PerturbationPoleResidue]
+
+
+# Update forward references for all Custom medium classes that inherit from AbstractCustomMedium
+def _get_all_subclasses(cls):
+    """Recursively get all subclasses of a class."""
+    all_subclasses = []
+    for subclass in cls.__subclasses__():
+        all_subclasses.append(subclass)
+        all_subclasses.extend(_get_all_subclasses(subclass))
+    return all_subclasses
+
+
+for _custom_medium_cls in _get_all_subclasses(AbstractCustomMedium):
+    _custom_medium_cls.update_forward_refs()
 
 MediumType3D = Union[
     Medium,
