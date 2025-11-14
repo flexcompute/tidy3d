@@ -16,7 +16,17 @@ from tidy3d.components.base import (
     Tidy3dBaseModel,
     cached_property,
 )
-from tidy3d.components.boundary import PML, Absorber, Boundary, BoundarySpec, PECBoundary, StablePML
+from tidy3d.components.boundary import (
+    PML,
+    Absorber,
+    BlochBoundary,
+    Boundary,
+    BoundarySpec,
+    PECBoundary,
+    Periodic,
+    PMCBoundary,
+    StablePML,
+)
 from tidy3d.components.data.data_array import (
     ModeIndexDataArray,
     ScalarModeFieldCylindricalDataArray,
@@ -81,6 +91,7 @@ if TYPE_CHECKING:
         Ax,
         Axis,
         Axis2D,
+        Bound2D,
         EpsSpecType,
         PlotScale,
         Symmetry,
@@ -1201,6 +1212,88 @@ class ModeSolver(Tidy3dBaseModel):
             )
             return self
 
+    @cached_property
+    def _sim_boundary_positions(self) -> Bound2D:
+        """Get simulation boundary positions for the mode plane's tangential axes.
+
+        Returns the simulation boundary positions and logs warnings if the mode solver
+        grid extends beyond boundaries with unsupported conditions (PMC, Periodic, Bloch).
+        PEC boundaries are fully supported. PML/Absorber/ABC boundaries are silently
+        ignored since including them would introduce too many warnings in existing simulations.
+
+        .. TODO Consolidate all boundary conditions in the underlying simulation and the mode solver.
+
+        Returns
+        -------
+        Bound2D
+            ((min_0, min_1), (max_0, max_1)) positions along tangential axes.
+        """
+        trans_axes = [0, 1, 2]
+        trans_axes.remove(self.normal_axis)
+        axis_names = ["x", "y", "z"]
+
+        sim_grid_list = self.simulation.grid.boundaries.to_list
+        solver_grid_list = self._solver_grid.boundaries.to_list
+        bspec = self.simulation.boundary_spec
+
+        pos_min = [None, None]
+        pos_max = [None, None]
+
+        for i, axis in enumerate(trans_axes):
+            axis_name = axis_names[axis]
+            boundary = bspec[axis_name]
+
+            sim_min = sim_grid_list[axis][0]
+            sim_max = sim_grid_list[axis][-1]
+            solver_min = solver_grid_list[axis][0]
+            solver_max = solver_grid_list[axis][-1]
+            pos_min[i] = sim_min
+            pos_max[i] = sim_max
+            # Check if mode solver plane intersects simulation boundaries
+            # Min side: intersects if solver grid extends beyond (below) sim boundary
+            intersects_min = solver_min < sim_min and not np.isclose(
+                solver_min, sim_min, rtol=fp_eps, atol=fp_eps
+            )
+            # Max side: intersects if solver grid extends beyond (above) sim boundary
+            intersects_max = solver_max > sim_max and not np.isclose(
+                solver_max, sim_max, rtol=fp_eps, atol=fp_eps
+            )
+
+            # Check minus side
+            bc_minus = boundary.minus
+            if isinstance(bc_minus, PMCBoundary):
+                if intersects_min:
+                    log.warning(
+                        f"Mode solver plane intersects simulation '{axis_name}-' boundary with "
+                        f"unsupported PMC boundary condition. The mode solver will apply PEC instead."
+                    )
+            elif isinstance(bc_minus, (Periodic, BlochBoundary)):
+                if intersects_min:
+                    log.warning(
+                        f"Mode solver plane intersects simulation '{axis_name}-' boundary with "
+                        f"unsupported periodic/Bloch boundary condition. "
+                        f"Fields will not wrap around periodically."
+                    )
+            # ABC boundaries: no truncation, no warning (fields can extend)
+
+            # Check plus side
+            bc_plus = boundary.plus
+            if isinstance(bc_plus, PMCBoundary):
+                if intersects_max:
+                    log.warning(
+                        f"Mode solver plane intersects simulation '{axis_name}+' boundary with "
+                        f"unsupported PMC boundary condition. The mode solver will apply PEC instead."
+                    )
+            elif isinstance(bc_plus, (Periodic, BlochBoundary)):
+                if intersects_max:
+                    log.warning(
+                        f"Mode solver plane intersects simulation '{axis_name}+' boundary with "
+                        f"unsupported periodic/Bloch boundary condition. "
+                        f"Fields will not wrap around periodically."
+                    )
+            # ABC boundaries: no truncation, no warning (fields can extend)
+        return (tuple(pos_min), tuple(pos_max))
+
     def _data_on_yee_grid(self) -> ModeSolverData:
         """Solve for all modes, and construct data with fields on the Yee grid."""
         solver = self._reduced_simulation_copy_with_fallback
@@ -1217,7 +1310,8 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Compute and store the modes at all frequencies
         n_complex, fields, eps_spec = solver._solve_all_freqs(
-            coords=_solver_coords, symmetry=solver.solver_symmetry
+            coords=_solver_coords,
+            symmetry=solver.solver_symmetry,
         )
 
         # start a dictionary storing the data arrays for the ModeSolverData
@@ -1291,7 +1385,9 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Compute and store the modes at all frequencies
         n_complex, fields, eps_spec = self._solve_all_freqs_relative(
-            coords=_solver_coords, symmetry=self.solver_symmetry, basis_fields=basis_fields
+            coords=_solver_coords,
+            symmetry=self.solver_symmetry,
+            basis_fields=basis_fields,
         )
 
         # start a dictionary storing the data arrays for the ModeSolverData
@@ -1601,14 +1697,19 @@ class ModeSolver(Tidy3dBaseModel):
         """Call the mode solver at all requested frequencies."""
         if tidy3d_extras["use_local_subpixel"]:
             subpixel_ms = tidy3d_extras["mod"].SubpixelModeSolver.from_mode_solver(self)
-            return subpixel_ms._solve_all_freqs(coords=coords, symmetry=symmetry)
+            return subpixel_ms._solve_all_freqs(
+                coords=coords,
+                symmetry=symmetry,
+            )
 
         fields = []
         n_complex = []
         eps_spec = []
         for freq in self.freqs:
             n_freq, fields_freq, eps_spec_freq = self._solve_single_freq(
-                freq=freq, coords=coords, symmetry=symmetry
+                freq=freq,
+                coords=coords,
+                symmetry=symmetry,
             )
             fields.append(fields_freq)
             n_complex.append(n_freq)
@@ -1626,7 +1727,9 @@ class ModeSolver(Tidy3dBaseModel):
         if tidy3d_extras["use_local_subpixel"]:
             subpixel_ms = tidy3d_extras["mod"].SubpixelModeSolver.from_mode_solver(self)
             return subpixel_ms._solve_all_freqs_relative(
-                coords=coords, symmetry=symmetry, basis_fields=basis_fields
+                coords=coords,
+                symmetry=symmetry,
+                basis_fields=basis_fields,
             )
 
         fields = []
@@ -1634,7 +1737,10 @@ class ModeSolver(Tidy3dBaseModel):
         eps_spec = []
         for freq, basis_fields_freq in zip(self.freqs, basis_fields):
             n_freq, fields_freq, eps_spec_freq = self._solve_single_freq_relative(
-                freq=freq, coords=coords, symmetry=symmetry, basis_fields=basis_fields_freq
+                freq=freq,
+                coords=coords,
+                symmetry=symmetry,
+                basis_fields=basis_fields_freq,
             )
             fields.append(fields_freq)
             n_complex.append(n_freq)
@@ -1692,6 +1798,7 @@ class ModeSolver(Tidy3dBaseModel):
             direction=self.direction,
             precision=self._precision,
             plane_center=self.plane_center_tangential(self.plane),
+            sim_pec_bound=self._sim_boundary_positions,
         )
 
         fields = self._postprocess_solver_fields(
@@ -1756,6 +1863,7 @@ class ModeSolver(Tidy3dBaseModel):
             solver_basis_fields=solver_basis_fields,
             precision=self._precision,
             plane_center=self.plane_center_tangential(self.plane),
+            sim_pec_bound=self._sim_boundary_positions,
         )
 
         fields = self._postprocess_solver_fields(

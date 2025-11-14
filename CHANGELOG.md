@@ -45,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed the default value of `fill_value` in `UnstructuredGridDataset.interp()` from `0` to `"extrapolate"`. This means points outside the mesh will now use nearest-neighbor extrapolation instead of being filled with zeros.
 
 ### Fixed
+- Fix to `outer_dot` when frequencies stored in the data were not in increasing order. Previously, the result would be provided with re-sorted frequencies, which would not match the order of the original data.
+- Fixed bug where an extra spatial coordinate could appear in `complex_flux` and `ImpedanceCalculator` results.
+- Fixed normal for `Box` shape gradient computation to always point outward from boundary which is needed for correct PEC handling.
+- Fixed `Box` gradients within `GeometryGroup` where the group intersection boundaries were forwarded.
+- Fixed `Box` gradients to use automatic permittivity detection for inside/outside permittivity.
+- Fixed bug where `ModeSolver` and `Simulation` did not place PEC boundaries at the same location. The solver now truncates the computational grid to simulation bounds and zero-pads fields outside the domain.
 
 - Fixed `CustomMedium` gradient calculation when field coordinates exactly align with boundaries.
 - Fixed adjoint simulation `grid_spec` to align exactly with forward simulation for correct `FieldData` adjoint source power.

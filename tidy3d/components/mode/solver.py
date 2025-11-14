@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from scipy import sparse as sp
 
-    from tidy3d.components.types import EpsSpecType, ModeSolverType
+    from tidy3d.components.types import Bound2D, EpsSpecType, ModeSolverType
 
 # Consider vec to be complex if norm(vec.imag)/norm(vec) > TOL_COMPLEX
 TOL_COMPLEX = 1e-10
@@ -67,6 +67,7 @@ class EigSolver(Tidy3dBaseModel):
         direction: Literal["+", "-"] = "+",
         solver_basis_fields: Optional[ArrayComplex] = None,
         plane_center: Optional[tuple[float, float]] = None,
+        sim_pec_bound: Optional[Bound2D] = None,
     ) -> tuple[ArrayComplex, ArrayComplex, EpsSpecType]:
         """
         Solve for the modes of a waveguide cross-section.
@@ -106,6 +107,9 @@ class EigSolver(Tidy3dBaseModel):
             The center of the mode plane along the tangential axes of the global simulation. Used
             in case of bend modes to offset the coordinates correctly w.r.t. the bend radius, which
             is assumed to refer to the distance from the bend center to the mode plane center.
+        sim_pec_bound : Optional[Bound2D]
+            Simulation PEC boundary positions ((x_min, y_min), (x_max, y_max)). If the solver grid extends
+            beyond a PEC position, it will be truncated and fields outside will be zero-padded.
 
         Returns
         -------
@@ -123,6 +127,67 @@ class EigSolver(Tidy3dBaseModel):
         omega = 2 * np.pi * freq
         k0 = omega / C_0
         enable_incidence_matrices = False  # Experimental feature, always off for now
+
+        # Determine truncation indices based on simulation PEC boundary positions
+        # Store original shapes for later zero-padding
+        original_Nx = len(coords[0]) - 1
+        original_Ny = len(coords[1]) - 1
+
+        # Find indices where coords fall within simulation PEC boundaries
+        trim_min = [0, 0]
+        trim_max = [len(coords[0]), len(coords[1])]
+
+        if sim_pec_bound is not None:
+            # Find first coord index >= min_bound (for boundary coords)
+            min_bound = sim_pec_bound[0]
+            for i in range(2):
+                idx = np.searchsorted(coords[i], min_bound[i], side="left")
+                # Only trim if min_bound is actually inside the coord range
+                if idx > 0 and not np.isclose(coords[i][idx - 1], min_bound[i]):
+                    trim_min[i] = idx
+
+            # Find last coord index <= max_bound (for boundary coords)
+            max_bound = sim_pec_bound[1]
+            for i in range(2):
+                idx = np.searchsorted(coords[i], max_bound[i], side="right")
+                # Only trim if max_bound is actually inside the coord range
+                if idx < len(coords[i]) and not np.isclose(coords[i][idx], max_bound[i]):
+                    trim_max[i] = idx
+
+        # Check if truncation is needed
+        needs_truncation = trim_min != [0, 0] or trim_max != [len(coords[0]), len(coords[1])]
+
+        if needs_truncation:
+            # Truncate coords
+            coords = [
+                coords[0][trim_min[0] : trim_max[0]],
+                coords[1][trim_min[1] : trim_max[1]],
+            ]
+
+            # Calculate cell indices for eps truncation (cells are between boundaries)
+            cell_min = [trim_min[0], trim_min[1]]
+            cell_max = [trim_max[0] - 1, trim_max[1] - 1]
+
+            # Truncate eps_cross
+            eps_cross = cls._truncate_medium_data(eps_cross, cell_min, cell_max)
+
+            # Truncate mu_cross if provided
+            if mu_cross is not None:
+                mu_cross = cls._truncate_medium_data(mu_cross, cell_min, cell_max)
+
+            # Truncate split_curl_scaling if provided
+            if split_curl_scaling is not None:
+                split_curl_scaling = tuple(
+                    s[cell_min[0] : cell_max[0], cell_min[1] : cell_max[1]]
+                    for s in split_curl_scaling
+                )
+
+            # Truncate solver_basis_fields if provided
+            # Shape is (6, Nx, Ny, 1, num_modes) for E and H fields
+            if solver_basis_fields is not None:
+                solver_basis_fields = solver_basis_fields[
+                    :, cell_min[0] : cell_max[0], cell_min[1] : cell_max[1], :, :
+                ]
 
         eps_formated = cls.format_medium_data(eps_cross)
         eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_formated
@@ -300,6 +365,19 @@ class EigSolver(Tidy3dBaseModel):
         H = H.reshape((3, Nx, Ny, 1, num_modes))
 
         fields = np.stack((E, H), axis=0)
+
+        # Zero-pad fields back to original size if truncation was applied
+        if needs_truncation:
+            # fields shape: (2, 3, Nx, Ny, 1, num_modes) for E and H stacked
+            pad_width = (
+                (0, 0),  # E/H axis
+                (0, 0),  # field component axis (Ex, Ey, Ez)
+                (trim_min[0], original_Nx - trim_max[0] + 1),  # x axis padding
+                (trim_min[1], original_Ny - trim_max[1] + 1),  # y axis padding
+                (0, 0),  # normal axis (always 1)
+                (0, 0),  # modes axis
+            )
+            fields = np.pad(fields, pad_width, mode="constant", constant_values=0.0)
 
         neff = neff * np.linalg.norm(kp_to_k)
         keff = keff * np.linalg.norm(kp_to_k)
@@ -1091,6 +1169,35 @@ class EigSolver(Tidy3dBaseModel):
             return np.real(sqrt_eig_list), np.imag(sqrt_eig_list)
 
         raise RuntimeError(f"Unidentified 'mode_solver_type={mode_solver_type}'.")
+
+    @staticmethod
+    def _truncate_medium_data(mat_data, cell_min, cell_max):
+        """Truncate medium data (eps or mu) to the specified cell range.
+
+        Parameters
+        ----------
+        mat_data : array_like or tuple of array_like
+            Either a single 2D array or nine 2D arrays (for tensorial data).
+        cell_min : list[int]
+            [x_min, y_min] cell indices for truncation start.
+        cell_max : list[int]
+            [x_max, y_max] cell indices for truncation end.
+
+        Returns
+        -------
+        Truncated medium data in the same format as input.
+        """
+        x_slice = slice(cell_min[0], cell_max[0])
+        y_slice = slice(cell_min[1], cell_max[1])
+
+        if isinstance(mat_data, np.ndarray):
+            # Tensorial format: shape (9, Nx, Ny)
+            return mat_data[:, x_slice, y_slice]
+        if len(mat_data) == 9:
+            # Nine separate 2D arrays
+            return tuple(arr[x_slice, y_slice] for arr in mat_data)
+
+        raise ValueError("Wrong input to mode solver permittivity/permeability truncation!")
 
     @staticmethod
     def format_medium_data(

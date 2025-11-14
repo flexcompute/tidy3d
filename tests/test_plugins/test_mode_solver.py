@@ -15,6 +15,7 @@ from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.components.mode.solver import TOL_DEGENERATE_CANDIDATE, EigSolver, compute_modes
 from tidy3d.components.mode_spec import MODE_DATA_KEYS
+from tidy3d.constants import fp_eps
 from tidy3d.exceptions import DataError, SetupError, ValidationError
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
@@ -1823,3 +1824,247 @@ def test_mode_data_fill_fraction_box_requires_intersection():
     data, _ = make_fill_fraction_mode_data()
     with pytest.raises(ValidationError):
         data.fill_fraction(td.Box(center=(0.0, 2.0, 0.0), size=(1.0, 1.0, 1.0)))
+
+
+def test_mode_solver_pec_boundary_truncation():
+    """Test that fields are correctly zero outside simulation bounds and satisfy PEC boundary conditions.
+
+    This test creates a rectangular waveguide where the waveguide walls are modeled using the
+    PEC boundary conditions of the simulation domain. The mode solver grid may extend beyond
+    the simulation bounds due to _discretize_inds_monitor adding extra cells for interpolation.
+    This test verifies that:
+    1. Fields outside the simulation boundaries are exactly 0
+    2. Electric fields tangential to the boundary are 0 at the boundary
+    3. Magnetic fields normal to the boundary are 0 at the boundary
+    """
+    # Create a simulation with PEC boundaries (default)
+    # The simulation size defines the waveguide cross-section
+    sim_size = (2.0, 0.0, 1.5)  # Waveguide in y-direction, cross-section in x-z plane
+    freq0 = td.C_0 / 1.55
+
+    # Simple simulation with just air - the waveguide walls are the PEC boundaries
+    simulation = td.Simulation(
+        size=sim_size,
+        grid_spec=td.GridSpec.uniform(dl=0.05),
+        run_time=1e-14,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.periodic(),  # Propagation direction
+            z=td.Boundary.pec(),
+        ),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+                polarization="Ex",
+            )
+        ],
+    )
+
+    # Mode plane perpendicular to propagation direction
+    plane = td.Box(center=(0, 0, 0), size=(sim_size[0], 0, sim_size[2]))
+
+    mode_spec = td.ModeSpec(
+        num_modes=2,
+        precision="double",
+    )
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=plane,
+        mode_spec=mode_spec,
+        freqs=[freq0],
+        direction="+",
+        colocate=False,
+    )
+
+    # Get the mode solver data
+    data = ms.data
+
+    # Get simulation boundaries
+    sim_bounds = simulation.bounds
+    sim_x_min, sim_x_max = sim_bounds[0][0], sim_bounds[1][0]
+    sim_z_min, sim_z_max = sim_bounds[0][2], sim_bounds[1][2]
+
+    # Test 1: Fields outside simulation boundaries should be exactly 0 (zero-padded)
+    for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
+        field = data.field_components[field_name]
+        field_coords_x = field.coords["x"].values
+        field_coords_z = field.coords["z"].values
+
+        # Check fields at x positions outside simulation
+        x_outside_min = field_coords_x[
+            (field_coords_x < sim_x_min)
+            & ~np.isclose(field_coords_x, sim_x_min, rtol=fp_eps, atol=fp_eps)
+        ]
+        if len(x_outside_min) > 0:
+            field_outside = field.sel(x=x_outside_min)
+            assert np.all(field_outside.values == 0.0), (
+                f"{field_name} should be exactly 0 outside x_min boundary, got {np.max(np.abs(field_outside.values))}"
+            )
+
+        x_outside_max = field_coords_x[
+            (field_coords_x > sim_x_max)
+            & ~np.isclose(field_coords_x, sim_x_max, rtol=fp_eps, atol=fp_eps)
+        ]
+        if len(x_outside_max) > 0:
+            field_outside = field.sel(x=x_outside_max)
+            assert np.all(field_outside.values == 0.0), (
+                f"{field_name} should be exactly 0 outside x_max boundary, got {np.max(np.abs(field_outside.values))}"
+            )
+
+        # Check fields at z positions outside simulation
+        z_outside_min = field_coords_z[
+            (field_coords_z < sim_z_min)
+            & ~np.isclose(field_coords_z, sim_z_min, rtol=fp_eps, atol=fp_eps)
+        ]
+        if len(z_outside_min) > 0:
+            field_outside = field.sel(z=z_outside_min)
+            assert np.all(field_outside.values == 0.0), (
+                f"{field_name} should be exactly 0 outside z_min boundary, got {np.max(np.abs(field_outside.values))}"
+            )
+
+        z_outside_max = field_coords_z[
+            (field_coords_z > sim_z_max)
+            & ~np.isclose(field_coords_z, sim_z_max, rtol=fp_eps, atol=fp_eps)
+        ]
+        if len(z_outside_max) > 0:
+            field_outside = field.sel(z=z_outside_max)
+            assert np.all(field_outside.values == 0.0), (
+                f"{field_name} should be exactly 0 outside z_max boundary, got {np.max(np.abs(field_outside.values))}"
+            )
+
+    # Test 2: Tangential E-fields at PEC boundaries should be exactly 0
+    # At x boundaries: Ey and Ez are tangential
+    # At z boundaries: Ex and Ey are tangential
+
+    # Get field coordinates exactly at boundaries
+    for field_name in ("Ey", "Ez"):
+        field = data.field_components[field_name]
+        field_coords_x = field.coords["x"].values
+        # Find coordinates exactly at boundaries
+        x_at_min = field_coords_x[np.isclose(field_coords_x, sim_x_min, rtol=fp_eps, atol=fp_eps)]
+        x_at_max = field_coords_x[np.isclose(field_coords_x, sim_x_max, rtol=fp_eps, atol=fp_eps)]
+
+        if len(x_at_min) > 0:
+            field_at_boundary = field.sel(x=x_at_min[0])
+            assert np.all(field_at_boundary.values == 0.0), (
+                f"{field_name} (tangential) should be exactly 0 at x_min PEC boundary, got {np.max(np.abs(field_at_boundary.values))}"
+            )
+
+        if len(x_at_max) > 0:
+            field_at_boundary = field.sel(x=x_at_max[0])
+            assert np.all(field_at_boundary.values == 0.0), (
+                f"{field_name} (tangential) should be exactly 0 at x_max PEC boundary, got {np.max(np.abs(field_at_boundary.values))}"
+            )
+
+    for field_name in ("Ex", "Ey"):
+        field = data.field_components[field_name]
+        field_coords_z = field.coords["z"].values
+        # Find coordinates exactly at boundaries
+        z_at_min = field_coords_z[np.isclose(field_coords_z, sim_z_min, rtol=fp_eps, atol=fp_eps)]
+        z_at_max = field_coords_z[np.isclose(field_coords_z, sim_z_max, rtol=fp_eps, atol=fp_eps)]
+
+        if len(z_at_min) > 0:
+            field_at_boundary = field.sel(z=z_at_min[0])
+            assert np.all(field_at_boundary.values == 0.0), (
+                f"{field_name} (tangential) should be exactly 0 at z_min PEC boundary, got {np.max(np.abs(field_at_boundary.values))}"
+            )
+
+        if len(z_at_max) > 0:
+            field_at_boundary = field.sel(z=z_at_max[0])
+            assert np.all(field_at_boundary.values == 0.0), (
+                f"{field_name} (tangential) should be exactly 0 at z_max PEC boundary, got {np.max(np.abs(field_at_boundary.values))}"
+            )
+
+    # Test 3: Normal H-fields at PEC boundaries should be exactly 0
+    # At x boundaries: Hx is normal
+    # At z boundaries: Hz is normal
+    field = data.field_components["Hx"]
+    field_coords_x = field.coords["x"].values
+    x_at_min = field_coords_x[np.isclose(field_coords_x, sim_x_min, rtol=fp_eps, atol=fp_eps)]
+    x_at_max = field_coords_x[np.isclose(field_coords_x, sim_x_max, rtol=fp_eps, atol=fp_eps)]
+
+    if len(x_at_min) > 0:
+        field_at_boundary = field.sel(x=x_at_min[0])
+        assert np.all(field_at_boundary.values == 0.0), (
+            f"Hx (normal) should be exactly 0 at x_min PEC boundary, got {np.max(np.abs(field_at_boundary.values))}"
+        )
+
+    if len(x_at_max) > 0:
+        field_at_boundary = field.sel(x=x_at_max[0])
+        assert np.all(field_at_boundary.values == 0.0), (
+            f"Hx (normal) should be exactly 0 at x_max PEC boundary, got {np.max(np.abs(field_at_boundary.values))}"
+        )
+
+    field = data.field_components["Hz"]
+    field_coords_z = field.coords["z"].values
+    z_at_min = field_coords_z[np.isclose(field_coords_z, sim_z_min, rtol=fp_eps, atol=fp_eps)]
+    z_at_max = field_coords_z[np.isclose(field_coords_z, sim_z_max, rtol=fp_eps, atol=fp_eps)]
+
+    if len(z_at_min) > 0:
+        field_at_boundary = field.sel(z=z_at_min[0])
+        assert np.all(field_at_boundary.values == 0.0), (
+            f"Hz (normal) should be exactly 0 at z_min PEC boundary, got {np.max(np.abs(field_at_boundary.values))}"
+        )
+
+    if len(z_at_max) > 0:
+        field_at_boundary = field.sel(z=z_at_max[0])
+        assert np.all(field_at_boundary.values == 0.0), (
+            f"Hz (normal) should be exactly 0 at z_max PEC boundary, got {np.max(np.abs(field_at_boundary.values))}"
+        )
+
+
+@pytest.mark.parametrize(
+    "boundary_type,boundary_axis,warning_str,plane_size,expected_warnings",
+    [
+        ("pmc", "x", "PMC", (6, 0, 6), 2),
+        ("periodic", "z", "periodic", (6, 0, 6), 2),
+        ("bloch", "x", "Bloch", (6, 0, 6), 2),
+        ("pmc", "x", None, (2, 0, 2), 0),  # No warning when plane doesn't intersect boundary
+    ],
+    ids=["pmc", "periodic", "bloch", "no_intersection"],
+)
+def test_mode_solver_boundary_warning(
+    boundary_type, boundary_axis, warning_str, plane_size, expected_warnings
+):
+    """Test that warnings are emitted when mode solver plane intersects unsupported boundaries."""
+    # Set up boundary spec based on test parameters
+    if boundary_type == "pmc":
+        test_boundary = td.Boundary.pmc()
+    elif boundary_type == "periodic":
+        test_boundary = td.Boundary.periodic()
+    elif boundary_type == "bloch":
+        test_boundary = td.Boundary.bloch(bloch_vec=0.1)
+
+    # Apply the test boundary to the specified axis, PEC to others
+    boundary_spec = td.BoundarySpec(
+        x=test_boundary if boundary_axis == "x" else td.Boundary.pec(),
+        y=td.Boundary.pec(),
+        z=test_boundary if boundary_axis == "z" else td.Boundary.pec(),
+    )
+
+    simulation = td.Simulation(
+        size=(4, 3, 3),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        boundary_spec=boundary_spec,
+    )
+
+    plane = td.Box(center=(0, 0, 0), size=plane_size)
+
+    mode_spec = td.ModeSpec(num_modes=1)
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=plane,
+        mode_spec=mode_spec,
+        freqs=[td.C_0 / 1.0],
+    )
+
+    # Access the cached property to trigger the warning
+    with AssertLogLevel(
+        "WARNING" if expected_warnings > 0 else None, contains_str=warning_str
+    ) as ctx:
+        _ = ms._sim_boundary_positions
+        assert ctx.num_records == expected_warnings
