@@ -373,3 +373,9 @@ class ModalComponentModeler(AbstractComponentModeler):
         max_mode_index_in = get_max_mode_indices(self.matrix_indices_source)
 
         return max_mode_index_out, max_mode_index_in
+
+    def task_name_from_index(self, matrix_index: MatrixIndex) -> str:
+        """Compute task name for a given (port_name, mode_index) without constructing simulations."""
+        port_name, mode_index = matrix_index
+        port = self.get_port_by_name(port_name=port_name)
+        return self.get_task_name(port=port, mode_index=mode_index)

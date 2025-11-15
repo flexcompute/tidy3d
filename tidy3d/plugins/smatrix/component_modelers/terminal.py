@@ -877,6 +877,11 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                 return monitor
         raise Tidy3dKeyError(f"No radiation monitor named '{monitor_name}'.")
 
+    def task_name_from_index(self, source_index: NetworkIndex) -> str:
+        """Compute task name for a given network index without constructing simulations."""
+        port, mode_index = self.network_dict[source_index]
+        return self.get_task_name(port=port, mode_index=mode_index)
+
     def _extrude_port_structures(self, sim: Simulation) -> Simulation:
         """
         Extrude structures intersecting a port plane when a wave port lies on a structure boundary.
