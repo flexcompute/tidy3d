@@ -68,3 +68,8 @@ class MicrowaveModeSolverMonitor(MicrowaveModeMonitor, ModeSolverMonitor):
     ...     mode_spec=mode_spec,
     ...     name='mode_monitor')
     """
+
+    @property
+    def _stored_freqs(self) -> list[float]:
+        """Return actually stored frequencies of the data."""
+        return self.mode_spec._sampling_freqs_mode_solver_data(freqs=self.freqs)

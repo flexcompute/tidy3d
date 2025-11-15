@@ -885,6 +885,112 @@ def test_mode_solver_with_reduce_data_but_small_num_freqs():
     assert data.interpolated_copy == data
 
 
+@pytest.mark.parametrize(
+    "num_freqs,num_points,reduce_data,expected_stored_len",
+    [
+        # No interp_spec (num_points=None)
+        (10, None, None, 10),
+        # interp_spec with reduce_data=False
+        (10, 5, False, 10),
+        (10, 8, False, 10),
+        # interp_spec with reduce_data=True and num_points < len(monitor.freqs)
+        (20, 5, True, 5),
+        (20, 10, True, 10),
+        # interp_spec with reduce_data=True and num_points >= len(monitor.freqs)
+        (10, 10, True, 10),
+        (10, 15, True, 10),
+        (5, 10, True, 5),
+    ],
+)
+@pytest.mark.parametrize("rf", [False, True])
+def test_mode_solver_data_stored_freqs(num_freqs, num_points, reduce_data, expected_stored_len, rf):
+    """Test that _stored_freqs in ModeSolverData is correct based on interp_spec.
+
+    Cases tested:
+    1. No interp_spec: _stored_freqs matches monitor.freqs
+    2. interp_spec with reduce_data=False: _stored_freqs matches monitor.freqs
+    3. interp_spec with reduce_data=True and num_points < len(monitor.freqs):
+       len(_stored_freqs) == num_points
+    4. interp_spec with reduce_data=True and num_points >= len(monitor.freqs):
+       _stored_freqs matches monitor.freqs
+    """
+    from tidy3d.components.data.data_array import ModeIndexDataArray
+
+    from ..test_data.test_data_arrays import SIM, make_scalar_mode_field_data_array
+
+    freqs = np.linspace(1e14, 2e14, num_freqs)
+
+    # Create mode_spec based on parameters
+    if num_points is None:
+        # No interp_spec
+        mode_spec = td.ModeSpec(
+            num_modes=2,
+            sort_spec=td.ModeSortSpec(track_freq="central"),
+        )
+    else:
+        # With interp_spec
+        mode_spec = td.ModeSpec(
+            num_modes=2,
+            sort_spec=td.ModeSortSpec(track_freq="central"),
+            interp_spec=td.ModeInterpSpec.uniform(
+                num_points=num_points, method="linear", reduce_data=reduce_data
+            ),
+        )
+
+    # Create monitor
+    monitor = td.ModeSolverMonitor(
+        center=(0, 0, 0),
+        size=SIZE_2D,
+        freqs=freqs,
+        mode_spec=mode_spec,
+        name="test_monitor",
+        colocate=False,
+    )
+
+    # Create n_complex with the expected stored frequencies
+    mode_indices = np.arange(2)
+    n_complex_values = (1.5 + 0.1j) * np.ones((expected_stored_len, 2))
+    n_complex = ModeIndexDataArray(
+        n_complex_values,
+        coords={"f": np.linspace(1e14, 2e14, expected_stored_len), "mode_index": mode_indices},
+    )
+
+    # Create ModeSolverData
+    data = td.ModeSolverData(
+        monitor=monitor,
+        Ex=make_scalar_mode_field_data_array("Ex", symmetry=False),
+        Ey=make_scalar_mode_field_data_array("Ey", symmetry=False),
+        Ez=make_scalar_mode_field_data_array("Ez", symmetry=False),
+        Hx=make_scalar_mode_field_data_array("Hx", symmetry=False),
+        Hy=make_scalar_mode_field_data_array("Hy", symmetry=False),
+        Hz=make_scalar_mode_field_data_array("Hz", symmetry=False),
+        n_complex=n_complex,
+        symmetry=(0, 0, 0),
+        symmetry_center=(0, 0, 0),
+        grid_expanded=SIM.discretize_monitor(monitor),
+    )
+
+    if rf:
+        mode_spec = td.MicrowaveModeSpec(**mode_spec.dict(exclude={"type"}))
+        monitor = td.MicrowaveModeSolverMonitor(
+            **monitor.dict(exclude={"type", "mode_spec"}), mode_spec=mode_spec
+        )
+        data = td.ModeSolverData(**data.dict(exclude={"type", "monitor"}), monitor=monitor)
+
+    # Check _stored_freqs length
+    assert len(data.monitor._stored_freqs) == expected_stored_len, (
+        f"Expected _stored_freqs length {expected_stored_len}, "
+        f"got {len(data.monitor._stored_freqs)}"
+    )
+
+    # Check that monitor.freqs always matches original freqs
+    assert len(data.monitor.freqs) == num_freqs
+    assert np.allclose(data.monitor.freqs, freqs)
+
+    # Check data shape matches _stored_freqs
+    assert data.n_complex.shape[0] == expected_stored_len
+
+
 # ============================================================================
 # Monitor Integration Tests (Phase 6)
 # ============================================================================
