@@ -6,10 +6,9 @@ import json
 import os
 from enum import Enum
 from functools import wraps
-from typing import Any, Optional, TypeAlias
+from typing import Any, Callable, Optional, TypeAlias
 
 import requests
-from jedi.inference.gradual.typing import Callable
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 
