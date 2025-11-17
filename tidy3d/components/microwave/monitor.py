@@ -9,7 +9,27 @@ from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 
 
-class MicrowaveModeMonitor(MicrowaveBaseModel, ModeMonitor):
+class MicrowaveModeMonitorBase(MicrowaveBaseModel):
+    """Base class for microwave mode monitors that use :class:`.MicrowaveModeSpec`.
+
+    This mixin provides the ``mode_spec`` field configured for RF and microwave applications,
+    including characteristic impedance calculations and transmission line analysis.
+
+    Notes
+    -----
+    This is a mixin class that provides the :class:`.MicrowaveModeSpec` field for mode monitors.
+    It must be placed first in the inheritance list to ensure its ``mode_spec`` field takes
+    precedence over the base :class:`.ModeSpec` field from :class:`.AbstractModeMonitor`.
+    """
+
+    mode_spec: MicrowaveModeSpec = pydantic.Field(
+        default_factory=MicrowaveModeSpec._default_without_license_warning,
+        title="Mode Specification",
+        description="Parameters to feed to mode solver which determine modes measured by monitor.",
+    )
+
+
+class MicrowaveModeMonitor(MicrowaveModeMonitorBase, ModeMonitor):
     """:class:`Monitor` that records amplitudes from modal decomposition of fields on plane.
 
     Notes
@@ -47,14 +67,8 @@ class MicrowaveModeMonitor(MicrowaveBaseModel, ModeMonitor):
         * `ModalSourcesMonitors <../../notebooks/ModalSourcesMonitors.html>`_
     """
 
-    mode_spec: MicrowaveModeSpec = pydantic.Field(
-        default_factory=MicrowaveModeSpec._default_without_license_warning,
-        title="Mode Specification",
-        description="Parameters to feed to mode solver which determine modes measured by monitor.",
-    )
 
-
-class MicrowaveModeSolverMonitor(MicrowaveModeMonitor, ModeSolverMonitor):
+class MicrowaveModeSolverMonitor(MicrowaveModeMonitorBase, ModeSolverMonitor):
     """:class:`Monitor` that stores the mode field profiles returned by the mode solver in the
     monitor plane.
 
@@ -68,8 +82,3 @@ class MicrowaveModeSolverMonitor(MicrowaveModeMonitor, ModeSolverMonitor):
     ...     mode_spec=mode_spec,
     ...     name='mode_monitor')
     """
-
-    @property
-    def _stored_freqs(self) -> list[float]:
-        """Return actually stored frequencies of the data."""
-        return self.mode_spec._sampling_freqs_mode_solver_data(freqs=self.freqs)
