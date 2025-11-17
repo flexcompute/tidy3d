@@ -138,12 +138,12 @@ dev = [
   'myst-parser',
   'memory_profiler',
   'mypy',
-  'psutil',
   'nbconvert',
   'nbdime',
   'nbsphinx',
   'networkx',
   'optax',
+  'psutil',
   'pre-commit',
   'pydata-sphinx-theme',
   'pygad',
@@ -177,6 +177,16 @@ dev = [
   'diff-cover',
   'openpyxl',
   'zizmor',
+]
+tests = [
+  'psutil',
+  'pre-commit',
+  'pylint',
+  'pytest',
+  'pytest-timeout',
+  'pytest-xdist',
+  'pytest-env',
+  'pytest-cov'
 ]
 docs = [
   "jupyter",
