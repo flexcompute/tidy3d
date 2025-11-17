@@ -8,6 +8,7 @@ from typing import Literal, Optional
 
 import pydantic.v1 as pd
 import xarray as xr
+from typing_extensions import Self
 
 from tidy3d.components.data.data_array import FieldProjectionAngleDataArray, FreqDataArray
 from tidy3d.components.data.monitor_data import DirectivityData, ModeData, ModeSolverData
@@ -201,7 +202,95 @@ class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
         return partial_G.Gtheta + partial_G.Gphi
 
 
-class MicrowaveModeData(ModeData, MicrowaveBaseModel):
+class MicrowaveModeDataBase(MicrowaveBaseModel):
+    """Base class for microwave mode data that extends standard mode data with RF/microwave features.
+
+    This base class adds microwave-specific functionality to mode data classes, including:
+
+    - **Transmission line data**: Characteristic impedance (Z0), voltage coefficients, and
+      current coefficients for transmission line analysis
+    - **Enhanced modes_info**: Includes impedance data in the mode properties dataset
+    - **Group index handling**: Properly filters transmission line data when computing group indices
+    - **Mode reordering**: Ensures transmission line data tracks with reordered modes
+
+    Notes
+    -----
+    This is a mixin class that must be combined with mode data classes (:class:`.ModeData` or
+    :class:`.ModeSolverData`). It uses ``super()`` to call methods on the mixed-in class, extending
+    their functionality rather than replacing it.
+
+    The mixin should be placed first in the inheritance list to ensure its method overrides
+    are used.
+    """
+
+    transmission_line_data: Optional[TransmissionLineDataset] = pd.Field(
+        None,
+        title="Transmission Line Data",
+        description="Additional data relevant to transmission lines in RF and microwave applications, "
+        "like characteristic impedance. This field is populated when a :class:`MicrowaveModeSpec` has "
+        "been used to set up the monitor or mode solver.",
+    )
+
+    @property
+    def modes_info(self) -> xr.Dataset:
+        """Dataset collecting various properties of the stored modes."""
+        super_info = super().modes_info
+
+        # Add transmission line data if present
+        if self.transmission_line_data is not None:
+            super_info["Re(Z0)"] = self.transmission_line_data.Z0.real
+            super_info["Im(Z0)"] = self.transmission_line_data.Z0.imag
+        return super_info
+
+    def _group_index_post_process(self, frequency_step: float) -> Self:
+        """Calculate group index and remove added frequencies used only for this calculation.
+
+        Parameters
+        ----------
+        frequency_step: float
+            Fractional frequency step used to calculate the group index.
+
+        Returns
+        -------
+        Self
+            Filtered data with calculated group index.
+        """
+        super_data = super()._group_index_post_process(frequency_step)
+
+        # Add transmission line data handling if present
+        if self.transmission_line_data is not None:
+            _, center_inds, _ = self._group_index_freq_slices()
+            update_dict = {
+                "Z0": self.transmission_line_data.Z0.isel(f=center_inds),
+                "voltage_coeffs": self.transmission_line_data.voltage_coeffs.isel(f=center_inds),
+                "current_coeffs": self.transmission_line_data.current_coeffs.isel(f=center_inds),
+            }
+            super_data = super_data.updated_copy(**update_dict, path="transmission_line_data")
+        return super_data
+
+    def _apply_mode_reorder(self, sort_inds_2d):
+        """Apply a mode reordering along mode_index for all frequency indices.
+
+        Parameters
+        ----------
+        sort_inds_2d : np.ndarray
+            Array of shape (num_freqs, num_modes) where each row is the
+            permutation to apply to the mode_index for that frequency.
+        """
+        main_data_reordered = super()._apply_mode_reorder(sort_inds_2d)
+
+        # Add transmission line data handling if present
+        if self.transmission_line_data is not None:
+            transmission_line_data_reordered = self.transmission_line_data._apply_mode_reorder(
+                sort_inds_2d
+            )
+            main_data_reordered = main_data_reordered.updated_copy(
+                transmission_line_data=transmission_line_data_reordered
+            )
+        return main_data_reordered
+
+
+class MicrowaveModeData(MicrowaveModeDataBase, ModeData):
     """
     Data associated with a :class:`.ModeMonitor` for microwave and RF applications: modal amplitudes,
     propagation indices, mode profiles, and transmission line data.
@@ -264,68 +353,8 @@ class MicrowaveModeData(ModeData, MicrowaveBaseModel):
         ..., title="Monitor", description="Mode monitor associated with the data."
     )
 
-    transmission_line_data: Optional[TransmissionLineDataset] = pd.Field(
-        None,
-        title="Transmission Line Data",
-        description="Additional data relevant to transmission lines in RF and microwave applications, "
-        "like characteristic impedance. This field is populated when a :class:`MicrowaveModeSpec` has "
-        "been used to set up the monitor or mode solver.",
-    )
 
-    @property
-    def modes_info(self) -> xr.Dataset:
-        """Dataset collecting various properties of the stored modes."""
-        super_info = super().modes_info
-        if self.transmission_line_data is not None:
-            super_info["Re(Z0)"] = self.transmission_line_data.Z0.real
-            super_info["Im(Z0)"] = self.transmission_line_data.Z0.imag
-        return super_info
-
-    def _group_index_post_process(self, frequency_step: float) -> ModeData:
-        """Calculate group index and remove added frequencies used only for this calculation.
-
-        Parameters
-        ----------
-        frequency_step: float
-            Fractional frequency step used to calculate the group index.
-
-        Returns
-        -------
-        :class:`.ModeData`
-            Filtered data with calculated group index.
-        """
-        super_data = super()._group_index_post_process(frequency_step)
-        if self.transmission_line_data is not None:
-            _, center_inds, _ = self._group_index_freq_slices()
-            update_dict = {
-                "Z0": self.transmission_line_data.Z0.isel(f=center_inds),
-                "voltage_coeffs": self.transmission_line_data.voltage_coeffs.isel(f=center_inds),
-                "current_coeffs": self.transmission_line_data.current_coeffs.isel(f=center_inds),
-            }
-            super_data = super_data.updated_copy(**update_dict, path="transmission_line_data")
-        return super_data
-
-    def _apply_mode_reorder(self, sort_inds_2d):
-        """Apply a mode reordering along mode_index for all frequency indices.
-
-        Parameters
-        ----------
-        sort_inds_2d : np.ndarray
-            Array of shape (num_freqs, num_modes) where each row is the
-            permutation to apply to the mode_index for that frequency.
-        """
-        main_data_reordered = super()._apply_mode_reorder(sort_inds_2d)
-        if self.transmission_line_data is not None:
-            transmission_line_data_reordered = self.transmission_line_data._apply_mode_reorder(
-                sort_inds_2d
-            )
-            main_data_reordered = main_data_reordered.updated_copy(
-                transmission_line_data=transmission_line_data_reordered
-            )
-        return main_data_reordered
-
-
-class MicrowaveModeSolverData(ModeSolverData, MicrowaveModeData):
+class MicrowaveModeSolverData(MicrowaveModeDataBase, ModeSolverData):
     """
     Data associated with a :class:`.ModeSolverMonitor` for microwave and RF applications: scalar components
     of E and H fields plus characteristic impedance data.
