@@ -741,6 +741,8 @@ def get_run_info(task_id: TaskId) -> tuple[Optional[float], Optional[float]]:
         Average field intensity normalized to max value (1.0).
         Is ``None`` if run info not available.
     """
+    if _is_modeler_batch(task_id):
+        raise NotImplementedError("Operation not implemented for modeler batches.")
     task = SimulationTask(taskId=task_id)
     return task.get_running_info()
 
@@ -1062,6 +1064,8 @@ def download_json(task_id: TaskId, path: PathLike = SIM_FILE_JSON, verbose: bool
         If ``True``, will print progressbars and status, otherwise, will run silently.
 
     """
+    if _is_modeler_batch(task_id):
+        raise NotImplementedError("Operation not implemented for modeler batches.")
     task = SimulationTask(taskId=task_id)
     task.get_simulation_json(path, verbose=verbose)
 
@@ -1093,6 +1097,8 @@ def load_simulation(
     Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation loaded from downloaded json file.
     """
+    if _is_modeler_batch(task_id):
+        raise NotImplementedError("Operation not implemented for modeler batches.")
     task = SimulationTask.get(task_id)
     path = Path(path)
     if path.suffix == ".json":
@@ -1128,6 +1134,8 @@ def download_log(
     ----
     To load downloaded results into data, call :meth:`load` with option ``replace_existing=False``.
     """
+    if _is_modeler_batch(task_id):
+        raise NotImplementedError("Operation not implemented for modeler batches.")
     task = SimulationTask(taskId=task_id)
     task.get_log(path, verbose=verbose, progress_callback=progress_callback)
 
@@ -1370,6 +1378,8 @@ def delete(task_id: TaskId, versions: bool = False) -> TaskInfo:
         Object containing information about status, size, credits of task.
 
     """
+    if _is_modeler_batch(task_id):
+        raise NotImplementedError("Delete operation not implemented for modeler batches.")
     if not task_id:
         raise ValueError("Task id not found.")
     task = SimulationTask.get(task_id, verbose=False)
@@ -1398,6 +1408,8 @@ def download_simulation(
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
+    if _is_modeler_batch(task_id):
+        raise NotImplementedError("Operation not implemented for modeler batches.")
     task_info = get_info(task_id)
     task_type = task_info.taskType
 
