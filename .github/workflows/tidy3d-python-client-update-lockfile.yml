@@ -47,6 +47,26 @@ jobs:
           virtualenvs-create: true
           virtualenvs-in-project: true
       
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_CODEARTIFACT_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_CODEARTIFACT_ACCESS_SECRET }}
+          aws-region: us-east-1
+      
+      - name: Configure CodeArtifact authentication
+        run: |
+          set -e
+          echo "Getting CodeArtifact token..."
+          CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token \
+            --domain flexcompute \
+            --domain-owner 625554095313 \
+            --query authorizationToken \
+            --output text)
+          
+          echo "Configuring Poetry with CodeArtifact credentials..."
+          poetry config http-basic.codeartifact aws $CODEARTIFACT_AUTH_TOKEN
+      
       - name: Update lock file
         run: |
           set -e

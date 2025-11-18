@@ -120,7 +120,7 @@ sphinxemoji = { version = "*", optional = true }
 devsim = { version = "*", optional = true }
 cma = { version = "*", optional = true }
 openpyxl = { version = "*", optional = true }
-# tidy3d-extras = { version = "2.10.0rc3", optional = true }
+tidy3d-extras = { version = "2.10.0rc3", optional = true }
 
 [tool.poetry.extras]
 dev = [
@@ -228,7 +228,7 @@ heatcharge = ["trimesh", "vtk", "devsim"]
 # plugins with extra deps
 pytorch = ["torch"]
 design = ["bayesian-optimization", "pygad", "pyswarms"]
-# extras = ["tidy3d-extras"]
+extras = ["tidy3d-extras"]
 
 [tool.poetry.scripts]
 tidy3d = "tidy3d.web.cli:tidy3d_cli"
@@ -243,6 +243,11 @@ name = "torch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 priority = "explicit"
 
+
+[[tool.poetry.source]]
+name = "codeartifact"
+url = "https://flexcompute-625554095313.d.codeartifact.us-east-1.amazonaws.com/pypi/pypi-releases/simple/"
+priority = "supplemental"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
