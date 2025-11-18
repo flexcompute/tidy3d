@@ -7257,7 +7257,7 @@ description = "Import, export, process, analyze and view triangular meshes."
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"dev\" or extra == \"trimesh\" or extra == \"heatcharge\""
+markers = "extra == \"dev\" or extra == \"tests\" or extra == \"trimesh\" or extra == \"heatcharge\""
 files = [
     {file = "trimesh-4.9.0-py3-none-any.whl", hash = "sha256:934265a1de4b472bee21094c4e88d0a7522054b9911adb06e9b8062bb8757178"},
     {file = "trimesh-4.9.0.tar.gz", hash = "sha256:ad907a223867f614ef1598d85a4c978845f39365cb7ccc93fa5800901fba3ef9"},
@@ -7639,11 +7639,11 @@ heatcharge = ["devsim", "trimesh", "vtk"]
 pytorch = ["torch", "torch"]
 ruff = ["ruff"]
 scikit-rf = ["scikit-rf"]
-tests = ["pre-commit", "psutil", "pylint", "pytest", "pytest-cov", "pytest-env", "pytest-timeout", "pytest-xdist"]
+tests = ["pre-commit", "psutil", "pylint", "pytest", "pytest-cov", "pytest-env", "pytest-timeout", "pytest-xdist", "trimesh"]
 trimesh = ["networkx", "rtree", "trimesh"]
 vtk = ["vtk"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "c42358ff19c56bb17998cec5e2b0186e51e419c6e66a0c2934dd89c7202f7a62"
+content-hash = "82e314ebdddd660f4ab2e42c219687441ee7a0af8c6fc827b1aa726acb53dca1"
