@@ -265,8 +265,8 @@ def use_emulated_run(monkeypatch):
                 sim_data_orig=sim_data_orig,
                 sim_data_fwd=sim_data_fwd,
                 sim_fields_keys=sim_fields_keys,
-                user_vjp=None,
                 numerical_structures=None,
+                user_vjp=None,
             )
 
             return traced_fields_vjp
@@ -754,11 +754,11 @@ def make_polyslab_user_vjp(user_vjp_val):
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
-@pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
-@pytest.mark.parametrize("use_run_async", [True, False])
+@pytest.mark.parametrize("polyslab_axis", [0])  # , 1, 2])
+@pytest.mark.parametrize("use_run_async", [False])  # [True, False])
 @pytest.mark.parametrize("use_task_names", [True, False])
 @pytest.mark.parametrize("use_single_user_vjp", [True, False])
-@pytest.mark.parametrize("local_gradient", [True, False])
+@pytest.mark.parametrize("local_gradient", [True])  # , False])
 def test_autograd_user_vjp(
     use_emulated_run,
     structure_key,

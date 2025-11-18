@@ -115,23 +115,14 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
-    user_vjp: tuple[UserVJPConfig],
-    numerical_structures: tuple[NumericalStructureConfig],
+    numerical_structures: typing.Optional[tuple[NumericalStructureConfig]] = None,
+    user_vjp: typing.Optional[tuple[UserVJPConfig]] = None,
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
-    # prepare lookup for user-provided VJPs keyed by structure and field entry
-
-    ####
-
-    # here is where we can decide if we are using the vjp for all entries or not
-    # we might want to do some checking on the user_vjp to make sure we don't have collisions
-    # runtime validation of it
-
-    ####
-
-    # todo: fix this return typing
-    def get_all_paths(match_structure_index: int) -> tuple[str, ...]:
+    def get_all_paths(match_structure_index: int) -> tuple[tuple[str, str, int]]:
+        """Get all the paths that may appear in autograd for this structure index. This allows a"""
+        """user_vjp to be called for all autograd paths for the structure."""
         all_paths = tuple(
             tuple(structure_path)
             for namespace, structure_index, *structure_path in sim_fields_keys
@@ -140,7 +131,7 @@ def postprocess_adj(
 
         return all_paths
 
-    user_vjp_lookup: dict[int, dict[typing.Hashable, typing.Callable[..., typing.Any]]] = {}
+    user_vjp_lookup: dict[int, dict[tuple[str, str], typing.Callable[..., typing.Any]]] = {}
     if user_vjp:
         for vjp_config in user_vjp:
             structure_index = vjp_config.structure_index

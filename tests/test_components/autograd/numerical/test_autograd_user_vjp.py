@@ -272,7 +272,6 @@ orders_x = [(1,)]
 orders_y = [(0,)]
 polarizations = ["p"]
 
-
 pw_angles_deg = [0.0]
 
 run_functions = ["run_custom", "run_async_custom"]

@@ -566,13 +566,16 @@ def run_async_custom(
         ],
         sim_dict: dict[str, tuple[td.Simulation]],
     ) -> dict[str, typing.Sequence[typing.Union[NumericalStructureConfig, UserVJPConfig]]]:
+        """Check and validate the provided numerical_structures or user_vjp type and expand as"""
+        """necessary to match the provided simulation specification."""
         if fn_arg is None:
             return fn_arg
 
-        expanded = None
         if isinstance(fn_arg, base_type):
             expanded = dict.fromkeys(sim_dict.keys(), fn_arg)
+            return expanded
 
+        expanded = {}
         if not isinstance(fn_arg, type(orig_sim_arg)):
             raise AdjointError(
                 f"{fn_arg_name} type ({type(fn_arg)}) should match simulations type ({type(simulations)})"
@@ -584,7 +587,6 @@ def run_async_custom(
             if not check_keys:
                 raise AdjointError(f"{fn_arg_name} keys do not match simulations keys")
 
-            expanded = {}
             for key, val in fn_arg.items():
                 if isinstance(val, base_type):
                     expanded[key] = (val,)
@@ -594,10 +596,9 @@ def run_async_custom(
         elif isinstance(orig_sim_arg, (list, tuple)):
             if not (len(fn_arg) == len(orig_sim_arg)):
                 raise AdjointError(
-                    f"{fn_arg_name} is not the same length as simulations ({len(fn_arg)} vs. {len(simulations)})"
+                    f"{fn_arg_name} is not the same length as simulations ({len(expanded)} vs. {len(simulations)})"
                 )
 
-            expanded = {}
             for idx, key in enumerate(sim_dict.keys()):
                 val = fn_arg[idx]
                 if isinstance(val, (list, tuple)):
@@ -905,10 +906,6 @@ def setup_run(
 
     sim_prepared = simulation
 
-    numerical_structures_indices = [
-        numerical_structure.structure_index for numerical_structure in numerical_structures
-    ]
-
     if numerical_structures:
         structures = list(simulation.structures)
         for config in numerical_structures:
@@ -922,6 +919,10 @@ def setup_run(
     )
 
     if numerical_structures:
+        numerical_structures_indices = [
+            numerical_structure.structure_index for numerical_structure in numerical_structures
+        ]
+
         # collect sim fields for structures that go through regular derivative path
         sim_fields_dict = {
             key: value
@@ -1218,8 +1219,8 @@ def _run_bwd(
                     sim_data_orig=sim_data_orig,
                     sim_data_fwd=sim_data_fwd,
                     sim_fields_keys=sim_fields_keys,
-                    user_vjp=user_vjp,
                     numerical_structures=numerical_structures,
+                    user_vjp=user_vjp,
                 )
         else:
             td.log.info("Starting server-side batch of adjoint simulations ...")
@@ -1369,8 +1370,8 @@ def _run_async_bwd(
                     sim_data_orig=sim_data_orig,
                     sim_data_fwd=sim_data_fwd,
                     sim_fields_keys=sim_fields_keys,
-                    user_vjp=task_user_vjp,
                     numerical_structures=numerical_structures,
+                    user_vjp=task_user_vjp,
                 )
         else:
             # Set up parent tasks mapping for all adjoint simulations
