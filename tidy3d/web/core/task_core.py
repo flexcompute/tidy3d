@@ -23,6 +23,7 @@ from .constants import (
     SIM_ERROR_FILE,
     SIM_FILE_HDF5_GZ,
     SIM_LOG_FILE,
+    SIM_VALIDATION_FILE,
     SIMULATION_DATA_HDF5_GZ,
 )
 from .core_config import get_logger_console
@@ -143,8 +144,8 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         )
 
 
-class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
-    """Interface for managing the running of a :class:`.Simulation` task on server."""
+class WebTask(ResourceLifecycle, Submittable, extra=Extra.allow):
+    """Interface for managing the running a task on the server."""
 
     task_id: Optional[str] = Field(
         ...,
@@ -152,52 +153,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         description="Task ID number, set when the task is uploaded, leave as None.",
         alias="taskId",
     )
-    folder_id: Optional[str] = Field(
-        None,
-        title="folder_id",
-        description="Folder ID number, set when the task is uploaded, leave as None.",
-        alias="folderId",
-    )
-    status: Optional[str] = Field(title="status", description="Simulation task status.")
-
-    real_flex_unit: float = Field(
-        None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
-    )
-
-    created_at: Optional[datetime] = Field(
-        title="created_at", description="Time at which this task was created.", alias="createdAt"
-    )
-
-    task_type: Optional[str] = Field(
-        title="task_type", description="The type of task.", alias="taskType"
-    )
-
-    folder_name: Optional[str] = Field(
-        "default",
-        title="Folder Name",
-        description="Name of the folder associated with this task.",
-        alias="folderName",
-    )
-
-    callback_url: str = Field(
-        None,
-        title="Callback URL",
-        description="Http PUT url to receive simulation finish event. "
-        "The body content is a json file with fields "
-        "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
-    )
-
-    # simulation_type: str = pd.Field(
-    #     None,
-    #     title="Simulation Type",
-    #     description="Type of simulation, used internally only.",
-    # )
-
-    # parent_tasks: Tuple[TaskId, ...] = pd.Field(
-    #     None,
-    #     title="Parent Tasks",
-    #     description="List of parent task ids for the simulation, used internally only."
-    # )
 
     @classmethod
     def create(
@@ -272,6 +227,192 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             else:
                 raise WebError("Missing resource ID for task creation. Contact customer support.")
         return SimulationTask(**resp, taskType=task_type, folder_name=folder_name)
+
+    def get_url(self) -> str:
+        base = str(config.web.website_endpoint or "")
+        if isinstance(self, BatchTask):
+            return "/".join([base.rstrip("/"), f"rf?taskId={self.task_id}"])
+        return "/".join([base.rstrip("/"), f"workbench?taskId={self.task_id}"])
+
+    def get_folder_url(self) -> Optional[str]:
+        folder_id = getattr(self, "folder_id", None)
+        if not folder_id:
+            return None
+        base = str(config.web.website_endpoint or "")
+        return "/".join([base.rstrip("/"), f"folders/{folder_id}"])
+
+    def get_log(
+        self,
+        to_file: PathLike,
+        verbose: bool = True,
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> pathlib.Path:
+        """Get log file from Server.
+
+        Parameters
+        ----------
+        to_file: PathLike
+            Save file to path.
+        verbose: bool = True
+            Whether to display progress bars.
+        progress_callback : Callable[[float], None] = None
+            Optional callback function called while downloading the data.
+
+        Returns
+        -------
+        path: pathlib.Path
+            Path to saved file.
+        """
+
+        if not self.task_id:
+            raise WebError("Expected field 'task_id' is unset.")
+
+        target_path = pathlib.Path(to_file)
+
+        return download_file(
+            self.task_id,
+            SIM_LOG_FILE,
+            to_file=target_path,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
+
+    def get_data_hdf5(
+        self,
+        to_file: PathLike,
+        remote_data_file_gz: PathLike = SIMULATION_DATA_HDF5_GZ,
+        verbose: bool = True,
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> pathlib.Path:
+        """Download data artifact (simulation or batch) with gz fallback handling.
+
+        Parameters
+        ----------
+        remote_data_file_gz : PathLike
+            Gzipped remote filename.
+        to_file : PathLike
+            Local target path.
+        verbose : bool
+            Whether to log progress.
+        progress_callback : Optional[Callable[[float], None]]
+            Progress callback.
+
+        Returns
+        -------
+        pathlib.Path
+            Saved local path.
+        """
+        if not self.task_id:
+            raise WebError("Expected field 'task_id' is unset.")
+        target_path = pathlib.Path(to_file)
+        file = None
+        try:
+            file = download_gz_file(
+                resource_id=self.task_id,
+                remote_filename=remote_data_file_gz,
+                to_file=target_path,
+                verbose=verbose,
+                progress_callback=progress_callback,
+            )
+        except ClientError:
+            if verbose:
+                console = get_logger_console()
+                console.log(f"Unable to download '{remote_data_file_gz}'.")
+        if not file:
+            try:
+                file = download_file(
+                    resource_id=self.task_id,
+                    remote_filename=str(remote_data_file_gz)[:-3],
+                    to_file=target_path,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+            except Exception as e:
+                raise WebError(
+                    "Failed to download the data file from the server. "
+                    "Please confirm that the task completed successfully."
+                ) from e
+        return file
+
+    @staticmethod
+    def is_batch(resource_id: str) -> bool:
+        """Checks if a given resource ID corresponds to a valid batch task.
+
+        This is a utility function to verify a batch task's existence before
+        instantiating the class.
+
+        Parameters
+        ----------
+        resource_id : str
+            The unique identifier for the resource.
+
+        Returns
+        -------
+        bool
+            ``True`` if the resource is a valid batch task, ``False`` otherwise.
+        """
+        try:
+            # TODO PROPERLY FIXME
+            # Disable non critical logs due to check for resourceId, until we have a dedicated API for this
+            resp = http.get(
+                f"rf/task/{resource_id}/statistics",
+                suppress_404=True,
+            )
+            status = bool(resp and isinstance(resp, dict) and "status" in resp)
+            return status
+        except Exception:
+            return False
+
+
+class SimulationTask(WebTask):
+    """Interface for managing the running of solver tasks on the server."""
+
+    folder_id: Optional[str] = Field(
+        None,
+        title="folder_id",
+        description="Folder ID number, set when the task is uploaded, leave as None.",
+        alias="folderId",
+    )
+    status: Optional[str] = Field(title="status", description="Simulation task status.")
+
+    real_flex_unit: float = Field(
+        None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
+    )
+
+    created_at: Optional[datetime] = Field(
+        title="created_at", description="Time at which this task was created.", alias="createdAt"
+    )
+
+    task_type: Optional[str] = Field(
+        title="task_type", description="The type of task.", alias="taskType"
+    )
+
+    folder_name: Optional[str] = Field(
+        "default",
+        title="Folder Name",
+        description="Name of the folder associated with this task.",
+        alias="folderName",
+    )
+
+    callback_url: str = Field(
+        None,
+        title="Callback URL",
+        description="Http PUT url to receive simulation finish event. "
+        "The body content is a json file with fields "
+        "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
+    )
+
+    # simulation_type: str = pd.Field(
+    #     None,
+    #     title="Simulation Type",
+    #     description="Type of simulation, used internally only.",
+    # )
+
+    # parent_tasks: Tuple[TaskId, ...] = pd.Field(
+    #     None,
+    #     title="Parent Tasks",
+    #     description="List of parent task ids for the simulation, used internally only."
+    # )
 
     @classmethod
     def get(cls, task_id: str, verbose: bool = True) -> SimulationTask:
@@ -516,65 +657,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         )
         return resp
 
-    def get_sim_data_hdf5(
-        self,
-        to_file: PathLike,
-        verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
-        remote_data_file: PathLike = SIMULATION_DATA_HDF5_GZ,
-    ) -> pathlib.Path:
-        """Get simulation data file from Server.
-
-        Parameters
-        ----------
-        to_file: PathLike
-            Save file to path.
-        verbose: bool = True
-            Whether to display progress bars.
-        progress_callback : Callable[[float], None] = None
-            Optional callback function called while downloading the data.
-
-        Returns
-        -------
-        path: pathlib.Path
-            Path to saved file.
-        """
-        if not self.task_id:
-            raise WebError("Expected field 'task_id' is unset.")
-
-        target_path = pathlib.Path(to_file)
-
-        file = None
-        try:
-            file = download_gz_file(
-                resource_id=self.task_id,
-                remote_filename=remote_data_file,
-                to_file=target_path,
-                verbose=verbose,
-                progress_callback=progress_callback,
-            )
-        except ClientError:
-            if verbose:
-                console = get_logger_console()
-                console.log(f"Unable to download '{remote_data_file}'.")
-
-        if not file:
-            try:
-                file = download_file(
-                    resource_id=self.task_id,
-                    remote_filename=remote_data_file[:-3],
-                    to_file=target_path,
-                    verbose=verbose,
-                    progress_callback=progress_callback,
-                )
-            except Exception as e:
-                raise WebError(
-                    "Failed to download the simulation data file from the server. "
-                    "Please confirm that the task was successfully run."
-                ) from e
-
-        return file
-
     def get_simulation_hdf5(
         self,
         to_file: PathLike,
@@ -667,7 +749,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             progress_callback=progress_callback,
         )
 
-    def get_error_json(self, to_file: PathLike, verbose: bool = True) -> pathlib.Path:
+    def get_error_json(
+        self, to_file: PathLike, verbose: bool = True, validation: bool = False
+    ) -> pathlib.Path:
         """Get error json file for a :class:`.Simulation` from server.
 
         Parameters
@@ -676,6 +760,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Save file to path.
         verbose: bool = True
             Whether to display progress bars.
+        validation: bool = False
+            Whether to get a validation error file or a solver error file.
 
         Returns
         -------
@@ -686,10 +772,11 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             raise WebError("Expected field 'task_id' is unset.")
 
         target_path = pathlib.Path(to_file)
+        target_file = SIM_ERROR_FILE if not validation else SIM_VALIDATION_FILE
 
         return download_file(
             self.task_id,
-            SIM_ERROR_FILE,
+            target_file,
             to_file=target_path,
             verbose=verbose,
         )
@@ -733,44 +820,32 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 raise WebError(f"Provided 'parent_tasks' failed validation: {e!s}") from e
 
 
-class BatchTask:
-    """Provides a client-side interface for managing a remote batch task.
+class BatchTask(WebTask):
+    """Interface for managing a batch task on the server."""
 
-    This class acts as a wrapper around the API endpoints for a specific batch,
-    allowing users to check, submit, monitor, and download data from it.
-    """
-
-    def __init__(self, batch_id: str) -> None:
-        self.batch_id = batch_id
-
-    @staticmethod
-    def is_batch(resource_id: str) -> bool:
-        """Checks if a given resource ID corresponds to a valid batch task.
-
-        This is a utility function to verify a batch task's existence before
-        instantiating the class.
+    @classmethod
+    def get(cls, task_id: str, verbose: bool = True) -> BatchTask:
+        """Get batch task by id.
 
         Parameters
         ----------
-        resource_id : str
-            The unique identifier for the resource.
+        task_id: str
+            Unique identifier of batch on server.
+        verbose:
+            If `True`, will print progressbars and status, otherwise, will run silently.
 
         Returns
         -------
-        bool
-            ``True`` if the resource is a valid batch task, ``False`` otherwise.
+        :class:`.BatchTask` | None
+            BatchTask object if found, otherwise None.
         """
         try:
-            # TODO PROPERLY FIXME
-            # Disable non critical logs due to check for resourceId, until we have a dedicated API for this
-            resp = http.get(
-                f"rf/task/{resource_id}/statistics",
-                suppress_404=True,
-            )
-            status = bool(resp and isinstance(resp, dict) and "status" in resp)
-            return status
-        except Exception:
-            return False
+            resp = http.get(f"rf/task/{task_id}/statistics")
+        except WebNotFoundError as e:
+            td.log.error(f"The requested batch ID '{task_id}' does not exist.")
+            raise e
+        # We only need to validate existence; store id on the instance.
+        return BatchTask(taskId=task_id) if resp else None
 
     def detail(self) -> BatchDetail:
         """Fetches the detailed information and status of the batch.
@@ -781,7 +856,7 @@ class BatchTask:
             An object containing the batch's latest data.
         """
         resp = http.get(
-            f"rf/task/{self.batch_id}/statistics",
+            f"rf/task/{self.task_id}/statistics",
         )
         # Some backends may return null for collection fields; coerce to sensible defaults
         if isinstance(resp, dict):
@@ -811,7 +886,7 @@ class BatchTask:
         if protocol_version is None:
             protocol_version = _get_protocol_version()
         return http.post(
-            f"rf/task/{self.batch_id}/check",
+            f"rf/task/{self.task_id}/check",
             {
                 "solverVersion": solver_version,
                 "protocolVersion": protocol_version,
@@ -856,7 +931,7 @@ class BatchTask:
         if protocol_version is None:
             protocol_version = _get_protocol_version()
         return http.post(
-            f"rf/task/{self.batch_id}/submit",
+            f"rf/task/{self.task_id}/submit",
             {
                 "solverVersion": solver_version,
                 "protocolVersion": protocol_version,
@@ -864,75 +939,48 @@ class BatchTask:
             },
         )
 
-    def get_data_hdf5(
-        self,
-        remote_data_file_gz: str,
-        to_file: PathLike,
-        verbose: bool = True,
-        progress_callback: Optional[Callable[[float], None]] = None,
-    ) -> pathlib.Path:
-        """Downloads a batch data artifact, with a fallback mechanism.
+    def abort(self) -> requests.Response:
+        """Abort the current task on the server."""
+        if not self.task_id:
+            raise ValueError("Batch id not found.")
+        return http.put(f"rf/task/{self.task_id}/abort", {})
+
+    def delete(self, versions: bool = False) -> None:
+        """Delete current batch task from server.
 
         Parameters
         ----------
-        remote_data_file_gz : str
-            Remote gzipped filename to download (e.g., 'output/cm_data.hdf5.gz').
-        to_file : PathLike
-            Local path where the downloaded file will be saved.
-        verbose : bool, default=True
-            If ``True``, shows progress logs and messages.
-        progress_callback : Optional[Callable[[float], None]], default=None
-            Optional callback function for progress updates, which receives the
-            download percentage as a float.
-
-        Returns
-        -------
-        pathlib.Path
-            An object pointing to the downloaded local file.
-
-        Raises
-        ------
-        WebError
-            If both the gzipped and uncompressed file downloads fail.
-
-        Notes
-        -----
-        This method first attempts to download the gzipped version of a file.
-        If that fails, it falls back to downloading the uncompressed version.
+        versions : bool = False
+            Ignored for batch tasks; present for API compatibility.
         """
-        file = None
-        try:
-            file = download_gz_file(
-                resource_id=self.batch_id,
-                remote_filename=remote_data_file_gz,
-                to_file=to_file,
-                verbose=verbose,
-                progress_callback=progress_callback,
-            )
-        except ClientError:
-            if verbose:
-                console = get_logger_console()
-                console.log(f"Unable to download '{remote_data_file_gz}'.")
-
-        if not file:
-            try:
-                file = download_file(
-                    resource_id=self.batch_id,
-                    remote_filename=remote_data_file_gz[:-3],
-                    to_file=to_file,
-                    verbose=verbose,
-                    progress_callback=progress_callback,
-                )
-            except Exception as e:
-                raise WebError(
-                    "Failed to download the batch data file from the server. "
-                    "Please confirm that the batch has been successfully postprocessed."
-                ) from e
-
-        return file
-
-    def abort(self) -> requests.Response:
-        """Abort the current task on the server."""
-        if not self.batch_id:
+        if not self.task_id:
             raise ValueError("Batch id not found.")
-        return http.put(f"rf/task/{self.batch_id}/abort", {})
+        if versions:
+            raise NotImplementedError("Deleting all versions is not supported for batch tasks.")
+        http.delete(f"rf/task/{self.task_id}")
+
+
+class TaskFactory:
+    """Factory for obtaining the correct task subclass."""
+
+    _REGISTRY: dict[str, str] = {}
+
+    @classmethod
+    def register(cls, task_id: str, kind: str) -> None:
+        cls._REGISTRY[task_id] = kind
+
+    @classmethod
+    def get(cls, task_id: str, verbose: bool = True) -> WebTask:
+        kind = cls._REGISTRY.get(task_id)
+        if kind == "batch":
+            return BatchTask.get(task_id, verbose=verbose)
+        if kind == "simulation":
+            task = SimulationTask.get(task_id, verbose=verbose)
+            return task
+        if WebTask.is_batch(task_id):
+            cls.register(task_id, "batch")
+            return BatchTask.get(task_id, verbose=verbose)
+        task = SimulationTask.get(task_id, verbose=verbose)
+        if task:
+            cls.register(task_id, "simulation")
+        return task

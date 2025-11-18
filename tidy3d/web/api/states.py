@@ -36,16 +36,13 @@ COMPLETED_STATES = {"visualize", "success", "completed", "processed", "postproce
 
 END_STATES = ERROR_STATES | COMPLETED_STATES
 
-POST_VALIDATE_STATES = {
-    "validate_success",
-    "validate_warn",
-}
+POST_VALIDATE_STATES = {"validate_success", "validate_warn"}
 
 RUNNING_STATES = (
     PRE_VALIDATE_STATES | POST_VALIDATE_STATES | {"running"} | POST_RUN_STATES | COMPLETED_STATES
 )
 
-ALL_POST_VALIDATE_STATES = POST_VALIDATE_STATES | {"running"} | POST_RUN_STATES | COMPLETED_STATES
+ALL_POST_VALIDATE_STATES = POST_VALIDATE_STATES | {"running"} | POST_RUN_STATES | END_STATES
 
 VALID_PROGRESS_STATES = RUNNING_STATES | PRE_ERROR_STATES
 
@@ -101,4 +98,8 @@ STATE_PROGRESS_PERCENTAGE = {
     "run_failed": 0,
     "aborted": 0,
     "deleted": 0,
+    "validate_error": 0,
+    "preprocess_error": 0,
+    "run_error": 0,
+    "postprocess_error": 0,
 }
