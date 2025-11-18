@@ -673,7 +673,7 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
         raise ValueError("Task not found.")
     if isinstance(task, BatchTask):
         return task.detail()
-    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
+    return TaskInfo(**{"taskId": task.task_id, "taskType": task.task_type, **task.dict()})
 
 
 @wait_for_connection
