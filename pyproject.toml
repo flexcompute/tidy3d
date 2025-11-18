@@ -186,7 +186,8 @@ tests = [
   'pytest-timeout',
   'pytest-xdist',
   'pytest-env',
-  'pytest-cov'
+  'pytest-cov',
+  'trimesh'
 ]
 docs = [
   "jupyter",
