@@ -36,6 +36,10 @@
           "default": {},
           "type": "object"
         },
+        "extrude_structures": {
+          "default": false,
+          "type": "boolean"
+        },
         "name": {
           "type": "string"
         },
@@ -1631,6 +1635,7 @@
         "minus": {
           "default": {
             "attrs": {},
+            "extrude_structures": true,
             "name": null,
             "num_layers": 12,
             "parameters": {
@@ -1695,6 +1700,7 @@
         "plus": {
           "default": {
             "attrs": {},
+            "extrude_structures": true,
             "name": null,
             "num_layers": 12,
             "parameters": {
@@ -1790,6 +1796,7 @@
             "attrs": {},
             "minus": {
               "attrs": {},
+              "extrude_structures": true,
               "name": null,
               "num_layers": 12,
               "parameters": {
@@ -1809,6 +1816,7 @@
             },
             "plus": {
               "attrs": {},
+              "extrude_structures": true,
               "name": null,
               "num_layers": 12,
               "parameters": {
@@ -1839,6 +1847,7 @@
             "attrs": {},
             "minus": {
               "attrs": {},
+              "extrude_structures": true,
               "name": null,
               "num_layers": 12,
               "parameters": {
@@ -1858,6 +1867,7 @@
             },
             "plus": {
               "attrs": {},
+              "extrude_structures": true,
               "name": null,
               "num_layers": 12,
               "parameters": {
@@ -1888,6 +1898,7 @@
             "attrs": {},
             "minus": {
               "attrs": {},
+              "extrude_structures": true,
               "name": null,
               "num_layers": 12,
               "parameters": {
@@ -1907,6 +1918,7 @@
             },
             "plus": {
               "attrs": {},
+              "extrude_structures": true,
               "name": null,
               "num_layers": 12,
               "parameters": {
@@ -13562,6 +13574,10 @@
           "default": {},
           "type": "object"
         },
+        "extrude_structures": {
+          "default": true,
+          "type": "boolean"
+        },
         "name": {
           "type": "string"
         },
@@ -15871,6 +15887,10 @@
           "default": {},
           "type": "object"
         },
+        "extrude_structures": {
+          "default": true,
+          "type": "boolean"
+        },
         "name": {
           "type": "string"
         },
@@ -17368,6 +17388,7 @@
           "attrs": {},
           "minus": {
             "attrs": {},
+            "extrude_structures": true,
             "name": null,
             "num_layers": 12,
             "parameters": {
@@ -17387,6 +17408,7 @@
           },
           "plus": {
             "attrs": {},
+            "extrude_structures": true,
             "name": null,
             "num_layers": 12,
             "parameters": {
@@ -17410,6 +17432,7 @@
           "attrs": {},
           "minus": {
             "attrs": {},
+            "extrude_structures": true,
             "name": null,
             "num_layers": 12,
             "parameters": {
@@ -17429,6 +17452,7 @@
           },
           "plus": {
             "attrs": {},
+            "extrude_structures": true,
             "name": null,
             "num_layers": 12,
             "parameters": {
@@ -17452,6 +17476,7 @@
           "attrs": {},
           "minus": {
             "attrs": {},
+            "extrude_structures": true,
             "name": null,
             "num_layers": 12,
             "parameters": {
@@ -17471,6 +17496,7 @@
           },
           "plus": {
             "attrs": {},
+            "extrude_structures": true,
             "name": null,
             "num_layers": 12,
             "parameters": {

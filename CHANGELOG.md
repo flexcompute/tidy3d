@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
 
 ### Breaking Changes
+- Added optional automatic extrusion of structures at the simulation boundaries into/through PML/Absorber layers via `extrude_structures` field in class `AbsorberSpec`.
 - Added `structure_priority_mode` for `TerminalComponentModeler` and default to `"conductor"` to ensure metal structures override dielectrics regardless of structure order, preventing order-dependent results in RF simulations.
 - 1D lumped elements (with zero lateral extent) are no longer allowed. Use a small finite lateral extent (e.g., `1e-6`) instead.
 - `ModeSortSpec.sort_key` is now required with a default of `"n_eff"` (previously optional with `None` default). `ModeSortSpec.sort_order` is now optional with a default of `None`, which automatically selects the natural order based on `sort_key` and `sort_reference`: ascending when a reference is provided (closest first), otherwise descending for `n_eff` and polarization fractions (higher values first), ascending for `k_eff` and `mode_area` (lower values first).

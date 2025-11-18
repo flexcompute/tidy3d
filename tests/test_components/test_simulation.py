@@ -628,7 +628,8 @@ def test_validate_symmetry_boundaries():
 
 
 def test_validate_components_none():
-    assert SIM._structures_not_at_edges(val=None, values=SIM.dict()) is None
+    # _structures_not_at_edges is now a post-init validator method, not a pydantic validator
+    # so it's tested via _post_init_validators() instead
     assert SIM._validate_num_sources(val=None) is None
     assert SIM._warn_monitor_mediums_frequency_range(val=None, values=SIM.dict()) is None
     assert SIM._warn_monitor_simulation_frequency_range(val=None, values=SIM.dict()) is None
@@ -1665,7 +1666,9 @@ def test_warn_lumped_elements_outside_sim_bounds():
 def test_sim_validate_structure_bounds_pml(box_length, absorb_type, log_level):
     """Make sure we warn if structure bounds are within the PML exactly to simulation edges."""
 
-    boundary = td.PML() if absorb_type == "PML" else td.Absorber()
+    # For PML, set extrude_structures=False to test the warning behavior
+    # (with extrude_structures=True, structures are automatically extended so no warning is needed)
+    boundary = td.PML(extrude_structures=False) if absorb_type == "PML" else td.Absorber()
 
     src = td.UniformCurrentSource(
         source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
@@ -3953,3 +3956,401 @@ def test_finalized_volumetric_structures_respects_priority_mode(structure_priori
         assert finalized_structures[-1].medium == dielectric.medium
         assert isinstance(finalized_structures[1].medium, td.LossyMetalMedium)
         assert finalized_structures[0].medium == td.PEC
+
+
+def test_extrusion_suppresses_structure_at_edges_warning():
+    """Test that structure at edges warning is suppressed when extrude_structures=True."""
+
+    # Create a structure that extends exactly to x-min edge only
+    # Simulation: size=(2, 1, 1), center=(0, 0, 0) → bounds x:[-1, 1], y:[-0.5, 0.5], z:[-0.5, 0.5]
+    # Structure: center=(-0.5, 0, 0), size=(1, 0.4, 0.4) → x-min = -1 (touches x-min edge), y:[-0.2, 0.2], z:[-0.2, 0.2] (inside bounds)
+    structure = td.Structure(
+        geometry=td.Box(size=(1, 0.4, 0.4), center=(-0.5, 0, 0)),  # Touches x-min edge at -1 only
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    # Use PointDipole to avoid PlaneWave validation issues with structure intersections
+    source = td.PointDipole(
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        center=(0, 0, 0),
+        polarization="Ex",
+    )
+
+    # Test 1: Warning should appear when extrude_structures=False
+    boundary_spec_no_extrusion = td.BoundarySpec(
+        x=td.Boundary(
+            minus=td.PML(extrude_structures=False), plus=td.PML(extrude_structures=False)
+        ),
+        y=td.Boundary.pml(),
+        z=td.Boundary.pml(),
+    )
+
+    with AssertLogLevel("WARNING", contains_str="has bounds that extend exactly"):
+        sim = td.Simulation(
+            size=(2, 1, 1),
+            center=(0, 0, 0),
+            structures=[structure],
+            sources=[source],
+            boundary_spec=boundary_spec_no_extrusion,
+            run_time=1e-12,
+        )
+
+    # Test 2: Warning should be suppressed when extrude_structures=True on x-min
+    boundary_spec_with_extrusion = td.BoundarySpec(
+        x=td.Boundary(minus=td.PML(extrude_structures=True), plus=td.PML(extrude_structures=True)),
+        y=td.Boundary.pml(),
+        z=td.Boundary.pml(),
+    )
+
+    # Verify the "structure at edges" warning is NOT present (other warnings may still appear)
+    with AssertLogStr(log_level_expected="WARNING", excludes_str="has bounds that extend exactly"):
+        sim = td.Simulation(
+            size=(2, 1, 1),
+            center=(0, 0, 0),
+            structures=[structure],
+            sources=[source],
+            boundary_spec=boundary_spec_with_extrusion,
+            run_time=1e-12,
+        )
+
+
+def test_extrusion_suppresses_structure_in_pml_warning():
+    """Test that structure in PML warning is suppressed when extrude_structures=True."""
+
+    # Create a structure that extends into PML region on x-min side only
+    # Simulation: size=(2, 1, 1), center=(0, 0, 0) → bounds x:[-1, 1], y:[-0.5, 0.5], z:[-0.5, 0.5]
+    # PML extends beyond x=-1, so structure x-min needs to be < -1 to be in PML
+    # Structure must be partially inside simulation domain for extrusion to work (within 2 cells of boundary)
+    # Structure: center=(-0.95, 0, 0), size=(0.2, 0.4, 0.4) → x-min = -1.05 (in PML), x-max = -0.85 (in simulation domain), y/z inside bounds
+    structure = td.Structure(
+        geometry=td.Box(
+            size=(1.2, 0.4, 0.4), center=(-0.5, 0, 0)
+        ),  # Partially in simulation domain, extends into PML
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    # Use PointDipole to avoid PlaneWave validation issues
+    source = td.PointDipole(
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        center=(0.5, 0, 0),  # Place away from structure
+        polarization="Ex",
+    )
+
+    # Test 1: Warning should appear when extrude_structures=False
+    boundary_spec_no_extrusion = td.BoundarySpec(
+        x=td.Boundary(
+            minus=td.PML(extrude_structures=False, num_layers=12),
+            plus=td.PML(extrude_structures=False, num_layers=12),
+        ),
+        y=td.Boundary.pml(),
+        z=td.Boundary.pml(),
+    )
+
+    with AssertLogLevel("WARNING", contains_str="within the simulation PML"):
+        sim = td.Simulation(
+            size=(2, 4, 4),
+            center=(0, 0, 0),
+            structures=[structure],
+            sources=[source],
+            boundary_spec=boundary_spec_no_extrusion,
+            run_time=1e-12,
+        )
+
+    # Test 2: Warning should be suppressed when extrude_structures=True
+    boundary_spec_with_extrusion = td.BoundarySpec(
+        x=td.Boundary(
+            minus=td.PML(extrude_structures=True, num_layers=12),
+            plus=td.PML(extrude_structures=True, num_layers=12),
+        ),
+        y=td.Boundary.pml(),
+        z=td.Boundary.pml(),
+    )
+
+    # Verify the "structure in PML" warning is NOT present (other warnings may still appear)
+    with AssertLogStr(log_level_expected="WARNING", excludes_str="within the simulation PML"):
+        sim = td.Simulation(
+            size=(2, 4, 4),
+            center=(0, 0, 0),
+            structures=[structure],
+            sources=[source],
+            boundary_spec=boundary_spec_with_extrusion,
+            run_time=1e-12,
+        )
+
+
+def test_extrusion_warns_automatic_extrusion():
+    """Test that automatic extrusion warning appears when structure is close to PML with extrude_structures=True."""
+
+    # Create a structure close to PML boundary (within half wavelength AND within 2 cells)
+    freq0 = 2e14  # 200 THz
+    wavelength = 3e8 / freq0 * 1e6  # Convert to um: ~1.5 um
+    half_wavelength = wavelength / 2
+
+    # Structure positioned just inside simulation boundary, close to PML
+    # Use longer simulation domain to ensure better grid resolution and clipping margin coverage
+    sim_size = (10, 1, 1)  # In um - longer in x direction
+    sim_bound_min = -sim_size[0] / 2
+
+    # Structure extends from -4.95 um to 3 um
+    structure_x_min = -4.95  # Very close to boundary (within 2 cells for typical grid)
+    structure_x_max = 3.0
+    structure_size_x = structure_x_max - structure_x_min  # 7.95 um
+    structure_center_x = (structure_x_min + structure_x_max) / 2  # -0.975 um
+    structure = td.Structure(
+        geometry=td.Box(size=(structure_size_x, 10, 10), center=(structure_center_x, 0, 0)),
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    # Use PointDipole to avoid PlaneWave validation issues
+    source = td.PointDipole(
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 * 0.1),
+        center=(0, 0, 0),
+        polarization="Ex",
+    )
+
+    # Test: Warning should appear when extrude_structures=True and structure is within clipping margin
+    boundary_spec_with_extrusion = td.BoundarySpec.all_sides(
+        boundary=td.PML(extrude_structures=True, num_layers=12)
+    )
+
+    with AssertLogLevel("WARNING", contains_str="will be automatically extruded"):
+        sim = td.Simulation(
+            size=sim_size,
+            center=(0, 0, 0),
+            structures=[structure],
+            sources=[source],
+            boundary_spec=boundary_spec_with_extrusion,
+            run_time=1e-12,
+        )
+
+
+def test_extrusion_warning_not_triggered_when_far_from_pml():
+    """Test extrusion warning behavior based on structure distance from PML.
+
+    Case 1: Structure > half_wavelength AND > 2 cells away → no warning
+    Case 2: Structure < half_wavelength BUT > 2 cells away → warns about distance to PML, but does not trigger automatic extrusion
+    """
+
+    freq0 = 2e14  # 200 THz
+    wavelength = 3e8 / freq0 * 1e6  # Convert to um: ~1.5 um
+    half_wavelength = wavelength / 2
+
+    sim_size = (2, 1, 1)  # In um
+    sim_bound_min = -sim_size[0] / 2
+
+    # Use PointDipole to avoid PlaneWave validation issues
+    source = td.PointDipole(
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 * 0.1),
+        center=(0, 0, 0),
+        polarization="Ex",
+    )
+
+    boundary_spec_with_extrusion = td.BoundarySpec.all_sides(
+        boundary=td.PML(extrude_structures=True, num_layers=12)
+    )
+
+    # Case 1: Structure is more than half_wavelength AND more than 2 cells away from boundary
+    # No warning expected
+    # Place structure near center with small size to ensure it's > half_wavelength from both boundaries
+    # Structure bounds: x: [-0.1, 0.1], distance from boundaries: 0.9 um > 0.75 um (half_wavelength) ✓
+    structure_far = td.Structure(
+        geometry=td.Box(size=(0.2, 10, 10), center=(0.0, 0, 0)),
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    # Verify no warning when structure is far from PML
+    with AssertLogStr(
+        log_level_expected="WARNING", excludes_str="less than half of a central wavelength"
+    ):
+        sim = td.Simulation(
+            size=sim_size,
+            center=(0, 0, 0),
+            structures=[structure_far],
+            sources=[source],
+            boundary_spec=boundary_spec_with_extrusion,
+            run_time=1e-12,
+        )
+
+    # Case 2: Structure is closer than half_wavelength BUT more than 2 cells away (outside clipping margin)
+    # Should warn about distance to PML (not automatic extrusion, since it's outside clipping margin)
+    # Place structure so its x-min bound is inside simulation domain but within half_wavelength of boundary
+    structure_size_x = 0.3
+    structure_x_min_close = (
+        sim_bound_min + half_wavelength * 0.4
+    )  # x-min close to boundary (< half_wavelength)
+    structure_center_x_close = (
+        structure_x_min_close + structure_size_x / 2
+    )  # Center so x-min is at desired position
+    structure_close = td.Structure(
+        geometry=td.Box(size=(structure_size_x, 10, 10), center=(structure_center_x_close, 0, 0)),
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    # Verify warning about distance to PML (contains distance warning, excludes automatic extrusion warning)
+    with AssertLogStr(
+        log_level_expected="WARNING",
+        contains_str="less than half of a central wavelength",
+        excludes_str="will be automatically extruded",
+    ):
+        sim = td.Simulation(
+            size=sim_size,
+            center=(0, 0, 0),
+            structures=[structure_close],
+            sources=[source],
+            boundary_spec=boundary_spec_with_extrusion,
+            run_time=1e-12,
+        )
+
+
+def test_extrusion_warnings_with_absorber():
+    """Test that extrusion warnings work correctly with Absorber boundaries."""
+
+    # Structure that touches x-min edge only
+    # Simulation: size=(2, 1, 1), center=(0, 0, 0) → bounds x:[-1, 1], y:[-0.5, 0.5], z:[-0.5, 0.5]
+    # Structure: center=(-0.5, 0, 0), size=(1, 0.4, 0.4) → x-min = -1 (touches edge), y/z inside bounds
+    structure = td.Structure(
+        geometry=td.Box(size=(1, 0.4, 0.4), center=(-0.5, 0, 0)),
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    # Use PointDipole to avoid PlaneWave validation issues
+    source = td.PointDipole(
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        center=(0, 0, 0),
+        polarization="Ex",
+    )
+
+    # Test with Absorber (default extrude_structures=False)
+    boundary_spec_absorber_no_extrusion = td.BoundarySpec(
+        x=td.Boundary(
+            minus=td.Absorber(extrude_structures=False), plus=td.Absorber(extrude_structures=False)
+        ),
+        y=td.Boundary.pml(),
+        z=td.Boundary.pml(),
+    )
+
+    with AssertLogLevel("WARNING", contains_str="has bounds that extend exactly"):
+        sim = td.Simulation(
+            size=(2, 1, 1),
+            center=(0, 0, 0),
+            structures=[structure],
+            sources=[source],
+            boundary_spec=boundary_spec_absorber_no_extrusion,
+            run_time=1e-12,
+        )
+
+    # Test with Absorber (extrude_structures=True)
+    boundary_spec_absorber_with_extrusion = td.BoundarySpec(
+        x=td.Boundary(
+            minus=td.Absorber(extrude_structures=True), plus=td.Absorber(extrude_structures=True)
+        ),
+        y=td.Boundary.pml(),
+        z=td.Boundary.pml(),
+    )
+
+    # Verify the "structure at edges" warning is NOT present (other warnings may still appear)
+    with AssertLogStr(log_level_expected="WARNING", excludes_str="has bounds that extend exactly"):
+        sim = td.Simulation(
+            size=(2, 1, 1),
+            center=(0, 0, 0),
+            structures=[structure],
+            sources=[source],
+            boundary_spec=boundary_spec_absorber_with_extrusion,
+            run_time=1e-12,
+        )
+
+
+def test_extrusion_warnings_with_non_pml_boundaries():
+    """Test that extrusion warnings are not triggered for non-PML boundaries."""
+
+    # Structure that touches x-min edge only
+    # Simulation: size=(2, 1, 1), center=(0, 0, 0) → bounds x:[-1, 1], y:[-0.5, 0.5], z:[-0.5, 0.5]
+    # Structure: center=(-0.5, 0, 0), size=(1, 0.4, 0.4) → x-min = -1 (touches edge), y/z inside bounds
+    structure = td.Structure(
+        geometry=td.Box(size=(1, 0.4, 0.4), center=(-0.5, 0, 0)),
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    # Use PointDipole to avoid PlaneWave validation issues
+    source = td.PointDipole(
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        center=(0, 0, 0),
+        polarization="Ex",
+    )
+
+    # Test with PEC boundary (no extrude_structures attribute)
+    boundary_spec_pec = td.BoundarySpec(
+        x=td.Boundary(minus=td.PECBoundary(), plus=td.PECBoundary()),
+        y=td.Boundary.pml(),
+        z=td.Boundary.pml(),
+    )
+
+    # Should still warn about structure at edges (extrusion not applicable)
+    with AssertLogLevel("WARNING", contains_str="has bounds that extend exactly"):
+        sim = td.Simulation(
+            size=(2, 1, 1),
+            center=(0, 0, 0),
+            structures=[structure],
+            sources=[source],
+            boundary_spec=boundary_spec_pec,
+            run_time=1e-12,
+        )
+
+    # Test with Periodic boundary (no extrude_structures attribute)
+    boundary_spec_periodic = td.BoundarySpec(
+        x=td.Boundary(minus=td.Periodic(), plus=td.Periodic()),
+        y=td.Boundary.pml(),
+        z=td.Boundary.pml(),
+    )
+
+    # Should still warn about structure at edges
+    with AssertLogLevel("WARNING", contains_str="has bounds that extend exactly"):
+        sim = td.Simulation(
+            size=(2, 1, 1),
+            center=(0, 0, 0),
+            structures=[structure],
+            sources=[source],
+            boundary_spec=boundary_spec_periodic,
+            run_time=1e-12,
+        )
+
+
+def test_extrusion_warnings_mixed_boundaries():
+    """Test that warnings work correctly when different boundaries are used on different sides."""
+
+    # Structure that touches x-min edge only
+    # Simulation: size=(2, 1, 1), center=(0, 0, 0) → bounds x:[-1, 1], y:[-0.5, 0.5], z:[-0.5, 0.5]
+    # Structure: center=(-0.5, 0, 0), size=(1, 0.4, 0.4) → x-min = -1 (touches x-min edge only), y/z inside bounds
+    structure = td.Structure(
+        geometry=td.Box(size=(1, 0.4, 0.4), center=(-0.5, 0, 0)),
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    # Use PointDipole to avoid PlaneWave validation issues
+    source = td.PointDipole(
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        center=(0.5, 0, 0),  # Place away from structure
+        polarization="Ex",
+    )
+
+    # PML with extrusion on x-min, PML without extrusion on x-max
+    boundary_spec_mixed = td.BoundarySpec(
+        x=td.Boundary(
+            minus=td.PML(extrude_structures=True),
+            plus=td.PML(extrude_structures=False),
+        ),
+        y=td.Boundary.pml(),
+        z=td.Boundary.pml(),
+    )
+
+    # Warning should be suppressed for x-min (extrusion enabled)
+    # Since structure only touches x-min, no warning should appear
+    with AssertLogStr(log_level_expected="WARNING", excludes_str="has bounds that extend exactly"):
+        sim = td.Simulation(
+            size=(2, 1, 1),
+            center=(0, 0, 0),
+            structures=[structure],
+            sources=[source],
+            boundary_spec=boundary_spec_mixed,
+            run_time=1e-12,
+        )
