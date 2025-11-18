@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from collections.abc import Iterator
+from typing import Any, Optional, Self
 
 import numpy as np
 import pandas
@@ -93,7 +94,7 @@ class Result(Tidy3dBaseModel):
     )
 
     @model_validator(mode="after")
-    def _coords_and_dims_shape(self):
+    def _coords_and_dims_shape(self) -> Self:
         """Make sure coords and dims have same size."""
 
         if self.coords is None or self.dims is None:
@@ -110,7 +111,7 @@ class Result(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
-    def _coords_and_values_shape(self):
+    def _coords_and_values_shape(self) -> Self:
         """Make sure coords and values have same length."""
 
         _values = self.values
@@ -129,7 +130,7 @@ class Result(Tidy3dBaseModel):
 
         return self
 
-    def value_as_dict(self, value) -> dict[str, Any]:
+    def value_as_dict(self, value: Any) -> dict[str, Any]:
         """How to convert an output function value as a dictionary."""
         if isinstance(value, dict):
             return value
@@ -139,7 +140,7 @@ class Result(Tidy3dBaseModel):
         return dict(zip(keys, value))
 
     @staticmethod
-    def default_value_keys(value) -> tuple[str, ...]:
+    def default_value_keys(value: Any) -> tuple[str, ...]:
         """The default keys for a given value."""
 
         # if a dict already, just use the existing keys as labels
@@ -153,7 +154,7 @@ class Result(Tidy3dBaseModel):
         # if simply single value (float, int, bool, etc) just label "output"
         return ("output",)
 
-    def items(self) -> tuple[dict, Any]:
+    def items(self) -> Iterator[tuple[dict[str, Any], Any]]:
         """Iterate through coordinates (args) and values (outputs) one by one."""
 
         for coord_tuple, val in zip(self.coords, self.values):
@@ -161,7 +162,7 @@ class Result(Tidy3dBaseModel):
             yield coord_dict, val
 
     @cached_property
-    def data(self) -> dict[tuple, Any]:
+    def data(self) -> dict[tuple[Any, ...], Any]:
         """Dict mapping tuple of fn args to their value."""
 
         result = {}
@@ -171,7 +172,7 @@ class Result(Tidy3dBaseModel):
 
         return result
 
-    def get_value(self, coords: tuple) -> Any:
+    def get_value(self, coords: tuple[Any, ...]) -> Any:
         """Get a data element indexing by function arg tuple."""
         return self.data[coords]
 
@@ -319,7 +320,7 @@ class Result(Tidy3dBaseModel):
         if self.dims != other.dims:
             raise ValueError("Can't combine results, dimensions don't match.")
 
-        def combine_tuples(tuple1: tuple, tuple2: tuple):
+        def combine_tuples(tuple1: tuple[Any, ...], tuple2: tuple[Any, ...]) -> list[Any] | None:
             """Combine two tuples together if not None."""
             if tuple1 is None and tuple2 is None:
                 return None
@@ -340,7 +341,7 @@ class Result(Tidy3dBaseModel):
             task_names=task_names,
         )
 
-    def __add__(self, other):
+    def __add__(self, other: Result) -> Result:
         """Special syntax for design_result1 + design_result2."""
         return self.combine(other)
 
@@ -426,12 +427,12 @@ class Result(Tidy3dBaseModel):
 
         return self.updated_copy(values=new_values, coords=new_coords)
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Implement len function to return the number of items in the result."""
 
         return len(self.coords)
 
-    def __getitem__(self, data_index):
+    def __getitem__(self, data_index: int | slice) -> tuple[np.ndarray, np.ndarray]:
         """Implement the accessor function to index into the coordinates and values of the result."""
 
         features = self.coords[data_index]

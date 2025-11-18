@@ -5,7 +5,7 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from .base import Expression
-from .types import NumberOrExpression, NumberType
+from .types import ExpressionType, NumberOrExpression, NumberType
 
 
 class UnaryOperator(Expression):
@@ -26,7 +26,7 @@ class UnaryOperator(Expression):
 
     @field_validator("operand")
     @classmethod
-    def validate_operand(cls, v):
+    def validate_operand(cls, v: NumberOrExpression) -> ExpressionType:
         return cls._to_expression(v)
 
     def __repr__(self) -> str:
@@ -55,7 +55,7 @@ class BinaryOperator(Expression):
 
     @field_validator("left", "right")
     @classmethod
-    def validate_operands(cls, v):
+    def validate_operands(cls, v: NumberOrExpression) -> ExpressionType:
         return cls._to_expression(v)
 
     def __repr__(self) -> str:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing import Optional, Self, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -49,7 +49,7 @@ class RandomInitializationSpec(AbstractInitializationSpec):
     )
 
     @model_validator(mode="after")
-    def _validate_max_ge_min(self):
+    def _validate_max_ge_min(self) -> Self:
         """Ensure that max_value is greater than or equal to min_value."""
         if self.min_value > self.max_value:
             raise ValidationError(
@@ -90,7 +90,7 @@ class CustomInitializationSpec(AbstractInitializationSpec):
 
     @field_validator("params")
     @classmethod
-    def _validate_params_range(cls, val):
+    def _validate_params_range(cls, val: NDArray) -> NDArray:
         """Ensure that all parameter values are between 0 and 1."""
         if np.any((val < 0) | (val > 1)):
             raise ValidationError("'params' need to be between 0 and 1.")
@@ -98,7 +98,7 @@ class CustomInitializationSpec(AbstractInitializationSpec):
 
     @field_validator("params")
     @classmethod
-    def _validate_params_dtype(cls, val):
+    def _validate_params_dtype(cls, val: NDArray) -> NDArray:
         """Ensure that params is real-valued."""
         if np.issubdtype(val.dtype, np.bool_):
             td.log.warning(
@@ -111,7 +111,7 @@ class CustomInitializationSpec(AbstractInitializationSpec):
 
     @field_validator("params")
     @classmethod
-    def _validate_params_3d(cls, val):
+    def _validate_params_3d(cls, val: NDArray) -> NDArray:
         """Ensure that params is a 3D array."""
         if val.ndim != 3:
             raise ValidationError(f"'params' must be 3D, but got {val.ndim}D.")

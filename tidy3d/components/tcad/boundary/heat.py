@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Optional, Self, Union
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat
 
@@ -91,11 +91,13 @@ class VerticalNaturalConvectionCoeffModel(Tidy3dBaseModel):
         units=ACCELERATION,
     )
 
+    @classmethod
     def from_si_units(
+        cls,
         plate_length: NonNegativeFloat,
         medium: FluidMedium = None,
         gravity: NonNegativeFloat = GRAV_ACC * 1e-6,
-    ):
+    ) -> Self:
         """
         Create an instance from standard SI units.
 
@@ -113,7 +115,7 @@ class VerticalNaturalConvectionCoeffModel(Tidy3dBaseModel):
         plate_length_tidy = plate_length * 1e6  # m -> um
         g_tidy = gravity * 1e6  # m/s**2 -> um/s**2
 
-        return VerticalNaturalConvectionCoeffModel(
+        return cls(
             medium=medium,
             plate_length=plate_length_tidy,
             gravity=g_tidy,

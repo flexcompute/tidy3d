@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
+from tidy3d.components.autograd import TracedSize
 from tidy3d.components.tcad.monitors.abstract import HeatChargeMonitor
 
 
@@ -23,7 +24,7 @@ class VolumeMeshMonitor(HeatChargeMonitor):
 
     @field_validator("size")
     @classmethod
-    def _at_least_2d(cls, val):
+    def _at_least_2d(cls, val: TracedSize) -> TracedSize:
         """Validate that the monitor has at least two non-zero dimensions."""
         if len([d for d in val if isclose(d, 0)]) > 1:
             raise ValueError("'VolumeMeshMonitor' must have at least two nonzero dimensions.")

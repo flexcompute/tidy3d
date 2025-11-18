@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Union
+from typing import Any, Optional, Self, Union
 
 import autograd.numpy as np
 import xarray as xr
@@ -88,7 +88,7 @@ class ModeAmp(Metric):
     @classmethod
     def from_mode_monitor(
         cls, monitor: ModeMonitor, mode_index: int = 0, direction: Direction = "+"
-    ):
+    ) -> Self:
         return cls(
             monitor_name=monitor.name, f=monitor.freqs, mode_index=mode_index, direction=direction
         )

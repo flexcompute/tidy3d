@@ -3,7 +3,7 @@ NOTE: Keeping this class for backward compatibility only"""
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import model_validator
 
@@ -49,7 +49,7 @@ class HeatSimulation(HeatChargeSimulation):
 
     @model_validator(mode="before")
     @classmethod
-    def issue_warning_deprecated(cls, data):
+    def issue_warning_deprecated(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Issue warning for 'HeatSimulations'."""
         log.warning(
             "Setting up deprecated 'HeatSimulation'. "

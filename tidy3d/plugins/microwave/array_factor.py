@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing import Any, Optional, Self, Union
 
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -82,7 +83,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
 
         return 0.5 * (rmax + rmin)
 
-    def _detect_antenna_bounds(self, simulation: Simulation):
+    def _detect_antenna_bounds(self, simulation: Simulation) -> Bound:
         """Detect the bounds of the antenna in the simulation."""
         # directions in which we will need to tile simulation
         extend_dims = self._extend_dims
@@ -135,7 +136,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
 
     def _try_to_expand_geometry(
         self, geometry: Geometry, old_sim_bounds: Bound, new_sim_bounds: Bound
-    ):
+    ) -> Geometry:
         """Try to expand geometry to cover the entire simulation domain."""
 
         can_expand = isinstance(geometry, Box) and all(
@@ -183,7 +184,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
         ],
         old_sim_bounds: Bound,
         new_sim_bounds: Bound,
-    ):
+    ) -> list[Union[Structure, MeshOverrideStructure, LayerRefinementSpec, LumpedElement], ...]:
         """Duplicate or expand a list of objects."""
 
         locations = self._antenna_locations
@@ -251,7 +252,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
         antenna_bounds: Bound,
         new_sim_bounds: Bound,
         old_sim_bounds: Bound,
-    ):
+    ) -> list[MonitorType]:
         """Expand monitors."""
 
         extend_dims = self._extend_dims
@@ -320,7 +321,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
 
     def _duplicate_structures(
         self, structures: tuple[Structure, ...], new_sim_bounds: Bound, old_sim_bounds: Bound
-    ):
+    ) -> list[Structure]:
         """Duplicate structures."""
 
         return self._duplicate_or_expand_list_of_objects(
@@ -333,7 +334,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
         lumped_elements: tuple[LumpedElement, ...],
         old_sim_bounds: Bound,
         new_sim_bounds: Bound,
-    ):
+    ) -> tuple[list[SourceType], list[LumpedElement]]:
         """Duplicate sources and lumped elements."""
         array_lumped_elements = self._duplicate_or_expand_list_of_objects(
             objects=lumped_elements, old_sim_bounds=old_sim_bounds, new_sim_bounds=new_sim_bounds
@@ -359,7 +360,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
 
     def _duplicate_grid_specs(
         self, grid_spec: GridSpec, old_sim_bounds: Bound, new_sim_bounds: Bound
-    ):
+    ) -> GridSpec:
         """Duplicate grid specs."""
 
         array_overrides = self._duplicate_or_expand_list_of_objects(
@@ -761,7 +762,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
 
     @field_validator("array_size", "spacings", "phase_shifts", "amp_multipliers", mode="before")
     @classmethod
-    def _convert_list_to_tuple(cls, v):
+    def _convert_list_to_tuple(cls, v: Any) -> Any:
         """Convert lists to tuples for tuple fields."""
         if isinstance(v, list):
             return tuple(v)
@@ -776,7 +777,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
         return v
 
     @model_validator(mode="after")
-    def _check_amp_multipliers(self):
+    def _check_amp_multipliers(self) -> Self:
         """Check that the length of the amplitude multipliers is equal to the array size along each dimension."""
         val = self.amp_multipliers
         array_size = self.array_size
@@ -1085,7 +1086,7 @@ class TaylorWindow(AbstractWindow):
         description="Number of nearly constant level sidelobes adjacent to the mainlobe.",
     )
 
-    def _get_weights_discrete(self, N):
+    def _get_weights_discrete(self, N: int) -> NDArray:
         """
         Generate a 1D Taylor window of length N.
 
@@ -1101,7 +1102,7 @@ class TaylorWindow(AbstractWindow):
         """
         return taylor(N, self.nbar, self.sll)
 
-    def _get_exp_weights(self, mus: np.ndarray):
+    def _get_exp_weights(self, mus: NDArray) -> NDArray:
         """
         Compute expansion coefficients B_l for the circular Taylor taper.
 
@@ -1241,7 +1242,7 @@ class RectangularTaper(AbstractTaper):
         return cls(window_x=window, window_y=window, window_z=window)
 
     @model_validator(mode="after")
-    def check_at_least_one_window(self):
+    def check_at_least_one_window(self) -> Self:
         if not any([self.window_x, self.window_y, self.window_z]):
             raise ValueError("At least one window (x, y, or z) must be provided.")
         return self

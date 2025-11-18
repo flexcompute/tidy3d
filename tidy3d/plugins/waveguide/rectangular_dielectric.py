@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, Self, Union
 
 import numpy
 from matplotlib import pyplot
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.boundary import BoundarySpec, Periodic
@@ -206,7 +206,7 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     @field_validator("wavelength", "core_width", "gap")
     @classmethod
-    def _set_non_negative_array(cls, val):
+    def _set_non_negative_array(cls, val: Union[float, ArrayFloat1D]) -> Union[float, ArrayFloat1D]:
         """Ensure values are not negative and convert to numpy arrays."""
         val = numpy.array(val, ndmin=1)
         if any(val < 0):
@@ -215,7 +215,9 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     @field_validator("core_medium", "clad_medium", "box_medium")
     @classmethod
-    def _check_non_metallic(cls, val, info):
+    def _check_non_metallic(
+        cls, val: Union[MediumType, tuple[MediumType, ...]], info: ValidationInfo
+    ) -> Union[MediumType, tuple[MediumType, ...]]:
         if val is None:
             return val
         media = val if isinstance(val, tuple) else (val,)
@@ -228,7 +230,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return val
 
     @model_validator(mode="after")
-    def _validate_gaps(self):
+    def _validate_gaps(self) -> Self:
         """Ensure the number of gaps is compatible with the number of cores supplied."""
         if self.gap.size == 1 and self.core_width.size != 2:
             # If a single value is defined, use it for all gaps
@@ -239,7 +241,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
-    def _set_box_medium(self):
+    def _set_box_medium(self) -> Self:
         """Set BOX medium same as cladding as default value."""
         if self.box_medium is None:
             if self.clad_medium is None:
@@ -251,7 +253,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
-    def _set_clad_thickness(self):
+    def _set_clad_thickness(self) -> Self:
         """Set default clad/BOX thickness based on the max wavelength in the medium."""
         for side in ("clad", "box"):
             val = getattr(self, side + "_thickness")
@@ -274,7 +276,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
-    def _validate_layers(self):
+    def _validate_layers(self) -> Self:
         """Ensure the number of clad media is compatible with the number of layers supplied."""
         for side in ("clad", "box"):
             thickness = getattr(self, side + "_thickness")
@@ -291,7 +293,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
-    def _set_side_margin(self):
+    def _set_side_margin(self) -> Self:
         """Set default side margin based on BOX and cladding thicknesses."""
         clad_thickness = self.clad_thickness
         box_thickness = self.box_thickness
@@ -306,7 +308,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
-    def _ensure_consistency(self):
+    def _ensure_consistency(self) -> Self:
         """Ensure consistency in setting surface/sidewall models and propagation/normal axes."""
         if self.sidewall_thickness > 0 and self.sidewall_medium is None:
             raise ValidationError(
@@ -591,7 +593,9 @@ class RectangularDielectric(Tidy3dBaseModel):
         if self.mode_spec.bend_radius is None or self.mode_spec.bend_radius == 0.0:
             half_length = 0.5 * self.length
 
-            def polyslab_vertices(x, w):
+            def polyslab_vertices(
+                x: float, w: float
+            ) -> tuple[list[float], list[float], list[float], list[float]]:
                 return (
                     self._transform_in_plane(x, -half_length),
                     self._transform_in_plane(x + w, -half_length),
@@ -617,7 +621,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             sin = numpy.sin(angles)
             cos = numpy.cos(angles)
 
-            def polyslab_vertices(x, w):
+            def polyslab_vertices(x: float, w: float) -> list[list[float]]:
                 r_in = bend_radius + x
                 v_in = numpy.vstack((-bend_radius + r_in * cos, r_in * sin)).T
                 r_out = r_in + w

@@ -8,6 +8,7 @@ from typing import Any, Literal, Optional, Union
 import autograd.numpy as anp
 import numpy as np
 from autograd import elementwise_grad, grad
+from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 import tidy3d as td
@@ -70,7 +71,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
 
     @field_validator("eps_bounds")
     @classmethod
-    def _validate_ge_one(cls, v):
+    def _validate_ge_one(cls, v: tuple[float, float]) -> tuple[float, float]:
         if any(vi < 1 for vi in v):
             raise ValueError("Each value in 'eps_bounds' must be '>=1.0'.")
         return v
@@ -259,31 +260,31 @@ class TopologyDesignRegion(DesignRegion):
             "'initialization_spec' instead."
         )
 
-    def params_uniform(self, value: float) -> np.ndarray:
+    def params_uniform(self, value: float) -> NDArray[np.floating]:
         """Make an array of parameters with all the same value."""
         self._warn_deprecate_params()
         return value * np.ones(self.params_shape)
 
     @property
-    def params_random(self) -> np.ndarray:
+    def params_random(self) -> NDArray[np.floating]:
         """Convenience for generating random parameters between (0,1) with correct shape."""
         self._warn_deprecate_params()
         return np.random.random(self.params_shape)
 
     @property
-    def params_zeros(self):
+    def params_zeros(self) -> NDArray[np.floating]:
         """Convenience for generating random parameters of all 0 values with correct shape."""
         self._warn_deprecate_params()
         return self.params_uniform(0.0)
 
     @property
-    def params_half(self):
+    def params_half(self) -> NDArray[np.floating]:
         """Convenience for generating random parameters of all 0.5 values with correct shape."""
         self._warn_deprecate_params()
         return self.params_uniform(0.5)
 
     @property
-    def params_ones(self):
+    def params_ones(self) -> NDArray[np.floating]:
         """Convenience for generating random parameters of all 1 values with correct shape."""
         self._warn_deprecate_params()
         return self.params_uniform(1.0)

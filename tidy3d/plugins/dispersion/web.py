@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ssl
 from enum import Enum
-from typing import Literal, Optional
+from typing import Any, Literal, Optional, Self
 
 import requests
 from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, model_validator
@@ -96,7 +96,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
     )
 
     @model_validator(mode="after")
-    def _validate_lower_frequency_bound(self):
+    def _validate_lower_frequency_bound(self) -> Self:
         """bound_f_lower cannot be larger than bound_f."""
         if self.bound_f is not None and self.bound_f_lower > self.bound_f:
             raise SetupError(
@@ -215,7 +215,7 @@ class FitterData(AdvancedFitterParam):
         return task
 
     @staticmethod
-    def _set_url(config_env: Literal["default", "dev", "prod", "local"] = "default"):
+    def _set_url(config_env: Literal["default", "dev", "prod", "local"] = "default") -> str:
         """Set the url of python web service
 
         Parameters
@@ -349,7 +349,7 @@ class StableDispersionFitter(DispersionFitter):
 
     @model_validator(mode="before")
     @classmethod
-    def _deprecate_stable_fitter(cls, data):
+    def _deprecate_stable_fitter(cls, data: dict[str, Any]) -> dict[str, Any]:
         log.warning(
             "'StableDispersionFitter' has been deprecated. Use 'DispersionFitter' with "
             "'tidy3d.plugins.dispersion.web.run' to access the stable fitter from the web server."

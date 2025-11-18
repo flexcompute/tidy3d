@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import Any, Optional, Self, Union
 
 import numpy as np
 from pydantic import Field, model_validator
@@ -94,7 +94,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
         return {"electrons": self.electrons, "holes": self.holes}
 
     @model_validator(mode="after")
-    def check_correct_data_type(self):
+    def check_correct_data_type(self) -> Self:
         """Issue error if incorrect data type is used"""
         field_data = {field: getattr(self, field) for field in ["electrons", "holes"]}
         for field, data in field_data.items():
@@ -183,7 +183,7 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
         return {"Ec": self.Ec, "Ev": self.Ev, "Ei": self.Ei, "Efn": self.Efn, "Efp": self.Efp}
 
     @model_validator(mode="after")
-    def check_correct_data_type(self):
+    def check_correct_data_type(self) -> Self:
         """Issue error if incorrect data type is used"""
 
         field_data = {field: getattr(self, field) for field in ["Ec", "Ev", "Ei", "Efn", "Efp"]}
@@ -375,7 +375,7 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
         return {"E": self.E}
 
     @model_validator(mode="after")
-    def check_correct_data_type(self):
+    def check_correct_data_type(self) -> Self:
         """Issue error if incorrect data type is used"""
 
         if isinstance(self.E, TetrahedralGridDataset) or isinstance(self.E, TriangularGridDataset):
@@ -413,7 +413,7 @@ class SteadyCurrentDensityData(HeatChargeMonitorData):
         return {"J": self.J}
 
     @model_validator(mode="after")
-    def check_correct_data_type(self):
+    def check_correct_data_type(self) -> Self:
         """Issue error if incorrect data type is used"""
 
         mnt = self.monitor

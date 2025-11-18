@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Annotated, Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Annotated, Any, Callable, Literal, Optional, Union, overload
 
 import numpy as np
 import scipy.stats.qmc as qmc
+from numpy.typing import NDArray
 from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt
+from rich.console import Console
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import inf
@@ -15,7 +17,13 @@ from tidy3d.constants import inf
 from .parameter import ParameterAny, ParameterFloat, ParameterInt, ParameterType
 
 if TYPE_CHECKING:
+    import pygad
     from scipy.stats import qmc as qmc_type
+
+
+ArgsList = list[dict[str, Any]]
+RunFunction = Callable[[ArgsList], list[Any]]
+RunResult = tuple[ArgsList, list[Any], list[Any] | None, Any | None]
 
 
 class Method(Tidy3dBaseModel, ABC):
@@ -26,14 +34,19 @@ class Method(Tidy3dBaseModel, ABC):
     )
 
     @abstractmethod
-    def _run(self, parameters: tuple[ParameterType, ...], run_fn: Callable) -> tuple[Any]:
+    def _run(
+        self,
+        parameters: tuple[ParameterType, ...],
+        run_fn: RunFunction,
+        console: Optional[Console],
+    ) -> RunResult:
         """Defines the search algorithm."""
 
     @abstractmethod
-    def _get_run_count(self, parameters: Optional[list] = None) -> int:
+    def _get_run_count(self, parameters: Optional[list[ParameterType]] = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
 
-    def _force_int(self, next_point: dict, parameters: list) -> None:
+    def _force_int(self, next_point: dict[str, Any], parameters: tuple[ParameterType, ...]) -> None:
         """Convert a float asigned to an int parameter to be an int. Update dict in place."""
 
         for param in parameters:
@@ -41,8 +54,17 @@ class Method(Tidy3dBaseModel, ABC):
                 # Using int(round()) instead of just int as int always rounds down making upper bound value impossible
                 next_point[param.name] = int(round(next_point[param.name], 0))
 
-    @staticmethod
-    def _extract_output(output: list, sampler: bool = False) -> tuple:
+    @overload
+    def _extract_output(self, output: list[Any], sampler: Literal[True]) -> list[Any]: ...
+
+    @overload
+    def _extract_output(
+        self, output: list[Any], sampler: Literal[False] = False
+    ) -> tuple[list[float], list[Any]]: ...
+
+    def _extract_output(
+        self, output: list[Any], sampler: bool = False
+    ) -> list[Any] | tuple[list[float], list[Any]]:
         """Format the user function output for further optimization and result storage."""
 
         # Light check if all the outputs are the same type
@@ -61,7 +83,7 @@ class Method(Tidy3dBaseModel, ABC):
         if all(isinstance(val, (float, int)) for val in output):
             # No aux_out
             none_aux = [None for _ in range(len(output))]
-            return (output, none_aux)
+            return output, none_aux
 
         if all(isinstance(val, (list, tuple)) for val in output):
             if all(isinstance(val[0], (float, int)) for val in output):
@@ -77,7 +99,7 @@ class Method(Tidy3dBaseModel, ABC):
                     aux_out.append(val[1])
 
                 # Float with aux_out
-                return (float_out, aux_out)
+                return float_out, aux_out
 
             raise ValueError(
                 "Unrecognized output from supplied post function. The first element in the iterable object should be a 'float'."
@@ -88,7 +110,9 @@ class Method(Tidy3dBaseModel, ABC):
         )
 
     @staticmethod
-    def _flatten_and_append(list_of_lists: list[list], append_target: list) -> None:
+    def _flatten_and_append(
+        list_of_lists: Optional[list[list[Any]]], append_target: list[Any]
+    ) -> None:
         """Flatten a list of lists and append the sublist to a new list."""
         if list_of_lists is not None:
             for sub_list in list_of_lists:
@@ -99,13 +123,13 @@ class MethodSample(Method, ABC):
     """A sweep method where all points are independently computed in one iteration."""
 
     @abstractmethod
-    def sample(self, parameters: tuple[ParameterType, ...], **kwargs: Any) -> dict[str, Any]:
+    def sample(self, parameters: tuple[ParameterType, ...], **kwargs: Any) -> ArgsList:
         """Defines how the design parameters are sampled."""
 
     def _assemble_args(
         self,
         parameters: tuple[ParameterType, ...],
-    ) -> tuple[dict, int]:
+    ) -> ArgsList:
         """Sample design parameters, check the args are hashable and compute number of points."""
 
         fn_args = self.sample(parameters)
@@ -113,7 +137,12 @@ class MethodSample(Method, ABC):
             self._force_int(arg_dict, parameters)
         return fn_args
 
-    def _run(self, parameters: tuple[ParameterType, ...], run_fn: Callable, console) -> tuple[Any]:
+    def _run(
+        self,
+        parameters: tuple[ParameterType, ...],
+        run_fn: RunFunction,
+        console: Optional[Console],
+    ) -> RunResult:
         """Defines the search algorithm."""
 
         # get all function inputs
@@ -138,16 +167,16 @@ class MethodGrid(MethodSample):
     >>> method = tdd.MethodGrid()
     """
 
-    def _get_run_count(self, parameters: list) -> int:
+    def _get_run_count(self, parameters: list[ParameterType]) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return len(self.sample(parameters))
 
     @staticmethod
-    def sample(parameters: tuple[ParameterType, ...]) -> dict[str, Any]:
+    def sample(parameters: tuple[ParameterType, ...]) -> ArgsList:
         """Defines how the design parameters are sampled on the grid."""
 
         # sample each dimension individually
-        vals_each_dim = {}
+        vals_each_dim: dict[str, list[Any]] = {}
         for param in parameters:
             vals = param.sample_grid()
             vals_each_dim[param.name] = vals
@@ -156,7 +185,9 @@ class MethodGrid(MethodSample):
         vals_grid = np.meshgrid(*vals_each_dim.values())
         vals_grid = (np.ravel(x).tolist() for x in vals_grid)
         vals_dict = dict(zip(vals_each_dim.keys(), vals_grid))
-        t_vals_dict = [dict(zip(vals_dict.keys(), values)) for values in zip(*vals_dict.values())]
+        t_vals_dict: ArgsList = [
+            dict(zip(vals_dict.keys(), values)) for values in zip(*vals_dict.values())
+        ]
 
         return t_vals_dict
 
@@ -171,14 +202,17 @@ class MethodOptimize(Method, ABC):
         description="Set the seed used by the optimizers to ensure consistant random number generation.",
     )
 
-    def any_to_int_param(self, parameter: ParameterAny) -> dict:
+    def any_to_int_param(self, parameter: ParameterAny) -> dict[int, Any]:
         """Convert ParameterAny object to integers and provide a conversion dict to return"""
 
         return dict(enumerate(parameter.allowed_values))
 
     def sol_array_to_dict(
-        self, solution: np.array, keys: list, param_converter: dict
-    ) -> list[dict]:
+        self,
+        solution: NDArray[np.floating],
+        keys: list[str],
+        param_converter: dict[str, dict[int, Any]],
+    ) -> ArgsList:
         """Convert an array of solutions to a list of dicts for function input"""
         sol_dict_list = [dict(zip(keys, sol)) for sol in solution]
 
@@ -186,7 +220,9 @@ class MethodOptimize(Method, ABC):
 
         return sol_dict_list
 
-    def _handle_param_convert(self, param_converter: dict, sol_dict_list: list[dict]) -> None:
+    def _handle_param_convert(
+        self, param_converter: dict[str, dict[int, Any]], sol_dict_list: ArgsList
+    ) -> None:
         for param, convert in param_converter.items():
             for sol in sol_dict_list:
                 if isinstance(sol[param], float):
@@ -232,11 +268,16 @@ class MethodBayOpt(MethodOptimize, ABC):
         description="The Xi coefficient used by the ``ei`` and ``poi`` acquisition functions. More detail available in the `package docs <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
     )
 
-    def _get_run_count(self, parameters: Optional[list] = None) -> int:
+    def _get_run_count(self, parameters: Optional[list[ParameterType]] = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.initial_iter + self.n_iter
 
-    def _run(self, parameters: tuple[ParameterType, ...], run_fn: Callable, console) -> tuple[Any]:
+    def _run(
+        self,
+        parameters: tuple[ParameterType, ...],
+        run_fn: RunFunction,
+        console: Optional[Console],
+    ) -> RunResult:
         """Defines the Bayesian optimization search algorithm for the method.
 
         Uses the ``bayes_opt`` package to carry out a Bayesian optimization. Utilizes the ``.suggest`` and ``.register`` methods instead of
@@ -252,8 +293,8 @@ class MethodBayOpt(MethodOptimize, ABC):
             ) from None
 
         # Identify non-numeric params and define boundaries for Bay-opt
-        param_converter = {}
-        boundary_dict = {}
+        param_converter: dict[str, dict[int, Any]] = {}
+        boundary_dict: dict[str, tuple[float, float]] = {}
         for param in parameters:
             if isinstance(param, ParameterAny):
                 param_converter[param.name] = self.any_to_int_param(param)
@@ -425,13 +466,18 @@ class MethodGenAlg(MethodOptimize, ABC):
         description="Save all solutions from all generations within a numpy array. Can be accessed from the optimizer object stored in the Result. May cause memory issues with large populations or many generations. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>_` for more details.",
     )
 
-    def _get_run_count(self, parameters: Optional[list] = None) -> int:
+    def _get_run_count(self, parameters: Optional[list[ParameterType]] = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         # +1 to generations as pygad creates an initial population which is effectively "Generation 0"
         run_count = self.solutions_per_pop * (self.n_generations + 1)
         return run_count
 
-    def _run(self, parameters: tuple[ParameterType, ...], run_fn: Callable, console) -> tuple[Any]:
+    def _run(
+        self,
+        parameters: tuple[ParameterType, ...],
+        run_fn: RunFunction,
+        console: Optional[Console],
+    ) -> RunResult:
         """Defines the genetic algorithm for the method.
 
         Uses the ``pygad`` package to carry out a particle search optimization. Additional development has ensured that
@@ -449,15 +495,15 @@ class MethodGenAlg(MethodOptimize, ABC):
         param_keys = [param.name for param in parameters]
 
         # Store parameters and fitness
-        store_parameters = []
-        store_fitness = []
-        store_aux = []
-        previous_solutions = {}
+        store_parameters: ArgsList = []
+        store_fitness: list[NDArray[np.floating]] = []
+        store_aux: list[Any] = []
+        previous_solutions: dict[str, tuple[float, Any]] = {}
 
         # Set gene_spaces to keep GA within ranges
-        param_converter = {}
-        gene_spaces = []
-        gene_types = []
+        param_converter: dict[str, dict[int, Any]] = {}
+        gene_spaces: list[Any] = []
+        gene_types: list[type[Any]] = []
         for param in parameters:
             if isinstance(param, ParameterFloat):
                 gene_spaces.append({"low": param.span[0], "high": param.span[1]})
@@ -474,9 +520,9 @@ class MethodGenAlg(MethodOptimize, ABC):
                 gene_spaces.append(range(len(param.allowed_values)))
                 gene_types.append(int)
 
-        def capture_aux(sol_dict_list: list[dict]) -> None:
+        def capture_aux(sol_dict_list: ArgsList) -> None:
             """Store the aux data by pulling from previous_solutions."""
-            aux_out = []
+            aux_out: list[Any] = []
             for sol in sol_dict_list:
                 composite_key = str(sol.keys()) + str(sol.values())
                 _, aux_data = previous_solutions[composite_key]
@@ -485,16 +531,20 @@ class MethodGenAlg(MethodOptimize, ABC):
             self._flatten_and_append(aux_out, store_aux)
 
         # Create fitness function combining pre and post fn with the tidy3d call
-        def fitness_function(ga_instance: pygad.GA, solution: np.array, solution_idx) -> dict:
+        def fitness_function(
+            ga_instance: pygad.GA,
+            solution: NDArray[np.floating],
+            solution_idx: int,
+        ) -> list[float]:
             """Fitness function for GA. Format of inputs cannot be changed."""
             # Break solution down to list of dict
             sol_dict_list = self.sol_array_to_dict(solution, param_keys, param_converter)
 
             # Check if solution already exists
             # Have to update the solutions as need to pass to run_fn together to be batched
-            known_sol = {}
-            unknown_sol = []
-            unknown_keys = []
+            known_sol: dict[int, str] = {}
+            unknown_sol: ArgsList = []
+            unknown_keys: list[str] = []
             for sol_idx, sol in enumerate(sol_dict_list):
                 composite_key = str(sol.keys()) + str(sol.values())
 
@@ -560,9 +610,11 @@ class MethodGenAlg(MethodOptimize, ABC):
         num_genes = len(parameters)
 
         # PyGAD doesn't store the initial population fitness - this captures parameters, fitness and aux data
-        init_state = []
+        init_state: list[str] = []
 
-        def capture_init_pop_fitness(ga_instance: pygad.GA, population_fitness) -> None:
+        def capture_init_pop_fitness(
+            ga_instance: pygad.GA, population_fitness: NDArray[np.floating]
+        ) -> None:
             """Store the initial population fitness which PyGAD otherwise ignores
 
             Has to be run ``on_fitness`` but contains a check so that it only runs on the first pass
@@ -674,11 +726,16 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         description="Set the initial positions of the swarm using a numpy array of appropriate size.",
     )
 
-    def _get_run_count(self, parameters: Optional[list] = None) -> int:
+    def _get_run_count(self, parameters: Optional[list[ParameterType]] = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.n_particles * self.n_iter
 
-    def _run(self, parameters: tuple[ParameterType, ...], run_fn: Callable, console) -> tuple[Any]:
+    def _run(
+        self,
+        parameters: tuple[ParameterType, ...],
+        run_fn: RunFunction,
+        console: Optional[Console],
+    ) -> RunResult:
         """Defines the particle search optimization algorithm for the method.
 
         Uses the ``pyswarms`` package to carry out a particle search optimization.
@@ -698,14 +755,14 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         # Variable assignment here so it is available to the fitness function
         param_keys = [param.name for param in parameters]
 
-        store_parameters = []
-        store_fitness = []
-        store_aux = []
+        store_parameters: list[ArgsList] = []
+        store_fitness: list[list[float]] = []
+        store_aux: list[Any] = []
 
         # Build bounds and conversion dict for ParameterAny inputs
-        param_converter = {}
-        min_bound = []
-        max_bound = []
+        param_converter: dict[str, dict[int, Any]] = {}
+        min_bound: list[float] = []
+        max_bound: list[float] = []
         for param in parameters:
             if isinstance(param, ParameterAny):
                 param_converter[param.name] = self.any_to_int_param(param)
@@ -715,9 +772,9 @@ class MethodParticleSwarm(MethodOptimize, ABC):
                 min_bound.append(param.span[0])
                 max_bound.append(param.span[1])
 
-        bounds = (min_bound, max_bound)
+        bounds: tuple[list[float], list[float]] = (min_bound, max_bound)
 
-        def fitness_function(solution: np.array) -> np.array:
+        def fitness_function(solution: NDArray[np.floating]) -> NDArray[np.floating]:
             """Fitness function for PSO. Input format cannot be changed"""
             # Correct solutions that should be ints
             sol_dict_list = self.sol_array_to_dict(solution, param_keys, param_converter)
@@ -757,8 +814,8 @@ class MethodParticleSwarm(MethodOptimize, ABC):
             )
 
         # Collapse stores into fn_args and results lists
-        fn_args = [val for sublist in store_parameters for val in sublist]
-        results = [val for sublist in store_fitness for val in sublist]
+        fn_args: ArgsList = [val for sublist in store_parameters for val in sublist]
+        results: list[float] = [val for sublist in store_fitness for val in sublist]
 
         return fn_args, results, store_aux, optimizer
 
@@ -781,11 +838,11 @@ class AbstractMethodRandom(MethodSample, ABC):
     def _get_sampler(self, parameters: tuple[ParameterType, ...]) -> qmc_type.QMCEngine:
         """Sampler for this ``Method`` class. If ``None``, sets a default."""
 
-    def _get_run_count(self, parameters: Optional[list] = None) -> int:
+    def _get_run_count(self, parameters: Optional[list[ParameterType]] = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.num_points
 
-    def sample(self, parameters: tuple[ParameterType, ...], **kwargs: Any) -> list[dict[str, Any]]:
+    def sample(self, parameters: tuple[ParameterType, ...], **kwargs: Any) -> ArgsList:
         """Defines how the design parameters are sampled on grid."""
 
         sampler = self._get_sampler(parameters)
@@ -800,7 +857,7 @@ class AbstractMethodRandom(MethodSample, ABC):
 
         # Get output list of kwargs for pre_fn
         keys = [param.name for param in parameters]
-        result = [{keys[j]: row[j] for j in range(len(keys))} for row in args_by_sample]
+        result: ArgsList = [{keys[j]: row[j] for j in range(len(keys))} for row in args_by_sample]
 
         return result
 

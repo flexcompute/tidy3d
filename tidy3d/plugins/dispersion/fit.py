@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import codecs
 import csv
+from collections.abc import Sequence
 from os import PathLike
-from typing import Any, Optional
+from typing import Any, Optional, Self
 
 import numpy as np
 import requests
 import scipy.optimize as opt
+from numpy.typing import NDArray
 from pydantic import Field, field_validator, model_validator
 from rich.progress import Progress
 
@@ -54,21 +56,21 @@ class DispersionFitter(Tidy3dBaseModel):
 
     @field_validator("wvl_um")
     @classmethod
-    def _setup_wvl(cls, val):
+    def _setup_wvl(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         """Convert wvl_um to a numpy array."""
         if val.size == 0:
             raise ValidationError("Wavelength data cannot be empty.")
         return val
 
     @model_validator(mode="after")
-    def _ndata_length_match_wvl(self):
+    def _ndata_length_match_wvl(self) -> Self:
         """Validate n_data"""
         if self.n_data.shape != self.wvl_um.shape:
             raise ValidationError("The length of 'n_data' doesn't match 'wvl_um'.")
         return self
 
     @model_validator(mode="after")
-    def _kdata_setup_and_length_match(self):
+    def _kdata_setup_and_length_match(self) -> Self:
         """Validate the length of k_data, or setup k if it's None."""
         if self.k_data is None:
             object.__setattr__(self, "k_data", np.zeros_like(self.wvl_um))
@@ -149,7 +151,9 @@ class DispersionFitter(Tidy3dBaseModel):
         return self.freqs.min(), self.freqs.max()
 
     @staticmethod
-    def _unpack_coeffs(coeffs):
+    def _unpack_coeffs(
+        coeffs: NDArray[np.floating],
+    ) -> tuple[NDArray[np.complexfloating], NDArray[np.complexfloating]]:
         """Unpack coefficient vector into complex pole parameters.
 
         Parameters
@@ -175,7 +179,9 @@ class DispersionFitter(Tidy3dBaseModel):
         return poles_a, poles_c
 
     @staticmethod
-    def _pack_coeffs(pole_a, pole_c):
+    def _pack_coeffs(
+        pole_a: NDArray[np.complexfloating], pole_c: NDArray[np.complexfloating]
+    ) -> NDArray[np.floating]:
         """Pack complex a and c pole parameters into coefficient array.
 
         Parameters
@@ -194,7 +200,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return stacked_coeffs.flatten()
 
     @staticmethod
-    def _coeffs_to_poles(coeffs):
+    def _coeffs_to_poles(coeffs: NDArray[np.floating]) -> list[tuple[complex, complex]]:
         """Convert model coefficients to poles.
 
         Parameters
@@ -212,7 +218,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return list(zip(poles_a, poles_c))
 
     @staticmethod
-    def _poles_to_coeffs(poles):
+    def _poles_to_coeffs(poles: Sequence[tuple[complex, complex]]) -> NDArray[np.floating]:
         """Convert poles to model coefficients.
 
         Parameters
@@ -230,7 +236,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return coeffs * HBAR
 
     @staticmethod
-    def _eV_to_Hz(f_eV: float):
+    def _eV_to_Hz(f_eV: float) -> float:
         """Convert frequency in unit of eV to Hz.
 
         Parameters
@@ -241,7 +247,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return f_eV / (HBAR * 2 * np.pi)
 
     @staticmethod
-    def _Hz_to_eV(f_Hz: float):
+    def _Hz_to_eV(f_Hz: float) -> float:
         """Convert frequency in unit of Hz to eV.
 
         Parameters
@@ -322,7 +328,7 @@ class DispersionFitter(Tidy3dBaseModel):
         log.info("Returning best fit with RMS error %.3g", best_rms)
         return best_medium, best_rms
 
-    def _make_medium(self, coeffs):
+    def _make_medium(self, coeffs: NDArray[np.floating]) -> PoleResidue:
         """Return medium from coeffs from optimizer.
 
         Parameters
@@ -359,7 +365,9 @@ class DispersionFitter(Tidy3dBaseModel):
         """
 
         # NOTE: Not used
-        def constraint(coeffs, _grad=None):
+        def constraint(
+            coeffs: NDArray[np.floating], _grad: NDArray[np.floating] | None = None
+        ) -> float:
             """Evaluate the nonlinear stability criterion of Hongjin Choi, Jae-Woo Baek, and
             Kyung-Young Jung, "Comprehensive Study on Numerical Aspects of Modified Lorentz Model
             Based Dispersive FDTD Formulations," IEEE TAP 2019.
@@ -386,7 +394,9 @@ class DispersionFitter(Tidy3dBaseModel):
             res[res >= 0] = 0
             return np.sum(res)
 
-        def objective(coeffs, _grad=None):
+        def objective(
+            coeffs: NDArray[np.floating], _grad: NDArray[np.floating] | None = None
+        ) -> float:
             """Objective function for fit
 
             Parameters

@@ -316,11 +316,11 @@ class DesignSpace(Tidy3dBaseModel):
         fn_mid: Callable,
         console: Console,
         priority: Optional[int],
-    ):
+    ) -> Any:
         """Get function that tries to use batch processing on a set of arguments."""
 
         class Pre_Post_Handler:
-            def __init__(self, console, priority) -> None:
+            def __init__(self, console: Console, priority: Optional[int]) -> None:
                 self.sim_counter = 0
                 self.sim_names = []
                 self.sim_paths = []
@@ -569,7 +569,7 @@ class DesignSpace(Tidy3dBaseModel):
         # Compute fn_pre
         pre_out = fn_pre(**arg_dict)
 
-        def _estimate_sim_cost(sim):
+        def _estimate_sim_cost(sim: Simulation) -> float:
             job = Job(simulation=sim, task_name="estimate_cost")
 
             estimate = job.estimate_cost()

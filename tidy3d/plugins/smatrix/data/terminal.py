@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 from pydantic import Field, model_validator
@@ -228,7 +228,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
 
     @model_validator(mode="before")
     @classmethod
-    def _warn_rf_license(cls, values):
+    def _warn_rf_license(cls, values: dict[str, Any]) -> dict[str, Any]:
         log.warning(
             "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
             log_once=True,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Self
 
 from pydantic import Field, model_validator
 
@@ -44,7 +44,7 @@ class AbstractComponentModelerData(ABC, Tidy3dBaseModel):
         """Computes and returns the scattering matrix (S-matrix)."""
 
     @model_validator(mode="after")
-    def keys_match_modeler(self):
+    def keys_match_modeler(self) -> Self:
         """
         Validates that the keys of the 'data' dictionary match the keys
         of the 'modeler.sim_dict' dictionary, irrespective of order.

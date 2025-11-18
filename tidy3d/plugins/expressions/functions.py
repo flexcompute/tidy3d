@@ -6,7 +6,7 @@ import autograd.numpy as anp
 from pydantic import Field, field_validator
 
 from .base import Expression
-from .types import NumberOrExpression, NumberType
+from .types import ExpressionType, NumberOrExpression, NumberType
 
 
 class Function(Expression):
@@ -23,7 +23,7 @@ class Function(Expression):
 
     @field_validator("operand")
     @classmethod
-    def validate_operand(cls, v):
+    def validate_operand(cls, v: NumberOrExpression) -> ExpressionType:
         """
         Validate and convert operand to an expression.
         """
@@ -42,7 +42,7 @@ class Function(Expression):
         """
         super().__init__(operand=operand, **kwargs)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """
         Return a string representation of the function.
         """

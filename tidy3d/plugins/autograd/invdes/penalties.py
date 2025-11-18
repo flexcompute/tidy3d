@@ -81,16 +81,16 @@ class ErosionDilationPenalty(Tidy3dBaseModel):
         eta_dilate = 0.0 + self.delta_eta
         eta_eroded = 1.0 - self.delta_eta
 
-        def _dilate(arr: NDArray):
+        def _dilate(arr: NDArray) -> NDArray:
             return filtproj(arr, eta=eta_dilate)
 
-        def _erode(arr: NDArray):
+        def _erode(arr: NDArray) -> NDArray:
             return filtproj(arr, eta=eta_eroded)
 
-        def _open(arr: NDArray):
+        def _open(arr: NDArray) -> NDArray:
             return _dilate(_erode(arr))
 
-        def _close(arr: NDArray):
+        def _close(arr: NDArray) -> NDArray:
             return _erode(_dilate(arr))
 
         diff = _close(array) - _open(array)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, Union
+from typing import Optional, Self, Union
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat
 
@@ -117,20 +117,22 @@ class FluidMedium(AbstractHeatMedium):
         units=THERMAL_EXPANSIVITY,
     )
 
+    @classmethod
     def from_si_units(
+        cls,
         thermal_conductivity: NonNegativeFloat,
         viscosity: NonNegativeFloat,
         specific_heat: NonNegativeFloat,
         density: NonNegativeFloat,
         expansivity: NonNegativeFloat,
-    ):
+    ) -> Self:
         thermal_conductivity_tidy = thermal_conductivity / 1e6  # W/(m*K) -> W/(um*K)
         viscosity_tidy = viscosity / 1e6  # Pa*s -> kg/(um*s)
         specific_heat_tidy = specific_heat * 1e12  # J/(kg*K) -> um**2/(s**2*K)
         density_tidy = density / 1e18  # kg/m**3 -> kg/um**3
         expansivity_tidy = expansivity  # 1/K -> 1/K (no change)
 
-        return FluidMedium(
+        return cls(
             thermal_conductivity=thermal_conductivity_tidy,
             viscosity=viscosity_tidy,
             specific_heat=specific_heat_tidy,

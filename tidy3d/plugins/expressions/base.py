@@ -78,7 +78,7 @@ class Expression(Tidy3dBaseModel, ABC):
             Instances of the specified type or field found in the expression.
         """
 
-        def _find_instances(expr: Expression):
+        def _find_instances(expr: Expression) -> Generator[Any, None, None]:
             if isinstance(expr, target_type):
                 if target_field:
                     value = getattr(expr, target_field, None)

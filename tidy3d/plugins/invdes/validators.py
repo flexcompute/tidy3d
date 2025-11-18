@@ -1,9 +1,10 @@
 # validator utilities for invdes plugin
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from pydantic import field_validator, model_validator
+from pydantic._internal._decorators import ModelValidatorDecoratorInfo, PydanticDescriptorProxy
 
 import tidy3d as td
 
@@ -15,7 +16,7 @@ def ignore_inherited_field(field_name: str) -> Callable:
     """Create validator that ignores a field inherited but not set by user."""
 
     @field_validator(field_name)
-    def _ignore_field(val):
+    def _ignore_field(val: Any) -> None:
         """Ignore supplied field value and warn."""
         if val is not None:
             td.log.warning(
@@ -28,7 +29,7 @@ def ignore_inherited_field(field_name: str) -> Callable:
     return _ignore_field
 
 
-def check_pixel_size(sim_field_name: str):
+def check_pixel_size(sim_field_name: str) -> PydanticDescriptorProxy[ModelValidatorDecoratorInfo]:
     """make validator to check the pixel size of sim or list of sims in an ``InverseDesign``."""
 
     def check_pixel_size_sim(
@@ -55,7 +56,7 @@ def check_pixel_size(sim_field_name: str):
             )
 
     @model_validator(mode="after")
-    def _check_pixel_size(self):
+    def _check_pixel_size(self: Any) -> Any:
         """Make sure region pixel_size isn't too large compared to sim's wavelength in material."""
         sim = getattr(self, sim_field_name)
         region = self.design_region

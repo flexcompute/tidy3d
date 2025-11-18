@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Optional, Self, Union
 
 from pydantic import Field, NonNegativeFloat, NonNegativeInt, field_validator, model_validator
 
@@ -281,7 +281,7 @@ class WavePort(AbstractTerminalPort, Box):
         ]
 
     @model_validator(mode="after")
-    def _validate_path_integrals_within_port(self):
+    def _validate_path_integrals_within_port(self) -> Self:
         """Validate that the microwave mode spec contains path specs all within the port bounds."""
         val = self.mode_spec
         center = self.center
@@ -296,7 +296,7 @@ class WavePort(AbstractTerminalPort, Box):
         return self
 
     @model_validator(mode="after")
-    def _validate_mode_selection(self):
+    def _validate_mode_selection(self) -> Self:
         """Validate that mode_selection contains valid, unique indices within range."""
         val = self.mode_selection
         if val is None:
@@ -331,7 +331,7 @@ class WavePort(AbstractTerminalPort, Box):
         return self
 
     @model_validator(mode="after")
-    def _check_absorber_if_extruding_structures(self):
+    def _check_absorber_if_extruding_structures(self) -> Self:
         """Raise validation error when ``extrude_structures`` is set to ``True``
         while ``absorber`` is set to ``False``."""
 
@@ -344,7 +344,7 @@ class WavePort(AbstractTerminalPort, Box):
 
     @field_validator("mode_index")
     @classmethod
-    def _mode_index_deprecated(cls, val):
+    def _mode_index_deprecated(cls, val: Optional[int]) -> Optional[int]:
         """Warn that 'mode_index' is deprecated in favor of 'mode_selection'."""
         if val is not None:
             log.warning(
@@ -354,7 +354,7 @@ class WavePort(AbstractTerminalPort, Box):
         return val
 
     @model_validator(mode="after")
-    def _validate_mode_index(self):
+    def _validate_mode_index(self) -> Self:
         """Validate that mode_selection contains valid, unique indices within range."""
         val = self.mode_index
         if val is None:

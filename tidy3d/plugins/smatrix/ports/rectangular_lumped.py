@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from collections.abc import Sequence
+from typing import Any, Optional, Self
 
 import numpy as np
 from pydantic import Field, model_validator
@@ -83,12 +84,12 @@ class LumpedPort(AbstractLumpedPort, Box):
     _line_plane_validator = assert_line_or_plane()
 
     @cached_property
-    def injection_axis(self):
+    def injection_axis(self) -> int:
         """Injection axis of the port."""
         return self.size.index(0.0)
 
     @model_validator(mode="after")
-    def _voltage_axis_in_plane(self):
+    def _voltage_axis_in_plane(self) -> Self:
         """Ensure voltage integration axis is in the port's plane."""
         if self.voltage_axis == self.size.index(0.0):
             raise ValidationError("'voltage_axis' must lie in the port's plane.")
@@ -310,7 +311,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         voltage_axis: Axis = None,
         lateral_coord: Optional[float] = None,
         port_width: Optional[float] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> LumpedPort:
         """
         Auto-generate lumped port based on provided structures and plane coordinates.
@@ -465,7 +466,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         ground_bounds = np.array(ground_2d.bounds).reshape(2, 2).T
         signal_bounds = np.array(signal_2d.bounds).reshape(2, 2).T
 
-        def intervals_overlap(a, b):
+        def intervals_overlap(a: Sequence, b: Sequence) -> bool:
             """Return True if [a_min, a_max] and [b_min, b_max] overlap."""
             a_min, a_max = a
             b_min, b_max = b

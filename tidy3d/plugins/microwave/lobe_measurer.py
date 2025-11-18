@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import isclose, isnan
-from typing import Optional
+from typing import Optional, Self
 
 import numpy as np
 from pandas import DataFrame
@@ -88,7 +88,7 @@ class LobeMeasurer(MicrowaveBaseModel):
 
     @field_validator("angle")
     @classmethod
-    def _sorted_angle(cls, val):
+    def _sorted_angle(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         """Ensure the angle array is sorted."""
         if not np.all(np.diff(val) >= 0):
             raise ValidationError("The angle array must be sorted in ascending order.")
@@ -96,14 +96,14 @@ class LobeMeasurer(MicrowaveBaseModel):
 
     @field_validator("radiation_pattern")
     @classmethod
-    def _nonnegative_radiation_pattern(cls, val):
+    def _nonnegative_radiation_pattern(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         """Ensure the radiation pattern is nonnegative."""
         if not np.all(val >= 0):
             raise ValidationError("Radiation pattern must be nonnegative.")
         return val
 
     @model_validator(mode="after")
-    def _cyclic_extension_valid(self):
+    def _cyclic_extension_valid(self) -> Self:
         if self.apply_cyclic_extension:
             angle = self.angle
             if np.any(angle < 0) or np.any(angle > 2 * np.pi):

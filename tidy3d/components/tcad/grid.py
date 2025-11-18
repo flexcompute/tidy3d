@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union
+from typing import Self, Union
 
 import numpy as np
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator, model_validator
@@ -98,7 +98,7 @@ class GridRefinementLine(Tidy3dBaseModel, ABC):
 
     @field_validator("r1", "r2")
     @classmethod
-    def _not_inf(cls, val):
+    def _not_inf(cls, val: Coordinate) -> Coordinate:
         """Make sure the point is not infinitiy."""
         if any(np.isinf(v) for v in val):
             raise ValidationError("Point can not contain 'td.inf' terms.")
@@ -126,7 +126,7 @@ class GridRefinementLine(Tidy3dBaseModel, ABC):
     )
 
     @model_validator(mode="after")
-    def names_exist_bcs(self):
+    def names_exist_bcs(self) -> Self:
         """Error if distance_bulk is less than distance_near"""
         if self.distance_near > self.distance_bulk:
             raise ValidationError("'distance_bulk' cannot be smaller than 'distance_near'.")
@@ -205,7 +205,7 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
     )
 
     @model_validator(mode="after")
-    def names_exist_bcs(self):
+    def names_exist_bcs(self) -> Self:
         """Error if distance_bulk is less than distance_interface"""
         if self.distance_interface > self.distance_bulk:
             raise ValidationError("'distance_bulk' cannot be smaller than 'distance_interface'.")

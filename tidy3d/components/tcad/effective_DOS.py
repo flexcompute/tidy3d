@@ -20,7 +20,7 @@ class EffectiveDOS(Tidy3dBaseModel, ABC):
     def calc_eff_dos(self, T: float) -> None:
         """Abstract method to calculate the effective density of states."""
 
-    def get_effective_DOS(self, T: float):
+    def get_effective_DOS(self, T: float) -> float:
         if T <= 0:
             raise DataError(
                 f"Incorrect temperature value ({T}) for the effective density of states calculation."
@@ -36,7 +36,7 @@ class ConstantEffectiveDOS(EffectiveDOS):
         title="Effective DOS", description="Effective density of states", units="cm^(-3)"
     )
 
-    def calc_eff_dos(self, T: float):
+    def calc_eff_dos(self, T: float) -> float:
         return self.N
 
 
@@ -57,7 +57,7 @@ class IsotropicEffectiveDOS(EffectiveDOS):
         description="Effective mass of the carriers relative to the electron mass at rest",
     )
 
-    def calc_eff_dos(self, T: float):
+    def calc_eff_dos(self, T: float) -> float:
         return np.power(self.m_eff * T, 1.5) * DOS_aux_const
 
 
@@ -86,7 +86,7 @@ class MultiValleyEffectiveDOS(EffectiveDOS):
         title="Number of valleys", description="Number of effective valleys"
     )
 
-    def calc_eff_dos(self, T: float):
+    def calc_eff_dos(self, T: float) -> float:
         return (
             self.N_valley
             * np.power(self.m_eff_long * self.m_eff_trans * self.m_eff_trans, 0.5)
@@ -118,5 +118,5 @@ class DualValleyEffectiveDOS(EffectiveDOS):
         description="Relative effective mass of the heavy holes. This is a relative value compared to the electron mass at rest.",
     )
 
-    def calc_eff_dos(self, T: float):
+    def calc_eff_dos(self, T: float) -> float:
         return (np.power(self.m_eff_lh * T, 1.5) + np.power(self.m_eff_hh * T, 1.5)) * DOS_aux_const

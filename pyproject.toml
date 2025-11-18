@@ -325,11 +325,13 @@ python_files = "*.py"
 [tool.mypy]
 python_version = "3.10"
 files = [
-  "tidy3d/web",
-  "tidy3d/config",
-  "tidy3d/material_library",
   "tidy3d/components/geometry",
   "tidy3d/components/data",
+  "tidy3d/components/tcad",
+  "tidy3d/config",
+  "tidy3d/material_library",
+  "tidy3d/plugins",
+  "tidy3d/web",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

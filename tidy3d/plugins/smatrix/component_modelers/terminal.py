@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import Any, Optional, Self, Union
 
 import numpy as np
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
@@ -215,7 +215,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _warn_refactor_2_10(cls, values):
+    def _warn_refactor_2_10(cls, values: dict[str, Any]) -> dict[str, Any]:
         log.warning(
             f"ℹ️ ⚠️ The {cls.__name__} class was refactored in tidy3d version 2.10. Migration documentation will be provided, and existing functionality can be accessed in a different way.",
             log_once=True,
@@ -716,7 +716,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         return (task_name, self.base_sim.updated_copy(sources=[port_source]))
 
     @cached_property
-    def _source_time(self):
+    def _source_time(self) -> GaussianPulse:
         """Helper to create a time domain pulse for the frequency range of interest."""
         if self.custom_source_time is not None:
             return self.custom_source_time
@@ -735,7 +735,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     @field_validator("simulation")
     @classmethod
-    def _validate_3d_simulation(cls, val):
+    def _validate_3d_simulation(cls, val: Simulation) -> Simulation:
         """Error if :class:`.Simulation` is not a 3D simulation"""
 
         if val.size.count(0.0) > 0:
@@ -745,7 +745,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         return val
 
     @model_validator(mode="after")
-    def _validate_port_refinement_usage(self):
+    def _validate_port_refinement_usage(self) -> Self:
         """Warn if port refinement options are enabled, but the supplied simulation
         does not contain a grid type that will make use of them."""
         val = self.ports
@@ -770,7 +770,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         return self
 
     @model_validator(mode="after")
-    def _validate_radiation_monitors(self):
+    def _validate_radiation_monitors(self) -> Self:
         """Validate radiation monitors configuration.
 
         Validates that:

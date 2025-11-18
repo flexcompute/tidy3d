@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Self, Union
 
 import autograd.numpy as anp
 import numpy as np
@@ -97,7 +97,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         initial_params = self.design_region.initial_parameters
         return self.to_simulation(initial_params)
 
-    def run(self, simulation, **kwargs: Any) -> td.SimulationData:
+    def run(self, simulation: td.Simulation, **kwargs: Any) -> td.SimulationData:
         """Run a single tidy3d simulation."""
         from tidy3d.web import run
 
@@ -105,7 +105,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         kwargs.setdefault("task_name", self.task_name)
         return run(simulation, **kwargs)
 
-    def run_async(self, simulations, **kwargs: Any) -> web.BatchData:  # noqa: F821
+    def run_async(self, simulations: dict[str, td.Simulation], **kwargs: Any) -> web.BatchData:  # noqa: F821
         """Run a batch of tidy3d simulations."""
         from tidy3d.web import run_async
 
@@ -130,18 +130,10 @@ class InverseDesign(AbstractInverseDesign):
         "not fully supported, for example ``FieldMonitor`` instances with ``.colocate != False``.",
     )
 
-    @field_validator("output_monitor_names", mode="before")
-    @classmethod
-    def _convert_list_to_tuple(cls, v):
-        """Convert list to tuple for output_monitor_names."""
-        if isinstance(v, list):
-            return tuple(v)
-        return v
-
     _check_sim_pixel_size = check_pixel_size("simulation")
 
     @model_validator(mode="after")
-    def _validate_model(self):
+    def _validate_model(self) -> Self:
         if not self.metric:
             return self
         for metric in self.metric.filter(Metric):
@@ -273,7 +265,7 @@ class InverseDesignMulti(AbstractInverseDesign):
 
     @field_validator("output_monitor_names", mode="before")
     @classmethod
-    def _convert_list_to_tuple(cls, v):
+    def _convert_list_to_tuple(cls, v: Any) -> Any:
         """Convert lists to tuples for output_monitor_names."""
         if v is None:
             return v
@@ -292,7 +284,7 @@ class InverseDesignMulti(AbstractInverseDesign):
     _check_sim_pixel_size = check_pixel_size("simulations")
 
     @model_validator(mode="after")
-    def _check_lengths(self):
+    def _check_lengths(self) -> Self:
         """Check the lengths of all of the multi fields."""
 
         keys = ("simulations", "output_monitor_names")

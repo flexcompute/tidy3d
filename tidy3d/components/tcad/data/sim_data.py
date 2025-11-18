@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Self
 
 import numpy as np
 from pydantic import Field, model_validator
@@ -11,6 +11,7 @@ from pydantic import Field, model_validator
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (
+    DataArray,
     FreqVoltageDataArray,
     SpatialDataArray,
     SteadyVoltageDataArray,
@@ -105,7 +106,9 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
     )
 
     @staticmethod
-    def _get_field_by_name(monitor_data: TCADMonitorDataType, field_name: Optional[str] = None):
+    def _get_field_by_name(
+        monitor_data: TCADMonitorDataType, field_name: Optional[str] = None
+    ) -> DataArray:
         """Return a field data based on a monitor dataset and a specified field name."""
         if field_name is None:
             if len(monitor_data.field_components) > 1:
@@ -484,7 +487,7 @@ class HeatSimulationData(HeatChargeSimulationData):
 
     @model_validator(mode="before")
     @classmethod
-    def issue_warning_deprecated(cls, data):
+    def issue_warning_deprecated(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Issue warning for 'HeatSimulations'."""
         log.warning(
             "'HeatSimulationData' is deprecated and will be discontinued. Use "
@@ -569,7 +572,7 @@ class VolumeMesherData(AbstractHeatChargeSimulationData):
         )
 
     @model_validator(mode="after")
-    def data_monitors_match_sim(self):
+    def data_monitors_match_sim(self) -> Self:
         """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
         ``.simulation``.
         """

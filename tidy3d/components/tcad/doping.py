@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Self, Union
 
 import numpy as np
 import xarray as xr
+from numpy.typing import ArrayLike, NDArray
 from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.autograd import TracedSize
@@ -27,7 +28,9 @@ class AbstractDopingBox(Box):
         units=MICROMETER,
     )
 
-    def _get_indices_in_box(self, coords: dict, meshgrid: bool = True):
+    def _get_indices_in_box(
+        self, coords: dict[str, ArrayLike], meshgrid: bool = True
+    ) -> tuple[NDArray[np.bool_], NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
         """Returns locations inside box"""
 
         # work out whether x,y, and z are present
@@ -60,7 +63,7 @@ class AbstractDopingBox(Box):
         return indices_in_box, X, Y, Z
 
     @model_validator(mode="after")
-    def _post_init_validators(self):
+    def _post_init_validators(self) -> Self:
         # check the doping box is 3D
         if len(self.zero_dims) > 0:
             raise SetupError(
@@ -92,7 +95,7 @@ class ConstantDoping(AbstractDopingBox):
         units=PERCMCUBE,
     )
 
-    def _get_contrib(self, coords: dict, meshgrid: bool = True):
+    def _get_contrib(self, coords: dict, meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
         indices_in_box, X, _, _ = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
@@ -183,11 +186,11 @@ class GaussianDoping(AbstractDopingBox):
     )
 
     @cached_property
-    def sigma(self):
+    def sigma(self) -> float:
         """The sigma parameter of the pseudo-gaussian"""
         return np.sqrt(-self.width * self.width / 2 / np.log(self.ref_con / self.concentration))
 
-    def _get_contrib(self, coords: dict, meshgrid: bool = True):
+    def _get_contrib(self, coords: dict[str, ArrayLike], meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
         indices_in_box, X, Y, Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
@@ -312,7 +315,7 @@ class CustomDoping(AbstractDopingBox):
         units=PERCMCUBE,
     )
 
-    def _get_contrib(self, coords: dict, meshgrid: bool = True):
+    def _get_contrib(self, coords: dict, meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
         indices_in_box, X, Y, Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)

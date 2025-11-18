@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Self
 
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 from tidy3d.components.base import cached_property
@@ -77,25 +78,25 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
     )
 
     @cached_property
-    def main_axis(self):
+    def main_axis(self) -> int:
         """Required for inheriting from AbstractAxesRH."""
         return self.normal_axis
 
     @cached_property
-    def injection_axis(self):
+    def injection_axis(self) -> int:
         """Required for inheriting from AbstractTerminalPort."""
         return self.normal_axis
 
     @field_validator("center")
     @classmethod
-    def _center_not_inf(cls, val):
+    def _center_not_inf(cls, val: Coordinate) -> Coordinate:
         """Make sure center is not infinity."""
         if any(np.isinf(v) for v in val):
             raise ValidationError("'center' can not contain 'td.inf' terms.")
         return val
 
     @model_validator(mode="after")
-    def _ensure_inner_diameter_is_smaller(self):
+    def _ensure_inner_diameter_is_smaller(self) -> Self:
         """Ensures that the inner diameter is smaller than the outer diameter, so that the final
         shape is an annulus."""
         if self.inner_diameter >= self.outer_diameter:
@@ -136,7 +137,9 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
 
         # Get a normalized current density that is flowing radially from inner circle to outer circle
         # Total current is normalized to 1
-        def compute_coax_current(rin, rout, x, y):
+        def compute_coax_current(
+            rin: float, rout: float, x: NDArray, y: NDArray
+        ) -> tuple[NDArray, NDArray]:
             # Radial distance
             r = np.sqrt(x**2 + y**2)
             # Remove division by 0

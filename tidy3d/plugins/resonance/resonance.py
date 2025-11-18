@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import xarray as xr
@@ -110,7 +110,7 @@ class ResonanceFinder(Tidy3dBaseModel):
 
     @field_validator("freq_window")
     @classmethod
-    def _check_freq_window(cls, val):
+    def _check_freq_window(cls, val: tuple[float, float]) -> tuple[float, float]:
         """Validate ``freq_window``"""
         if val[1] < val[0]:
             raise ValidationError(
@@ -235,7 +235,9 @@ class ResonanceFinder(Tidy3dBaseModel):
         return np.squeeze(signal.data), dt
 
     def _aggregate_field_time_comps(
-        self, signals: tuple[FieldTimeData, ...], comps
+        self,
+        signals: tuple[FieldTimeData, ...],
+        comps: list[Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]],
     ) -> ScalarFieldTimeDataArray:
         """Aggregates the given components from several :class:`.FieldTimeData`."""
         total_signal = None

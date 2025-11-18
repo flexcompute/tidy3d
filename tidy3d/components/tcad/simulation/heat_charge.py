@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Literal, Optional, Self, Union
 
 import numpy as np
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, FiniteFloat, field_validator, model_validator
 
 from tidy3d.components.base_sim.simulation import AbstractSimulation
 from tidy3d.components.bc_placement import (
@@ -83,7 +84,7 @@ from tidy3d.components.types import (
     ScalarSymmetry,
     Shapely,
 )
-from tidy3d.components.types.base import discriminated_union
+from tidy3d.components.types.base import ArrayFloat1D, discriminated_union
 from tidy3d.components.viz import PlotParams, add_ax_if_none, equal_aspect
 from tidy3d.constants import VOLUMETRIC_HEAT_RATE, inf
 from tidy3d.exceptions import SetupError
@@ -327,7 +328,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @field_validator("structures")
     @classmethod
-    def check_unsupported_geometries(cls, val):
+    def check_unsupported_geometries(cls, val: tuple[Structure, ...]) -> tuple[Structure, ...]:
         """Error if structures contain unsupported yet geometries."""
         for ind, structure in enumerate(val):
             bbox = structure.geometry.bounding_box
@@ -391,7 +392,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return obj_do_not_cross_solid_idx, obj_do_not_cross_cond_idx
 
     @model_validator(mode="after")
-    def _monitors_cross_solids(self):
+    def _monitors_cross_solids(self) -> Self:
         """Error if monitors does not cross any solid medium."""
         val = self.monitors
 
@@ -424,7 +425,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def check_voltage_array_if_capacitance(self):
+    def check_voltage_array_if_capacitance(self) -> Self:
         """Make sure an array of voltages has been defined if a
         SteadyCapacitanceMonitor' has been defined"""
         boundary_spec = self.boundary_spec
@@ -452,7 +453,9 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @field_validator("boundary_spec")
     @classmethod
-    def check_single_ssac(cls, boundary_spec):
+    def check_single_ssac(
+        cls, boundary_spec: Union[HeatChargeBoundarySpec, HeatBoundarySpec]
+    ) -> Union[HeatChargeBoundarySpec, HeatBoundarySpec]:
         ssac_present = False
         for bc in boundary_spec:
             if isinstance(bc.condition, VoltageBC):
@@ -466,7 +469,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return boundary_spec
 
     @model_validator(mode="after")
-    def check_natural_convection_bc(self):
+    def check_natural_convection_bc(self) -> Self:
         """Make sure that natural convection BCs are defined correctly."""
         boundary_spec = self.boundary_spec
         if not boundary_spec:
@@ -482,7 +485,7 @@ class HeatChargeSimulation(AbstractSimulation):
             media[bg_medium.name] = bg_medium
         structures_map = {s.name: s for s in structures if s.name}
 
-        def check_fluid_medium_attr(fluid_medium) -> None:
+        def check_fluid_medium_attr(fluid_medium: FluidMedium) -> None:
             if (
                 (fluid_medium.thermal_conductivity is None)
                 or (fluid_medium.viscosity is None)
@@ -543,7 +546,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @field_validator("size")
     @classmethod
-    def check_zero_dim_domain(cls, val):
+    def check_zero_dim_domain(cls, val: Any) -> Any:
         """Error if heat domain have zero dimensions."""
 
         dim_names = ["x", "y", "z"]
@@ -564,7 +567,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return val
 
     @model_validator(mode="after")
-    def names_exist_bcs(self):
+    def names_exist_bcs(self) -> Self:
         """Error if boundary conditions point to non-existing structures/media."""
         structures = self.structures
         structures_names = {s.name for s in structures}
@@ -600,7 +603,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @field_validator("boundary_spec")
     @classmethod
-    def check_only_one_voltage_array_provided(cls, val):
+    def check_only_one_voltage_array_provided(cls, val: Any) -> Any:
         """Issue error if more than one voltage array is provided.
         Currently we only allow to sweep over one voltage array.
         """
@@ -624,7 +627,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return val
 
     @model_validator(mode="after")
-    def check_freqs_requires_ac_source(self):
+    def check_freqs_requires_ac_source(self) -> Self:
         """Ensure that if freqs is provided, at least one ACVoltageSource is present."""
         analysis_spec = self.analysis_spec
         if (
@@ -648,7 +651,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def check_charge_simulation(self):
+    def check_charge_simulation(self) -> Self:
         """Makes sure that Charge simulations are set correctly."""
 
         ChargeMonitorType = (
@@ -693,7 +696,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def not_all_neumann(self):
+    def not_all_neumann(self) -> Self:
         """Make sure not all BCs are of Neumann type"""
 
         NeumannBCsHeat = (HeatFluxBC,)
@@ -732,7 +735,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def names_exist_grid_spec(self):
+    def names_exist_grid_spec(self) -> Self:
         """Warn if 'UniformUnstructuredGrid' points at a non-existing structure."""
         structures_names = {s.name for s in self.structures}
         for structure_name in self.grid_spec.non_refined_structures:
@@ -744,7 +747,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def warn_if_minimal_mesh_size_override(self):
+    def warn_if_minimal_mesh_size_override(self) -> Self:
         """Warn if minimal mesh size limit overrides desired mesh size."""
         val = self.grid_spec
         max_size = np.max(self.size)
@@ -764,7 +767,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def names_exist_sources(self):
+    def names_exist_sources(self) -> Self:
         """Error if a heat-charge source point to non-existing structures."""
         structures_names = {s.name for s in self.structures}
 
@@ -780,7 +783,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def check_medium_specs(self):
+    def check_medium_specs(self) -> Self:
         """Error if no appropriate specs."""
 
         sim_box = (Box(size=self.size, center=self.center),)
@@ -804,7 +807,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @staticmethod
-    def _check_if_semiconductor_present(structures) -> bool:
+    def _check_if_semiconductor_present(structures: Iterable[Structure]) -> bool:
         """Checks whether the simulation object can run a Charge simulation."""
 
         charge_sim = False
@@ -821,9 +824,9 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def _check_simulation_types(
         self,
-        HeatBCTypes=HeatBCTypes,
-        ElectricBCTypes=ElectricBCTypes,
-        HeatSourceTypes=HeatSourceTypes,
+        HeatBCTypes: tuple[type, ...] = HeatBCTypes,
+        ElectricBCTypes: tuple[type, ...] = ElectricBCTypes,
+        HeatSourceTypes: tuple[type, ...] = HeatSourceTypes,
     ) -> list[TCADAnalysisTypes]:
         """Given model dictionary ``values``, check the type of simulations to be run
         based on BCs and sources.
@@ -854,7 +857,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return set(simulation_types)
 
     @model_validator(mode="after")
-    def check_coupling_source_can_be_applied(self):
+    def check_coupling_source_can_be_applied(self) -> Self:
         """Error if material doesn't have the right specifications"""
 
         HeatSourceTypes_noCoupling = (UniformHeatSource, HeatSource)
@@ -873,7 +876,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def check_heat_sim(self):
+    def check_heat_sim(self) -> Self:
         """Make sure that heat simulations have at least one monitor defined."""
 
         simulation_types = self._check_simulation_types()
@@ -888,7 +891,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def check_conduction_sim(self):
+    def check_conduction_sim(self) -> Self:
         """Make sure that conduction simulations have at least one monitor defined."""
 
         simulation_types = self._check_simulation_types()
@@ -930,7 +933,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def estimate_charge_mesh_size(self):
+    def estimate_charge_mesh_size(self) -> Self:
         """Make an estimate of the mesh size and raise a warning if too big.
         NOTE: this is a very rough estimate. The back-end will actually stop
         execution based on actual node-count."""
@@ -988,7 +991,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def check_transient_heat(self):
+    def check_transient_heat(self) -> Self:
         """Make sure transient heat simulations can run."""
 
         analysis_type = self.analysis_spec
@@ -1054,7 +1057,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return self
 
     @model_validator(mode="after")
-    def check_non_isothermal_is_possible(self):
+    def check_non_isothermal_is_possible(self) -> Self:
         """Make sure that when a non-isothermal case is defined the structrures
         have both electrical and thermal properties."""
 
@@ -1918,17 +1921,17 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return simulation_types
 
-    def _useHeatSourceFromConductionSim(self):
+    def _useHeatSourceFromConductionSim(self) -> bool:
         """Returns True if 'HeatFromElectricSource' has been defined."""
         return any(isinstance(source, HeatFromElectricSource) for source in self.sources)
 
-    def _get_charge_type(self):
+    def _get_charge_type(self) -> Literal["ac", "dc"]:
         if isinstance(self.analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
             return "ac"
         else:
             return "dc"
 
-    def _get_ssac_frequency_and_amplitude(self):
+    def _get_ssac_frequency_and_amplitude(self) -> tuple[ArrayFloat1D, FiniteFloat]:
         if not isinstance(self.analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
             raise SetupError(
                 "Invalid analysis type for Small-Signal AC (SSAC). "
@@ -1938,7 +1941,8 @@ class HeatChargeSimulation(AbstractSimulation):
 
         amplitude = None
         for bc in self.boundary_spec:
-            if isinstance(bc.condition, VoltageBC):
-                if isinstance(bc.condition.source, SSACVoltageSource):
-                    amplitude = bc.condition.source.amplitude
+            if isinstance(bc.condition, VoltageBC) and isinstance(
+                bc.condition.source, SSACVoltageSource
+            ):
+                amplitude = bc.condition.source.amplitude
         return (self.analysis_spec.freqs, amplitude)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Any, Union
 
 from pydantic import Field, model_validator
 
@@ -41,7 +41,7 @@ class UniformHeatSource(HeatSource):
 
     @model_validator(mode="before")
     @classmethod
-    def issue_warning_deprecated(cls, data):
+    def issue_warning_deprecated(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Issue warning for 'UniformHeatSource'."""
         log.warning(
             "'UniformHeatSource' is deprecated and will be discontinued. You can use "

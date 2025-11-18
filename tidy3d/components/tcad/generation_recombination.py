@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Union
+from typing import Literal, Self, Union
 
 import numpy as np
 from pydantic import Field, PositiveFloat, model_validator
@@ -229,7 +229,7 @@ class DistributedGeneration(Tidy3dBaseModel):
         return cls(rate=new_gen)
 
     @model_validator(mode="after")
-    def check_spatialdataarray_dimensions(self):
+    def check_spatialdataarray_dimensions(self) -> Self:
         """Check that the SpatialDataArray is at least 2D:"""
 
         rate = self.rate

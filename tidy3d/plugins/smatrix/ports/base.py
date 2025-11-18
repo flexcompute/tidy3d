@@ -21,7 +21,7 @@ class AbstractBasePort(Tidy3dBaseModel, ABC):
 
     @field_validator("name")
     @classmethod
-    def _valid_port_name(cls, val):
+    def _valid_port_name(cls, val: str) -> str:
         """Make sure port name does not include the '@' symbol, so that task names will always be unique."""
         if "@" in val:
             raise SetupError(f"Port names must not include the '@' symbol. Name given was '{val}'.")

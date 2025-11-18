@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional, Union
 
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import Field, PositiveInt, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -27,7 +28,7 @@ class Parameter(Tidy3dBaseModel, ABC):
 
     @field_validator("values")
     @classmethod
-    def _values_unique(cls, val):
+    def _values_unique(cls, val: Optional[tuple[Any, ...]]) -> Optional[tuple[Any, ...]]:
         """Supplied unique values."""
         if (val is not None) and (len(set(val)) != len(val)):
             raise ValueError("Supplied 'values' were not unique.")
@@ -36,7 +37,7 @@ class Parameter(Tidy3dBaseModel, ABC):
     def sample_grid(self) -> list[Any]:
         """Sample design variable on grid, checking for custom values."""
         if self.values is not None:
-            return self.values
+            return list(self.values)
         return self._sample_grid()
 
     @abstractmethod
@@ -48,7 +49,7 @@ class Parameter(Tidy3dBaseModel, ABC):
         """Sample this design variable on a grid."""
 
     @abstractmethod
-    def select_from_01(self, pts_01: np.ndarray) -> list[Any]:
+    def select_from_01(self, pts_01: NDArray[np.floating]) -> list[Any]:
         """Select values given a set of points between 0, 1."""
 
     @abstractmethod
@@ -66,7 +67,9 @@ class ParameterNumeric(Parameter, ABC):
 
     @field_validator("span")
     @classmethod
-    def _span_valid(cls, val):
+    def _span_valid(
+        cls, val: tuple[Union[float, int], Union[float, int]]
+    ) -> tuple[Union[float, int], Union[float, int]]:
         """Span min <= span max."""
         span_min, span_max = val
         if span_min > span_max:
@@ -76,13 +79,13 @@ class ParameterNumeric(Parameter, ABC):
         return val
 
     @property
-    def span_size(self):
+    def span_size(self) -> float:
         """Size of the span of this numeric variable."""
         span_min = min(self.span)
         span_max = max(self.span)
         return span_max - span_min
 
-    def sample_first(self) -> tuple:
+    def sample_first(self) -> Union[float, int]:
         """Output the first allowed sample."""
         return self.span[0]
 
@@ -105,7 +108,9 @@ class ParameterFloat(ParameterNumeric):
 
     @field_validator("span")
     @classmethod
-    def _span_is_float(cls, val):
+    def _span_is_float(
+        cls, val: tuple[Union[float, int], Union[float, int]]
+    ) -> tuple[float, float]:
         """Make sure the span contains floats."""
         low, high = val
         return float(low), float(high)
@@ -122,7 +127,7 @@ class ParameterFloat(ParameterNumeric):
         low, high = self.span
         return np.linspace(low, high, self.num_points).tolist()
 
-    def select_from_01(self, pts_01: np.ndarray) -> list[Any]:
+    def select_from_01(self, pts_01: NDArray[np.floating]) -> list[float]:
         """Select values given a set of points between 0, 1."""
         return (min(self.span) + pts_01 * self.span_size).tolist()
 
@@ -146,7 +151,7 @@ class ParameterInt(ParameterNumeric):
 
     @field_validator("span")
     @classmethod
-    def _span_is_int(cls, val):
+    def _span_is_int(cls, val: tuple[Union[float, int], Union[float, int]]) -> tuple[int, int]:
         """Make sure the span contains ints."""
         low, high = val
         return int(low), int(high)
@@ -161,7 +166,7 @@ class ParameterInt(ParameterNumeric):
         low, high = self.span
         return np.arange(low, high).tolist()
 
-    def select_from_01(self, pts_01: np.ndarray) -> list[Any]:
+    def select_from_01(self, pts_01: NDArray[np.floating]) -> list[int]:
         """Select values given a set of points between 0, 1."""
         pts_continuous = min(self.span) + pts_01 * self.span_size
         return np.floor(pts_continuous).astype(int).tolist()
@@ -183,7 +188,7 @@ class ParameterAny(Parameter):
 
     @field_validator("allowed_values")
     @classmethod
-    def _given_any_allowed_values(cls, val):
+    def _given_any_allowed_values(cls, val: tuple[Any, ...]) -> tuple[Any, ...]:
         """Need at least one allowed value."""
         if not len(val):
             raise ValueError("Given empty tuple of allowed values. Must have at least one.")
@@ -191,7 +196,7 @@ class ParameterAny(Parameter):
 
     @field_validator("allowed_values")
     @classmethod
-    def _no_duplicate_allowed_values(cls, val):
+    def _no_duplicate_allowed_values(cls, val: tuple[Any, ...]) -> tuple[Any, ...]:
         """No duplicates in allowed_values."""
         if len(val) != len(set(val)):
             raise ValueError("'allowed_values' has duplicate entries, must be unique.")
@@ -205,7 +210,7 @@ class ParameterAny(Parameter):
         """Sample this design variable uniformly, ie just take all allowed values."""
         return list(self.allowed_values)
 
-    def select_from_01(self, pts_01: np.ndarray) -> list[Any]:
+    def select_from_01(self, pts_01: NDArray[np.floating]) -> list[Any]:
         """Select values given a set of points between 0, 1."""
         pts_continuous = pts_01 * len(self.allowed_values)
         indices = np.floor(pts_continuous).astype(int)

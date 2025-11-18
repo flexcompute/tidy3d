@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal, Optional, Union
+from typing import TYPE_CHECKING, Literal, Optional, Self, Union
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.utils import _shift_value_signed
@@ -22,14 +22,14 @@ from tidy3d.config import config
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.log import log
-from tidy3d.plugins.smatrix.ports.modal import Port
+from tidy3d.plugins.smatrix.ports.modal import ModalPortDataArray, Port
 from tidy3d.plugins.smatrix.ports.types import LumpedPortType, PortType, TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import Element, MatrixIndex, NetworkElement, NetworkIndex
 
 if TYPE_CHECKING:
+    from tidy3d.plugins.smatrix import MicrowaveSMatrixData
     from tidy3d.web.core.types import PayType
-
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
 DEFAULT_DATA_DIR = "."
@@ -102,7 +102,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
     @field_validator("simulation")
     @classmethod
-    def _sim_has_no_sources(cls, val):
+    def _sim_has_no_sources(cls, val: Simulation) -> Simulation:
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
             raise SetupError(f"'{cls.__name__}.simulation' must not have any sources.")
@@ -110,7 +110,11 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
     @field_validator("element_mappings")
     @classmethod
-    def _validate_element_mappings(cls, element_mappings, info):
+    def _validate_element_mappings(
+        cls,
+        element_mappings: tuple[tuple[ElementType, ElementType, Complex], ...],
+        info: ValidationInfo,
+    ) -> tuple[tuple[ElementType, ElementType, Complex], ...]:
         """
         Validate that each source index referenced in element_mappings is included in run_only.
         """
@@ -134,7 +138,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         return element_mappings
 
     @model_validator(mode="after")
-    def _validate_run_only(self):
+    def _validate_run_only(self) -> Self:
         """Validate that run_only entries are unique and exist in matrix_indices_monitor."""
         val = self.run_only
         if val is None:
@@ -167,7 +171,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     _freqs_unique = validate_freqs_unique()
 
     @model_validator(mode="after")
-    def _freqs_in_custom_source_time(self):
+    def _freqs_in_custom_source_time(self) -> Self:
         """Make sure freqs is in the range of the custom source time."""
         val = self.custom_source_time
         if val is None:
@@ -317,7 +321,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         priority: Optional[int] = None,
         local_gradient: bool = False,
         max_num_adjoint_per_fwd: Optional[int] = None,
-    ):
+    ) -> Union[ModalPortDataArray, MicrowaveSMatrixData]:
         log.warning(
             "'ComponentModeler.run()' is deprecated and will be removed in a future release. "
             "Use web.run(modeler) instead. 'web.run' returns a 'ComponentModelerData' object; "
