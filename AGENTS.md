@@ -10,6 +10,7 @@
 - Prefix every repo command with `poetry run` to match CI.
 - Re-run `poetry run pytest` locally as part of your development loop; `pyproject.toml` already wires markers, doctests, coverage, and env vars.
 - The pre-commit hooks you enabled during onboarding run automatically; still run `poetry run pre-commit run --all-files` before opening a PR or when new hooks land so your tree matches `.pre-commit-config.yaml` and the checks in `.github/workflows/tidy3d-python-client-tests.yml` (covers `ruff format`, `ruff check`, doc hooks).
+- When editing YAML, Python, or docs, match the surrounding indentation exactly; never re-indent or reformat lines you didn’t otherwise modify.
 
 ### Do / Don't
 - **Do** run `poetry run pre-commit run --all-files` before opening a PR; **don't** skip it even if individual hooks passed earlier.

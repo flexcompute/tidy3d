@@ -10,6 +10,13 @@ RUN apt-get update && \
     xsel \
     xclip
 
+RUN apt-get update && apt-get install -y zip unzip curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+    && unzip awscliv2.zip \
+    && ./aws/install \
+    && rm -rf aws awscliv2.zip
+
 ENV POETRY_HOME=/opt/poetry
 RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:${POETRY_HOME}/bin:${PATH}"

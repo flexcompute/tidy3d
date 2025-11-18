@@ -2,6 +2,7 @@ name: "public/tidy3d/python-client-tests"
 
 on:
   merge_group:
+  
   workflow_dispatch:
     inputs:
       remote_tests:
@@ -12,6 +13,61 @@ on:
         description: 'local-tests'
         type: boolean
         default: false
+      cli_tests:
+        description: 'Run develop-cli tests'
+        type: boolean
+        default: false
+      submodule_tests:
+        description: 'Run submodule tests'
+        type: boolean
+        default: false
+      version_match_tests:
+        description: 'Run version consistency checks'
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Release Tag (v2.10.0, v2.10.0rc1)'
+        required: false
+        type: string
+        default: ''
+  
+  workflow_call:
+    inputs:
+      remote_tests:
+        description: 'remote-tests'
+        type: boolean
+        required: false
+        default: true
+      local_tests:
+        description: 'local-tests'
+        type: boolean
+        required: false
+        default: true
+      cli_tests:
+        description: 'Run develop-cli tests'
+        type: boolean
+        required: false
+        default: false
+      submodule_tests:
+        description: 'Run submodule tests'
+        type: boolean
+        required: false
+        default: false
+      version_match_tests:
+        description: 'Run version consistency checks'
+        type: boolean
+        required: false
+        default: false
+      release_tag:
+        description: 'Release Tag (v2.10.0, v2.10.0rc1)'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      workflow_success:
+        description: 'Overall test workflow success status'
+        value: ${{ jobs.workflow-validation.result == 'success' }}
+  
   pull_request:
     branches:
       - latest
@@ -36,6 +92,9 @@ jobs:
       pr_review_tests: ${{ steps.determine-test-type.outputs.pr_review_tests }}
       local_tests: ${{ steps.determine-test-type.outputs.local_tests }}
       remote_tests: ${{ steps.determine-test-type.outputs.remote_tests }}
+      cli_tests: ${{ steps.determine-test-type.outputs.cli_tests }}
+      submodule_tests: ${{ steps.determine-test-type.outputs.submodule_tests }}
+      version_match_tests: ${{ steps.determine-test-type.outputs.version_match_tests }}
       pr_approval_state: ${{ steps.approval.outputs.approved }}
     steps:
       - name: check-current-approval-status
@@ -82,8 +141,11 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REVIEW_STATE: ${{ github.event.review.state }}
           REF: ${{ github.ref }}
-          INPUT_LOCAL: ${{ github.event.inputs.local_tests }}
-          INPUT_REMOTE: ${{ github.event.inputs.remote_tests }}
+          INPUT_LOCAL: ${{ github.event.inputs.local_tests || inputs.local_tests }}
+          INPUT_REMOTE: ${{ github.event.inputs.remote_tests || inputs.remote_tests }}
+          INPUT_CLI: ${{ github.event.inputs.cli_tests || inputs.cli_tests }}
+          INPUT_SUBMODULE: ${{ github.event.inputs.submodule_tests || inputs.submodule_tests }}
+          INPUT_VERSION_MATCH: ${{ github.event.inputs.version_match_tests || inputs.version_match_tests }}
           APPROVED: ${{ steps.approval.outputs.approved }}
         run: |
           echo "Event: $EVENT_NAME"
@@ -92,14 +154,20 @@ jobs:
           echo "Git REF: $REF"
           echo "Input local: $INPUT_LOCAL"
           echo "Input remote: $INPUT_REMOTE"
+          echo "Input cli: $INPUT_CLI"
+          echo "Input submodule: $INPUT_SUBMODULE"
+          echo "Input version_match: $INPUT_VERSION_MATCH"
           echo "Approved: $APPROVED"
 
           remote_tests=false
           local_tests=false
+          cli_tests=false
+          submodule_tests=false
+          version_match_tests=false
           code_quality_tests=false
           pr_review_tests=false
           
-          # Workflow_dispatch input override
+            # Workflow_dispatch input override
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             code_quality_tests=true
             # Each option is self contained
@@ -110,14 +178,25 @@ jobs:
             if [[ "$INPUT_LOCAL" == "true" ]]; then
               local_tests=true
             fi
+            
+            if [[ "$INPUT_CLI" == "true" ]]; then
+              cli_tests=true
+            fi
+            
+            if [[ "$INPUT_SUBMODULE" == "true" ]]; then
+              submodule_tests=true
+            fi
+            
+            if [[ "$INPUT_VERSION_MATCH" == "true" ]]; then
+              version_match_tests=true
+            fi
           fi
 
-          # All PRs that have been triggered need local tests and approved ones need to re-run the remote tests
+          # All PRs that have been triggered need local tests (remote reserved for merge queue/manual)
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
               local_tests=true
               code_quality_tests=true
               pr_review_tests=true
-              [[ "$APPROVED" == "true" ]] && remote_tests=true
           fi
 
           if [[ "$EVENT_NAME" == "merge_group" ]]; then
@@ -145,12 +224,18 @@ jobs:
 
           echo "local_tests=$local_tests" >> $GITHUB_OUTPUT
           echo "remote_tests=$remote_tests" >> $GITHUB_OUTPUT
+          echo "cli_tests=$cli_tests" >> $GITHUB_OUTPUT
+          echo "submodule_tests=$submodule_tests" >> $GITHUB_OUTPUT
+          echo "version_match_tests=$version_match_tests" >> $GITHUB_OUTPUT
           echo "code_quality_tests=$code_quality_tests" >> $GITHUB_OUTPUT
           echo "pr_review_tests=$pr_review_tests" >> $GITHUB_OUTPUT
           echo "code_quality_tests=$code_quality_tests"
           echo "pr_review_tests=$pr_review_tests"
           echo "local_tests=$local_tests"
           echo "remote_tests=$remote_tests"
+          echo "cli_tests=$cli_tests"
+          echo "submodule_tests=$submodule_tests"
+          echo "version_match_tests=$version_match_tests"
 
   lint:
     needs: determine-test-scope
@@ -215,7 +300,7 @@ jobs:
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
 
       - name: Run zizmor 🌈
-        run: uvx zizmor .github/workflows/* --format=sarif . > results.sarif 
+        run: uvx zizmor .github/workflows/*.y* --format=sarif . > results.sarif 
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
 
@@ -226,7 +311,7 @@ jobs:
           category: zizmor
       
       - name: run zizmor directly  # this gets a success or fail result
-        run: uvx zizmor  .github/workflows/*
+        run: uvx zizmor  .github/workflows/*.y*
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
   
@@ -466,15 +551,27 @@ jobs:
     defaults:
       run:
         shell: bash
-    env:  # Set environment variables for the whole job
+    env:
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
     permissions:
         pull-requests: write
     steps:
-    - uses: actions/checkout@v4
+    - name: checkout-head
+      if: ${{ !env.RELEASE_TAG }}
+      uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # Required 0 for diff report.
+        fetch-depth: 0
+        submodules: false
+        persist-credentials: false
+
+    - name: checkout-tag
+      if: ${{ env.RELEASE_TAG }}
+      uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.RELEASE_TAG }}
+        fetch-depth: 0
         submodules: false
         persist-credentials: false
 
@@ -580,13 +677,25 @@ jobs:
     defaults:
       run:
         shell: bash
-    env:  # Set environment variables for the whole job
+    env:
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
 
     steps:
-    - uses: actions/checkout@v4
+    - name: checkout-head
+      if: ${{ !env.RELEASE_TAG }}
+      uses: actions/checkout@v4
       with:
+        fetch-depth: 1
+        submodules: false
+        persist-credentials: false
+
+    - name: checkout-tag
+      if: ${{ env.RELEASE_TAG }}
+      uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 1
         submodules: false
         persist-credentials: false
@@ -652,12 +761,177 @@ jobs:
         valColorRange: ${{ env.total }}
         style: "for-the-badge"
   
-  pr-requirements-pass:
-    name: pr-requirements-pass
-    if: |
-      always() &&
-      (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'merge_group') && 
-      ((needs.determine-test-scope.outputs.pr_approval_state == 'true' && needs.determine-test-scope.outputs.local_tests == 'true') || needs.determine-test-scope.outputs.remote_tests == 'true')
+  develop-cli-tests:
+    name: develop-cli-tests
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.cli_tests == 'true'
+    uses: ./.github/workflows/tidy3d-python-client-develop-cli.yml
+    with:
+      release_tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+
+  verify-version-consistency:
+    name: verify-version-consistency
+    runs-on: ubuntu-latest
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.version_match_tests == 'true'
+    steps:
+      - name: checkout-code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag) || github.ref }}
+          persist-credentials: false
+      
+      - name: check-version-consistency
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+        run: |
+          set -e
+          echo "=== Verifying Version Consistency ==="
+          echo ""
+          
+          # Extract version from pyproject.toml
+          PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | head -n 1 | sed 's/version = "\(.*\)"/\1/')
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          
+          # Extract version from tidy3d/version.py
+          VERSION_PY=$(grep '__version__ = ' tidy3d/version.py | sed 's/__version__ = "\(.*\)"/\1/')
+          echo "tidy3d/version.py version: $VERSION_PY"
+          echo ""
+          
+          # Compare versions
+          if [[ "$PYPROJECT_VERSION" != "$VERSION_PY" ]]; then
+            echo "❌ ERROR: Version mismatch detected!"
+            echo "   pyproject.toml:    $PYPROJECT_VERSION"
+            echo "   tidy3d/version.py: $VERSION_PY"
+            echo ""
+            echo "These versions must match before release."
+            echo "Please update both files to the same version."
+            exit 1
+          fi
+          
+          echo "✅ Version consistency check passed: $PYPROJECT_VERSION"
+          echo ""
+          
+          # If release tag provided, validate it matches the version
+          if [[ -n "$RELEASE_TAG" ]]; then
+            echo "=== Validating Release Tag ==="
+            echo "Release tag: $RELEASE_TAG"
+            
+            # Strip 'v' prefix from tag if present
+            TAG_VERSION="${RELEASE_TAG#v}"
+            echo "Tag version (without 'v'): $TAG_VERSION"
+            
+            if [[ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]]; then
+              echo "❌ ERROR: Release tag does not match package version!"
+              echo "   Release tag: $RELEASE_TAG (version: $TAG_VERSION)"
+              echo "   Package version: $PYPROJECT_VERSION"
+              echo ""
+              echo "The release tag should be 'v$PYPROJECT_VERSION'"
+              exit 1
+            fi
+            
+            echo "✅ Release tag matches package version"
+          fi
+          
+          echo ""
+          echo "=== Version Checks Passed ==="
+
+  test-submodules:
+    name: test-submodules
+    runs-on: ubuntu-latest
+    needs: determine-test-scope
+    if: ${{ always() && (needs.determine-test-scope.outputs.submodule_tests == 'true') && (github.event.inputs.release_tag || inputs.release_tag) && !contains(github.event.inputs.release_tag || inputs.release_tag, 'rc') }}
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+    steps:
+      - name: checkout-head
+        if: ${{ !env.RELEASE_TAG }}
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: checkout-tag
+        if: ${{ env.RELEASE_TAG }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          submodules: 'recursive'
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: initialize-submodules
+        run: |
+          git submodule update --init --recursive
+
+      - name: check-submodules-for-multiple-branches
+        shell: bash
+        run: |
+          BRANCHES=("develop") # Add your branches here
+          
+          for BRANCH in "${BRANCHES[@]}"; do
+            echo "Analyzing branch: $BRANCH"
+          
+            # Fetch all branches and tags
+            git fetch --all --verbose
+          
+            # Checkout the branch
+            git checkout $BRANCH
+          
+            NOTEBOOKS_PATH=docs/notebooks
+            FAQ_PATH=docs/faq
+          
+            # Checking Notebooks submodule
+            echo "Checking $NOTEBOOKS_PATH for updates..."
+            cd $NOTEBOOKS_PATH
+            NOTEBOOKS_CURRENT_COMMIT=$(git rev-parse HEAD)
+            echo $(git fetch --all --verbose)
+            echo $(git remote get-url origin)
+            if git show-ref --verify refs/remotes/origin/$BRANCH; then
+              echo "Branch $BRANCH exists."
+            else
+              echo "::error::Branch $BRANCH does not exist on remote."
+              exit 1
+            fi
+            NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/${BRANCH})
+            echo "NOTEBOOKS_LATEST_COMMIT: $NOTEBOOKS_LATEST_COMMIT"
+            echo "NOTEBOOKS_CURRENT_COMMIT: $NOTEBOOKS_CURRENT_COMMIT"
+          
+            cd ../..
+            if [ "$NOTEBOOKS_LATEST_COMMIT" != "$NOTEBOOKS_CURRENT_COMMIT" ]; then
+              echo "::error::Submodule $NOTEBOOKS_PATH is not up to date with the $BRANCH branch. Please update it."
+              exit 1
+            else
+              echo "Submodule $NOTEBOOKS_PATH is up to date with the $BRANCH branch."
+            fi
+          
+            # Checking FAQs only on the develop branch
+            if [[ "$BRANCH" == "develop" ]]; then
+              echo "Checking $FAQ_PATH for updates..."
+              cd $FAQ_PATH
+              FAQ_CURRENT_COMMIT=$(git rev-parse HEAD)
+              echo $(git fetch --all --verbose)
+              echo $(git remote get-url origin)
+              FAQ_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/develop)
+              echo "FAQ_LATEST_COMMIT: $FAQ_LATEST_COMMIT"
+              echo "FAQ_CURRENT_COMMIT: $FAQ_CURRENT_COMMIT"
+              cd ../..
+              if [ "$FAQ_LATEST_COMMIT" != "$FAQ_CURRENT_COMMIT" ]; then
+                echo "::error::Submodule $FAQ_PATH is not up to date. Please update it."
+                exit 1
+              else
+                echo "Submodule $FAQ_PATH is up to date."
+              fi
+            fi
+          done
+          
+          echo ""
+          echo "=== Submodule Checks Passed ==="
+  
+  workflow-validation:
+    name: workflow-validation
+    if: always()
     needs:
       - determine-test-scope
       - local-tests
@@ -668,63 +942,96 @@ jobs:
       - lint-commit-messages
       - lint-branch-name
       - zizmor
+      - develop-cli-tests
+      - verify-version-consistency
+      - test-submodules
     runs-on: ubuntu-latest
-    env:
-      NEEDS_LOCAL_TESTS_RESULT: ${{ needs.local-tests.result }}
-      NEEDS_REMOTE_TESTS_RESULT: ${{ needs.remote-tests.result }}
-      NEEDS_LINT_RESULT: ${{ needs.lint.result }}
-      NEEDS_VERIFY_SCHEMA_CHANGE_RESULT: ${{ needs.verify-schema-change.result }}
-      NEEDS_LINT_COMMIT_MESSAGES_RESULT: ${{ needs.lint-commit-messages.result }}
-      NEEDS_LINT_BRANCH_NAME_RESULT: ${{ needs.lint-branch-name.result }}
-      NEEDS_ZIZMOR_RESULT: ${{ needs.zizmor.result }}
     steps:
       - name: check-linting-result
-        if: ${{ needs.lint.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.lint.result != 'success' && needs.lint.result != 'skipped' }}
         run: |
           echo "❌ Linting failed."
           exit 1
 
       - name: check-mypy-result
-        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.mypy.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.mypy.result != 'success' && needs.mypy.result != 'skipped' }}
         run: |
           echo "❌ Mypy type checking failed."
           exit 1
           
       - name: check-schema-change-verification
-        if: ${{ needs.verify-schema-change.result != 'success' }}
-        
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.verify-schema-change.result != 'success' && needs.verify-schema-change.result != 'skipped' }}
         run: |
           echo "❌ Schema change verification failed."
           exit 1
 
       - name: check-local-tests-result
-        if: ${{ needs.local-tests.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.local_tests == 'true' && needs.local-tests.result != 'success' && needs.local-tests.result != 'skipped' }}
         run: |
           echo "❌ Local tests failed."
           exit 1
 
       - name: check-remote-tests-result
-        if: ${{ needs.remote-tests.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.remote_tests == 'true' && needs.remote-tests.result != 'success' && needs.remote-tests.result != 'skipped' }}
         run: |
           echo "❌ Remote tests failed."
           exit 1
 
       - name: check-commit-message-linting
-        if: ${{  needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.lint-commit-messages.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.lint-commit-messages.result != 'success' && needs.lint-commit-messages.result != 'skipped' }}
         run: |
           echo "❌ Commit message linting failed."
           exit 1
 
       - name: check-branch-name-linting
-        if: ${{ needs.determine-test-scope.outputs.pr_review_tests == 'true' && needs.lint-branch-name.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.pr_review_tests == 'true' && needs.lint-branch-name.result != 'success' && needs.lint-branch-name.result != 'skipped' }}
         run: |
           echo "❌ Branch name linting failed."
           exit 1
 
       - name: check-zizmor-static-analysis
-        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.zizmor.result != 'success' }}
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.zizmor.result != 'success' && needs.zizmor.result != 'skipped' }}
         run: |
           echo "❌ Zizmor static analysis failed."
+          exit 1
+
+      - name: check-cli-tests-result
+        if: ${{ needs.determine-test-scope.outputs.cli_tests == 'true' && needs.develop-cli-tests.result != 'success' && needs.develop-cli-tests.result != 'skipped' }}
+        run: |
+          echo "❌ CLI tests failed."
+          exit 1
+
+      - name: check-version-consistency-result
+        if: ${{ needs.determine-test-scope.outputs.version_match_tests == 'true' && needs.verify-version-consistency.result != 'success' && needs.verify-version-consistency.result != 'skipped' }}
+        run: |
+          echo "❌ Version consistency check failed."
+          exit 1
+      
+      - name: check-submodule-tests-result
+        if: ${{ needs.determine-test-scope.outputs.submodule_tests == 'true' && needs.test-submodules.result != 'success' && needs.test-submodules.result != 'skipped' }}
+        run: |
+          echo "❌ Submodule tests failed."
+          exit 1
+
+      - name: all-checks-passed
+        if: ${{ success() }}
+        run: echo "✅ All required jobs passed!"
+  
+  pr-requirements-pass:
+    name: pr-requirements-pass
+    if: |
+      always() &&
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'merge_group') && 
+      ((needs.determine-test-scope.outputs.pr_approval_state == 'true' && needs.determine-test-scope.outputs.local_tests == 'true') || needs.determine-test-scope.outputs.remote_tests == 'true')
+    needs:
+      - determine-test-scope
+      - workflow-validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: check-workflow-validation
+        if: ${{ needs.workflow-validation.result != 'success' }}
+        run: |
+          echo "❌ Workflow validation failed. See workflow-validation job for details."
           exit 1
 
       - name: all-checks-passed
