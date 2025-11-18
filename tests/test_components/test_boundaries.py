@@ -193,6 +193,33 @@ def test_boundaryspec_classmethods():
     )
 
 
+def test_extrude_structures_to_pml():
+    """Test ``extrude_structures`` field in PML/Absorber API."""
+
+    # check default state
+    boundary_pml = PML()
+    boundary_abs = Absorber()
+    boundary_bloch = BlochBoundary(bloch_vec=1)
+    boundary_pec = PECBoundary()
+
+    assert boundary_pml.extrude_structures is True
+    assert boundary_abs.extrude_structures is False
+
+    # make sure attribute error is raised if other BC attempt to access/use the feature
+    with pytest.raises(AttributeError):
+        boundary_bloch.extrude_structures
+    with pytest.raises(AttributeError):
+        boundary_pec.extrude_structures
+
+    # change state of boundary condition
+    boundary_pml = PML(extrude_structures=False)
+    boundary_abs = Absorber(extrude_structures=True)
+
+    # make sure field values were correctly updated
+    assert boundary_pml.extrude_structures is False
+    assert boundary_abs.extrude_structures is True
+
+
 @pytest.mark.parametrize("absorber_type", [PML, StablePML, Absorber])
 def test_num_layers_validator(absorber_type):
     """Test the Field validators that enforce ``num_layers>0``."""

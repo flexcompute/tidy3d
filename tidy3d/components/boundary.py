@@ -32,6 +32,10 @@ MIN_NUM_PML_LAYERS = 6
 MIN_NUM_STABLE_PML_LAYERS = 6
 MIN_NUM_ABSORBER_LAYERS = 6
 
+# Margin (in grid cells) defining the extrusion clipping region. The clipping bounding box is inset
+# by this margin on both the lower and upper bounds of each axis.
+CLIPPING_MARGIN = 2
+
 
 def warn_num_layers_factory(min_num_layers: int, descr: str):
     """Several similar classes defined have a ``num_layers`` data member, and they generate
@@ -672,6 +676,17 @@ class AbsorberSpec(BoundaryEdge):
         description="Parameters to fine tune the absorber profile and properties.",
     )
 
+    extrude_structures: bool = pd.Field(
+        False,
+        title="Enable structure extrusion to PML",
+        description="Automatically extrude structures into the absorbing region (e.g., PML or adiabatic absorber). "
+        f"Any structure located within {CLIPPING_MARGIN} cells of a simulation boundary will be extended "
+        "through the full thickness of the PML/absorber. "
+        f"The extruded region is assigned the material properties of the structure {CLIPPING_MARGIN} cells "
+        "from the simulation boundary. "
+        "Extrusion is performed along the direction normal to the PML/absorber surface.",
+    )
+
 
 class PML(AbsorberSpec):
     """Specifies a standard PML along a single dimension.
@@ -794,6 +809,17 @@ class PML(AbsorberSpec):
         min_num_layers=MIN_NUM_PML_LAYERS, descr="perfectly-matched layer"
     )
 
+    extrude_structures: bool = pd.Field(
+        True,
+        title="Enable structure extrusion to PML",
+        description="Automatically extrude structures into the absorbing region (e.g., PML or adiabatic absorber). "
+        f"Any structure located within {CLIPPING_MARGIN} cells of a simulation boundary will be extended "
+        "through the full thickness of the PML/absorber. "
+        f"The extruded region is assigned the material properties of the structure {CLIPPING_MARGIN} cells "
+        "from the simulation boundary. "
+        "Extrusion is performed along the direction normal to the PML/absorber surface.",
+    )
+
 
 class StablePML(AbsorberSpec):
     """Specifies a 'stable' PML along a single dimension.
@@ -834,6 +860,17 @@ class StablePML(AbsorberSpec):
 
     _warn_num_layers = warn_num_layers_factory(
         min_num_layers=MIN_NUM_STABLE_PML_LAYERS, descr="stable perfectly-matched layer"
+    )
+
+    extrude_structures: bool = pd.Field(
+        True,
+        title="Enable structure extrusion to PML",
+        description="Automatically extrude structures into the absorbing region (e.g., PML or adiabatic absorber). "
+        f"Any structure located within {CLIPPING_MARGIN} cells of a simulation boundary will be extended "
+        "through the full thickness of the PML/absorber. "
+        f"The extruded region is assigned the material properties of the structure {CLIPPING_MARGIN} cells "
+        "from the simulation boundary. "
+        "Extrusion is performed along the direction normal to the PML/absorber surface.",
     )
 
 

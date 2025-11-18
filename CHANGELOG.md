@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added autograd support for `Sphere`.
 
 ### Breaking Changes
+- Added optional automatic extrusion of structures at the simulation boundaries into/through PML/Absorber layers via `extrude_structures` field in class `AbsorberSpec`.
 - Added `structure_priority_mode` for `TerminalComponentModeler` and default to `"conductor"` to ensure metal structures override dielectrics regardless of structure order, preventing order-dependent results in RF simulations.
 - 1D lumped elements (with zero lateral extent) are no longer allowed. Use a small finite lateral extent (e.g., `1e-6`) instead.
 - Added `GaussianOverlapMonitor` and `AstigmaticGaussianOverlapMonitor` for decomposing electromagnetic fields onto Gaussian beam profiles.

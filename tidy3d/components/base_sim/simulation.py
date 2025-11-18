@@ -161,7 +161,6 @@ class AbstractSimulation(Box, ABC):
     @skip_if_fields_missing(["size", "center"])
     def _structures_not_at_edges(cls, val, values):
         """Warn if any structures lie at the simulation boundaries."""
-
         if val is None:
             return val
 
@@ -188,6 +187,62 @@ class AbstractSimulation(Box, ABC):
         return val
 
     """ Post-init validators """
+
+    def _validate_structures_not_at_edges(self) -> None:
+        """Warn if any structures lie at the simulation boundaries (post-init check with full field access)."""
+        if not self.structures:
+            return
+
+        sim_bound_min, sim_bound_max = self.bounds
+        sim_bounds = list(sim_bound_min) + list(sim_bound_max)
+
+        # Get boundaries - now guaranteed to be available since we're post-init
+        boundary_spec = self.boundary_spec
+        try:
+            boundaries = (
+                boundary_spec.to_list
+                if boundary_spec is not None and hasattr(boundary_spec, "to_list")
+                else None
+            )
+        except Exception:
+            boundaries = None
+
+        with log as consolidated_logger:
+            for istruct, structure in enumerate(self.structures):
+                struct_bound_min, struct_bound_max = structure.geometry.bounds
+                struct_bounds = list(struct_bound_min) + list(struct_bound_max)
+
+                for idx, (sim_val, struct_val) in enumerate(zip(sim_bounds, struct_bounds)):
+                    if anp.isclose(sim_val, struct_val):
+                        # Check if extrusion is enabled for this boundary
+                        # Index 0-2: min bounds for x, y, z → boundaries[axis][0] (minus side)
+                        # Index 3-5: max bounds for x, y, z → boundaries[axis][1] (plus side)
+                        axis_idx = idx % 3
+                        side_idx = idx // 3
+
+                        extrusion_enabled = False
+                        if boundaries is not None:
+                            try:
+                                boundary_edge = boundaries[axis_idx][side_idx]
+                                if (
+                                    hasattr(boundary_edge, "extrude_structures")
+                                    and boundary_edge.extrude_structures
+                                ):
+                                    extrusion_enabled = True
+                            except (IndexError, AttributeError):
+                                pass
+
+                        # Skip warning if extrusion is enabled
+                        if extrusion_enabled:
+                            continue
+
+                        consolidated_logger.warning(
+                            f"Structure at 'structures[{istruct}]' has bounds that extend exactly "
+                            "to simulation edges. This can cause unexpected behavior. "
+                            "If intending to extend the structure to infinity along one dimension, "
+                            "use td.inf as a size variable instead to make this explicit.",
+                            custom_loc=["structures", istruct],
+                        )
 
     def _post_init_validators(self) -> None:
         """Call validators taking z`self` that get run after init."""

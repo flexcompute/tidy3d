@@ -40,6 +40,7 @@ from .autograd.types import AutogradFieldMap
 from .base import cached_property, skip_if_fields_missing
 from .base_sim.simulation import AbstractSimulation
 from .boundary import (
+    CLIPPING_MARGIN,
     PML,
     ABCBoundary,
     Absorber,
@@ -3079,6 +3080,17 @@ class Simulation(AbstractYeeGridSimulation):
     _mode_sources_symmetries = validate_mode_objects_symmetry("sources")
     _mode_monitors_symmetries = validate_mode_objects_symmetry("monitors")
 
+    @pydantic.validator("structures", always=True)
+    @skip_if_fields_missing(["size", "center"])
+    def _structures_not_at_edges(cls, val, values):
+        """Override AbstractSimulation validator to disable it for Simulation class.
+
+        The validation is handled by _validate_structures_not_at_edges() in _post_init_validators()
+        which has access to boundary_spec and can check for extrusion settings.
+        """
+        # Skip validation here - handled by post-init validator instead
+        return val
+
     # _few_enough_mediums = validate_num_mediums()
     # _structures_not_at_edges = validate_structure_bounds_not_at_edges()
     # _gap_size_ok = validate_pml_gap_size()
@@ -3465,66 +3477,6 @@ class Simulation(AbstractYeeGridSimulation):
                         "Please ensure that the bounding boxes of the two geometries "
                         "do not intersect."
                     )
-        return val
-
-    @pydantic.validator("boundary_spec", always=True)
-    @skip_if_fields_missing(["sources", "center", "size", "structures"])
-    def _structures_not_close_pml(cls, val, values):
-        """Warn if any structures lie at the simulation boundaries."""
-
-        sim_box = Box(size=values.get("size"), center=values.get("center"))
-        sim_bound_min, sim_bound_max = sim_box.bounds
-
-        boundaries = val.to_list
-        structures = values.get("structures")
-        sources = values.get("sources")
-
-        if (not structures) or (not sources):
-            return val
-
-        with log as consolidated_logger:
-
-            def warn(structure, istruct, side) -> None:
-                """Warning message for a structure too close to PML."""
-                obj_descr = named_obj_descr(structure, "structures", istruct)
-                consolidated_logger.warning(
-                    f"Structure: {obj_descr} was detected as being less "
-                    f"than half of a central wavelength from a PML on side {side}. "
-                    "To avoid inaccurate results or divergence, please increase gap between "
-                    "any structures and PML or fully extend structure through the pml.",
-                    custom_loc=["structures", istruct],
-                )
-
-            for istruct, structure in enumerate(structures):
-                struct_bound_min, struct_bound_max = structure.geometry.bounds
-
-                for source in sources:
-                    lambda0 = C_0 / source.source_time._freq0
-
-                    zipped = zip(["x", "y", "z"], sim_bound_min, struct_bound_min, boundaries)
-                    for axis, sim_val, struct_val, boundary in zipped:
-                        # The test is required only for PML and stable PML
-                        if not isinstance(boundary[0], (PML, StablePML)):
-                            continue
-                        if (
-                            boundary[0].num_layers > 0
-                            and struct_val > sim_val
-                            and abs(sim_val - struct_val) < lambda0 / 2
-                        ):
-                            warn(structure, istruct, axis + "-min")
-
-                    zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, boundaries)
-                    for axis, sim_val, struct_val, boundary in zipped:
-                        # The test is required only for PML and stable PML
-                        if not isinstance(boundary[1], (PML, StablePML)):
-                            continue
-                        if (
-                            boundary[1].num_layers > 0
-                            and struct_val < sim_val
-                            and abs(sim_val - struct_val) < lambda0 / 2
-                        ):
-                            warn(structure, istruct, axis + "-max")
-
         return val
 
     @pydantic.validator("monitors", always=True)
@@ -4287,7 +4239,9 @@ class Simulation(AbstractYeeGridSimulation):
     def _post_init_validators(self) -> None:
         """Call validators taking z`self` that get run after init."""
         _ = self.scene
+        self._validate_structures_not_at_edges()
         self._validate_no_structures_pml()
+        self._validate_no_structures_close_to_pml()
         self._validate_tfsf_nonuniform_grid()
         self._validate_tfsf_aux_sources()
         self._validate_nonlinear_specs()
@@ -4420,7 +4374,14 @@ class Simulation(AbstractYeeGridSimulation):
                         sim_pos_pml = sim_pos + pm_val * pml
                         in_pml_plus = (pm_val > 0) and (sim_pos < geo_pos <= sim_pos_pml)
                         in_pml_mnus = (pm_val < 0) and (sim_pos > geo_pos >= sim_pos_pml)
-                        if not isinstance(bound_edge, Absorber) and (in_pml_plus or in_pml_mnus):
+                        if (
+                            not isinstance(bound_edge, Absorber)
+                            and (in_pml_plus or in_pml_mnus)
+                            and (
+                                not hasattr(bound_edge, "extrude_structures")
+                                or not bound_edge.extrude_structures
+                            )
+                        ):
                             warn = True
                 if warn:
                     obj_descr = named_obj_descr(structure, "structures", i)
@@ -4432,6 +4393,120 @@ class Simulation(AbstractYeeGridSimulation):
                         "invariant within the PML.",
                         custom_loc=["structures", i],
                     )
+
+    def _validate_no_structures_close_to_pml(self) -> None:
+        """Warn if structures are too close to PML boundaries and may be automatically extruded."""
+        if not self.structures or not self.sources:
+            return
+
+        sim_bound_min, sim_bound_max = self.bounds
+        boundaries = self.boundary_spec.to_list
+
+        # Access grid - this will compute it once and cache it
+        grid_boundaries = self.grid.boundaries.to_list
+        num_pml_layers = self.num_pml_layers
+
+        def is_within_clipping_margin(axis_idx: int, struct_val: float, side_idx: int) -> bool:
+            """Check if structure is within ``CLIPPING_MARGIN`` cells from absorber start.
+
+            Returns True if structure is within ``CLIPPING_MARGIN`` cells from where the absorber starts.
+
+            Args:
+                axis_idx: Axis index (0=x, 1=y, 2=z)
+                struct_val: Structure boundary coordinate value
+                side_idx: Side index (0=min, 1=max)
+            """
+            if num_pml_layers[axis_idx][side_idx] == 0:
+                return False
+
+            grid_axis = grid_boundaries[axis_idx]
+            num_layers = num_pml_layers[axis_idx][side_idx]
+
+            if side_idx == 0:
+                # Absorber starts at cell index num_layers
+                # Extrusion clipping bound is at num_layers + CLIPPING_MARGIN
+                clipping_bound_idx = num_layers + CLIPPING_MARGIN
+                if clipping_bound_idx >= len(grid_axis):
+                    return False
+                absorber_start_coord = grid_axis[num_layers]
+                clipping_bound_coord = grid_axis[clipping_bound_idx]
+                # Structure is within clipping margin if it's between absorber start and clipping bound
+                return absorber_start_coord <= struct_val <= clipping_bound_coord
+            else:
+                # Absorber starts at cell index len(grid_axis) - num_layers - 1
+                # Extrusion clipping bound is at len(grid_axis) - num_layers - 1 - CLIPPING_MARGIN
+                absorber_start_idx = len(grid_axis) - num_layers - 1
+                clipping_bound_idx = absorber_start_idx - CLIPPING_MARGIN
+                if clipping_bound_idx < 0:
+                    return False
+                absorber_start_coord = grid_axis[absorber_start_idx]
+                clipping_bound_coord = grid_axis[clipping_bound_idx]
+                # Structure is within clipping margin if it's between clipping bound and absorber start
+                return clipping_bound_coord <= struct_val <= absorber_start_coord
+
+        with log as consolidated_logger:
+
+            def warn(structure, istruct, side, extrusion_flag) -> None:
+                """Warn when a structure is within half a wavelength of a PML boundary.
+                If ``extrusion_flag`` is True, warns about automatic extrusion. Otherwise, warns about
+                potential inaccuracies and suggests increasing the gap or extending the structure.
+                """
+                obj_descr = named_obj_descr(structure, "structures", istruct)
+
+                if extrusion_flag:
+                    consolidated_logger.warning(
+                        f"Structure: {obj_descr} was detected as being less "
+                        f"than half of a central wavelength from a PML on side {side}. "
+                        "The structure will be automatically extruded to the end of the PML region "
+                        "to ensure translational invariance.",
+                        custom_loc=["structures", istruct],
+                    )
+                else:
+                    consolidated_logger.warning(
+                        f"Structure: {obj_descr} was detected as being less "
+                        f"than half of a central wavelength from a PML on side {side}. "
+                        "To avoid inaccurate results or divergence, please increase gap between "
+                        "any structures and PML or fully extend structure through the pml.",
+                        custom_loc=["structures", istruct],
+                    )
+
+            for istruct, structure in enumerate(self.structures):
+                struct_bound_min, struct_bound_max = structure.geometry.bounds
+
+                for source in self.sources:
+                    lambda0 = C_0 / source.source_time._freq0
+
+                    # Check both min (side_idx=0) and max (side_idx=1) sides
+                    for side_idx in [0, 1]:
+                        sim_bound_side = sim_bound_min if side_idx == 0 else sim_bound_max
+                        struct_bound_side = struct_bound_min if side_idx == 0 else struct_bound_max
+                        side_suffix = "-min" if side_idx == 0 else "-max"
+
+                        zipped = zip(
+                            ["x", "y", "z"],
+                            [0, 1, 2],
+                            sim_bound_side,
+                            struct_bound_side,
+                            boundaries,
+                        )
+                        for axis, axis_idx, sim_val, struct_val, boundary in zipped:
+                            # The test is required only for PML and stable PML
+                            if not isinstance(boundary[side_idx], (PML, StablePML)):
+                                continue
+                            # Min side: struct_val > sim_val, Max side: struct_val < sim_val
+                            if (
+                                boundary[side_idx].num_layers > 0
+                                and (
+                                    struct_val > sim_val if side_idx == 0 else struct_val < sim_val
+                                )
+                                and abs(sim_val - struct_val) < lambda0 / 2
+                            ):
+                                extrusion_flag = boundary[
+                                    side_idx
+                                ].extrude_structures and is_within_clipping_margin(
+                                    axis_idx, struct_val, side_idx
+                                )
+                                warn(structure, istruct, axis + side_suffix, extrusion_flag)
 
     def _validate_tfsf_nonuniform_grid(self) -> None:
         """Warn if the grid is nonuniform along the directions tangential to the injection plane,
