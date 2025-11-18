@@ -83,7 +83,9 @@ DEFAULT_DATA_FILENAME = {
 }
 
 
-def _get_default_path(task_id: str, provided_path: Optional[PathLike]) -> Path:
+def _get_default_path(
+    task_id: str, provided_path: Optional[PathLike]
+) -> tuple[Path, bool, Optional[str]]:
     """Get the appropriate default path based on task type.
 
     If the user provided a path, returns it as-is.
@@ -98,15 +100,21 @@ def _get_default_path(task_id: str, provided_path: Optional[PathLike]) -> Path:
 
     Returns
     -------
-    Path
-        The appropriate path to use for this task type.
+    tuple[Path, bool, Optional[str]]
+        A tuple containing:
+        - Path: The appropriate path to use for this task type
+        - bool: True if this is a modeler batch task
+        - Optional[str]: Task type string (None if user provided a path)
     """
     # If user provided a path, respect it exactly
     if provided_path is not None:
-        return Path(provided_path)
+        # Still need to determine if it's a modeler batch for later use
+        is_batch = _is_modeler_batch(task_id)
+        return Path(provided_path), is_batch, None
 
     # Determine task type for default filename
-    if _is_modeler_batch(task_id):
+    is_batch = _is_modeler_batch(task_id)
+    if is_batch:
         task_type = "RF"
     else:
         task_info = get_info(task_id)
@@ -115,7 +123,7 @@ def _get_default_path(task_id: str, provided_path: Optional[PathLike]) -> Path:
     # Get the task-type-specific default filename
     default_filename = DEFAULT_DATA_FILENAME.get(task_type, "simulation_data.hdf5")
 
-    return Path(default_filename)
+    return Path(default_filename), is_batch, task_type
 
 
 def _get_url(task_id: str) -> str:
@@ -1066,9 +1074,9 @@ def download(
 
     """
     # Get the appropriate default path based on task type
-    path = _get_default_path(task_id, path)
+    path, is_batch, task_type = _get_default_path(task_id, path)
 
-    if _is_modeler_batch(task_id):
+    if is_batch:
         BatchTask(task_id).get_data_hdf5(
             remote_data_file_gz=CM_DATA_HDF5_GZ,
             to_file=path,
@@ -1078,8 +1086,10 @@ def download(
         return
 
     # Regular single-task download
-    task_info = get_info(task_id)
-    task_type = task_info.taskType
+    # Only call get_info if we don't already have task_type
+    if task_type is None:
+        task_info = get_info(task_id)
+        task_type = task_info.taskType
 
     remote_data_file = SIMULATION_DATA_HDF5_GZ
     if task_type == "MODE_SOLVER":
@@ -1228,10 +1238,12 @@ def load(
     """
     # Get the appropriate default path based on task type
     if task_id is not None:
-        path = _get_default_path(task_id, path)
+        path, is_batch, task_type = _get_default_path(task_id, path)
     else:
         # When no task_id, use provided path or fall back to generic default
         path = Path(path) if path is not None else Path("simulation_data.hdf5")
+        is_batch = False
+        task_type = None
 
     if task_id is None:
         if not path.exists():
@@ -1241,7 +1253,7 @@ def load(
 
     if verbose and task_id is not None:
         console = get_logging_console()
-        if _is_modeler_batch(task_id):
+        if is_batch:
             console.log(f"Loading component modeler data from {path}")
         else:
             console.log(f"Loading simulation from {path}")
@@ -1250,8 +1262,12 @@ def load(
 
     simulation_cache = resolve_local_cache()
     if simulation_cache is not None and task_id is not None:
-        info = get_info(task_id, verbose=False)
-        workflow_type = getattr(info, "taskType", None)
+        # Only call get_info if we don't already have task_type
+        if task_type is None:
+            info = get_info(task_id, verbose=False)
+            workflow_type = getattr(info, "taskType", None)
+        else:
+            workflow_type = task_type
         if (
             workflow_type != TaskType.MODE_SOLVER.name
         ):  # we cannot get the simulation from data or web for mode solver

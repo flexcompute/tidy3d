@@ -436,40 +436,50 @@ class Job(WebContainer):
             return
         web.monitor(self.task_id, verbose=self.verbose)
 
-    def download(self, path: PathLike = DEFAULT_DATA_PATH) -> None:
+    def download(self, path: Optional[PathLike] = None) -> None:
         """Download results of simulation.
 
         Parameters
         ----------
-        path : PathLike = "./simulation_data.hdf5"
+        path : Optional[PathLike] = None
             Path to download data as ``.hdf5`` file (including filename).
+            If not provided, uses a task-type-specific default filename.
 
         Note
         ----
         To load the data after download, use :meth:`Job.load`.
         """
+        # For cached loads, we need a path - use default if not provided
         if self.load_if_cached:
+            if path is None:
+                path = DEFAULT_DATA_PATH
             self._materialize_from_stash(path)
             return
-        self._check_path_dir(path=path)
+        if path is not None:
+            self._check_path_dir(path=path)
         web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
-    def load(self, path: PathLike = DEFAULT_DATA_PATH) -> WorkflowDataType:
+    def load(self, path: Optional[PathLike] = None) -> WorkflowDataType:
         """Download job results and load them into a data object.
 
         Parameters
         ----------
-        path : PathLike = "./simulation_data.hdf5"
+        path : Optional[PathLike] = None
             Path to download data as ``.hdf5`` file (including filename).
+            If not provided, uses a task-type-specific default filename.
 
         Returns
         -------
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
-        self._check_path_dir(path=path)
+        # For cached loads, we need a path - use default if not provided
         if self.load_if_cached:
+            if path is None:
+                path = DEFAULT_DATA_PATH
             self._materialize_from_stash(path)
+        elif path is not None:
+            self._check_path_dir(path=path)
 
         data = web.load(
             task_id=None if self.load_if_cached else self.task_id,
