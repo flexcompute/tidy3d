@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [v2.9.3]
+
+### Added
+
+### Changed
+
+### Fixed
+- Minor version mismatch between `tidy3d.__version__` and the `pyproject.toml`
+
 ## [v2.9.2]
 
 ### Added
