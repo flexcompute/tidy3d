@@ -8,7 +8,7 @@ import xarray as xr
 
 import tidy3d as td
 from tidy3d import Medium
-from tidy3d.components.autograd import AutogradFieldMap, NumericalStructureInfo, get_static
+from tidy3d.components.autograd import AutogradFieldMap, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.data.data_array import DataArray, FreqDataArray, ScalarFieldDataArray
 from tidy3d.components.geometry.base import Box
@@ -18,6 +18,7 @@ from tidy3d.exceptions import AdjointError
 from tidy3d.packaging import disable_local_subpixel
 
 from .types import (
+    NumericalStructureConfig,
     UserVJPConfig,
 )
 from .utils import E_to_D, get_derivative_maps
@@ -115,7 +116,7 @@ def postprocess_adj(
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
     user_vjp: tuple[UserVJPConfig],
-    numerical_info: dict[int, NumericalStructureInfo],
+    numerical_structures: tuple[NumericalStructureConfig],
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
@@ -155,12 +156,19 @@ def postprocess_adj(
     # map of index into 'structures' and 'numerical' to the paths we need VJPs for
     sim_vjp_map = defaultdict(list)
     numerical_vjp_map = defaultdict(set)
+    numerical_structure_indices = []
     for namespace, structure_index, *structure_path in sim_fields_keys:
         structure_path = tuple(structure_path)
         if namespace == "structures":
             sim_vjp_map[structure_index].append(structure_path)
         elif namespace == "numerical":
             numerical_vjp_map[structure_index].add(structure_path)
+            numerical_structure_indices.append(structure_index)
+
+    def lookup_numerical_structure(structure_index: int) -> NumericalStructureConfig:
+        for numerical_structure in numerical_structures:
+            if numerical_structure.structure_index == structure_index:
+                return numerical_structure
 
     # store the derivative values given the forward and adjoint data
     sim_fields_vjp = {}
@@ -168,20 +176,22 @@ def postprocess_adj(
 
     for structure_index in all_structure_indices:
         structure_paths = tuple(sim_vjp_map.get(structure_index, ()))
+
+        use_numerical_vjp = structure_index in numerical_structure_indices
+
         numerical_paths_raw = numerical_vjp_map.get(structure_index, set())
         numerical_paths_ordered: tuple[tuple, ...] = ()
         numerical_value_map: dict[tuple, typing.Any] = {}
         numerical_vjp_fn = None
         numerical_params_static: tuple[typing.Any, ...] = ()
 
-        if numerical_paths_raw:
-            info = numerical_info.get(structure_index)
-            if info is None:
-                raise AdjointError(
-                    f"Missing numerical structure metadata for index {structure_index}."
-                )
-            numerical_vjp_fn = info.vjp
-            numerical_params_static = tuple(get_static(param) for param in info.parameters)
+        if use_numerical_vjp:
+            numerical_structure = lookup_numerical_structure(structure_index)
+
+            numerical_vjp_fn = numerical_structure.compute_derivatives
+            numerical_params_static = tuple(
+                get_static(param) for param in numerical_structure.parameters
+            )
             numerical_paths_ordered = tuple(sorted(numerical_paths_raw))
 
         # grab the forward and adjoint data
@@ -426,7 +436,7 @@ def postprocess_adj(
                     else:
                         vjp_value_map[path] = value
 
-            if numerical_paths_ordered and numerical_vjp_fn is not None:
+            if use_numerical_vjp:
                 derivative_info_num = DerivativeInfo(
                     paths=numerical_paths_ordered,
                     **common_kwargs,

@@ -20,6 +20,7 @@ from autograd.test_util import check_grads
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.field_map import FieldMap
 from tidy3d.components.autograd.utils import is_tidy_box
@@ -33,7 +34,7 @@ from tidy3d.plugins.smatrix.run import _run_local
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd import autograd as autograd_module
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom
-from tidy3d.web.api.autograd.types import UserVJPConfig
+from tidy3d.web.api.autograd.types import NumericalStructureConfig, UserVJPConfig
 
 from ...utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
 
@@ -265,7 +266,7 @@ def use_emulated_run(monkeypatch):
                 sim_data_fwd=sim_data_fwd,
                 sim_fields_keys=sim_fields_keys,
                 user_vjp=None,
-                numerical_info=None,
+                numerical_structures=None,
             )
 
             return traced_fields_vjp
@@ -666,9 +667,6 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-# args = [("polyslab", "mode")]
-
-
 def get_functions(structure_key: str, monitor_key: str) -> dict[str, typing.Callable]:
     if structure_key == ALL_KEY:
         structure_keys = structure_keys_
@@ -755,10 +753,7 @@ def make_polyslab_user_vjp(user_vjp_val):
     return polyslab_user_vjp
 
 
-user_vjp_args = [("polyslab", "mode")]
-
-
-@pytest.mark.parametrize("structure_key, monitor_key", user_vjp_args)
+@pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
 @pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
 @pytest.mark.parametrize("use_run_async", [True, False])
 @pytest.mark.parametrize("use_task_names", [True, False])
@@ -827,9 +822,6 @@ def test_autograd_user_vjp(
                 user_vjp = [user_vjp_element] * len(task_names)
             batch_data = {}
             if use_run_async:
-                # print(f'user vjp = {user_vjp}')
-                # asdf
-
                 batch_data = run_async_custom(
                     sims, user_vjp=user_vjp, local_gradient=local_gradient
                 )
@@ -862,7 +854,7 @@ def test_autograd_user_vjp(
     if not local_gradient:
         with pytest.raises(
             td.exceptions.AdjointError,
-            match="User VJP specified for a remote gradient not supported.",
+            match="user_vjp specified for a remote gradient not supported.",
         ):
             val, grad = ag.value_and_grad(make_objective(user_vjp_val))(params0)
     else:
@@ -874,7 +866,7 @@ def test_autograd_user_vjp(
         ), "Gradients were not set by the user vjp"
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", user_vjp_args)
+@pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
 @pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
 @pytest.mark.parametrize("use_run_async", [True, False])
 @pytest.mark.parametrize("use_task_names", [True, False])
@@ -975,12 +967,19 @@ def test_autograd_user_vjp_selective(
         ), "Gradients were set by the user vjp when they should not have been"
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", user_vjp_args)
+@pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
 @pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
 @pytest.mark.parametrize("use_single_user_vjp", [True, False])
+@pytest.mark.parametrize("run_function", [_run_local, run_custom])
 @pytest.mark.parametrize("local_gradient", [True, False])
 def test_autograd_cm_user_vjp(
-    use_emulated_run, structure_key, monitor_key, polyslab_axis, use_single_user_vjp, local_gradient
+    use_emulated_run,
+    structure_key,
+    monitor_key,
+    polyslab_axis,
+    use_single_user_vjp,
+    run_function,
+    local_gradient,
 ):
     """Test that we can override a vjp with a user defined function in component modeler simulations."""
 
@@ -1045,7 +1044,7 @@ def test_autograd_cm_user_vjp(
                 freqs=select_mode_monitor.freqs,
             )
 
-            smatrix = _run_local(
+            smatrix = run_function(
                 modeler,
                 user_vjp=user_vjp_element,
                 local_gradient=local_gradient,
@@ -1060,7 +1059,7 @@ def test_autograd_cm_user_vjp(
     if not local_gradient:
         with pytest.raises(
             td.exceptions.AdjointError,
-            match="User VJP specified for a remote gradient not supported.",
+            match="user_vjp specified for a remote gradient not supported.",
         ):
             val, grad = ag.value_and_grad(make_objective(user_vjp_val))(params0)
     else:
@@ -1072,10 +1071,12 @@ def test_autograd_cm_user_vjp(
         ), "Gradients were not set by the user vjp"
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", user_vjp_args)
+@pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
 @pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
 @pytest.mark.parametrize("use_run_async", [True, False])
+@pytest.mark.parametrize("use_single_numerical_structure", [True, False])
 @pytest.mark.parametrize("use_task_names", [True, False])
+@pytest.mark.parametrize("specify_numerical_structure_index", [True, False])
 @pytest.mark.parametrize("local_gradient", [True, False])
 def test_autograd_numerical_structures(
     use_emulated_run,
@@ -1083,10 +1084,12 @@ def test_autograd_numerical_structures(
     monitor_key,
     polyslab_axis,
     use_run_async,
+    use_single_numerical_structure,
     use_task_names,
+    specify_numerical_structure_index,
     local_gradient,
 ):
-    """Test that we can numerical structures to autograd simulations."""
+    """Test that we can add numerical structures to autograd simulations."""
 
     fn_dict = get_functions(structure_key, monitor_key)
     make_sim = fn_dict["sim"]
@@ -1096,7 +1099,7 @@ def test_autograd_numerical_structures(
 
     def make_objective(user_vjp_val):
         def objective(*args):
-            def make_first_polyslab(param):
+            def make_first_polyslab(params):
                 return make_sim(*args, polyslab_axis=polyslab_axis).structures[1]
 
             def vjp(parameters, derivative_info):
@@ -1109,25 +1112,37 @@ def test_autograd_numerical_structures(
 
                 return vjps
 
-            structure_generator = {
-                1: {
-                    "function": make_first_polyslab,
-                    "parameters": np.array(args).flatten(),
-                    "vjp": vjp,
-                }
-            }
-
-            sim = make_sim(*args, polyslab_axis=polyslab_axis)
+            # ensure the numerical_structures are the reason for the autograd run by stripping
+            # tracers for the simulation creation
+            static_args = [get_static(arg) for arg in args]
+            sim = make_sim(*static_args, polyslab_axis=polyslab_axis)
 
             structures = [s for idx, s in enumerate(sim.structures) if (not (idx == 1))]
             sim_strip_structure = sim.updated_copy(structures=structures)
 
+            if specify_numerical_structure_index:
+                numerical_structure = NumericalStructureConfig(
+                    create=make_first_polyslab,
+                    compute_derivatives=vjp,
+                    parameters=np.array(args).flatten(),
+                    structure_index=1,
+                )
+            else:
+                numerical_structure = NumericalStructureConfig(
+                    create=make_first_polyslab,
+                    compute_derivatives=vjp,
+                    parameters=np.array(args).flatten(),
+                )
+            numerical_structures = (
+                numerical_structure if use_single_numerical_structure else (numerical_structure,)
+            )
+
             if use_task_names:
                 sims = dict.fromkeys(task_names, sim_strip_structure)
-                numerical_structures = dict.fromkeys(task_names, structure_generator)
+                numerical_structures = dict.fromkeys(task_names, numerical_structures)
             else:
                 sims = [sim_strip_structure] * len(task_names)
-                numerical_structures = [structure_generator] * len(task_names)
+                numerical_structures = [numerical_structures] * len(task_names)
 
             batch_data = {}
             if use_run_async:
@@ -1165,25 +1180,39 @@ def test_autograd_numerical_structures(
     if not local_gradient:
         with pytest.raises(
             td.exceptions.AdjointError,
-            match="Numerical structures specified for a remote gradient not supported.",
+            match="numerical_structures specified for a remote gradient not supported.",
         ):
             val, grad = ag.value_and_grad(make_objective(user_vjp_val))(params0)
     else:
         val, grad = ag.value_and_grad(make_objective(user_vjp_val))(params0)
         val_scale, grad_scale = ag.value_and_grad(make_objective(user_vjp_val_scale))(params0)
 
+        assert np.allclose(grad, len(task_names) * user_vjp_val), (
+            "Gradients did not accumulate correctly."
+        )
+
         assert np.isclose(
             np.sum(np.abs(grad * (user_vjp_val_scale / user_vjp_val) - grad_scale)), 0.0
         ), "Gradients were not set by the user vjp"
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", user_vjp_args)
+@pytest.mark.parametrize("structure_key, monitor_key", [("polyslab", "mode")])
 @pytest.mark.parametrize("polyslab_axis", [0, 1, 2])
+@pytest.mark.parametrize("numerical_structures_specification", ["single", "tuple"])
+@pytest.mark.parametrize("run_function", [_run_local, run_custom])
+@pytest.mark.parametrize("specify_numerical_structure_index", [True, False])
 @pytest.mark.parametrize("local_gradient", [True, False])
 def test_autograd_cm_numerical_structures(
-    use_emulated_run, structure_key, monitor_key, polyslab_axis, local_gradient
+    use_emulated_run,
+    structure_key,
+    monitor_key,
+    polyslab_axis,
+    numerical_structures_specification,
+    run_function,
+    specify_numerical_structure_index,
+    local_gradient,
 ):
-    """Test that we can numerical structures to component modeler autograd simulations."""
+    """Test that we can add numerical structures to component modeler autograd simulations."""
 
     fn_dict = get_functions(structure_key, monitor_key)
     make_sim = fn_dict["sim"]
@@ -1191,7 +1220,7 @@ def test_autograd_cm_numerical_structures(
 
     def make_objective(user_vjp_val):
         def objective(*args):
-            def make_first_polyslab(param):
+            def make_first_polyslab(params):
                 return make_sim(*args, polyslab_axis=polyslab_axis).structures[1]
 
             def vjp(parameters, derivative_info):
@@ -1204,15 +1233,28 @@ def test_autograd_cm_numerical_structures(
 
                 return vjps
 
-            structure_generator = {
-                1: {
-                    "function": make_first_polyslab,
-                    "parameters": np.array(args).flatten(),
-                    "vjp": vjp,
-                }
-            }
+            if specify_numerical_structure_index:
+                numerical_structure = NumericalStructureConfig(
+                    create=make_first_polyslab,
+                    compute_derivatives=vjp,
+                    parameters=np.array(args).flatten(),
+                    structure_index=1,
+                )
+            else:
+                numerical_structure = NumericalStructureConfig(
+                    create=make_first_polyslab,
+                    compute_derivatives=vjp,
+                    parameters=np.array(args).flatten(),
+                )
+            if numerical_structures_specification == "single":
+                numerical_structures = numerical_structure
+            elif numerical_structures_specification == "tuple":
+                numerical_structures = (numerical_structure,)
 
-            sim = make_sim(*args, polyslab_axis=polyslab_axis)
+            # ensure the numerical_structures are the reason for the autograd run by stripping
+            # tracers for the simulation creation
+            static_args = [get_static(arg) for arg in args]
+            sim = make_sim(*static_args, polyslab_axis=polyslab_axis)
 
             structures = [s for idx, s in enumerate(sim.structures) if (not (idx == 1))]
             sim_strip_structure = sim.updated_copy(structures=structures)
@@ -1241,8 +1283,8 @@ def test_autograd_cm_numerical_structures(
                 freqs=select_mode_monitor.freqs,
             )
 
-            smatrix = _run_local(
-                modeler, numerical_structures=structure_generator, local_gradient=local_gradient
+            smatrix = run_function(
+                modeler, numerical_structures=numerical_structures, local_gradient=local_gradient
             )
             return np.sum(np.abs(smatrix.smatrix().values) ** 2)
 

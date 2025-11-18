@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import json
 import typing
 from os import PathLike
@@ -16,11 +15,10 @@ from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.web import Batch, BatchData
-from tidy3d.web.api.autograd import (
-    has_traced_numerical_structures,
-    insert_numerical_structures_static,
+from tidy3d.web.api.autograd.types import (
+    NumericalStructureConfig,
+    UserVJPConfig,
 )
-from tidy3d.web.api.autograd.types import UserVJPConfig
 
 DEFAULT_DATA_DIR = "."
 
@@ -161,7 +159,9 @@ def create_batch(
 def _run_local(
     modeler: ComponentModelerType,
     path_dir: str = DEFAULT_DATA_DIR,
-    numerical_structures=None,
+    numerical_structures: typing.Optional[
+        typing.Union[NumericalStructureConfig, tuple[NumericalStructureConfig]]
+    ] = None,
     user_vjp: typing.Optional[typing.Union[UserVJPConfig, tuple[UserVJPConfig]]] = None,
     **kwargs: typing.Any,
 ) -> ComponentModelerDataType:
@@ -193,12 +193,15 @@ def _run_local(
 
     sims = modeler.sim_dict
 
-    numerical_structures_modeler = numerical_structures or {}
+    if isinstance(numerical_structures, NumericalStructureConfig):
+        numerical_structures = (numerical_structures,)
 
-    should_use_autograd = any(web_ag.is_valid_for_autograd(sim) for sim in sims.values())
-
-    if not should_use_autograd and has_traced_numerical_structures(numerical_structures_modeler):
-        should_use_autograd = True
+    traced_numerical_structures = numerical_structures and web_ag.has_traced_numerical_structures(
+        numerical_structures
+    )
+    should_use_autograd = traced_numerical_structures or any(
+        web_ag.is_valid_for_autograd(sim) for sim in sims.values()
+    )
 
     if should_use_autograd:
         if len(modeler.element_mappings) > 0:
@@ -218,26 +221,18 @@ def _run_local(
 
         local_gradient = kwargs.get("local_gradient", True)
 
-        if (user_vjp is not None) and (not local_gradient):
-            raise AdjointError("User VJP specified for a remote gradient not supported.")
+        if not local_gradient:
+            if user_vjp is not None:
+                raise AdjointError("user_vjp specified for a remote gradient not supported.")
 
-        if (not local_gradient) and has_traced_numerical_structures(numerical_structures_modeler):
-            raise AdjointError(
-                "ComponentModeler autograd with traced numerical structures requires local_gradient=True."
-            )
+            if traced_numerical_structures:
+                raise AdjointError(
+                    "ComponentModeler autograd with traced numerical structures requires local_gradient=True."
+                )
 
-        if numerical_structures_modeler:
-            first_sim = next(iter(sims.values()))
-            web_ag.validate_numerical_structures(
-                numerical_structures=numerical_structures_modeler,
-                simulation=first_sim,
-            )
-
-            numerical_structures_broadcast = {
-                key: copy.deepcopy(numerical_structures_modeler) for key in sims
-            }
-        else:
-            numerical_structures_broadcast = None
+        if numerical_structures:
+            web_ag.validate_numerical_structure_parameters(numerical_structures)
+            numerical_structures = dict.fromkeys(sims, numerical_structures)
 
         if isinstance(user_vjp, UserVJPConfig):
             user_vjp = (user_vjp,)
@@ -245,9 +240,15 @@ def _run_local(
         if user_vjp:
             user_vjp = dict.fromkeys(sims, user_vjp)
 
+        if numerical_structures is not None:
+            for key in numerical_structures:
+                numerical_structures[key] = web_ag.populate_numerical_structures(
+                    simulation=sims[key], numerical_structures=numerical_structures[key]
+                )
+
         sim_data_map = _run_async(
             simulations=sims,
-            numerical_structures=numerical_structures_broadcast,
+            numerical_structures=numerical_structures,
             user_vjp=user_vjp,
             **kwargs,
         )
@@ -256,7 +257,7 @@ def _run_local(
 
     if numerical_structures is not None:
         modeler = modeler.updated_copy(
-            simulation=insert_numerical_structures_static(
+            simulation=web_ag.insert_numerical_structures_static(
                 simulation=modeler.simulation, numerical_structures=numerical_structures
             )
         )

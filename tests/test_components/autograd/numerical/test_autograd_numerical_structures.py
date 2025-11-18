@@ -13,6 +13,7 @@ import xarray as xr
 
 import tidy3d as td
 from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom
+from tidy3d.web.api.autograd.types import NumericalStructureConfig
 
 PLOT_FD_ADJ_COMPARISON = True
 NUM_FINITE_DIFFERENCE = 10
@@ -199,22 +200,22 @@ def create_objective_function(geometry, create_sim_base, eval_fn, run_fn, sim_pa
         assert (run_fn == "run_custom") or (run_fn == "run_async_custom"), (
             "Unrecognized run function!"
         )
+
         if run_fn == "run_custom":
             sim_data = {}
             idx = 0
             for key, sim_val in simulation_dict.items():
-                ring_generator = {
-                    0: {
-                        "function": create_ring,
-                        "parameters": ring_parameters_lists[idx],
-                        "vjp": vjp_ring,
-                    }
-                }
+                ring_numerical_structure = NumericalStructureConfig(
+                    create=create_ring,
+                    compute_derivatives=vjp_ring,
+                    parameters=ring_parameters_lists[idx],
+                    structure_index=0,
+                )
                 sim_data[key] = run_custom(
                     sim_val,
                     local_gradient=LOCAL_GRADIENT,
                     verbose=VERBOSE,
-                    numerical_structures=ring_generator,
+                    numerical_structures=ring_numerical_structure,
                 )
 
                 idx += 1
@@ -223,16 +224,14 @@ def create_objective_function(geometry, create_sim_base, eval_fn, run_fn, sim_pa
             numerical_structures_dict = {}
 
             for idx, key in enumerate(simulation_dict):
+                ring_numerical_structure = NumericalStructureConfig(
+                    create=create_ring,
+                    compute_derivatives=vjp_ring,
+                    parameters=ring_parameters_lists[idx],
+                    structure_index=0,
+                )
                 user_vjp_dict[key] = ((1, "radius", vjp_ring), (1, "center", vjp_ring))
-
-                ring_generator = {
-                    0: {
-                        "function": create_ring,
-                        "parameters": ring_parameters_lists[idx],
-                        "vjp": vjp_ring,
-                    }
-                }
-                numerical_structures_dict[key] = ring_generator
+                numerical_structures_dict[key] = ring_numerical_structure
 
             sim_data = run_async_custom(
                 simulation_dict,
@@ -391,13 +390,13 @@ def test_finite_difference_numerical_structures(test_parameters, rng, tmp_path, 
 
     all_rings = []
     for fd_idx in range(len(ring_init)):
-        rin_up = ring_init.copy()
+        ring_up = ring_init.copy()
         ring_down = ring_init.copy()
 
-        rin_up[fd_idx] += fd_step
+        ring_up[fd_idx] += fd_step
         ring_down[fd_idx] -= fd_step
 
-        all_rings.append(rin_up)
+        all_rings.append(ring_up)
         all_rings.append(ring_down)
 
     all_obj = objective(all_rings)

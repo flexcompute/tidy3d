@@ -14,7 +14,7 @@ import xarray as xr
 import tidy3d as td
 from tidy3d.plugins.smatrix import ComponentModeler, Port
 from tidy3d.plugins.smatrix.run import _run_local
-from tidy3d.web.api.autograd.types import UserVJPConfig
+from tidy3d.web.api.autograd.types import NumericalStructureConfig, UserVJPConfig
 
 PLOT_FD_ADJ_COMPARISON = True
 NUM_FINITE_DIFFERENCE = 10
@@ -279,13 +279,12 @@ def create_objective_function(geometry, create_sim_base, adj_wvl_um, sim_path_di
                 freqs=[td.C_0 / adj_wvl_um],
             )
 
-            ring_generator = {
-                0: {
-                    "function": create_ring,
-                    "parameters": geom_dict[key][4:],
-                    "vjp": vjp_ring,
-                }
-            }
+            ring_numerical_structure = NumericalStructureConfig(
+                create=create_ring,
+                compute_derivatives=vjp_ring,
+                parameters=geom_dict[key][4:],
+                structure_index=0,
+            )
 
             user_vjp_single = UserVJPConfig(
                 structure_index=3,
@@ -297,7 +296,7 @@ def create_objective_function(geometry, create_sim_base, adj_wvl_um, sim_path_di
                 local_gradient=LOCAL_GRADIENT,
                 verbose=VERBOSE,
                 user_vjp=user_vjp_single,
-                numerical_structures=ring_generator,
+                numerical_structures=ring_numerical_structure,
             )
 
         objective_vals = []
