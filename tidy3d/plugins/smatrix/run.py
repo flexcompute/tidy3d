@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import json
-from os import PathLike
 from typing import Any
 
-from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.index import SimulationDataMap
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
@@ -16,43 +13,6 @@ from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.web import Batch, BatchData
 
 DEFAULT_DATA_DIR = "."
-
-
-def compose_modeler(
-    modeler_file: PathLike,
-) -> ComponentModelerType:
-    """Load a component modeler from an HDF5 file.
-
-    This function reads an HDF5 file, determines the modeler type
-    (`ModalComponentModeler` or `TerminalComponentModeler`), and constructs the
-    corresponding modeler object.
-
-    Parameters
-    ----------
-    modeler_file : PathLike
-        Path to the HDF5 file containing the modeler definition.
-
-    Returns
-    -------
-    ComponentModelerType
-        The loaded `ModalComponentModeler` or `TerminalComponentModeler` object.
-
-    Raises
-    ------
-    TypeError
-        If the modeler type specified in the file is not supported.
-    """
-    json_str = Tidy3dBaseModel._json_string_from_hdf5(modeler_file)
-    model_dict = json.loads(json_str)
-    modeler_type = model_dict["type"]
-
-    if modeler_type == "ModalComponentModeler":
-        modeler = ModalComponentModeler.from_file(modeler_file)
-    elif modeler_type == "TerminalComponentModeler":
-        modeler = TerminalComponentModeler.from_file(modeler_file)
-    else:
-        raise TypeError(f"Unsupported modeler type: {type(modeler_type).__name__}")
-    return modeler
 
 
 def compose_modeler_data(
