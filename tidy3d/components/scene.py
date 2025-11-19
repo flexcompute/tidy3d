@@ -1979,8 +1979,8 @@ class Scene(Tidy3dBaseModel):
     def doping_bounds(self):
         """Get the maximum and minimum of the doping"""
 
-        acceptors_lims = [1e50, -1e50]
-        donors_lims = [1e50, -1e50]
+        acceptors_lims = [np.inf, -np.inf]
+        donors_lims = [np.inf, -np.inf]
 
         for struct in self.all_structures:
             if isinstance(struct.medium.charge, SemiconductorMedium):
@@ -2020,6 +2020,15 @@ class Scene(Tidy3dBaseModel):
                                     limits[0] = min_value
                                 if max_value > limits[1]:
                                     limits[1] = max_value
+        # make sure we have recorded some values. Otherwise, set to 0
+        if np.isinf(acceptors_lims[0]):
+            acceptors_lims[0] = 0
+        if np.isinf(acceptors_lims[1]):
+            acceptors_lims[1] = 0
+        if np.isinf(donors_lims[0]):
+            donors_lims[0] = 0
+        if np.isinf(donors_lims[1]):
+            donors_lims[1] = 0
         return acceptors_lims, donors_lims
 
     def doping_absolute_minimum(self):
