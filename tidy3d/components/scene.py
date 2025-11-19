@@ -2002,6 +2002,9 @@ class Scene(Tidy3dBaseModel):
                         if max_value > limits[1]:
                             limits[1] = max_value
                     if isinstance(doping, tuple):
+                        if len(doping) == 0:
+                            limits[0] = 0
+                            limits[1] = 0
                         for doping_box in doping:
                             if isinstance(doping_box, ConstantDoping):
                                 if doping_box.concentration < limits[0]:
