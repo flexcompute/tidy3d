@@ -104,19 +104,19 @@ def test_layerrefinement():
         assert layer.size[axis] == 1
         assert layer.size[(axis + 1) % 3] == td.inf
         assert layer.size[(axis + 2) % 3] == td.inf
-        assert not layer._is_inplane_bounded
+        assert not layer._is_inplane_bounded(layer)
 
     layer = LayerRefinementSpec.from_bounds(axis=axis, rmin=(0, 0, 0), rmax=(1, 2, 3))
     layer = LayerRefinementSpec.from_bounds(rmin=(0, 0, 0), rmax=(1, 2, 3))
     assert layer.axis == 0
     assert np.isclose(layer.length_axis, 1)
     assert np.isclose(layer.center_axis, 0.5)
-    assert layer._is_inplane_bounded
+    assert layer._is_inplane_bounded(layer)
 
     # from structures
     structures = [td.Structure(geometry=td.Box(size=(td.inf, 2, 3)), medium=td.Medium())]
     layer = LayerRefinementSpec.from_structures(structures)
-    assert layer._is_inplane_bounded
+    assert layer._is_inplane_bounded(layer)
     assert layer.axis == 1
 
     with pytest.raises(pydantic.ValidationError):
@@ -138,11 +138,11 @@ def test_layerrefinement():
 def test_layerrefinement_inplane_inside():
     # inplane inside
     layer = LayerRefinementSpec.from_layer_bounds(axis=2, bounds=(0, 1))
-    assert not layer._is_inplane_bounded
-    assert layer._inplane_inside([3e3, 4e4])
+    assert not layer._is_inplane_bounded(layer)
+    assert layer._inplane_inside(layer, [3e3, 4e4])
     layer = LayerRefinementSpec(axis=1, size=(1, 0, 1))
-    assert layer._inplane_inside([0, 0])
-    assert not layer._inplane_inside([2, 0])
+    assert layer._inplane_inside(layer, [0, 0])
+    assert not layer._inplane_inside(layer, [2, 0])
 
 
 def test_layerrefinement_snapping_points():
@@ -263,7 +263,11 @@ def test_grid_spec_with_layers():
     assert (
         len(
             sim2.grid_spec.all_override_structures(
-                list(sim2.structures), 1.0, sim2.size, lumped_elements
+                list(sim2.structures),
+                1.0,
+                lumped_elements,
+                sim2._internal_layerrefinement_boundary_types,
+                sim2.bounds,
             )
         )
         == 1
@@ -281,7 +285,11 @@ def test_grid_spec_with_layers():
     assert (
         len(
             sim2.grid_spec.all_override_structures(
-                list(sim2.structures), 1.0, sim2.size, lumped_elements
+                list(sim2.structures),
+                1.0,
+                lumped_elements,
+                sim2._internal_layerrefinement_boundary_types,
+                sim2.bounds,
             )
         )
         == 2
@@ -425,7 +433,11 @@ def test_dl_min_from_smallest_feature():
         ),
         medium=td.PECMedium(),
     )
-
+    boundary_types = [[None] * 2] * 3
+    sim_bounds = [
+        [-td.inf] * 3,
+        [td.inf] * 3,
+    ]
     # check expected dl_min
     layer_spec = td.LayerRefinementSpec(
         axis=2,
@@ -434,7 +446,7 @@ def test_dl_min_from_smallest_feature():
             convex_resolution=10,
         ),
     )
-    dl_min = layer_spec._dl_min_from_smallest_feature([structure])
+    dl_min = layer_spec._dl_min_from_smallest_feature([structure], sim_bounds, boundary_types)
     assert np.allclose(0.3 / 10, dl_min)
 
     layer_spec = td.LayerRefinementSpec(
@@ -442,7 +454,7 @@ def test_dl_min_from_smallest_feature():
         size=(td.inf, td.inf, 2),
         corner_finder=td.CornerFinderSpec(mixed_resolution=10),
     )
-    dl_min = layer_spec._dl_min_from_smallest_feature([structure])
+    dl_min = layer_spec._dl_min_from_smallest_feature([structure], sim_bounds, boundary_types)
     assert np.allclose(0.2 / 10, dl_min)
 
     layer_spec = td.LayerRefinementSpec(
@@ -452,7 +464,7 @@ def test_dl_min_from_smallest_feature():
             concave_resolution=10,
         ),
     )
-    dl_min = layer_spec._dl_min_from_smallest_feature([structure])
+    dl_min = layer_spec._dl_min_from_smallest_feature([structure], sim_bounds, boundary_types)
     assert np.allclose(0.1 / 10, dl_min)
 
     # check grid is generated succesfully
@@ -517,7 +529,8 @@ def test_gap_meshing():
             layer_refinement_specs=[
                 td.LayerRefinementSpec(
                     axis=2,
-                    corner_finder=None,
+                    corner_snapping=False,
+                    corner_refinement=None,
                     gap_meshing_iters=num_iters,
                     size=[td.inf, td.inf, 2],
                     center=[0, 0, 1],
@@ -583,7 +596,8 @@ def test_gap_meshing():
                 td.LayerRefinementSpec(
                     axis=1,
                     size=(td.inf, 0.2, td.inf),
-                    corner_finder=None,
+                    corner_snapping=False,
+                    corner_refinement=None,
                     gap_meshing_iters=1,
                     dl_min_from_gap_width=True,
                 )
@@ -626,7 +640,8 @@ def test_gap_meshing():
                 td.LayerRefinementSpec(
                     axis=1,
                     size=(td.inf, 0.2, td.inf),
-                    corner_finder=None,
+                    corner_snapping=False,
+                    corner_refinement=None,
                     gap_meshing_iters=2,
                     dl_min_from_gap_width=True,
                     interior_disjoint_geometries=False,
@@ -658,7 +673,8 @@ def test_gap_meshing():
                 td.LayerRefinementSpec(
                     axis=1,
                     size=(td.inf, 0.2, td.inf),
-                    corner_finder=None,
+                    corner_snapping=False,
+                    corner_refinement=None,
                     gap_meshing_iters=1,
                     dl_min_from_gap_width=True,
                 )
@@ -697,7 +713,8 @@ def test_gap_meshing():
                     axis=1,
                     size=(0.5, 0.2, 0.5),
                     center=(0.5, 0, -0.5),
-                    corner_finder=None,
+                    corner_snapping=False,
+                    corner_refinement=None,
                     gap_meshing_iters=1,
                     dl_min_from_gap_width=True,
                 )
@@ -731,7 +748,8 @@ def test_gap_meshing():
                     axis=1,
                     size=(0.05, 0.2, 0.05),
                     center=(0.05, 0, 0.05),
-                    corner_finder=None,
+                    corner_snapping=False,
+                    corner_refinement=None,
                     gap_meshing_iters=2,
                     dl_min_from_gap_width=True,
                 )
@@ -765,7 +783,8 @@ def test_gap_meshing():
                     axis=1,
                     size=(0.01, 0.2, 0.01),
                     center=(10.0, 0, 10.0),
-                    corner_finder=None,
+                    corner_snapping=False,
+                    corner_refinement=None,
                     gap_meshing_iters=1,
                     dl_min_from_gap_width=True,
                 )
@@ -804,7 +823,8 @@ def test_gap_meshing():
                 td.LayerRefinementSpec(
                     axis=1,
                     size=(td.inf, 0.2, td.inf),
-                    corner_finder=None,
+                    corner_snapping=False,
+                    corner_refinement=None,
                     gap_meshing_iters=1,
                     dl_min_from_gap_width=True,
                 )
@@ -842,7 +862,8 @@ def test_gap_meshing():
                 td.LayerRefinementSpec(
                     axis=0,
                     size=(0.2, td.inf, td.inf),
-                    corner_finder=None,
+                    corner_snapping=False,
+                    corner_refinement=None,
                     gap_meshing_iters=1,
                     dl_min_from_gap_width=True,
                 )
