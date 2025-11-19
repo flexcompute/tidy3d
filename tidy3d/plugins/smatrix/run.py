@@ -178,6 +178,12 @@ def _run_local(
         The component modeler defining the simulations to be run.
     path_dir : str, optional
         The directory where the batch file will be saved. Defaults to ".".
+    numerical_structures : typing.Union[NumericalStructureConfig, tuple[NumericalStructureConfig]] = None
+        Specification of additional structures to add to the base simulation that can be traced via
+        autograd. This can be a single structure or multiple structures specified in a tuple.
+    user_vjp : typing.Union[UserVJPConfig, tuple[UserVJPConfig]] = None
+        Specification of alternate gradient function for certain structures in the simulation.
+        This can be a single vjp configuration or multiple specified in a tuple.
     **kwargs
         Extra keyword arguments propagated to the Batch creation.
 

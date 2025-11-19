@@ -171,10 +171,10 @@ def vjp_ring(parameters, derivative_info):
         params_up[param_idx] += step_size
         params_down[param_idx] -= step_size
 
-        rin_up = create_ring(params_up)
+        ring_up = create_ring(params_up)
         ring_down = create_ring(params_down)
 
-        eps_up = derivative_info.updated_epsilon(rin_up.geometry)
+        eps_up = derivative_info.updated_epsilon(ring_up.geometry)
         eps_down = derivative_info.updated_epsilon(ring_down.geometry)
 
         eps_grad = (eps_up - eps_down) / (2 * step_size)

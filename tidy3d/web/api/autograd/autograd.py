@@ -244,6 +244,13 @@ def run_custom(
     lazy: Optional[bool] = None
         Whether to return lazy data proxies. Defaults to ``False`` for single runs when
         unspecified, matching :func:`tidy3d.web.run`.
+    numerical_structures : typing.Optional[typing.Union[NumericalStructureConfig, tuple[NumericalStructureConfig]]] = None
+        Specification of additional structures to add to the simulation (or base simulation for ComponentModeler workflows)
+        that can be traced via autograd. This can be a single structure or multiple structures specified in a tuple.
+    user_vjp : typing.Optional[typing.Union[UserVJPConfig, tuple[UserVJPConfig]]] = None
+        Specification of alternate gradient function for certain structures in the simulation.
+        This can be a single vjp configuration or multiple specified in a tuple.
+
     Returns
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`, :class:`.ModalComponentModelerData`, :class:`.TerminalComponentModelerData`]
@@ -530,6 +537,30 @@ def run_async_custom(
     lazy: Optional[bool] = None
         Whether to return lazy data proxies. Defaults to ``True`` for batch runs when
         unspecified, matching :func:`tidy3d.web.run`.
+    numerical_structures: typing.Optional[typing.Union[
+            NumericalStructureConfig,
+            dict[str, NumericalStructureConfig],
+            typing.Sequence[NumericalStructureConfig],
+            dict[str, typing.Sequence[NumericalStructureConfig]],
+            typing.Sequence[typing.Sequence[NumericalStructureConfig]],
+        ]] = None
+        Specification of additional structures to add to the simulations that can be traced via autograd. Different
+        numerical_structures can be added for different simulations or the same set can be broadcasted to all simulations.
+        Specifying a single config will broadcast to all simluations. Specifying a dict or a sequence with single configs
+        as values will set one config for each simluation. Most generally, multiple structures can be specified for each
+        simulation by specifying a dict with sequence values or a sequence of sequences.
+    user_vjp: typing.Optional[typing.Union[
+            UserVJPConfig,
+            dict[str, UserVJPConfig],
+            typing.Sequence[UserVJPConfig],
+            dict[str, typing.Sequence[UserVJPConfig]],
+            typing.Sequence[typing.Sequence[UserVJPConfig]],
+        ]] = None
+        Specification of alternate gradient function for certain structures in the simulation. Different
+        user_vjp's can be added for different simulations or the same set can be broadcasted to all simulations.
+        Specifying a single config will broadcast to all simluations. Specifying a dict or a sequence with single configs
+        as values will set one config for each simluation. Most generally, multiple user_vjp's can be specified for each
+        simulation by specifying a dict with sequence values or a sequence of sequences.
 
     Returns
     ------

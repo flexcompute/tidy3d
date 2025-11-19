@@ -143,12 +143,13 @@ def vjp_sphere(sphere, derivative_info):
         "paths": list(ps_paths),
         "deep": False,
     }
-    derivative_info_custom_medium = derivative_info.updated_copy(**update_kwargs)
 
     def finite_difference_gradient(perturb_up, perturb_down, derivative_info_):
-        eps_up = derivative_info.updated_epsilon(sphere_up)
-        eps_down = derivative_info.updated_epsilon(sphere_down)
+        eps_up = derivative_info.updated_epsilon(perturb_up)
+        eps_down = derivative_info.updated_epsilon(perturb_down)
         eps_grad = (eps_up - eps_down) / (2 * step_size)
+
+        derivative_info_custom_medium = derivative_info_.updated_copy(**update_kwargs)
 
         custom_medium = td.CustomMedium(permittivity=xr.ones_like(eps_grad.isel(f=0, drop=True)))
         vjps_custom_medium = custom_medium._compute_derivatives(derivative_info_custom_medium)
@@ -248,15 +249,11 @@ def create_objective_function(geometry, create_sim_base, eval_fn, run_fn, sim_pa
     return objective
 
 
-# def make_eval_fns(orders_x, orders_y, polarization):
 def make_eval_fns():
     def transmission(sim_data):
         total = 0.0
 
         return np.sum(np.abs(sim_data["monitor_fields"].flux.data) ** 2)
-
-        return np.mean(np.abs(sim_data["monitor_fields"].Ez.data) ** 2)
-        # return np.mean(np.abs(sim_data["monitor_fields"].Ex.data)**2 + np.abs(sim_data["monitor_fields"].Ey.data)**2)
 
     eval_fns = [transmission]
     eval_fn_names = ["transmission"]
@@ -318,8 +315,6 @@ def test_finite_difference_user_vjp(test_parameters, rng, tmp_path, create_direc
     """Test a variety of autograd permittivity gradients for DiffractionData by"""
     """comparing them to numerical finite difference."""
 
-    test_number = test_parameters["test_number"]
-
     (
         mesh_wvl_um,
         adj_wvl_um,
@@ -348,8 +343,6 @@ def test_finite_difference_user_vjp(test_parameters, rng, tmp_path, create_direc
         center=(sim_geometry.center[0], sim_geometry.center[1], 0),
         size=(dim_um, dim_um, thickness_um),
     )
-
-    eval_fns, eval_fn_names = make_eval_fns()
 
     sim_path_dir = tmp_path / f"test{test_number}"
     sim_path_dir.mkdir()

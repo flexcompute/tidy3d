@@ -140,12 +140,13 @@ def vjp_sphere(sphere, derivative_info):
         "paths": list(ps_paths),
         "deep": False,
     }
-    derivative_info_custom_medium = derivative_info.updated_copy(**update_kwargs)
 
     def finite_difference_gradient(perturb_up, perturb_down, derivative_info_):
-        eps_up = derivative_info.updated_epsilon(sphere_up)
-        eps_down = derivative_info.updated_epsilon(sphere_down)
+        eps_up = derivative_info.updated_epsilon(perturb_up)
+        eps_down = derivative_info.updated_epsilon(perturb_down)
         eps_grad = (eps_up - eps_down) / (2 * step_size)
+
+        derivative_info_custom_medium = derivative_info_.updated_copy(**update_kwargs)
 
         custom_medium = td.CustomMedium(permittivity=xr.ones_like(eps_grad.isel(f=0, drop=True)))
         vjps_custom_medium = custom_medium._compute_derivatives(derivative_info_custom_medium)

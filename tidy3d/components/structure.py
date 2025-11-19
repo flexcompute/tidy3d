@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+import typing
 from collections import defaultdict
 from functools import cmp_to_key
 from os import PathLike
@@ -347,9 +348,12 @@ class Structure(AbstractStructure):
         return mnt_fld, mnt_eps
 
     def _compute_derivatives(
-        self, derivative_info: DerivativeInfo, vjp_fns=None
+        self,
+        derivative_info: DerivativeInfo,
+        vjp_fns: typing.Optional[dict[tuple[str, str], typing.Callable[..., typing.Any]]] = None,
     ) -> AutogradFieldMap:
-        """Compute adjoint gradients given the forward and adjoint fields"""
+        """Compute adjoint gradients given the forward and adjoint fields provided in derivative_info."""
+        """vjp_fns provide alternate derivative computation paths for the geometry or medium derivatives."""
 
         # generate a mapping from the 'medium', or 'geometry' tag to the list of fields for VJP
         structure_fields_map = defaultdict(list)
