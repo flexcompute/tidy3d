@@ -211,6 +211,16 @@ Our Ecosystem
       +++
       **Tidy3D GUI**
 
+Tidy3D + AI
+===========
+
+*Ushering in a new era of AI-assisted photonic design*
+
+The `Tidy3D + AI <ai/index.html>`_ ecosystem enables seamless building, visualization, and iteration on electromagnetic simulations. The Tidy3D Extension for Cursor and VS Code automatically detects simulations in Python scripts and notebooks, opens an interactive `3D Viewer <ai/3d_viewer.html>`_ alongside your code, and enables the IDE AI assistant to leverage the integrated `FlexAgent MCP <ai/flex_agent.html>`_ server for an intelligent, physics‑aware assistance experience.
+
+.. image:: _static/img/tidy3d_extension.png
+   :alt: Tidy3D Extension
+   :height: 300px
 
 Further Information
 ====================
@@ -256,6 +266,7 @@ Contents
   notebooks/docs/index
   faq/docs/index
   api/index
+  ai/index
   GUI <https://tidy3d.simulation.cloud/>
   Photonforge <https://docs.flexcompute.com/projects/photonforge/en/latest/>
   extras/index
