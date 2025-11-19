@@ -966,6 +966,11 @@ class TaskFactory:
     _REGISTRY: dict[str, str] = {}
 
     @classmethod
+    def reset(cls) -> None:
+        """Clear the cached task kind registry (used in tests)."""
+        cls._REGISTRY.clear()
+
+    @classmethod
     def register(cls, task_id: str, kind: str) -> None:
         cls._REGISTRY[task_id] = kind
 

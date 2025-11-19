@@ -1368,9 +1368,9 @@ def delete(task_id: TaskId, versions: bool = False) -> TaskInfo:
         Object containing information about status, size, credits of task.
 
     """
-    task = TaskFactory.get(task_id, verbose=False)
-    if not task:
+    if not task_id:
         raise ValueError("Task id not found.")
+    task = TaskFactory.get(task_id, verbose=False)
     task.delete(versions)
     return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 

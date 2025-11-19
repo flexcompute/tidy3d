@@ -43,7 +43,7 @@ from tidy3d.web.cache import (
     resolve_local_cache,
 )
 from tidy3d.web.cli.app import tidy3d_cli
-from tidy3d.web.core.task_core import BatchTask
+from tidy3d.web.core.task_core import BatchTask, SimulationTask
 
 common.CONNECTION_RETRY_TIME = 0.1
 
@@ -245,7 +245,9 @@ def _patch_run_pipeline(monkeypatch):
     monkeypatch.setattr(
         io_utils, "load_simulation", lambda task_id, *args, **kwargs: TASK_TO_SIM[task_id]
     )
-    monkeypatch.setattr(BatchTask, "is_batch", lambda *args, **kwargs: "success")
+    monkeypatch.setattr(
+        SimulationTask, "get", lambda *args, **kwargs: SimpleNamespace(taskType="FDTD")
+    )
     monkeypatch.setattr(
         BatchTask, "detail", lambda *args, **kwargs: SimpleNamespace(status="success")
     )
