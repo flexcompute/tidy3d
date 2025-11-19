@@ -31,6 +31,7 @@ from tidy3d.components.autograd import (
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
+from tidy3d.components.geometry.float_utils import increment_float
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
 from tidy3d.components.types import (
     ArrayFloat2D,
@@ -2172,6 +2173,11 @@ class Box(SimplePlaneIntersection, Centered):
         shapely_box = self.make_shapely_box(bs_min[0], bs_min[1], bs_max[0], bs_max[1])
         shapely_box = Geometry.evaluate_inf_shape(shapely_box)
         return [Geometry.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
+
+    def slightly_enlarged_copy(self) -> Box:
+        """Box size slightly enlarged around machine precision."""
+        size = [increment_float(orig_length, 1) for orig_length in self.size]
+        return self.updated_copy(size=size)
 
     def padded_copy(
         self,

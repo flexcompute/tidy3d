@@ -126,6 +126,7 @@ from .types import (
     FreqBound,
     InterpMethod,
     PermittivityComponent,
+    Shapely,
     Symmetry,
     annotate_type,
 )
@@ -979,15 +980,47 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         return pml_thicknesses
 
     @cached_property
+    def _internal_layerrefinement_boundary_types(self):
+        """Boundary types for layer refinement."""
+        boundary_types = [[None, None], [None, None], [None, None]]
+        for dim, boundary in enumerate(self.boundary_spec.to_list):
+            for side, edge in enumerate(boundary):
+                if isinstance(edge, (PECBoundary, PMCBoundary)):
+                    boundary_types[dim][side] = "pec/pmc"
+                elif isinstance(edge, (Periodic, BlochBoundary)):
+                    boundary_types[dim][side] = "periodic"
+        return boundary_types
+
+    @cached_property
+    def _internal_layerrefinement_merged_geos(self) -> list[tuple[Any, Shapely]]:
+        """Merged geometries on the plane for each layer refinement specification."""
+        cached_data = []
+        for layer in self.grid_spec.layer_refinement_specs:
+            cached_data.append(
+                layer._merged_geos(
+                    structure_list=self.scene.all_structures,
+                    sim_bounds=self.bounds,
+                    boundary_type=self._internal_layerrefinement_boundary_types,
+                )
+            )
+        return cached_data
+
+    @cached_property
     def _internal_layerfinement_corners_and_convexity_2d(
         self,
     ) -> list[tuple[list[ArrayFloat2D], list[ArrayFloat1D]]]:
         """Internal inplane corners and their convexity for each layer_refinement_specs."""
         cached_data = []
-        for layer in self.grid_spec.layer_refinement_specs:
+        for merged_geos, layer in zip(
+            self._internal_layerrefinement_merged_geos, self.grid_spec.layer_refinement_specs
+        ):
             cached_data.append(
                 layer._corners_and_convexity_2d(
-                    structure_list=self.scene.all_structures, ravel=False
+                    merged_geos=merged_geos,
+                    structure_list=self.scene.all_structures,
+                    ravel=False,
+                    sim_bounds=self.bounds,
+                    boundary_type=self._internal_layerrefinement_boundary_types,
                 )
             )
         return cached_data
@@ -1005,9 +1038,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         return self.grid_spec.internal_override_structures(
             self.scene.all_structures,
             wavelength,
-            self.geometry.size,
+            self.bounds,
             self.lumped_elements,
+            self._internal_layerrefinement_boundary_types,
             self._internal_layerfinement_corners_and_convexity_2d,
+            self._internal_layerrefinement_merged_geos,
         )
 
     @cached_property
@@ -1022,7 +1057,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         return self.grid_spec.internal_snapping_points(
             self.scene.all_structures,
             self.lumped_elements,
+            self._internal_layerrefinement_boundary_types,
+            self.bounds,
             self._internal_layerfinement_corners_and_convexity_2d,
+            self._internal_layerrefinement_merged_geos,
         )
 
     @equal_aspect
@@ -1389,6 +1427,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             internal_override_structures=self.internal_override_structures,
             boundary_types=boundary_types,
             structure_priority_mode=self.scene.structure_priority_mode,
+            cached_merged_geos=self._internal_layerrefinement_merged_geos,
         )
 
         # This would AutoGrid the in-plane directions of the 2D materials
@@ -5422,6 +5461,7 @@ class Simulation(AbstractYeeGridSimulation):
             lumped_elements=self.lumped_elements,
             internal_snapping_points=self.internal_snapping_points,
             internal_override_structures=self.internal_override_structures,
+            cached_merged_geos=self._internal_layerrefinement_merged_geos,
         )
 
         # Handle 2D materials if ``AutoGrid`` is used for in-plane directions
