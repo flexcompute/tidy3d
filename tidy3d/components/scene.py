@@ -2002,9 +2002,6 @@ class Scene(Tidy3dBaseModel):
                         if max_value > limits[1]:
                             limits[1] = max_value
                     if isinstance(doping, tuple):
-                        if len(doping) == 0:
-                            limits[0] = 0
-                            limits[1] = 0
                         for doping_box in doping:
                             if isinstance(doping_box, ConstantDoping):
                                 if doping_box.concentration < limits[0]:
@@ -2023,6 +2020,15 @@ class Scene(Tidy3dBaseModel):
                                     limits[0] = min_value
                                 if max_value > limits[1]:
                                     limits[1] = max_value
+        # make sure we have recorded some values. Otherwise, set to 0
+        if acceptors_lims[0] == 1e50:
+            acceptors_lims[0] = 0
+        if acceptors_lims[1] == -1e50:
+            acceptors_lims[1] = 0
+        if donors_lims[0] == 1e50:
+            donors_lims[0] = 0
+        if donors_lims[1] == -1e50:
+            donors_lims[1] = 0
         return acceptors_lims, donors_lims
 
     def doping_absolute_minimum(self):
