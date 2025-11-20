@@ -86,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed DRC parsing for quoted categories in klayout plugin.
 - Removed mode solver warnings about evaluating permittivity of a `Medium2D`.
 - Maximum number of grid points in an EME simulation is now based solely on transverse grid points. Maximum number of EME cells is unchanged.
+- Fixed handling of polygons with holes (interiors) in `subdivide()` function. The function now properly converts polygons with interiors into `PolySlab` geometries using subtraction operations with `GeometryGroup`.
 
 ### Removed
 - Removed deprecated `use_complex_fields` parameter from `TwoPhotonAbsorption` and `KerrNonlinearity`. Parameters `beta` and `n2` are now real-valued only, as is `n0` if specified.

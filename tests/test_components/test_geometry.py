@@ -1158,6 +1158,71 @@ def test_subdivide():
     subdivisions = subdivide(geom=overlapping_boxes, structures=[background_structure, box_sliver])
 
 
+def test_subdivide_geometry_group_with_polygon_holes():
+    """Test that unionized geometry containing a hole works correctly."""
+    mm = 1000.0
+
+    # Create four boxes arranged to form a cross pattern with a square hole in the middle
+    box_a = td.Box.from_bounds((-10 * mm, -10 * mm, 0 * mm), (-5 * mm, 5 * mm, 0 * mm))
+    box_b = td.Box.from_bounds((-10 * mm, 5 * mm, 0 * mm), (5 * mm, 10 * mm, 0 * mm))
+    box_c = td.Box.from_bounds((5 * mm, -5 * mm, 0 * mm), (10 * mm, 10 * mm, 0 * mm))
+    box_d = td.Box.from_bounds((-5 * mm, -10 * mm, 0 * mm), (10 * mm, -5 * mm, 0 * mm))
+
+    geom_group = td.GeometryGroup(geometries=(box_a, box_b, box_c, box_d))
+    geom_structures_group = [td.Structure(geometry=geom_group, medium=td.PEC2D)]
+
+    feed_pin_bottom = -2 * mm
+    feed_pin_top = 0 * mm
+    feed_pin_center = 0.5 * (feed_pin_top + feed_pin_bottom)
+    feed_pin_length = feed_pin_top - feed_pin_bottom
+    feed_center_x = -7.5 * mm
+    feed_center_y = -7.5 * mm
+    rfeed = 1.0 * mm
+
+    feed_pin = td.Structure(
+        geometry=td.Cylinder(
+            center=(feed_center_x, feed_center_y, feed_pin_center),
+            radius=rfeed,
+            length=feed_pin_length,
+            axis=2,
+        ),
+        medium=td.PECMedium(),
+    )
+
+    structures_list = [feed_pin, *geom_structures_group]
+
+    freq = 1500 * 1e6
+    dl = (td.C_0 / freq) / 300.0
+
+    mesh_overrides = [
+        td.MeshOverrideStructure(
+            geometry=td.Box(
+                center=(0, 0, 0 * mm),
+                size=(20 * mm, 20 * mm, 6 * mm),
+            ),
+            dl=[dl, dl, dl],
+        )
+    ]
+
+    sim = td.Simulation(
+        size=[100 * mm, 100 * mm, 30 * mm],
+        grid_spec=td.GridSpec.auto(
+            min_steps_per_wvl=20,
+            wavelength=td.C_0 / freq,
+            override_structures=mesh_overrides,
+        ),
+        structures=structures_list,
+        run_time=1e-13,
+    )
+
+    contains_difference_operation = False
+    for structure in sim._finalized.structures:
+        geo = structure.geometry
+        if isinstance(geo, td.ClipOperation) and geo.operation == "difference":
+            contains_difference_operation = True
+    assert contains_difference_operation
+
+
 @pytest.mark.parametrize("snap_location", [SnapLocation.Boundary, SnapLocation.Center])
 @pytest.mark.parametrize(
     "snap_behavior",

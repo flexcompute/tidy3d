@@ -7,7 +7,7 @@ from math import isclose
 import numpy as np
 import shapely
 
-from tidy3d.components.geometry.base import Box, ClipOperation, Geometry
+from tidy3d.components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup
 from tidy3d.components.geometry.polyslab import _MIN_POLYGON_AREA, PolySlab
 from tidy3d.components.grid.grid import Grid
 from tidy3d.components.scene import Scene
@@ -122,10 +122,28 @@ def subdivide(
 
     """
 
-    def shapely_to_polyslab(polygon: shapely.Polygon, axis: Axis, center: float) -> PolySlab:
-        xx, yy = polygon.exterior.coords.xy
-        vertices = list(zip(xx, yy))
-        return PolySlab(slab_bounds=(center, center), vertices=vertices, axis=axis)
+    def shapely_to_polyslab(polygon: shapely.Polygon, axis: Axis, center: float) -> Geometry:
+        def ring_vertices(ring: shapely.LinearRing) -> list[tuple[float, float]]:
+            xx, yy = ring.coords.xy
+            return list(zip(xx, yy))
+
+        polyslab = PolySlab(
+            slab_bounds=(center, center),
+            vertices=ring_vertices(polygon.exterior),
+            axis=axis,
+        )
+        if len(polygon.interiors) == 0:
+            return polyslab
+
+        interiors = [
+            PolySlab(
+                slab_bounds=(center, center),
+                vertices=ring_vertices(interior),
+                axis=axis,
+            )
+            for interior in polygon.interiors
+        ]
+        return polyslab - GeometryGroup(geometries=interiors)
 
     def to_multipolygon(shapely_geometry: Shapely) -> shapely.MultiPolygon:
         return shapely.MultiPolygon(ClipOperation.to_polygon_list(shapely_geometry))
