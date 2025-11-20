@@ -41,19 +41,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `interp_spec` in `EMEModeSpec` to enable faster multi-frequency EME simulations. Note that the default is now `ModeInterpSpec.cheb(num_points=3, reduce_data=True)`; previously the computation was repeated at all frequencies.
 - Added `smoothed_projection` for topology optimization of completely binarized designs.
 - Added more RF-specific mode characteristics to `MicrowaveModeData`, including propagation constants (alpha, beta, gamma), phase/group velocities, wave impedance, and automatic mode classification with configurable polarization thresholds in `MicrowaveModeSpec`.
+- Introduce `tidy3d.rf` namespace to consolidate all RF classes.
 
 ### Breaking Changes
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.
 - `angle_threshold` in `CornerFinderSpec` now defaults to `pi/4`.
-**Note: These breaking changes only affect the microwave and smatrix plugins.**
-- Renamed path integral classes for improved consistency. Please see our migration guide for details on updating your code.
+- `WavePort` has been refactored to use `MicrowaveModeSpec`. The fields `voltage_integral`, and `current_integral` have been removed. Impedance specifications are now defined in `MicrowaveModeSpec.impedance_specs`. Please see our migration guide for details on updating your code.
+
+### Planned Deprecation
+**Note: These changes only affect the microwave and smatrix plugins.**
+- Renamed path integral classes for improved consistency. Please see our migration guide for details on updating your code. Old class naming is aliased to the new classes for 2.10.
   - `VoltageIntegralAxisAligned` → `AxisAlignedVoltageIntegral`
   - `CurrentIntegralAxisAligned` → `AxisAlignedCurrentIntegral`
   - `CustomPathIntegral2D` → `Custom2DPathIntegral`
   - `CustomVoltageIntegral2D` → `Custom2DVoltageIntegral`
   - `CustomCurrentIntegral2D` → `Custom2DCurrentIntegral`
   - Path integral and impedance calculator classes have been refactored and moved from the microwave plugin into Tidy3D components. They are now publicly exported via the top-level package `__init__.py`.
-- `WavePort` has been refactored to use `MicrowaveModeSpec`. The fields `voltage_integral`, and `current_integral` have been removed. Impedance specifications are now defined in `MicrowaveModeSpec.impedance_specs`. Please see our migration guide for details on updating your code.
 
 ### Changed
 - Improved performance of antenna metrics calculation by utilizing cached wave amplitude calculations instead of recomputing wave amplitudes for each port excitation in the `TerminalComponentModelerData`.
