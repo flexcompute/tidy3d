@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 import pathlib
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from os import PathLike
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
@@ -721,11 +721,14 @@ class Geometry(Tidy3dBaseModel, ABC):
         if not any(np.isinf(b) for b in shape.bounds):
             return shape
 
+        def _processed_coords(coords: Sequence[tuple[Any, ...]]) -> list[tuple[float, ...]]:
+            evaluated = Geometry._evaluate_inf(np.array(coords))
+            return [tuple(point) for point in evaluated.tolist()]
+
         if shape.geom_type == "Polygon":
-            return shapely.Polygon(
-                Geometry._evaluate_inf(np.array(shape.exterior.coords)),
-                [Geometry._evaluate_inf(np.array(g.coords)) for g in shape.interiors],
-            )
+            shell = _processed_coords(shape.exterior.coords)
+            holes = [_processed_coords(g.coords) for g in shape.interiors]
+            return shapely.Polygon(shell, holes)
         if shape.geom_type in {"Point", "LineString", "LinearRing"}:
             return shape.__class__(Geometry._evaluate_inf(np.array(shape.coords)))
         if shape.geom_type in {
