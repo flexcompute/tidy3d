@@ -40,9 +40,14 @@ from .array_factor import (
 from .lobe_measurer import LobeMeasurer
 from .rf_material_library import rf_material_library
 
-# Backwards compatibility
+# Backwards compatibility: Remove 2.11 renamed integral classes
 CurrentIntegralTypes = CurrentIntegralType
 VoltageIntegralTypes = VoltageIntegralType
+VoltageIntegralAxisAligned = AxisAlignedVoltageIntegral
+CurrentIntegralAxisAligned = AxisAlignedCurrentIntegral
+CustomPathIntegral2D = Custom2DPathIntegral
+CustomVoltageIntegral2D = Custom2DVoltageIntegral
+CustomCurrentIntegral2D = Custom2DCurrentIntegral
 
 __all__ = [
     "AxisAlignedCurrentIntegral",
@@ -52,10 +57,14 @@ __all__ = [
     "BlackmanWindow",
     "ChebWindow",
     "CompositeCurrentIntegral",
+    "CurrentIntegralAxisAligned",  # Backwards compatibility alias
     "CurrentIntegralTypes",
     "Custom2DCurrentIntegral",
     "Custom2DPathIntegral",
     "Custom2DVoltageIntegral",
+    "CustomCurrentIntegral2D",  # Backwards compatibility alias
+    "CustomPathIntegral2D",  # Backwards compatibility alias
+    "CustomVoltageIntegral2D",  # Backwards compatibility alias
     "HammingWindow",
     "HannWindow",
     "ImpedanceCalculator",
@@ -65,6 +74,7 @@ __all__ = [
     "RectangularAntennaArrayCalculator",
     "RectangularTaper",
     "TaylorWindow",
+    "VoltageIntegralAxisAligned",  # Backwards compatibility alias
     "VoltageIntegralTypes",
     "models",
     "path_integrals_from_lumped_element",

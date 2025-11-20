@@ -484,6 +484,12 @@ Transformed.update_forward_refs()
 ClipOperation.update_forward_refs()
 GeometryGroup.update_forward_refs()
 
+# Backwards compatibility: Remove 2.11 renamed integral classes
+VoltageIntegralAxisAligned = AxisAlignedVoltageIntegral
+CurrentIntegralAxisAligned = AxisAlignedCurrentIntegral
+CustomVoltageIntegral2D = Custom2DVoltageIntegral
+CustomCurrentIntegral2D = Custom2DCurrentIntegral
+
 __all__ = [
     "C_0",
     "DATA_TYPE_MAP",
@@ -549,12 +555,14 @@ __all__ = [
     "Coords1D",
     "CornerFinderSpec",
     "CurrentBC",
+    "CurrentIntegralAxisAligned",  # Backwards compatibility alias
     "Custom2DCurrentIntegral",
     "Custom2DCurrentIntegralSpec",
     "Custom2DVoltageIntegral",
     "Custom2DVoltageIntegralSpec",
     "CustomAnisotropicMedium",
     "CustomChargePerturbation",
+    "CustomCurrentIntegral2D",  # Backwards compatibility alias
     "CustomCurrentSource",
     "CustomDebye",
     "CustomDoping",
@@ -570,6 +578,7 @@ __all__ = [
     "CustomSampling",
     "CustomSellmeier",
     "CustomSourceTime",
+    "CustomVoltageIntegral2D",  # Backwards compatibility alias
     "Cylinder",
     "DCCurrentSource",
     "DCVoltageSource",
@@ -830,6 +839,7 @@ __all__ = [
     "VerticalNaturalConvectionCoeffModel",
     "VisualizationSpec",
     "VoltageBC",
+    "VoltageIntegralAxisAligned",  # Backwards compatibility alias
     "VoltageSourceType",
     "VolumeMeshData",
     "VolumeMeshMonitor",
