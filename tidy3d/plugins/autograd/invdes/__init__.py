@@ -16,7 +16,7 @@ from .parametrizations import (
     make_filter_and_project,
 )
 from .penalties import ErosionDilationPenalty, make_curvature_penalty, make_erosion_dilation_penalty
-from .projections import ramp_projection, tanh_projection
+from .projections import ramp_projection, smoothed_projection, tanh_projection
 
 __all__ = [
     "CircularFilter",
@@ -34,5 +34,6 @@ __all__ = [
     "make_filter_and_project",
     "make_gaussian_filter",
     "ramp_projection",
+    "smoothed_projection",
     "tanh_projection",
 ]
