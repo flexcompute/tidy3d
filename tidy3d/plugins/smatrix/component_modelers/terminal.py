@@ -10,6 +10,7 @@ import pydantic.v1 as pd
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
+from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.monitor import DirectivityMonitor
 from tidy3d.components.simulation import Simulation
@@ -125,7 +126,9 @@ class TerminalComponentModeler(AbstractComponentModeler):
             for port in self.ports
             if isinstance(port, WavePort) and port.absorber
         ]
-        return self.simulation.updated_copy(sources=sources, internal_absorbers=absorbers)
+        return self.simulation.updated_copy(
+            sources=sources, internal_absorbers=absorbers, validate=False
+        )
 
     @equal_aspect
     @add_ax_if_none
@@ -256,16 +259,14 @@ class TerminalComponentModeler(AbstractComponentModeler):
     def sim_dict(self) -> SimulationMap:
         """Generate all the :class:`.Simulation` objects for the port parameter calculation."""
 
+        TerminalComponentModeler._check_grid_size_at_ports(self.base_sim, self._lumped_ports)
+        TerminalComponentModeler._check_grid_size_at_wave_ports(self.base_sim, self._wave_ports)
+
         sim_dict = {}
         # Now, create simulations with wave port sources and mode solver monitors for computing port modes
         for network_index in self.matrix_indices_run_sim:
             task_name, sim_with_src = self._add_source_to_sim(network_index)
             sim_dict[task_name] = sim_with_src
-
-        # Check final simulations for grid size at ports
-        for _, sim in sim_dict.items():
-            TerminalComponentModeler._check_grid_size_at_ports(sim, self._lumped_ports)
-            TerminalComponentModeler._check_grid_size_at_wave_ports(sim, self._wave_ports)
 
         return SimulationMap(keys=tuple(sim_dict.keys()), values=tuple(sim_dict.values()))
 
@@ -287,7 +288,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
         # Make an initial simulation with new grid_spec to determine where LumpedPorts are snapped
         sim_wo_source = self.simulation.updated_copy(
-            grid_spec=grid_spec, lumped_elements=lumped_resistors
+            grid_spec=grid_spec, lumped_elements=lumped_resistors, validate=False, deep=False
         )
         snap_centers = {}
         for port in self._lumped_ports:
@@ -345,7 +346,10 @@ class TerminalComponentModeler(AbstractComponentModeler):
         }
 
         # This is the new default simulation will all shared components added
-        return sim_wo_source.copy(update=update_dict)
+        base_sim_tmp = sim_wo_source.updated_copy(**update_dict, validate=False, deep=False)
+        grid_spec = GridSpec.from_grid(base_sim_tmp.grid)
+        grid_spec.attrs["from_grid_spec"] = base_sim_tmp.grid_spec
+        return base_sim_tmp.updated_copy(grid_spec=grid_spec)
 
     def _add_source_to_sim(self, source_index: NetworkIndex) -> tuple[str, Simulation]:
         """Adds the source corresponding to the ``source_index`` to the base simulation."""
@@ -363,7 +367,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 self._source_time, snap_center=new_port_center, grid=self.base_sim.grid
             )
         task_name = self.get_task_name(port=port, mode_index=mode_index)
-        return (task_name, self.base_sim.updated_copy(sources=[port_source]))
+        return (task_name, self.base_sim.updated_copy(sources=[port_source], validate=False))
 
     @cached_property
     def _source_time(self):
