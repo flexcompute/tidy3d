@@ -84,4 +84,5 @@ Inverse Design
     tidy3d.plugins.autograd.invdes.make_filter_and_project
     tidy3d.plugins.autograd.invdes.ramp_projection
     tidy3d.plugins.autograd.invdes.tanh_projection
+    tidy3d.plugins.autograd.invdes.smoothed_projection
 
