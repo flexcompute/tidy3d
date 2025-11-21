@@ -4718,7 +4718,6 @@
           "type": "integer"
         },
         "num_sweep": {
-          "default": 1,
           "minimum": 0,
           "type": "integer"
         },
@@ -5089,6 +5088,190 @@
       },
       "required": [
         "freq_scale_factors"
+      ],
+      "type": "object"
+    },
+    "EMEInterfaceSMatrixMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ],
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "colocate": {
+          "default": true,
+          "enum": [
+            true
+          ],
+          "type": "boolean"
+        },
+        "eme_cell_interval_space": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "freqs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "ArrayLike"
+            }
+          ]
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "items": [
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "num_modes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "num_sweep": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ]
+        },
+        "type": {
+          "default": "EMEInterfaceSMatrixMonitor",
+          "enum": [
+            "EMEInterfaceSMatrixMonitor"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "size"
       ],
       "type": "object"
     },
@@ -12731,6 +12914,7 @@
           "mapping": {
             "EMECoefficientMonitor": "#/definitions/EMECoefficientMonitor",
             "EMEFieldMonitor": "#/definitions/EMEFieldMonitor",
+            "EMEInterfaceSMatrixMonitor": "#/definitions/EMEInterfaceSMatrixMonitor",
             "EMEModeSolverMonitor": "#/definitions/EMEModeSolverMonitor",
             "MediumMonitor": "#/definitions/MediumMonitor",
             "ModeSolverMonitor": "#/definitions/ModeSolverMonitor",
@@ -12744,6 +12928,9 @@
           },
           {
             "$ref": "#/definitions/EMEFieldMonitor"
+          },
+          {
+            "$ref": "#/definitions/EMEInterfaceSMatrixMonitor"
           },
           {
             "$ref": "#/definitions/EMEModeSolverMonitor"

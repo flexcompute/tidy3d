@@ -1176,15 +1176,41 @@ class EMESMatrixDataArray(DataArray):
     >>> sweep_index = np.arange(10)
     >>> coords = dict(
     ...     f=f,
+    ...     sweep_index=sweep_index,
     ...     mode_index_out=mode_index_out,
     ...     mode_index_in=mode_index_in,
-    ...     sweep_index=sweep_index
     ... )
-    >>> fd = EMESMatrixDataArray((1 + 1j) * np.random.random((1, 3, 2, 10)), coords=coords)
+    >>> fd = EMESMatrixDataArray((1 + 1j) * np.random.random((1, 10, 3, 2)), coords=coords)
     """
 
     __slots__ = ()
     _dims = ("f", "sweep_index", "mode_index_out", "mode_index_in")
+    _data_attrs = {"long_name": "scattering matrix element"}
+
+
+class EMEInterfaceSMatrixDataArray(DataArray):
+    """Scattering matrix elements at a single cell interface for a fixed pair of ports,
+    possibly with an extra sweep index.
+
+    Example
+    -------
+    >>> mode_index_in = [0, 1]
+    >>> mode_index_out = [0, 1, 2]
+    >>> eme_cell_index = [2, 4]
+    >>> f = [2e14]
+    >>> sweep_index = np.arange(10)
+    >>> coords = dict(
+    ...     f=f,
+    ...     sweep_index=sweep_index,
+    ...     eme_cell_index=eme_cell_index,
+    ...     mode_index_out=mode_index_out,
+    ...     mode_index_in=mode_index_in,
+    ... )
+    >>> fd = EMEInterfaceSMatrixDataArray((1 + 1j) * np.random.random((1, 10, 2, 3, 2)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "sweep_index", "eme_cell_index", "mode_index_out", "mode_index_in")
     _data_attrs = {"long_name": "scattering matrix element"}
 
 
@@ -1596,6 +1622,7 @@ DATA_ARRAY_TYPES = [
     EMEScalarModeFieldDataArray,
     EMESMatrixDataArray,
     EMECoefficientDataArray,
+    EMEInterfaceSMatrixDataArray,
     EMEModeIndexDataArray,
     EMEFreqModeDataArray,
     ChargeDataArray,

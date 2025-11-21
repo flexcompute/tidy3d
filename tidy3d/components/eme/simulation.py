@@ -51,8 +51,9 @@ MAX_MODE_NUM_CELLS = 5e6
 
 
 # eme specific simulation parameters
-WARN_NUM_FREQS = 20
-MAX_NUM_FREQS = 500
+WARN_NUM_SAMPLING_POINTS = 20
+MAX_NUM_SAMPLING_POINTS = 500
+MAX_NUM_FREQS = 2000
 MAX_NUM_SWEEP = 100
 
 
@@ -105,7 +106,7 @@ class EMESimulation(AbstractYeeGridSimulation):
 
         **Frequency Sweeps**
 
-        Frequency sweeps are supported by including multiple frequencies in the `freqs` field. However, our EME solver repeats the mode solving for each new frequency, so frequency sweeps involving a large number of frequencies can be slow and expensive. If a large number of frequencies are required, consider using our FDTD solver instead.
+        Frequency sweeps are supported by including multiple frequencies in the `freqs` field. To avoid recomputing the modes at each frequency, the modes are interpolated according to the `EMEModeSpec.interp_spec` in the cells `eme_grid_spec`. By setting this `interp_spec`, the interpolation can be changed or disabled (repeating the solve at each frequency, which can be slow).
 
         **Passivity and Unitarity Constraints**
 
@@ -159,10 +160,9 @@ class EMESimulation(AbstractYeeGridSimulation):
         ...,
         title="Frequencies",
         description="Frequencies for the EME simulation. "
-        "The field is propagated independently at each provided frequency. "
-        "This can be slow when the number of frequencies is large. In this case, "
-        "consider using the approximate 'EMEFreqSweep' as the 'sweep_spec' "
-        "instead of providing all desired frequencies here.",
+        "The field is propagated independently at each provided frequency, "
+        "but the modes are only computed at a few sampling points and interpolated. "
+        "To change this behavior, you can use 'EMEModeSpec.interp_spec'.",
     )
 
     axis: Axis = pd.Field(
@@ -817,17 +817,23 @@ class EMESimulation(AbstractYeeGridSimulation):
         if num_freqs > MAX_NUM_FREQS:
             raise SetupError(
                 f"Simulation has {num_freqs:.2e} frequencies, "
-                f"a maximum of {MAX_NUM_FREQS:.2e} are allowed. Mode solving "
+                f"a maximum of {MAX_NUM_SAMPLING_POINTS:.2e} are allowed."
+            )
+        num_freqs = self._num_sampling_points
+        if num_freqs > MAX_NUM_SAMPLING_POINTS:
+            raise SetupError(
+                f"Simulation has {num_freqs:.2e} frequencies, "
+                f"a maximum of {MAX_NUM_SAMPLING_POINTS:.2e} are allowed. Mode solving "
                 f"is repeated at each frequency, so EME simulations with too many frequencies "
                 f"can be slower and more expensive than FDTD simulations. "
-                f"Consider using an 'EMEFreqSweep' instead for a faster approximate solution."
+                f"Consider using 'EMEModeSpec.interp_spec' instead for a faster approximate solution."
             )
-        if num_freqs > WARN_NUM_FREQS:
+        if num_freqs > WARN_NUM_SAMPLING_POINTS:
             log.warning(
                 f"Simulation has {num_freqs:.2e} frequencies. Mode solving "
                 f"is repeated at each frequency, so EME simulations with too many frequencies "
                 f"can be slower and more expensive than FDTD simulations. "
-                f"Consider using an 'EMEFreqSweep' instead for a faster approximate solution."
+                f"Consider using 'EMEModeSpec.interp_spec' instead for a faster approximate solution."
             )
 
     def _validate_monitor_size(self) -> None:
@@ -933,6 +939,18 @@ class EMESimulation(AbstractYeeGridSimulation):
                 storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=0))
             data_size[monitor.name] = storage_size
         return data_size
+
+    @property
+    def _num_sampling_points(self) -> pd.NonNegativeFloat:
+        """Max number of sampling freqs in the simulation."""
+        freqs = set()
+        for mode_spec in self.eme_grid.mode_specs:
+            interp_spec = mode_spec.interp_spec
+            if interp_spec is None:
+                freqs |= set(self.freqs)
+            else:
+                freqs |= set(interp_spec.sampling_points(self.freqs))
+        return len(freqs)
 
     @property
     def _num_sweep(self) -> pd.PositiveInt:

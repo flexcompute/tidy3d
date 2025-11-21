@@ -286,6 +286,73 @@ class EMECoefficientMonitor(EMEMonitor):
         "Not all monitors support values different from 1.",
     )
 
+    num_sweep: Optional[pd.NonNegativeInt] = pd.Field(
+        None,
+        title="Number of Sweep Indices",
+        description="Number of sweep indices for the monitor to record. "
+        "Cannot exceed the number of sweep indices for the simulation. "
+        "If the sweep does not change the monitor data, the sweep index "
+        "will be omitted. A value of 'None' will record all sweep indices.",
+    )
+
+    def storage_size(
+        self,
+        num_cells: int,
+        num_transverse_cells: int,
+        num_eme_cells: int,
+        num_freqs: int,
+        num_modes: int,
+        num_sweep: int,
+    ) -> int:
+        """Size of monitor storage given the number of points after discretization."""
+        bytes_single = (
+            4 * BYTES_COMPLEX * num_freqs * num_modes * num_modes * num_eme_cells * num_sweep
+        )
+        return bytes_single
+
+
+class EMEInterfaceSMatrixMonitor(EMEMonitor):
+    """EME monitor for cell interface s matrices.
+
+    Example
+    -------
+    >>> monitor = EMEInterfaceSMatrixMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     freqs=[300e12],
+    ...     num_modes=2,
+    ...     name="eme_interface_smatrix"
+    ... )
+    """
+
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
+        (1, 1, 1),
+        title="Spatial Interval",
+        description="Number of grid step intervals between monitor recordings. If equal to 1, "
+        "there will be no downsampling. If greater than 1, the step will be applied, but the "
+        "first and last point of the monitor grid are always included. "
+        "Not all monitors support values different from 1. Note: This field is not used "
+        "for 'EMEInterfaceSMatrixMonitor'.",
+    )
+
+    eme_cell_interval_space: pd.PositiveInt = pd.Field(
+        1,
+        title="EME Cell Interval",
+        description="Number of eme cells between monitor recordings. If equal to 1, "
+        "there will be no downsampling. If greater than 1, the step will be applied, but the "
+        "first and last cells are always included. Not used in all monitors. "
+        "Not all monitors support values different from 1.",
+    )
+
+    num_sweep: Optional[pd.NonNegativeInt] = pd.Field(
+        None,
+        title="Number of Sweep Indices",
+        description="Number of sweep indices for the monitor to record. "
+        "Cannot exceed the number of sweep indices for the simulation. "
+        "If the sweep does not change the monitor data, the sweep index "
+        "will be omitted. A value of 'None' will record all sweep indices.",
+    )
+
     def storage_size(
         self,
         num_cells: int,
@@ -306,6 +373,7 @@ EMEMonitorType = Union[
     EMEModeSolverMonitor,
     EMEFieldMonitor,
     EMECoefficientMonitor,
+    EMEInterfaceSMatrixMonitor,
     ModeSolverMonitor,
     PermittivityMonitor,
     MediumMonitor,

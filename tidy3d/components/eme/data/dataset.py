@@ -6,6 +6,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.data.data_array import (
     EMECoefficientDataArray,
+    EMEInterfaceSMatrixDataArray,
     EMEModeIndexDataArray,
     EMEScalarFieldDataArray,
     EMEScalarModeFieldDataArray,
@@ -53,6 +54,33 @@ class EMECoefficientDataset(Dataset):
         ...,
         title="B coefficient",
         description="Coefficient for backward mode in this cell.",
+    )
+
+
+class EMEInterfaceSMatrixDataset(Dataset):
+    """Dataset storing interface s-matrices.
+    The s-matrix at ``eme_cell_index=i`` is between cells ``i`` and ``i+1``.
+    """
+
+    S11: EMEInterfaceSMatrixDataArray = pd.Field(
+        ...,
+        title="S11 matrix",
+        description="S matrix relating output modes at port 1 to input modes at port 1.",
+    )
+    S12: EMEInterfaceSMatrixDataArray = pd.Field(
+        ...,
+        title="S12 matrix",
+        description="S matrix relating output modes at port 1 to input modes at port 2.",
+    )
+    S21: EMEInterfaceSMatrixDataArray = pd.Field(
+        ...,
+        title="S21 matrix",
+        description="S matrix relating output modes at port 2 to input modes at port 1.",
+    )
+    S22: EMEInterfaceSMatrixDataArray = pd.Field(
+        ...,
+        title="S22 matrix",
+        description="S matrix relating output modes at port 2 to input modes at port 2.",
     )
 
 

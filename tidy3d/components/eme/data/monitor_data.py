@@ -16,10 +16,16 @@ from tidy3d.components.data.monitor_data import (
 from tidy3d.components.eme.monitor import (
     EMECoefficientMonitor,
     EMEFieldMonitor,
+    EMEInterfaceSMatrixMonitor,
     EMEModeSolverMonitor,
 )
 
-from .dataset import EMECoefficientDataset, EMEFieldDataset, EMEModeSolverDataset
+from .dataset import (
+    EMECoefficientDataset,
+    EMEFieldDataset,
+    EMEInterfaceSMatrixDataset,
+    EMEModeSolverDataset,
+)
 
 
 class EMEModeSolverData(ElectromagneticFieldData, EMEModeSolverDataset):
@@ -50,10 +56,21 @@ class EMECoefficientData(AbstractMonitorData, EMECoefficientDataset):
     )
 
 
+class EMEInterfaceSMatrixData(AbstractMonitorData, EMEInterfaceSMatrixDataset):
+    """Data associated with an EME interface s matrix monitor."""
+
+    monitor: EMEInterfaceSMatrixMonitor = pd.Field(
+        ...,
+        title="EME Interface S Matrix Monitor",
+        description="EME interface s matrix monitor associated with this data.",
+    )
+
+
 EMEMonitorDataType = Union[
     EMEModeSolverData,
     EMEFieldData,
     EMECoefficientData,
+    EMEInterfaceSMatrixData,
     ModeSolverData,
     PermittivityData,
     MediumData,

@@ -185,6 +185,7 @@ from .components.data.data_array import (
     ChargeDataArray,
     DiffractionDataArray,
     EMECoefficientDataArray,
+    EMEInterfaceSMatrixDataArray,
     EMEModeIndexDataArray,
     EMEScalarFieldDataArray,
     EMEScalarModeFieldDataArray,
@@ -243,10 +244,16 @@ from .components.data.utils import (
 from .components.eme.data.dataset import (
     EMECoefficientDataset,
     EMEFieldDataset,
+    EMEInterfaceSMatrixDataset,
     EMEModeSolverDataset,
     EMESMatrixDataset,
 )
-from .components.eme.data.monitor_data import EMECoefficientData, EMEFieldData, EMEModeSolverData
+from .components.eme.data.monitor_data import (
+    EMECoefficientData,
+    EMEFieldData,
+    EMEInterfaceSMatrixData,
+    EMEModeSolverData,
+)
 from .components.eme.data.sim_data import EMESimulationData
 from .components.eme.grid import (
     EMECompositeGrid,
@@ -258,6 +265,7 @@ from .components.eme.grid import (
 from .components.eme.monitor import (
     EMECoefficientMonitor,
     EMEFieldMonitor,
+    EMEInterfaceSMatrixMonitor,
     EMEModeSolverMonitor,
     EMEMonitor,
 )
@@ -607,6 +615,10 @@ __all__ = [
     "EMEFieldMonitor",
     "EMEFreqSweep",
     "EMEGrid",
+    "EMEInterfaceSMatrixData",
+    "EMEInterfaceSMatrixDataArray",
+    "EMEInterfaceSMatrixDataset",
+    "EMEInterfaceSMatrixMonitor",
     "EMELengthSweep",
     "EMEModeIndexDataArray",
     "EMEModeSolverData",

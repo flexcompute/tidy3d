@@ -54,6 +54,11 @@ def make_eme_sim():
         name="coeffs",
     )
 
+    interface_smatrix_monitor = td.EMEInterfaceSMatrixMonitor(
+        size=monitor_size,
+        name="interface_smatrix",
+    )
+
     mode_monitor = td.EMEModeSolverMonitor(
         size=(td.inf, td.inf, td.inf),
         name="modes",
@@ -74,7 +79,14 @@ def make_eme_sim():
         name="modes_out",
     )
 
-    monitors = [mode_monitor, coeff_monitor, field_monitor, modes_in, modes_out]
+    monitors = [
+        mode_monitor,
+        coeff_monitor,
+        interface_smatrix_monitor,
+        field_monitor,
+        modes_in,
+        modes_out,
+    ]
     structures = [waveguide]
 
     sim = td.EMESimulation(
@@ -281,6 +293,9 @@ def test_eme_monitor():
     _ = td.EMECoefficientMonitor(
         center=(1, 2, 3), size=(2, 2, 2), freqs=[300e12], num_modes=2, name="eme_coeffs"
     )
+    _ = td.EMEInterfaceSMatrixMonitor(
+        center=(1, 2, 3), size=(2, 2, 2), freqs=[300e12], num_modes=2, name="eme_interface_smatrix"
+    )
 
 
 def test_eme_simulation():
@@ -402,7 +417,7 @@ def test_eme_simulation():
     monitor = sim.monitors[0].updated_copy(num_modes=1000)
     with pytest.raises(SetupError):
         _ = sim.updated_copy(monitors=[monitor])
-    monitor = sim.monitors[2].updated_copy(num_modes=6)
+    monitor = sim.monitors[3].updated_copy(num_modes=6)
     with pytest.raises(SetupError):
         _ = sim.updated_copy(monitors=[monitor])
 
@@ -419,18 +434,34 @@ def test_eme_simulation():
     with AssertLogLevel("WARNING", "slow-down"):
         sim_bad.validate_pre_upload()
 
-    sim_bad = sim.updated_copy(
+    sim_ok = sim.updated_copy(
         freqs=list(sim.freqs) + list(1e14 * np.linspace(1, 2, 1000)),
+        grid_spec=sim.grid_spec.updated_copy(wavelength=1),
+    )
+    sim_ok.validate_pre_upload()
+    eme_grid_spec_no_interp = td.EMECompositeGrid(
+        subgrids=[
+            s.updated_copy(interp_spec=None, path="mode_spec")
+            for s in sim_ok.eme_grid_spec.subgrids
+        ],
+        subgrid_boundaries=[-1, 1],
+    )
+    sim_bad = sim_ok.updated_copy(eme_grid_spec=eme_grid_spec_no_interp)
+    with pytest.raises(SetupError):
+        sim_bad.validate_pre_upload()
+    sim_bad = sim.updated_copy(
+        freqs=list(sim.freqs) + list(1e14 * np.linspace(1, 2, 5000)),
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
     with pytest.raises(SetupError):
         sim_bad.validate_pre_upload()
-    sim_bad = sim.updated_copy(
+    sim_bad = sim_ok.updated_copy(
         freqs=list(sim.freqs) + list(1e14 * np.linspace(1, 2, 100)),
+        eme_grid_spec=eme_grid_spec_no_interp,
     )
     with AssertLogLevel("WARNING", contains_str="expensive"):
         sim_bad.validate_pre_upload()
-    large_monitor = sim.monitors[2].updated_copy(size=(td.inf, td.inf, td.inf))
+    large_monitor = sim.monitors[3].updated_copy(size=(td.inf, td.inf, td.inf))
     _ = sim.updated_copy(
         size=(10, 10, 10),
         monitors=[large_monitor],
@@ -769,15 +800,61 @@ def _get_eme_coeff_data_array(num_sweep=0):
     return data
 
 
+def _get_eme_interface_smatrix_data_array(num_sweep=0):
+    f = [2e14]
+    mode_index_out = [0, 1]
+    mode_index_in = [0, 1, 2]
+    eme_cell_index = np.arange(6)
+    if num_sweep != 0:
+        sweep_index = np.arange(num_sweep)
+    else:
+        sweep_index = [0]
+    coords = {
+        "f": f,
+        "sweep_index": sweep_index,
+        "eme_cell_index": eme_cell_index,
+        "mode_index_out": mode_index_out,
+        "mode_index_in": mode_index_in,
+    }
+    data = td.EMEInterfaceSMatrixDataArray(
+        (1 + 1j)
+        * np.random.random(
+            (
+                len(f),
+                len(sweep_index),
+                len(eme_cell_index),
+                len(mode_index_out),
+                len(mode_index_in),
+            ),
+        ),
+        coords=coords,
+    )
+    if num_sweep == 0:
+        data = data.drop_vars("sweep_index")
+    return data
+
+
 def _get_eme_coeff_dataset(num_sweep=0):
     A = _get_eme_coeff_data_array(num_sweep=num_sweep)
     B = _get_eme_coeff_data_array(num_sweep=num_sweep)
     return td.EMECoefficientDataset(A=A, B=B)
 
 
+def _get_eme_interface_smatrix_dataset(num_sweep=0):
+    fields = {}
+    for key in ["S11", "S12", "S21", "S22"]:
+        fields[key] = _get_eme_interface_smatrix_data_array(num_sweep=num_sweep)
+    return td.EMEInterfaceSMatrixDataset(**fields)
+
+
 def test_eme_coeff_data_array():
     _ = _get_eme_coeff_data_array()
     _ = _get_eme_coeff_data_array(num_sweep=3)
+
+
+def test_eme_interface_smatrix_data_array():
+    _ = _get_eme_interface_smatrix_data_array()
+    _ = _get_eme_interface_smatrix_data_array(num_sweep=3)
 
 
 def _get_eme_mode_index_data_array(num_sweep=0):
@@ -836,6 +913,9 @@ def test_eme_dataset():
 
     # test coefficient
     _ = _get_eme_coeff_dataset()
+
+    # test interface s matrix
+    _ = _get_eme_interface_smatrix_dataset()
 
     # test field
     _ = _get_eme_field_dataset()
@@ -905,6 +985,17 @@ def _get_eme_coeff_data(num_sweep=0):
     return td.EMECoefficientData(monitor=monitor, A=dataset.A, B=dataset.B)
 
 
+def _get_eme_interface_smatrix_data(num_sweep=0):
+    dataset = _get_eme_interface_smatrix_dataset(num_sweep=num_sweep)
+    monitor = td.EMEInterfaceSMatrixMonitor(
+        size=(td.inf, td.inf, td.inf),
+        name="interface_smatrix",
+    )
+    return td.EMEInterfaceSMatrixData(
+        monitor=monitor, S11=dataset.S11, S12=dataset.S12, S21=dataset.S21, S22=dataset.S22
+    )
+
+
 def _get_mode_solver_data(modes_out=False, num_modes=3):
     offset = 1 if modes_out else -1
     name = "modes_out" if modes_out else "modes_in"
@@ -936,10 +1027,12 @@ def test_eme_monitor_data():
     _ = _get_eme_mode_solver_data()
     _ = _get_eme_field_data()
     _ = _get_eme_coeff_data()
+    _ = _get_eme_interface_smatrix_data()
     _ = _get_mode_solver_data()
     _ = _get_eme_mode_solver_data(num_sweep=3)
     _ = _get_eme_field_data(num_sweep=3)
     _ = _get_eme_coeff_data(num_sweep=3)
+    _ = _get_eme_interface_smatrix_data(num_sweep=3)
 
 
 def _get_eme_port_modes(num_sweep=0):
@@ -960,12 +1053,14 @@ def test_eme_sim_data():
     sim = make_eme_sim()
     mode_monitor_data = _get_eme_mode_solver_data()
     coeff_monitor_data = _get_eme_coeff_data()
+    interface_smatrix_monitor_data = _get_eme_interface_smatrix_data()
     field_monitor_data = _get_eme_field_data()
     modes_in_data = _get_mode_solver_data(modes_out=False, num_modes=3)
     modes_out_data = _get_mode_solver_data(modes_out=True, num_modes=2)
     data = [
         mode_monitor_data,
         coeff_monitor_data,
+        interface_smatrix_monitor_data,
         field_monitor_data,
         modes_in_data,
         modes_out_data,
@@ -1219,7 +1314,7 @@ def test_eme_sim_data():
 
     # test field in basis with freq sweep
     field_monitor_data = _get_eme_field_data(num_sweep=10)
-    data[2] = field_monitor_data
+    data[3] = field_monitor_data
     sim_data = sim_data.updated_copy(data=data)
     field_in_basis = sim_data.field_in_basis(field=sim_data["field"], port_index=0)
     assert len(field_in_basis.Ex.sweep_index) == 10
