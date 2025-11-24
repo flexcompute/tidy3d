@@ -18245,15 +18245,7 @@
         {
           "$ref": "#/definitions/ModelerLowFrequencySmoothingSpec"
         }
-      ],
-      "default": {
-        "attrs": {},
-        "max_deviation": 0.5,
-        "max_sampling_time": 5.0,
-        "min_sampling_time": 1.0,
-        "order": 1,
-        "type": "ModelerLowFrequencySmoothingSpec"
-      }
+      ]
     },
     "name": {
       "default": "",

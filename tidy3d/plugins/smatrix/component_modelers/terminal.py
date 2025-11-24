@@ -133,9 +133,6 @@ class ModelerLowFrequencySmoothingSpec(AbstractLowFrequencySmoothingSpec):
     """
 
 
-DEFAULT_LOW_FREQUENCY_SMOOTHING_SPEC = ModelerLowFrequencySmoothingSpec()
-
-
 class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     """
     Tool for modeling two-terminal multiport devices and computing port parameters
@@ -208,7 +205,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     )
 
     low_freq_smoothing: Optional[ModelerLowFrequencySmoothingSpec] = pd.Field(
-        DEFAULT_LOW_FREQUENCY_SMOOTHING_SPEC,
+        None,
         title="Low Frequency Smoothing",
         description="The low frequency smoothing parameters for the terminal component simulation.",
     )
