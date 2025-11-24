@@ -236,6 +236,35 @@ def test_intersections_plane_inf():
     assert len(c.intersections_plane(y=0)) == 1
 
 
+@pytest.mark.parametrize("component", [BOX, CYLINDER, SPHERE, POLYSLAB, UNION, GROUP])
+@pytest.mark.parametrize("cleanup", [True, False])
+def test_intersections_plane_cleanup_param(component, cleanup):
+    """Test that cleanup parameter is accepted by all geometry types."""
+    shapes = component.intersections_plane(z=0, cleanup=cleanup)
+    assert isinstance(shapes, list)
+    shapes_default = component.intersections_plane(z=0)
+    # Both should return valid shapely objects
+    for shape in shapes:
+        assert hasattr(shape, "is_valid")
+    for shape in shapes_default:
+        assert hasattr(shape, "is_valid")
+
+
+@pytest.mark.parametrize("component", [SPHERE, CYLINDER])
+@pytest.mark.parametrize("quad_segs", [8, 50, 200])
+def test_intersections_plane_quad_segs(component, quad_segs):
+    """Test that quad_segs parameter controls discretization of circular shapes."""
+    shapes = component.intersections_plane(z=0, quad_segs=quad_segs)
+    assert len(shapes) > 0
+    # For circular shapes, quad_segs should affect the number of vertices
+    # Higher quad_segs should generally give more vertices
+    shape = shapes[0]
+    num_coords = len(shape.exterior.coords)
+    assert num_coords > 4 * quad_segs, (
+        f"Expected more than {4 * quad_segs} coords, got {num_coords}"
+    )
+
+
 def test_center_not_inf_validate():
     with pytest.raises(pydantic.ValidationError):
         _ = td.Box(center=(td.inf, 0, 0))

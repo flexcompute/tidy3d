@@ -16,6 +16,10 @@ from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
 from tidy3d.constants import inf
 
 CORNER_ANGLE_THRESOLD = 0.25 * np.pi
+# For shapely circular shapes discretization.
+N_SHAPELY_QUAD_SEGS = 8
+# whether to clean tiny features that sometimes occurs in shapely operations
+SHAPELY_CLEANUP = False
 
 
 class CornerFinderSpec(Tidy3dBaseModel):
@@ -132,7 +136,12 @@ class CornerFinderSpec(Tidy3dBaseModel):
             medium_list = [PEC for _ in geometry_list]
         # merge geometries
         merged_geos = merging_geometries_on_plane(
-            geometry_list, plane, medium_list, interior_disjoint_geometries
+            geometry_list,
+            plane,
+            medium_list,
+            interior_disjoint_geometries,
+            cleanup=SHAPELY_CLEANUP,
+            quad_segs=N_SHAPELY_QUAD_SEGS,
         )
 
         return merged_geos

@@ -530,7 +530,12 @@ class TriangleMesh(base.Geometry, ABC):
         return self.trimesh.bounds
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -542,6 +547,10 @@ class TriangleMesh(base.Geometry, ABC):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. Not used for TriangleMesh.
 
         Returns
         -------
@@ -557,7 +566,12 @@ class TriangleMesh(base.Geometry, ABC):
         return path.polygons_full
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -569,6 +583,10 @@ class TriangleMesh(base.Geometry, ABC):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. Not used for TriangleMesh.
 
         Returns
         -------
@@ -623,7 +641,7 @@ class TriangleMesh(base.Geometry, ABC):
                     "Using bounding box instead."
                 )
             log.warning(f"Error encountered: {e}")
-            return self.bounding_box.intersections_plane(x=x, y=y, z=z)
+            return self.bounding_box.intersections_plane(x=x, y=y, z=z, cleanup=cleanup)
 
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
