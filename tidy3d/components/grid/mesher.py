@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import logging
 import warnings
 from abc import ABC, abstractmethod
@@ -440,8 +441,8 @@ class GradedMesher(Mesher):
 
         # Left structure bound
         bound_coord = str_bbox[0, 2]
-        indsmin = np.nonzero(bound_coord <= coords)[0]
-        indmin = int(indsmin[0])  # coordinate is in interval index ``indmin - 1``
+        # coordinate is in interval index ``indmin - 1``
+        indmin = bisect.bisect_left(coords, bound_coord)
         is_close_l = self.is_close(bound_coord, coords, indmin - 1, min_step_check)
         is_close_r = self.is_close(bound_coord, coords, indmin, min_step_check)
         is_contained = self.is_contained(bound_coord, bbox_contained_2d)
@@ -450,9 +451,11 @@ class GradedMesher(Mesher):
         skip_unshadowed = False
         if unshadowed and indmin > 0:
             grid_size_str = structure_steps[str_ind]
-            min_grid_size = min(
-                (structure_steps[ind] for ind in structs[indmin - 1]), default=grid_size_str
-            )
+            struct_inds = structs[indmin - 1]
+            if struct_inds:
+                min_grid_size = np.amin(structure_steps[struct_inds])
+            else:
+                min_grid_size = grid_size_str
             if not (isclose(grid_size_str, min_grid_size) or grid_size_str < min_grid_size):
                 skip_unshadowed = True
 
@@ -471,8 +474,8 @@ class GradedMesher(Mesher):
 
         # Right structure bound
         bound_coord = str_bbox[1, 2]
-        indsmax = np.nonzero(bound_coord >= coords)[0]
-        indmax = int(indsmax[-1])  # coordinate is in interval index ``indmax``
+        # coordinate is in interval index ``indmax``
+        indmax = bisect.bisect_right(coords, bound_coord) - 1
         is_close_l = self.is_close(bound_coord, coords, indmax, min_step_check)
         is_close_r = self.is_close(bound_coord, coords, indmax + 1, min_step_check)
         is_contained = self.is_contained(bound_coord, bbox_contained_2d)
@@ -481,9 +484,11 @@ class GradedMesher(Mesher):
         skip_unshadowed = False
         if unshadowed and indmax < len(structs):
             grid_size_str = structure_steps[str_ind]
-            min_grid_size = min(
-                (structure_steps[ind] for ind in structs[indmax]), default=grid_size_str
-            )
+            struct_inds = structs[indmax]
+            if struct_inds:
+                min_grid_size = np.amin(structure_steps[struct_inds])
+            else:
+                min_grid_size = grid_size_str
             if not (isclose(grid_size_str, min_grid_size) or grid_size_str < min_grid_size):
                 skip_unshadowed = True
 
