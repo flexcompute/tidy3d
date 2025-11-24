@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Callable, Literal, SupportsInt, Union
+from types import ModuleType
+from typing import Callable, Literal, Optional, SupportsInt, Union
 
 import autograd.numpy as np
 import numpy as onp
@@ -37,6 +38,8 @@ __all__ = [
     "threshold",
     "trapz",
 ]
+
+from tidy3d.components.autograd import TracedArrayLike
 
 
 def _normalize_axes(
@@ -178,7 +181,7 @@ def _get_pad_indices(
     pad_width: tuple[int, int],
     *,
     mode: PaddingType,
-    numpy_module,
+    numpy_module: ModuleType,
 ) -> NDArray:
     """Compute the indices to pad an array along a single axis based on the padding mode.
 
@@ -335,7 +338,11 @@ def convolve(
     return _fft_convolve_general(working_array, kernel, axes_array, axes_kernel, effective_mode)
 
 
-def _get_footprint(size, structure, maxval):
+def _get_footprint(
+    size: Union[int, tuple[int, int], None],
+    structure: Optional[NDArray],
+    maxval: float,
+) -> NDArray:
     """Helper to generate the morphological footprint from size or structure."""
     if size is None and structure is None:
         raise ValueError("Either size or structure must be provided.")
@@ -404,7 +411,15 @@ def grey_dilation(
     return onp.max(dilated_windows, axis=(-2, -1))
 
 
-def _vjp_maker_dilation(ans, array, size=None, structure=None, *, mode="reflect", maxval=1e4):
+def _vjp_maker_dilation(
+    ans: NDArray,
+    array: NDArray,
+    size: Union[int, tuple[int, int], None] = None,
+    structure: Optional[NDArray] = None,
+    *,
+    mode: PaddingType = "reflect",
+    maxval: float = 1e4,
+) -> Callable[[TracedArrayLike], TracedArrayLike]:
     """VJP for the custom grey_dilation primitive."""
     nb = _get_footprint(size, structure, maxval)
     h, w = nb.shape
@@ -429,7 +444,7 @@ def _vjp_maker_dilation(ans, array, size=None, structure=None, *, mode="reflect"
     multiplicity = onp.sum(is_max_mask, axis=(-2, -1), keepdims=True)
     is_max_mask /= onp.maximum(multiplicity, 1)
 
-    def vjp(g):
+    def vjp(g: TracedArrayLike) -> TracedArrayLike:
         g_reshaped = g[..., None, None]
         grad_windows = g_reshaped * is_max_mask
 

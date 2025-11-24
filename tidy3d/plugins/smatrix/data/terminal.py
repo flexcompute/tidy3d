@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqDataArray
@@ -38,19 +38,18 @@ from tidy3d.plugins.smatrix.utils import (
 class MicrowaveSMatrixData(MicrowaveBaseModel):
     """Stores the computed S-matrix and reference impedances for the terminal ports."""
 
-    port_reference_impedances: Optional[PortDataArray] = pd.Field(
+    port_reference_impedances: Optional[PortDataArray] = Field(
         None,
         title="Port Reference Impedances",
         description="Reference impedance for each port used in the S-parameter calculation. This is optional and may not be present if not specified or computed.",
     )
 
-    data: TerminalPortDataArray = pd.Field(
-        ...,
+    data: TerminalPortDataArray = Field(
         title="S-Matrix Data",
         description="An array containing the computed S-matrix of the device. The data is organized by terminal ports, representing the scattering parameters between them.",
     )
 
-    s_param_def: SParamDef = pd.Field(
+    s_param_def: SParamDef = Field(
         "pseudo",
         title="Scattering Parameter Definition",
         description="Whether scattering parameters are defined using the 'pseudo' or 'power' wave definitions.",
@@ -78,7 +77,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
             John Wiley & Sons, 2012.
     """
 
-    modeler: TerminalComponentModeler = pd.Field(
+    modeler: TerminalComponentModeler = Field(
         ...,
         title="TerminalComponentModeler",
         description="The original :class:`.TerminalComponentModeler` object that defines the simulation setup "
@@ -227,8 +226,9 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         """Interface function returns  de-embedded S-parameter matrix."""
         return self.change_port_reference_planes(self.smatrix(), port_shifts=port_shifts)
 
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_rf_license(cls, values: dict[str, Any]) -> dict[str, Any]:
         log.warning(
             "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
             log_once=True,

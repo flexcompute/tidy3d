@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 
@@ -106,7 +106,7 @@ def test_perturbation_medium(unstructured):
         assert cmed.allow_gain == pmed.allow_gain
 
         # permittivity < 1
-        with pytest.raises(pydantic.ValidationError):
+        with pytest.raises(ValidationError):
             _ = pmed.perturbed_copy(1.1 * temperature)
 
     # conductivity validators
@@ -136,7 +136,7 @@ def test_perturbation_medium(unstructured):
     for pmed in [pmed_direct, pmed_perm, pmed_index]:
         cmed = pmed.perturbed_copy(0.9 * temperature)  # positive conductivity
         assert not cmed.subpixel
-        with pytest.raises(pydantic.ValidationError):
+        with pytest.raises(ValidationError):
             _ = pmed.perturbed_copy(1.1 * temperature)  # negative conductivity
 
         # negative conductivity but allow gain
@@ -144,11 +144,11 @@ def test_perturbation_medium(unstructured):
         _ = pmed.perturbed_copy(1.1 * temperature)
 
     # complex perturbation
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         pmed = td.PerturbationMedium(permittivity=3, permittivity_perturbation=pp_complex)
 
     # overdefinition
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.PerturbationMedium(
             permittivity=1.21,
             permittivity_perturbation=pp_real,
@@ -261,18 +261,18 @@ def test_perturbation_medium(unstructured):
         assert cmed.allow_gain == pmed.allow_gain
 
         # eps_inf < 0
-        with pytest.raises(pydantic.ValidationError):
+        with pytest.raises(ValidationError):
             _ = pmed.perturbed_copy(1.1 * temperature)
 
     # mismatch between base parameter and perturbations
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         pmed = td.PerturbationPoleResidue(
             poles=[(1j, 3), (2j, 4)],
             poles_perturbation=[(None, pp_real)],
         )
 
     # overdefinition
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.PerturbationPoleResidue(
             eps_inf=1.21,
             poles=[(1j, 3), (2j, 4)],

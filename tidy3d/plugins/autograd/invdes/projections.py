@@ -76,7 +76,7 @@ def smoothed_projection(
     array: NDArray,
     beta: float = BETA_DEFAULT,
     eta: float = ETA_DEFAULT,
-    scaling_factor=1.0,
+    scaling_factor: float = 1.0,
 ) -> NDArray:
     """
     Apply a subpixel-smoothed projection method.

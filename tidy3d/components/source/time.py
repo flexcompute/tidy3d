@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pydantic
+from pydantic import Field, PositiveFloat, field_validator, model_validator
 from pyroots import Brentq
 
 from tidy3d.components.base import cached_property
@@ -104,17 +104,18 @@ class SourceTime(AbstractTimeDependence):
 class Pulse(SourceTime, ABC):
     """A source time that ramps up with some ``fwidth`` and oscillates at ``freq0``."""
 
-    freq0: pydantic.PositiveFloat = pydantic.Field(
-        ..., title="Central Frequency", description="Central frequency of the pulse.", units=HERTZ
+    freq0: PositiveFloat = Field(
+        title="Central Frequency",
+        description="Central frequency of the pulse.",
+        units=HERTZ,
     )
-    fwidth: pydantic.PositiveFloat = pydantic.Field(
-        ...,
+    fwidth: PositiveFloat = Field(
         title="",
         description="Standard deviation of the frequency content of the pulse.",
         units=HERTZ,
     )
 
-    offset: float = pydantic.Field(
+    offset: float = Field(
         5.0,
         title="Offset",
         description="Time delay of the maximum value of the "
@@ -166,7 +167,7 @@ class GaussianPulse(Pulse):
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     """
 
-    remove_dc_component: bool = pydantic.Field(
+    remove_dc_component: bool = Field(
         True,
         title="Remove DC Component",
         description="Whether to remove the DC component in the Gaussian pulse spectrum. "
@@ -342,9 +343,9 @@ class GaussianPulse(Pulse):
     @classmethod
     def from_frequency_range(
         cls,
-        fmin: pydantic.PositiveFloat,
-        fmax: pydantic.PositiveFloat,
-        minimum_source_bandwidth: pydantic.PositiveFloat = None,
+        fmin: PositiveFloat,
+        fmax: PositiveFloat,
+        minimum_source_bandwidth: Optional[PositiveFloat] = None,
         **kwargs: Any,
     ) -> GaussianPulse:
         """Create a ``GaussianPulse`` that maximizes its amplitude in the frequency range [fmin, fmax].
@@ -462,14 +463,14 @@ class CustomSourceTime(Pulse):
 
     """
 
-    offset: float = pydantic.Field(
+    offset: float = Field(
         0.0,
         title="Offset",
         description="Time delay of the envelope in units of 1 / (``2pi * fwidth``).",
     )
 
-    source_time_dataset: Optional[TimeDataset] = pydantic.Field(
-        ...,
+    source_time_dataset: Optional[TimeDataset] = Field(
+        None,
         title="Source time dataset",
         description="Dataset for storing the envelope of the custom source time. "
         "This envelope will be modulated by a complex exponential at frequency ``freq0``.",
@@ -478,7 +479,8 @@ class CustomSourceTime(Pulse):
     _no_nans_dataset = validate_no_nans("source_time_dataset")
     _source_time_dataset_none_warning = warn_if_dataset_none("source_time_dataset")
 
-    @pydantic.validator("source_time_dataset", always=True)
+    @field_validator("source_time_dataset")
+    @classmethod
     def _more_than_one_time(cls, val):
         """Must have more than one time to interpolate."""
         if val is None:
@@ -609,20 +611,19 @@ class CustomSourceTime(Pulse):
 class BroadbandPulse(SourceTime):
     """A source time injecting significant energy in the entire custom frequency range."""
 
-    freq_range: FreqBound = pydantic.Field(
-        ...,
+    freq_range: FreqBound = Field(
         title="Frequency Range",
         description="Frequency range where the pulse should have significant energy.",
         units=HERTZ,
     )
-    minimum_amplitude: float = pydantic.Field(
+    minimum_amplitude: float = Field(
         0.3,
         title="Minimum Amplitude",
         description="Minimum amplitude of the pulse relative to the peak amplitude in the frequency range.",
         gt=0.05,
         lt=0.5,
     )
-    offset: float = pydantic.Field(
+    offset: float = Field(
         0.0,
         title="Offset",
         description="An automatic time delay of the peak value of the pulse has been applied under the hood "
@@ -630,7 +631,8 @@ class BroadbandPulse(SourceTime):
         "in units of 1 / [``2pi * (freq_range[1] - freq_range[0])``].",
     )
 
-    @pydantic.validator("freq_range", always=True)
+    @field_validator("freq_range")
+    @classmethod
     def _validate_freq_range(cls, val):
         """Validate that freq_range is positive and properly ordered."""
         if val[0] <= 0 or val[1] <= 0:
@@ -641,7 +643,8 @@ class BroadbandPulse(SourceTime):
             )
         return val
 
-    @pydantic.root_validator()
+    @model_validator(mode="before")
+    @classmethod
     def _check_broadband_pulse_available(cls, values):
         """Check if BroadbandPulse is available."""
         check_tidy3d_extras_licensed_feature("BroadbandPulse")

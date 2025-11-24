@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.tcad.monitors.abstract import HeatChargeMonitor
 
@@ -35,7 +35,7 @@ class SteadyFreeCarrierMonitor(HeatChargeMonitor):
     """
 
     # NOTE: for the time being supporting unstructured
-    unstructured: Literal[True] = pd.Field(
+    unstructured: Literal[True] = Field(
         True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
@@ -55,7 +55,7 @@ class SteadyEnergyBandMonitor(HeatChargeMonitor):
     """
 
     # NOTE: for the time being supporting unstructured
-    unstructured: Literal[True] = pd.Field(
+    unstructured: Literal[True] = Field(
         True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
@@ -75,7 +75,7 @@ class SteadyCapacitanceMonitor(HeatChargeMonitor):
     """
 
     # NOTE: for the time being supporting unstructured
-    unstructured: Literal[True] = pd.Field(
+    unstructured: Literal[True] = Field(
         True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
@@ -94,7 +94,7 @@ class SteadyElectricFieldMonitor(HeatChargeMonitor):
     ... )
     """
 
-    unstructured: Literal[True] = pd.Field(
+    unstructured: Literal[True] = Field(
         True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
@@ -113,7 +113,7 @@ class SteadyCurrentDensityMonitor(HeatChargeMonitor):
     ... )
     """
 
-    unstructured: Literal[True] = pd.Field(
+    unstructured: Literal[True] = Field(
         True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",

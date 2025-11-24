@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Self, Union
 
 import numpy as np
-import pydantic.v1 as pd
 import xarray as xr
+from numpy.typing import ArrayLike, NDArray
+from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.autograd import TracedSize
 from tidy3d.components.base import cached_property
@@ -20,14 +21,16 @@ class AbstractDopingBox(Box):
     """Derived class from Box to deal with dopings"""
 
     # Override size so that we can set default values
-    size: TracedSize = pd.Field(
+    size: TracedSize = Field(
         (inf, inf, inf),
         title="Size",
         description="Size in x, y, and z directions.",
         units=MICROMETER,
     )
 
-    def _get_indices_in_box(self, coords: dict, meshgrid: bool = True):
+    def _get_indices_in_box(
+        self, coords: dict[str, ArrayLike], meshgrid: bool = True
+    ) -> tuple[NDArray[np.bool_], NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
         """Returns locations inside box"""
 
         # work out whether x,y, and z are present
@@ -59,12 +62,14 @@ class AbstractDopingBox(Box):
 
         return indices_in_box, X, Y, Z
 
-    def _post_init_validators(self) -> None:
+    @model_validator(mode="after")
+    def _post_init_validators(self) -> Self:
         # check the doping box is 3D
         if len(self.zero_dims) > 0:
             raise SetupError(
                 "The doping box must be 3D. If you want a 2D doping box, please set one of the dimensions to a large or infinite size."
             )
+        return self
 
 
 class ConstantDoping(AbstractDopingBox):
@@ -83,14 +88,14 @@ class ConstantDoping(AbstractDopingBox):
     >>> constant_box2 = td.ConstantDoping.from_bounds(rmin=box_coords[0], rmax=box_coords[1], concentration=1e18)
     """
 
-    concentration: pd.NonNegativeFloat = pd.Field(
+    concentration: NonNegativeFloat = Field(
         default=0,
         title="Doping concentration density.",
         description="Doping concentration density.",
         units=PERCMCUBE,
     )
 
-    def _get_contrib(self, coords: dict, meshgrid: bool = True):
+    def _get_contrib(self, coords: dict, meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
         indices_in_box, X, _, _ = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
@@ -150,20 +155,20 @@ class GaussianDoping(AbstractDopingBox):
     ... )
     """
 
-    ref_con: pd.PositiveFloat = pd.Field(
+    ref_con: PositiveFloat = Field(
         title="Reference concentration.",
         description="Reference concentration. This is the minimum concentration in the box "
         "and it is attained at the edges/faces of the box.",
         units=PERCMCUBE,
     )
 
-    concentration: pd.PositiveFloat = pd.Field(
+    concentration: PositiveFloat = Field(
         title="Concentration",
         description="The concentration at the center of the box.",
         units=PERCMCUBE,
     )
 
-    width: pd.PositiveFloat = pd.Field(
+    width: PositiveFloat = Field(
         title="Width of the gaussian.",
         description="Width of the gaussian. The concentration will transition from "
         "``concentration`` at the center of the box to ``ref_con`` at the edge/face "
@@ -171,7 +176,7 @@ class GaussianDoping(AbstractDopingBox):
         units=MICROMETER,
     )
 
-    source: str = pd.Field(
+    source: str = Field(
         "xmin",
         title="Source face",
         description="Specifies the side of the box acting as the source, i.e., "
@@ -181,11 +186,11 @@ class GaussianDoping(AbstractDopingBox):
     )
 
     @cached_property
-    def sigma(self):
+    def sigma(self) -> float:
         """The sigma parameter of the pseudo-gaussian"""
         return np.sqrt(-self.width * self.width / 2 / np.log(self.ref_con / self.concentration))
 
-    def _get_contrib(self, coords: dict, meshgrid: bool = True):
+    def _get_contrib(self, coords: dict[str, ArrayLike], meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
         indices_in_box, X, Y, Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
@@ -304,14 +309,13 @@ class CustomDoping(AbstractDopingBox):
     ... )
     """
 
-    concentration: SpatialDataArray = pd.Field(
-        ...,
+    concentration: SpatialDataArray = Field(
         title="Doping concentration data array.",
         description="Doping concentration data array.",
         units=PERCMCUBE,
     )
 
-    def _get_contrib(self, coords: dict, meshgrid: bool = True):
+    def _get_contrib(self, coords: dict, meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
         indices_in_box, X, Y, Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)

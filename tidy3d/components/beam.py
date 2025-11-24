@@ -7,7 +7,7 @@ from abc import abstractmethod
 from typing import Literal, Optional, Union
 
 import autograd.numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat
 
 from tidy3d.constants import C_0, ETA_0, HERTZ, MICROMETER, RADIAN
 
@@ -19,7 +19,7 @@ from .grid.grid import Coords, Grid
 from .medium import Medium, MediumType
 from .monitor import FieldMonitor
 from .source.field import FixedAngleSpec, FixedInPlaneKSpec
-from .types import TYPE_TAG_STR, Direction, FreqArray, Numpy
+from .types import TYPE_TAG_STR, Direction, FreqArray
 from .validators import assert_plane
 
 DEFAULT_RESOLUTION = 200
@@ -28,7 +28,7 @@ DEFAULT_RESOLUTION = 200
 class BeamProfile(Box):
     """Base class for handling analytic beams."""
 
-    resolution: float = pd.Field(
+    resolution: float = Field(
         DEFAULT_RESOLUTION,
         title="Sampling resolution",
         description="Sampling resolution in the tangential directions of the beam (defines a "
@@ -36,27 +36,26 @@ class BeamProfile(Box):
         units=MICROMETER,
     )
 
-    freqs: FreqArray = pd.Field(
-        ...,
+    freqs: FreqArray = Field(
         title="Frequencies",
         description="List of frequencies at which the beam is sampled.",
         units=HERTZ,
     )
 
-    background_medium: MediumType = pd.Field(
-        Medium(),
+    background_medium: MediumType = Field(
+        default_factory=Medium,
         title="Background Medium",
         description="Background medium in which the beam is embedded.",
     )
 
-    angle_theta: float = pd.Field(
+    angle_theta: float = Field(
         0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the normal axis.",
         units=RADIAN,
     )
 
-    angle_phi: float = pd.Field(
+    angle_phi: float = Field(
         0.0,
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "
@@ -64,7 +63,7 @@ class BeamProfile(Box):
         units=RADIAN,
     )
 
-    pol_angle: float = pd.Field(
+    pol_angle: float = Field(
         0.0,
         title="Polarization Angle",
         description="Specifies the angle between the electric field polarization of the "
@@ -78,7 +77,7 @@ class BeamProfile(Box):
         units=RADIAN,
     )
 
-    direction: Direction = pd.Field(
+    direction: Direction = Field(
         "+",
         title="Direction",
         description="Specifies propagation in the positive or negative direction of the normal "
@@ -132,7 +131,7 @@ class BeamProfile(Box):
 
         return data_raw.updated_copy(**fields_norm)
 
-    def _field_data_on_grid(self, grid: Grid, background_n: Numpy, colocate=True) -> dict:
+    def _field_data_on_grid(self, grid: Grid, background_n: np.ndarray, colocate=True) -> dict:
         """Compute the field data for each field component on a grid for the beam.
         A dictionary of the scalar field data arrays is returned, not yet packaged as ``FieldData``.
         """
@@ -166,14 +165,14 @@ class BeamProfile(Box):
         return scalar_fields
 
     @abstractmethod
-    def scalar_field(self, points: Numpy, background_n: float) -> Numpy:
+    def scalar_field(self, points: np.ndarray, background_n: float) -> np.ndarray:
         """Scalar field corresponding to the analytic beam in coordinate system such that the
         propagation direction is z and the ``E``-field is entirely ``x``-polarized. The field is
         computed on an unstructured array ``points`` of shape ``(3, ...)``."""
 
     def analytic_beam_z_normal(
-        self, points: Numpy, background_n: float, field: Literal["E", "H"]
-    ) -> Numpy:
+        self, points: np.ndarray, background_n: float, field: Literal["E", "H"]
+    ) -> np.ndarray:
         """Analytic beam with all the beam parameters but assuming ``z`` as the normal axis."""
 
         # Add a frequency dimension to points
@@ -213,12 +212,12 @@ class BeamProfile(Box):
 
     def analytic_beam(
         self,
-        x: Numpy,
-        y: Numpy,
-        z: Numpy,
+        x: np.ndarray,
+        y: np.ndarray,
+        z: np.ndarray,
         background_n: float,
         field: Literal["E", "H"],
-    ) -> Numpy:
+    ) -> np.ndarray:
         """Sample the analytic beam fields on a cartesian grid of points in x, y, z."""
 
         # Make a meshgrid
@@ -242,13 +241,15 @@ class BeamProfile(Box):
         # Reshape to (3, Nx, Ny, Nz, num_freqs)
         return np.reshape(field_vals, (3, Nx, Ny, Nz, len(self.freqs)))
 
-    def _rotate_points_z(self, points: Numpy, background_n: Numpy) -> Numpy:
+    def _rotate_points_z(self, points: np.ndarray, background_n: np.ndarray) -> np.ndarray:
         """Rotate points to new coordinates where z is the propagation axis."""
         points_prop_z = self.rotate_points(points, [0, 0, 1], -self.angle_phi)
         points_prop_z = self.rotate_points(points_prop_z, [0, 1, 0], -self.angle_theta)
         return points_prop_z
 
-    def _inverse_rotate_field_vals_z(self, field_vals: Numpy, background_n: Numpy) -> Numpy:
+    def _inverse_rotate_field_vals_z(
+        self, field_vals: np.ndarray, background_n: np.ndarray
+    ) -> np.ndarray:
         """Rotate field values from coordinates where z is the propagation axis to angled
         coordinates."""
         field_vals = self.rotate_points(field_vals, [0, 1, 0], self.angle_theta)
@@ -263,14 +264,14 @@ class PlaneWaveBeamProfile(BeamProfile):
     See also :class:`.PlaneWave`.
     """
 
-    angular_spec: Union[FixedInPlaneKSpec, FixedAngleSpec] = pd.Field(
+    angular_spec: Union[FixedInPlaneKSpec, FixedAngleSpec] = Field(
         FixedAngleSpec(),
         title="Angular Dependence Specification",
         description="Specification of plane wave propagation direction dependence on wavelength.",
         discriminator=TYPE_TAG_STR,
     )
 
-    as_fixed_angle_source: bool = pd.Field(
+    as_fixed_angle_source: bool = Field(
         False,
         title="Fixed Angle Flag",
         description="Fixed angle flag. Only used internally when computing source beams for "
@@ -278,7 +279,7 @@ class PlaneWaveBeamProfile(BeamProfile):
         "switch between waves with fixed angle and fixed in-plane k.",
     )
 
-    angle_theta_frequency: Optional[float] = pd.Field(
+    angle_theta_frequency: Optional[float] = Field(
         None,
         title="Frequency at Which Angle Theta is Defined",
         description="Frequency for which ``angle_theta`` is set. This only has an effect for "
@@ -298,7 +299,7 @@ class PlaneWaveBeamProfile(BeamProfile):
         k_in_plane = k0.real * np.sin(self.angle_theta)
         return [k_in_plane * np.cos(self.angle_phi), k_in_plane * np.sin(self.angle_phi)]
 
-    def scalar_field(self, points: Numpy, background_n: float) -> Numpy:
+    def scalar_field(self, points: np.ndarray, background_n: float) -> np.ndarray:
         """Scalar field for plane wave.
         Scalar field corresponding to the analytic beam in coordinate system such that the
         propagation direction is z and the ``E``-field is entirely ``x``-polarized. The field is
@@ -313,14 +314,14 @@ class PlaneWaveBeamProfile(BeamProfile):
             kz *= np.cos(self.angle_theta)
         return np.exp(1j * points[2] * kz)
 
-    def _angle_theta_actual(self, background_n: Numpy) -> Numpy:
+    def _angle_theta_actual(self, background_n: np.ndarray) -> np.ndarray:
         """Compute the frequency-dependent actual propagation angle theta."""
         k0 = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
         kx, ky = self.in_plane_k(background_n)
         k_perp = np.sqrt(kx**2 + ky**2)
         return np.real(np.arcsin(k_perp / k0)) * np.sign(self.angle_theta)
 
-    def _rotate_points_z(self, points: Numpy, background_n: Numpy) -> Numpy:
+    def _rotate_points_z(self, points: np.ndarray, background_n: np.ndarray) -> np.ndarray:
         """Rotate points to new coordinates where z is the propagation axis."""
         if self.as_fixed_angle_source:
             # For fixed-angle, we do not rotate the points
@@ -334,7 +335,9 @@ class PlaneWaveBeamProfile(BeamProfile):
             return points
         return super()._rotate_points_z(points, background_n)
 
-    def _inverse_rotate_field_vals_z(self, field_vals: Numpy, background_n: Numpy) -> Numpy:
+    def _inverse_rotate_field_vals_z(
+        self, field_vals: np.ndarray, background_n: np.ndarray
+    ) -> np.ndarray:
         """Rotate field values from coordinates where z is the propagation axis to angled
         coordinates. Special handling is needed if fixed in-plane k wave."""
         if isinstance(self.angular_spec, FixedInPlaneKSpec):
@@ -356,14 +359,14 @@ class GaussianBeamProfile(BeamProfile):
     See also :class:`.GaussianBeam`.
     """
 
-    waist_radius: pd.PositiveFloat = pd.Field(
+    waist_radius: PositiveFloat = Field(
         1.0,
         title="Waist Radius",
         description="Radius of the beam at the waist.",
         units=MICROMETER,
     )
 
-    waist_distance: float = pd.Field(
+    waist_distance: float = Field(
         0.0,
         title="Waist Distance",
         description="Distance from the beam waist along the propagation direction. "
@@ -375,14 +378,16 @@ class GaussianBeamProfile(BeamProfile):
         units=MICROMETER,
     )
 
-    def beam_params(self, z: Numpy, k0: Numpy) -> tuple[Numpy, Numpy, Numpy]:
+    def beam_params(
+        self, z: np.ndarray, k0: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Compute the parameters needed to evaluate a Gaussian beam at z.
 
         Parameters
         ----------
-        z : Numpy
+        z : np.ndarray
             Axial distance from the beam center.
-        k0 : Numpy
+        k0 : np.ndarray
             Wave vector magnitude.
         """
 
@@ -397,7 +402,7 @@ class GaussianBeamProfile(BeamProfile):
         psi_g = np.arctan((z + z_0) / z_r) - np.arctan(z_0 / z_r)
         return w_z, inv_r_z, psi_g
 
-    def scalar_field(self, points: Numpy, background_n: float) -> Numpy:
+    def scalar_field(self, points: np.ndarray, background_n: float) -> np.ndarray:
         """Scalar field for Gaussian beam.
         Scalar field corresponding to the analytic beam in coordinate system such that the
         propagation direction is z and the ``E``-field is entirely ``x``-polarized. The field is
@@ -422,14 +427,14 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
     See also :class:`.AstigmaticGaussianBeam`.
     """
 
-    waist_sizes: tuple[pd.PositiveFloat, pd.PositiveFloat] = pd.Field(
+    waist_sizes: tuple[PositiveFloat, PositiveFloat] = Field(
         (1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
         units=MICROMETER,
     )
 
-    waist_distances: tuple[float, float] = pd.Field(
+    waist_distances: tuple[float, float] = Field(
         (0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
@@ -441,14 +446,16 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
         units=MICROMETER,
     )
 
-    def beam_params(self, z: Numpy, k0: Numpy) -> tuple[Numpy, Numpy, Numpy, Numpy]:
+    def beam_params(
+        self, z: np.ndarray, k0: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Compute the parameters needed to evaluate an astigmatic Gaussian beam at z.
 
         Parameters
         ----------
-        z : Numpy
+        z : np.ndarray
             Axial distance from the beam center.
-        k0 : Numpy
+        k0 : np.ndarray
             Wave vector magnitude.
         """
 
@@ -468,7 +475,7 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
 
         return w_0, w_z, inv_r_z, psi_g
 
-    def scalar_field(self, points: Numpy, background_n: float) -> Numpy:
+    def scalar_field(self, points: np.ndarray, background_n: float) -> np.ndarray:
         """
         Scalar field for astigmatic Gaussian beam.
         Scalar field corresponding to the analytic beam in coordinate system such that the

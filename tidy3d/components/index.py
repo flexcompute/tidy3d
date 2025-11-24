@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from typing import Any
 
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types.simulation import SimulationType
@@ -34,18 +34,18 @@ class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):
         same index. Should be overwritten by the subclass instantiation
     """
 
-    keys_tuple: tuple[str, ...] = pd.Field(
+    keys_tuple: tuple[str, ...] = Field(
         description="A tuple of unique string identifiers for each simulation.", alias="keys"
     )
-    values_tuple: tuple[Any, ...] = pd.Field(
+    values_tuple: tuple[Any, ...] = Field(
         description=(
             "A tuple of `Simulation` objects, each corresponding to a key at the same index."
         ),
         alias="values",
     )
 
-    @pd.root_validator(skip_on_failure=True)
-    def _validate_lengths_match(cls, data: dict) -> dict:
+    @model_validator(mode="after")
+    def _validate_lengths_match(self):
         """Pydantic root validator to ensure 'keys' and 'values' have the same length.
 
         Parameters
@@ -63,10 +63,14 @@ class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):
         ValueError
             If the lengths of the 'keys' and 'values' tuples are not equal.
         """
-        keys, values = data.get("keys"), data.get("values")
+        keys, values = self.keys, self.values
+        if keys is None or values is None:
+            return self
+        if not hasattr(keys, "__len__") or not hasattr(values, "__len__"):
+            return self
         if keys is not None and values is not None and len(keys) != len(values):
             raise ValueError("Length of 'keys' and 'values' must be the same.")
-        return data
+        return self
 
     def __getitem__(self, key: str) -> Any:
         """Retrieves a `Simulation` object by its corresponding key.
@@ -193,10 +197,10 @@ class SimulationMap(ValueMap, Mapping[str, SimulationType]):
     >>> # print(simulation_map["sim_1"])
     """
 
-    keys_tuple: tuple[str, ...] = pd.Field(
+    keys_tuple: tuple[str, ...] = Field(
         description="A tuple of unique string identifiers for each simulation.", alias="keys"
     )
-    values_tuple: tuple[SimulationType, ...] = pd.Field(
+    values_tuple: tuple[SimulationType, ...] = Field(
         description=(
             "A tuple of `Simulation` objects, each corresponding to a key at the same index."
         ),

@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Any, Optional
+from typing import Any, Optional, Self
 
 import autograd.numpy as anp
 import numpy as np
-import pydantic.v1 as pydantic
 import shapely
+from pydantic import Field, model_validator
 from shapely.geometry.base import BaseGeometry
 
 from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.base import cached_property
 from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER
@@ -86,7 +86,7 @@ class Sphere(base.Centered, base.Circular):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -127,7 +127,7 @@ class Sphere(base.Centered, base.Circular):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -198,37 +198,32 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     """
 
     # Provide more explanations on where radius is defined
-    radius: TracedSize1D = pydantic.Field(
-        ...,
+    radius: TracedSize1D = Field(
         title="Radius",
         description="Radius of geometry at the ``reference_plane``.",
         units=MICROMETER,
     )
 
-    length: TracedSize1D = pydantic.Field(
-        ...,
+    length: TracedSize1D = Field(
         title="Length",
         description="Defines thickness of cylinder along axis dimension.",
         units=MICROMETER,
     )
 
-    @pydantic.validator("length", always=True)
-    @skip_if_fields_missing(["sidewall_angle", "reference_plane"])
-    def _only_middle_for_infinite_length_slanted_cylinder(
-        cls, val: float, values: dict[str, Any]
-    ) -> float:
+    @model_validator(mode="after")
+    def _only_middle_for_infinite_length_slanted_cylinder(self: Self) -> Self:
         """For a slanted cylinder of infinite length, ``reference_plane`` can only
         be ``middle``; otherwise, the radius at ``center`` is either td.inf or 0.
         """
-        if isclose(values["sidewall_angle"], 0) or not np.isinf(val):
-            return val
-        if values["reference_plane"] != "middle":
+        if isclose(self.sidewall_angle, 0) or not np.isinf(self.length):
+            return self
+        if self.reference_plane != "middle":
             raise SetupError(
                 "For a slanted cylinder here is of infinite length, "
                 "defining the reference_plane other than 'middle' "
                 "leads to undefined cylinder behaviors near 'center'."
             )
-        return val
+        return self
 
     def to_polyslab(
         self, num_pts_circumference: int = _N_PTS_CYLINDER_POLYSLAB, **kwargs: Any
@@ -426,7 +421,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         new_center = list(self.center)
         new_center[axis] = (bounds[0] + bounds[1]) / 2
         new_length = bounds[1] - bounds[0]
-        return self.updated_copy(center=new_center, length=new_length)
+        return self.updated_copy(center=tuple(new_center), length=new_length)
 
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
@@ -445,7 +440,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -535,7 +530,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -567,7 +562,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -802,7 +797,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         ----------
         axis : int
             Integer index into 'xyz' (0, 1, 2).
-        coords : List[float, float]
+        coords : list[float, float]
             The value in the planar coordinate.
 
         Returns

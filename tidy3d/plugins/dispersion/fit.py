@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import codecs
 import csv
+from collections.abc import Sequence
 from os import PathLike
-from typing import Any, Optional
+from typing import Any, Optional, Self
 
 import numpy as np
 import requests
-from pydantic.v1 import Field, validator
+import scipy.optimize as opt
+from numpy.typing import NDArray
+from pydantic import Field, field_validator, model_validator
 from rich.progress import Progress
 
-from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.medium import AbstractMedium, PoleResidue
 from tidy3d.components.types import ArrayFloat1D, Ax
 from tidy3d.components.viz import add_ax_if_none
@@ -27,19 +30,17 @@ class DispersionFitter(Tidy3dBaseModel):
     dispersive medium described by :class:`.PoleResidue` model."""
 
     wvl_um: ArrayFloat1D = Field(
-        ...,
         title="Wavelength data",
         description="Wavelength data in micrometers.",
         units=MICROMETER,
     )
 
     n_data: ArrayFloat1D = Field(
-        ...,
         title="Index of refraction data",
         description="Real part of the complex index of refraction.",
     )
 
-    k_data: ArrayFloat1D = Field(
+    k_data: Optional[ArrayFloat1D] = Field(
         None,
         title="Extinction coefficient data",
         description="Imaginary part of the complex index of refraction.",
@@ -53,32 +54,29 @@ class DispersionFitter(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    @validator("wvl_um", always=True)
-    def _setup_wvl(cls, val):
+    @field_validator("wvl_um")
+    @classmethod
+    def _setup_wvl(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         """Convert wvl_um to a numpy array."""
         if val.size == 0:
             raise ValidationError("Wavelength data cannot be empty.")
         return val
 
-    @validator("n_data", always=True)
-    @skip_if_fields_missing(["wvl_um"])
-    def _ndata_length_match_wvl(cls, val, values):
+    @model_validator(mode="after")
+    def _ndata_length_match_wvl(self) -> Self:
         """Validate n_data"""
-
-        if val.shape != values["wvl_um"].shape:
+        if self.n_data.shape != self.wvl_um.shape:
             raise ValidationError("The length of 'n_data' doesn't match 'wvl_um'.")
-        return val
+        return self
 
-    @validator("k_data", always=True)
-    @skip_if_fields_missing(["wvl_um"])
-    def _kdata_setup_and_length_match(cls, val, values):
+    @model_validator(mode="after")
+    def _kdata_setup_and_length_match(self) -> Self:
         """Validate the length of k_data, or setup k if it's None."""
-
-        if val is None:
-            return np.zeros_like(values["wvl_um"])
-        if val.shape != values["wvl_um"].shape:
+        if self.k_data is None:
+            object.__setattr__(self, "k_data", np.zeros_like(self.wvl_um))
+        if self.k_data.shape != self.wvl_um.shape:
             raise ValidationError("The length of 'k_data' doesn't match 'wvl_um'.")
-        return val
+        return self
 
     @cached_property
     def data_in_range(self) -> tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]:
@@ -86,7 +84,7 @@ class DispersionFitter(Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]
+        tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]
             Filtered wvl_um, n_data, k_data
         """
 
@@ -133,7 +131,7 @@ class DispersionFitter(Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[float, ...]
+        tuple[float, ...]
             Frequency array converted from filtered input wavelength data
         """
 
@@ -146,14 +144,16 @@ class DispersionFitter(Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[float, float]
+        tuple[float, float]
             The minimal frequency and the maximal frequency
         """
 
         return self.freqs.min(), self.freqs.max()
 
     @staticmethod
-    def _unpack_coeffs(coeffs):
+    def _unpack_coeffs(
+        coeffs: NDArray[np.floating],
+    ) -> tuple[NDArray[np.complexfloating], NDArray[np.complexfloating]]:
         """Unpack coefficient vector into complex pole parameters.
 
         Parameters
@@ -163,7 +163,7 @@ class DispersionFitter(Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[np.ndarray[complex], np.ndarray[complex]]
+        tuple[np.ndarray[complex], np.ndarray[complex]]
             "a" and "c" poles for the PoleResidue model.
         """
         if len(coeffs) % 4 != 0:
@@ -179,7 +179,9 @@ class DispersionFitter(Tidy3dBaseModel):
         return poles_a, poles_c
 
     @staticmethod
-    def _pack_coeffs(pole_a, pole_c):
+    def _pack_coeffs(
+        pole_a: NDArray[np.complexfloating], pole_c: NDArray[np.complexfloating]
+    ) -> NDArray[np.floating]:
         """Pack complex a and c pole parameters into coefficient array.
 
         Parameters
@@ -198,7 +200,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return stacked_coeffs.flatten()
 
     @staticmethod
-    def _coeffs_to_poles(coeffs):
+    def _coeffs_to_poles(coeffs: NDArray[np.floating]) -> list[tuple[complex, complex]]:
         """Convert model coefficients to poles.
 
         Parameters
@@ -208,7 +210,7 @@ class DispersionFitter(Tidy3dBaseModel):
 
         Returns
         -------
-        List[Tuple[complex, complex]]
+        list[tuple[complex, complex]]
             List of complex poles (a, c)
         """
         coeffs_scaled = coeffs / HBAR
@@ -216,12 +218,12 @@ class DispersionFitter(Tidy3dBaseModel):
         return list(zip(poles_a, poles_c))
 
     @staticmethod
-    def _poles_to_coeffs(poles):
+    def _poles_to_coeffs(poles: Sequence[tuple[complex, complex]]) -> NDArray[np.floating]:
         """Convert poles to model coefficients.
 
         Parameters
         ----------
-        poles : List[Tuple[complex, complex]]
+        poles : list[tuple[complex, complex]]
             List of complex poles (a, c)
 
         Returns
@@ -234,7 +236,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return coeffs * HBAR
 
     @staticmethod
-    def _eV_to_Hz(f_eV: float):
+    def _eV_to_Hz(f_eV: float) -> float:
         """Convert frequency in unit of eV to Hz.
 
         Parameters
@@ -245,7 +247,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return f_eV / (HBAR * 2 * np.pi)
 
     @staticmethod
-    def _Hz_to_eV(f_Hz: float):
+    def _Hz_to_eV(f_Hz: float) -> float:
         """Convert frequency in unit of Hz to eV.
 
         Parameters
@@ -278,7 +280,7 @@ class DispersionFitter(Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[:class:`.PoleResidue`, float]
+        tuple[:class:`.PoleResidue`, float]
             Best results of multiple fits: (dispersive medium, RMS error).
         """
 
@@ -326,7 +328,7 @@ class DispersionFitter(Tidy3dBaseModel):
         log.info("Returning best fit with RMS error %.3g", best_rms)
         return best_medium, best_rms
 
-    def _make_medium(self, coeffs):
+    def _make_medium(self, coeffs: NDArray[np.floating]) -> PoleResidue:
         """Return medium from coeffs from optimizer.
 
         Parameters
@@ -358,13 +360,14 @@ class DispersionFitter(Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[:class:`.PoleResidue`, float]
+        tuple[:class:`.PoleResidue`, float]
             Results of single fit: (dispersive medium, RMS error).
         """
-        import scipy.optimize as opt
 
         # NOTE: Not used
-        def constraint(coeffs, _grad=None):
+        def constraint(
+            coeffs: NDArray[np.floating], _grad: NDArray[np.floating] | None = None
+        ) -> float:
             """Evaluate the nonlinear stability criterion of Hongjin Choi, Jae-Woo Baek, and
             Kyung-Young Jung, "Comprehensive Study on Numerical Aspects of Modified Lorentz Model
             Based Dispersive FDTD Formulations," IEEE TAP 2019.
@@ -391,7 +394,9 @@ class DispersionFitter(Tidy3dBaseModel):
             res[res >= 0] = 0
             return np.sum(res)
 
-        def objective(coeffs, _grad=None):
+        def objective(
+            coeffs: NDArray[np.floating], _grad: NDArray[np.floating] | None = None
+        ) -> float:
             """Objective function for fit
 
             Parameters
@@ -765,7 +770,7 @@ class DispersionFitter(Tidy3dBaseModel):
             Real parts of relative permittivity data
         eps_imag : Optional[ArrayFloat1D]
             Imaginary parts of relative permittivity data; `None` for lossless medium.
-        wvg_range : Tuple[Optional[float], Optional[float]]
+        wvg_range : tuple[Optional[float], Optional[float]]
             Wavelength range [wvl_min,wvl_max] for fitting.
 
         Returns
@@ -797,7 +802,7 @@ class DispersionFitter(Tidy3dBaseModel):
             Real parts of relative permittivity data
         loss_tangent : Optional[ArrayFloat1D]
             Loss tangent data, defined as the ratio of imaginary and real parts of permittivity.
-        wvl_range : Tuple[Optional[float], Optional[float]]
+        wvl_range : tuple[Optional[float], Optional[float]]
             Wavelength range [wvl_min,wvl_max] for fitting.
 
         Returns

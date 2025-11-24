@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.plugins.mode import ModeSolver
 
 # from tidy3d.plugins.smatrix.ports.wave import DEFAULT_WAVE_PORT_MODE_SPEC
 from ..test_data.test_data_arrays import MODE_SPEC, SIZE_2D
-from ..utils import AssertLogLevel
+from ..utils import AssertLogLevel, AssertLogStr
 
 # Shared test constants
 FREQS_DENSE = np.linspace(1e14, 2e14, 20)
@@ -47,7 +47,7 @@ def test_interp_spec_default_method():
 
 def test_interp_spec_cubic_needs_4_points():
     """Test that cubic interpolation requires at least 4 points."""
-    with pytest.raises(pydantic.ValidationError, match="Cubic interpolation requires at least 4"):
+    with pytest.raises(ValidationError, match="Cubic interpolation requires at least 4"):
         td.ModeInterpSpec.uniform(num_points=3, method="cubic")
 
 
@@ -60,9 +60,7 @@ def test_interp_spec_valid_poly():
 
 def test_interp_spec_poly_needs_3_points():
     """Test that polynomial interpolation requires at least 3 points."""
-    with pytest.raises(
-        pydantic.ValidationError, match="Polynomial interpolation requires at least 3"
-    ):
+    with pytest.raises(ValidationError, match="Polynomial interpolation requires at least 3"):
         td.ModeInterpSpec.uniform(num_points=2, method="poly")
 
 
@@ -154,22 +152,22 @@ def test_interp_spec_sampling_points_custom():
 
 def test_interp_spec_min_2_points():
     """Test that at least 2 points are required."""
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.ModeInterpSpec.uniform(num_points=1, method="linear")
 
 
 def test_interp_spec_positive_points():
     """Test that num_points must be positive."""
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.ModeInterpSpec.uniform(num_points=0, method="linear")
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.ModeInterpSpec.uniform(num_points=-5, method="linear")
 
 
 def test_interp_spec_invalid_method():
     """Test that invalid interpolation method is rejected."""
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.ModeInterpSpec.uniform(num_points=5, method="quadratic")
 
 
@@ -192,7 +190,7 @@ def test_interp_spec_reduce_data_false():
 def test_interp_spec_requires_tracking():
     """Test that ModeMonitor with interp_spec requires track_freq."""
 
-    with pytest.raises(pydantic.ValidationError, match="tracking"):
+    with pytest.raises(ValidationError, match="tracking"):
         mode_spec_no_track = td.ModeSpec(
             num_modes=2,
             track_freq=None,
@@ -363,7 +361,7 @@ def test_mode_solver_warns_num_points():
     )
     plane = td.Box(center=(0, 0, 0), size=SIZE_2D)
 
-    with AssertLogLevel(None):
+    with AssertLogStr(None, excludes_str=["has bounds that extend"]):
         ms = ModeSolver(
             simulation=sim,
             plane=plane,
