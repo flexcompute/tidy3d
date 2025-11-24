@@ -28,7 +28,7 @@ from .polyslab import PolySlab
 _N_SAMPLE_CURVE_SHAPELY = 40
 
 # for shapely circular shapes discretization in visualization
-_N_SHAPELY_QUAD_SEGS = 200
+_N_SHAPELY_QUAD_SEGS_VISUALIZATION = 200
 
 # Default number of points to discretize polyslab in `Cylinder.to_polyslab()`
 _N_PTS_CYLINDER_POLYSLAB = 51
@@ -71,7 +71,12 @@ class Sphere(base.Centered, base.Circular):
         return (dist_x**2 + dist_y**2 + dist_z**2) <= (self.radius**2)
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -83,6 +88,11 @@ class Sphere(base.Centered, base.Circular):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            ``_N_SHAPELY_QUAD_SEGS_VISUALIZATION`` for high-quality visualization.
 
         Returns
         -------
@@ -91,6 +101,9 @@ class Sphere(base.Centered, base.Circular):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        if quad_segs is None:
+            quad_segs = _N_SHAPELY_QUAD_SEGS_VISUALIZATION
+
         normal = np.array(normal)
         unit_normal = normal / (np.sum(normal**2) ** 0.5)
         projection = np.dot(np.array(origin) - np.array(self.center), unit_normal)
@@ -106,13 +119,18 @@ class Sphere(base.Centered, base.Circular):
         u /= np.sum(u**2) ** 0.5
         v = np.cross(unit_normal, u)
 
-        angles = np.linspace(0, 2 * np.pi, _N_SHAPELY_QUAD_SEGS * 4 + 1)[:-1]
+        angles = np.linspace(0, 2 * np.pi, quad_segs * 4 + 1)[:-1]
         circ = center + np.outer(np.cos(angles), radius * u) + np.outer(np.sin(angles), radius * v)
         vertices = np.dot(np.hstack((circ, np.ones((angles.size, 1)))), to_2D.T)
         return [shapely.Polygon(vertices[:, :2])]
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[BaseGeometry]:
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -124,14 +142,22 @@ class Sphere(base.Centered, base.Circular):
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            ``_N_SHAPELY_QUAD_SEGS_VISUALIZATION`` for high-quality visualization.
 
         Returns
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>``.
         """
+        if quad_segs is None:
+            quad_segs = _N_SHAPELY_QUAD_SEGS_VISUALIZATION
+
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
@@ -139,7 +165,7 @@ class Sphere(base.Centered, base.Circular):
         intersect_dist = self._intersect_dist(position, z0)
         if not intersect_dist:
             return []
-        return [shapely.Point(x0, y0).buffer(0.5 * intersect_dist, quad_segs=_N_SHAPELY_QUAD_SEGS)]
+        return [shapely.Point(x0, y0).buffer(0.5 * intersect_dist, quad_segs=quad_segs)]
 
     @cached_property
     def bounds(self) -> Bound:
@@ -430,7 +456,11 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -442,6 +472,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            ``_N_SHAPELY_QUAD_SEGS_VISUALIZATION`` for high-quality visualization.
 
         Returns
         -------
@@ -451,6 +484,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         import trimesh
+
+        if quad_segs is None:
+            quad_segs = _N_SHAPELY_QUAD_SEGS_VISUALIZATION
 
         z0, (x0, y0) = self.pop_axis(self.center, self.axis)
         half_length = self.finite_length_axis / 2
@@ -471,7 +507,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
                 r_bot = 0
                 z_bot = z0 + self._radius_z(z0) / self._tanq
 
-        angles = np.linspace(0, 2 * np.pi, _N_SHAPELY_QUAD_SEGS * 4 + 1)
+        angles = np.linspace(0, 2 * np.pi, quad_segs * 4 + 1)
 
         if r_bot > 0:
             x_bot = x0 + r_bot * np.cos(angles)
@@ -525,13 +561,18 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         path, _ = section.to_2D(to_2D=to_2D)
         return path.polygons_full
 
-    def _intersections_normal(self, z: float) -> list[BaseGeometry]:
+    def _intersections_normal(
+        self, z: float, quad_segs: Optional[int] = None
+    ) -> list[BaseGeometry]:
         """Find shapely geometries intersecting cylindrical geometry with axis normal to slab.
 
         Parameters
         ----------
         z : float
             Position along the axis normal to slab
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            ``_N_SHAPELY_QUAD_SEGS_VISUALIZATION`` for high-quality visualization.
 
         Returns
         -------
@@ -540,6 +581,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        if quad_segs is None:
+            quad_segs = _N_SHAPELY_QUAD_SEGS_VISUALIZATION
 
         static_self = self.to_static()
 
@@ -550,7 +593,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             return []
 
         _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axis)
-        return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
+        return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=quad_segs)]
 
     def _intersections_side(self, position: float, axis: int) -> list[BaseGeometry]:
         """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.

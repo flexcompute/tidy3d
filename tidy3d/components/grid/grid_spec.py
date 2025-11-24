@@ -1922,8 +1922,8 @@ class LayerRefinementSpec(Box):
         cells_valid = []
 
         # for each polygon vertex find the index of the first grid line on the right
-        grid_lines_on_right = np.argmax(grid_x_coords[:, None] >= poly_vertices[None, :, 0], axis=0)
-        grid_lines_on_right[poly_vertices[:, 0] >= grid_x_coords[-1]] = len(grid_x_coords)
+        # Use searchsorted for O(n log m) instead of O(n * m) with argmax broadcasting
+        grid_lines_on_right = np.searchsorted(grid_x_coords, poly_vertices[:, 0], side="left")
         # once we know these indices then we can find grid lines intersected by the i-th
         # segment of the polygon as
         # [grid_lines_on_right[i], grid_lines_on_right[i+1]) for grid_lines_on_right[i] > grid_lines_on_right[i+1]

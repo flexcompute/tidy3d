@@ -587,7 +587,11 @@ class PolySlab(base.Planar):
 
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -599,6 +603,8 @@ class PolySlab(base.Planar):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. Not used for PolySlab geometry.
 
         Returns
         -------
@@ -641,7 +647,7 @@ class PolySlab(base.Planar):
         path, _ = section.to_2D(to_2D=to_2D)
         return path.polygons_full
 
-    def _intersections_normal(self, z: float) -> list[Shapely]:
+    def _intersections_normal(self, z: float, quad_segs: Optional[int] = None) -> list[Shapely]:
         """Find shapely geometries intersecting planar geometry with axis normal to slab.
 
         Parameters
@@ -2567,7 +2573,12 @@ class ComplexPolySlabBase(PolySlab):
         return z_coord
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -2579,6 +2590,10 @@ class ComplexPolySlabBase(PolySlab):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. Not used for PolySlab.
 
         Returns
         -------
@@ -2592,7 +2607,9 @@ class ComplexPolySlabBase(PolySlab):
                 [
                     base.Geometry.evaluate_inf_shape(shape)
                     for polyslab in self.sub_polyslabs
-                    for shape in polyslab.intersections_tilted_plane(normal, origin, to_2D)
+                    for shape in polyslab.intersections_tilted_plane(
+                        normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+                    )
                 ]
             )
         ]

@@ -229,7 +229,12 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @abstractmethod
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -241,6 +246,11 @@ class Geometry(Tidy3dBaseModel, ABC):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
 
         Returns
         -------
@@ -251,7 +261,12 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -263,6 +278,11 @@ class Geometry(Tidy3dBaseModel, ABC):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
 
         Returns
         -------
@@ -278,7 +298,9 @@ class Geometry(Tidy3dBaseModel, ABC):
         if axis != 2:
             last, indices = self.pop_axis((0, 1, 2), axis)
             to_2D = to_2D[[*list(indices), last, 3]]
-        return self.intersections_tilted_plane(normal, origin, to_2D)
+        return self.intersections_tilted_plane(
+            normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+        )
 
     def intersections_2dbox(self, plane: Box) -> list[Shapely]:
         """Returns list of shapely geometries representing the intersections of the geometry with
@@ -1564,7 +1586,12 @@ class SimplePlaneIntersection(Geometry, ABC):
     """A geometry where intersections with an axis aligned plane may be computed efficiently."""
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
         Checks special cases before relying on the complete computation.
@@ -1577,6 +1604,11 @@ class SimplePlaneIntersection(Geometry, ABC):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
 
         Returns
         -------
@@ -1591,7 +1623,7 @@ class SimplePlaneIntersection(Geometry, ABC):
             axis = np.argmax(np.abs(normal)).item()
             coord = "xyz"[axis]
             kwargs = {coord: origin[axis]}
-            section = self.intersections_plane(**kwargs)
+            section = self.intersections_plane(cleanup=cleanup, quad_segs=quad_segs, **kwargs)
             # Apply transformation in the plane by removing row and column
             to_2D_in_plane = np.delete(np.delete(to_2D, 2, 0), axis, 1)
 
@@ -1603,11 +1635,17 @@ class SimplePlaneIntersection(Geometry, ABC):
             transformed_section = shapely.transform(section, transformation=transform)
             return transformed_section
         # Otherwise compute the arbitrary intersection
-        return self._do_intersections_tilted_plane(normal=normal, origin=origin, to_2D=to_2D)
+        return self._do_intersections_tilted_plane(
+            normal=normal, origin=origin, to_2D=to_2D, quad_segs=quad_segs
+        )
 
     @abstractmethod
     def _do_intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -1619,6 +1657,8 @@ class SimplePlaneIntersection(Geometry, ABC):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes.
 
         Returns
         -------
@@ -1704,7 +1744,12 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         return self.center_axis
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -1716,29 +1761,37 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
 
         Returns
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-        `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>``.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
         if axis == self.axis:
-            return self._intersections_normal(position)
+            return self._intersections_normal(position, quad_segs=quad_segs)
         return self._intersections_side(position, axis)
 
     @abstractmethod
-    def _intersections_normal(self, z: float) -> list:
+    def _intersections_normal(self, z: float, quad_segs: Optional[int] = None) -> list:
         """Find shapely geometries intersecting planar geometry with axis normal to slab.
 
         Parameters
         ----------
         z : float
             Position along the axis normal to slab
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
 
         Returns
         -------
@@ -2021,7 +2074,11 @@ class Box(SimplePlaneIntersection, Centered):
 
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -2033,6 +2090,8 @@ class Box(SimplePlaneIntersection, Centered):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. Not used for Box geometry.
 
         Returns
         -------
@@ -2071,7 +2130,12 @@ class Box(SimplePlaneIntersection, Centered):
         return path.polygons_full
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -2083,6 +2147,10 @@ class Box(SimplePlaneIntersection, Centered):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. Not used for Box geometry.
 
         Returns
         -------
@@ -2138,9 +2206,21 @@ class Box(SimplePlaneIntersection, Centered):
         dist_z = np.abs(z - z0)
         return (dist_x <= Lx / 2) * (dist_y <= Ly / 2) * (dist_z <= Lz / 2)
 
-    def intersections_with(self, other: Shapely) -> list[Shapely]:
+    def intersections_with(
+        self, other: Shapely, cleanup: bool = True, quad_segs: Optional[int] = None
+    ) -> list[Shapely]:
         """Returns list of shapely geometries representing the intersections of the geometry with
         this 2D box.
+
+        Parameters
+        ----------
+        other : Shapely
+            Geometry to intersect with.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
 
         Returns
         -------
@@ -2165,7 +2245,7 @@ class Box(SimplePlaneIntersection, Centered):
         dim = "xyz"[normal_ind]
         pos = self.center[normal_ind]
         xyz_kwargs = {dim: pos}
-        shapes_plane = other.intersections_plane(**xyz_kwargs)
+        shapes_plane = other.intersections_plane(cleanup=cleanup, quad_segs=quad_segs, **xyz_kwargs)
 
         # intersect all shapes with the input self
         bs_min, bs_max = (self.pop_axis(bounds, axis=normal_ind)[1] for bounds in self.bounds)
@@ -2762,7 +2842,12 @@ class Transformed(Geometry):
         return (tuple(vertices.min(axis=1)), tuple(vertices.max(axis=1)))
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -2774,6 +2859,11 @@ class Transformed(Geometry):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
 
         Returns
         -------
@@ -2786,6 +2876,8 @@ class Transformed(Geometry):
             tuple(np.dot((normal[0], normal[1], normal[2], 0.0), self.transform)[:3]),
             tuple(np.dot(self.inverse, (origin[0], origin[1], origin[2], 1.0))[:3]),
             np.dot(to_2D, self.transform),
+            cleanup=cleanup,
+            quad_segs=quad_segs,
         )
 
     def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
@@ -3026,7 +3118,9 @@ class ClipOperation(Geometry):
         unfiltered_geoms = []
         if base_geometry.geom_type == "GeometryCollection":
             unfiltered_geoms = [
-                p for geom in base_geometry.geoms for p in ClipOperation.to_polygon_list(geom)
+                p
+                for geom in base_geometry.geoms
+                for p in ClipOperation.to_polygon_list(geom, cleanup)
             ]
         if base_geometry.geom_type == "MultiPolygon":
             unfiltered_geoms = [p for p in base_geometry.geoms if not p.is_empty]
@@ -3069,7 +3163,12 @@ class ClipOperation(Geometry):
         return result
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -3081,6 +3180,11 @@ class ClipOperation(Geometry):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
 
         Returns
         -------
@@ -3089,17 +3193,26 @@ class ClipOperation(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        a = self.geometry_a.intersections_tilted_plane(normal, origin, to_2D)
-        b = self.geometry_b.intersections_tilted_plane(normal, origin, to_2D)
+        a = self.geometry_a.intersections_tilted_plane(
+            normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+        )
+        b = self.geometry_b.intersections_tilted_plane(
+            normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+        )
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
         return ClipOperation.to_polygon_list(
             self._shapely_operation(geom_a, geom_b),
-            cleanup=True,
+            cleanup=cleanup,
         )
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -3111,6 +3224,11 @@ class ClipOperation(Geometry):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
 
         Returns
         -------
@@ -3119,13 +3237,13 @@ class ClipOperation(Geometry):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        a = self.geometry_a.intersections_plane(x, y, z)
-        b = self.geometry_b.intersections_plane(x, y, z)
+        a = self.geometry_a.intersections_plane(x, y, z, cleanup=cleanup, quad_segs=quad_segs)
+        b = self.geometry_b.intersections_plane(x, y, z, cleanup=cleanup, quad_segs=quad_segs)
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
         return ClipOperation.to_polygon_list(
             self._shapely_operation(geom_a, geom_b),
-            cleanup=True,
+            cleanup=cleanup,
         )
 
     @cached_property
@@ -3283,7 +3401,12 @@ class GeometryGroup(Geometry):
         )
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -3295,6 +3418,11 @@ class GeometryGroup(Geometry):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
 
         Returns
         -------
@@ -3306,11 +3434,18 @@ class GeometryGroup(Geometry):
         return [
             intersection
             for geometry in self.geometries
-            for intersection in geometry.intersections_tilted_plane(normal, origin, to_2D)
+            for intersection in geometry.intersections_tilted_plane(
+                normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+            )
         ]
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -3322,6 +3457,11 @@ class GeometryGroup(Geometry):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
 
         Returns
         -------
@@ -3335,7 +3475,9 @@ class GeometryGroup(Geometry):
         return [
             intersection
             for geometry in self.geometries
-            for intersection in geometry.intersections_plane(x=x, y=y, z=z)
+            for intersection in geometry.intersections_plane(
+                x=x, y=y, z=z, cleanup=cleanup, quad_segs=quad_segs
+            )
         ]
 
     def intersects_axis_position(self, axis: float, position: float) -> bool:
