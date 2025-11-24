@@ -8,8 +8,6 @@ ERROR_STATES = {
     "validate_error",
     "error",
     "errored",
-    "diverge",
-    "diverged",
     "blocked",
     "preprocess_error",
     "run_error",
@@ -32,7 +30,15 @@ POST_RUN_STATES = {
     "run_success",
 }
 
-COMPLETED_STATES = {"visualize", "success", "completed", "processed", "postprocess_success"}
+COMPLETED_STATES = {
+    "visualize",
+    "success",
+    "completed",
+    "processed",
+    "postprocess_success",
+    "diverge",
+    "diverged",
+}
 
 END_STATES = ERROR_STATES | COMPLETED_STATES
 
@@ -92,8 +98,8 @@ STATE_PROGRESS_PERCENTAGE = {
     "validate_fail": 0,
     "error": 0,
     "errored": 0,
-    "diverge": 0,
-    "diverged": 0,
+    "diverge": 100,
+    "diverged": 100,
     "blocked": 0,
     "run_failed": 0,
     "aborted": 0,
