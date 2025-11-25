@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Literal, Union
+from typing import Any, Literal, Self, Union
 
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
@@ -45,12 +46,12 @@ class Coords(Tidy3dBaseModel):
     )
 
     @property
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         """Return a dict of the three Coord1D objects as numpy arrays."""
         return {key: self.model_dump()[key] for key in "xyz"}
 
     @property
-    def to_list(self):
+    def to_list(self) -> list[NDArray]:
         """Return a list of the three Coord1D objects as numpy arrays."""
         return list(self.to_dict.values())
 
@@ -75,7 +76,7 @@ class Coords(Tidy3dBaseModel):
         return cell_sizes
 
     @cached_property
-    def cell_size_meshgrid(self):
+    def cell_size_meshgrid(self) -> NDArray:
         """Returns an N-dimensional grid where N is the number of coordinate arrays that have more than one
         element. Each grid element corresponds to the size of the mesh cell in N-dimensions and 1 for N=0."""
         coord_dict = self.to_dict
@@ -323,7 +324,7 @@ class YeeGrid(Tidy3dBaseModel):
     )
 
     @property
-    def grid_dict(self):
+    def grid_dict(self) -> dict[str, Coords]:
         """The Yee grid coordinates associated to various field components as a dictionary."""
         return {
             "Ex": self.E.x,
@@ -356,12 +357,12 @@ class Grid(Tidy3dBaseModel):
     )
 
     @staticmethod
-    def _avg(coords1d: Coords1D):
+    def _avg(coords1d: Coords1D) -> Coords1D:
         """Return average positions of an array of 1D coordinates."""
         return (coords1d[1:] + coords1d[:-1]) / 2.0
 
     @staticmethod
-    def _min(coords1d: Coords1D):
+    def _min(coords1d: Coords1D) -> Coords1D:
         """Return minus positions of 1D coordinates."""
         return coords1d[:-1]
 
@@ -535,7 +536,7 @@ class Grid(Tidy3dBaseModel):
 
         return coord_dict.get(coord_key)
 
-    def _yee_e(self, axis: Axis):
+    def _yee_e(self, axis: Axis) -> Coords:
         """E field yee lattice sites for axis."""
 
         boundary_coords = self.boundaries.to_dict
@@ -549,7 +550,7 @@ class Grid(Tidy3dBaseModel):
 
         return Coords(**yee_coords)
 
-    def _yee_h(self, axis: Axis):
+    def _yee_h(self, axis: Axis) -> Coords:
         """H field yee lattice sites for axis."""
 
         boundary_coords = self.boundaries.to_dict
@@ -679,7 +680,7 @@ class Grid(Tidy3dBaseModel):
 
         return padded_coords[ind_beg:ind_end]
 
-    def snap_to_box_zero_dim(self, box: Box):
+    def snap_to_box_zero_dim(self, box: Box) -> Self:
         """Snap a grid to an exact box position for dimensions for which the box is size 0.
         If the box location is outside of the grid, an error is raised.
 
@@ -714,7 +715,9 @@ class Grid(Tidy3dBaseModel):
         )
         return self.updated_copy(boundaries=boundaries)
 
-    def _get_geo_inds(self, geo: Geometry, span_inds: ArrayLike = None, expand_inds: int = 2):
+    def _get_geo_inds(
+        self, geo: Geometry, span_inds: ArrayLike = None, expand_inds: int = 2
+    ) -> NDArray:
         """
         Get ``geo_inds`` based on a geometry's bounding box, enlarged by ``expand_inds``.
         If ``span_inds`` is supplied, take the intersection of ``span_inds`` and ``geo``'s bounding
@@ -731,7 +734,7 @@ class Grid(Tidy3dBaseModel):
 
         Returns
         -------
-        List[Tuple[int, int]]
+        np.ndarray
             The (start, stop) indexes of the cells for interpolation.
         """
         # only interpolate inside the bounding box

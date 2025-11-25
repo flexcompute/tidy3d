@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import copy
-from typing import Annotated, Literal, Optional, Union, get_origin
+from typing import Annotated, Any, Literal, Optional, Union, get_origin
 
 import autograd.numpy as anp
 from autograd.builtins import dict as TracedDict
 from autograd.extend import Box, defvjp, primitive
 from autograd.numpy.numpy_boxes import ArrayBox
-from pydantic import BeforeValidator, PlainSerializer, PositiveFloat, TypeAdapter
+from pydantic import BeforeValidator, PlainSerializer, PositiveFloat, SerializationInfo, TypeAdapter
 
 from tidy3d.compat import TypeAlias
 from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, Size1D
@@ -35,10 +35,10 @@ Box.__str__ = lambda self: f"{self._value} <{type(self).__name__}>"
 Box.__repr__ = Box.__str__
 
 
-def traced_alias(base_alias, *, name: Optional[str] = None) -> TypeAlias:
+def traced_alias(base_alias: Any, *, name: Optional[str] = None) -> TypeAlias:
     base_adapter = TypeAdapter(base_alias, config={"arbitrary_types_allowed": True})
 
-    def _validate_box_or_container(v):
+    def _validate_box_or_container(v: Any) -> Any:
         # case 1: v itself is a tracer
         # in this case we just validate but leave the tracer untouched
         if isinstance(v, Box):
@@ -78,7 +78,7 @@ def traced_alias(base_alias, *, name: Optional[str] = None) -> TypeAlias:
 
         return base_adapter.validate_python(v)
 
-    def _serialize_traced(a, info):
+    def _serialize_traced(a: Any, info: SerializationInfo) -> Any:
         return _auto_serializer(get_static(a), info)
 
     return Annotated[

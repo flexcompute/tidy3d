@@ -6,6 +6,7 @@ from numpy import inf
 from pydantic import Field, NonNegativeFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.viz.visualization_spec import VisualizationSpec
 
 
 class AbstractPlotParams(Tidy3dBaseModel):
@@ -25,11 +26,11 @@ class AbstractPlotParams(Tidy3dBaseModel):
         }
         return self.copy(update=update_dict)
 
-    def override_with_viz_spec(self, viz_spec) -> AbstractPlotParams:
+    def override_with_viz_spec(self, viz_spec: VisualizationSpec) -> AbstractPlotParams:
         """Override plot params with supplied VisualizationSpec."""
         return self.include_kwargs(**dict(viz_spec))
 
-    def to_kwargs(self) -> dict:
+    def to_kwargs(self) -> dict[str, Any]:
         """Export the plot parameters as kwargs dict that can be supplied to plot function."""
         kwarg_dict = self.model_dump()
         for ignore_key in ("type", "attrs"):

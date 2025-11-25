@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.log import log
@@ -57,7 +57,7 @@ class VisualizationSpec(Tidy3dBaseModel):
 
     @field_validator("edgecolor")
     @classmethod
-    def _ensure_edgecolor(cls, value, info) -> str:
+    def _ensure_edgecolor(cls, value: str, info: ValidationInfo) -> str:
         # if no explicit edgecolor given, fall back to facecolor
         if (value == "") and "facecolor" in info.data:
             return is_valid_color(info.data["facecolor"])

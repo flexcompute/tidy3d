@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal, Optional
 
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat, PositiveInt
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
@@ -68,7 +69,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
     )
 
     @cached_property
-    def _no_min_dl_override(self):
+    def _no_min_dl_override(self) -> bool:
         return all(
             (
                 self.concave_resolution is None,
@@ -197,7 +198,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         return self._ravel_corners_and_convexity(ravel, corner_list, convexity_list)
 
     def _ravel_corners_and_convexity(
-        self, ravel: bool, corner_list, convexity_list
+        self, ravel: bool, corner_list: list[ArrayFloat2D], convexity_list: list[ArrayFloat1D]
     ) -> tuple[ArrayFloat2D, ArrayFloat1D]:
         """Whether to put the resulting corners in a single list or per polygon."""
         if ravel and len(corner_list) > 0:
@@ -259,7 +260,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
             Convexity of corners: True for outer corners, False for inner corners.
         """
 
-        def normalize(v):
+        def normalize(v: NDArray) -> NDArray:
             return v / np.linalg.norm(v, axis=-1)[:, np.newaxis]
 
         # drop the last vertex, which is identical to the 1st one.
