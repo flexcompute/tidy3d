@@ -271,7 +271,13 @@ class GradedMesher(Mesher):
         # Rtree from the 2D part of the bounding boxes
         tree = self.bounds_2d_tree(struct_bbox)
 
-        intervals = {"coords": list(domain_bounds), "structs": [[]]}
+        intervals = {
+            "coords": list(domain_bounds),
+            "structs": [[]],
+            "min_steps": [
+                np.inf
+            ],  # Track min step per interval for O(1) lookup; inf until structures added
+        }
         """ Build the ``intervals`` dictionary. ``intervals["coords"]`` gets populated based on the
         bounding boxes of all structures in the list (some filtering is done to exclude points that
         will be too close together compared to the absolute lower desired step). At every point, the
@@ -364,6 +370,7 @@ class GradedMesher(Mesher):
         in_domain = np.nonzero((coords >= domain_bounds[0]) * (coords <= domain_bounds[1]))[0]
         intervals["coords"] = [intervals["coords"][int(i)] for i in in_domain]
         intervals["structs"] = [intervals["structs"][int(i)] for i in in_domain if i < num_ints]
+        intervals["min_steps"] = [intervals["min_steps"][int(i)] for i in in_domain if i < num_ints]
 
         # Compute the maximum allowed step size in each interval
         max_steps = []
@@ -372,11 +379,9 @@ class GradedMesher(Mesher):
             if max(intervals["structs"][coord_ind]) >= num_unenforced:
                 max_step = structure_steps[max(intervals["structs"][coord_ind])]
                 max_steps.append(max_step)
-            # otherwise, define the max step as the minimum over all medium steps
-            # of media in this interval
+            # otherwise, use the cached minimum step for this interval - O(1) lookup
             else:
-                max_step = np.amin(structure_steps[intervals["structs"][coord_ind]])
-                max_steps.append(max_step)
+                max_steps.append(intervals["min_steps"][coord_ind])
 
         # Re-evaluate the absolute smallest min_step and remove intervals that are smaller than that
         intervals["coords"], max_steps = self.filter_min_step(intervals["coords"], max_steps)
@@ -435,6 +440,7 @@ class GradedMesher(Mesher):
 
         coords = intervals["coords"]
         structs = intervals["structs"]
+        cached_min_steps = intervals["min_steps"]
 
         min_step_check = MIN_STEP_SCALE * min_step
 
@@ -450,9 +456,8 @@ class GradedMesher(Mesher):
         skip_unshadowed = False
         if unshadowed and indmin > 0:
             grid_size_str = structure_steps[str_ind]
-            min_grid_size = min(
-                (structure_steps[ind] for ind in structs[indmin - 1]), default=grid_size_str
-            )
+            # Use cached min_steps
+            min_grid_size = cached_min_steps[indmin - 1]
             if not (isclose(grid_size_str, min_grid_size) or grid_size_str < min_grid_size):
                 skip_unshadowed = True
 
@@ -468,6 +473,8 @@ class GradedMesher(Mesher):
             # Copy the structure containment list to the newly created interval
             struct_list = structs[max(0, indmin - 1)]
             structs.insert(indmin, struct_list.copy())
+            # Copy the cached min step to the newly created interval
+            cached_min_steps.insert(indmin, cached_min_steps[max(0, indmin - 1)])
 
         # Right structure bound
         bound_coord = str_bbox[1, 2]
@@ -481,9 +488,8 @@ class GradedMesher(Mesher):
         skip_unshadowed = False
         if unshadowed and indmax < len(structs):
             grid_size_str = structure_steps[str_ind]
-            min_grid_size = min(
-                (structure_steps[ind] for ind in structs[indmax]), default=grid_size_str
-            )
+            # Use cached min_steps
+            min_grid_size = cached_min_steps[indmax]
             if not (isclose(grid_size_str, min_grid_size) or grid_size_str < min_grid_size):
                 skip_unshadowed = True
 
@@ -498,14 +504,35 @@ class GradedMesher(Mesher):
             # Copy the structure containment list to the newly created interval
             struct_list = structs[min(indmax - 1, len(structs) - 1)]
             structs.insert(indmax, struct_list.copy())
+            # Copy the cached min step to the newly created interval
+            cached_min_steps.insert(
+                indmax, cached_min_steps[min(indmax - 1, len(cached_min_steps) - 1)]
+            )
 
         # Add the current structure index to all intervals that it spans, if it is not
         # contained in any of the latter structures
-        for interval_ind in range(indmin, indmax):
-            # Check at the midpoint to avoid numerical issues at the interval boundaries
-            mid_coord = (coords[interval_ind] + coords[interval_ind + 1]) / 2
-            if not self.is_contained(mid_coord, bbox_contained_2d):
-                structs[interval_ind].append(str_ind)
+        current_step = structure_steps[str_ind]
+        num_intervals = indmax - indmin
+        if num_intervals > 0:
+            # Vectorized containment check for better performance with many intervals
+            if bbox_contained_2d:
+                # Compute all midpoints at once
+                mid_coords = np.array(
+                    [(coords[i] + coords[i + 1]) / 2 for i in range(indmin, indmax)]
+                )
+                # Vectorized containment: check all midpoints against all containing boxes
+                contained_mask = self._is_contained_vectorized(mid_coords, bbox_contained_2d)
+            else:
+                # No containing boxes - nothing is contained
+                contained_mask = np.zeros(num_intervals, dtype=bool)
+
+            # Add structure to non-contained intervals
+            for i, interval_ind in enumerate(range(indmin, indmax)):
+                if not contained_mask[i]:
+                    structs[interval_ind].append(str_ind)
+                    # Update cached min step incrementally - O(1) instead of recomputing
+                    if current_step < cached_min_steps[interval_ind]:
+                        cached_min_steps[interval_ind] = current_step
 
         return indmin >= indmax
 
@@ -759,6 +786,40 @@ class GradedMesher(Mesher):
         return any(
             contain_box[0, 2] <= normal_pos <= contain_box[1, 2] for contain_box in contained_2d
         )
+
+    @staticmethod
+    def _is_contained_vectorized(
+        normal_positions: ArrayFloat1D, contained_2d: list[ArrayFloat1D]
+    ) -> ArrayFloat1D:
+        """Vectorized containment check for multiple positions at once.
+
+        Parameters
+        ----------
+        normal_positions : ArrayFloat1D
+            Array of positions along the meshing direction to check.
+        contained_2d : list[ArrayFloat1D]
+            List of bounding boxes that could contain the positions.
+
+        Returns
+        -------
+        ArrayFloat1D
+            Boolean array where True means the position is contained in at least one box.
+        """
+        if not contained_2d:
+            return np.zeros(len(normal_positions), dtype=bool)
+
+        # Stack all z-bounds: shape (num_boxes, 2)
+        z_bounds = np.array([[box[0, 2], box[1, 2]] for box in contained_2d])
+
+        # Check containment: positions[:, None] broadcasts against z_bounds[None, :, :]
+        # Result shape: (num_positions, num_boxes)
+        positions = np.asarray(normal_positions)
+        in_range = (positions[:, None] >= z_bounds[None, :, 0]) & (
+            positions[:, None] <= z_bounds[None, :, 1]
+        )
+
+        # Any box containing the position means it's contained
+        return np.any(in_range, axis=1)
 
     @staticmethod
     def filter_min_step(
