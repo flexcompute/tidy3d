@@ -448,6 +448,30 @@ def test_rescale_exceptions(array, out_min, out_max, in_min, in_max, expected_me
         rescale(array, out_min, out_max, in_min, in_max)
 
 
+def test_rescale_clips_output_to_bounds():
+    """Test that rescale clips output to [out_min, out_max] even when input is slightly outside [in_min, in_max].
+
+    This is a regression test for a numerical precision issue where filter_project + tanh_projection
+    could produce values slightly outside [0, 1] (e.g., -1e-15), causing rescale to produce
+    permittivity values slightly below 1.0, which would fail CustomMedium validation.
+    """
+    # Simulate input slightly outside the expected [0, 1] range due to numerical precision
+    array_with_numerical_error = np.array([-1e-15, 0.5, 1.0 + 1e-15])
+
+    out_min, out_max = 1.0, 2.75
+    in_min, in_max = 0.0, 1.0
+
+    result = rescale(array_with_numerical_error, out_min, out_max, in_min, in_max)
+
+    # Without clipping, result[0] would be slightly below 1.0 (e.g., 0.999999999999998)
+    # and result[2] would be slightly above 2.75
+    assert result.min() >= out_min, f"Output {result.min()} is below out_min={out_min}"
+    assert result.max() <= out_max, f"Output {result.max()} is above out_max={out_max}"
+
+    npt.assert_equal(result[0], out_min)
+    npt.assert_equal(result[2], out_max)
+
+
 @pytest.mark.parametrize(
     "ary, vmin, vmax, level, expected",
     [
