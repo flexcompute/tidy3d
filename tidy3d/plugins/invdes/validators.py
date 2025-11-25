@@ -48,7 +48,7 @@ def check_pixel_size(sim_field_name: str):
 
             td.log.warning(
                 f"'DesignRegion.pixel_size' is '{pixel_size}', which is large compared to "
-                f"the minimum wavelength in {sim_string}: '{sim.wvl_mat_min}'. For best results, "
+                f"the minimum wavelength in the material '{sim.wvl_mat_min}' in {sim_string}. For best results, "
                 f"we recommend setting it at most {PIXEL_SIZE_WARNING_THRESHOLD} times the minimum "
                 f"wavelength ({PIXEL_SIZE_WARNING_THRESHOLD * sim.wvl_mat_min}). "
                 "Note: to set the grid size within the design region independent of the parameter "
