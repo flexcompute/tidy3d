@@ -709,7 +709,9 @@ def rescale(
         raise ValueError(f"'in_min' ({in_min}) must be less than 'in_max' ({in_max}).")
 
     scaled = (array - in_min) / (in_max - in_min)
-    return scaled * (out_max - out_min) + out_min
+    result = scaled * (out_max - out_min) + out_min
+
+    return np.clip(result, out_min, out_max)
 
 
 def threshold(
