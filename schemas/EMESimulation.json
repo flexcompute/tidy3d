@@ -4718,7 +4718,6 @@
           "type": "integer"
         },
         "num_sweep": {
-          "default": 1,
           "minimum": 0,
           "type": "integer"
         },

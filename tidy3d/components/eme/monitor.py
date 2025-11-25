@@ -59,7 +59,7 @@ class EMEMonitor(AbstractMonitor, ABC):
     eme_cell_interval_space: Literal[1] = pd.Field(
         1,
         title="EME Cell Interval",
-        description="Number of eme cells between monitor recordings. If equal to 1, "
+        description="Number of EME cells between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
         "first and last cells are always included. Not used in all monitors. "
         "Not all monitors support values different from 1.",
@@ -141,7 +141,7 @@ class EMEModeSolverMonitor(EMEMonitor):
     eme_cell_interval_space: pd.PositiveInt = pd.Field(
         1,
         title="EME Cell Interval",
-        description="Number of eme cells between monitor recordings. If equal to 1, "
+        description="Number of EME cells between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
         "first and last cells are always included. Not used in all monitors. "
         "Not all monitors support values different from 1.",
@@ -214,7 +214,7 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
     eme_cell_interval_space: Literal[1] = pd.Field(
         1,
         title="EME Cell Interval",
-        description="Number of eme cells between monitor recordings. If equal to 1, "
+        description="Number of EME cells between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
         "first and last cells are always included. Not used in all monitors. "
         "Not all monitors support values different from 1. Note: this field is not used for "
@@ -280,10 +280,19 @@ class EMECoefficientMonitor(EMEMonitor):
     eme_cell_interval_space: pd.PositiveInt = pd.Field(
         1,
         title="EME Cell Interval",
-        description="Number of eme cells between monitor recordings. If equal to 1, "
+        description="Number of EME cells between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
         "first and last cells are always included. Not used in all monitors. "
         "Not all monitors support values different from 1.",
+    )
+
+    num_sweep: Optional[pd.NonNegativeInt] = pd.Field(
+        None,
+        title="Number of Sweep Indices",
+        description="Number of sweep indices for the monitor to record. "
+        "Cannot exceed the number of sweep indices for the simulation. "
+        "If the sweep does not change the monitor data, the sweep index "
+        "will be omitted. A value of 'None' will record all sweep indices.",
     )
 
     def storage_size(
