@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 import numpy as np
 from pydantic import Field, PositiveFloat, field_validator, model_validator
@@ -38,6 +38,9 @@ from tidy3d.log import log
 from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
 
 from .mode_solver import ModeSolver
+
+if TYPE_CHECKING:
+    from tidy3d.components.mode.data.sim_data import ModeSimulationData
 
 ModeSimulationMonitorType = Union[PermittivityMonitor, MediumMonitor]
 
@@ -216,20 +219,20 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     @field_validator("grid_spec")
     @classmethod
-    def _validate_auto_grid_wavelength(cls, val):
+    def _validate_auto_grid_wavelength(cls, val: GridSpec) -> GridSpec:
         # abstract override, logic is handled in post-init to ensure freqs is defined
         return val
 
     @field_validator("plane")
     @classmethod
-    def _validate_planar(cls, val):
+    def _validate_planar(cls, val: Optional[MODE_PLANE_TYPE]) -> Optional[MODE_PLANE_TYPE]:
         if val.size.count(0.0) != 1:
             raise ValidationError(f"'ModeSimulation.plane' must be planar, given 'size={val.size}'")
         return val
 
     @model_validator(mode="before")
     @classmethod
-    def is_plane(cls, data):
+    def is_plane(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Raise validation error if not planar."""
         if hasattr(data, "get") and data.get("plane") is None:
             val = Box(size=data.get("size"), center=data.get("center"))
@@ -242,7 +245,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         return data
 
     @model_validator(mode="after")
-    def plane_in_sim_bounds(self):
+    def plane_in_sim_bounds(self) -> Self:
         """Check that the plane is at least partially inside the simulation bounds."""
         sim_box = Box(size=self.size, center=self.center)
         if not sim_box.intersects(self.plane):
@@ -250,12 +253,12 @@ class ModeSimulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _validate_mode_solver(self):
+    def _validate_mode_solver(self) -> Self:
         _ = self._mode_solver
         return self
 
     @model_validator(mode="after")
-    def _validate_grid(self):
+    def _validate_grid(self) -> Self:
         _ = self.grid
         return self
 
@@ -266,7 +269,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         return ModeSolver(simulation=self._as_fdtd_sim, **kwargs)
 
     @supports_local_subpixel
-    def run_local(self):
+    def run_local(self) -> ModeSimulationData:
         """Run locally."""
 
         if tidy3d_extras["use_local_subpixel"]:

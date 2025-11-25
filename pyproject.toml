@@ -341,9 +341,13 @@ python_files = "*.py"
 [tool.mypy]
 python_version = "3.10"
 files = [
-  "tidy3d/components/geometry",
+  "tidy3d/components/autograd",
   "tidy3d/components/data",
+  "tidy3d/components/geometry",
+  "tidy3d/components/grid",
+  "tidy3d/components/mode",
   "tidy3d/components/tcad",
+  "tidy3d/components/viz",
   "tidy3d/config",
   "tidy3d/material_library",
   "tidy3d/plugins",

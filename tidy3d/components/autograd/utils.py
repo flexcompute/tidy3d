@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any
+from typing import Any, Union
 
 import autograd.numpy as anp
+from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import getval, isbox
+from numpy.typing import ArrayLike, NDArray
 
 __all__ = [
     "asarray1d",
@@ -66,12 +68,12 @@ def hasbox(obj: Any) -> bool:
     return False
 
 
-def pack_complex_vec(z):
+def pack_complex_vec(z: Union[NDArray, ArrayBox]) -> Union[NDArray, ArrayBox]:
     """Ravel [Re(z); Im(z)] into one real vector (autograd-safe)."""
     return anp.concatenate([anp.ravel(anp.real(z)), anp.ravel(anp.imag(z))])
 
 
-def asarray1d(x):
+def asarray1d(x: Union[ArrayLike, ArrayBox]) -> Union[NDArray, ArrayBox]:
     """Autograd-friendly 1D flatten: returns ndarray of shape (-1,)."""
     x = anp.array(x)
     return x if x.ndim == 1 else anp.ravel(x)

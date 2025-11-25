@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal, Optional, Self, Union
 
 import numpy as np
 from pydantic import (
@@ -30,6 +30,7 @@ from tidy3d.components.types import (
     Coordinate,
     CoordinateOptional,
     PriorityMode,
+    Shapely,
     Symmetry,
     Undefined,
 )
@@ -51,6 +52,8 @@ DEFAULT_REFINEMENT_FACTOR = 2
 
 # Tolerance for distinguishing pec/grid intersections
 GAP_MESHING_TOL = 1e-3
+
+CornersAndConvexity = tuple[list[ArrayFloat2D], list[ArrayFloat1D]]
 
 
 class GridSpec1d(Tidy3dBaseModel, ABC):
@@ -295,7 +298,7 @@ class UniformGrid(GridSpec1d):
 
     @field_validator("dl")
     @classmethod
-    def _validate_dl(cls, val):
+    def _validate_dl(cls, val: PositiveFloat) -> PositiveFloat:
         """
         Ensure 'dl' is not too small.
         """
@@ -430,7 +433,7 @@ class CustomGridBoundaries(GridSpec1d):
 
     @field_validator("coords")
     @classmethod
-    def _validate_coords(cls, val):
+    def _validate_coords(cls, val: Coords1D) -> Coords1D:
         """
         Ensure 'coords' is sorted and has at least 2 entries.
         """
@@ -1093,7 +1096,7 @@ class LayerRefinementSpec(Box):
     )
 
     @model_validator(mode="after")
-    def _finite_size_along_axis(self):
+    def _finite_size_along_axis(self) -> Self:
         if self.size is None:
             return self
         """size must be finite along axis."""
@@ -1116,7 +1119,7 @@ class LayerRefinementSpec(Box):
         gap_meshing_iters: NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
         **kwargs: Any,
-    ):
+    ) -> Self:
         """Constructs a :class:`LayerRefinementSpec` that is unbounded in inplane dimensions from bounds along
         layer thickness dimension.
 
@@ -1192,7 +1195,7 @@ class LayerRefinementSpec(Box):
         gap_meshing_iters: NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
         **kwargs: Any,
-    ):
+    ) -> Self:
         """Constructs a :class:`LayerRefinementSpec` from minimum and maximum coordinate bounds.
 
         Parameters
@@ -1269,7 +1272,7 @@ class LayerRefinementSpec(Box):
         gap_meshing_iters: NonNegativeInt = 1,
         dl_min_from_gap_width: bool = True,
         **kwargs: Any,
-    ):
+    ) -> Self:
         """Constructs a :class:`LayerRefinementSpec` from the bounding box of a list of structures.
 
         Parameters
@@ -1409,7 +1412,9 @@ class LayerRefinementSpec(Box):
         return dl_min
 
     def generate_snapping_points(
-        self, structure_list: list[Structure], cached_corners_and_convexity=None
+        self,
+        structure_list: list[Structure],
+        cached_corners_and_convexity: Optional[CornersAndConvexity] = None,
     ) -> list[CoordinateOptional]:
         """generate snapping points for mesh refinement."""
         snapping_points = self._snapping_points_along_axis
@@ -1421,7 +1426,7 @@ class LayerRefinementSpec(Box):
         self,
         grid_size_in_vacuum: float,
         structure_list: list[Structure],
-        cached_corners_and_convexity=None,
+        cached_corners_and_convexity: Optional[CornersAndConvexity] = None,
     ) -> list[MeshOverrideStructure]:
         """Generate mesh override structures for mesh refinement."""
         return self._override_structures_along_axis(
@@ -1484,7 +1489,7 @@ class LayerRefinementSpec(Box):
 
         return inplane_points, convexity
 
-    def _dl_min_from_smallest_feature(self, structure_list: list[Structure]):
+    def _dl_min_from_smallest_feature(self, structure_list: list[Structure]) -> float:
         """Calculate `dl_min` suggestion based on smallest feature size."""
 
         inplane_points, convexity = self._corners_and_convexity_2d(
@@ -1523,7 +1528,9 @@ class LayerRefinementSpec(Box):
         return dl_min
 
     def _corners(
-        self, structure_list: list[Structure], cached_corners_and_convexity=None
+        self,
+        structure_list: list[Structure],
+        cached_corners_and_convexity: Optional[CornersAndConvexity] = None,
     ) -> list[CoordinateOptional]:
         """Inplane corners in 3D coordinate."""
         if self.corner_finder is None:
@@ -1573,7 +1580,7 @@ class LayerRefinementSpec(Box):
         self,
         structure_list: list[Structure],
         grid_size_in_vacuum: float,
-        cached_corners_and_convexity=None,
+        cached_corners_and_convexity: Optional[CornersAndConvexity] = None,
     ) -> list[MeshOverrideStructure]:
         """Inplane mesh override structures for refining mesh around corners."""
         if self.corner_refinement is None:
@@ -1643,8 +1650,12 @@ class LayerRefinementSpec(Box):
         return override_structures
 
     def _find_vertical_intersections(
-        self, grid_x_coords, grid_y_coords, poly_vertices, boundary
-    ) -> tuple[list[tuple[int, int]], list[float]]:
+        self,
+        grid_x_coords: ArrayFloat1D,
+        grid_y_coords: ArrayFloat1D,
+        poly_vertices: ArrayFloat2D,
+        boundary: tuple[Optional[str], Optional[str]],
+    ) -> tuple[np.typing.NDArray[np.int_], np.typing.NDArray[np.float64]]:
         """Detect intersection points of single polygon and vertical grid lines."""
 
         # indices of cells that contain intersection with grid lines (left edge of a cell)
@@ -1809,12 +1820,24 @@ class LayerRefinementSpec(Box):
                     np.zeros(len(cells_ij_one_side)),
                 ]
             )
+        else:
+            cells_ij = np.empty((0, 2), dtype=int)
+            cells_dy = np.empty(0, dtype=float)
 
         return cells_ij, cells_dy
 
     def _process_poly(
-        self, grid_x_coords, grid_y_coords, poly_vertices, boundaries
-    ) -> tuple[list[tuple[int, int]], list[float], list[tuple[int, int]], list[float]]:
+        self,
+        grid_x_coords: ArrayFloat1D,
+        grid_y_coords: ArrayFloat1D,
+        poly_vertices: ArrayFloat2D,
+        boundaries: tuple[tuple[Optional[str], Optional[str]], tuple[Optional[str], Optional[str]]],
+    ) -> tuple[
+        np.typing.NDArray[np.int_],
+        np.typing.NDArray[np.float64],
+        np.typing.NDArray[np.int_],
+        np.typing.NDArray[np.float64],
+    ]:
         """Detect intersection points of single polygon and grid lines."""
 
         # find cells that contain intersections of vertical grid lines
@@ -1836,8 +1859,17 @@ class LayerRefinementSpec(Box):
         return v_cells_ij, v_cells_dy, h_cells_ij, h_cells_dx
 
     def _process_slice(
-        self, x, y, merged_geos, boundaries
-    ) -> tuple[list[tuple[int, int]], list[float], list[tuple[int, int]], list[float]]:
+        self,
+        x: ArrayFloat1D,
+        y: ArrayFloat1D,
+        merged_geos: list[tuple[Any, Shapely]],
+        boundaries: list[list[Optional[str], Optional[str]], list[Optional[str], Optional[str]]],
+    ) -> tuple[
+        np.typing.NDArray[np.int_],
+        np.typing.NDArray[np.float64],
+        np.typing.NDArray[np.int_],
+        np.typing.NDArray[np.float64],
+    ]:
         """Detect intersection points of geometries boundaries and grid lines."""
 
         # cells that contain intersections of vertical grid lines
@@ -1911,16 +1943,25 @@ class LayerRefinementSpec(Box):
         if len(v_cells_ij) > 0:
             v_cells_ij = np.concatenate(v_cells_ij)
             v_cells_dy = np.concatenate(v_cells_dy)
+        else:
+            v_cells_ij = np.empty((0, 2), dtype=int)
+            v_cells_dy = np.empty(0, dtype=float)
 
         if len(h_cells_ij) > 0:
             h_cells_ij = np.concatenate(h_cells_ij)
             h_cells_dx = np.concatenate(h_cells_dx)
+        else:
+            h_cells_ij = np.empty((0, 2), dtype=int)
+            h_cells_dx = np.empty(0, dtype=float)
 
         return v_cells_ij, v_cells_dy, h_cells_ij, h_cells_dx
 
     def _generate_horizontal_snapping_lines(
-        self, grid_y_coords, intersected_cells_ij, relative_vert_disp
-    ) -> tuple[list[CoordinateOptional], float]:
+        self,
+        grid_y_coords: ArrayFloat1D,
+        intersected_cells_ij: np.typing.NDArray[np.int_],
+        relative_vert_disp: np.typing.NDArray[np.float64],
+    ) -> tuple[list[float], float]:
         """Convert a list of intersections of vertical grid lines, given as coordinates of cells
         and relative vertical displacement inside each cell, into locations of snapping lines that
         resolve thin gaps and strips.
@@ -1997,8 +2038,15 @@ class LayerRefinementSpec(Box):
         return snapping_lines_y, min_gap_width
 
     def _resolve_gaps(
-        self, structures: list[Structure], grid: Grid, boundary_types: tuple
-    ) -> tuple[list[CoordinateOptional], float]:
+        self,
+        structures: list[Structure],
+        grid: Grid,
+        boundary_types: tuple[
+            tuple[Optional[str], Optional[str]],
+            tuple[Optional[str], Optional[str]],
+            tuple[Optional[str], Optional[str]],
+        ],
+    ) -> tuple[tuple[CoordinateOptional], float]:
         """
         Detect underresolved gaps and place snapping lines in them. Also return the detected minimal gap width.
 
@@ -2014,7 +2062,7 @@ class LayerRefinementSpec(Box):
 
         Returns
         -------
-        tuple[list[CoordinateOptional], float]
+        list[list[CoordinateOptional], float]
             List of snapping lines and the detected minimal gap width.
         """
 
@@ -2308,7 +2356,7 @@ class GridSpec(Tidy3dBaseModel):
         self,
         structures: list[Structure],
         lumped_elements: list[LumpedElementType],
-        cached_corners_and_convexity=None,
+        cached_corners_and_convexity: Optional[list[CornersAndConvexity]] = None,
     ) -> list[CoordinateOptional]:
         """Internal snapping points. So far, internal snapping points are generated by
         `layer_refinement_specs` and lumped element.
@@ -2319,7 +2367,7 @@ class GridSpec(Tidy3dBaseModel):
             List of physical structures.
         lumped_elements : list[LumpedElementType]
             List of lumped elements.
-        cached_corners_and_convexity : Optional[list[CachedCornersAndConvexity]]
+        cached_corners_and_convexity : Optional[list[CornersAndConvexity]]
             Cached corners and convexity data.
 
         Returns
@@ -2389,7 +2437,7 @@ class GridSpec(Tidy3dBaseModel):
         wavelength: PositiveFloat,
         sim_size: tuple[float, 3],
         lumped_elements: list[LumpedElementType],
-        cached_corners_and_convexity=None,
+        cached_corners_and_convexity: Optional[list[CornersAndConvexity]] = None,
     ) -> list[StructureType]:
         """Internal mesh override structures. So far, internal override structures are generated by
         `layer_refinement_specs` and lumped element.
@@ -2404,7 +2452,7 @@ class GridSpec(Tidy3dBaseModel):
             Simulation domain size.
         lumped_elements : list[LumpedElementType]
             List of lumped elements.
-        cached_corners_and_convexity : Optional[list[CachedCornersAndConvexity]]
+        cached_corners_and_convexity : Optional[list[CornersAndConvexity]]
             Cached corners and convexity data.
 
         Returns

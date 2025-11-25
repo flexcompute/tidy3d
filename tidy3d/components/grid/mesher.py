@@ -692,7 +692,7 @@ class GradedMesher(Mesher):
         return struct_bbox
 
     @staticmethod
-    def bounds_2d_tree(struct_bbox: list[ArrayFloat1D]):
+    def bounds_2d_tree(struct_bbox: list[ArrayFloat1D]) -> STRtree:
         """Make a shapely Rtree for the 2D bounding boxes of all structures in the plane
         perpendicular to the meshing axis."""
 
@@ -1339,7 +1339,7 @@ class GradedMesher(Mesher):
 
         if len_mismatch_even > small_dl:
 
-            def fun_scale(new_scale):
+            def fun_scale(new_scale: float) -> float:
                 if isclose(new_scale, 1.0):
                     return len_interval - small_dl * (1 + num_step)
                 return (

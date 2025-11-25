@@ -26,7 +26,7 @@ anp.permute_dims = anp.transpose
 
 
 @classmethod
-def from_arraybox(cls, box: ArrayBox) -> TidyArrayBox:
+def from_arraybox(cls: Any, box: ArrayBox) -> TidyArrayBox:
     """Construct a TidyArrayBox from an ArrayBox."""
     return cls(box._value, box._trace, box._node)
 
@@ -142,7 +142,7 @@ def __array_ufunc__(
     return NotImplemented
 
 
-def item(self):
+def item(self: Any) -> Any:
     if self.size != 1:
         raise ValueError("Can only convert an array of size 1 to a scalar")
     return anp.ravel(self)[0]

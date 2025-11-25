@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
+from numpy.typing import NDArray
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import EpsSpecType, ModeSolverType
@@ -13,6 +15,9 @@ from tidy3d.constants import C_0, ETA_0, fp_eps, pec_val
 from .derivatives import create_d_matrices as d_mats
 from .derivatives import create_s_matrices as s_mats
 from .transforms import angled_transform, radial_transform
+
+if TYPE_CHECKING:
+    from scipy import sparse as sp
 
 # Consider vec to be complex if norm(vec.imag)/norm(vec) > TOL_COMPLEX
 TOL_COMPLEX = 1e-10
@@ -28,11 +33,12 @@ PRECONDITIONER = "Material"
 # double precision. This value is very heuristic.
 GOOD_CONDUCTOR_CUT_OFF = 1e70
 
-if TYPE_CHECKING:
-    from scipy import sparse as sp
 
 # Consider a material to be good conductor if |ep| (or |mu|) > GOOD_CONDUCTOR_THRESHOLD * |pec_val|
 GOOD_CONDUCTOR_THRESHOLD = 0.9
+
+ArrayFloat = NDArray[np.floating]
+ArrayComplex = NDArray[np.complexfloating]
 
 
 class EigSolver(Tidy3dBaseModel):
@@ -43,18 +49,18 @@ class EigSolver(Tidy3dBaseModel):
     @classmethod
     def compute_modes(
         cls,
-        eps_cross,
-        coords,
-        freq,
-        mode_spec,
-        precision,
-        mu_cross=None,
-        split_curl_scaling=None,
-        symmetry=(0, 0),
-        direction="+",
-        solver_basis_fields=None,
+        eps_cross: Union[ArrayComplex, tuple[ArrayComplex, ...]],
+        coords: Sequence[ArrayFloat],
+        freq: float,
+        mode_spec: ModeSolverType,
+        precision: Literal["single", "double"],
+        mu_cross: Optional[Union[ArrayComplex, tuple[ArrayComplex, ...]]] = None,
+        split_curl_scaling: Optional[ArrayFloat] = None,
+        symmetry: tuple[int, int] = (0, 0),
+        direction: Literal["+", "-"] = "+",
+        solver_basis_fields: Optional[ArrayComplex] = None,
         plane_center: Optional[tuple[float, float]] = None,
-    ) -> tuple[np.ndarray, np.ndarray, EpsSpecType]:
+    ) -> tuple[ArrayComplex, ArrayComplex, EpsSpecType]:
         """
         Solve for the modes of a waveguide cross-section.
 
@@ -124,7 +130,7 @@ class EigSolver(Tidy3dBaseModel):
 
         if len(coords[0]) != Nx + 1 or len(coords[1]) != Ny + 1:
             raise ValueError("Mismatch between 'coords' and 'esp_cross' shapes.")
-        new_coords = [np.copy(c) for c in coords]
+        new_coords = (np.copy(coords[0]), np.copy(coords[1]))
 
         """We work with full tensorial epsilon in mu to handle the most general cases that can
         be introduced by coordinate transformations. In the solver, we distinguish the case when
@@ -299,20 +305,20 @@ class EigSolver(Tidy3dBaseModel):
     @classmethod
     def solver_em(
         cls,
-        Nx,
-        Ny,
-        eps_tensor,
-        mu_tensor,
-        der_mats,
-        num_modes,
-        neff_guess,
-        mat_precision,
-        direction,
-        enable_incidence_matrices,
-        basis_E,
-        dls,
-        dmin_pmc=None,
-    ):
+        Nx: int,
+        Ny: int,
+        eps_tensor: ArrayComplex,
+        mu_tensor: ArrayComplex,
+        der_mats: Sequence[sp.csr_matrix],
+        num_modes: int,
+        neff_guess: float,
+        mat_precision: Literal["single", "double"],
+        direction: Literal["+", "-"],
+        enable_incidence_matrices: bool,
+        basis_E: Optional[ArrayComplex],
+        dls: tuple[Sequence[ArrayFloat], Sequence[ArrayFloat]],
+        dmin_pmc: Optional[Sequence[bool]] = None,
+    ) -> tuple[ArrayComplex, ArrayComplex, ArrayFloat, ArrayFloat, EpsSpecType]:
         """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
         permeability and assuming translational invariance in the normal direction.
 
@@ -366,8 +372,8 @@ class EigSolver(Tidy3dBaseModel):
 
         # use a high-conductivity model for locations associated with a good conductor
         def conductivity_model_for_good_conductor(
-            eps, threshold=GOOD_CONDUCTOR_THRESHOLD * pec_val
-        ):
+            eps: ArrayComplex, threshold: complex = GOOD_CONDUCTOR_THRESHOLD * pec_val
+        ) -> ArrayComplex:
             """Entries associated with 'eps' are converted to a high-conductivity model."""
             eps = eps.astype(complex)
             eps[np.abs(eps) >= abs(threshold)] = 1 + 1j * pec_scaled_val
@@ -445,16 +451,16 @@ class EigSolver(Tidy3dBaseModel):
     @classmethod
     def solver_diagonal(
         cls,
-        eps,
-        mu,
-        der_mats,
-        num_modes,
-        neff_guess,
-        vec_init,
-        mat_precision,
-        enable_incidence_matrices,
-        basis_E,
-    ):
+        eps: ArrayComplex,
+        mu: ArrayComplex,
+        der_mats: Sequence[sp.csr_matrix],
+        num_modes: int,
+        neff_guess: float,
+        vec_init: ArrayComplex,
+        mat_precision: Literal["single", "double"],
+        enable_incidence_matrices: bool,
+        basis_E: Optional[ArrayComplex],
+    ) -> tuple[ArrayComplex, ArrayComplex, ArrayFloat, ArrayFloat]:
         """EM eigenmode solver assuming ``eps`` and ``mu`` are diagonal everywhere."""
         import scipy.sparse as sp
         import scipy.sparse.linalg as spl
@@ -464,7 +470,9 @@ class EigSolver(Tidy3dBaseModel):
         analyze_conditioning = False
         _threshold = 0.9 * np.abs(pec_val)
 
-        def incidence_matrix_for_pec(eps_vec, threshold=_threshold):
+        def incidence_matrix_for_pec(
+            eps_vec: ArrayComplex, threshold: float = _threshold
+        ) -> sp.csr_matrix:
             """Incidence matrix indicating non-PEC entries associated with 'eps_vec'."""
             nnz = eps_vec[np.abs(eps_vec) < threshold]
             eps_nz = eps_vec.copy()
@@ -553,7 +561,9 @@ class EigSolver(Tidy3dBaseModel):
 
             elif PRECONDITIONER == "Material":
 
-                def conditional_inverted_vec(eps_vec, threshold=1):
+                def conditional_inverted_vec(
+                    eps_vec: ArrayComplex, threshold: float = 1
+                ) -> sp.csr_matrix:
                     """Returns a diagonal sparse matrix whose i-th element in the diagonal
                     is |eps_i|^-1 if |eps_i|>threshold, and |eps_i| otherwise.
                     """
@@ -671,7 +681,14 @@ class EigSolver(Tidy3dBaseModel):
         return E, H, neff, keff
 
     @classmethod
-    def matrix_data_type(cls, eps, mu, der_mats, mat_precision, is_tensorial):
+    def matrix_data_type(
+        cls,
+        eps: ArrayComplex,
+        mu: ArrayComplex,
+        der_mats: Sequence[sp.csr_matrix],
+        mat_precision: Literal["single", "double"],
+        is_tensorial: bool,
+    ) -> np.dtype[Any]:
         """Determine data type that should be used for the matrix for diagonalization."""
         mat_dtype = np.float32
         # In tensorial case, even though the matrix can be real, the
@@ -708,18 +725,18 @@ class EigSolver(Tidy3dBaseModel):
     @classmethod
     def solver_tensorial(
         cls,
-        eps,
-        mu,
-        der_mats,
-        num_modes,
-        neff_guess,
-        vec_init,
-        mat_precision,
-        direction,
-        dls,
-        Nxy=None,
-        dmin_pmc=None,
-    ):
+        eps: ArrayComplex,
+        mu: ArrayComplex,
+        der_mats: Sequence[sp.csr_matrix],
+        num_modes: int,
+        neff_guess: float,
+        vec_init: ArrayComplex,
+        mat_precision: Literal["single", "double"],
+        direction: Literal["+", "-"],
+        dls: tuple[Sequence[ArrayFloat], Sequence[ArrayFloat]],
+        Nxy: Optional[tuple[int, int]] = None,
+        dmin_pmc: Optional[Sequence[bool]] = None,
+    ) -> tuple[ArrayComplex, ArrayComplex, ArrayFloat, ArrayFloat]:
         """EM eigenmode solver assuming ``eps`` or ``mu`` have off-diagonal elements."""
         import scipy.sparse as sp
 
@@ -850,13 +867,13 @@ class EigSolver(Tidy3dBaseModel):
     @classmethod
     def solver_eigs(
         cls,
-        mat,
-        num_modes,
-        vec_init,
-        guess_value=1.0,
-        M=None,
+        mat: sp.csr_matrix,
+        num_modes: int,
+        vec_init: ArrayComplex,
+        guess_value: float = 1.0,
+        M: Optional[sp.csr_matrix] = None,
         **kwargs: Any,
-    ):
+    ) -> tuple[ArrayComplex, ArrayComplex]:
         """Find ``num_modes`` eigenmodes of ``mat`` cloest to ``guess_value``.
 
         Parameters
@@ -888,14 +905,14 @@ class EigSolver(Tidy3dBaseModel):
     @classmethod
     def solver_eigs_relative(
         cls,
-        mat,
-        num_modes,
-        vec_init,
-        guess_value=1.0,
-        M=None,
-        basis_vecs=None,
+        mat: sp.csr_matrix,
+        num_modes: int,
+        vec_init: ArrayComplex,
+        guess_value: float = 1.0,
+        M: Optional[sp.csr_matrix] = None,
+        basis_vecs: Optional[ArrayComplex] = None,
         **kwargs: Any,
-    ):
+    ) -> tuple[ArrayComplex, ArrayComplex]:
         """Find ``num_modes`` eigenmodes of ``mat`` cloest to ``guess_value``.
 
         Parameters
@@ -916,7 +933,9 @@ class EigSolver(Tidy3dBaseModel):
         return values, vectors
 
     @classmethod
-    def isinstance_complex(cls, vec_or_mat, tol=TOL_COMPLEX):
+    def isinstance_complex(
+        cls, vec_or_mat: Union[ArrayComplex, sp.csr_matrix], tol: float = TOL_COMPLEX
+    ) -> bool:
         """Check if a numpy array or scipy.sparse.csr_matrix has complex component by looking at
         norm(x.imag)/norm(x)>TOL_COMPLEX
 
@@ -938,7 +957,9 @@ class EigSolver(Tidy3dBaseModel):
         )
 
     @classmethod
-    def type_conversion(cls, vec_or_mat, new_dtype):
+    def type_conversion(
+        cls, vec_or_mat: Union[ArrayComplex, sp.csr_matrix], new_dtype: np.dtype[Any]
+    ) -> Union[ArrayComplex, sp.csr_matrix]:
         """Convert vec_or_mat to new_type.
 
         Parameters
@@ -962,7 +983,7 @@ class EigSolver(Tidy3dBaseModel):
         raise RuntimeError("Unsupported new_type.")
 
     @classmethod
-    def set_initial_vec(cls, Nx, Ny, is_tensorial=False):
+    def set_initial_vec(cls, Nx: int, Ny: int, is_tensorial: bool = False) -> ArrayComplex:
         """Set initial vector for eigs:
         1) The field at x=0 and y=0 boundaries are set to 0. This should be
         the case for PEC boundaries, but wouldn't hurt for non-PEC boundary;
@@ -1000,7 +1021,9 @@ class EigSolver(Tidy3dBaseModel):
         return vec_init.flatten("F")
 
     @classmethod
-    def eigs_to_effective_index(cls, eig_list: np.ndarray, mode_solver_type: ModeSolverType):
+    def eigs_to_effective_index(
+        cls, eig_list: ArrayComplex, mode_solver_type: ModeSolverType
+    ) -> tuple[ArrayFloat, ArrayFloat]:
         """Convert obtained eigenvalues to n_eff and k_eff.
 
         Parameters
@@ -1030,7 +1053,9 @@ class EigSolver(Tidy3dBaseModel):
         raise RuntimeError(f"Unidentified 'mode_solver_type={mode_solver_type}'.")
 
     @staticmethod
-    def format_medium_data(mat_data):
+    def format_medium_data(
+        mat_data: Union[ArrayComplex, Sequence[ArrayComplex]],
+    ) -> tuple[ArrayComplex, ...]:
         """
         mat_data can be either permittivity or permeability. It's either a single 2D array
         defining the relative property in the cross-section, or nine 2D arrays defining
@@ -1038,13 +1063,13 @@ class EigSolver(Tidy3dBaseModel):
         xx, xy, xz, yx, yy, yz, zx, zy, zz.
         """
         if isinstance(mat_data, np.ndarray):
-            return (mat_data[i, :, :] for i in range(9))
+            return tuple(mat_data[i, :, :] for i in range(9))
         if len(mat_data) == 9:
-            return (np.copy(e) for e in mat_data)
+            return tuple(np.copy(e) for e in mat_data)
         raise ValueError("Wrong input to mode solver pemittivity/permeability!")
 
     @staticmethod
-    def split_curl_field_postprocess(split_curl, E):
+    def split_curl_field_postprocess(split_curl: ArrayFloat, E: ArrayComplex) -> ArrayComplex:
         """E has the shape (3, N, num_modes)"""
         _, Nx, Ny = split_curl.shape
         field_shape = E.shape
@@ -1062,7 +1087,9 @@ class EigSolver(Tidy3dBaseModel):
         return E
 
     @staticmethod
-    def make_pml_invariant(Nxy, tensor, num_pml):
+    def make_pml_invariant(
+        Nxy: tuple[int, int], tensor: ArrayComplex, num_pml: tuple[int, int]
+    ) -> ArrayComplex:
         """For a given epsilon or mu tensor of shape ``(3, 3, Nx, Ny)``, and ``num_pml`` pml layers
         along ``x`` and ``y``, make all the tensor values in the PML equal by replicating the first
         pixel into the PML."""
@@ -1076,12 +1103,16 @@ class EigSolver(Tidy3dBaseModel):
         return new_ten.reshape((3, 3, -1))
 
     @staticmethod
-    def split_curl_field_postprocess_inverse(split_curl, E) -> None:
+    def split_curl_field_postprocess_inverse(
+        split_curl: ArrayFloat, E: ArrayComplex
+    ) -> ArrayComplex:
         """E has the shape (3, N, num_modes)"""
         raise RuntimeError("Split curl not yet implemented for relative mode solver.")
 
     @staticmethod
-    def mode_plane_contain_good_conductor(material_response) -> bool:
+    def mode_plane_contain_good_conductor(
+        material_response: Optional[ArrayComplex],
+    ) -> bool:
         """Find out if epsilon on the modal plane contain good conductors whose permittivity
         or permeability value is very large.
         """
@@ -1090,6 +1121,6 @@ class EigSolver(Tidy3dBaseModel):
         return np.any(np.abs(material_response) > GOOD_CONDUCTOR_THRESHOLD * np.abs(pec_val))
 
 
-def compute_modes(*args: Any, **kwargs: Any) -> tuple[np.ndarray, np.ndarray, str]:
+def compute_modes(*args: Any, **kwargs: Any) -> tuple[ArrayComplex, ArrayComplex, EpsSpecType]:
     """A wrapper around ``EigSolver.compute_modes``, which is used in :class:`.ModeSolver`."""
     return EigSolver.compute_modes(*args, **kwargs)
