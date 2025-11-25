@@ -38,8 +38,10 @@ from .test_data_arrays import (
     FIELD_MONITOR_2D,
     FIELD_TIME_MONITOR,
     FIELD_TIME_MONITOR_2D,
+    FIELDS,
     FLUX_MONITOR,
     FLUX_TIME_MONITOR,
+    FREQS,
     MEDIUM_MONITOR,
     MODE_MONITOR,
     MODE_MONITOR_WITH_FIELDS,
@@ -1133,3 +1135,39 @@ class TestZBF:
         # this should fail
         with pytest.raises(ValueError) as e:
             _ = td.FieldDataset.from_zbf(filename=zbf_filename, dim1=dim1, dim2=dim2)
+
+
+def test_symmetry_expansion_no_interpolation_warning():
+    """Regression test: symmetry_expanded_copy should not warn when monitor is on
+    the negative side of the symmetry center. Bug was using coords[-1] (negative)
+    instead of coords_interp[-1] (positive) for coordinate matching."""
+    # Monitor entirely on negative y side (need size > 0 for multiple coords)
+    monitor = td.FieldMonitor(
+        size=(2, 0.5, 5), center=(0, -1.0, 0), fields=FIELDS, name="field", freqs=FREQS
+    )
+    sim = SIM_SYM.updated_copy(monitors=[monitor], symmetry=(0, -1, 0))
+    grid = sim.discretize_monitor(monitor)
+
+    # Grid y coords are negative; data stored at mirrored positive coords
+    y_grid = grid["Ex"].y
+    assert len(y_grid) > 1 and all(y < 0 for y in y_grid)
+    y_data = [-y for y in y_grid]
+
+    data = td.ScalarFieldDataArray(
+        np.ones((len(grid["Ex"].x), len(y_data), len(grid["Ex"].z), len(FREQS))) + 0j,
+        coords={"x": grid["Ex"].x, "y": y_data, "z": grid["Ex"].z, "f": FREQS},
+    )
+    field_data = FieldData(
+        monitor=monitor,
+        Ex=data,
+        Ey=data,
+        Ez=data,
+        Hx=data,
+        Hz=data,
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=grid,
+    )
+
+    with AssertLogLevel(None):
+        _ = field_data.symmetry_expanded_copy
