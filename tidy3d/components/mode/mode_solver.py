@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from functools import wraps
 from math import isclose
-from typing import Any, Literal, Optional, Union, get_args
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -82,6 +82,9 @@ from tidy3d.components.viz import make_ax, plot_params_pml
 from tidy3d.constants import C_0, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from matplotlib.colors import Colormap
 from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
 
 # Importing the local solver may not work if e.g. scipy is not installed
@@ -2249,6 +2252,7 @@ class ModeSolver(Tidy3dBaseModel):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         ax: Ax = None,
+        cmap: Optional[Union[str, Colormap]] = None,
         **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
@@ -2276,6 +2280,8 @@ class ModeSolver(Tidy3dBaseModel):
             inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        cmap : Optional[Union[str, Colormap]] = None
+            Colormap for visualizing the field values. ``None`` uses the default which infers it from the data.
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or `mode_index`, if applicable.
@@ -2300,6 +2306,7 @@ class ModeSolver(Tidy3dBaseModel):
             vmin=vmin,
             vmax=vmax,
             ax=ax,
+            cmap=cmap,
             **sel_kwargs,
         )
 

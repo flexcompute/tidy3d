@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -34,6 +34,9 @@ from tidy3d.components.types import Ax, RealFieldVal, annotate_type
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError, Tidy3dKeyError
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from matplotlib.colors import Colormap
 
 
 class DeviceCharacteristics(Tidy3dBaseModel):
@@ -281,6 +284,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         ax: Ax = None,
+        cmap: Optional[Union[str, Colormap]] = None,
         **sel_kwargs: Any,
     ) -> Ax:
         """Plot the data for a monitor with simulation structures overlaid.
@@ -310,6 +314,8 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        cmap : Optional[Union[str, Colormap]] = None
+            Colormap for visualizing the field values. ``None`` uses the default which infers it from the data.
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             or time dimension (``t``) if applicable.
@@ -345,7 +351,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         if scale == "log":
             field_data = np.log10(np.abs(field_data))
 
-        cmap = "coolwarm"
+        cmap_to_use = "coolwarm" if cmap is None else cmap
 
         # do sel on unstructured data
         # it could produce either SpatialDataArray or UnstructuredGridDatasetType
@@ -361,7 +367,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         if isinstance(field_data, TriangularGridDataset):
             field_data.plot(
                 ax=ax,
-                cmap=cmap,
+                cmap=cmap_to_use,
                 vmin=vmin,
                 vmax=vmax,
                 cbar_kwargs={"label": field_name},
@@ -436,7 +442,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
                 ax=ax,
                 x=x_coord_label,
                 y=y_coord_label,
-                cmap=cmap,
+                cmap=cmap_to_use,
                 vmin=vmin,
                 vmax=vmax,
                 robust=robust,

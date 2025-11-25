@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Union
 
 import numpy
 import pydantic.v1 as pydantic
@@ -26,6 +26,9 @@ from tidy3d.constants import C_0, MICROMETER, RADIAN, inf
 from tidy3d.exceptions import Tidy3dError, ValidationError
 from tidy3d.log import log
 from tidy3d.plugins.mode.mode_solver import ModeSolver
+
+if TYPE_CHECKING:
+    from matplotlib.colors import Colormap
 
 AnnotatedMedium = Annotated[MediumType, pydantic.Field(discriminator=TYPE_TAG_STR)]
 
@@ -1099,6 +1102,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         vmax: Optional[float] = None,
         ax: Ax = None,
         geometry_edges: Optional[str] = None,
+        cmap: Optional[Union[str, Colormap]] = None,
         **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
@@ -1127,6 +1131,8 @@ class RectangularDielectric(Tidy3dBaseModel):
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
         geometry_edges : Optional color to use for the geometry edges overlaid on the fields.
+        cmap : Optional[Union[str, Colormap]] = None
+            Colormap for visualizing the field values. ``None`` uses the default which infers it from the data.
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or `mode_index`, if applicable.
@@ -1147,6 +1153,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             vmin=vmin,
             vmax=vmax,
             ax=ax,
+            cmap=cmap,
             **sel_kwargs,
         )
         if geometry_edges is not None:

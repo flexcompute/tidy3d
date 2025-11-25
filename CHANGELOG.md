@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `smoothed_projection` for topology optimization of completely binarized designs.
 - Added more RF-specific mode characteristics to `MicrowaveModeData`, including propagation constants (alpha, beta, gamma), phase/group velocities, wave impedance, and automatic mode classification with configurable polarization thresholds in `MicrowaveModeSpec`.
 - Introduce `tidy3d.rf` namespace to consolidate all RF classes.
+- Added support for custom colormaps in `plot_field`.
 
 ### Breaking Changes
 - Edge singularity correction at PEC and lossy metal edges defaults to `True`.
