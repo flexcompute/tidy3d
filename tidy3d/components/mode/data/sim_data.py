@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import pydantic.v1 as pd
 
@@ -15,6 +15,9 @@ from tidy3d.components.types import TYPE_TAG_STR, Ax, PlotScale
 from tidy3d.components.types.monitor_data import ModeSolverDataType
 
 ModeSimulationMonitorDataType = Union[PermittivityData, MediumData]
+
+if TYPE_CHECKING:
+    from matplotlib.colors import Colormap
 
 
 class ModeSimulationData(AbstractYeeGridSimulationData):
@@ -53,6 +56,7 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         ax: Ax = None,
+        cmap: Optional[Union[str, Colormap]] = None,
         **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
@@ -80,6 +84,8 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
             inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        cmap : Optional[Union[str, Colormap]] = None
+            Colormap for visualizing the field values. ``None`` uses the default which infers it from the data.
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or `mode_index`, if applicable.
@@ -102,6 +108,7 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
             vmin=vmin,
             vmax=vmax,
             ax=ax,
+            cmap=cmap,
             **sel_kwargs,
         )
 

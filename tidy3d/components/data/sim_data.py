@@ -8,7 +8,7 @@ import re
 from abc import ABC
 from collections import defaultdict
 from os import PathLike
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 import h5py
 import numpy as np
@@ -33,6 +33,9 @@ from tidy3d.log import log
 
 from .data_array import FreqDataArray, TimeDataArray
 from .monitor_data import AbstractFieldData, FieldTimeData
+
+if TYPE_CHECKING:
+    from matplotlib.colors import Colormap
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 
@@ -456,6 +459,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmax: Optional[float] = None,
         ax: Ax = None,
         shading: str = "flat",
+        cmap: Optional[Union[str, Colormap]] = None,
         **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -492,6 +496,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             matplotlib axes to plot on, if not specified, one is created.
         shading: str = 'flat'
             Shading argument for Xarray plot method ('flat','nearest','goraud')
+        cmap : Optional[Union[str, Colormap]] = None
+            Colormap for visualizing the field values. ``None`` uses the default which infers it from the data.
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or ``mode_index``, if applicable.
@@ -656,6 +662,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             cmap_type=cmap_type,
             ax=ax,
             shading=shading,
+            cmap=cmap,
             infer_intervals=True if shading == "flat" else False,
         )
 
@@ -672,6 +679,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmax: Optional[float] = None,
         ax: Ax = None,
         shading: str = "flat",
+        cmap: Optional[Union[str, Colormap]] = None,
         **sel_kwargs: Any,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -709,6 +717,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             matplotlib axes to plot on, if not specified, one is created.
         shading: str = 'flat'
             Shading argument for Xarray plot method ('flat','nearest','goraud')
+        cmap : Optional[Union[str, Colormap]] = None
+            Colormap for visualizing the field values. ``None`` uses the default which infers it from the data.
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or ``mode_index``, if applicable.
@@ -736,6 +746,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             vmax=vmax,
             ax=ax,
             shading=shading,
+            cmap=cmap,
             **sel_kwargs,
         )
 
@@ -752,6 +763,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         cmap_type: ColormapType = "divergent",
+        cmap: Optional[Union[str, Colormap]] = None,
         ax: Ax = None,
         **kwargs: Any,
     ) -> Ax:
@@ -784,6 +796,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             inferred from the data and other keyword arguments.
         cmap_type : Literal["divergent", "sequential", "cyclic"] = "divergent"
             Type of color map to use for plotting.
+        cmap : Optional[Union[str, Colormap]] = None
+            Colormap for visualizing the field values. ``None`` uses the default which infers it from the data. Overrides inferred colormap from `cmap_type`.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
         **kwargs : Extra arguments to ``DataArray.plot``.
@@ -798,19 +812,23 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         interp_kwarg = {"xyz"[axis]: position}
 
         if cmap_type == "divergent":
-            cmap = "RdBu"
+            default_cmap = "RdBu"
             center = 0.0
             eps_reverse = False
         elif cmap_type == "sequential":
-            cmap = "magma"
+            default_cmap = "magma"
             center = False
             eps_reverse = True
         elif cmap_type == "cyclic":
-            cmap = "twilight"
+            default_cmap = "twilight"
             vmin = -np.pi
             vmax = np.pi
             center = False
             eps_reverse = False
+        else:
+            default_cmap = None
+
+        cmap_to_use = default_cmap if cmap is None else cmap
 
         # plot the field
         xy_coord_labels = list("xyz")
@@ -820,7 +838,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             ax=ax,
             x=x_coord_label,
             y=y_coord_label,
-            cmap=cmap,
+            cmap=cmap_to_use,
             vmin=vmin,
             vmax=vmax,
             robust=robust,

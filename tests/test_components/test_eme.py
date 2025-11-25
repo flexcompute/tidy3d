@@ -1093,6 +1093,19 @@ def test_eme_sim_data():
     _ = sim_data.plot_field(
         "field", "E", eme_port_index=0, val="abs^2", f=td.C_0, mode_index=0, ax=AX
     )
+    _ = sim_data.plot_field(
+        "field", "Ex", eme_port_index=0, val="real", f=td.C_0, mode_index=0, cmap="plasma", ax=AX
+    )
+    _ = sim_data.plot_field(
+        "field",
+        "Ex",
+        eme_port_index=0,
+        val="real",
+        f=td.C_0,
+        mode_index=0,
+        cmap=plt.get_cmap("cividis"),
+        ax=AX,
+    )
 
     # test smatrix in basis with sweep
     smatrix = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5, num_sweep=10)

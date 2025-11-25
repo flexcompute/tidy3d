@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+from matplotlib import colors as mcolors
 
 import tidy3d as td
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
@@ -191,6 +192,22 @@ def test_plot(phase):
         )
         plt.close()
     _ = sim_data.plot_field("mode_solver", "int", f=1e14, mode_index=1, phase=phase)
+    plt.close()
+
+
+def test_plot_field_custom_cmap():
+    sim_data = make_sim_data()
+    _ = sim_data.plot_field("field", "Ex", val="real", f=2e14, z=0.10, cmap="viridis")
+    plt.close()
+    custom_cmap = mcolors.LinearSegmentedColormap.from_list("two", ["black", "white"])
+    _ = sim_data.plot_field(
+        "field",
+        "Ez",
+        val="imag",
+        f=2e14,
+        z=0.10,
+        cmap=custom_cmap,
+    )
     plt.close()
 
 
