@@ -309,7 +309,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
                 # then we need to interpolate, which is slower.
                 use_sel = (
                     len(scalar_data.coords[dim_name]) == 1
-                    or coords[-1] in scalar_data.coords[dim_name]
+                    or coords_interp[-1] in scalar_data.coords[dim_name]
                 )
                 if use_sel:
                     scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
