@@ -419,14 +419,29 @@ def test_eme_simulation():
     with AssertLogLevel("WARNING", "slow-down"):
         sim_bad.validate_pre_upload()
 
-    sim_bad = sim.updated_copy(
+    sim_ok = sim.updated_copy(
         freqs=list(sim.freqs) + list(1e14 * np.linspace(1, 2, 1000)),
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
+    sim_ok.validate_pre_upload()
+    eme_grid_spec_no_interp = td.EMECompositeGrid(
+        subgrids=[
+            s.updated_copy(interp_spec=None, path="mode_spec")
+            for s in sim_ok.eme_grid_spec.subgrids
+        ],
+        subgrid_boundaries=[-1, 1],
+    )
+    sim_bad = sim_ok.updated_copy(eme_grid_spec=eme_grid_spec_no_interp)
     with pytest.raises(SetupError):
         sim_bad.validate_pre_upload()
-    sim_bad = sim.updated_copy(
+    sim_bad = sim_ok.updated_copy(
+        freqs=list(sim.freqs) + list(1e14 * np.linspace(1, 2, 5000)),
+    )
+    with pytest.raises(SetupError):
+        sim_bad.validate_pre_upload()
+    sim_bad = sim_ok.updated_copy(
         freqs=list(sim.freqs) + list(1e14 * np.linspace(1, 2, 100)),
+        eme_grid_spec=eme_grid_spec_no_interp,
     )
     with AssertLogLevel("WARNING", contains_str="expensive"):
         sim_bad.validate_pre_upload()

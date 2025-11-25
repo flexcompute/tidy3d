@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Port names in `ModalComponentModeler` and `TerminalComponentModeler` can no longer include the `@` symbol.
 - Improved speed of convolutions for large inputs.
 - Default value of `EMEModeSpec.interp_spec` is `ModeInterpSpec.cheb(num_points=3, reduce_data=True)` for faster multi-frequency EME simulations.
+- Default value of `num_sweep` in `EMECoefficientMonitor` is now `None`, recording all sweep indices.
+- Maximum number of frequencies in an `EMESimulation` is now larger if mode interpolation via `ModeInterpSpec` is used.
 
 ### Fixed
 - Ensured the legacy `Env` proxy mirrors `config.web` profile switches and preserves API URL.

@@ -140,6 +140,7 @@
                 "type": "CustomMedium",
                 "interp_method": "nearest",
                 "subpixel": false,
+                "derived_from": null,
                 "eps_dataset": null,
                 "permittivity": "SpatialDataArray",
                 "conductivity": null
@@ -988,6 +989,7 @@
                 "type": "CustomMedium",
                 "interp_method": "nearest",
                 "subpixel": false,
+                "derived_from": null,
                 "eps_dataset": null,
                 "permittivity": "SpatialDataArray",
                 "conductivity": null
@@ -1032,7 +1034,8 @@
                     ]
                 ],
                 "interp_method": "nearest",
-                "subpixel": false
+                "subpixel": false,
+                "derived_from": null
             }
         },
         {
@@ -1075,7 +1078,8 @@
                     ]
                 ],
                 "interp_method": "nearest",
-                "subpixel": false
+                "subpixel": false,
+                "derived_from": null
             }
         },
         {
@@ -1117,7 +1121,8 @@
                     ]
                 ],
                 "interp_method": "nearest",
-                "subpixel": false
+                "subpixel": false,
+                "derived_from": null
             }
         },
         {
@@ -1159,7 +1164,8 @@
                     ]
                 ],
                 "interp_method": "nearest",
-                "subpixel": false
+                "subpixel": false,
+                "derived_from": null
             }
         },
         {
@@ -1200,7 +1206,8 @@
                     ]
                 ],
                 "interp_method": "nearest",
-                "subpixel": false
+                "subpixel": false,
+                "derived_from": null
             }
         },
         {
@@ -1236,6 +1243,7 @@
                 "type": "CustomMedium",
                 "interp_method": "nearest",
                 "subpixel": false,
+                "derived_from": null,
                 "eps_dataset": null,
                 "permittivity": {
                     "attrs": {},
@@ -1304,7 +1312,8 @@
                     ]
                 ],
                 "interp_method": "nearest",
-                "subpixel": false
+                "subpixel": false,
+                "derived_from": null
             }
         },
         {
@@ -1371,7 +1380,8 @@
                     ]
                 ],
                 "interp_method": "nearest",
-                "subpixel": false
+                "subpixel": false,
+                "derived_from": null
             }
         },
         {
@@ -1431,7 +1441,8 @@
                     ]
                 ],
                 "interp_method": "nearest",
-                "subpixel": false
+                "subpixel": false,
+                "derived_from": null
             }
         },
         {
@@ -1491,7 +1502,8 @@
                     ]
                 ],
                 "interp_method": "nearest",
-                "subpixel": false
+                "subpixel": false,
+                "derived_from": null
             }
         },
         {
@@ -1544,7 +1556,8 @@
                     ]
                 ],
                 "interp_method": "nearest",
-                "subpixel": false
+                "subpixel": false,
+                "derived_from": null
             }
         },
         {
