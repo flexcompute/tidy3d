@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Removed validator that would warn if `PerturbationMedium` values could become numerically unstable, since an error will anyway be raised if this actually happens when the medium is converted using actual perturbation data.
 
 ### Fixed
 

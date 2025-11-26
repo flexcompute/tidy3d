@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -335,53 +335,16 @@ def assert_single_freq_in_range(field_name: str):
     return _single_frequency_in_range
 
 
-def _warn_potential_error(
-    field_name: str,
-    base_value: float,
-    val_change_range: tuple[float, float],
-    allowed_real_range: tuple[float, float],
-    allowed_imag_range: tuple[float, float],
-) -> None:
-    """Basic validation that perturbations do not drive a parameter out of physical bounds."""
-
-    min_val = val_change_range[0] + base_value
-    max_val = val_change_range[1] + base_value
-
-    for part_range, part_func, part_name in zip(
-        [allowed_real_range, allowed_imag_range], [np.real, np.imag], ["Re", "Im"]
-    ):
-        if part_range is not None:
-            min_allowed, max_allowed = part_range
-
-            if min_allowed is not None and part_func(min_val) < min_allowed:
-                log.warning(
-                    f"'{part_name}({field_name})' could "
-                    f"become less than '{min_allowed}' for a perturbation "
-                    "medium.",
-                    custom_loc=[field_name],
-                )
-
-            if max_allowed is not None and part_func(max_val) > max_allowed:
-                log.warning(
-                    f"'{part_name}({field_name})' could "
-                    f"become greater than '{max_allowed}' for a perturbation "
-                    "medium.",
-                    custom_loc=[field_name],
-                )
-
-
 def validate_parameter_perturbation(
     field_name: str,
     base_field_name: str,
-    allowed_real_range: tuple[tuple[float, float], ...],
-    allowed_imag_range: Optional[tuple[tuple[float, float], ...]] = None,
     allowed_complex: bool = True,
 ):
-    """Assert perturbations do not drive a parameter out of physical bounds."""
+    """Assert perturbations have a valid shape and data type."""
 
     @pydantic.validator(field_name, always=True, allow_reuse=True)
-    def _warn_perturbed_val_range(cls, val, values):
-        """Assert perturbations do not drive a parameter out of physical bounds."""
+    def _check_perturbed_val(cls, val, values):
+        """Assert perturbations have a valid shape and data type."""
 
         if val is not None:
             # get base values
@@ -394,18 +357,8 @@ def validate_parameter_perturbation(
                     f" with shape of base parameter '{base_field_name}' ({np.shape(base_values)})."
                 )
 
-            for tuple_ind, (base_tuple, perturb_tuple) in enumerate(
-                zip(np.atleast_1d(base_values), np.atleast_1d(val))
-            ):
-                tuple_ind_str = "" if np.shape(base_values) == () else f"[{tuple_ind}]"
-                for paramer_ind, (base_value, perturb, real_range, imag_range) in enumerate(
-                    zip(
-                        np.atleast_1d(base_tuple),
-                        np.atleast_1d(perturb_tuple),
-                        allowed_real_range,
-                        allowed_imag_range,
-                    )
-                ):
+            for perturb_tuple in np.atleast_1d(val):
+                for perturb in np.atleast_1d(perturb_tuple):
                     if perturb is not None:
                         # check real/complex type
                         if perturb.is_complex and not allowed_complex:
@@ -413,22 +366,9 @@ def validate_parameter_perturbation(
                                 f"Perturbation of '{base_field_name}' cannot be complex."
                             )
 
-                        ind_pointer = tuple_ind_str + (
-                            "" if np.shape(base_tuple) == () else f"[{paramer_ind}]"
-                        )
-
-                        sub_field_name = base_field_name + ind_pointer
-
-                        _warn_potential_error(
-                            field_name=sub_field_name,
-                            base_value=base_value,
-                            val_change_range=perturb.perturbation_range,
-                            allowed_real_range=real_range,
-                            allowed_imag_range=imag_range,
-                        )
         return val
 
-    return _warn_perturbed_val_range
+    return _check_perturbed_val
 
 
 def _assert_min_freq(freqs, msg_start: str) -> None:
