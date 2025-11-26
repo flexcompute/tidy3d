@@ -67,6 +67,8 @@ def tanh_projection(
     """
     if beta == 0:
         return array
+    if beta == np.inf:
+        return np.where(array > eta, 1.0, 0.0)
     num = np.tanh(beta * eta) + np.tanh(beta * (array - eta))
     denom = np.tanh(beta * eta) + np.tanh(beta * (1 - eta))
     return num / denom
@@ -101,10 +103,6 @@ def smoothed_projection(
         This function assumes that the device is placed on a uniform grid. When using
         ```GridSpec.auto``` in the simulation, make sure to place a ``MeshOverrideStructure`` at
         the position of the optimized geometry.
-
-    .. warning::
-        When using :math:`\\beta = \\infty` the function will produce NaN values if
-        the input is exactly equal to ``eta``.
 
     Parameters
     ----------
