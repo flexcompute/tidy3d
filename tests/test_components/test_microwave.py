@@ -7,7 +7,7 @@ from typing import Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pd
+import pydantic as pd
 import pytest
 import xarray as xr
 from shapely import LineString

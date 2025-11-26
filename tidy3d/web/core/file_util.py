@@ -82,6 +82,6 @@ def read_simulation_from_hdf5(file_name: os.PathLike) -> bytes:
 
 def read_simulation_from_json(file_name: os.PathLike) -> str:
     """read simulation str from json"""
-    with open(file_name) as json_file:
+    with open(file_name, encoding="utf-8") as json_file:
         json_data = json_file.read()
     return json_data

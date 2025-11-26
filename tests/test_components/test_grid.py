@@ -25,6 +25,99 @@ def test_coords():
     _ = Coords(x=x, y=y, z=z)
 
 
+def test_coords_arrays_are_immutable():
+    """Test that arrays in Coords objects are immutable.
+
+    This ensures that numpy arrays in Pydantic models cannot be modified,
+    enforcing true immutability for these data structures.
+    """
+
+    # Create original arrays
+    x_orig = np.array([1.0, 2.0, 3.0])
+    y_orig = np.array([4.0, 5.0, 6.0])
+    z_orig = np.array([7.0, 8.0, 9.0])
+
+    # Create Coords object
+    coords = Coords(x=x_orig, y=y_orig, z=z_orig)
+
+    # Get dictionary
+    coord_dict = coords.to_dict
+
+    # Verify we got the right values
+    assert np.array_equal(coord_dict["x"], x_orig)
+    assert np.array_equal(coord_dict["y"], y_orig)
+    assert np.array_equal(coord_dict["z"], z_orig)
+
+    # Verify arrays are not writeable
+    assert not coord_dict["x"].flags.writeable
+    assert not coord_dict["y"].flags.writeable
+    assert not coord_dict["z"].flags.writeable
+
+    # Attempting to modify the arrays should raise an error
+    with pytest.raises(ValueError, match="output array is read-only"):
+        coord_dict["x"] -= 10
+
+    with pytest.raises(ValueError, match="output array is read-only"):
+        coord_dict["y"] *= 2
+
+    with pytest.raises(ValueError, match="output array is read-only"):
+        coord_dict["z"] += 100
+
+    # Arrays should still have original values
+    assert np.array_equal(coord_dict["x"], x_orig)
+    assert np.array_equal(coord_dict["y"], y_orig)
+    assert np.array_equal(coord_dict["z"], z_orig)
+
+
+def test_grid_boundaries_modification_pattern():
+    """Test the pattern of modifying grid boundaries after retrieval.
+
+    This demonstrates that arrays are immutable and shows the correct
+    pattern for creating modified versions.
+    """
+
+    # Create a grid for testing boundary modification
+    boundaries_x = np.array([-1.0, 0.0, 1.0])
+    boundaries_y = np.array([-1.0, 0.0, 1.0])
+    boundaries_z = np.array([-1.0, 0.0, 1.0])
+    coords = Coords(x=boundaries_x, y=boundaries_y, z=boundaries_z)
+    grid = Grid(boundaries=coords)
+
+    # Store original boundary values
+    original_x = grid.boundaries.x.copy()
+    original_y = grid.boundaries.y.copy()
+    original_z = grid.boundaries.z.copy()
+
+    # Get boundaries dictionary
+    boundaries = grid.boundaries.to_dict
+    center = [0.5, 0.5, 0.5]  # Simulate an offset value
+
+    # Verify that direct modification fails due to immutability
+    with pytest.raises(ValueError, match="output array is read-only"):
+        boundaries["x"] -= center[0]
+
+    # Show the correct pattern: make copies when modification is needed
+    boundaries_copy = {k: v.copy() for k, v in boundaries.items()}
+
+    # Now we can modify the copies
+    for dim, dim_name in enumerate(boundaries_copy.keys()):
+        boundaries_copy[dim_name] -= center[dim]
+
+    # Create a new grid with modified boundaries
+    offset_coords = Coords(**boundaries_copy)
+    offset_grid = Grid(boundaries=offset_coords)
+
+    # Verify original grid is unchanged
+    assert np.array_equal(grid.boundaries.x, original_x)
+    assert np.array_equal(grid.boundaries.y, original_y)
+    assert np.array_equal(grid.boundaries.z, original_z)
+
+    # Verify offset grid has the expected modified values
+    assert np.array_equal(offset_grid.boundaries.x, original_x - 0.5)
+    assert np.array_equal(offset_grid.boundaries.y, original_y - 0.5)
+    assert np.array_equal(offset_grid.boundaries.z, original_z - 0.5)
+
+
 def test_field_grid():
     x = np.linspace(-1, 1, 100)
     y = np.linspace(-1, 1, 100)
@@ -45,7 +138,7 @@ def test_grid():
     assert np.all(g.centers.z == np.array([-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]))
 
     for dim in "xyz":
-        s = g.sizes.dict()[dim]
+        s = g.sizes.model_dump()[dim]
         assert np.all(np.array(s) == 1.0)
 
     assert np.all(g.yee.E.x.x == np.array([-0.5, 0.5]))
@@ -212,11 +305,11 @@ def test_sim_grid():
     )
 
     for dim in "xyz":
-        c = sim.grid.centers.dict()[dim]
+        c = sim.grid.centers.model_dump()[dim]
         assert np.all(c == np.array([-1.5, -0.5, 0.5, 1.5]))
 
     for dim in "xyz":
-        b = sim.grid.boundaries.dict()[dim]
+        b = sim.grid.boundaries.model_dump()[dim]
         assert np.all(b == np.array([-2, -1, 0, 1, 2]))
 
 
@@ -265,11 +358,11 @@ def test_sim_pml_grid():
     )
 
     for dim in "xyz":
-        c = sim.grid.centers.dict()[dim]
+        c = sim.grid.centers.model_dump()[dim]
         assert np.all(c == np.arange(-7.5, 8, 1))
 
     for dim in "xyz":
-        b = sim.grid.boundaries.dict()[dim]
+        b = sim.grid.boundaries.model_dump()[dim]
         assert np.all(b == np.arange(-8, 8.5, 1))
 
 
@@ -286,11 +379,11 @@ def test_sim_discretize_vol():
     subgrid = sim.discretize(vol)
 
     for dim in "xyz":
-        b = subgrid.boundaries.dict()[dim]
+        b = subgrid.boundaries.model_dump()[dim]
         assert np.all(b == np.array([-1, 0, 1]))
 
     for dim in "xyz":
-        c = subgrid.centers.dict()[dim]
+        c = subgrid.centers.model_dump()[dim]
         assert np.all(c == np.array([-0.5, 0.5]))
 
     _ = td.Box(size=(6, 6, 0))

@@ -8,15 +8,21 @@ from math import isclose
 from typing import Any, Callable, Literal, Optional, Union
 
 import autograd.numpy as np
-
-# TODO: it's hard to figure out which functions need this, for now all get it
 import numpy as npo
-import pydantic.v1 as pd
 import xarray as xr
 from autograd.differential_operators import tensor_jacobian_product
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    PositiveFloat,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
 
+from tidy3d.compat import Self
 from tidy3d.components.autograd.utils import pack_complex_vec
-from tidy3d.components.material.tcad.heat import ThermalSpecType
+from tidy3d.components.types.base import PolesAndResidues
 from tidy3d.constants import (
     C_0,
     CONDUCTIVITY,
@@ -37,13 +43,15 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 from .autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
-from .autograd.types import AutogradFieldMap, TracedFloat, TracedPoleAndResidue, TracedPositiveFloat
-from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
-from .data.dataset import (
-    ElectromagneticFieldDataset,
-    PermittivityDataset,
+from .autograd.types import (
+    AutogradFieldMap,
+    TracedFloat,
+    TracedPolesAndResidues,
+    TracedPositiveFloat,
 )
+from .base import Tidy3dBaseModel, cached_property
+from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
+from .data.dataset import ElectromagneticFieldDataset, PermittivityDataset
 from .data.unstructured.base import UnstructuredGridDataset
 from .data.utils import (
     CustomSpatialDataType,
@@ -63,6 +71,7 @@ from .dispersion_fitter import (
 )
 from .geometry.base import Geometry
 from .grid.grid import Coords, Grid
+from .material.tcad.heat import ThermalSpecType
 from .nonlinear import (  # noqa: F401
     KerrNonlinearity,
     NonlinearModel,
@@ -89,9 +98,7 @@ from .types import (
     FreqBound,
     InterpMethod,
     PermittivityComponent,
-    PoleAndResidue,
     TensorReal,
-    annotate_type,
 )
 from .validators import validate_name_str, validate_parameter_perturbation
 from .viz import VisualizationSpec, add_ax_if_none
@@ -161,16 +168,16 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
 class AbstractMedium(ABC, Tidy3dBaseModel):
     """A medium within which electromagnetic waves propagate."""
 
-    name: str = pd.Field(None, title="Name", description="Optional unique name for medium.")
+    name: Optional[str] = Field(None, title="Name", description="Optional unique name for medium.")
 
-    frequency_range: FreqBound = pd.Field(
+    frequency_range: Optional[FreqBound] = Field(
         None,
         title="Frequency Range",
         description="Optional range of validity for the medium.",
         units=(HERTZ, HERTZ),
     )
 
-    allow_gain: bool = pd.Field(
+    allow_gain: bool = Field(
         False,
         title="Allow gain medium",
         description="Allow the medium to be active. Caution: "
@@ -180,51 +187,39 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         "useful in some cases.",
     )
 
-    nonlinear_spec: Union[NonlinearSpec, NonlinearSusceptibility] = pd.Field(
+    nonlinear_spec: Optional[Union[NonlinearSpec, NonlinearSusceptibility]] = Field(
         None,
         title="Nonlinear Spec",
         description="Nonlinear spec applied on top of the base medium properties.",
     )
 
-    modulation_spec: ModulationSpec = pd.Field(
+    modulation_spec: Optional[ModulationSpec] = Field(
         None,
         title="Modulation Spec",
         description="Modulation spec applied on top of the base medium properties.",
     )
 
-    viz_spec: Optional[VisualizationSpec] = pd.Field(
+    viz_spec: Optional[VisualizationSpec] = Field(
         None,
         title="Visualization Specification",
         description="Plotting specification for visualizing medium.",
     )
 
-    @cached_property
-    def _nonlinear_models(self) -> list:
-        """The nonlinear models in the nonlinear_spec."""
-        if self.nonlinear_spec is None:
-            return []
-        if isinstance(self.nonlinear_spec, NonlinearModel):
-            return [self.nonlinear_spec]
-        if self.nonlinear_spec.models is None:
-            return []
-        return list(self.nonlinear_spec.models)
+    heat_spec: Optional[ThermalSpecType] = Field(
+        None,
+        title="Heat Specification",
+        description="DEPRECATED: Use :class:`MultiPhysicsMedium`. Specification of the medium heat properties. They are "
+        "used for solving the heat equation via the :class:`HeatSimulation` interface. Such simulations can be"
+        "used for investigating the influence of heat propagation on the properties of optical systems. "
+        "Once the temperature distribution in the system is found using :class:`HeatSimulation` object, "
+        "``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation "
+        "models defined into spatially dependent custom mediums. "
+        "Otherwise, the ``heat_spec`` does not directly affect the running of an optical "
+        "``Simulation``.",
+        discriminator=TYPE_TAG_STR,
+    )
 
-    @cached_property
-    def _nonlinear_num_iters(self) -> pd.PositiveInt:
-        """The num_iters of the nonlinear_spec."""
-        if self.nonlinear_spec is None:
-            return 0
-        if isinstance(self.nonlinear_spec, NonlinearModel):
-            if self.nonlinear_spec.numiters is None:
-                return 1  # old default value for backwards compatibility
-            return self.nonlinear_spec.numiters
-        return self.nonlinear_spec.num_iters
-
-    def _post_init_validators(self) -> None:
-        """Call validators taking ``self`` that get run after init."""
-        self._validate_nonlinear_spec()
-        self._validate_modulation_spec_post_init()
-
+    @model_validator(mode="after")
     def _validate_nonlinear_spec(self) -> None:
         """Check compatibility with nonlinear_spec."""
         if self.__class__.__name__ == "AnisotropicMedium" and any(
@@ -242,7 +237,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             )
 
         if self.nonlinear_spec is None:
-            return
+            return self
         if isinstance(self.nonlinear_spec, NonlinearModel):
             log.warning(
                 "The API for 'nonlinear_spec' has changed. "
@@ -262,8 +257,25 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                     "'NonlinearSusceptibility.numiters' is deprecated. "
                     "Please use 'NonlinearSpec.num_iters' instead."
                 )
+        return self
 
-    def _validate_modulation_spec_post_init(self) -> None:
+    @model_validator(mode="after")
+    def _check_either_modulation_or_nonlinear_spec(self):
+        """Check compatibility with modulation_spec."""
+        val = self.modulation_spec
+        nonlinear_spec = self.nonlinear_spec
+        if val is not None and nonlinear_spec is not None:
+            raise ValidationError(
+                f"For medium class {self.type}, 'modulation_spec' of class {type(val).__name__} and "
+                f"'nonlinear_spec' of class {type(nonlinear_spec).__name__} are "
+                "not simultaneously supported."
+            )
+        return self
+
+    _name_validator = validate_name_str()
+
+    @model_validator(mode="after")
+    def _validate_modulation_spec_after(self) -> Self:
         """Check compatibility with nonlinear_spec."""
         if self.__class__.__name__ == "Medium2D" and any(
             comp.modulation_spec is not None for comp in [self.ss, self.tt]
@@ -271,20 +283,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             raise ValidationError(
                 "Time modulation is not currently supported for the components of a 2D medium."
             )
-
-    heat_spec: Optional[ThermalSpecType] = pd.Field(
-        None,
-        title="Heat Specification",
-        description="DEPRECATED: Use :class:`MultiPhysicsMedium`. Specification of the medium heat properties. They are "
-        "used for solving the heat equation via the :class:`HeatSimulation` interface. Such simulations can be"
-        "used for investigating the influence of heat propagation on the properties of optical systems. "
-        "Once the temperature distribution in the system is found using :class:`HeatSimulation` object, "
-        "``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation "
-        "models defined into spatially dependent custom mediums. "
-        "Otherwise, the ``heat_spec`` does not directly affect the running of an optical "
-        "``Simulation``.",
-        discriminator=TYPE_TAG_STR,
-    )
+        return self
 
     @property
     def charge(self) -> None:
@@ -302,20 +301,27 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     def optical(self) -> None:
         return None
 
-    @pd.validator("modulation_spec", always=True)
-    @skip_if_fields_missing(["nonlinear_spec"])
-    def _validate_modulation_spec(cls, val, values):
-        """Check compatibility with modulation_spec."""
-        nonlinear_spec = values.get("nonlinear_spec")
-        if val is not None and nonlinear_spec is not None:
-            raise ValidationError(
-                f"For medium class {cls.__name__}, 'modulation_spec' of class {type(val)} and "
-                f"'nonlinear_spec' of class {type(nonlinear_spec)} are "
-                "not simultaneously supported."
-            )
-        return val
+    @cached_property
+    def _nonlinear_models(self) -> list:
+        """The nonlinear models in the nonlinear_spec."""
+        if self.nonlinear_spec is None:
+            return []
+        if isinstance(self.nonlinear_spec, NonlinearModel):
+            return [self.nonlinear_spec]
+        if self.nonlinear_spec.models is None:
+            return []
+        return list(self.nonlinear_spec.models)
 
-    _name_validator = validate_name_str()
+    @cached_property
+    def _nonlinear_num_iters(self) -> PositiveInt:
+        """The num_iters of the nonlinear_spec."""
+        if self.nonlinear_spec is None:
+            return 0
+        if isinstance(self.nonlinear_spec, NonlinearModel):
+            if self.nonlinear_spec.numiters is None:
+                return 1  # old default value for backwards compatibility
+            return self.nonlinear_spec.numiters
+        return self.nonlinear_spec.num_iters
 
     @cached_property
     def is_spatially_uniform(self) -> bool:
@@ -404,7 +410,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[float, float]
+        tuple[float, float]
             Real part (n) and imaginary part (k) of refractive index of medium.
         """
         eps_complex = self.eps_model(frequency=frequency)
@@ -420,7 +426,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[float, float]
+        tuple[float, float]
             Real part of permittivity and loss tangent.
         """
         eps_complex = self.eps_model(frequency=frequency)
@@ -437,7 +443,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[complex, complex, complex]
+        tuple[complex, complex, complex]
             The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
         """
 
@@ -456,7 +462,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[complex, complex, complex]
+        tuple[complex, complex, complex]
             The diagonal elements of relative permittivity tensor relevant for numerical
             considerations evaluated at ``frequency``.
         """
@@ -593,7 +599,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[float, float]
+        tuple[float, float]
             Real and imaginary parts of refractive index (n & k).
         """
         eps_c = np.array(eps_c)
@@ -615,7 +621,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[float, float]
+        tuple[float, float]
             Real part of relative permittivity & electric conductivity.
         """
         eps_complex = AbstractMedium.nk_to_eps_complex(n, k)
@@ -663,7 +669,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[float, float]
+        tuple[float, float]
             Real part of relative permittivity & electric conductivity.
         """
         eps_real, eps_imag = eps_complex.real, eps_complex.imag
@@ -682,7 +688,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Returns
         -------
-        Tuple[float, float]
+        tuple[float, float]
             Real part of relative permittivity & loss tangent
         """
         eps_real, eps_imag = eps_complex.real, eps_complex.imag
@@ -787,7 +793,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -857,7 +863,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 class AbstractCustomMedium(AbstractMedium, ABC):
     """A spatially varying medium."""
 
-    interp_method: InterpMethod = pd.Field(
+    interp_method: InterpMethod = Field(
         "nearest",
         title="Interpolation method",
         description="Interpolation method to obtain permittivity values "
@@ -867,7 +873,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         "the extrapolated value will take the minimal (maximal) of the supplied data.",
     )
 
-    subpixel: bool = pd.Field(
+    subpixel: bool = Field(
         False,
         title="Subpixel averaging",
         description="If ``True``, apply the subpixel averaging method specified by "
@@ -876,7 +882,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         "intersection interfaces with other structures.",
     )
 
-    derived_from: Optional[annotate_type(PerturbationMediumType)] = pd.Field(
+    derived_from: Optional[PerturbationMediumType] = Field(
         None,
         title="Parent Medium",
         description="If not ``None``, it records the parent medium from which this medium was derived.",
@@ -904,7 +910,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
         Returns
         -------
-        Tuple[
+        tuple[
             Union[
                 :class:`.SpatialDataArray`,
                 :class:`.TriangularGridDataset`,
@@ -941,7 +947,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
         Returns
         -------
-        Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
+        tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
             The complex-valued permittivity tensor at ``frequency`` interpolated
             at the supplied coordinate.
         """
@@ -1036,7 +1042,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
         Returns
         -------
-        Tuple[float, float]
+        tuple[float, float]
             The min and max values of the permittivity for the selected component and evaluated at ``frequency``.
         """
         eps_dataarray = self.eps_dataarray_freq(frequency)
@@ -1067,7 +1073,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -1175,12 +1181,13 @@ class PECMedium(AbstractMedium):
 
     """
 
-    @pd.validator("modulation_spec", always=True)
+    @field_validator("modulation_spec")
+    @classmethod
     def _validate_modulation_spec(cls, val):
         """Check compatibility with modulation_spec."""
         if val is not None:
             raise ValidationError(
-                f"A 'modulation_spec' of class {type(val)} is not "
+                f"A 'modulation_spec' of class {type(val).__name__} is not "
                 f"currently supported for medium class {cls.__name__}."
             )
         return val
@@ -1221,12 +1228,13 @@ class PMCMedium(AbstractMedium):
 
     """
 
-    @pd.validator("modulation_spec", always=True)
+    @field_validator("modulation_spec")
+    @classmethod
     def _validate_modulation_spec(cls, val):
         """Check compatibility with modulation_spec."""
         if val is not None:
             raise ValidationError(
-                f"A 'modulation_spec' of class {type(val)} is not "
+                f"A 'modulation_spec' of class {type(val).__name__} is not "
                 f"currently supported for medium class {cls.__name__}."
             )
         return val
@@ -1287,11 +1295,11 @@ class Medium(AbstractMedium):
 
     """
 
-    permittivity: TracedFloat = pd.Field(
+    permittivity: TracedFloat = Field(
         1.0, ge=1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
     )
 
-    conductivity: TracedFloat = pd.Field(
+    conductivity: TracedFloat = Field(
         0.0,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
@@ -1299,43 +1307,43 @@ class Medium(AbstractMedium):
         units=CONDUCTIVITY,
     )
 
-    @pd.validator("conductivity", always=True)
-    @skip_if_fields_missing(["allow_gain"])
-    def _passivity_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _passivity_validation(self):
         """Assert passive medium if ``allow_gain`` is False."""
-        if not values.get("allow_gain") and val < 0:
+        val = self.conductivity
+        if not self.allow_gain and val < 0:
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
                 "To simulate a gain medium, please set 'allow_gain=True'. "
                 "Caution: simulations with a gain medium are unstable, and are likely to diverge."
             )
-        return val
+        return self
 
-    @pd.validator("permittivity", always=True)
-    @skip_if_fields_missing(["modulation_spec"])
-    def _permittivity_modulation_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _permittivity_modulation_validation(self):
         """Assert modulated permittivity cannot be <= 0."""
-        modulation = values.get("modulation_spec")
+        val = self.permittivity
+        modulation = self.modulation_spec
         if modulation is None or modulation.permittivity is None:
-            return val
+            return self
 
         min_eps_inf = np.min(_get_numpy_array(val))
         if min_eps_inf - modulation.permittivity.max_modulation <= 0:
             raise ValidationError(
                 "The minimum permittivity value with modulation applied was found to be negative."
             )
-        return val
+        return self
 
-    @pd.validator("conductivity", always=True)
-    @skip_if_fields_missing(["modulation_spec", "allow_gain"])
-    def _passivity_modulation_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _passivity_modulation_validation(self):
         """Assert passive medium if ``allow_gain`` is False."""
-        modulation = values.get("modulation_spec")
+        val = self.conductivity
+        modulation = self.modulation_spec
         if modulation is None or modulation.conductivity is None:
-            return val
+            return self
 
         min_sigma = np.min(_get_numpy_array(val))
-        if not values.get("allow_gain") and min_sigma - modulation.conductivity.max_modulation < 0:
+        if not self.allow_gain and min_sigma - modulation.conductivity.max_modulation < 0:
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative at any time."
                 "With conductivity modulation, this medium can sometimes be active. "
@@ -1343,7 +1351,7 @@ class Medium(AbstractMedium):
                 "Caution: simulations with a gain medium are unstable, "
                 "and are likely to diverge."
             )
-        return val
+        return self
 
     @cached_property
     def n_cfl(self):
@@ -1474,14 +1482,13 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
     >>> eps = dielectric.eps_model(200e12)
     """
 
-    permittivity: CustomSpatialDataTypeAnnotated = pd.Field(
-        ...,
+    permittivity: CustomSpatialDataTypeAnnotated = Field(
         title="Permittivity",
         description="Relative permittivity.",
         units=PERMITTIVITY,
     )
 
-    conductivity: Optional[CustomSpatialDataTypeAnnotated] = pd.Field(
+    conductivity: Optional[CustomSpatialDataTypeAnnotated] = Field(
         None,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
@@ -1489,10 +1496,10 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         units=CONDUCTIVITY,
     )
 
-    _no_nans_eps = validate_no_nans("permittivity")
-    _no_nans_sigma = validate_no_nans("conductivity")
+    _no_nans = validate_no_nans("permittivity", "conductivity")
 
-    @pd.validator("permittivity", always=True)
+    @field_validator("permittivity")
+    @classmethod
     def _eps_inf_greater_no_less_than_one(cls, val):
         """Assert any eps_inf must be >=1"""
 
@@ -1504,34 +1511,34 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
 
         return val
 
-    @pd.validator("conductivity", always=True)
-    @skip_if_fields_missing(["permittivity"])
-    def _conductivity_real_and_correct_shape(cls, val, values):
+    @model_validator(mode="after")
+    def _conductivity_real_and_correct_shape(self):
         """Assert conductivity is real and of right shape."""
+        val = self.conductivity
 
         if val is None:
-            return val
+            return self
 
         if not CustomIsotropicMedium._validate_isreal_dataarray(val):
             raise SetupError("'conductivity' must be real.")
 
-        if not _check_same_coordinates(values["permittivity"], val):
+        if not _check_same_coordinates(self.permittivity, val):
             raise SetupError("'permittivity' and 'conductivity' must have the same coordinates.")
-        return val
+        return self
 
-    @pd.validator("conductivity", always=True)
-    @skip_if_fields_missing(["allow_gain"])
-    def _passivity_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _passivity_validation(self):
         """Assert passive medium if ``allow_gain`` is False."""
+        val = self.conductivity
         if val is None:
-            return val
-        if not values.get("allow_gain") and np.any(_get_numpy_array(val) < 0):
+            return self
+        if not self.allow_gain and np.any(_get_numpy_array(val) < 0):
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
                 "To simulate a gain medium, please set 'allow_gain=True'. "
                 "Caution: simulations with a gain medium are unstable, and are likely to diverge."
             )
-        return val
+        return self
 
     @cached_property
     def is_spatially_uniform(self) -> bool:
@@ -1571,7 +1578,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
 
         Returns
         -------
-        Tuple[
+        tuple[
             Union[
                 :class:`.SpatialDataArray`,
                 :class:`.TriangularGridDataset`,
@@ -1603,7 +1610,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -1646,7 +1653,7 @@ class CustomMedium(AbstractCustomMedium):
     >>> eps = dielectric.eps_model(200e12)
     """
 
-    eps_dataset: Optional[PermittivityDataset] = pd.Field(
+    eps_dataset: Optional[PermittivityDataset] = Field(
         None,
         title="Permittivity Dataset",
         description="[To be deprecated] User-supplied dataset containing complex-valued "
@@ -1654,14 +1661,14 @@ class CustomMedium(AbstractCustomMedium):
         "will be interpolated based on ``interp_method``.",
     )
 
-    permittivity: Optional[CustomSpatialDataTypeAnnotated] = pd.Field(
+    permittivity: Optional[CustomSpatialDataTypeAnnotated] = Field(
         None,
         title="Permittivity",
         description="Spatial profile of relative permittivity.",
         units=PERMITTIVITY,
     )
 
-    conductivity: Optional[CustomSpatialDataTypeAnnotated] = pd.Field(
+    conductivity: Optional[CustomSpatialDataTypeAnnotated] = Field(
         None,
         title="Conductivity",
         description="Spatial profile Electric conductivity. Defined such "
@@ -1670,45 +1677,43 @@ class CustomMedium(AbstractCustomMedium):
         units=CONDUCTIVITY,
     )
 
-    _no_nans_eps_dataset = validate_no_nans("eps_dataset")
-    _no_nans_permittivity = validate_no_nans("permittivity")
-    _no_nans_sigma = validate_no_nans("conductivity")
+    _no_nans = validate_no_nans("eps_dataset", "permittivity", "conductivity")
 
-    @pd.root_validator(pre=True)
-    def _warn_if_none(cls, values):
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_if_none(cls, data: dict) -> dict:
         """Warn if the data array fails to load, and return a vacuum medium."""
-        eps_dataset = values.get("eps_dataset")
-        permittivity = values.get("permittivity")
-        conductivity = values.get("conductivity")
         fail_load = False
-        if cls._not_loaded(permittivity):
+        if cls._not_loaded(data.get("permittivity")):
             log.warning(
                 "Loading 'permittivity' without data; constructing a vacuum medium instead."
             )
             fail_load = True
-        if cls._not_loaded(conductivity):
+        if cls._not_loaded(data.get("conductivity")):
             log.warning(
                 "Loading 'conductivity' without data; constructing a vacuum medium instead."
             )
             fail_load = True
-        if isinstance(eps_dataset, dict):
-            if any((v in DATA_ARRAY_MAP for _, v in eps_dataset.items() if isinstance(v, str))):
+        eps_ds = data.get("eps_dataset")
+        if isinstance(eps_ds, dict):
+            if any(isinstance(v, str) and v in DATA_ARRAY_MAP for v in eps_ds.values()):
                 log.warning(
                     "Loading 'eps_dataset' without data; constructing a vacuum medium instead."
                 )
                 fail_load = True
         if fail_load:
-            eps_real = SpatialDataArray(np.ones((1, 1, 1)), coords={"x": [0], "y": [0], "z": [0]})
-            return {"permittivity": eps_real}
-        return values
+            data["permittivity"] = SpatialDataArray(
+                np.ones((1, 1, 1)), coords={"x": [0], "y": [0], "z": [0]}
+            )
+        return data
 
-    @pd.root_validator(pre=True)
-    def _deprecation_dataset(cls, values):
+    @model_validator(mode="after")
+    def _deprecation_dataset(self):
         """Raise deprecation warning if dataset supplied and convert to dataset."""
 
-        eps_dataset = values.get("eps_dataset")
-        permittivity = values.get("permittivity")
-        conductivity = values.get("conductivity")
+        eps_dataset = self.eps_dataset
+        permittivity = self.permittivity
+        conductivity = self.conductivity
 
         # Incomplete custom medium definition.
         if eps_dataset is None and permittivity is None and conductivity is None:
@@ -1724,7 +1729,7 @@ class CustomMedium(AbstractCustomMedium):
             )
 
         if eps_dataset is None:
-            return values
+            return self
 
         # TODO: sometime before 3.0, uncomment these lines to warn users to start using new API
         # if isinstance(eps_dataset, dict):
@@ -1749,9 +1754,10 @@ class CustomMedium(AbstractCustomMedium):
         #         "We recommend you change your scripts to be compatible with the new API."
         #     )
 
-        return values
+        return self
 
-    @pd.validator("eps_dataset", always=True)
+    @field_validator("eps_dataset")
+    @classmethod
     def _eps_dataset_single_frequency(cls, val):
         """Assert only one frequency supplied."""
         if val is None:
@@ -1766,13 +1772,13 @@ class CustomMedium(AbstractCustomMedium):
                 )
         return val
 
-    @pd.validator("eps_dataset", always=True)
-    @skip_if_fields_missing(["modulation_spec", "allow_gain"])
-    def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(cls, val, values):
+    @model_validator(mode="after")
+    def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(self):
         """Assert any eps_inf must be >=1"""
+        val = self.eps_dataset
         if val is None:
-            return val
-        modulation = values.get("modulation_spec")
+            return self
+        modulation = self.modulation_spec
 
         for comp in ["eps_xx", "eps_yy", "eps_zz"]:
             eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(
@@ -1791,7 +1797,7 @@ class CustomMedium(AbstractCustomMedium):
                         "was found to be negative."
                     )
 
-            if not values.get("allow_gain") and np.any(_get_numpy_array(sigma) < 0):
+            if not self.allow_gain and np.any(_get_numpy_array(sigma) < 0):
                 raise ValidationError(
                     "For passive medium, imaginary part of permittivity must be non-negative. "
                     "To simulate a gain medium, please set 'allow_gain=True'. "
@@ -1800,7 +1806,7 @@ class CustomMedium(AbstractCustomMedium):
                 )
 
             if (
-                not values.get("allow_gain")
+                not self.allow_gain
                 and modulation is not None
                 and modulation.conductivity is not None
                 and np.any(_get_numpy_array(sigma) - modulation.conductivity.max_modulation <= 0)
@@ -1813,14 +1819,14 @@ class CustomMedium(AbstractCustomMedium):
                     "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
-        return val
+        return self
 
-    @pd.validator("permittivity", always=True)
-    @skip_if_fields_missing(["modulation_spec"])
-    def _eps_inf_greater_no_less_than_one(cls, val, values):
+    @model_validator(mode="after")
+    def _eps_inf_greater_no_less_than_one(self):
         """Assert any eps_inf must be >=1"""
+        val = self.permittivity
         if val is None:
-            return val
+            return self
 
         if not CustomMedium._validate_isreal_dataarray(val):
             raise SetupError("'permittivity' must be real.")
@@ -1828,29 +1834,29 @@ class CustomMedium(AbstractCustomMedium):
         if np.any(_get_numpy_array(val) < 1):
             raise SetupError("'permittivity' must be no less than one.")
 
-        modulation = values.get("modulation_spec")
+        modulation = self.modulation_spec
         if modulation is None or modulation.permittivity is None:
-            return val
+            return self
 
         if np.any(_get_numpy_array(val) - modulation.permittivity.max_modulation <= 0):
             raise ValidationError(
                 "The minimum permittivity value with modulation applied was found to be negative."
             )
 
-        return val
+        return self
 
-    @pd.validator("conductivity", always=True)
-    @skip_if_fields_missing(["permittivity", "allow_gain"])
-    def _conductivity_non_negative_correct_shape(cls, val, values):
+    @model_validator(mode="after")
+    def _conductivity_non_negative_correct_shape(self):
         """Assert conductivity>=0"""
+        val = self.conductivity
 
         if val is None:
-            return val
+            return self
 
         if not CustomMedium._validate_isreal_dataarray(val):
             raise SetupError("'conductivity' must be real.")
 
-        if not values.get("allow_gain") and np.any(_get_numpy_array(val) < 0):
+        if not self.allow_gain and np.any(_get_numpy_array(val) < 0):
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
                 "To simulate a gain medium, please set 'allow_gain=True'. "
@@ -1858,24 +1864,24 @@ class CustomMedium(AbstractCustomMedium):
                 "and are likely to diverge."
             )
 
-        if not _check_same_coordinates(values["permittivity"], val):
+        if not _check_same_coordinates(self.permittivity, val):
             raise SetupError("'permittivity' and 'conductivity' must have the same coordinates.")
 
-        return val
+        return self
 
-    @pd.validator("conductivity", always=True)
-    @skip_if_fields_missing(["eps_dataset", "modulation_spec", "allow_gain"])
-    def _passivity_modulation_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _passivity_modulation_validation(self):
         """Assert passive medium at any time during modulation if ``allow_gain`` is False."""
+        val = self.conductivity
 
         # validated already when the data is supplied through `eps_dataset`
-        if values.get("eps_dataset"):
-            return val
+        if self.eps_dataset:
+            return self
 
         # permittivity defined with ``permittivity`` and ``conductivity``
-        modulation = values.get("modulation_spec")
-        if values.get("allow_gain") or modulation is None or modulation.conductivity is None:
-            return val
+        modulation = self.modulation_spec
+        if self.allow_gain or modulation is None or modulation.conductivity is None:
+            return self
         if val is None or np.any(
             _get_numpy_array(val) - modulation.conductivity.max_modulation < 0
         ):
@@ -1886,14 +1892,15 @@ class CustomMedium(AbstractCustomMedium):
                 "Caution: simulations with a gain medium are unstable, "
                 "and are likely to diverge."
             )
-        return val
+        return self
 
-    @pd.validator("permittivity", "conductivity", always=True)
-    def _check_permittivity_conductivity_interpolate(cls, val, values, field):
+    @field_validator("permittivity", "conductivity")
+    @classmethod
+    def _check_permittivity_conductivity_interpolate(cls, val, info):
         """Check that the custom medium 'SpatialDataArrays' can be interpolated."""
 
         if isinstance(val, SpatialDataArray):
-            val._interp_validator(field.name)
+            val._interp_validator(info.field_name)
 
         return val
 
@@ -1932,11 +1939,11 @@ class CustomMedium(AbstractCustomMedium):
         """Internal representation in the form of
         either `CustomIsotropicMedium` or `CustomAnisotropicMedium`.
         """
-        self_dict = self.dict(exclude={"type", "eps_dataset"})
+        self_dict = self.model_dump(exclude={"type", "eps_dataset"})
         # isotropic
         if self.eps_dataset is None:
             self_dict.update({"permittivity": self.permittivity, "conductivity": self.conductivity})
-            return CustomIsotropicMedium.parse_obj(self_dict)
+            return CustomIsotropicMedium.model_validate(self_dict)
 
         def get_eps_sigma(eps_complex: SpatialDataArray, freq: float) -> tuple:
             """Convert a complex permittivity to real permittivity and conductivity."""
@@ -1959,7 +1966,7 @@ class CustomMedium(AbstractCustomMedium):
             eps_real, sigma = get_eps_sigma(eps_complex, freq=self.freqs[0])
 
             self_dict.update({"permittivity": eps_real, "conductivity": sigma})
-            return CustomIsotropicMedium.parse_obj(self_dict)
+            return CustomIsotropicMedium.model_validate(self_dict)
 
         # anisotropic
         mat_comp = {"interp_method": self.interp_method}
@@ -1969,7 +1976,7 @@ class CustomMedium(AbstractCustomMedium):
 
             comp_dict = self_dict.copy()
             comp_dict.update({"permittivity": eps_real, "conductivity": sigma})
-            mat_comp.update({comp: CustomIsotropicMedium.parse_obj(comp_dict)})
+            mat_comp.update({comp: CustomIsotropicMedium.model_validate(comp_dict)})
         return CustomAnisotropicMediumInternal(**mat_comp)
 
     def _interp_method(self, comp: Axis) -> InterpMethod:
@@ -1999,7 +2006,7 @@ class CustomMedium(AbstractCustomMedium):
 
         Returns
         -------
-        Tuple[
+        tuple[
             Union[
                 :class:`.SpatialDataArray`,
                 :class:`.TriangularGridDataset`,
@@ -2037,7 +2044,7 @@ class CustomMedium(AbstractCustomMedium):
 
         Returns
         -------
-        Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
+        tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
             The complex-valued permittivity tensor at ``frequency`` interpolated
             at the supplied coordinate.
         """
@@ -2271,7 +2278,7 @@ class CustomMedium(AbstractCustomMedium):
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -2447,6 +2454,16 @@ class CustomMedium(AbstractCustomMedium):
                 "message and some information about your simulation setup and we will investigate. "
             )
         vjp_array = E_der_dim_interp.values
+
+        # match derivative dtype to the underlying dataset
+        target_array = getattr(spatial_data, "values", None)
+        if target_array is None and hasattr(spatial_data, "data"):
+            target_array = spatial_data.data
+        if target_array is not None:
+            target_dtype = np.asarray(target_array).dtype
+            if not np.issubdtype(target_dtype, np.complexfloating):
+                vjp_array = np.real(vjp_array).astype(target_dtype, copy=False)
+
         vjp_array = vjp_array.reshape(eps_coordinate_shape)
 
         return vjp_array
@@ -2498,20 +2515,20 @@ class DispersiveMedium(AbstractMedium, ABC):
     def _permittivity_modulation_validation():
         """Assert modulated permittivity cannot be <= 0 at any time."""
 
-        @pd.validator("eps_inf", allow_reuse=True, always=True)
-        @skip_if_fields_missing(["modulation_spec"])
-        def _validate_permittivity_modulation(cls, val, values):
+        @model_validator(mode="after")
+        def _validate_permittivity_modulation(self):
             """Assert modulated permittivity cannot be <= 0."""
-            modulation = values.get("modulation_spec")
+            val = self.eps_inf
+            modulation = self.modulation_spec
             if modulation is None or modulation.permittivity is None:
-                return val
+                return self
 
             min_eps_inf = np.min(_get_numpy_array(val))
             if min_eps_inf - modulation.permittivity.max_modulation <= 0:
                 raise ValidationError(
                     "The minimum permittivity value with modulation applied was found to be negative."
                 )
-            return val
+            return self
 
         return _validate_permittivity_modulation
 
@@ -2519,23 +2536,23 @@ class DispersiveMedium(AbstractMedium, ABC):
     def _conductivity_modulation_validation():
         """Assert passive medium at any time if not ``allow_gain``."""
 
-        @pd.validator("modulation_spec", allow_reuse=True, always=True)
-        @skip_if_fields_missing(["allow_gain"])
-        def _validate_conductivity_modulation(cls, val, values):
+        @model_validator(mode="after")
+        def _validate_conductivity_modulation(self):
             """With conductivity modulation, the medium can exhibit gain during the cycle.
             So `allow_gain` must be True when the conductivity is modulated.
             """
+            val = self.modulation_spec
             if val is None or val.conductivity is None:
-                return val
+                return self
 
-            if not values.get("allow_gain"):
+            if not self.allow_gain:
                 raise ValidationError(
                     "For passive medium, 'conductivity' must be non-negative at any time. "
                     "With conductivity modulation, this medium can sometimes be active. "
                     "Please set 'allow_gain=True'. "
                     "Caution: simulations with a gain medium are unstable, and are likely to diverge."
                 )
-            return val
+            return self
 
         return _validate_conductivity_modulation
 
@@ -2640,36 +2657,34 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
         and return a vacuum with eps_inf = 1.
         """
 
-        @pd.root_validator(pre=True, allow_reuse=True)
-        def _warn_if_none(cls, values):
-            """Warn if any of `eps_inf` and nested_tuple_field are not load."""
-            eps_inf = values.get("eps_inf")
-            coeffs = values.get(nested_tuple_field)
-            fail_load = False
+        @model_validator(mode="before")
+        @classmethod
+        def _warn_if_none(cls, data: dict):
+            is_not_loaded = AbstractCustomMedium._not_loaded
 
-            if AbstractCustomMedium._not_loaded(eps_inf):
+            eps_inf = data.get("eps_inf")
+            coeffs = data.get(nested_tuple_field, ())
+
+            eps_bad = is_not_loaded(eps_inf)
+            coeff_bad = any(is_not_loaded(c) for coeff in coeffs for c in coeff)
+
+            if not (eps_bad or coeff_bad):
+                return data
+
+            if eps_bad:
                 log.warning("Loading 'eps_inf' without data; constructing a vacuum medium instead.")
-                fail_load = True
-            for coeff in coeffs:
-                if fail_load:
-                    break
-                for coeff_i in coeff:
-                    if AbstractCustomMedium._not_loaded(coeff_i):
-                        log.warning(
-                            f"Loading '{nested_tuple_field}' without data; "
-                            "constructing a vacuum medium instead."
-                        )
-                        fail_load = True
-                        break
+            if coeff_bad:
+                log.warning(
+                    f"Loading '{nested_tuple_field}' without data; constructing a vacuum medium instead."
+                )
 
-            if fail_load and eps_inf is None:
-                return {nested_tuple_field: ()}
-            if fail_load:
-                eps_inf = SpatialDataArray(
+            data[nested_tuple_field] = ()
+            if eps_inf is not None:
+                data["eps_inf"] = SpatialDataArray(
                     np.ones((1, 1, 1)), coords={"x": [0], "y": [0], "z": [0]}
                 )
-                return {"eps_inf": eps_inf, nested_tuple_field: ()}
-            return values
+
+            return data
 
         return _warn_if_none
 
@@ -2764,21 +2779,22 @@ class PoleResidue(DispersiveMedium):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: TracedPositiveFloat = pd.Field(
+    eps_inf: TracedPositiveFloat = Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
     )
 
-    poles: tuple[TracedPoleAndResidue, ...] = pd.Field(
+    poles: TracedPolesAndResidues = Field(
         (),
         title="Poles",
         description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
         units=(RADPERSEC, RADPERSEC),
     )
 
-    @pd.validator("poles", always=True)
+    @field_validator("poles")
+    @classmethod
     def _causality_validation(cls, val):
         """Assert causal medium."""
         for a, _ in val:
@@ -2786,7 +2802,8 @@ class PoleResidue(DispersiveMedium):
                 raise SetupError("For stable medium, 'Re(a_i)' must be non-positive.")
         return val
 
-    @pd.validator("poles", always=True)
+    @field_validator("poles")
+    @classmethod
     def _poles_largest_value(cls, val):
         """Assert pole parameters are not too large."""
         for a, c in val:
@@ -2802,9 +2819,7 @@ class PoleResidue(DispersiveMedium):
     _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     @staticmethod
-    def _eps_model(
-        eps_inf: pd.PositiveFloat, poles: tuple[PoleAndResidue, ...], frequency: float
-    ) -> complex:
+    def _eps_model(eps_inf: PositiveFloat, poles: PolesAndResidues, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
         omega = 2 * np.pi * frequency
@@ -2884,7 +2899,7 @@ class PoleResidue(DispersiveMedium):
     @staticmethod
     def lo_to_eps_model(
         poles: tuple[tuple[float, float, float, float], ...],
-        eps_inf: pd.PositiveFloat,
+        eps_inf: PositiveFloat,
         frequency: float,
     ) -> complex:
         """Complex permittivity as a function of frequency for a given set of LO-TO coefficients.
@@ -2893,10 +2908,10 @@ class PoleResidue(DispersiveMedium):
 
         Parameters
         ----------
-        poles : Tuple[Tuple[float, float, float, float], ...]
+        poles : tuple[tuple[float, float, float, float], ...]
             The LO-TO poles, given as list of tuples of the form
             (omega_LO, gamma_LO, omega_TO, gamma_TO).
-        eps_inf: pd.PositiveFloat
+        eps_inf: PositiveFloat
             The relative permittivity at infinite frequency.
         frequency: float
             Frequency at which to evaluate the permittivity.
@@ -2915,7 +2930,7 @@ class PoleResidue(DispersiveMedium):
 
     @classmethod
     def from_lo_to(
-        cls, poles: tuple[tuple[float, float, float, float], ...], eps_inf: pd.PositiveFloat = 1
+        cls, poles: tuple[tuple[float, float, float, float], ...], eps_inf: PositiveFloat = 1
     ) -> PoleResidue:
         """Construct a pole residue model from the LO-TO form
         (longitudinal and transverse optical modes).
@@ -2927,10 +2942,10 @@ class PoleResidue(DispersiveMedium):
 
         Parameters
         ----------
-        poles : Tuple[Tuple[float, float, float, float], ...]
+        poles : tuple[tuple[float, float, float, float], ...]
             The LO-TO poles, given as list of tuples of the form
             (omega_LO, gamma_LO, omega_TO, gamma_TO).
-        eps_inf: pd.PositiveFloat
+        eps_inf: PositiveFloat
             The relative permittivity at infinite frequency.
 
         Returns
@@ -2987,12 +3002,12 @@ class PoleResidue(DispersiveMedium):
         return PoleResidue(eps_inf=eps_inf, poles=list(zip(a_coeffs, c_coeffs)))
 
     @staticmethod
-    def imag_ep_extrema(poles: tuple[PoleAndResidue, ...]) -> ArrayFloat1D:
+    def imag_ep_extrema(poles: PolesAndResidues) -> ArrayFloat1D:
         """Extrema of Im[eps] in the same unit as poles.
 
         Parameters
         ----------
-        poles: Tuple[PoleAndResidue, ...]
+        poles: PolesAndResidues
             Tuple of complex-valued (``a_i, c_i``) poles for the model.
         """
 
@@ -3108,7 +3123,7 @@ class PoleResidue(DispersiveMedium):
 
     @classmethod
     def _real_partial_fraction_decomposition(
-        cls, a: np.ndarray, b: np.ndarray, tol: pd.PositiveFloat = 1e-2
+        cls, a: np.ndarray, b: np.ndarray, tol: PositiveFloat = 1e-2
     ) -> tuple[list[tuple[Complex, Complex]], np.ndarray]:
         """Computes the complex conjugate pole residue pairs given a rational expression with
         real coefficients.
@@ -3120,7 +3135,7 @@ class PoleResidue(DispersiveMedium):
             Coefficients of the numerator polynomial in increasing monomial order.
         b : np.ndarray
             Coefficients of the denominator polynomial in increasing monomial order.
-        tol : pd.PositiveFloat
+        tol : PositiveFloat
             Tolerance for pole finding. Two poles are considered equal, if their spacing is less
             than ``tol``.
 
@@ -3177,7 +3192,7 @@ class PoleResidue(DispersiveMedium):
                     r_filtered.append(res)
                     p_filtered.append(pole)
 
-        poles_residues = list(zip(p_filtered, r_filtered))
+        poles_residues = tuple(zip(p_filtered, r_filtered))
         k_increasing_order = np.flip(k)
         return (poles_residues, k_increasing_order)
 
@@ -3186,8 +3201,8 @@ class PoleResidue(DispersiveMedium):
         cls,
         a: np.ndarray,
         b: np.ndarray,
-        eps_inf: pd.PositiveFloat = 1,
-        pole_tol: pd.PositiveFloat = 1e-2,
+        eps_inf: PositiveFloat = 1,
+        pole_tol: PositiveFloat = 1e-2,
     ) -> PoleResidue:
         """Construct a :class:`.PoleResidue` model from an admittance function defining the
         relationship between the electric field and the polarization current density in the
@@ -3199,9 +3214,9 @@ class PoleResidue(DispersiveMedium):
             Coefficients of the numerator polynomial in increasing monomial order.
         b : np.ndarray
             Coefficients of the denominator polynomial in increasing monomial order.
-        eps_inf: pd.PositiveFloat
+        eps_inf: PositiveFloat
             The relative permittivity at infinite frequency.
-        pole_tol: pd.PositiveFloat
+        pole_tol: PositiveFloat
             Tolerance for the pole finding algorithm in Hertz. Two poles are considered equal, if their
             spacing is closer than ``pole_tol`.
         Returns
@@ -3353,15 +3368,14 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: CustomSpatialDataTypeAnnotated = pd.Field(
-        ...,
+    eps_inf: CustomSpatialDataTypeAnnotated = Field(
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
     )
 
     poles: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
-        pd.Field(
+        Field(
             (),
             title="Poles",
             description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
@@ -3369,11 +3383,11 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         )
     )
 
-    _no_nans_eps_inf = validate_no_nans("eps_inf")
-    _no_nans_poles = validate_no_nans("poles")
+    _no_nans = validate_no_nans("eps_inf", "poles")
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("poles")
 
-    @pd.validator("eps_inf", always=True)
+    @field_validator("eps_inf")
+    @classmethod
     def _eps_inf_positive(cls, val):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
@@ -3382,19 +3396,19 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             raise SetupError("'eps_inf' must be positive.")
         return val
 
-    @pd.validator("poles", always=True)
-    @skip_if_fields_missing(["eps_inf"])
-    def _poles_correct_shape(cls, val, values):
+    @model_validator(mode="after")
+    def _poles_correct_shape(self):
         """poles must have the same shape."""
+        val = self.poles
 
         for coeffs in val:
             for coeff in coeffs:
-                if not _check_same_coordinates(coeff, values["eps_inf"]):
+                if not _check_same_coordinates(coeff, self.eps_inf):
                     raise SetupError(
                         "All pole coefficients 'a' and 'c' must have the same coordinates; "
                         "The coordinates must also be consistent with 'eps_inf'."
                     )
-        return val
+        return self
 
     @cached_property
     def is_spatially_uniform(self) -> bool:
@@ -3420,7 +3434,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         Returns
         -------
-        Tuple[
+        tuple[
             Union[
                 :class:`.SpatialDataArray`,
                 :class:`.TriangularGridDataset`,
@@ -3452,7 +3466,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         Returns
         -------
-        Tuple[Tuple[ArrayComplex3D, ArrayComplex3D], ...]
+        tuple[tuple[ArrayComplex3D, ArrayComplex3D], ...]
             The poles interpolated at the supplied coordinate.
         """
 
@@ -3476,9 +3490,11 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             The pole residue equivalent.
         """
         poles = [(_zeros_like(medium.conductivity), medium.conductivity / (2 * EPSILON_0))]
-        medium_dict = medium.dict(exclude={"type", "eps_dataset", "permittivity", "conductivity"})
+        medium_dict = medium.model_dump(
+            exclude={"type", "eps_dataset", "permittivity", "conductivity"}
+        )
         medium_dict.update({"eps_inf": medium.permittivity, "poles": poles})
-        return CustomPoleResidue.parse_obj(medium_dict)
+        return CustomPoleResidue.model_validate(medium_dict)
 
     def to_medium(self) -> CustomMedium:
         """Convert to a :class:`.CustomMedium`.
@@ -3499,9 +3515,9 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             res = res + (c + np.conj(c)) / 2
         sigma = res * 2 * EPSILON_0
 
-        self_dict = self.dict(exclude={"type", "eps_inf", "poles"})
+        self_dict = self.model_dump(exclude={"type", "eps_inf", "poles"})
         self_dict.update({"permittivity": self.eps_inf, "conductivity": np.real(sigma)})
-        return CustomMedium.parse_obj(self_dict)
+        return CustomMedium.model_validate(self_dict)
 
     @cached_property
     def loss_upper_bound(self) -> float:
@@ -3515,7 +3531,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -3536,7 +3552,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
             poles_reduced.append((pole.sel_inside(bounds), residue.sel_inside(bounds)))
 
-        return self.updated_copy(eps_inf=eps_inf_reduced, poles=poles_reduced)
+        return self.updated_copy(eps_inf=eps_inf_reduced, poles=tuple(poles_reduced))
 
     def _derivative_field_cmp(
         self,
@@ -3634,18 +3650,18 @@ class Sellmeier(DispersiveMedium):
     * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    coeffs: tuple[tuple[float, pd.PositiveFloat], ...] = pd.Field(
+    coeffs: tuple[tuple[float, PositiveFloat], ...] = Field(
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
         units=(None, MICROMETER + "^2"),
     )
 
-    @pd.validator("coeffs", always=True)
-    @skip_if_fields_missing(["allow_gain"])
-    def _passivity_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _passivity_validation(self):
         """Assert passive medium if `allow_gain` is False."""
-        if values.get("allow_gain"):
-            return val
+        val = self.coeffs
+        if self.allow_gain:
+            return self
         for B, _ in val:
             if B < 0:
                 raise ValidationError(
@@ -3654,9 +3670,10 @@ class Sellmeier(DispersiveMedium):
                     "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
-        return val
+        return self
 
-    @pd.validator("modulation_spec", always=True)
+    @field_validator("modulation_spec")
+    @classmethod
     def _validate_permittivity_modulation(cls, val):
         """Assert modulated permittivity cannot be <= 0."""
 
@@ -3831,8 +3848,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     """
 
     coeffs: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
-        pd.Field(
-            ...,
+        Field(
             title="Coefficients",
             description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
             units=(None, MICROMETER + "^2"),
@@ -3840,10 +3856,10 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     )
 
     _no_nans = validate_no_nans("coeffs")
-
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
-    @pd.validator("coeffs", always=True)
+    @field_validator("coeffs")
+    @classmethod
     def _correct_shape_and_sign(cls, val):
         """every term in coeffs must have the same shape, and B>=0 and C>0."""
         if len(val) == 0:
@@ -3859,12 +3875,12 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
                 raise SetupError("'C' must be positive.")
         return val
 
-    @pd.validator("coeffs", always=True)
-    @skip_if_fields_missing(["allow_gain"])
-    def _passivity_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _passivity_validation(self):
         """Assert passive medium if `allow_gain` is False."""
-        if values.get("allow_gain"):
-            return val
+        val = self.coeffs
+        if self.allow_gain:
+            return self
         for B, _ in val:
             if np.any(_get_numpy_array(B) < 0):
                 raise ValidationError(
@@ -3873,9 +3889,10 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
                     "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
-        return val
+        return self
 
-    @pd.validator("coeffs", always=True)
+    @field_validator("coeffs")
+    @classmethod
     def _coeffs_C_all_near_zero_or_much_greater(cls, val):
         """We restrict either all C~=0, or very different from 0."""
         for _, C in val:
@@ -3915,7 +3932,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
         Returns
         -------
-        Tuple[
+        tuple[
             Union[
                 :class:`.SpatialDataArray`,
                 :class:`.TriangularGridDataset`,
@@ -3999,7 +4016,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -4021,7 +4038,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
             coeffs_reduced.append((b_coeff.sel_inside(bounds), c_coeff.sel_inside(bounds)))
 
-        return self.updated_copy(coeffs=coeffs_reduced)
+        return self.updated_copy(coeffs=tuple(coeffs_reduced))
 
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Adjoint derivatives for CustomSellmeier via analytic chain rule.
@@ -4102,21 +4119,21 @@ class Lorentz(DispersiveMedium):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: pd.PositiveFloat = pd.Field(
+    eps_inf: PositiveFloat = Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
     )
 
-    coeffs: tuple[tuple[float, float, pd.NonNegativeFloat], ...] = pd.Field(
-        ...,
+    coeffs: tuple[tuple[float, float, NonNegativeFloat], ...] = Field(
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
         units=(PERMITTIVITY, HERTZ, HERTZ),
     )
 
-    @pd.validator("coeffs", always=True)
+    @field_validator("coeffs")
+    @classmethod
     def _coeffs_unequal_f_delta(cls, val):
         """f**2 and delta**2 cannot be exactly the same."""
         for _, f, delta in val:
@@ -4124,12 +4141,12 @@ class Lorentz(DispersiveMedium):
                 raise SetupError("'f' and 'delta' cannot take equal values.")
         return val
 
-    @pd.validator("coeffs", always=True)
-    @skip_if_fields_missing(["allow_gain"])
-    def _passivity_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _passivity_validation(self):
         """Assert passive medium if ``allow_gain`` is False."""
-        if values.get("allow_gain"):
-            return val
+        val = self.coeffs
+        if self.allow_gain:
+            return self
         for del_ep, _, _ in val:
             if del_ep < 0:
                 raise ValidationError(
@@ -4138,7 +4155,7 @@ class Lorentz(DispersiveMedium):
                     "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
-        return val
+        return self
 
     _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
     _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
@@ -4336,8 +4353,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: CustomSpatialDataTypeAnnotated = pd.Field(
-        ...,
+    eps_inf: CustomSpatialDataTypeAnnotated = Field(
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
@@ -4350,19 +4366,17 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
             CustomSpatialDataTypeAnnotated,
         ],
         ...,
-    ] = pd.Field(
-        ...,
+    ] = Field(
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
         units=(PERMITTIVITY, HERTZ, HERTZ),
     )
 
-    _no_nans_eps_inf = validate_no_nans("eps_inf")
-    _no_nans_coeffs = validate_no_nans("coeffs")
-
+    _no_nans = validate_no_nans("eps_inf", "coeffs")
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
-    @pd.validator("eps_inf", always=True)
+    @field_validator("eps_inf")
+    @classmethod
     def _eps_inf_positive(cls, val):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
@@ -4371,7 +4385,8 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
             raise SetupError("'eps_inf' must be positive.")
         return val
 
-    @pd.validator("coeffs", always=True)
+    @field_validator("coeffs")
+    @classmethod
     def _coeffs_unequal_f_delta(cls, val):
         """f and delta cannot be exactly the same.
         Not needed for now because we have a more strict
@@ -4379,15 +4394,15 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         """
         return val
 
-    @pd.validator("coeffs", always=True)
-    @skip_if_fields_missing(["eps_inf"])
-    def _coeffs_correct_shape(cls, val, values):
+    @model_validator(mode="after")
+    def _coeffs_correct_shape(self):
         """coeffs must have consistent shape."""
+        val = self.coeffs
         for de, f, delta in val:
             if (
-                not _check_same_coordinates(de, values["eps_inf"])
-                or not _check_same_coordinates(f, values["eps_inf"])
-                or not _check_same_coordinates(delta, values["eps_inf"])
+                not _check_same_coordinates(de, self.eps_inf)
+                or not _check_same_coordinates(f, self.eps_inf)
+                or not _check_same_coordinates(delta, self.eps_inf)
             ):
                 raise SetupError(
                     "All terms in 'coeffs' must have the same coordinates; "
@@ -4395,9 +4410,10 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
                 )
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, f, delta)):
                 raise SetupError("All terms in 'coeffs' must be real.")
-        return val
+        return self
 
-    @pd.validator("coeffs", always=True)
+    @field_validator("coeffs")
+    @classmethod
     def _coeffs_delta_all_smaller_or_larger_than_fi(cls, val):
         """We restrict either all f**2>delta**2 or all f**2<delta**2 for now."""
         for _, f, delta in val:
@@ -4410,11 +4426,11 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
                 )
         return val
 
-    @pd.validator("coeffs", always=True)
-    @skip_if_fields_missing(["allow_gain"])
-    def _passivity_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _passivity_validation(self):
         """Assert passive medium if ``allow_gain`` is False."""
-        allow_gain = values.get("allow_gain")
+        val = self.coeffs
+        allow_gain = self.allow_gain
         for del_ep, _, delta in val:
             if np.any(_get_numpy_array(delta) < 0):
                 raise ValidationError("For stable medium, 'delta_i' must be non-negative.")
@@ -4425,7 +4441,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
                     "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
-        return val
+        return self
 
     @cached_property
     def is_spatially_uniform(self) -> bool:
@@ -4450,7 +4466,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
         Returns
         -------
-        Tuple[
+        tuple[
             Union[
                 :class:`.SpatialDataArray`,
                 :class:`.TriangularGridDataset`,
@@ -4479,7 +4495,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -4511,7 +4527,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
                 (de.sel_inside(bounds), f.sel_inside(bounds), delta.sel_inside(bounds))
             )
 
-        return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=coeffs_reduced)
+        return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=tuple(coeffs_reduced))
 
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Adjoint derivatives for CustomLorentz via analytic chain rule."""
@@ -4606,15 +4622,14 @@ class Drude(DispersiveMedium):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: pd.PositiveFloat = pd.Field(
+    eps_inf: PositiveFloat = Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
     )
 
-    coeffs: tuple[tuple[float, pd.PositiveFloat], ...] = pd.Field(
-        ...,
+    coeffs: tuple[tuple[float, PositiveFloat], ...] = Field(
         title="Coefficients",
         description="List of (:math:`f_i, \\delta_i`) values for model.",
         units=(HERTZ, HERTZ),
@@ -4746,28 +4761,25 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: CustomSpatialDataTypeAnnotated = pd.Field(
-        ...,
+    eps_inf: CustomSpatialDataTypeAnnotated = Field(
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
     )
 
     coeffs: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
-        pd.Field(
-            ...,
+        Field(
             title="Coefficients",
             description="List of (:math:`f_i, \\delta_i`) values for model.",
             units=(HERTZ, HERTZ),
         )
     )
 
-    _no_nans_eps_inf = validate_no_nans("eps_inf")
-    _no_nans_coeffs = validate_no_nans("coeffs")
-
+    _no_nans = validate_no_nans("eps_inf", "coeffs")
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
-    @pd.validator("eps_inf", always=True)
+    @field_validator("eps_inf")
+    @classmethod
     def _eps_inf_positive(cls, val):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
@@ -4776,13 +4788,13 @@ class CustomDrude(CustomDispersiveMedium, Drude):
             raise SetupError("'eps_inf' must be positive.")
         return val
 
-    @pd.validator("coeffs", always=True)
-    @skip_if_fields_missing(["eps_inf"])
-    def _coeffs_correct_shape_and_sign(cls, val, values):
+    @model_validator(mode="after")
+    def _coeffs_correct_shape_and_sign(self):
         """coeffs must have consistent shape and sign."""
+        val = self.coeffs
         for f, delta in val:
-            if not _check_same_coordinates(f, values["eps_inf"]) or not _check_same_coordinates(
-                delta, values["eps_inf"]
+            if not _check_same_coordinates(f, self.eps_inf) or not _check_same_coordinates(
+                delta, self.eps_inf
             ):
                 raise SetupError(
                     "All terms in 'coeffs' must have the same coordinates; "
@@ -4792,7 +4804,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
                 raise SetupError("All terms in 'coeffs' must be real.")
             if np.any(_get_numpy_array(delta) <= 0):
                 raise SetupError("For stable medium, 'delta' must be positive.")
-        return val
+        return self
 
     @cached_property
     def is_spatially_uniform(self) -> bool:
@@ -4817,7 +4829,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
         Returns
         -------
-        Tuple[
+        tuple[
             Union[
                 :class:`.SpatialDataArray`,
                 :class:`.TriangularGridDataset`,
@@ -4846,7 +4858,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -4871,7 +4883,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
             coeffs_reduced.append((f.sel_inside(bounds), delta.sel_inside(bounds)))
 
-        return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=coeffs_reduced)
+        return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=tuple(coeffs_reduced))
 
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Adjoint derivatives for CustomDrude via analytic chain rule."""
@@ -4946,26 +4958,25 @@ class Debye(DispersiveMedium):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: pd.PositiveFloat = pd.Field(
+    eps_inf: PositiveFloat = Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
     )
 
-    coeffs: tuple[tuple[float, pd.PositiveFloat], ...] = pd.Field(
-        ...,
+    coeffs: tuple[tuple[float, PositiveFloat], ...] = Field(
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
         units=(PERMITTIVITY, SECOND),
     )
 
-    @pd.validator("coeffs", always=True)
-    @skip_if_fields_missing(["allow_gain"])
-    def _passivity_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _passivity_validation(self):
         """Assert passive medium if `allow_gain` is False."""
-        if values.get("allow_gain"):
-            return val
+        val = self.coeffs
+        if self.allow_gain:
+            return self
         for del_ep, _ in val:
             if del_ep < 0:
                 raise ValidationError(
@@ -4974,7 +4985,7 @@ class Debye(DispersiveMedium):
                     "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
-        return val
+        return self
 
     _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
     _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
@@ -5096,28 +5107,25 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: CustomSpatialDataTypeAnnotated = pd.Field(
-        ...,
+    eps_inf: CustomSpatialDataTypeAnnotated = Field(
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
     )
 
     coeffs: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
-        pd.Field(
-            ...,
+        Field(
             title="Coefficients",
             description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
             units=(PERMITTIVITY, SECOND),
         )
     )
 
-    _no_nans_eps_inf = validate_no_nans("eps_inf")
-    _no_nans_coeffs = validate_no_nans("coeffs")
-
+    _no_nans = validate_no_nans("eps_inf", "coeffs")
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
-    @pd.validator("eps_inf", always=True)
+    @field_validator("eps_inf")
+    @classmethod
     def _eps_inf_positive(cls, val):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
@@ -5126,13 +5134,13 @@ class CustomDebye(CustomDispersiveMedium, Debye):
             raise SetupError("'eps_inf' must be positive.")
         return val
 
-    @pd.validator("coeffs", always=True)
-    @skip_if_fields_missing(["eps_inf"])
-    def _coeffs_correct_shape(cls, val, values):
+    @model_validator(mode="after")
+    def _coeffs_correct_shape(self):
         """coeffs must have consistent shape."""
+        val = self.coeffs
         for de, tau in val:
-            if not _check_same_coordinates(de, values["eps_inf"]) or not _check_same_coordinates(
-                tau, values["eps_inf"]
+            if not _check_same_coordinates(de, self.eps_inf) or not _check_same_coordinates(
+                tau, self.eps_inf
             ):
                 raise SetupError(
                     "All terms in 'coeffs' must have the same coordinates; "
@@ -5140,9 +5148,10 @@ class CustomDebye(CustomDispersiveMedium, Debye):
                 )
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, tau)):
                 raise SetupError("All terms in 'coeffs' must be real.")
-        return val
+        return self
 
-    @pd.validator("coeffs", always=True)
+    @field_validator("coeffs")
+    @classmethod
     def _coeffs_tau_all_sufficient_positive(cls, val):
         """We restrict either all tau is sufficently greater than 0."""
         for _, tau in val:
@@ -5193,11 +5202,11 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
         return grads
 
-    @pd.validator("coeffs", always=True)
-    @skip_if_fields_missing(["allow_gain"])
-    def _passivity_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _passivity_validation(self):
         """Assert passive medium if ``allow_gain`` is False."""
-        allow_gain = values.get("allow_gain")
+        val = self.coeffs
+        allow_gain = self.allow_gain
         for del_ep, tau in val:
             if np.any(_get_numpy_array(tau) <= 0):
                 raise SetupError("For stable medium, 'tau_i' must be positive.")
@@ -5208,7 +5217,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
                     "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
-        return val
+        return self
 
     @cached_property
     def is_spatially_uniform(self) -> bool:
@@ -5233,7 +5242,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
         Returns
         -------
-        Tuple[
+        tuple[
             Union[
                 :class:`.SpatialDataArray`,
                 :class:`.TriangularGridDataset`,
@@ -5262,7 +5271,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -5287,7 +5296,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
             coeffs_reduced.append((de.sel_inside(bounds), tau.sel_inside(bounds)))
 
-        return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=coeffs_reduced)
+        return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=tuple(coeffs_reduced))
 
 
 class SurfaceImpedanceFitterParam(Tidy3dBaseModel):
@@ -5295,26 +5304,26 @@ class SurfaceImpedanceFitterParam(Tidy3dBaseModel):
     Internally, the quantity to be fitted is surface impedance divided by ``-1j * \\omega``.
     """
 
-    max_num_poles: pd.PositiveInt = pd.Field(
+    max_num_poles: PositiveInt = Field(
         LOSSY_METAL_DEFAULT_MAX_POLES,
         title="Maximal Number Of Poles",
         description="Maximal number of poles in complex-conjugate pole residue model for "
         "fitting surface impedance.",
     )
 
-    tolerance_rms: pd.NonNegativeFloat = pd.Field(
+    tolerance_rms: NonNegativeFloat = Field(
         LOSSY_METAL_DEFAULT_TOLERANCE_RMS,
         title="Tolerance In Fitting",
         description="Tolerance in fitting.",
     )
 
-    frequency_sampling_points: pd.PositiveInt = pd.Field(
+    frequency_sampling_points: PositiveInt = Field(
         LOSSY_METAL_DEFAULT_SAMPLING_FREQUENCY,
         title="Number Of Sampling Frequencies",
         description="Number of sampling frequencies used in fitting.",
     )
 
-    log_sampling: bool = pd.Field(
+    log_sampling: bool = Field(
         True,
         title="Frequencies Sampling In Log Scale",
         description="Whether to sample frequencies logarithmically (``True``),  "
@@ -5378,14 +5387,13 @@ class HammerstadSurfaceRoughness(AbstractSurfaceRoughness):
         and its Effect on Transmission Line Characteristics", Signal Integrity Journal, 2018.
     """
 
-    rq: pd.PositiveFloat = pd.Field(
-        ...,
+    rq: PositiveFloat = Field(
         title="RMS Peak-to-Valley Height",
         description="RMS peak-to-valley height (Rq) of the surface roughness.",
         units=MICROMETER,
     )
 
-    roughness_factor: float = pd.Field(
+    roughness_factor: float = Field(
         2.0,
         title="Roughness Factor",
         description="Expected maximal increase in conductor losses due to roughness effect. "
@@ -5448,14 +5456,13 @@ class HuraySurfaceRoughness(AbstractSurfaceRoughness):
         J. Eric Bracken, "A Causal Huray Model for Surface Roughness", DesignCon, 2012.
     """
 
-    relative_area: pd.PositiveFloat = pd.Field(
+    relative_area: PositiveFloat = Field(
         1,
         title="Relative Area",
         description="Relative area of the matte base compared to a flat surface",
     )
 
-    coeffs: tuple[tuple[pd.PositiveFloat, pd.PositiveFloat], ...] = pd.Field(
-        ...,
+    coeffs: tuple[tuple[PositiveFloat, PositiveFloat], ...] = Field(
         title="Coefficients for surface ratio and sphere radius",
         description="List of (:math:`f_i, r_i`) values for model, where :math:`f_i` is "
         "the ratio of total sphere surface area to the flat surface area, and :math:`r_i` "
@@ -5538,7 +5545,7 @@ class LossyMetalMedium(Medium):
 
     """
 
-    allow_gain: Literal[False] = pd.Field(
+    allow_gain: Literal[False] = Field(
         False,
         title="Allow gain medium",
         description="Allow the medium to be active. Caution: "
@@ -5548,11 +5555,18 @@ class LossyMetalMedium(Medium):
         "useful in some cases.",
     )
 
-    permittivity: Literal[1] = pd.Field(
+    permittivity: Literal[1.0] = Field(
         1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
     )
 
-    roughness: SurfaceRoughnessType = pd.Field(
+    conductivity: PositiveFloat = Field(
+        title="Conductivity",
+        description="Electric conductivity. Defined such that the imaginary part of the complex "
+        "permittivity at angular frequency omega is given by conductivity/omega.",
+        units=CONDUCTIVITY,
+    )
+
+    roughness: Optional[SurfaceRoughnessType] = Field(
         None,
         title="Surface Roughness Model",
         description="Surface roughness model that applies a frequency-dependent scaling "
@@ -5560,7 +5574,7 @@ class LossyMetalMedium(Medium):
         discriminator=TYPE_TAG_STR,
     )
 
-    thickness: pd.PositiveFloat = pd.Field(
+    thickness: Optional[PositiveFloat] = Field(
         None,
         title="Conductor Thickness",
         description="When the thickness of the conductor is not much greater than skin depth, "
@@ -5568,21 +5582,21 @@ class LossyMetalMedium(Medium):
         units=MICROMETER,
     )
 
-    frequency_range: FreqBound = pd.Field(
-        ...,
+    frequency_range: FreqBound = Field(
         title="Frequency Range",
         description="Frequency range of validity for the medium.",
         units=(HERTZ, HERTZ),
     )
 
-    fit_param: SurfaceImpedanceFitterParam = pd.Field(
-        SurfaceImpedanceFitterParam(),
+    fit_param: SurfaceImpedanceFitterParam = Field(
+        default_factory=SurfaceImpedanceFitterParam,
         title="Fitting Parameters For Surface Impedance",
         description="Parameters for fitting surface impedance divided by (-1j * omega) over "
         "the frequency range using pole-residue pair model.",
     )
 
-    @pd.validator("frequency_range")
+    @field_validator("frequency_range")
+    @classmethod
     def _validate_frequency_range(cls, val):
         """Validate that frequency range is finite and non-zero."""
         for freq in val:
@@ -5590,13 +5604,6 @@ class LossyMetalMedium(Medium):
                 raise ValidationError("Values in 'frequency_range' must be finite.")
             if freq <= 0:
                 raise ValidationError("Values in 'frequency_range' must be positive.")
-        return val
-
-    @pd.validator("conductivity", always=True)
-    def _positive_conductivity(cls, val):
-        """Assert conductivity>0."""
-        if val <= 0:
-            raise ValidationError("For lossy metal, 'conductivity' must be positive. ")
         return val
 
     @cached_property
@@ -5689,7 +5696,7 @@ class LossyMetalMedium(Medium):
 
         Returns
         -------
-        Tuple[complex, complex, complex]
+        tuple[complex, complex, complex]
             The diagonal elements of relative permittivity tensor relevant for numerical
             considerations evaluated at ``frequency``.
         """
@@ -5734,6 +5741,7 @@ class LossyMetalMedium(Medium):
 IsotropicUniformMediumFor2DType = Union[
     Medium, LossyMetalMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium
 ]
+
 IsotropicUniformMediumType = Union[IsotropicUniformMediumFor2DType, PMCMedium]
 IsotropicCustomMediumType = Union[
     CustomPoleResidue,
@@ -5775,34 +5783,32 @@ class AnisotropicMedium(AbstractMedium):
         * `Thin film lithium niobate adiabatic waveguide coupler <../../notebooks/AdiabaticCouplerLN.html>`_
     """
 
-    xx: IsotropicUniformMediumType = pd.Field(
-        ...,
+    xx: IsotropicUniformMediumType = Field(
         title="XX Component",
         description="Medium describing the xx-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    yy: IsotropicUniformMediumType = pd.Field(
-        ...,
+    yy: IsotropicUniformMediumType = Field(
         title="YY Component",
         description="Medium describing the yy-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    zz: IsotropicUniformMediumType = pd.Field(
-        ...,
+    zz: IsotropicUniformMediumType = Field(
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    allow_gain: bool = pd.Field(
+    allow_gain: Optional[bool] = Field(
         None,
         title="Allow gain medium",
         description="This field is ignored. Please set ``allow_gain`` in each component",
     )
 
-    @pd.validator("modulation_spec", always=True)
+    @field_validator("modulation_spec")
+    @classmethod
     def _validate_modulation_spec(cls, val):
         """Check compatibility with modulation_spec."""
         if val is not None:
@@ -5813,14 +5819,14 @@ class AnisotropicMedium(AbstractMedium):
             )
         return val
 
-    @pd.root_validator(pre=True)
-    def _ignored_fields(cls, values):
+    @model_validator(mode="after")
+    def _ignored_fields(self):
         """The field is ignored."""
-        if values.get("xx") is not None and values.get("allow_gain") is not None:
+        if self.xx is not None and self.allow_gain is not None:
             log.warning(
                 "The field 'allow_gain' is ignored. Please set 'allow_gain' in each component."
             )
-        return values
+        return self
 
     @cached_property
     def components(self) -> dict[str, Medium]:
@@ -5961,7 +5967,7 @@ class AnisotropicMedium(AbstractMedium):
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -6022,14 +6028,14 @@ class FullyAnisotropicMedium(AbstractMedium):
         * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_
     """
 
-    permittivity: TensorReal = pd.Field(
+    permittivity: TensorReal = Field(
         [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
         title="Permittivity",
         description="Relative permittivity tensor.",
         units=PERMITTIVITY,
     )
 
-    conductivity: TensorReal = pd.Field(
+    conductivity: TensorReal = Field(
         [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
         title="Conductivity",
         description="Electric conductivity tensor. Defined such that the imaginary part "
@@ -6037,7 +6043,8 @@ class FullyAnisotropicMedium(AbstractMedium):
         units=CONDUCTIVITY,
     )
 
-    @pd.validator("modulation_spec", always=True)
+    @field_validator("modulation_spec")
+    @classmethod
     def _validate_modulation_spec(cls, val):
         """Check compatibility with modulation_spec."""
         if val is not None:
@@ -6047,7 +6054,8 @@ class FullyAnisotropicMedium(AbstractMedium):
             )
         return val
 
-    @pd.validator("permittivity", always=True)
+    @field_validator("permittivity")
+    @classmethod
     def permittivity_spd_and_ge_one(cls, val):
         """Check that provided permittivity tensor is symmetric positive definite
         with eigenvalues >= 1.
@@ -6061,14 +6069,14 @@ class FullyAnisotropicMedium(AbstractMedium):
 
         return val
 
-    @pd.validator("conductivity", always=True)
-    @skip_if_fields_missing(["permittivity"])
-    def conductivity_commutes(cls, val, values):
+    @model_validator(mode="after")
+    def conductivity_commutes(self):
         """Check that the symmetric part of conductivity tensor commutes with permittivity tensor
         (that is, simultaneously diagonalizable).
         """
 
-        perm = values.get("permittivity")
+        val = self.conductivity
+        perm = self.permittivity
         cond_sym = 0.5 * (val + val.T)
         comm_diff = np.abs(np.matmul(perm, cond_sym) - np.matmul(cond_sym, perm))
 
@@ -6077,14 +6085,14 @@ class FullyAnisotropicMedium(AbstractMedium):
                 "Main directions of conductivity and permittivity tensor do not coincide."
             )
 
-        return val
+        return self
 
-    @pd.validator("conductivity", always=True)
-    @skip_if_fields_missing(["allow_gain"])
-    def _passivity_validation(cls, val, values):
+    @model_validator(mode="after")
+    def _passivity_validation(self):
         """Assert passive medium if ``allow_gain`` is False."""
-        if values.get("allow_gain"):
-            return val
+        val = self.conductivity
+        if self.allow_gain:
+            return self
 
         cond_sym = 0.5 * (val + val.T)
         if np.any(np.linalg.eigvals(cond_sym) < -fp_eps):
@@ -6094,7 +6102,7 @@ class FullyAnisotropicMedium(AbstractMedium):
                 "To simulate a gain medium, please set 'allow_gain=True'. "
                 "Caution: simulations with a gain medium are unstable, and are likely to diverge."
             )
-        return val
+        return self
 
     @classmethod
     def from_diagonal(cls, xx: Medium, yy: Medium, zz: Medium, rotation: RotationType):
@@ -6305,28 +6313,25 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_
     """
 
-    xx: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
-        ...,
+    xx: Union[IsotropicCustomMediumType, CustomMedium] = Field(
         title="XX Component",
         description="Medium describing the xx-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    yy: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
-        ...,
+    yy: Union[IsotropicCustomMediumType, CustomMedium] = Field(
         title="YY Component",
         description="Medium describing the yy-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    zz: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
-        ...,
+    zz: Union[IsotropicCustomMediumType, CustomMedium] = Field(
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    interp_method: Optional[InterpMethod] = pd.Field(
+    interp_method: Optional[InterpMethod] = Field(
         None,
         title="Interpolation method",
         description="When the value is ``None`` each component will follow its own "
@@ -6334,52 +6339,39 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         "method specified by this field will override the one in each component.",
     )
 
-    allow_gain: bool = pd.Field(
+    allow_gain: Optional[bool] = Field(
         None,
         title="Allow gain medium",
         description="This field is ignored. Please set ``allow_gain`` in each component",
     )
 
-    subpixel: bool = pd.Field(
+    subpixel: Optional[bool] = Field(
         None,
         title="Subpixel averaging",
         description="This field is ignored. Please set ``subpixel`` in each component",
     )
 
-    @pd.validator("xx", always=True)
-    def _isotropic_xx(cls, val):
+    @field_validator("xx", "yy", "zz")
+    @classmethod
+    def _isotropic_xx(cls, val, info):
         """If it's `CustomMedium`, make sure it's isotropic."""
         if isinstance(val, CustomMedium) and not val.is_isotropic:
-            raise SetupError("The xx-component medium type is not isotropic.")
+            raise SetupError(f"The {info.field_name}-component medium type is not isotropic.")
         return val
 
-    @pd.validator("yy", always=True)
-    def _isotropic_yy(cls, val):
-        """If it's `CustomMedium`, make sure it's isotropic."""
-        if isinstance(val, CustomMedium) and not val.is_isotropic:
-            raise SetupError("The yy-component medium type is not isotropic.")
-        return val
-
-    @pd.validator("zz", always=True)
-    def _isotropic_zz(cls, val):
-        """If it's `CustomMedium`, make sure it's isotropic."""
-        if isinstance(val, CustomMedium) and not val.is_isotropic:
-            raise SetupError("The zz-component medium type is not isotropic.")
-        return val
-
-    @pd.root_validator(pre=True)
-    def _ignored_fields(cls, values):
+    @model_validator(mode="after")
+    def _ignored_fields(self):
         """The field is ignored."""
-        if values.get("xx") is not None:
-            if values.get("allow_gain") is not None:
+        if self.xx is not None:
+            if self.allow_gain is not None:
                 log.warning(
                     "The field 'allow_gain' is ignored. Please set 'allow_gain' in each component."
                 )
-            if values.get("subpixel") is not None:
+            if self.subpixel is not None:
                 log.warning(
                     "The field 'subpixel' is ignored. Please set 'subpixel' in each component."
                 )
-        return values
+        return self
 
     @cached_property
     def is_spatially_uniform(self) -> bool:
@@ -6422,7 +6414,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 
         Returns
         -------
-        Tuple[
+        tuple[
             Union[
                 :class:`.SpatialDataArray`,
                 :class:`.TriangularGridDataset`,
@@ -6465,7 +6457,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 
         Returns
         -------
-        Tuple[float, float]
+        tuple[float, float]
             The min and max values of the permittivity for the selected component and evaluated at ``frequency``.
         """
         comps = ["xx", "yy", "zz"]
@@ -6511,22 +6503,19 @@ class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
     >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
     """
 
-    xx: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
-        ...,
+    xx: Union[IsotropicCustomMediumInternalType, CustomMedium] = Field(
         title="XX Component",
         description="Medium describing the xx-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    yy: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
-        ...,
+    yy: Union[IsotropicCustomMediumInternalType, CustomMedium] = Field(
         title="YY Component",
         description="Medium describing the yy-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
     )
 
-    zz: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
-        ...,
+    zz: Union[IsotropicCustomMediumInternalType, CustomMedium] = Field(
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
         discriminator=TYPE_TAG_STR,
@@ -6539,7 +6528,7 @@ class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
 class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
     """Abstract class for medium perturbation."""
 
-    subpixel: bool = pd.Field(
+    subpixel: bool = Field(
         True,
         title="Subpixel averaging",
         description="This value will be transferred to the resulting custom medium. That is, "
@@ -6549,7 +6538,7 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
         "have an effect.",
     )
 
-    perturbation_spec: Optional[Union[PermittivityPerturbation, IndexPerturbation]] = pd.Field(
+    perturbation_spec: Optional[Union[PermittivityPerturbation, IndexPerturbation]] = Field(
         None,
         title="Perturbation Spec",
         description="Specification of medium perturbation as one of predefined types.",
@@ -6630,18 +6619,14 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
             Resulting medium with perturbation model.
         """
 
-        new_dict = medium.dict(
-            exclude={
-                "type",
-            }
-        )
+        new_dict = medium.model_dump(exclude={"type"})
 
         new_dict["perturbation_spec"] = perturbation_spec
         new_dict["subpixel"] = subpixel
 
         new_dict.update(kwargs)
 
-        return cls.parse_obj(new_dict)
+        return cls.model_validate(new_dict)
 
 
 class PerturbationMedium(Medium, AbstractPerturbationMedium):
@@ -6662,14 +6647,14 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
     ... )
     """
 
-    permittivity_perturbation: Optional[ParameterPerturbation] = pd.Field(
+    permittivity_perturbation: Optional[ParameterPerturbation] = Field(
         None,
         title="Permittivity Perturbation",
         description="List of heat and/or charge perturbations to permittivity.",
         units=PERMITTIVITY,
     )
 
-    conductivity_perturbation: Optional[ParameterPerturbation] = pd.Field(
+    conductivity_perturbation: Optional[ParameterPerturbation] = Field(
         None,
         title="Permittivity Perturbation",
         description="List of heat and/or charge perturbations to permittivity.",
@@ -6688,15 +6673,15 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         allowed_complex=False,
     )
 
-    @pd.root_validator(pre=True)
-    def _check_overdefining(cls, values):
+    @model_validator(mode="after")
+    def _check_overdefining(self):
         """Check that perturbation model is provided either directly or through
         ``perturbation_spec``, but not both.
         """
 
-        perm_p = values.get("permittivity_perturbation") is not None
-        cond_p = values.get("conductivity_perturbation") is not None
-        p_spec = values.get("perturbation_spec") is not None
+        perm_p = self.permittivity_perturbation is not None
+        cond_p = self.conductivity_perturbation is not None
+        p_spec = self.perturbation_spec is not None
 
         if p_spec and (perm_p or cond_p):
             raise SetupError(
@@ -6705,7 +6690,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
                 "but not in both ways simultaneously."
             )
 
-        return values
+        return self
 
     def perturbed_copy(
         self,
@@ -6753,7 +6738,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         if all(x is None for x in [temperature, electron_density, hole_density]):
             return self
 
-        new_dict = self.dict(
+        new_dict = self.model_dump(
             exclude={
                 "permittivity_perturbation",
                 "conductivity_perturbation",
@@ -6803,7 +6788,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         new_dict["interp_method"] = interp_method
         new_dict["derived_from"] = self
 
-        return CustomMedium.parse_obj(new_dict)
+        return CustomMedium.model_validate(new_dict)
 
 
 class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
@@ -6837,7 +6822,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     ... )
     """
 
-    eps_inf_perturbation: Optional[ParameterPerturbation] = pd.Field(
+    eps_inf_perturbation: Optional[ParameterPerturbation] = Field(
         None,
         title="Perturbation of Epsilon at Infinity",
         description="Perturbations to relative permittivity at infinite frequency "
@@ -6847,7 +6832,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 
     poles_perturbation: Optional[
         tuple[tuple[Optional[ParameterPerturbation], Optional[ParameterPerturbation]], ...]
-    ] = pd.Field(
+    ] = Field(
         None,
         title="Perturbations of Poles",
         description="Perturbations to poles of the model.",
@@ -6865,15 +6850,15 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         "poles",
     )
 
-    @pd.root_validator(pre=True)
-    def _check_overdefining(cls, values):
+    @model_validator(mode="after")
+    def _check_overdefining(self):
         """Check that perturbation model is provided either directly or through
         ``perturbation_spec``, but not both.
         """
 
-        eps_i_p = values.get("eps_inf_perturbation") is not None
-        poles_p = values.get("poles_perturbation") is not None
-        p_spec = values.get("perturbation_spec") is not None
+        eps_i_p = self.eps_inf_perturbation is not None
+        poles_p = self.poles_perturbation is not None
+        p_spec = self.perturbation_spec is not None
 
         if p_spec and (eps_i_p or poles_p):
             raise SetupError(
@@ -6882,7 +6867,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
                 "but not in both ways simultaneously."
             )
 
-        return values
+        return self
 
     def perturbed_copy(
         self,
@@ -6930,9 +6915,13 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         if all(x is None for x in [temperature, electron_density, hole_density]):
             return self
 
-        new_dict = self.dict(
+        new_dict = self.model_dump(
             exclude={"eps_inf_perturbation", "poles_perturbation", "perturbation_spec", "type"}
         )
+
+        if all(x is None for x in [temperature, electron_density, hole_density]):
+            new_dict.pop("subpixel")
+            return PoleResidue.parse_obj(new_dict)
 
         zeros = ParameterPerturbation._zeros_like(temperature, electron_density, hole_density)
 
@@ -6983,7 +6972,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         new_dict["interp_method"] = interp_method
         new_dict["derived_from"] = self
 
-        return CustomPoleResidue.parse_obj(new_dict)
+        return CustomPoleResidue.model_validate(new_dict)
 
 
 # types of mediums that can be used in Simulation and Structures
@@ -7043,8 +7032,7 @@ class Medium2D(AbstractMedium):
 
     """
 
-    ss: IsotropicUniformMediumFor2DType = pd.Field(
-        ...,
+    ss: IsotropicUniformMediumFor2DType = Field(
         title="SS Component",
         description="Medium describing the ss-component of the diagonal permittivity tensor. "
         "The ss-component refers to the in-plane dimension of the medium that is the first "
@@ -7054,8 +7042,7 @@ class Medium2D(AbstractMedium):
         discriminator=TYPE_TAG_STR,
     )
 
-    tt: IsotropicUniformMediumFor2DType = pd.Field(
-        ...,
+    tt: IsotropicUniformMediumFor2DType = Field(
         title="TT Component",
         description="Medium describing the tt-component of the diagonal permittivity tensor. "
         "The tt-component refers to the in-plane dimension of the medium that is the second "
@@ -7065,7 +7052,8 @@ class Medium2D(AbstractMedium):
         discriminator=TYPE_TAG_STR,
     )
 
-    @pd.validator("modulation_spec", always=True)
+    @field_validator("modulation_spec")
+    @classmethod
     def _validate_modulation_spec(cls, val):
         """Check compatibility with modulation_spec."""
         if val is not None:
@@ -7075,16 +7063,16 @@ class Medium2D(AbstractMedium):
             )
         return val
 
-    @pd.validator("tt", always=True)
-    @skip_if_fields_missing(["ss"])
-    def _validate_inplane_pec(cls, val, values):
+    @model_validator(mode="after")
+    def _validate_inplane_pec(self):
         """ss/tt components must be both PEC or non-PEC."""
-        if isinstance(val, PECMedium) != isinstance(values["ss"], PECMedium):
+        val = self.tt
+        if isinstance(val, PECMedium) != isinstance(self.ss, PECMedium):
             raise ValidationError(
                 "Materials describing ss- and tt-components must be "
                 "either both 'PECMedium', or non-'PECMedium'."
             )
-        return val
+        return self
 
     @classmethod
     def _weighted_avg(
@@ -7128,11 +7116,11 @@ class Medium2D(AbstractMedium):
         axis : Axis
             Index (0, 1, or 2 for x, y, or z respectively) of the normal direction to the
             2D material.
-        adjacent_media : Tuple[MediumType3D, MediumType3D]
+        adjacent_media : tuple[MediumType3D, MediumType3D]
             The neighboring media on either side of the 2D material.
             The first element is directly on the - side of the 2D material in the supplied axis,
             and the second element is directly on the + side.
-        adjacent_dls : Tuple[float, float]
+        adjacent_dls : tuple[float, float]
             Each dl represents twice the thickness of the desired volumetric model on the
             respective side of the 2D material.
 
@@ -7339,7 +7327,7 @@ class Medium2D(AbstractMedium):
 
         Returns
         -------
-        Tuple[complex, complex, complex]
+        tuple[complex, complex, complex]
             The diagonal elements of relative permittivity tensor relevant for numerical
             considerations evaluated at ``frequency``.
         """

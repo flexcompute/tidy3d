@@ -10,10 +10,10 @@ from datetime import datetime
 from os import PathLike
 from typing import Callable, Literal, Optional, Union
 
-import pydantic.v1 as pydantic
 import requests
 from botocore.exceptions import ClientError
 from joblib import Parallel, delayed
+from pydantic import Field
 from rich.progress import Progress, TaskID
 
 from tidy3d.components.data.monitor_data import ModeSolverData
@@ -164,13 +164,13 @@ def run_batch(
 
     Parameters
     ----------
-    mode_solvers : List[ModeSolver]
+    mode_solvers : list[ModeSolver]
         List of mode solvers to be submitted to the server.
     task_name : str
         Base name for tasks. Each task in the batch will have a unique index appended to this base name.
     folder_name : str
         Name of the folder where tasks are stored on the server's web UI.
-    results_files : List[str], optional
+    results_files : list[str], optional
         List of file paths where the results for each ModeSolver should be downloaded. If None, a default path based on the folder name and index is used.
     verbose : bool
         If True, displays a progress bar. If False, runs silently.
@@ -188,7 +188,7 @@ def run_batch(
 
     Returns
     -------
-    List[ModeSolverData]
+    list[ModeSolverData]
         A list of ModeSolverData objects containing the results from each simulation in the batch. ``None`` is placed in the list for simulations that fail after all retries.
     """
     console = get_logging_console()
@@ -256,45 +256,45 @@ def run_batch(
     return results
 
 
-class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow):
+class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
     """Interface for managing the running of a :class:`.ModeSolver` task on server."""
 
-    task_id: str = pydantic.Field(
+    task_id: str = Field(
         None,
         title="task_id",
         description="Task ID number, set when the task is created, leave as None.",
         alias="refId",
     )
 
-    solver_id: str = pydantic.Field(
+    solver_id: str = Field(
         None,
         title="solver",
         description="Solver ID number, set when the task is created, leave as None.",
         alias="id",
     )
 
-    real_flex_unit: float = pydantic.Field(
+    real_flex_unit: float = Field(
         None, title="real FlexCredits", description="Billed FlexCredits.", alias="charge"
     )
 
-    created_at: Optional[datetime] = pydantic.Field(
+    created_at: Optional[datetime] = Field(
         title="created_at", description="Time at which this task was created.", alias="createdAt"
     )
 
-    status: str = pydantic.Field(
+    status: str = Field(
         None,
         title="status",
         description="Mode solver task status.",
     )
 
-    file_type: str = pydantic.Field(
+    file_type: str = Field(
         None,
         title="file_type",
         description="File type used to upload the mode solver.",
         alias="fileType",
     )
 
-    mode_solver: ModeSolver = pydantic.Field(
+    mode_solver: ModeSolver = Field(
         None,
         title="mode_solver",
         description="Mode solver being run by this task.",
@@ -574,7 +574,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
                 progress_callback=progress_callback,
             )
             mode_solver_dict["simulation"] = Simulation.from_json(sim_file)
-            mode_solver = ModeSolver.parse_obj(mode_solver_dict)
+            mode_solver = ModeSolver.model_validate(mode_solver_dict)
 
         # Store requested mode solver file
         mode_solver.to_file(to_file)

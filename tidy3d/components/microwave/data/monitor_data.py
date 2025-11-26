@@ -7,8 +7,9 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 import numpy as np
-import pydantic.v1 as pd
 import xarray as xr
+from numpy.typing import NDArray
+from pydantic import Field
 from typing_extensions import Self
 
 from tidy3d.components.data.data_array import (
@@ -82,14 +83,12 @@ class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
     John Wiley & Sons, Chapter 2.9 (2016).
     """
 
-    power_incident: FreqDataArray = pd.Field(
-        ...,
+    power_incident: FreqDataArray = Field(
         title="Power incident",
         description="Array of values representing the incident power to an antenna.",
     )
 
-    power_reflected: FreqDataArray = pd.Field(
-        ...,
+    power_reflected: FreqDataArray = Field(
         title="Power reflected",
         description="Array of values representing power reflected due to an impedance mismatch with the antenna.",
     )
@@ -115,7 +114,7 @@ class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
             New instance combining directivity data with incident and reflected power measurements.
         """
         antenna_params_dict = {
-            **dir_data.dict(),
+            **dir_data.model_dump(),
             "power_incident": power_inc,
             "power_reflected": power_refl,
         }
@@ -238,7 +237,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
     are used.
     """
 
-    transmission_line_data: Optional[TransmissionLineDataset] = pd.Field(
+    transmission_line_data: Optional[TransmissionLineDataset] = Field(
         None,
         title="Transmission Line Data",
         description="Additional data relevant to transmission lines in RF and microwave applications, "
@@ -441,7 +440,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
             super_data = super_data.updated_copy(**update_dict, path="transmission_line_data")
         return super_data
 
-    def _apply_mode_reorder(self, sort_inds_2d):
+    def _apply_mode_reorder(self, sort_inds_2d: NDArray) -> Self:
         """Apply a mode reordering along mode_index for all frequency indices.
 
         Parameters
@@ -522,8 +521,8 @@ class MicrowaveModeData(MicrowaveModeDataBase, ModeData):
     ... )
     """
 
-    monitor: MicrowaveModeMonitor = pd.Field(
-        ..., title="Monitor", description="Mode monitor associated with the data."
+    monitor: MicrowaveModeMonitor = Field(
+        title="Monitor", description="Mode monitor associated with the data."
     )
 
 
@@ -596,8 +595,8 @@ class MicrowaveModeSolverData(MicrowaveModeDataBase, ModeSolverData):
     ... )
     """
 
-    monitor: MicrowaveModeSolverMonitor = pd.Field(
-        ..., title="Monitor", description="Mode monitor associated with the data."
+    monitor: MicrowaveModeSolverMonitor = Field(
+        title="Monitor", description="Mode monitor associated with the data."
     )
 
     def interp_in_freq(

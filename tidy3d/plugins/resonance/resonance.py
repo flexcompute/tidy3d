@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import xarray as xr
-from pydantic.v1 import Field, NonNegativeFloat, PositiveInt, validator
+from pydantic import Field, NonNegativeFloat, PositiveInt, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
@@ -28,12 +28,19 @@ RCOND = 1e-4
 class ResonanceData(Tidy3dBaseModel):
     """Data class for storing objects computed while running the resonance finder."""
 
-    eigvals: ArrayComplex1D = Field(..., title="Eigenvalues", description="Resonance eigenvalues.")
-    complex_amplitudes: ArrayComplex1D = Field(
-        None, title="Complex amplitudes", description="Complex resonance amplitudes"
+    eigvals: ArrayComplex1D = Field(
+        title="Eigenvalues",
+        description="Resonance eigenvalues.",
     )
-    errors: ArrayFloat1D = Field(
-        None, title="Errors", description="Rough eigenvalue error estimate."
+    complex_amplitudes: Optional[ArrayComplex1D] = Field(
+        None,
+        title="Complex amplitudes",
+        description="Complex resonance amplitudes",
+    )
+    errors: Optional[ArrayFloat1D] = Field(
+        None,
+        title="Errors",
+        description="Rough eigenvalue error estimate.",
     )
 
 
@@ -71,7 +78,6 @@ class ResonanceFinder(Tidy3dBaseModel):
     """
 
     freq_window: tuple[float, float] = Field(
-        ...,
         title="Window ``[fmin, fmax]``",
         description="Window ``[fmin, fmax]`` for the initial frequencies. "
         "The resonance finder is initialized with an even grid of frequencies between "
@@ -102,8 +108,9 @@ class ResonanceFinder(Tidy3dBaseModel):
         "Making this closer to zero will typically return more resonances.",
     )
 
-    @validator("freq_window", always=True)
-    def _check_freq_window(cls, val):
+    @field_validator("freq_window")
+    @classmethod
+    def _check_freq_window(cls, val: tuple[float, float]) -> tuple[float, float]:
         """Validate ``freq_window``"""
         if val[1] < val[0]:
             raise ValidationError(
@@ -165,7 +172,7 @@ class ResonanceFinder(Tidy3dBaseModel):
 
         Parameters
         ----------
-        signal : List[complex]
+        signal : list[complex]
             One-dimensional array holding the complex-valued time series data
             to search for resonances.
         time_step : float
@@ -228,7 +235,9 @@ class ResonanceFinder(Tidy3dBaseModel):
         return np.squeeze(signal.data), dt
 
     def _aggregate_field_time_comps(
-        self, signals: tuple[FieldTimeData, ...], comps
+        self,
+        signals: tuple[FieldTimeData, ...],
+        comps: list[Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]],
     ) -> ScalarFieldTimeDataArray:
         """Aggregates the given components from several :class:`.FieldTimeData`."""
         total_signal = None

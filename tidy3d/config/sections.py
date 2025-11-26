@@ -446,6 +446,7 @@ class LocalCacheConfig(ConfigSection):
     )
 
     @field_validator("directory", mode="before")
+    @classmethod
     def _ensure_directory_exists(cls, v: PathLike) -> Path:
         """Expand ~, resolve path, and create directory if missing before DirectoryPath validation."""
         p = Path(v).expanduser().resolve()

@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.bound_ops import bounds_contains
@@ -16,7 +17,6 @@ from tidy3d.components.microwave.path_integrals.specs.impedance import (
     ImpedanceSpecType,
 )
 from tidy3d.components.mode_spec import AbstractModeSpec
-from tidy3d.components.types import annotate_type
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError
 
@@ -55,9 +55,9 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     """
 
     impedance_specs: Union[
-        annotate_type(ImpedanceSpecType),
-        tuple[Optional[annotate_type(ImpedanceSpecType)], ...],
-    ] = pd.Field(
+        ImpedanceSpecType,
+        tuple[Optional[ImpedanceSpecType], ...],
+    ] = Field(
         default_factory=AutoImpedanceSpec._default_without_license_warning,
         title="Impedance Specifications",
         description="Field controls how the impedance is calculated for each mode calculated by the mode solver. "
@@ -67,7 +67,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
         "ignored for the associated mode.",
     )
 
-    tem_polarization_threshold: float = pd.Field(
+    tem_polarization_threshold: float = Field(
         TEM_POLARIZATION_THRESHOLD,
         gt=0.0,
         le=1.0,
@@ -78,7 +78,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
         "(or TM) fraction is greater than or equal to this threshold.",
     )
 
-    qtem_polarization_threshold: float = pd.Field(
+    qtem_polarization_threshold: float = Field(
         QTEM_POLARIZATION_THRESHOLD,
         gt=0.0,
         le=1.0,
@@ -89,9 +89,9 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     )
 
     @cached_property
-    def _impedance_specs_as_tuple(self) -> tuple[Optional[ImpedanceSpecType]]:
+    def _impedance_specs_as_tuple(self) -> tuple[Optional[ImpedanceSpecType], ...]:
         """Gets the impedance_specs field converted to a tuple."""
-        if isinstance(self.impedance_specs, Union[tuple, list]):
+        if isinstance(self.impedance_specs, (tuple, list)):
             return tuple(self.impedance_specs)
         return (self.impedance_specs,)
 
@@ -103,15 +103,16 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
             for impedance_spec in self._impedance_specs_as_tuple
         )
 
-    @pd.validator("impedance_specs", always=True)
-    def check_impedance_specs_consistent_with_num_modes(cls, val, values):
+    @model_validator(mode="after")
+    def check_impedance_specs_consistent_with_num_modes(self) -> Self:
         """Check that the number of impedance specifications is equal to the number of modes.
         A single impedance spec is also permitted."""
-        num_modes = values.get("num_modes")
-        if isinstance(val, Union[tuple, list]):
+        val = self.impedance_specs
+        num_modes = self.num_modes
+        if isinstance(val, (tuple, list)):
             num_impedance_specs = len(val)
         else:
-            return val
+            return self
 
         # Otherwise, check that the count matches
         if num_impedance_specs != num_modes:
@@ -122,9 +123,9 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
                 "a single specification to apply to all modes."
             )
 
-        return val
+        return self
 
-    def _check_path_integrals_within_box(self, box: Box):
+    def _check_path_integrals_within_box(self, box: Box) -> None:
         """Raise SetupError if a ``CustomImpedanceSpec`` includes a path specification
         defined outside a candidate box.
         """

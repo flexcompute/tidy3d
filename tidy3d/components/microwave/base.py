@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from typing import Any
 
+from pydantic import model_validator
+
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.config import config
 from tidy3d.log import log
@@ -12,8 +15,9 @@ from tidy3d.log import log
 class MicrowaveBaseModel(Tidy3dBaseModel):
     """Base model that all RF and microwave specific components inherit from."""
 
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_rf_license(cls, values: dict[str, Any]) -> dict[str, Any]:
         from tidy3d.config import config
 
         # Skip warning when globally suppressed via config
@@ -26,7 +30,7 @@ class MicrowaveBaseModel(Tidy3dBaseModel):
         return values
 
     @classmethod
-    def _default_without_license_warning(cls) -> MicrowaveBaseModel:
+    def _default_without_license_warning(cls) -> Self:
         """Internal helper factory function for classes inheriting from ``MicrowaveBaseModel``."""
         if config.microwave.suppress_rf_license_warning is True:
             return cls()

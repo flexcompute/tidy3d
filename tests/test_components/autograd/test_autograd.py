@@ -160,8 +160,8 @@ PLANE_WAVE = td.PlaneWave(
 SIM_BASE = td.Simulation(
     size=(LX, 3.15, LZ),
     run_time=200 / FWIDTH,
-    sources=[PLANE_WAVE],
-    structures=[
+    sources=(PLANE_WAVE,),
+    structures=(
         td.Structure(
             geometry=td.Box(
                 size=(0.5, 0.5, LZ / 2),
@@ -170,16 +170,16 @@ SIM_BASE = td.Simulation(
             .rotated(ROT_ANGLE_WG, axis=0)
             .translated(x=0, y=-np.tan(ROT_ANGLE_WG) * MODE_FIELD_SPC, z=LZ / 2),
             medium=td.Medium(permittivity=2.0),
-        )
-    ],
-    monitors=[
+        ),
+    ),
+    monitors=(
         td.FieldMonitor(
             center=(0, 0, 0),
             size=(0, 0, 0),
             freqs=[FREQ0],
             name="extraneous",
-        )
-    ],
+        ),
+    ),
     boundary_spec=td.BoundarySpec.pml(x=PML_X, y=True, z=True),
     grid_spec=td.GridSpec.uniform(dl=0.01 * td.C_0 / FREQ0),
 )
@@ -1021,8 +1021,8 @@ def test_autograd_speed_num_structures(use_emulated_run):
 
     def make_sim(*args):
         structure = make_structures(*args)[structure_key]
-        structures = num_structures_test * [structure]
-        return SIM_BASE.updated_copy(structures=structures, monitors=[monitor])
+        structures = tuple(num_structures_test * [structure])
+        return SIM_BASE.updated_copy(structures=structures, monitors=(monitor,))
 
     def objective(*args):
         """Objective function."""
@@ -1078,7 +1078,7 @@ def test_autograd_polyslab_cylinder(use_emulated_run, monitor_key):
         geo = geo_maker(*params)
         structure = td.Structure(geometry=geo, medium=td.Medium(permittivity=2))
 
-        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
+        return SIM_BASE.updated_copy(structures=(structure,), monitors=(monitor,))
 
     p0 = [1.0, 0.0, 0.0, t0]
 
@@ -1155,7 +1155,7 @@ def test_sim_full_ops(structure_key):
     def objective(*params):
         s = make_structures(*params)[structure_key]
         s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
-        sim_full_traced = SIM_FULL.updated_copy(structures=[*list(SIM_FULL.structures), s])
+        sim_full_traced = SIM_FULL.updated_copy(structures=(*SIM_FULL.structures, s))
 
         sim_full_static = sim_full_traced.to_static()
 
@@ -1299,7 +1299,7 @@ def test_sim_traced_override_structures():
             geometry=td.Box(center=(0, 0, 0), size=(1, 1, x)),
             dl=[1, 1, 1],
         )
-        sim = SIM_FULL.updated_copy(override_structures=[override_structure], path="grid_spec")
+        sim = SIM_FULL.updated_copy(override_structures=(override_structure,), path="grid_spec")
         return sim.grid_spec.override_structures[0].geometry.size[2]
 
     with AssertLogLevel("WARNING", contains_str="override structures"):
@@ -1312,7 +1312,7 @@ def test_sim_fields_io(structure_key, tmp_path):
     from file, and then converting back, returns the same object."""
     s = make_structures(params0)[structure_key]
     s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
-    sim_full_traced = SIM_FULL.updated_copy(structures=[*list(SIM_FULL.structures), s])
+    sim_full_traced = SIM_FULL.updated_copy(structures=(*SIM_FULL.structures, s))
     sim_fields = sim_full_traced._strip_traced_fields()
 
     field_map = FieldMap.from_autograd_field_map(sim_fields)
@@ -1368,8 +1368,8 @@ def test_too_many_traced_structures(monkeypatch, use_emulated_run):
     def make_sim(*args):
         structure = make_structures(*args)[structure_key]
         return SIM_BASE.updated_copy(
-            structures=(config.adjoint.max_traced_structures + 1) * [structure],
-            monitors=[monitor],
+            structures=(config.adjoint.max_traced_structures + 1) * (structure,),
+            monitors=(monitor,),
         )
 
     def objective(*args):
@@ -1395,7 +1395,7 @@ def test_no_freq_adjoint(monkeypatch, use_emulated_run):
 
         sim = SIM_BASE.updated_copy(
             structures=structures,
-            monitors=[td.FieldTimeMonitor(size=(0, 0, 0), name="time_monitor_only")],
+            monitors=(td.FieldTimeMonitor(size=(0, 0, 0), name="time_monitor_only"),),
         )
         # doesn't need to be a valid objective since this should error when calling web.run
         return web.run(sim, task_name="autograd_test", verbose=False)
@@ -1614,7 +1614,7 @@ def test_interp_objectives(use_emulated_run, colocate, objtype):
         for structure_key in structure_keys_:
             structures.append(structures_traced_dict[structure_key])
 
-        sim = SIM_BASE.updated_copy(monitors=[monitor], structures=structures)
+        sim = SIM_BASE.updated_copy(monitors=(monitor,), structures=tuple(structures))
         data = run(sim, task_name="autograd_test", verbose=False)
 
         if objtype == "flux":
@@ -1683,7 +1683,7 @@ class TestFieldProjection:
                 name="far_field",
             )
 
-        sim = SIM_BASE.updated_copy(monitors=[monitor])
+        sim = SIM_BASE.updated_copy(monitors=(monitor,))
 
         if sim_2d and IS_3D:
             sim = sim.updated_copy(size=(0, *sim.size[1:]))
@@ -1717,7 +1717,7 @@ class TestFieldProjection:
             for structure_key in structure_keys_:
                 structures.append(structures_traced_dict[structure_key])
 
-            sim = sim_base.updated_copy(structures=structures)
+            sim = sim_base.updated_copy(structures=tuple(structures))
             sim_data = run(sim, task_name="field_projection_test")
 
             return self.objective(sim_data, monitor_far)
@@ -1745,14 +1745,14 @@ class TestFieldProjection:
         """Using a far field monitor directly should error"""
         # build a projection‐only monitor sim
         sim_base, monitor_far = self.setup(far_field_approx, projection_type, sim_2d)
-        sim_base = sim_base.updated_copy(monitors=[monitor_far])
+        sim_base = sim_base.updated_copy(monitors=(monitor_far,))
 
         def objective(args):
             structures_traced_dict = make_structures(args)
             structures = list(SIM_BASE.structures)
             for structure_key in structure_keys_:
                 structures.append(structures_traced_dict[structure_key])
-            sim = sim_base.updated_copy(structures=structures)
+            sim = sim_base.updated_copy(structures=tuple(structures))
             sim_data = run(sim, task_name="field_projection_test")
             return sim_data["far_field"].power.sum().item()
 
@@ -2389,8 +2389,8 @@ def make_objective(postprocess_fn: typing.Callable, structure_key: str) -> typin
     def objective(params):
         structure_traced = make_structures(params)[structure_key]
         sim = SIM_BASE.updated_copy(
-            structures=[structure_traced],
-            monitors=[*list(SIM_BASE.monitors), mnt_single, mnt_multi],
+            structures=(structure_traced,),
+            monitors=(*SIM_BASE.monitors, mnt_single, mnt_multi),
         )
         data = run(sim, task_name="multifreq_test")
         return postprocess_fn(data)
@@ -2517,8 +2517,8 @@ def test_multi_freq_edge_cases(use_emulated_run, structure_key, label, check_fn,
     def objective(params):
         structure_traced = make_structures(params)[structure_key]
         sim = SIM_BASE.updated_copy(
-            structures=[structure_traced],
-            monitors=[*list(SIM_BASE.monitors), mnt_single, mnt_multi],
+            structures=(structure_traced,),
+            monitors=(*SIM_BASE.monitors, mnt_single, mnt_multi),
         )
         data = run(sim, task_name="multifreq_test")
         return postprocess_fn(data)
@@ -2541,8 +2541,8 @@ def test_multi_frequency_equivalence(use_emulated_run, structure_key):
         for f in mnt_multi.freqs:
             structure_traced = make_structures(params)[structure_key]
             sim = SIM_BASE.updated_copy(
-                structures=[structure_traced],
-                monitors=[*list(SIM_BASE.monitors), mnt_multi],
+                structures=(structure_traced,),
+                monitors=(*SIM_BASE.monitors, mnt_multi),
             )
 
             sim_data = web.run(sim, task_name="multifreq_test")
@@ -2555,8 +2555,8 @@ def test_multi_frequency_equivalence(use_emulated_run, structure_key):
     def objective_multi(params, structure_key) -> float:
         structure_traced = make_structures(params)[structure_key]
         sim = SIM_BASE.updated_copy(
-            structures=[structure_traced],
-            monitors=[*list(SIM_BASE.monitors), mnt_multi],
+            structures=(structure_traced,),
+            monitors=(*SIM_BASE.monitors, mnt_multi),
         )
         sim_data = web.run(sim, task_name="multifreq_test")
         amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
@@ -2582,11 +2582,11 @@ def test_error_flux(use_emulated_run):
     def objective(params):
         structure_traced = make_structures(params)["medium"]
         sim = SIM_BASE.updated_copy(
-            structures=[structure_traced],
-            monitors=[
+            structures=(structure_traced,),
+            monitors=(
                 td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="flux"),
                 td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
-            ],
+            ),
         )
         data = run(sim, task_name="flux_error")
         return anp.sum(data["flux"].flux.values)
@@ -2603,8 +2603,8 @@ def test_extraneous_field(use_emulated_run):
     def objective(params):
         structure_traced = make_structures(params)["medium"]
         sim = SIM_BASE.updated_copy(
-            structures=[structure_traced],
-            monitors=[
+            structures=(structure_traced,),
+            monitors=(
                 SIM_BASE.monitors[0],
                 td.ModeMonitor(
                     size=(1, 1, 0),
@@ -2613,7 +2613,7 @@ def test_extraneous_field(use_emulated_run):
                     freqs=[FREQ0 * 0.9, FREQ0 * 1.1],
                     name="mode",
                 ),
-            ],
+            ),
         )
         data = run(sim, task_name="extra_field")
         amp = data["mode"].amps.sel(direction="+", f=FREQ0 * 0.9, mode_index=0).values
@@ -2849,21 +2849,26 @@ def test_flux_monitor_freq_exclusion(use_emulated_run):
     """Checks if we are excluding flux monitor frequencies from the adjoint frequencies since
     we cannot differentiate through flux data."""
 
-    monitors_just_field = [
-        td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field")
-    ]
+    monitors_just_field = (
+        td.FieldMonitor(
+            size=(1, 1, 0),
+            center=(0, 0, 0),
+            freqs=[FREQ0],
+            name="field",
+        ),
+    )
 
-    monitors_with_flux = [
+    monitors_with_flux = (
         td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
         td.FluxMonitor(
             size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0 - FWIDTH, FREQ0 + FWIDTH], name="flux"
         ),
-    ]
+    )
 
     def objective_with_monitors(monitors):
         def objective(params):
             structure_traced = make_structures(params)["medium"]
-            sim = SIM_BASE.updated_copy(structures=[structure_traced], monitors=monitors)
+            sim = SIM_BASE.updated_copy(structures=(structure_traced,), monitors=monitors)
             data = run(sim, task_name="adjoint_freq_test")
             assert data.simulation._freqs_adjoint == [FREQ0]
             return anp.sum(data["field"].flux.values)
@@ -2885,7 +2890,7 @@ def test_dispersive_no_inf(use_emulated_run):
 
     def objective(args):
         structure_traced = make_structures(args)["polyslab_dispersive"]
-        sim = make_sim(args).updated_copy(structures=[structure_traced])
+        sim = make_sim(args).updated_copy(structures=(structure_traced,))
         sim_data = run(sim, task_name="adjoint_test", verbose=False)
         return postprocess(sim_data)
 
@@ -2928,10 +2933,10 @@ def test_error_clip(use_emulated_run):
         union = td.ClipOperation(operation="union", geometry_a=box1, geometry_b=box2)
         structure = td.Structure(geometry=union, medium=td.Medium(permittivity=2))
         sim = SIM_BASE.updated_copy(
-            structures=[structure],
-            monitors=[
+            structures=(structure,),
+            monitors=(
                 td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
-            ],
+            ),
         )
         data = run(sim, task_name="clip_error")
         return anp.sum(data["field"].intensity.item())

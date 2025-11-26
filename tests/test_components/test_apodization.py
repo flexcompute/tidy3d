@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 
@@ -17,27 +17,27 @@ def test_apodization():
 
 
 def test_end_lt_start():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ApodizationSpec(start=2, end=1, width=0.2)
 
 
 def test_no_width():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ApodizationSpec(start=1, end=2)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ApodizationSpec(start=1)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ApodizationSpec(end=2)
 
 
 def test_negative_times():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ApodizationSpec(start=-2, end=-1, width=0.2)
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ApodizationSpec(start=1, end=2, width=-0.2)
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ApodizationSpec(start=1, end=2, width=0)
 
 
