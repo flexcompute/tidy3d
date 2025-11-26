@@ -400,6 +400,7 @@ jobs:
       cli_tests: ${{ needs.determine-workflow-scope.outputs.run_cli_tests == 'true' }}
       submodule_tests: ${{ needs.determine-workflow-scope.outputs.run_submodule_tests == 'true' }}
       version_match_tests: true
+    secrets: inherit # zizmor: ignore[secrets-inherit]
   
   compile-tests-results:
     name: compile-tests-results
