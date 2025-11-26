@@ -2,23 +2,34 @@ from __future__ import annotations
 
 import autograd
 import numpy as np
+import pytest
+from autograd.test_util import check_grads
 
 from tidy3d.plugins.autograd.invdes.filters import ConicFilter
 from tidy3d.plugins.autograd.invdes.projections import smoothed_projection, tanh_projection
 
 
-def test_smoothed_projection_beta_inf():
-    nx, ny = 50, 50
-    arr = np.zeros((50, 50), dtype=float)
+def create_circle(nx, ny, radius):
+    # 1. Initialize array
+    arr = np.zeros((nx, ny), dtype=float)
 
-    center_x, center_y = 25, 25
-    radius = 10
+    # 2. Logic to create circle
+    center_x, center_y = nx / 2, ny / 2
     x = np.arange(nx)
     y = np.arange(ny)
-    X, Y = np.meshgrid(x, y)
+    # Note: indexing='ij' ensures x corresponds to rows (nx) and y to cols (ny)
+    X, Y = np.meshgrid(x, y, indexing="ij")
     distance = np.sqrt((X - center_x) ** 2 + (Y - center_y) ** 2)
 
     arr[distance <= radius] = 1
+    return arr
+
+
+def test_smoothed_projection_beta_inf():
+    nx, ny = 50, 50
+    radius = 10
+
+    arr = create_circle(nx, ny, radius)
 
     filter = ConicFilter(kernel_size=5)
     arr_filtered = filter(arr)
@@ -29,7 +40,7 @@ def test_smoothed_projection_beta_inf():
         eta=0.5,
     )
     assert not np.any(np.isinf(result) | np.isnan(result))
-    assert np.isclose(result[center_x, center_y], 1)
+    assert np.isclose(result[round(nx / 2), round(ny / 2)], 1)
     assert np.isclose(result[0, -1], 0)
     assert np.isclose(result[0, 0], 0)
     assert np.isclose(result[-1, 0], 0)
@@ -46,16 +57,9 @@ def test_smoothed_projection_beta_inf():
 
 def test_smoothed_projection_beta_non_inf():
     nx, ny = 50, 50
-    arr = np.zeros((50, 50), dtype=float)
-
-    center_x, center_y = 25, 25
     radius = 10
-    x = np.arange(nx)
-    y = np.arange(ny)
-    X, Y = np.meshgrid(x, y)
-    distance = np.sqrt((X - center_x) ** 2 + (Y - center_y) ** 2)
 
-    arr[distance <= radius] = 1
+    arr = create_circle(nx, ny, radius)
 
     # fully discrete input should still be fully discrete output
     discrete_result = smoothed_projection(
@@ -99,3 +103,18 @@ def test_projection_gradient():
     val, grad = autograd.value_and_grad(_helper_fn)(arr)
     assert val == 0.5
     assert np.all(~(np.isnan(grad) | np.isinf(grad)))
+
+
+@pytest.mark.parametrize("beta", [0, 5, np.inf])
+@pytest.mark.parametrize("size", [30, 50])
+@pytest.mark.parametrize("radius", [10, 15, 20])
+@pytest.mark.parametrize("smoothing_radius", [3, 5, 7])
+def test_projection_gradient_correctness(beta, size, radius, smoothing_radius):
+    arr = create_circle(size, size, radius)
+    filter = ConicFilter(kernel_size=smoothing_radius)
+    arr = filter(arr)
+
+    def _helper_fn(x):
+        return smoothed_projection(x, beta=beta, eta=0.5).mean()
+
+    check_grads(_helper_fn, modes=["fwd", "rev"], order=2)(arr)
