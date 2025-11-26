@@ -200,7 +200,7 @@ class CustomSampling(FrequencySamplingSpec):
 
     @field_validator("freqs")
     @classmethod
-    def _validate_freqs(cls, val):
+    def _validate_freqs(cls, val: FreqArray) -> FreqArray:
         """Validate custom frequencies."""
         freqs_array = np.asarray(val)
         if freqs_array.size < 2:
@@ -295,7 +295,7 @@ class ModeInterpSpec(Tidy3dBaseModel):
     )
 
     @model_validator(mode="after")
-    def _validate_method_needs_points(self):
+    def _validate_method_needs_points(self) -> Self:
         """Validate that the method has enough points."""
         val = self.method
         sampling_spec = self.sampling_spec
@@ -572,7 +572,9 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("group_index_step", mode="before")
     @classmethod
-    def _validate_group_index_step_default(cls, val):
+    def _validate_group_index_step_default(
+        cls, val: Union[bool, PositiveFloat]
+    ) -> Union[bool, PositiveFloat]:
         """If ``True``, replace with default fractional step."""
         if val is True:
             return GROUP_INDEX_STEP
@@ -580,7 +582,9 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("group_index_step")
     @classmethod
-    def _validate_group_index_step_size(cls, val):
+    def _validate_group_index_step_size(
+        cls, val: Union[bool, PositiveFloat]
+    ) -> Union[bool, PositiveFloat]:
         """Ensure group-index step is < 1."""
         if val is not False and val >= 1:
             raise ValidationError(
@@ -590,7 +594,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("bend_radius")
     @classmethod
-    def _validate_bend_radius_not_zero(cls, v):
+    def _validate_bend_radius_not_zero(cls, v: Optional[float]) -> Optional[float]:
         """`bend_radius` magnitude must be non-zero."""
         if v is not None and isclose(v, 0):
             raise SetupError("The magnitude of 'bend_radius' must be larger than 0.")
@@ -598,7 +602,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("angle_theta")
     @classmethod
-    def _validate_angle_theta_glancing(cls, val):
+    def _validate_angle_theta_glancing(cls, val: float) -> float:
         """Disallow incidence too close to glancing."""
         if abs(np.pi / 2 - val) < GLANCING_CUTOFF:
             raise SetupError(
@@ -624,7 +628,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         return self
 
     @model_validator(mode="after")
-    def check_precision(self):
+    def check_precision(self) -> Self:
         """Verify critical ModeSpec settings for group index calculation."""
         if self.group_index_step > 0:
             tf = self._track_freq
@@ -646,7 +650,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         return self
 
     @model_validator(mode="after")
-    def _filter_pol_and_sort_spec_exclusive(self):
+    def _filter_pol_and_sort_spec_exclusive(self) -> Self:
         """Ensure that 'filter_pol' and 'sort_spec' are not used together."""
         sort_spec = self.sort_spec
         sort_or_filter = sort_spec.filter_key is not None or sort_spec.sort_key is not None
@@ -659,7 +663,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("filter_pol")
     @classmethod
-    def _filter_pol_deprecated(cls, val):
+    def _filter_pol_deprecated(cls, val: Optional[str]) -> Optional[str]:
         """Warn that 'filter_pol' is deprecated in favor of 'sort_spec'."""
         if val is not None:
             log.warning(
@@ -670,7 +674,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("track_freq")
     @classmethod
-    def _track_freq_deprecated(cls, val):
+    def _track_freq_deprecated(cls, val: Optional[TrackFreq]) -> Optional[TrackFreq]:
         """Warn that 'track_freq' on ModeSpec is deprecated in favor of 'sort_spec.track_freq'."""
         if val is not None:
             log.warning(
@@ -692,7 +696,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         return None
 
     @model_validator(mode="after")
-    def _interp_spec_needs_tracking(self):
+    def _interp_spec_needs_tracking(self) -> Self:
         """Ensure frequency tracking is enabled when using interpolation."""
         val = self.interp_spec
         if val is None:

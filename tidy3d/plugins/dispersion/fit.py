@@ -6,7 +6,7 @@ import codecs
 import csv
 from collections.abc import Sequence
 from os import PathLike
-from typing import Any, Optional, Self
+from typing import Any, Optional
 
 import numpy as np
 import requests
@@ -15,6 +15,7 @@ from numpy.typing import NDArray
 from pydantic import Field, field_validator, model_validator
 from rich.progress import Progress
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.medium import AbstractMedium, PoleResidue
 from tidy3d.components.types import ArrayFloat1D, Ax

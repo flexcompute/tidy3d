@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import Field
 
@@ -110,7 +110,7 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Any:
         """
         Delegate attribute lookup to inner media or fail fast.
 
@@ -191,7 +191,7 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         )
 
     @property
-    def heat_spec(self):
+    def heat_spec(self) -> Optional[HeatMediumType]:
         if self.heat is not None:
             return self.heat
 

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Self, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.data.data_array import (
     DataArray,
     IndexedFieldVoltageDataArray,

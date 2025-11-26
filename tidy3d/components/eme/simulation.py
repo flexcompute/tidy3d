@@ -28,6 +28,7 @@ from tidy3d.components.simulation import (
     Simulation,
     validate_boundaries_for_zero_dims,
 )
+from tidy3d.components.structure import Structure
 from tidy3d.components.types import (
     Ax,
     Axis,
@@ -283,14 +284,14 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     @field_validator("grid_spec")
     @classmethod
-    def _validate_auto_grid_wavelength(cls, val):
+    def _validate_auto_grid_wavelength(cls, val: GridSpec) -> GridSpec:
         """Handle the case where grid_spec is auto and wavelength is not provided."""
         # this is handled instead post-init to ensure freqs is defined
         return val
 
     @field_validator("freqs")
     @classmethod
-    def _validate_freqs(cls, val):
+    def _validate_freqs(cls, val: FreqArray) -> FreqArray:
         """Freqs cannot contain duplicates."""
         if len(set(val)) != len(val):
             raise SetupError(f"'EMESimulation' 'freqs={val}' cannot contain duplicate frequencies.")
@@ -298,7 +299,7 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     @field_validator("structures")
     @classmethod
-    def _validate_structures(cls, val):
+    def _validate_structures(cls, val: tuple[Structure, ...]) -> tuple[Structure, ...]:
         """Validate and warn for certain medium types."""
         for ind, structure in enumerate(val):
             medium = structure.medium

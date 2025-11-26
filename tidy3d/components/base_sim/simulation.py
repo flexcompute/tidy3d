@@ -137,7 +137,7 @@ class AbstractSimulation(Box, ABC):
 
     @model_validator(mode="before")
     @classmethod
-    def _update_simulation(cls, data):
+    def _update_simulation(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Update the simulation if it is an earlier version."""
         # dummy upgrade of version number
         # this should be overriden by each simulation class if needed
@@ -161,7 +161,7 @@ class AbstractSimulation(Box, ABC):
     _warn_traced_size = _warn_unsupported_traced_argument("size")
 
     @model_validator(mode="after")
-    def _structures_not_at_edges(self):
+    def _structures_not_at_edges(self) -> Self:
         """Warn if any structures lie at the simulation boundaries."""
 
         if self.structures is None:
@@ -704,7 +704,7 @@ class AbstractSimulation(Box, ABC):
             **kwargs,
         )
 
-    def plot_3d(self, width=800, height=800) -> None:
+    def plot_3d(self, width: float = 800, height: float = 800) -> None:
         """Render 3D plot of ``AbstractSimulation`` (in jupyter notebook only).
         Parameters
         ----------

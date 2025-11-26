@@ -50,7 +50,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
     )
 
     @cached_property
-    def port_modes(self):
+    def port_modes(self) -> Optional[EMEModeSolverData]:
         """Modes associated with the two ports of the EME device.
         The scattering matrix is expressed in this basis.
         Note: these modes are symmetry expanded."""

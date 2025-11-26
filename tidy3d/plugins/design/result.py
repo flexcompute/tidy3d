@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Any, Optional, Self
+from typing import Any, Optional
 
 import numpy as np
 import pandas
 from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 
 # NOTE: Coords are args_dict from method and design. This may be changed in future to unify naming

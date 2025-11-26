@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Self, Union
+from typing import Union
 
 import numpy as np
 import xarray as xr
 from numpy.typing import ArrayLike, NDArray
 from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.autograd import TracedSize
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import SpatialDataArray

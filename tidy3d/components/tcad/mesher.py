@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Self
-
 from pydantic import Field
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation, TCADAnalysisTypes

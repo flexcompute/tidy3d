@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from functools import wraps
 from math import isclose
-from typing import Any, Callable, Literal, Optional, ParamSpec, Self, TypeVar, Union, get_args
+from typing import Any, Callable, Literal, Optional, ParamSpec, TypeVar, Union, get_args
 
 import numpy as np
 import xarray as xr
@@ -19,6 +19,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d.compat import Self
 from tidy3d.components.base import (
     Tidy3dBaseModel,
     cached_property,

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import ssl
 from enum import Enum
-from typing import Any, Literal, Optional, Self
+from typing import Any, Literal, Optional
 
 import requests
 from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.medium import PoleResidue
 from tidy3d.components.types import Undefined

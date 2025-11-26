@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Self, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -19,6 +19,7 @@ from pydantic import (
 from scipy.signal.windows import blackman, blackmanharris, chebwin, hamming, hann, kaiser, taylor
 from scipy.special import j0, jn_zeros
 
+from tidy3d.compat import Self
 from tidy3d.components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box, Geometry

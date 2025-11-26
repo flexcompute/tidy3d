@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, Self, Union
+from typing import Optional, Union
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import (
     DENSITY,
@@ -25,7 +26,7 @@ class AbstractHeatMedium(ABC, Tidy3dBaseModel):
     name: Optional[str] = Field(None, title="Name", description="Optional unique name for medium.")
 
     @property
-    def heat(self):
+    def heat(self) -> Self:
         """
         This means that a heat medium has been defined inherently within this solver medium.
         This provides interconnection with the `MultiPhysicsMedium` higher-dimensional classes.
@@ -176,11 +177,13 @@ class SolidMedium(AbstractHeatMedium):
         units=DENSITY,
     )
 
+    @classmethod
     def from_si_units(
+        cls,
         conductivity: PositiveFloat,
-        capacity: PositiveFloat = None,
-        density: PositiveFloat = None,
-    ):
+        capacity: Optional[PositiveFloat] = None,
+        density: Optional[PositiveFloat] = None,
+    ) -> Self:
         """Create a SolidMedium using SI units"""
         new_conductivity = conductivity * 1e-6  # Convert from W/(m*K) to W/(um*K)
         new_capacity = capacity
@@ -189,7 +192,7 @@ class SolidMedium(AbstractHeatMedium):
         if density is not None:
             new_density = density * 1e-18
 
-        return SolidMedium(
+        return cls(
             capacity=new_capacity,
             conductivity=new_conductivity,
             density=new_density,

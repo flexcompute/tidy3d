@@ -6,6 +6,7 @@ from abc import ABC
 from typing import Any, Optional, Union
 
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import Field, NonNegativeInt, PositiveFloat, field_validator, model_validator
 
 from tidy3d.compat import Self
@@ -49,12 +50,12 @@ class PlanarSource(Source, ABC):
     _plane_validator = assert_plane()
 
     @cached_property
-    def injection_axis(self):
+    def injection_axis(self) -> Axis:
         """Injection axis of the source."""
         return self._injection_axis
 
     @cached_property
-    def _injection_axis(self):
+    def _injection_axis(self) -> Axis:
         """Injection axis of the source."""
         return self.size.index(0.0)
 
@@ -78,7 +79,7 @@ class DirectionalSource(FieldSource, ABC):
     )
 
     @cached_property
-    def _dir_vector(self) -> tuple[float, float, float]:
+    def _dir_vector(self) -> Optional[tuple[float, float, float]]:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         if self._injection_axis is None:
             return None
@@ -103,14 +104,14 @@ class BroadbandSource(Source, ABC):
     )
 
     @cached_property
-    def frequency_grid(self) -> np.ndarray:
+    def frequency_grid(self) -> NDArray:
         """A Chebyshev grid used to approximate frequency dependence."""
         if self.num_freqs == 1:
             return np.array([self.source_time._freq0])
         freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
         return self._chebyshev_freq_grid(freq_min, freq_max)
 
-    def _chebyshev_freq_grid(self, freq_min, freq_max):
+    def _chebyshev_freq_grid(self, freq_min: float, freq_max: float) -> NDArray:
         """A Chebyshev grid based on a minimum and maximum frequency."""
         freq_avg = 0.5 * (freq_min + freq_max)
         freq_diff = 0.5 * (freq_max - freq_min)
@@ -291,7 +292,7 @@ class AngledFieldSource(DirectionalSource, ABC):
 
     @field_validator("angle_theta")
     @classmethod
-    def glancing_incidence(cls, val):
+    def glancing_incidence(cls, val: float) -> float:
         """Warn if close to glancing incidence."""
         if np.abs(np.pi / 2 - val) < GLANCING_CUTOFF:
             log.warning(
@@ -417,12 +418,12 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
     )
 
     @cached_property
-    def angle_theta(self):
+    def angle_theta(self) -> float:
         """Polar angle of propagation."""
         return self.mode_spec.angle_theta
 
     @cached_property
-    def angle_phi(self):
+    def angle_phi(self) -> float:
         """Azimuth angle of propagation."""
         return self.mode_spec.angle_phi
 
@@ -436,7 +437,7 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
 
     @cached_property
-    def _bend_axis(self) -> Axis:
+    def _bend_axis(self) -> Optional[Axis]:
         if self.mode_spec.bend_radius is None:
             return None
         in_plane = [0, 0]
@@ -516,7 +517,7 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         return isinstance(self.angular_spec, FixedAngleSpec) and self.angle_theta != 0.0
 
     @cached_property
-    def frequency_grid(self) -> np.ndarray:
+    def frequency_grid(self) -> NDArray:
         """A Chebyshev grid used to approximate frequency dependence."""
         if self.num_freqs == 1:
             return np.array([self.source_time._freq0])
@@ -707,7 +708,7 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
     )
 
     @cached_property
-    def _injection_axis(self):
+    def _injection_axis(self) -> Axis:
         """Injection axis of the source."""
         return self.injection_axis
 

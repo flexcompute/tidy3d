@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from math import isclose, isnan
-from typing import Optional, Self
+from typing import Optional
 
 import numpy as np
 from pandas import DataFrame
 from pydantic import Field, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.types import ArrayFloat1D, ArrayLike, Ax

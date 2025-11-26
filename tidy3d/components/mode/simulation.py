@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BoundarySpec
 from tidy3d.components.geometry.base import Box

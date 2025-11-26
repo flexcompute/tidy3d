@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Optional, Self, Union
+from typing import Optional, Union
 
 from pydantic import Field, NonNegativeFloat, NonNegativeInt, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import ABCBoundary, InternalAbsorber, ModeABCBoundary
 from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray

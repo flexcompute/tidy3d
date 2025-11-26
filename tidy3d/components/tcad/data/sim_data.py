@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Literal, Optional, Self
+from typing import Any, Literal, Optional
 
 import numpy as np
 from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (

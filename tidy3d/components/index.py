@@ -10,6 +10,7 @@ from typing import Any
 
 from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types.simulation import SimulationType
 
@@ -45,7 +46,7 @@ class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):
     )
 
     @model_validator(mode="after")
-    def _validate_lengths_match(self):
+    def _validate_lengths_match(self) -> Self:
         """Pydantic root validator to ensure 'keys' and 'values' have the same length.
 
         Parameters

@@ -8,6 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.constants import C_0
@@ -286,7 +287,7 @@ class FreqRange(Tidy3dBaseModel):
     )
 
     @model_validator(mode="after")
-    def check_half_fwidth_less_than_freq0(self):
+    def check_half_fwidth_less_than_freq0(self) -> Self:
         if self.freq0 is not None and self.fwidth is not None:
             if (self.fwidth / 2) >= self.freq0:
                 raise ValueError(

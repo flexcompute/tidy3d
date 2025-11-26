@@ -9,6 +9,7 @@ import numpy as np
 import xarray as xr
 from pydantic import Field, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.base_sim.simulation import AbstractSimulation
@@ -51,7 +52,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         return {monitor_data.monitor.name: monitor_data for monitor_data in self.data}
 
     @model_validator(mode="after")
-    def data_monitors_match_sim(self):
+    def data_monitors_match_sim(self) -> Self:
         """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
         ``.simulation``.
         """
@@ -70,7 +71,9 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
 
     @field_validator("data")
     @classmethod
-    def validate_no_ambiguity(cls, val):
+    def validate_no_ambiguity(
+        cls, val: tuple[AbstractMonitorData, ...]
+    ) -> tuple[AbstractMonitorData, ...]:
         """Ensure all :class:`AbstractMonitorData` entries in ``.data`` correspond to different
         monitors in ``.simulation``.
         """

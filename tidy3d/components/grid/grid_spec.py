@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Literal, Optional, Self, Union
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 from pydantic import (
@@ -16,6 +16,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.base import Box, ClipOperation
 from tidy3d.components.geometry.utils_2d import increment_float

@@ -55,7 +55,7 @@ class SSACVoltageSource(Tidy3dBaseModel):
 
     @field_validator("voltage")
     @classmethod
-    def validate_voltage(cls, val):
+    def validate_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         for v in val:
             if v == td_inf:
                 raise ValueError(f"Voltages must be finite. Current voltage={val}.")
@@ -63,7 +63,7 @@ class SSACVoltageSource(Tidy3dBaseModel):
 
     @field_validator("amplitude")
     @classmethod
-    def validate_amplitude(cls, val):
+    def validate_amplitude(cls, val: FiniteFloat) -> FiniteFloat:
         if val == td_inf:
             raise ValueError(f"Signal amplitude must be finite. Current amplitude={val}.")
         return val

@@ -6,6 +6,7 @@ from typing import Optional, Union
 
 from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.path_integrals.types import (
     CurrentPathSpecType,
@@ -62,7 +63,7 @@ class CustomImpedanceSpec(MicrowaveBaseModel):
     )
 
     @model_validator(mode="after")
-    def check_path_spec_combinations(self):
+    def check_path_spec_combinations(self) -> Self:
         """Validate that at least one of voltage_spec or current_spec is provided.
 
         In order to define voltage/current/impedance, either a voltage or current path specification

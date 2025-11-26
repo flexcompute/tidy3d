@@ -5,15 +5,16 @@ from __future__ import annotations
 import math
 from copy import copy
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import autograd.numpy as np
 import shapely
 from autograd.tracer import getval
-from numpy._typing import NDArray
 from numpy.polynomial.legendre import leggauss as _leggauss
+from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.autograd import AutogradFieldMap, TracedArrayFloat2D, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.types import TracedFloat

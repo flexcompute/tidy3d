@@ -7,6 +7,7 @@ from typing import Optional, Union
 import numpy as np
 from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.data.data_array import (
     CurrentIntegralResultType,
     ImpedanceResultType,
@@ -80,7 +81,9 @@ class ImpedanceCalculator(MicrowaveBaseModel):
     )
 
     def compute_impedance(
-        self, em_field: IntegrableMonitorDataType, return_voltage_and_current=False
+        self,
+        em_field: IntegrableMonitorDataType,
+        return_voltage_and_current: bool = False,
     ) -> Union[
         ImpedanceResultType,
         tuple[ImpedanceResultType, VoltageIntegralResultType, CurrentIntegralResultType],
@@ -94,7 +97,7 @@ class ImpedanceCalculator(MicrowaveBaseModel):
         em_field : :class:`.IntegrableMonitorDataType`
             The electromagnetic field data that will be used for computing the characteristic
             impedance.
-        return_voltage_and_current: bool
+        return_voltage_and_current: bool = False
             When ``True``, returns additional :class:`.IntegralResultType` that represent the voltage
             and current associated with the supplied fields.
 
@@ -157,7 +160,7 @@ class ImpedanceCalculator(MicrowaveBaseModel):
         return impedance
 
     @model_validator(mode="after")
-    def check_voltage_or_current(self):
+    def check_voltage_or_current(self) -> Self:
         """Raise validation error if both ``voltage_integral`` and ``current_integral``
         are not provided."""
         val = self.current_integral

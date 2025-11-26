@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 from os import PathLike
-from typing import TYPE_CHECKING, Optional, Self, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 from pydantic import Field, model_validator
 from rich.panel import Panel
 from rich.table import Table
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import SemiconductorMedium

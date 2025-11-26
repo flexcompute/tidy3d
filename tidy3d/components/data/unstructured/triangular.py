@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
 from pydantic import Field, PositiveInt
 from xarray import DataArray
 from xarray import DataArray as XrDataArray
+
+from tidy3d.compat import Self
 
 try:
     from matplotlib import pyplot as plt

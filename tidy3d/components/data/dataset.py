@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Literal, Optional, Self, Union, get_args
+from typing import Any, Callable, Literal, Optional, Union, get_args
 
 import numpy as np
 import xarray as xr
 from numpy.typing import ArrayLike
 from pydantic import Field
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import Axis, FreqArray, xyz
 from tidy3d.constants import C_0, PICOSECOND_PER_NANOMETER_PER_KILOMETER, UnitScaling

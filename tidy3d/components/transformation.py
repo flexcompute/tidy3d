@@ -90,7 +90,7 @@ class RotationAroundAxis(AbstractRotation):
 
     @field_validator("axis")
     @classmethod
-    def _validate_axis_vector(cls, val):
+    def _validate_axis_vector(cls, val: Union[Axis, Coordinate]) -> Coordinate:
         if not isinstance(val, tuple):
             axis = [0.0, 0.0, 0.0]
             axis[val] = 1.0
@@ -99,7 +99,7 @@ class RotationAroundAxis(AbstractRotation):
 
     @field_validator("axis")
     @classmethod
-    def _validate_axis_nonzero_norm(cls, val):
+    def _validate_axis_nonzero_norm(cls, val: Coordinate) -> Coordinate:
         norm = np.linalg.norm(val)
         if np.isclose(norm, 0):
             raise ValidationError(
@@ -185,7 +185,7 @@ class ReflectionFromPlane(AbstractReflection):
 
     @field_validator("normal")
     @classmethod
-    def _validate_normal_nonzero_norm(cls, val):
+    def _validate_normal_nonzero_norm(cls, val: Coordinate) -> Coordinate:
         norm = np.linalg.norm(val)
         if np.isclose(norm, 0):
             raise ValidationError(

@@ -7,7 +7,7 @@ from math import isclose
 from typing import Optional, Union
 
 import numpy as np
-from pydantic import Field, PositiveFloat, field_validator, model_validator
+from pydantic import Field, FieldValidationInfo, PositiveFloat, field_validator, model_validator
 
 from tidy3d.compat import Self
 from tidy3d.constants import HERTZ, RADIAN
@@ -153,7 +153,9 @@ class SpaceModulation(AbstractSpaceModulation):
 
     @field_validator("amplitude", "phase")
     @classmethod
-    def _validate_fields_real(cls, val, info):
+    def _validate_fields_real(
+        cls, val: Union[float, SpatialDataArray], info: FieldValidationInfo
+    ) -> Union[float, SpatialDataArray]:
         """Assert that the amplitude is real."""
         if np.iscomplexobj(val):
             raise ValidationError(f"'{info.field_name}' must be real.")

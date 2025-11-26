@@ -98,7 +98,7 @@ WARN_STRUCTURES_PER_MEDIUM = 200
 MAX_STRUCTURES_PER_MEDIUM = 1_000
 
 
-def _get_colormap(reverse: bool = False):
+def _get_colormap(reverse: bool = False) -> str:
     return STRUCTURE_EPS_CMAP_R if reverse else STRUCTURE_EPS_CMAP
 
 
@@ -160,7 +160,9 @@ class Scene(Tidy3dBaseModel):
 
     @field_validator("structures")
     @classmethod
-    def _validate_mediums(cls, val):
+    def _validate_mediums(
+        cls, val: Optional[tuple[Structure, ...]]
+    ) -> Optional[tuple[Structure, ...]]:
         """Error if too many mediums present. Warn if different mediums have the same name."""
 
         if val is None:
@@ -209,7 +211,9 @@ class Scene(Tidy3dBaseModel):
 
     @field_validator("structures")
     @classmethod
-    def _validate_structures_per_medium(cls, val):
+    def _validate_structures_per_medium(
+        cls, val: Optional[tuple[Structure, ...]]
+    ) -> Optional[tuple[Structure, ...]]:
         """Error if too many structures share the same medium; suggest using GeometryGroup."""
         if val is None:
             return val
@@ -1721,7 +1725,7 @@ class Scene(Tidy3dBaseModel):
         )
         return ax
 
-    def heat_charge_property_bounds(self, property) -> tuple[float, float]:
+    def heat_charge_property_bounds(self, property: str) -> tuple[float, float]:
         """Compute range of the heat-charge simulation property present in the scene.
 
         Returns
@@ -1847,7 +1851,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-    ):
+    ) -> Ax:
         """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
 
@@ -1899,9 +1903,9 @@ class Scene(Tidy3dBaseModel):
 
     def perturbed_mediums_copy(
         self,
-        temperature: CustomSpatialDataType = None,
-        electron_density: CustomSpatialDataType = None,
-        hole_density: CustomSpatialDataType = None,
+        temperature: Optional[CustomSpatialDataType] = None,
+        electron_density: Optional[CustomSpatialDataType] = None,
+        hole_density: Optional[CustomSpatialDataType] = None,
         interp_method: InterpMethod = "linear",
     ) -> Self:
         """Return a copy of the scene with heat and/or charge data applied to all mediums
@@ -1986,7 +1990,7 @@ class Scene(Tidy3dBaseModel):
 
         return Scene.model_validate(scene_dict)
 
-    def doping_bounds(self):
+    def doping_bounds(self) -> tuple[list[float], list[float]]:
         """Get the maximum and minimum of the doping"""
 
         acceptors_lims = [np.inf, -np.inf]
@@ -2041,7 +2045,7 @@ class Scene(Tidy3dBaseModel):
             donors_lims[1] = 0
         return acceptors_lims, donors_lims
 
-    def doping_absolute_minimum(self):
+    def doping_absolute_minimum(self) -> tuple[float, float]:
         """Get the absolute minimum values of the doping concentrations.
 
         Returns
@@ -2069,7 +2073,9 @@ class Scene(Tidy3dBaseModel):
 
         return acceptors_abs_min, donors_abs_min
 
-    def _get_absolute_minimum_from_doping(self, doping):
+    def _get_absolute_minimum_from_doping(
+        self, doping: Union[float, SpatialDataArray, tuple[DopingBoxType, ...]]
+    ) -> float:
         """Helper method to get absolute minimum from a single doping specification.
 
         Parameters
@@ -2114,7 +2120,7 @@ class Scene(Tidy3dBaseModel):
         shape: Shapely,
         ax: Ax,
         plt_type: str = "doping",
-        norm: mpl.colors.Normalize = None,
+        norm: Optional[mpl.colors.Normalize] = None,
     ) -> None:
         """
         Plot shape made of structure defined with doping.
@@ -2188,7 +2194,7 @@ class Scene(Tidy3dBaseModel):
             norm=norm,
         )
 
-    def plot_3d(self, width=800, height=800) -> None:
+    def plot_3d(self, width: int = 800, height: int = 800) -> None:
         """Render 3D plot of ``Scene`` (in jupyter notebook only).
         Parameters
         ----------

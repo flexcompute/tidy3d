@@ -121,7 +121,7 @@ class NonlinearSusceptibility(NonlinearModel):
 
     @field_validator("numiters")
     @classmethod
-    def _validate_numiters(cls, val):
+    def _validate_numiters(cls, val: Optional[PositiveInt]) -> Optional[PositiveInt]:
         """Check that numiters is not too large."""
         if val is None:
             return val
@@ -363,7 +363,9 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
 
     @field_validator("models")
     @classmethod
-    def _no_duplicate_models(cls, val):
+    def _no_duplicate_models(
+        cls, val: Optional[tuple[NonlinearModelType, ...]]
+    ) -> Optional[tuple[NonlinearModelType, ...]]:
         """Ensure each type of model appears at most once."""
         if val is None:
             return val
@@ -379,7 +381,7 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
 
     @field_validator("num_iters")
     @classmethod
-    def _validate_num_iters(cls, val):
+    def _validate_num_iters(cls, val: PositiveInt) -> PositiveInt:
         """Check that num_iters is not too large."""
         if val > NONLINEAR_MAX_NUM_ITERS:
             raise ValidationError(
@@ -398,7 +400,9 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
 
     @field_validator("models")
     @classmethod
-    def _consistent_models(cls, val):
+    def _consistent_models(
+        cls, val: Optional[tuple[NonlinearModelType, ...]]
+    ) -> Optional[tuple[NonlinearModelType, ...]]:
         """Ensure that parameters shared between models are consistent."""
         if val is None:
             return val

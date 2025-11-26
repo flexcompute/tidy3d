@@ -8,6 +8,7 @@ from typing import Literal, Optional
 
 import numpy as np
 import xarray as xr
+from numpy.typing import NDArray
 from pydantic import Field
 from typing_extensions import Self
 
@@ -439,7 +440,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
             super_data = super_data.updated_copy(**update_dict, path="transmission_line_data")
         return super_data
 
-    def _apply_mode_reorder(self, sort_inds_2d):
+    def _apply_mode_reorder(self, sort_inds_2d: NDArray) -> Self:
         """Apply a mode reordering along mode_index for all frequency indices.
 
         Parameters

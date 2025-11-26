@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Self
+from typing import Optional
 
 from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.data.index import SimulationDataMap

@@ -44,7 +44,7 @@ class AbstractSSACAnalysis(Tidy3dBaseModel, ABC):
 
     @field_validator("freqs")
     @classmethod
-    def validate_freqs(cls, val):
+    def validate_freqs(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         if len(val) == 0:
             raise ValueError("'freqs' cannot be empty (size 0).")
         else:

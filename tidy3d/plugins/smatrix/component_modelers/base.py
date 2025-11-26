@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal, Optional, Self, Union
+from typing import TYPE_CHECKING, Literal, Optional, Union
 
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.utils import _shift_value_signed
 from tidy3d.components.simulation import Simulation

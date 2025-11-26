@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, Callable, Optional, Self, Union
+from typing import Any, Callable, Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
 from pydantic import Field, field_validator, model_validator
 
 import tidy3d as td
+from tidy3d.compat import Self
 from tidy3d.components.autograd import get_static
 from tidy3d.exceptions import ValidationError
 from tidy3d.plugins.expressions.metrics import Metric, generate_validation_data

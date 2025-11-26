@@ -6,6 +6,7 @@ import numbers
 from typing import Annotated, Any, Literal, Optional, Union
 
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import (
     BaseModel,
     BeforeValidator,
@@ -29,7 +30,7 @@ from shapely.geometry.base import BaseGeometry
 TYPE_TAG_STR = "type"
 
 
-def discriminated_union(union, discriminator=TYPE_TAG_STR):
+def discriminated_union(union: type, discriminator: str = TYPE_TAG_STR) -> type:
     return Annotated[union, Field(discriminator=discriminator)]
 
 
@@ -49,13 +50,13 @@ def _dtype2python(value: Any) -> Any:
     return value
 
 
-def _from_complex_dict(v):
+def _from_complex_dict(v: Any) -> Any:
     if isinstance(v, dict) and "real" in v and "imag" in v:
         return np.asarray(v["real"]) + 1j * np.asarray(v["imag"])
     return v
 
 
-def _auto_serializer(a, _):
+def _auto_serializer(a: Any, _: Any) -> Any:
     """Serializes numpy arrays and scalars for JSON."""
     if isinstance(a, complex) or (
         hasattr(np, "complexfloating") and isinstance(a, np.complexfloating)
@@ -91,7 +92,7 @@ class ArrayConstraints(BaseModel):
     strict: bool = False
 
 
-def _coerce(v, *, constraints: ArrayConstraints):
+def _coerce(v: Any, *, constraints: ArrayConstraints) -> NDArray:
     """Convert input to a NumPy array with constraints.
 
     Raises
@@ -143,7 +144,7 @@ def array_alias(
     forbid_nan: bool = True,
     scalar_to_1d: bool = False,
     strict: bool = False,
-):
+) -> Any:
     constraints = ArrayConstraints(
         dtype=dtype,
         ndim=ndim,
@@ -272,7 +273,7 @@ Direction = Literal["+", "-"]
 """ monitors """
 
 
-def _list_to_tuple(v):
+def _list_to_tuple(v: Any) -> Any:
     if isinstance(v, list):
         return tuple(v)
     return v

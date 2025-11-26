@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Self, Union
+from typing import Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
 
 import tidy3d as td
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayLike
 from tidy3d.exceptions import ValidationError

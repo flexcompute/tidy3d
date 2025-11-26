@@ -15,6 +15,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords1D
@@ -122,7 +123,7 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
 
     @field_validator("num_reps")
     @classmethod
-    def _validate_num_reps(cls, val):
+    def _validate_num_reps(cls, val: int) -> int:
         """Check num_reps is not too large."""
         if val > MAX_NUM_REPS:
             raise SetupError(
@@ -173,7 +174,7 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
         """Number of virtual cells in this EME grid spec."""
         return len(self.virtual_cell_indices)
 
-    def _updated_copy_num_reps(self, num_reps: dict[str, PositiveInt]) -> EMEGridSpec:
+    def _updated_copy_num_reps(self, num_reps: dict[str, PositiveInt]) -> Self:
         """Update ``num_reps`` of named subgrids."""
         if self.name is not None:
             new_num_reps = num_reps.get(self.name)
@@ -273,7 +274,7 @@ class EMEExplicitGrid(EMEGridSpec):
     )
 
     @model_validator(mode="after")
-    def _validate_boundaries(self):
+    def _validate_boundaries(self) -> Self:
         """Check that boundaries is increasing and contains one fewer element than mode_specs."""
         val = self.boundaries
         mode_specs = self.mode_specs
@@ -332,7 +333,7 @@ class EMEExplicitGrid(EMEGridSpec):
     @classmethod
     def from_structures(
         cls, structures: list[Structure], axis: Axis, mode_spec: EMEModeSpec, **kwargs: Any
-    ) -> EMEExplicitGrid:
+    ) -> Self:
         """Create an explicit EME grid with boundaries aligned with
         structure bounding boxes. Every cell in the resulting grid
         has the same mode specification.
@@ -423,7 +424,7 @@ class EMECompositeGrid(EMEGridSpec):
     )
 
     @model_validator(mode="after")
-    def _validate_subgrid_boundaries(self):
+    def _validate_subgrid_boundaries(self) -> Self:
         """Check that subgrid boundaries is increasing and contains one fewer element than subgrids."""
         val = self.subgrid_boundaries
         subgrids = self.subgrids
@@ -534,7 +535,7 @@ class EMECompositeGrid(EMEGridSpec):
             inds += [ind + start_ind for ind in subgrid.virtual_cell_indices]
         return list(inds) * self.num_reps
 
-    def _updated_copy_num_reps(self, num_reps: dict[str, PositiveInt]) -> EMEGridSpec:
+    def _updated_copy_num_reps(self, num_reps: dict[str, PositiveInt]) -> Self:
         """Update ``num_reps`` of named subgrids."""
         new_self = super()._updated_copy_num_reps(num_reps=num_reps)
         new_subgrids = [
@@ -699,7 +700,7 @@ class EMEGrid(Box):
 
     @field_validator("mode_specs")
     @classmethod
-    def _validate_size(cls, val):
+    def _validate_size(cls, val: list[EMEModeSpec]) -> list[EMEModeSpec]:
         """Check grid size and num modes."""
         num_eme_cells = len(val)
         if num_eme_cells > MAX_NUM_EME_CELLS:
@@ -717,7 +718,7 @@ class EMEGrid(Box):
         return val
 
     @model_validator(mode="after")
-    def _validate_boundaries(self):
+    def _validate_boundaries(self) -> Self:
         """Check that boundaries is increasing, in simulation domain, and contains
         one more element than 'mode_specs'."""
         boundaries = self.boundaries

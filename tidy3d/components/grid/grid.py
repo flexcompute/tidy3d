@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Self, Union
+from typing import Any, Literal, Union
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import Field
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
 from tidy3d.components.data.utils import UnstructuredGridDataset, UnstructuredGridDatasetType

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat
@@ -196,7 +198,7 @@ class FreqRange(Tidy3dBaseModel):
             # generate array of wavelengths (in ascending order)
             return np.linspace(lmin, lmax, num_points)
 
-    def to_gaussian_pulse(self, **kwargs) -> GaussianPulse:
+    def to_gaussian_pulse(self, **kwargs: Any) -> GaussianPulse:
         """
         method ``to_gaussian_pulse()`` returns instance of class ``GaussianPulse``
         with frequency-specific parameters defined in ``FreqRange``.

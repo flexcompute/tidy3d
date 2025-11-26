@@ -8,9 +8,12 @@ from typing import Optional, Union
 import autograd.numpy as anp
 import numpy as np
 import xarray as xr
+from autograd.numpy.numpy_boxes import ArrayBox
+from numpy.typing import ArrayLike, NDArray
 from pydantic import Field, model_validator
 from rich.progress import track
 
+from tidy3d.compat import Self
 from tidy3d.constants import C_0, EPSILON_0, ETA_0, MICROMETER, MU_0
 from tidy3d.exceptions import SetupError
 from tidy3d.log import get_logging_console
@@ -94,7 +97,7 @@ class FieldProjector(Tidy3dBaseModel):
     )
 
     @model_validator(mode="after")
-    def _check_origin_set(self):
+    def _check_origin_set(self) -> Self:
         """Sets ``.origin`` as the average of centers of all surface monitors if not provided."""
         if self.origin is None:
             centers = np.array([surface.monitor.center for surface in self.surfaces])
@@ -126,7 +129,7 @@ class FieldProjector(Tidy3dBaseModel):
         normal_dirs: list[Direction],
         pts_per_wavelength: int = PTS_PER_WVL,
         origin: Coordinate = None,
-    ):
+    ) -> Self:
         """Constructs :class:`FieldProjection` from a list of surface monitors and their directions.
 
         Parameters
@@ -165,7 +168,7 @@ class FieldProjector(Tidy3dBaseModel):
         )
 
     @cached_property
-    def currents(self):
+    def currents(self) -> dict[str, xr.Dataset]:
         """Sets the surface currents."""
         sim_data = self.sim_data
         surfaces = self.surfaces
@@ -350,10 +353,10 @@ class FieldProjector(Tidy3dBaseModel):
 
     @staticmethod
     def trapezoid(
-        ary: np.ndarray,
-        pts: Union[Iterable[np.ndarray], np.ndarray],
+        ary: NDArray,
+        pts: Union[Iterable[NDArray], NDArray],
         axes: Union[Iterable[int], int] = 0,
-    ):
+    ) -> NDArray:
         """Trapezoidal integration in n dimensions.
 
         Parameters
@@ -389,7 +392,7 @@ class FieldProjector(Tidy3dBaseModel):
         surface: FieldProjectionSurface,
         currents: xr.Dataset,
         medium: MediumType,
-    ) -> np.ndarray:
+    ) -> NDArray:
         """Compute far fields at an angle in spherical coordinates
         for a given set of surface currents and observation angles.
 
@@ -462,7 +465,7 @@ class FieldProjector(Tidy3dBaseModel):
         H1 = "H" + cmp_1
         H2 = "H" + cmp_2
 
-        def contract(currents):
+        def contract(currents: Union[ArrayLike, ArrayBox]) -> Union[ArrayLike, ArrayBox]:
             return anp.einsum("xtp,ytp,zt,xyz->xyztp", phase_0, phase_1, phase_2, currents)
 
         jm = []
@@ -827,7 +830,7 @@ class FieldProjector(Tidy3dBaseModel):
         surface: FieldProjectionSurface,
         currents: xr.Dataset,
         medium: MediumType,
-    ) -> np.ndarray:
+    ) -> NDArray:
         """Compute projected fields in spherical coordinates at a given projection point on a
         Cartesian grid for a given set of surface currents using the exact homogeneous medium
         Green's function without geometric approximations.
@@ -903,7 +906,7 @@ class FieldProjector(Tidy3dBaseModel):
         d2G_dr2 = dG_dr * (ikr - 1.0) / r + G / (r**2)
 
         # operations between unit vectors and currents
-        def r_x_current(current: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        def r_x_current(current: tuple[NDArray, ...]) -> tuple[NDArray, ...]:
             """Cross product between the r unit vector and the current."""
             return [
                 sin_theta * sin_phi * current[2] - cos_theta * current[1],
@@ -911,7 +914,7 @@ class FieldProjector(Tidy3dBaseModel):
                 sin_theta * cos_phi * current[1] - sin_theta * sin_phi * current[0],
             ]
 
-        def r_dot_current(current: tuple[np.ndarray, ...]) -> np.ndarray:
+        def r_dot_current(current: tuple[NDArray, ...]) -> NDArray:
             """Dot product between the r unit vector and the current."""
             return (
                 sin_theta * cos_phi * current[0]
@@ -919,7 +922,7 @@ class FieldProjector(Tidy3dBaseModel):
                 + cos_theta * current[2]
             )
 
-        def r_dot_current_dtheta(current: tuple[np.ndarray, ...]) -> np.ndarray:
+        def r_dot_current_dtheta(current: tuple[NDArray, ...]) -> NDArray:
             """Theta derivative of the dot product between the r unit vector and the current."""
             return (
                 cos_theta * cos_phi * current[0]
@@ -927,12 +930,12 @@ class FieldProjector(Tidy3dBaseModel):
                 - sin_theta * current[2]
             )
 
-        def r_dot_current_dphi_div_sin_theta(current: tuple[np.ndarray, ...]) -> np.ndarray:
+        def r_dot_current_dphi_div_sin_theta(current: tuple[NDArray, ...]) -> NDArray:
             """Phi derivative of the dot product between the r unit vector and the current,
             analytically divided by sin theta."""
             return -sin_phi * current[0] + cos_phi * current[1]
 
-        def grad_Gr_r_dot_current(current: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        def grad_Gr_r_dot_current(current: tuple[NDArray, ...]) -> tuple[NDArray, ...]:
             """Gradient of the product of the gradient of the Green's function and the dot product
             between the r unit vector and the current."""
             temp = [
@@ -943,7 +946,9 @@ class FieldProjector(Tidy3dBaseModel):
             # convert to Cartesian coordinates
             return surface.monitor.sph_2_car_field(temp[0], temp[1], temp[2], theta_obs, phi_obs)
 
-        def potential_terms(current: tuple[np.ndarray, ...], const: complex):
+        def potential_terms(
+            current: tuple[NDArray, ...], const: complex
+        ) -> tuple[list[complex], list[complex], list[complex]]:
             """Assemble vector potential and its derivatives."""
             r_x_c = r_x_current(current)
             pot = [const * item * G for item in current]

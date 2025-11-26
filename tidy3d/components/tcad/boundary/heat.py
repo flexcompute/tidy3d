@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Optional, Self, Union
+from typing import Optional, Union
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.tcad.heat import FluidMedium
 from tidy3d.components.tcad.boundary.abstract import HeatChargeBC

@@ -102,11 +102,11 @@ class LumpedElement(MicrowaveBaseModel, ABC):
         """Converts the :class:`.LumpedElement` object to a :class:`.Geometry`."""
 
     @abstractmethod
-    def to_structure(self, grid: Grid = None) -> Structure:
+    def to_structure(self, grid: Optional[Grid] = None) -> Structure:
         """Converts the network portion of the :class:`.LumpedElement` object to a
         :class:`.Structure`."""
 
-    def to_structures(self, grid: Grid = None) -> list[Structure]:
+    def to_structures(self, grid: Optional[Grid] = None) -> list[Structure]:
         """Converts the :class:`.LumpedElement` object to a list of :class:`.Structure`
         which are ready to be added to the :class:`.Simulation`"""
         return [self.to_structure(grid)]
@@ -136,12 +136,12 @@ class RectangularLumpedElement(LumpedElement, Box):
     _line_plane_validator = assert_line_or_plane()
 
     @cached_property
-    def normal_axis(self):
+    def normal_axis(self) -> Axis:
         """Normal axis of the lumped element, which is the axis where the element has zero size."""
         return self.size.index(0.0)
 
     @cached_property
-    def lateral_axis(self):
+    def lateral_axis(self) -> Axis:
         """Lateral axis of the lumped element."""
         return 3 - self.voltage_axis - self.normal_axis
 
@@ -216,14 +216,14 @@ class RectangularLumpedElement(LumpedElement, Box):
             )
         return snapping_points
 
-    def to_geometry(self, grid: Grid = None) -> Box:
+    def to_geometry(self, grid: Optional[Grid] = None) -> Box:
         """Converts the :class:`RectangularLumpedElement` object to a :class:`.Box`."""
         box = Box(size=self.size, center=self.center)
         if grid and self.snap_perimeter_to_grid:
             return snap_box_to_grid(grid, box, self._snapping_spec)
         return box
 
-    def _admittance_transfer_function_scaling(self, box: Box = None) -> float:
+    def _admittance_transfer_function_scaling(self, box: Optional[Box] = None) -> float:
         """The admittance transfer function of the network needs to be scaled depending on the dimensions
         of the lumped element. The scaling emulates adding networks with equal admittances in series and
         parallel, and is needed when distributing the network over a finite volume.
@@ -275,7 +275,7 @@ class RectangularLumpedElement(LumpedElement, Box):
         )
 
     @cached_property
-    def monitor_name(self):
+    def monitor_name(self) -> str:
         return f"{self.name}_monitor"
 
     @model_validator(mode="after")
@@ -303,11 +303,11 @@ class LumpedResistor(RectangularLumpedElement):
         unit=OHM,
     )
 
-    def _sheet_conductance(self, box: Box = None):
+    def _sheet_conductance(self, box: Optional[Box] = None) -> float:
         """Effective sheet conductance."""
         return self._admittance_transfer_function_scaling(box) / self.resistance
 
-    def to_structure(self, grid: Grid = None) -> Structure:
+    def to_structure(self, grid: Optional[Grid] = None) -> Structure:
         """Converts the :class:`LumpedResistor` object to a :class:`.Structure`
         ready to be added to the :class:`.Simulation`"""
         box = self.to_geometry(grid=grid)
@@ -399,7 +399,7 @@ class CoaxialLumpedResistor(LumpedElement):
 
     @field_validator("center")
     @classmethod
-    def _center_not_inf(cls, val):
+    def _center_not_inf(cls, val: Coordinate) -> Coordinate:
         """Make sure center is not infinitiy."""
         if any(np.isinf(v) for v in val):
             raise ValidationError("'center' can not contain 'td.inf' terms.")
@@ -417,13 +417,13 @@ class CoaxialLumpedResistor(LumpedElement):
         return self
 
     @cached_property
-    def _sheet_conductance(self):
+    def _sheet_conductance(self) -> float:
         """Effective sheet conductance for a coaxial resistor."""
         rout = self.outer_diameter / 2
         rin = self.inner_diameter / 2
         return 1 / (2 * np.pi * self.resistance) * (np.log(rout / rin))
 
-    def to_structure(self, grid: Grid = None) -> Structure:
+    def to_structure(self, grid: Optional[Grid] = None) -> Structure:
         """Converts the :class:`CoaxialLumpedResistor` object to a :class:`.Structure`
         ready to be added to the :class:`.Simulation`"""
         conductivity = self._sheet_conductance
@@ -436,7 +436,7 @@ class CoaxialLumpedResistor(LumpedElement):
             medium=Medium2D(**medium_dict),
         )
 
-    def to_geometry(self, grid: Grid = None) -> ClipOperation:
+    def to_geometry(self, grid: Optional[Grid] = None) -> ClipOperation:
         """Converts the :class:`CoaxialLumpedResistor` object to a :class:`Geometry`."""
         rout = self.outer_diameter / 2
         rin = self.inner_diameter / 2
@@ -756,7 +756,9 @@ class RLCNetwork(MicrowaveBaseModel):
     ) -> PoleResidue:
         """Converts the RLC parallel network directly to an equivalent medium."""
 
-        def combine_equivalent_medium_in_parallel(first: PoleResidue, second: PoleResidue):
+        def combine_equivalent_medium_in_parallel(
+            first: PoleResidue, second: PoleResidue
+        ) -> PoleResidue:
             """Helper for combining equivalent media when the network elements are in the 'parallel'
             configuration. A similar operation cannot be done for the 'series' topology."""
             eps_inf = 1.0 + (first.eps_inf - 1) + (second.eps_inf - 1)
@@ -790,7 +792,7 @@ class RLCNetwork(MicrowaveBaseModel):
         return result_medium
 
     @model_validator(mode="after")
-    def _validate_single_element(self):
+    def _validate_single_element(self) -> Self:
         """At least one element should be defined."""
         val = self.inductance
         resistance = self.resistance
@@ -1013,7 +1015,7 @@ class LinearLumpedElement(RectangularLumpedElement):
             bottom_box = None
         return (bottom_box, top_box)
 
-    def to_structure(self, grid) -> Structure:
+    def to_structure(self, grid: Grid) -> Structure:
         """Converts the :class:`LinearLumpedElement` object to a :class:`.Structure`,
         which enforces the desired voltage-current relationship across one or more grid cells."""
 
@@ -1032,7 +1034,7 @@ class LinearLumpedElement(RectangularLumpedElement):
             medium=Medium2D(**medium_dict),
         )
 
-    def to_PEC_connection(self, grid) -> Optional[Structure]:
+    def to_PEC_connection(self, grid: Grid) -> Optional[Structure]:
         """Converts the :class:`LinearLumpedElement` object to a :class:`.Structure`,
         representing any PEC connections.
         """

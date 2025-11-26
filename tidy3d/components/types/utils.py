@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
 
@@ -11,9 +13,9 @@ def _add_schema(arbitrary_type: type, title: str, field_type_str: str) -> None:
 
     @classmethod
     def __get_pydantic_core_schema__(
-        cls, _source_type: type, _handler: GetCoreSchemaHandler
+        cls: type, _source_type: type, _handler: GetCoreSchemaHandler
     ) -> core_schema.CoreSchema:
-        def _serialize(value, info):
+        def _serialize(value: Any, info: core_schema.SerializationInfo) -> Any:
             from tidy3d.components.autograd.utils import get_static
             from tidy3d.components.types.base import _auto_serializer
 

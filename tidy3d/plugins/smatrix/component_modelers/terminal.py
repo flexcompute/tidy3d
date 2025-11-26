@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Self, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
 
 from tidy3d import ClipOperation, GeometryGroup, GridSpec, PolySlab
+from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.frequency_extrapolation import (

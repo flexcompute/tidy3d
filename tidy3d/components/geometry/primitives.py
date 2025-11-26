@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Any, Optional, Self
+from typing import Any, Optional
 
 import autograd.numpy as anp
 import numpy as np
@@ -11,6 +11,7 @@ import shapely
 from pydantic import Field, model_validator
 from shapely.geometry.base import BaseGeometry
 
+from tidy3d.compat import Self
 from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import cached_property

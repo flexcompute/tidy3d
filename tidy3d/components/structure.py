@@ -6,7 +6,7 @@ import pathlib
 from collections import defaultdict
 from functools import cmp_to_key
 from os import PathLike
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
@@ -20,6 +20,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d.compat import Self
 from tidy3d.config import config
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, Tidy3dImportError
@@ -40,6 +41,11 @@ from .monitor import FieldMonitor, PermittivityMonitor
 from .types import TYPE_TAG_STR, Ax, Axis, PriorityMode
 from .validators import validate_name_str
 from .viz import add_ax_if_none, equal_aspect
+
+if TYPE_CHECKING:
+    import gdstk
+
+    from tidy3d import VisualizationSpec
 
 try:
     gdstk_available = True
@@ -90,7 +96,7 @@ class AbstractStructure(Tidy3dBaseModel):
     )
 
     @model_validator(mode="after")
-    def _handle_background_mediums(self):
+    def _handle_background_mediums(self) -> Self:
         """Handle background medium combinations, including deprecation."""
 
         background_permittivity = self.background_permittivity
@@ -122,7 +128,7 @@ class AbstractStructure(Tidy3dBaseModel):
 
     @field_validator("geometry")
     @classmethod
-    def _transformed_slanted_polyslabs_not_allowed(cls, val):
+    def _transformed_slanted_polyslabs_not_allowed(cls, val: GeometryType) -> GeometryType:
         """Prevents the creation of slanted polyslabs rotated out of plane."""
         validate_no_transformed_polyslabs(val)
         return val
@@ -141,7 +147,7 @@ class AbstractStructure(Tidy3dBaseModel):
     ) -> list[StructureType]:
         """Sort structure lists based on their priority values in ascending order."""
 
-        def structure_comparator(struct1, struct2):
+        def structure_comparator(struct1: StructureType, struct2: StructureType) -> int:
             return struct1._priority(structure_priority_mode) - struct2._priority(
                 structure_priority_mode
             )
@@ -246,7 +252,7 @@ class Structure(AbstractStructure):
         return 0
 
     @property
-    def viz_spec(self):
+    def viz_spec(self) -> Optional[VisualizationSpec]:
         return self.medium.viz_spec
 
     def eps_diagonal(self, frequency: float, coords: Coords) -> tuple[complex, complex, complex]:
@@ -267,7 +273,7 @@ class Structure(AbstractStructure):
         return self.medium.eps_diagonal(frequency=frequency)
 
     @staticmethod
-    def _get_optical_medium(medium):
+    def _get_optical_medium(medium: MultiPhysicsMedium) -> Optional[StructureMediumType]:
         """Get optical medium."""
         return medium.optical if isinstance(medium, MultiPhysicsMedium) else medium
 
@@ -277,7 +283,7 @@ class Structure(AbstractStructure):
         return self._get_optical_medium(self.medium)
 
     @model_validator(mode="after")
-    def _check_2d_geometry(self):
+    def _check_2d_geometry(self) -> Self:
         """Medium2D is only consistent with certain geometry types"""
         val = self.medium
         geom = self.geometry
@@ -432,7 +438,7 @@ class Structure(AbstractStructure):
         frequency: PositiveFloat = 0,
         gds_layer: NonNegativeInt = 0,
         gds_dtype: NonNegativeInt = 0,
-    ) -> None:
+    ) -> list[Any]:
         """Convert a structure's planar slice to a .gds type polygon.
 
         Parameters
@@ -493,7 +499,7 @@ class Structure(AbstractStructure):
 
     def to_gds(
         self,
-        cell,
+        cell: gdstk.Cell,
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
@@ -726,7 +732,7 @@ class MeshOverrideStructure(AbstractStructure):
 
     @field_validator("geometry")
     @classmethod
-    def _box_only(cls, val):
+    def _box_only(cls, val: GeometryType) -> GeometryType:
         """Ensure this is a box."""
         if isinstance(val, Geometry):
             if not isinstance(val, Box):
@@ -738,7 +744,7 @@ class MeshOverrideStructure(AbstractStructure):
         return val
 
     @model_validator(mode="after")
-    def _unshadowed_cannot_be_enforced(self):
+    def _unshadowed_cannot_be_enforced(self) -> Self:
         """Unshadowed structure cannot be enforced."""
         if not self.shadow and self.enforce:
             raise SetupError("A structure cannot be simultaneously enforced and unshadowed.")

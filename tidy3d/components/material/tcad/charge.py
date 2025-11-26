@@ -6,6 +6,7 @@ from typing import Optional, Union
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.medium import AbstractMedium
 from tidy3d.components.tcad.doping import ConstantDoping, DopingBoxType
@@ -35,7 +36,7 @@ class AbstractChargeMedium(AbstractMedium):
     )
 
     @property
-    def charge(self):
+    def charge(self) -> Self:
         """
         This means that a charge medium has been defined inherently within this solver medium.
         This provides interconnection with the :class:`MultiPhysicsMedium` higher-dimensional classes.
@@ -321,7 +322,7 @@ class SemiconductorMedium(AbstractChargeMedium):
     # DEPRECATION VALIDATORS
     @field_validator("N_c")
     @classmethod
-    def check_nc_uses_model(cls, val):
+    def check_nc_uses_model(cls, val: Union[EffectiveDOSModelType, float]) -> EffectiveDOSModelType:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(
@@ -333,7 +334,7 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     @field_validator("N_v")
     @classmethod
-    def check_nv_uses_model(cls, val):
+    def check_nv_uses_model(cls, val: Union[EffectiveDOSModelType, float]) -> EffectiveDOSModelType:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(
@@ -345,7 +346,9 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     @field_validator("E_g")
     @classmethod
-    def check_eg_uses_model(cls, val):
+    def check_eg_uses_model(
+        cls, val: Union[EnergyBandGapModelType, float]
+    ) -> EnergyBandGapModelType:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(
@@ -357,7 +360,9 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     @field_validator("N_d")
     @classmethod
-    def check_nd_uses_model(cls, val):
+    def check_nd_uses_model(
+        cls, val: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]]
+    ) -> Union[SpatialDataArray, tuple[DopingBoxType, ...]]:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(
@@ -369,7 +374,9 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     @field_validator("N_a")
     @classmethod
-    def check_na_uses_model(cls, val):
+    def check_na_uses_model(
+        cls, val: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]]
+    ) -> Union[SpatialDataArray, tuple[DopingBoxType, ...]]:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(

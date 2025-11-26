@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Optional, Self, Union
+from typing import Annotated, Any, Literal, Optional, Union
 
 import numpy
 from matplotlib import pyplot
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.boundary import BoundarySpec, Periodic
 from tidy3d.components.data.data_array import FreqModeDataArray, ModeIndexDataArray

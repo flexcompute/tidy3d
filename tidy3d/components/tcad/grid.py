@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Self, Union
+from typing import Union
 
 import numpy as np
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.types import Coordinate

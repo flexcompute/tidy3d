@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from enum import Enum
-from typing import Any, Literal, Optional, Self, Union
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 from pydantic import Field, FiniteFloat, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base_sim.simulation import AbstractSimulation
 from tidy3d.components.bc_placement import (
     MediumMediumInterface,

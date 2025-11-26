@@ -49,12 +49,12 @@ class Source(Box, AbstractSource, ABC):
         return
 
     @cached_property
-    def _dir_vector(self) -> tuple[float, float, float]:
+    def _dir_vector(self) -> None:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         return None
 
     @cached_property
-    def _pol_vector(self) -> tuple[float, float, float]:
+    def _pol_vector(self) -> None:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
 
@@ -63,7 +63,7 @@ class Source(Box, AbstractSource, ABC):
 
     @field_validator("source_time")
     @classmethod
-    def _freqs_lower_bound(cls, val):
+    def _freqs_lower_bound(cls, val: SourceTimeType) -> SourceTimeType:
         """Raise validation error if central frequency is too low."""
         _assert_min_freq(val._freq0_sigma_centroid, msg_start="'source_time.freq0'")
         return val

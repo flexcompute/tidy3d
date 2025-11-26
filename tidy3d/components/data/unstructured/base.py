@@ -5,7 +5,7 @@ from __future__ import annotations
 import numbers
 from abc import ABC, abstractmethod
 from os import PathLike
-from typing import TYPE_CHECKING, Any, Literal, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
 from numpy.typing import DTypeLike, NDArray
@@ -14,6 +14,7 @@ from pydantic import Field, PositiveInt, field_validator, model_validator
 from vtkmodules.vtkCommonCore import vtkPoints
 from xarray import DataArray as XrDataArray
 
+from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
     DATA_ARRAY_MAP,

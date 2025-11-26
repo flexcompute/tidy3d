@@ -8,6 +8,7 @@ import numpy as np
 from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.geometry.bound_ops import bounds_union
 from tidy3d.components.microwave.base import MicrowaveBaseModel
@@ -63,9 +64,12 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
         for index, value in enumerate(self.size):
             if value == 0:
                 return index
+        raise SetupError("AxisAlignedCurrentIntegralSpec requires a zero-sized dimension.")
 
     def _to_path_integral_specs(
-        self, h_horizontal=None, h_vertical=None
+        self,
+        h_horizontal: Optional[DataArray] = None,
+        h_vertical: Optional[DataArray] = None,
     ) -> tuple[AxisAlignedPathIntegralSpec, ...]:
         """Returns four ``AxisAlignedPathIntegralSpec`` instances, which represent a contour
         integral around the surface defined by ``self.size``."""
@@ -363,7 +367,9 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
 
     @field_validator("path_specs")
     @classmethod
-    def _path_specs_not_empty(cls, val):
+    def _path_specs_not_empty(
+        cls, val: tuple[Union[AxisAlignedCurrentIntegralSpec, Custom2DCurrentIntegralSpec], ...]
+    ) -> tuple[Union[AxisAlignedCurrentIntegralSpec, Custom2DCurrentIntegralSpec], ...]:
         """Makes sure at least one path spec has been supplied"""
         # overall shape of vertices
         if len(val) < 1:

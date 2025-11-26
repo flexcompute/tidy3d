@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Optional, Self
+from typing import Any, Optional
 
 import numpy as np
 from pydantic import Field, model_validator
 from shapely import union_all
 from shapely.geometry.base import BaseMultipartGeometry
 
+from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.components.data.sim_data import SimulationData

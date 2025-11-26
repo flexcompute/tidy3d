@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -14,6 +15,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d.compat import Self
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import Progress, get_logging_console, log
@@ -59,7 +61,12 @@ def imag_resp_extrema_locs(poles: ArrayComplex1D, residues: ArrayComplex1D) -> A
         Complex-valued residues for the model.
     """
 
-    def _extrema_loss_freq_finder(areal, aimag, creal, cimag):
+    def _extrema_loss_freq_finder(
+        areal: ArrayFloat1D,
+        aimag: ArrayFloat1D,
+        creal: ArrayFloat1D,
+        cimag: ArrayFloat1D,
+    ) -> ArrayFloat1D:
         """For each pole, find frequencies for the extrema of Im[eps]"""
 
         a_square = areal**2 + aimag**2
@@ -195,7 +202,7 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
 
     @field_validator("loss_bounds")
     @classmethod
-    def _max_loss_geq_min_loss(cls, val):
+    def _max_loss_geq_min_loss(cls, val: tuple[float, float]) -> tuple[float, float]:
         """Must have max_loss >= min_loss."""
         if val[0] > val[1]:
             raise ValidationError(
@@ -205,7 +212,9 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
 
     @field_validator("weights")
     @classmethod
-    def _weights_average_to_one(cls, val):
+    def _weights_average_to_one(
+        cls, val: Optional[tuple[NonNegativeFloat, NonNegativeFloat]]
+    ) -> Optional[tuple[NonNegativeFloat, NonNegativeFloat]]:
         """Weights must average to one."""
         if val is None:
             return None
@@ -282,7 +291,7 @@ class FastFitterData(AdvancedFastFitterParam):
     )
 
     @model_validator(mode="after")
-    def _eps_inf_geq_one(self):
+    def _eps_inf_geq_one(self) -> Self:
         """Must have eps_inf >= 1 unless it is being optimized.
         In the latter case, it will be made >= 1 later."""
         if self.optimize_eps_inf is False and self.eps_inf < 1:
@@ -290,7 +299,7 @@ class FastFitterData(AdvancedFastFitterParam):
         return self
 
     @model_validator(mode="after")
-    def _generate_initial_poles(self):
+    def _generate_initial_poles(self) -> Self:
         """Generate initial poles."""
         val = self.poles
         if val is not None:
@@ -315,7 +324,7 @@ class FastFitterData(AdvancedFastFitterParam):
         return self
 
     @model_validator(mode="after")
-    def _generate_initial_residues(self):
+    def _generate_initial_residues(self) -> Self:
         """Generate initial residues."""
         if self.residues is not None:
             return self
@@ -687,10 +696,10 @@ class FastFitterData(AdvancedFastFitterParam):
         h_matrix = a_matrix_real.T @ a_matrix_real
         f_vector = a_matrix_real.T @ b_vector_real
 
-        def loss(dx):
-            return dx.T @ h_matrix @ dx / 2 - f_vector.T @ dx
+        def loss(dx: NDArray) -> float:
+            return float(dx.T @ h_matrix @ dx / 2 - f_vector.T @ dx)
 
-        def jac(dx):
+        def jac(dx: NDArray) -> NDArray:
             return dx.T @ h_matrix - f_vector.T
 
         cons = {
@@ -861,7 +870,7 @@ def fit(
     )
     log.info(f"Fitting weights=({init_model.weights[0]:.3g}, {init_model.weights[1]:.3g}).")
 
-    def make_configs():
+    def make_configs() -> list[list[Union[int, bool]]]:
         configs = [[p] for p in range(max(min_num_poles // 2, 1), max_num_poles + 1)]
         for setting in [
             init_model.relaxed,

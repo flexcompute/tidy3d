@@ -6,6 +6,7 @@ from typing import Optional
 
 from pydantic import Field, NonNegativeFloat, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 
 
@@ -42,7 +43,7 @@ class AbstractLowFrequencySmoothingSpec(Tidy3dBaseModel):
     )
 
     @model_validator(mode="after")
-    def _validate_sampling_times(self):
+    def _validate_sampling_times(self) -> Self:
         min_sampling_time = self.min_sampling_time
         max_sampling_time = self.max_sampling_time
         if min_sampling_time >= max_sampling_time:
@@ -76,7 +77,7 @@ class LowFrequencySmoothingSpec(AbstractLowFrequencySmoothingSpec):
 
     @field_validator("monitors")
     @classmethod
-    def _validate_monitors(cls, val):
+    def _validate_monitors(cls, val: tuple[str, ...]) -> tuple[str, ...]:
         """Validate the monitors list is not empty."""
         if not val:
             raise ValueError("The monitors list must not be empty.")

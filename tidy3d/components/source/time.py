@@ -272,7 +272,7 @@ class GaussianPulse(Pulse):
             return self.frequency_range(num_fwidth=sigma)
 
         # With dc removed, we'll need to solve for the transcendental equation to find the frequency range
-        def equation_for_sigma_frequency(freq):
+        def equation_for_sigma_frequency(freq: float) -> float:
             """computes A / A_p - exp(-sigma)"""
             return np.abs(self._rel_amp_freq(freq)) - np.exp(-(sigma**2) / 2)
 
@@ -481,7 +481,7 @@ class CustomSourceTime(Pulse):
 
     @field_validator("source_time_dataset")
     @classmethod
-    def _more_than_one_time(cls, val):
+    def _more_than_one_time(cls, val: Optional[TimeDataset]) -> Optional[TimeDataset]:
         """Must have more than one time to interpolate."""
         if val is None:
             return val
@@ -633,7 +633,7 @@ class BroadbandPulse(SourceTime):
 
     @field_validator("freq_range")
     @classmethod
-    def _validate_freq_range(cls, val):
+    def _validate_freq_range(cls, val: FreqBound) -> FreqBound:
         """Validate that freq_range is positive and properly ordered."""
         if val[0] <= 0 or val[1] <= 0:
             raise ValidationError("Both elements of 'freq_range' must be positive.")
@@ -645,13 +645,13 @@ class BroadbandPulse(SourceTime):
 
     @model_validator(mode="before")
     @classmethod
-    def _check_broadband_pulse_available(cls, values):
+    def _check_broadband_pulse_available(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Check if BroadbandPulse is available."""
         check_tidy3d_extras_licensed_feature("BroadbandPulse")
         return values
 
     @cached_property
-    def _source(self):
+    def _source(self) -> Any:
         """Implementation of broadband pulse."""
         return tidy3d_extras["mod"].extension.BroadbandPulse(
             fmin=self.freq_range[0],

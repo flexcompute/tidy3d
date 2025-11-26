@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Optional, Self
+from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
 from tidy3d.components.data.dataset import FieldDataset

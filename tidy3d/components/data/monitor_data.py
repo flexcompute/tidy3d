@@ -7,7 +7,7 @@ import warnings
 from abc import ABC
 from math import isclose
 from os import PathLike
-from typing import Any, Callable, Literal, Optional, Self, SupportsComplex, Union, get_args
+from typing import Any, Callable, Literal, Optional, SupportsComplex, Union, get_args
 
 import autograd.numpy as np
 import xarray as xr
@@ -15,6 +15,7 @@ from numpy.typing import NDArray
 from pandas import DataFrame
 from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.grid.grid import Coords, Grid
@@ -265,7 +266,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         return self.updated_copy(**self._symmetry_update_dict, deep=False, validate=False)
 
     @property
-    def symmetry_expanded_copy(self) -> AbstractFieldData:
+    def symmetry_expanded_copy(self) -> Self:
         """Create a copy of the :class:`.AbstractFieldData` with fields expanded based on symmetry.
 
         Returns

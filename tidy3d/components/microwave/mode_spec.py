@@ -7,6 +7,7 @@ from typing import Optional, Union
 import numpy as np
 from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.bound_ops import bounds_contains
@@ -88,9 +89,9 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
     )
 
     @cached_property
-    def _impedance_specs_as_tuple(self) -> tuple[Optional[ImpedanceSpecType]]:
+    def _impedance_specs_as_tuple(self) -> tuple[Optional[ImpedanceSpecType], ...]:
         """Gets the impedance_specs field converted to a tuple."""
-        if isinstance(self.impedance_specs, Union[tuple, list]):
+        if isinstance(self.impedance_specs, (tuple, list)):
             return tuple(self.impedance_specs)
         return (self.impedance_specs,)
 
@@ -103,12 +104,12 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
         )
 
     @model_validator(mode="after")
-    def check_impedance_specs_consistent_with_num_modes(self):
+    def check_impedance_specs_consistent_with_num_modes(self) -> Self:
         """Check that the number of impedance specifications is equal to the number of modes.
         A single impedance spec is also permitted."""
         val = self.impedance_specs
         num_modes = self.num_modes
-        if isinstance(val, Union[tuple, list]):
+        if isinstance(val, (tuple, list)):
             num_impedance_specs = len(val)
         else:
             return self
@@ -124,7 +125,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
 
         return self
 
-    def _check_path_integrals_within_box(self, box: Box):
+    def _check_path_integrals_within_box(self, box: Box) -> None:
         """Raise SetupError if a ``CustomImpedanceSpec`` includes a path specification
         defined outside a candidate box.
         """
