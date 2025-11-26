@@ -16177,7 +16177,7 @@
           "type": "string"
         },
         "version": {
-          "default": "2.10.0rc3",
+          "default": "2.10.0",
           "type": "string"
         }
       },

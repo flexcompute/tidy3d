@@ -434,6 +434,10 @@ jobs:
           git remote add upstream "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${BASE_REPO}.git" || true
           git fetch --no-tags --prune --depth=1 upstream "+refs/heads/${BASE_REF}:refs/remotes/upstream/${BASE_REF}"
 
+          # Store base repo/ref for use in subsequent steps
+          echo "base_repo=${BASE_REPO}" >> "$GITHUB_OUTPUT"
+          echo "base_ref=${BASE_REF}" >> "$GITHUB_OUTPUT"
+
           # Name-status diff between base and head limited to schemas/
           DIFF_OUTPUT=$(git diff --name-status "upstream/${BASE_REF}...HEAD" -- schemas || true)
 
@@ -465,17 +469,61 @@ jobs:
             echo "| $label | \`$file\` |" >> "$GITHUB_STEP_SUMMARY"
           done <<< "$DIFF_OUTPUT"
       
-      - name: verify-allowed-changes
+      - name: compare-versions
+        id: compare-versions
         if: steps.schema-diff.outputs.changed == 'true'
         env:
-          STEPS_GET_VERSION_OUTPUTS_VERSION: ${{ steps.get-version.outputs.version }}
+          PR_VERSION: ${{ steps.get-version.outputs.version }}
+          BASE_REPO: ${{ steps.schema-diff.outputs.base_repo }}
+          BASE_REF: ${{ steps.schema-diff.outputs.base_ref }}
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          
+          PR_VERSION="${PR_VERSION}"
+          BASE_REPO="${BASE_REPO}"
+          BASE_REF="${BASE_REF}"
+          
+          echo "PR branch version: $PR_VERSION"
+          
+          # Checkout base branch temporarily to get its version
+          echo "Checking out base branch ${BASE_REF} to get version..."
+          git checkout -q "refs/remotes/upstream/${BASE_REF}"
+          
+          # Install dependencies and get version from base branch
+          source $GITHUB_WORKSPACE/.venv/bin/activate
+          uv pip install -e "$GITHUB_WORKSPACE" --quiet
+          BASE_VERSION=$(python -c "import tidy3d; print(tidy3d.__version__)")
+          echo "Base branch (${BASE_REF}) version: $BASE_VERSION"
+          echo "base_version=${BASE_VERSION}" >> "$GITHUB_OUTPUT"
+          
+          # Return to HEAD branch
+          git checkout -q HEAD
+          
+          # Compare versions
+          if [[ "$PR_VERSION" != "$BASE_VERSION" ]]; then
+            echo "⚠️  Version mismatch detected: PR branch ($PR_VERSION) != base branch ($BASE_VERSION)"
+            echo "This appears to be a version bump PR. Skipping schema change verification."
+            echo "is_version_bump=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "✅ Versions match: PR branch ($PR_VERSION) == base branch ($BASE_VERSION)"
+            echo "Proceeding with schema change verification."
+            echo "is_version_bump=false" >> "$GITHUB_OUTPUT"
+          fi
+      
+      - name: verify-allowed-changes
+        if: steps.schema-diff.outputs.changed == 'true' && steps.compare-versions.outputs.is_version_bump == 'false'
+        env:
+          BASE_VERSION: ${{ steps.compare-versions.outputs.base_version }}
+          BASE_REF: ${{ steps.schema-diff.outputs.base_ref }}
         run: |
           set -e
-          version="${STEPS_GET_VERSION_OUTPUTS_VERSION}"
-          if [[ "$version" == *rc* ]]; then
-            echo "✅ Passing: Schema changed on a release candidate version ($version), which is permitted."
+          base_version="${BASE_VERSION}"
+          base_ref="${BASE_REF}"
+          if [[ "$base_version" == *rc* ]]; then
+            echo "✅ Passing: Schema changed on a release candidate version ($base_version) in base branch '${base_ref}', which is permitted."
           else
-            echo "❌ Failing: Schema changed on a non-rc release version ($version)."
+            echo "❌ Failing: Schema changed on a non-rc release version ($base_version) in base branch '${base_ref}'."
             exit 1
           fi
            

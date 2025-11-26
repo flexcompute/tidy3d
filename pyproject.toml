@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.10.0rc3"
+version = "2.10.0"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -120,7 +120,7 @@ sphinxemoji = { version = "*", optional = true }
 devsim = { version = "*", optional = true }
 cma = { version = "*", optional = true }
 openpyxl = { version = "*", optional = true }
-tidy3d-extras = { version = "2.10.0rc3", optional = true }
+tidy3d-extras = { version = "2.10.0", optional = true }
 
 [tool.poetry.extras]
 dev = [
