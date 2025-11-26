@@ -95,45 +95,7 @@ jobs:
       cli_tests: ${{ steps.determine-test-type.outputs.cli_tests }}
       submodule_tests: ${{ steps.determine-test-type.outputs.submodule_tests }}
       version_match_tests: ${{ steps.determine-test-type.outputs.version_match_tests }}
-      pr_approval_state: ${{ steps.approval.outputs.approved }}
     steps:
-      - name: check-current-approval-status
-        id: approval
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const {owner, repo} = context.repo;
-            const number = context.payload.pull_request.number;
-            
-            // Fetch all reviews across all pages
-            const allReviews = await github.paginate(github.rest.pulls.listReviews, {
-              owner,
-              repo,
-              pull_number: number,
-              per_page: 100,
-            });
-            
-            core.info(`Found ${allReviews.length} total review events.`);
-            
-            // Process the array to get only the latest review per user
-            const latestByUser = {};
-            allReviews.forEach(review => {
-              if (review.state !== 'COMMENTED') {
-                latestByUser[review.user.id] = review;
-              }
-            });
-            
-            const latestStates = Object.values(latestByUser).map(review => review.state);
-            core.info(`Final review states from unique reviewers: [${latestStates.join(', ')}]`);
-            
-            // The rest of the logic remains the same
-            const isBlocked = latestStates.includes('CHANGES_REQUESTED');
-            const isApproved = latestStates.includes('APPROVED');
-            const finalStatus = isApproved && !isBlocked;
-            
-            core.info(`🏁 Final determined approval status is: ${finalStatus}`);
-            core.setOutput('approved', finalStatus ? 'true' : 'false');
       - name: determine-test-type
         id: determine-test-type
         env:
@@ -146,7 +108,6 @@ jobs:
           INPUT_CLI: ${{ github.event.inputs.cli_tests || inputs.cli_tests }}
           INPUT_SUBMODULE: ${{ github.event.inputs.submodule_tests || inputs.submodule_tests }}
           INPUT_VERSION_MATCH: ${{ github.event.inputs.version_match_tests || inputs.version_match_tests }}
-          APPROVED: ${{ steps.approval.outputs.approved }}
         run: |
           echo "Event: $EVENT_NAME"
           echo "Draft: $DRAFT_STATE"
@@ -157,7 +118,6 @@ jobs:
           echo "Input cli: $INPUT_CLI"
           echo "Input submodule: $INPUT_SUBMODULE"
           echo "Input version_match: $INPUT_VERSION_MATCH"
-          echo "Approved: $APPROVED"
 
           remote_tests=false
           local_tests=false
@@ -205,23 +165,6 @@ jobs:
               code_quality_tests=true
           fi
           
-          # If triggered by PR review and approved
-          if [[ "$EVENT_NAME" == "pull_request_review" ]]; then
-            if [[ "$REVIEW_STATE" == "approved" ]]; then
-              code_quality_tests=true
-              pr_review_tests=true
-              local_tests=true
-              remote_tests=true
-            fi
-          fi
-
-          # If it's a push to develop
-          if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/develop" ]]; then
-            local_tests=true
-            remote_tests=true
-            code_quality_tests=true
-          fi
-
           echo "local_tests=$local_tests" >> $GITHUB_OUTPUT
           echo "remote_tests=$remote_tests" >> $GITHUB_OUTPUT
           echo "cli_tests=$cli_tests" >> $GITHUB_OUTPUT
@@ -1022,7 +965,7 @@ jobs:
     if: |
       always() &&
       (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'merge_group') && 
-      ((needs.determine-test-scope.outputs.pr_approval_state == 'true' && needs.determine-test-scope.outputs.local_tests == 'true') || needs.determine-test-scope.outputs.remote_tests == 'true')
+      (needs.determine-test-scope.outputs.local_tests == 'true' || needs.determine-test-scope.outputs.remote_tests == 'true')
     needs:
       - determine-test-scope
       - workflow-validation
