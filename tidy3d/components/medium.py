@@ -93,7 +93,7 @@ from .types import (
     TensorReal,
     annotate_type,
 )
-from .validators import _warn_potential_error, validate_name_str, validate_parameter_perturbation
+from .validators import validate_name_str, validate_parameter_perturbation
 from .viz import VisualizationSpec, add_ax_if_none
 
 # evaluate frequency as this number (Hz) if inf
@@ -6679,16 +6679,12 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
     _permittivity_perturbation_validator = validate_parameter_perturbation(
         "permittivity_perturbation",
         "permittivity",
-        allowed_real_range=[(1.0, None)],
-        allowed_imag_range=[None],
         allowed_complex=False,
     )
 
     _conductivity_perturbation_validator = validate_parameter_perturbation(
         "conductivity_perturbation",
         "conductivity",
-        allowed_real_range=[(0.0, None)],
-        allowed_imag_range=[None],
         allowed_complex=False,
     )
 
@@ -6709,44 +6705,6 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
                 "but not in both ways simultaneously."
             )
 
-        return values
-
-    @pd.root_validator(skip_on_failure=True)
-    def _check_perturbation_spec_ranges(cls, values):
-        """Check perturbation ranges if defined as ``perturbation_spec``."""
-        p_spec = values["perturbation_spec"]
-        if p_spec is None:
-            return values
-
-        perm = values["permittivity"]
-        cond = values["conductivity"]
-
-        if isinstance(p_spec, IndexPerturbation):
-            eps_complex = Medium._eps_model(
-                permittivity=perm, conductivity=cond, frequency=p_spec.freq
-            )
-            n, k = Medium.eps_complex_to_nk(eps_c=eps_complex)
-            delta_eps_range, delta_sigma_range = p_spec._delta_eps_delta_sigma_ranges(n, k)
-        elif isinstance(p_spec, PermittivityPerturbation):
-            delta_eps_range, delta_sigma_range = p_spec._delta_eps_delta_sigma_ranges()
-        else:
-            raise SetupError("Unknown type of 'perturbation_spec'.")
-
-        _warn_potential_error(
-            field_name="permittivity",
-            base_value=perm,
-            val_change_range=delta_eps_range,
-            allowed_real_range=(1.0, None),
-            allowed_imag_range=None,
-        )
-
-        _warn_potential_error(
-            field_name="conductivity",
-            base_value=cond,
-            val_change_range=delta_sigma_range,
-            allowed_real_range=(0.0, None),
-            allowed_imag_range=None,
-        )
         return values
 
     def perturbed_copy(
@@ -6899,16 +6857,12 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     _eps_inf_perturbation_validator = validate_parameter_perturbation(
         "eps_inf_perturbation",
         "eps_inf",
-        allowed_real_range=[(0.0, None)],
-        allowed_imag_range=[None],
         allowed_complex=False,
     )
 
     _poles_perturbation_validator = validate_parameter_perturbation(
         "poles_perturbation",
         "poles",
-        allowed_real_range=[(None, 0.0), (None, None)],
-        allowed_imag_range=[None, None],
     )
 
     @pd.root_validator(pre=True)
@@ -6927,37 +6881,6 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
                 "'eps_inf_perturbation' and 'poles_perturbation', "
                 "but not in both ways simultaneously."
             )
-
-        return values
-
-    @pd.root_validator(skip_on_failure=True)
-    def _check_perturbation_spec_ranges(cls, values):
-        """Check perturbation ranges if defined as ``perturbation_spec``."""
-        p_spec = values["perturbation_spec"]
-        if p_spec is None:
-            return values
-
-        eps_inf = values["eps_inf"]
-        poles = values["poles"]
-
-        if isinstance(p_spec, IndexPerturbation):
-            eps_complex = PoleResidue._eps_model(
-                eps_inf=eps_inf, poles=poles, frequency=p_spec.freq
-            )
-            n, k = Medium.eps_complex_to_nk(eps_c=eps_complex)
-            delta_eps_range, _ = p_spec._delta_eps_delta_sigma_ranges(n, k)
-        elif isinstance(p_spec, PermittivityPerturbation):
-            delta_eps_range, _ = p_spec._delta_eps_delta_sigma_ranges()
-        else:
-            raise SetupError("Unknown type of 'perturbation_spec'.")
-
-        _warn_potential_error(
-            field_name="eps_inf",
-            base_value=eps_inf,
-            val_change_range=delta_eps_range,
-            allowed_real_range=(0.0, None),
-            allowed_imag_range=None,
-        )
 
         return values
 

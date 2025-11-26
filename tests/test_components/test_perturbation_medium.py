@@ -61,17 +61,14 @@ def test_perturbation_medium(unstructured):
             perturbation_spec=td.IndexPerturbation(delta_n=pp_real, freq=td.C_0),
         )
 
-    with AssertLogLevel("WARNING"):
-        pmed_direct = td.PerturbationMedium(permittivity=1.21, permittivity_perturbation=pp_real)
-    with AssertLogLevel("WARNING"):
-        pmed_perm = td.PerturbationMedium(
-            permittivity=1.21, perturbation_spec=td.PermittivityPerturbation(delta_eps=pp_real)
-        )
-    with AssertLogLevel("WARNING"):
-        pmed_index = td.PerturbationMedium(
-            permittivity=1.21,
-            perturbation_spec=td.IndexPerturbation(delta_n=pp_real, freq=td.C_0),
-        )
+    pmed_direct = td.PerturbationMedium(permittivity=1.21, permittivity_perturbation=pp_real)
+    pmed_perm = td.PerturbationMedium(
+        permittivity=1.21, perturbation_spec=td.PermittivityPerturbation(delta_eps=pp_real)
+    )
+    pmed_index = td.PerturbationMedium(
+        permittivity=1.21,
+        perturbation_spec=td.IndexPerturbation(delta_n=pp_real, freq=td.C_0),
+    )
 
     # test from_unperturbed function
     pmed_direct_from_med = td.PerturbationMedium.from_unperturbed(
@@ -120,18 +117,15 @@ def test_perturbation_medium(unstructured):
             subpixel=False,
         )
 
-    with AssertLogLevel("WARNING"):
-        pmed_direct = td.PerturbationMedium(conductivity_perturbation=pp_real, subpixel=False)
-    with AssertLogLevel("WARNING"):
-        pmed_perm = td.PerturbationMedium(
-            perturbation_spec=td.PermittivityPerturbation(delta_sigma=pp_real), subpixel=False
-        )
-    with AssertLogLevel("WARNING"):
-        pmed_index = td.PerturbationMedium(
-            permittivity=2,
-            perturbation_spec=td.IndexPerturbation(delta_k=pp_real, freq=td.C_0),
-            subpixel=False,
-        )
+    pmed_direct = td.PerturbationMedium(conductivity_perturbation=pp_real, subpixel=False)
+    pmed_perm = td.PerturbationMedium(
+        perturbation_spec=td.PermittivityPerturbation(delta_sigma=pp_real), subpixel=False
+    )
+    pmed_index = td.PerturbationMedium(
+        permittivity=2,
+        perturbation_spec=td.IndexPerturbation(delta_k=pp_real, freq=td.C_0),
+        subpixel=False,
+    )
 
     for pmed in [pmed_direct, pmed_perm, pmed_index]:
         cmed = pmed.perturbed_copy(0.9 * temperature)  # positive conductivity
@@ -182,33 +176,30 @@ def test_perturbation_medium(unstructured):
             allow_gain=True,
         )
 
-    with AssertLogLevel("WARNING"):
-        pmed_direct = td.PerturbationPoleResidue(
-            eps_inf=0.2,
-            poles=[(1j, 3), (2j, 4)],
-            eps_inf_perturbation=pp_real,
-            poles_perturbation=[(None, pp_real), (pp_complex, None)],
-            subpixel=False,
-            allow_gain=True,
-        )
+    pmed_direct = td.PerturbationPoleResidue(
+        eps_inf=0.2,
+        poles=[(1j, 3), (2j, 4)],
+        eps_inf_perturbation=pp_real,
+        poles_perturbation=[(None, pp_real), (pp_complex, None)],
+        subpixel=False,
+        allow_gain=True,
+    )
 
-    with AssertLogLevel("WARNING"):
-        pmed_perm = td.PerturbationPoleResidue(
-            eps_inf=0.2,
-            poles=[(1j, 3), (2j, 4)],
-            perturbation_spec=td.PermittivityPerturbation(delta_eps=pp_real),
-            subpixel=False,
-            allow_gain=True,
-        )
+    pmed_perm = td.PerturbationPoleResidue(
+        eps_inf=0.2,
+        poles=[(1j, 3), (2j, 4)],
+        perturbation_spec=td.PermittivityPerturbation(delta_eps=pp_real),
+        subpixel=False,
+        allow_gain=True,
+    )
 
-    with AssertLogLevel("WARNING"):
-        pmed_index = td.PerturbationPoleResidue(
-            eps_inf=0.05,
-            poles=[(0, 0.0001)],
-            perturbation_spec=td.IndexPerturbation(delta_k=pp_real, freq=td.C_0),
-            subpixel=False,
-            allow_gain=True,
-        )
+    pmed_index = td.PerturbationPoleResidue(
+        eps_inf=0.05,
+        poles=[(0, 0.0001)],
+        perturbation_spec=td.IndexPerturbation(delta_k=pp_real, freq=td.C_0),
+        subpixel=False,
+        allow_gain=True,
+    )
 
     # test from_unperturbed function
     pmed_direct_from_med = td.PerturbationPoleResidue.from_unperturbed(
