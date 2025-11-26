@@ -5,8 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-
 ## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed
+
+## [2.10.0rc3] - 2025-11-26
 
 ### Added
 - Added S-parameter de-embedding to `TerminalComponentModelerData`, enabling recalculation with shifted reference planes.
@@ -94,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Removed deprecated `use_complex_fields` parameter from `TwoPhotonAbsorption` and `KerrNonlinearity`. Parameters `beta` and `n2` are now real-valued only, as is `n0` if specified.
 
-## [v2.10.0rc2] - 2025-10-01
+## [2.10.0rc2] - 2025-10-01
 
 ### Added
 - New `MediumMonitor` that returns both permittivity and permeability profiles.
@@ -117,7 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Subtasks validation errors from `web.upload(ComponentModeler)` previously were not being propagated to users, and hung without response.
 
 
-## [v2.10.0rc1] - 2025-09-11
+## [2.10.0rc1] - 2025-09-11
 
 ### Added
 - Added rectangular and radial taper support to `RectangularAntennaArrayCalculator` for phased array amplitude weighting; refactored array factor calculation for improved clarity and performance. 
@@ -158,9 +165,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `interpn` data array method to be compatible with extrapolation outside of data array coordinates.
 - Fixed `overlap_sort` to use the same value of the `conjugated_dot_product` field in `ModeMonitor`, and added the `conjugated_dot_product` field to `ModeSolver` and `ModeSimulation`.
 
+## [2.9.3]
+
+### Added
+
+### Changed
+
+### Fixed
+- Fixed `pyproject.toml` and `tidy3d.__version__` mismatch.
 
 
-## [v2.9.1] - 2025-08-13
+## [2.9.2]
+
+### Added
+
+### Changed
+- Improved Nexus platform configuration support and instantiation. Includes improvements to use the new `tidy3d configure ... --nexus-url <url>` CLI functionality.
+
+### Fixed
+
+
+## [2.9.1] - 2025-08-13
 
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.
@@ -1878,7 +1903,13 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.9.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.10.0rc3...develop
+[2.10.0rc3]: https://github.com/flexcompute/tidy3d/compare/v2.10.0rc2...v2.10.0rc3
+[2.10.0rc2]: https://github.com/flexcompute/tidy3d/compare/v2.10.0rc1...v2.10.0rc2
+[2.10.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.9.3...v2.10.0rc1
+[2.9.3]: https://github.com/flexcompute/tidy3d/compare/v2.9.2...v2.9.3
+[2.9.2]: https://github.com/flexcompute/tidy3d/compare/v2.9.1...v2.9.2
+[2.9.1]: https://github.com/flexcompute/tidy3d/compare/v2.9.0...v2.9.1
 [2.9.0]: https://github.com/flexcompute/tidy3d/compare/v2.8.5...v2.9.0
 [2.8.5]: https://github.com/flexcompute/tidy3d/compare/v2.8.4...v2.8.5
 [2.8.4]: https://github.com/flexcompute/tidy3d/compare/v2.8.3...v2.8.4
