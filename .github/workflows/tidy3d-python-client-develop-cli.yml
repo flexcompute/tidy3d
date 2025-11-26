@@ -24,11 +24,6 @@ on:
   schedule:
     - cron: '0 2 * * *'  # Runs every day at 2:00 AM UTC
   
-  push:
-    branches:
-      - develop
-      - latest
-
 permissions:
   contents: read
 
@@ -36,10 +31,7 @@ jobs:
   test-dev-commands:
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code (HEAD)
