@@ -497,11 +497,13 @@ jobs:
   
   github-release:
     name: create-github-release
-    needs: [determine-workflow-scope, compile-tests-results]
+    needs: [determine-workflow-scope, compile-tests-results, deploy-packages]
     if: |
       always() &&
       (needs.compile-tests-results.outputs.proceed_deploy == 'true' || needs.compile-tests-results.result == 'skipped') &&
-      needs.determine-workflow-scope.outputs.deploy_github_release == 'true'
+      needs.determine-workflow-scope.outputs.deploy_github_release == 'true' &&
+      needs.determine-workflow-scope.outputs.deploy_pypi == 'true' &&
+      needs.deploy-packages.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
