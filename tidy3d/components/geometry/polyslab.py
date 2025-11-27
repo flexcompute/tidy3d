@@ -1547,73 +1547,149 @@ class PolySlab(base.Planar):
         return z_centers, dz, z0, z1
 
     @staticmethod
-    def _clip_edge_to_bounds_t(
-        v0_3d: NDArray, v1_3d: NDArray, sim_min: NDArray, sim_max: NDArray
-    ) -> Optional[tuple[float, float]]:
-        """Parametric bounds [t0,t1] of segment within [sim_min, sim_max]."""
-        t_start, t_end = 0.0, 1.0
-        edge_clip_tolerance = config.adjoint.edge_clip_tolerance
+    def _clip_edges_to_bounds_batch(
+        segment_starts: NDArray,
+        segment_ends: NDArray,
+        sim_min: NDArray,
+        sim_max: NDArray,
+        *,
+        _edge_clip_tol: Optional[float] = None,
+        _dtype: Optional[type] = None,
+    ) -> tuple[NDArray, NDArray, NDArray]:
+        """
+        Compute parametric bounds for multiple segments clipped to simulation bounds.
+
+        Parameters
+        ----------
+        segment_starts : NDArray
+            (N, 3) array of segment start coordinates.
+        segment_ends : NDArray
+            (N, 3) array of segment end coordinates.
+        sim_min : NDArray
+            (3,) array of simulation minimum bounds.
+        sim_max : NDArray
+            (3,) array of simulation maximum bounds.
+
+        Returns
+        -------
+        is_within_bounds : NDArray
+            (N,) boolean array indicating if the segment intersects the bounds.
+        t_starts : NDArray
+            (N,) array of parametric start values (0.0 to 1.0).
+        t_ends : NDArray
+            (N,) array of parametric end values (0.0 to 1.0).
+        """
+        n = segment_starts.shape[0]
+        if _edge_clip_tol is None:
+            _edge_clip_tol = config.adjoint.edge_clip_tolerance
+        if _dtype is None:
+            _dtype = config.adjoint.gradient_dtype_float
+
+        t_starts = np.zeros(n, dtype=_dtype)
+        t_ends = np.ones(n, dtype=_dtype)
+        is_within_bounds = np.ones(n, dtype=bool)
 
         for dim in range(3):
-            v0_d, v1_d = v0_3d[dim], v1_3d[dim]
-            min_d, max_d = sim_min[dim], sim_max[dim]
+            start_coords = segment_starts[:, dim]
+            end_coords = segment_ends[:, dim]
+            bound_min = sim_min[dim]
+            bound_max = sim_max[dim]
 
-            if np.isclose(v0_d, v1_d):
-                if v0_d < (min_d - edge_clip_tolerance) or v0_d > (max_d + edge_clip_tolerance):
-                    return None
-                continue
+            # check for parallel edges (faster than isclose)
+            parallel = np.abs(start_coords - end_coords) < 1e-12
 
-            t_min = (min_d - v0_d) / (v1_d - v0_d)
-            t_max = (max_d - v0_d) / (v1_d - v0_d)
-            if t_min > t_max:
-                t_min, t_max = t_max, t_min
+            # parallel edges: check if outside bounds
+            outside = parallel & (
+                (start_coords < (bound_min - _edge_clip_tol))
+                | (start_coords > (bound_max + _edge_clip_tol))
+            )
+            is_within_bounds &= ~outside
 
-            t_start = max(t_start, t_min)
-            t_end = min(t_end, t_max)
-            if t_start >= t_end:
-                return None
+            # non-parallel edges: compute t_min, t_max
+            not_parallel = ~parallel & is_within_bounds
+            if np.any(not_parallel):
+                denom = np.where(not_parallel, end_coords - start_coords, 1.0)  # avoid div by zero
+                t_min = (bound_min - start_coords) / denom
+                t_max = (bound_max - start_coords) / denom
 
-        if t_end <= t_start + edge_clip_tolerance:
-            return None
+                # swap if needed
+                swap = t_min > t_max
+                t_min_new = np.where(swap, t_max, t_min)
+                t_max_new = np.where(swap, t_min, t_max)
 
-        return (t_start, t_end)
+                # update t_starts and t_ends for valid non-parallel edges
+                t_starts = np.where(not_parallel, np.maximum(t_starts, t_min_new), t_starts)
+                t_ends = np.where(not_parallel, np.minimum(t_ends, t_max_new), t_ends)
+
+                # still valid?
+                is_within_bounds &= ~not_parallel | (t_starts < t_ends)
+
+        is_within_bounds &= t_ends > t_starts + _edge_clip_tol
+
+        return is_within_bounds, t_starts, t_ends
 
     @staticmethod
     def _adaptive_edge_samples(
-        L: float, dx: float, t_start: float = 0.0, t_end: float = 1.0
+        L: float,
+        dx: float,
+        t_start: float = 0.0,
+        t_end: float = 1.0,
+        *,
+        _sample_fraction: Optional[float] = None,
+        _gauss_order: Optional[int] = None,
+        _dtype: Optional[type] = None,
     ) -> tuple[NDArray, NDArray]:
-        """Gauss samples and weights along [t_start,t_end] with adaptive count."""
+        """
+        Compute Gauss samples and weights along [t_start, t_end] with adaptive count.
+
+        Parameters
+        ----------
+        L : float
+            Physical length of the full edge.
+        dx : float
+            Target discretization step size.
+        t_start : float, optional
+            Start parameter, by default 0.0.
+        t_end : float, optional
+            End parameter, by default 1.0.
+
+        Returns
+        -------
+        tuple[NDArray, NDArray]
+            Tuple of (samples, weights) for the integration.
+        """
+        if _sample_fraction is None:
+            _sample_fraction = config.adjoint.quadrature_sample_fraction
+        if _gauss_order is None:
+            _gauss_order = config.adjoint.gauss_quadrature_order
+        if _dtype is None:
+            _dtype = config.adjoint.gradient_dtype_float
+
         L_eff = L * max(0.0, t_end - t_start)
         n_uniform = max(1, int(np.ceil(L_eff / dx)))
-        sample_fraction = config.adjoint.quadrature_sample_fraction
-        gauss_quadrature_order = config.adjoint.gauss_quadrature_order
-        n_gauss = n_uniform if n_uniform <= 3 else max(2, int(n_uniform * sample_fraction))
-        if n_gauss <= gauss_quadrature_order:
+        n_gauss = n_uniform if n_uniform <= 3 else max(2, int(n_uniform * _sample_fraction))
+        if n_gauss <= _gauss_order:
             g, w = leggauss(n_gauss)
-            s = (0.5 * (t_end - t_start) * g + 0.5 * (t_end + t_start)).astype(
-                config.adjoint.gradient_dtype_float, copy=False
-            )
-            wt = (w * 0.5 * (t_end - t_start)).astype(
-                config.adjoint.gradient_dtype_float, copy=False
-            )
+            half_range = 0.5 * (t_end - t_start)
+            s = (half_range * g + 0.5 * (t_end + t_start)).astype(_dtype, copy=False)
+            wt = (w * half_range).astype(_dtype, copy=False)
             return s, wt
 
         # composite Gauss with fixed local order
-        g_loc, w_loc = leggauss(gauss_quadrature_order)
+        g_loc, w_loc = leggauss(_gauss_order)
         segs = n_uniform
-        edges_t = np.linspace(t_start, t_end, segs + 1, dtype=config.adjoint.gradient_dtype_float)
-        S, W = [], []
-        for i in range(segs):
-            a, b = edges_t[i], edges_t[i + 1]
-            S.append(
-                (0.5 * (b - a) * g_loc + 0.5 * (b + a)).astype(
-                    config.adjoint.gradient_dtype_float, copy=False
-                )
-            )
-            W.append(
-                (w_loc * 0.5 * (b - a)).astype(config.adjoint.gradient_dtype_float, copy=False)
-            )
-        return np.concatenate(S), np.concatenate(W)
+        edges_t = np.linspace(t_start, t_end, segs + 1, dtype=_dtype)
+
+        # compute all segments at once
+        a = edges_t[:-1]  # (segs,)
+        b = edges_t[1:]  # (segs,)
+        half_width = 0.5 * (b - a)  # (segs,)
+        mid = 0.5 * (b + a)  # (segs,)
+
+        # (segs, 1) * (order,) + (segs, 1) -> (segs, order)
+        S = (half_width[:, None] * g_loc + mid[:, None]).astype(_dtype, copy=False)
+        W = (half_width[:, None] * w_loc).astype(_dtype, copy=False)
+        return S.ravel(), W.ravel()
 
     def _collect_sidewall_patches(
         self,
@@ -1626,20 +1702,49 @@ class PolySlab(base.Planar):
         is_2d: bool,
         dx: float,
     ) -> dict:
-        """Collect sidewall patch geometry for batched VJP evaluation.
-
-        Returns a dict with keys:
-        - centers: (N,3)
-        - normals: (N,3)
-        - perps1: (N,3)
-        - perps2: (N,3)
-        - Ls: (N,)
-        - s_vals: (N,)
-        - s_weights: (N,)
-        - zc_vals: (N,)
-        - dz: float (slice thickness; 1.0 for 2D)
-        - edge_indices: (N,) int edge index per patch
         """
+        Collect sidewall patch geometry for batched VJP evaluation.
+
+        Parameters
+        ----------
+        vertices : NDArray
+            Array of polygon vertices.
+        next_v : NDArray
+            Array of next vertices (forming edges).
+        edges : NDArray
+            Edge vectors.
+        basis : dict
+            Basis vectors dictionary.
+        sim_min : NDArray
+            Simulation minimum bounds.
+        sim_max : NDArray
+            Simulation maximum bounds.
+        is_2d : bool
+            Whether the simulation is 2D.
+        dx : float
+            Discretization step.
+
+        Returns
+        -------
+        dict
+            Dictionary containing:
+            - centers: (N, 3) array of patch centers.
+            - normals: (N, 3) array of patch normals.
+            - perps1: (N, 3) array of first tangent vectors.
+            - perps2: (N, 3) array of second tangent vectors.
+            - Ls: (N,) array of edge lengths.
+            - s_vals: (N,) array of parametric coordinates along the edge.
+            - s_weights: (N,) array of quadrature weights.
+            - zc_vals: (N,) array of z-coordinates.
+            - dz: float, slice thickness.
+            - edge_indices: (N,) array of original edge indices.
+        """
+        # cache config values to avoid repeated lookups (overhead not insignificant here)
+        _dtype = config.adjoint.gradient_dtype_float
+        _edge_clip_tol = config.adjoint.edge_clip_tolerance
+        _sample_fraction = config.adjoint.quadrature_sample_fraction
+        _gauss_order = config.adjoint.gauss_quadrature_order
+
         theta = get_static(self.sidewall_angle)
         z_ref = self.reference_axis_pos
 
@@ -1649,23 +1754,23 @@ class PolySlab(base.Planar):
         dprime = -tan_th  # dd/dz
 
         # axis unit vector in 3D
-        axis_vec = np.zeros(3, dtype=config.adjoint.gradient_dtype_float)
+        axis_vec = np.zeros(3, dtype=_dtype)
         axis_vec[self.axis] = 1.0
 
-        # densify along axis as |theta| grows: dz scales with cos(theta)
+        # densify along axis as |theta| grows, dz scales with cos(theta)
         z_centers, dz, z0, z1 = self._z_slices(sim_min, sim_max, is_2d=is_2d, dx=dx * cos_th)
 
         # early exit: no slices
         if (not is_2d) and len(z_centers) == 0:
             return {
-                "centers": np.empty((0, 3), dtype=config.adjoint.gradient_dtype_float),
-                "normals": np.empty((0, 3), dtype=config.adjoint.gradient_dtype_float),
-                "perps1": np.empty((0, 3), dtype=config.adjoint.gradient_dtype_float),
-                "perps2": np.empty((0, 3), dtype=config.adjoint.gradient_dtype_float),
-                "Ls": np.empty((0,), dtype=config.adjoint.gradient_dtype_float),
-                "s_vals": np.empty((0,), dtype=config.adjoint.gradient_dtype_float),
-                "s_weights": np.empty((0,), dtype=config.adjoint.gradient_dtype_float),
-                "zc_vals": np.empty((0,), dtype=config.adjoint.gradient_dtype_float),
+                "centers": np.empty((0, 3), dtype=_dtype),
+                "normals": np.empty((0, 3), dtype=_dtype),
+                "perps1": np.empty((0, 3), dtype=_dtype),
+                "perps2": np.empty((0, 3), dtype=_dtype),
+                "Ls": np.empty((0,), dtype=_dtype),
+                "s_vals": np.empty((0,), dtype=_dtype),
+                "s_weights": np.empty((0,), dtype=_dtype),
+                "zc_vals": np.empty((0,), dtype=_dtype),
                 "dz": dz,
                 "edge_indices": np.empty((0,), dtype=int),
             }
@@ -1684,22 +1789,22 @@ class PolySlab(base.Planar):
         estimated_patches = int(max(1, estimated_patches) * 1.2)
 
         # pre-allocate arrays
-        centers = np.empty((estimated_patches, 3), dtype=config.adjoint.gradient_dtype_float)
-        normals = np.empty((estimated_patches, 3), dtype=config.adjoint.gradient_dtype_float)
-        perps1 = np.empty((estimated_patches, 3), dtype=config.adjoint.gradient_dtype_float)
-        perps2 = np.empty((estimated_patches, 3), dtype=config.adjoint.gradient_dtype_float)
-        Ls = np.empty((estimated_patches,), dtype=config.adjoint.gradient_dtype_float)
-        s_vals = np.empty((estimated_patches,), dtype=config.adjoint.gradient_dtype_float)
-        s_weights = np.empty((estimated_patches,), dtype=config.adjoint.gradient_dtype_float)
-        zc_vals = np.empty((estimated_patches,), dtype=config.adjoint.gradient_dtype_float)
+        centers = np.empty((estimated_patches, 3), dtype=_dtype)
+        normals = np.empty((estimated_patches, 3), dtype=_dtype)
+        perps1 = np.empty((estimated_patches, 3), dtype=_dtype)
+        perps2 = np.empty((estimated_patches, 3), dtype=_dtype)
+        Ls = np.empty((estimated_patches,), dtype=_dtype)
+        s_vals = np.empty((estimated_patches,), dtype=_dtype)
+        s_weights = np.empty((estimated_patches,), dtype=_dtype)
+        zc_vals = np.empty((estimated_patches,), dtype=_dtype)
         edge_indices = np.empty((estimated_patches,), dtype=int)
 
         patch_idx = 0
 
         # if the simulation is effectively 2D (one tangential dimension collapsed),
         # slightly expand degenerate bounds to enable finite-length clipping of edges.
-        sim_min_eff = np.array(sim_min, dtype=config.adjoint.gradient_dtype_float)
-        sim_max_eff = np.array(sim_max, dtype=config.adjoint.gradient_dtype_float)
+        sim_min_eff = np.array(sim_min, dtype=_dtype)
+        sim_max_eff = np.array(sim_max, dtype=_dtype)
         for dim in range(3):
             if dim == self.axis:
                 continue
@@ -1707,15 +1812,22 @@ class PolySlab(base.Planar):
                 sim_min_eff[dim] -= 0.5 * dx
                 sim_max_eff[dim] += 0.5 * dx
 
+        # pre-compute values that are constant across z slices
+        n_z = len(z_centers)
+        z_centers_arr = np.asarray(z_centers, dtype=_dtype)
+
+        # slanted local basis (constant across z for non-slanted case)
+        # for slanted: rz = axis_vec + dprime * n2d, but dprime is constant
         for ei, (v0, v1) in enumerate(zip(vertices, next_v)):
             edge_vec = v1 - v0
-            L = np.linalg.norm(edge_vec)
-            if np.isclose(L, 0.0):
+            L = np.sqrt(np.dot(edge_vec, edge_vec))
+            if L < 1e-12:
                 continue
 
             # constant along edge: unit tangent in 3D (no axis component)
             t_edge = basis["perp1"][ei]
-            # outward in-plane normal from canonical basis normal (axis-consistent)
+
+            # outward in-plane normal from canonical basis normal
             n2d = basis["norm"][ei].copy()
             n2d[self.axis] = 0.0
             nrm = np.linalg.norm(n2d)
@@ -1726,46 +1838,96 @@ class PolySlab(base.Planar):
                 tmp = np.cross(axis_vec, t_edge)
                 n2d = tmp / (np.linalg.norm(tmp) + 1e-20)
 
-            for zc in z_centers:
-                # offset at this slice along the in-plane outward normal
-                d = -(zc - z_ref) * tan_th
-                offset3d = d * n2d
+            # compute basis vectors once per edge
+            rz = axis_vec + dprime * n2d
+            T1_vec = t_edge
+            N_vec = np.cross(T1_vec, rz)
+            N_norm = np.linalg.norm(N_vec)
+            if not np.isclose(N_norm, 0.0):
+                N_vec = N_vec / N_norm
 
-                # clip offset edge against simulation bounds in 3D
-                v0_3d = (
-                    self.unpop_axis_vect(
-                        np.array([zc], dtype=config.adjoint.gradient_dtype_float), v0[None]
-                    )[0]
-                    + offset3d
-                )
-                v1_3d = (
-                    self.unpop_axis_vect(
-                        np.array([zc], dtype=config.adjoint.gradient_dtype_float), v1[None]
-                    )[0]
-                    + offset3d
-                )
-                clip = self._clip_edge_to_bounds_t(v0_3d, v1_3d, sim_min_eff, sim_max_eff)
-                if clip is None:
-                    continue
-                t0, t1 = clip
+            # align N with outward edge normal
+            if float(np.dot(N_vec, basis["norm"][ei])) < 0.0:
+                N_vec = -N_vec
 
-                # densify tangentially as |theta| grows: ds_phys scales with cos(theta)
-                s_list, w_list = self._adaptive_edge_samples(L, denom_edge, t0, t1)
+            T2_vec = np.cross(N_vec, T1_vec)
+            T2_norm = np.linalg.norm(T2_vec)
+            if not np.isclose(T2_norm, 0.0):
+                T2_vec = T2_vec / T2_norm
+
+            # batch compute offsets for all z slices at once
+            d_all = -(z_centers_arr - z_ref) * tan_th  # (n_z,)
+            offsets_3d = d_all[:, None] * n2d  # (n_z, 3) - faster than np.outer
+
+            # batch compute segment starts and ends for all z slices
+            segment_starts = np.empty((n_z, 3), dtype=_dtype)
+            segment_ends = np.empty((n_z, 3), dtype=_dtype)
+            plane_axes = [i for i in range(3) if i != self.axis]
+            segment_starts[:, self.axis] = z_centers_arr
+            segment_starts[:, plane_axes] = v0
+            segment_starts += offsets_3d
+            segment_ends[:, self.axis] = z_centers_arr
+            segment_ends[:, plane_axes] = v1
+            segment_ends += offsets_3d
+
+            # batch clip all z slices at once
+            is_within_bounds, t_starts, t_ends = self._clip_edges_to_bounds_batch(
+                segment_starts,
+                segment_ends,
+                sim_min_eff,
+                sim_max_eff,
+                _edge_clip_tol=_edge_clip_tol,
+                _dtype=_dtype,
+            )
+
+            # process only valid z slices (sampling has variable output sizes)
+            valid_indices = np.nonzero(is_within_bounds)[0]
+            if len(valid_indices) == 0:
+                continue
+
+            # group z slices by unique (t0, t1) pairs to avoid redundant quadrature calculations.
+            # since most z-slices will have identical clipping bounds (0.0, 1.0),
+            # we can compute the Gauss samples once and reuse them for almost all slices.
+            # rounding ensures we get cache hits despite tiny floating point differences.
+            t0_valid = np.round(t_starts[valid_indices], 10)
+            t1_valid = np.round(t_ends[valid_indices], 10)
+
+            # simple cache for sampling results: (t0, t1) -> (s_list, w_list)
+            sample_cache = {}
+
+            # process each z slice
+            for zi, t0, t1 in zip(valid_indices, t0_valid, t1_valid):
+                if (t0, t1) not in sample_cache:
+                    sample_cache[(t0, t1)] = self._adaptive_edge_samples(
+                        L,
+                        denom_edge,
+                        t0,
+                        t1,
+                        _sample_fraction=_sample_fraction,
+                        _gauss_order=_gauss_order,
+                        _dtype=_dtype,
+                    )
+
+                s_list, w_list = sample_cache[(t0, t1)]
                 if len(s_list) == 0:
                     continue
 
-                pts2d = v0 + np.outer(s_list, edge_vec)
-                xyz = (
-                    self.unpop_axis_vect(
-                        np.full(len(s_list), zc, dtype=config.adjoint.gradient_dtype_float), pts2d
-                    )
-                    + offset3d
-                )
+                zc = z_centers_arr[zi]
+                offset3d = offsets_3d[zi]
 
-                n_patches = len(s_list)
+                pts2d = v0 + s_list[:, None] * edge_vec  # faster than np.outer
+
+                # inline unpop_axis_vect for xyz computation
+                n_pts = len(s_list)
+                xyz = np.empty((n_pts, 3), dtype=_dtype)
+                xyz[:, self.axis] = zc
+                xyz[:, plane_axes] = pts2d
+                xyz += offset3d
+
+                n_patches = n_pts
                 new_size_needed = patch_idx + n_patches
                 if new_size_needed > centers.shape[0]:
-                    # grow arrays by 1.5x
+                    # grow arrays by 1.5x to avoid frequent reallocations
                     new_size = int(new_size_needed * 1.5)
                     centers.resize((new_size, 3), refcheck=False)
                     normals.resize((new_size, 3), refcheck=False)
@@ -1779,23 +1941,6 @@ class PolySlab(base.Planar):
 
                 sl = slice(patch_idx, patch_idx + n_patches)
                 centers[sl] = xyz
-
-                # slanted local basis at this z
-                rz = axis_vec + dprime * n2d
-                T1_vec = t_edge
-                N_vec = np.cross(T1_vec, rz)
-                N_norm = np.linalg.norm(N_vec)
-                if not np.isclose(N_norm, 0.0):
-                    N_vec = N_vec / N_norm
-
-                # align N with canonical outward edge normal
-                if float(np.dot(N_vec, basis["norm"][ei])) < 0.0:
-                    N_vec = -N_vec
-                T2_vec = np.cross(N_vec, T1_vec)
-                T2_norm = np.linalg.norm(T2_vec)
-                if not np.isclose(T2_norm, 0.0):
-                    T2_vec = T2_vec / T2_norm
-
                 normals[sl] = N_vec
                 perps1[sl] = T1_vec
                 perps2[sl] = T2_vec
@@ -1807,7 +1952,7 @@ class PolySlab(base.Planar):
 
                 patch_idx += n_patches
 
-        # trim arrays
+        # trim arrays to final size
         centers = centers[:patch_idx]
         normals = normals[:patch_idx]
         perps1 = perps1[:patch_idx]
