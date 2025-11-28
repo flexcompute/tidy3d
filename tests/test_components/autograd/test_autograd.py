@@ -3040,3 +3040,56 @@ def test_autograd_polyslab_sidewall(use_emulated_run, monitor_key):
 
     assert np.isfinite(val)
     assert grad != 0.0
+
+
+def test_frequency_coordinate_alignment():
+    """Test that frequency coordinate handling is robust to floating-point drift.
+
+    Regression test for FXC-4349: KeyError in adjoint postprocessing due to
+    frequency coordinate mismatch between forward and adjoint data.
+    """
+    from tidy3d.web.api.autograd.backward import _slice_field_data
+
+    # Typical optical frequency
+    freq = 2e14
+
+    # Create field data with exact frequency (single frequency, single value)
+    data = xr.DataArray(
+        np.array([1.0]),
+        coords={"f": [freq]},
+        dims=["f"],
+    )
+    field_data = {"Ex": data, "Ey": data, "Ez": data}
+
+    # Test 1: Exact match should work
+    freqs_exact = np.array([freq])
+    result = _slice_field_data(field_data, freqs_exact)
+    assert len(result) == 3
+    assert all(k in result for k in ["Ex", "Ey", "Ez"])
+
+    # Test 2: Tiny FP drift (within typical precision) should fail with KeyError
+    # This demonstrates the original bug - even 0.1 Hz difference causes failure
+    freqs_drifted = np.array([freq + 0.1])  # 0.1 Hz drift at 2e14 Hz scale
+    with pytest.raises(KeyError):
+        _slice_field_data(field_data, freqs_drifted)
+
+    # Test 3: Component indicator filtering works
+    result_e_only = _slice_field_data(field_data, freqs_exact, component_indicator="E")
+    assert len(result_e_only) == 3
+
+    # Test 4: Multiple frequencies
+    freqs_multi = [1e14, 2e14, 3e14]
+    data_multi = xr.DataArray(
+        np.array([1.0, 2.0, 3.0]),
+        coords={"f": freqs_multi},
+        dims=["f"],
+    )
+    field_data_multi = {"Ex": data_multi}
+
+    # Selecting subset should work
+    result_subset = _slice_field_data(field_data_multi, np.array([2e14]))
+    assert result_subset["Ex"].sizes["f"] == 1
+
+    # Selecting non-existent frequency should fail
+    with pytest.raises(KeyError):
+        _slice_field_data(field_data_multi, np.array([1.5e14]))

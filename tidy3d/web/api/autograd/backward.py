@@ -150,7 +150,20 @@ def postprocess_adj(
         structure = sim_data_fwd.simulation.structures[structure_index]
 
         # compute epsilon arrays for all frequencies
-        adjoint_frequencies = np.array(fld_adj.monitor.freqs)
+        # use frequencies from the actual computed derivative map to ensure they exist
+        # in both forward and adjoint data (E_der_map = fld_fwd * fld_adj)
+        first_field_component = next(iter(E_der_map.field_components.values()))
+        adjoint_frequencies = np.array(first_field_component.coords["f"].values)
+
+        monitor_freqs = np.array(fld_adj.monitor.freqs)
+        if len(adjoint_frequencies) != len(monitor_freqs) or not np.allclose(
+            np.sort(adjoint_frequencies), np.sort(monitor_freqs), rtol=1e-10, atol=0
+        ):
+            raise ValueError(
+                f"Frequency mismatch in adjoint postprocessing for structure {structure_index}. "
+                f"Expected frequencies from monitor: {monitor_freqs}, "
+                f"but derivative map has: {adjoint_frequencies}. "
+            )
 
         eps_in = _compute_eps_array(structure.medium, adjoint_frequencies)
         eps_out = _compute_eps_array(sim_data_orig.simulation.medium, adjoint_frequencies)
