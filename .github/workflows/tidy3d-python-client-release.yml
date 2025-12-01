@@ -46,7 +46,12 @@ on:
         description: 'Run submodule tests'
         type: boolean
         default: true
-  
+
+      extras_integration_tests:
+        description: 'Run tidy3d-extras integration tests (full)'
+        type: boolean
+        default: true
+
   workflow_call:
     inputs:
       release_tag:
@@ -80,7 +85,12 @@ on:
         description: 'Run submodule tests'
         type: boolean
         default: true
-      
+
+      extras_integration_tests:
+        description: 'Run tidy3d-extras integration tests (full)'
+        type: boolean
+        default: true
+
       deploy_testpypi:
         description: 'Deploy to TestPyPI'
         type: boolean
@@ -121,6 +131,7 @@ jobs:
       run_client_tests: ${{ steps.determine-workflow-steps.outputs.run_client_tests }}
       run_cli_tests: ${{ steps.determine-workflow-steps.outputs.run_cli_tests }}
       run_submodule_tests: ${{ steps.determine-workflow-steps.outputs.run_submodule_tests }}
+      run_extras_integration_tests: ${{ steps.determine-workflow-steps.outputs.run_extras_integration_tests }}
       deploy_github_release: ${{ steps.determine-workflow-steps.outputs.deploy_github_release }}
       deploy_testpypi: ${{ steps.determine-workflow-steps.outputs.deploy_testpypi }}
       deploy_pypi: ${{ steps.determine-workflow-steps.outputs.deploy_pypi }}
@@ -133,6 +144,7 @@ jobs:
       CLIENT_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.client_tests || inputs.client_tests }}
       CLI_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.cli_tests || inputs.cli_tests }}
       SUBMODULE_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.submodule_tests || inputs.submodule_tests }}
+      EXTRAS_INTEGRATION_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.extras_integration_tests || inputs.extras_integration_tests }}
       DEPLOY_TESTPYPI: ${{ inputs.deploy_testpypi || false }}
       DEPLOY_PYPI: ${{ inputs.deploy_pypi || false }}
     steps:
@@ -270,11 +282,13 @@ jobs:
           run_client_tests=false
           run_cli_tests=false
           run_submodule_tests=false
-          
+          run_extras_integration_tests=false
+
           if [[ "$run_tests" == "true" ]]; then
             [[ "$CLIENT_TESTS" == "true" ]] && run_client_tests=true
             [[ "$CLI_TESTS" == "true" ]] && run_cli_tests=true
-            
+            [[ "$EXTRAS_INTEGRATION_TESTS" == "true" ]] && run_extras_integration_tests=true
+
             # Submodule tests: user input OR auto-enable for PyPI non-RC releases
             if [[ "$SUBMODULE_TESTS" == "true" ]]; then
               run_submodule_tests=true
@@ -289,6 +303,7 @@ jobs:
           echo "run_client_tests: $run_client_tests"
           echo "run_cli_tests: $run_cli_tests"
           echo "run_submodule_tests: $run_submodule_tests"
+          echo "run_extras_integration_tests: $run_extras_integration_tests"
           echo ""
           
           # ============================================
@@ -362,6 +377,7 @@ jobs:
           echo "run_client_tests=$run_client_tests" >> $GITHUB_OUTPUT
           echo "run_cli_tests=$run_cli_tests" >> $GITHUB_OUTPUT
           echo "run_submodule_tests=$run_submodule_tests" >> $GITHUB_OUTPUT
+          echo "run_extras_integration_tests=$run_extras_integration_tests" >> $GITHUB_OUTPUT
           echo "deploy_github_release=$deploy_github_release" >> $GITHUB_OUTPUT
           echo "deploy_testpypi=$deploy_testpypi" >> $GITHUB_OUTPUT
           echo "deploy_pypi=$deploy_pypi" >> $GITHUB_OUTPUT
@@ -400,6 +416,8 @@ jobs:
       cli_tests: ${{ needs.determine-workflow-scope.outputs.run_cli_tests == 'true' }}
       submodule_tests: ${{ needs.determine-workflow-scope.outputs.run_submodule_tests == 'true' }}
       version_match_tests: true
+      extras_integration_tests: ${{ needs.determine-workflow-scope.outputs.run_extras_integration_tests == 'true' }}
+      test_type: full
     secrets: inherit # zizmor: ignore[secrets-inherit]
   
   compile-tests-results:
