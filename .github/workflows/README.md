@@ -33,6 +33,7 @@ The orchestrator for the entire release pipeline. It sequences:
   - `client_tests`
   - `cli_tests`
   - `submodule_tests` (auto-enabled for non-RC `pypi` releases even if left `false`)
+  - `extras_integration_tests`
 
 When invoked via `workflow_call`, two optional overrides are also honored:
 - `deploy_testpypi`
@@ -81,7 +82,7 @@ Primary CI workflow; it runs on PRs (`latest`, `develop`, `pre/*`), merge queue 
 - **Code quality**: `ruff format`, `ruff check`, `mypy`, `zizmor`, schema regeneration, commit/branch linting.
 - **Local tests**: Self-hosted Slurm runners on Python 3.10 and 3.13 (coverage enforced, diff-coverage comments for 3.13).
 - **Remote tests**: GitHub-hosted matrix across Windows, Linux, and macOS for Python 3.10–3.13.
-- **Optional suites**: CLI tests, version consistency checks, and submodule validation (non-RC release tags only) can be toggled via inputs.
+- **Optional suites**: CLI tests, version consistency checks, submodule validation (non-RC release tags only), and `tidy3d-extras` integration tests can be toggled via inputs.
 - **Dynamic scope**: Determines which jobs to run based on the event (draft PRs, approvals, merge queue, manual overrides).
 - **Outputs**: `workflow_success` summarizes whether every required job succeeded; the release workflow uses this to decide if deployment can continue.
 
@@ -91,17 +92,35 @@ Primary CI workflow; it runs on PRs (`latest`, `develop`, `pre/*`), merge queue 
 
 Reusable workflow that runs the develop-CLI integration tests. It is usually invoked by the main tests workflow when `cli_tests` is requested but can also be triggered directly.
 
+### `tidy3d-extras-python-client-tests-integration.yml`
+
+Dedicated integration test workflow for `tidy3d-extras` package. Tests the optional extras functionality across multiple platforms and Python versions. Highlights:
+- **Cross-platform testing**: Runs on Windows, Linux, and macOS with Python 3.10 and 3.13.
+- **AWS CodeArtifact integration**: Authenticates with CodeArtifact to access private dependencies.
+- **Comprehensive test coverage**: Includes doctests, extras license verification, and full test suite with coverage reporting.
+- **Release tag support**: Can test against a specific release tag via the `release_tag` input.
+- **Invocation**: Called from `tidy3d-python-client-tests.yml` when `extras_integration_tests` is enabled, or run manually via `workflow_dispatch`.
+- **Outputs**: `workflow_success` indicates whether all integration tests passed.
+
+The workflow ensures that the `tidy3d-extras` package installs correctly and functions as expected across all supported platforms before releases.
+
 ## Maintenance Workflows
 
 ### `tidy3d-python-client-daily.yml`
 
 Scheduled at 05:00 UTC and also manually runnable. It fans out to:
 - `tidy3d-python-client-update-lockfile.yml` – keeps dependencies fresh.
-- The submodule smoke-test workflow – ensures docs/notebooks submodules stay aligned (same helper the release tests call).
+- `tidy3d-python-client-release.yml` – runs a daily draft release (`daily-0.0.0`) with client and CLI tests enabled to catch breaking changes early. This validates that the package can be built and tested against the latest develop branch without actually publishing artifacts.
 
 ### `tidy3d-python-client-update-lockfile.yml`
 
-Manual or called workflow that updates `poetry.lock`, authenticates against AWS CodeArtifact, and opens a PR on `develop` with the refreshed lockfile (`daily-chore/update-poetry-lock`). Requires `AWS_CODEARTIFACT_ACCESS_KEY` and `AWS_CODEARTIFACT_ACCESS_SECRET`.
+Manual or called workflow that updates `poetry.lock`, authenticates against AWS CodeArtifact, and opens a PR with the refreshed lockfile. Requires `AWS_CODEARTIFACT_ACCESS_KEY` and `AWS_CODEARTIFACT_ACCESS_SECRET`.
+
+**Key inputs:**
+- `source_branch` – branch to checkout and update lockfile for (defaults to `develop`). Useful for updating lockfiles on feature branches or release branches.
+- `run_workflow` – boolean to enable/disable the workflow execution.
+
+The workflow creates a PR with branch name `chore/update-poetry-lock-{source_branch}` targeting the specified source branch.
 
 ## Documentation Workflows
 
@@ -212,4 +231,5 @@ Private dependencies are sourced through AWS CodeArtifact:
 
 - Release workflow details: `docs/development/release/version.rst`
 - Development guidelines: `AGENTS.md`
+- Docker development environment: `docs/development/docker.rst` – comprehensive guide for setting up and using the Docker-based development environment
 - General repository info: `README.md`

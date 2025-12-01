@@ -1,0 +1,145 @@
+name: "public/tidy3d-extras/python-client-integration-tests"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release Tag (v2.10.0, v2.10.0rc1)'
+        required: false
+        type: string
+        default: ''
+
+  workflow_call:
+    inputs:
+      release_tag:
+        description: 'Release Tag (v2.10.0, v2.10.0rc1)'
+        required: false
+        type: string
+        default: ''
+    outputs:
+      workflow_success:
+        description: 'Overall integration test workflow success status'
+        value: ${{ jobs.integration-tests.result == 'success' }}
+
+permissions:
+  contents: read
+
+jobs:
+  integration-tests:
+    name: python-${{ matrix.python-version }}-${{ matrix.platform }}-extras
+    runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: read
+    concurrency:
+      group: tidy3d-extras-integration-${{ github.event.pull_request.number || github.sha }}-${{ matrix.platform }}-${{ matrix.python-version }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.13']
+        platform: [windows-latest, ubuntu-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIP_ONLY_BINARY: gdstk
+      MPLBACKEND: agg
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+
+    steps:
+    - name: checkout-head
+      if: ${{ !env.RELEASE_TAG }}
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+        submodules: false
+        persist-credentials: false
+
+    - name: checkout-tag
+      if: ${{ env.RELEASE_TAG }}
+      uses: actions/checkout@v4
+      with:
+        ref: refs/tags/${{ env.RELEASE_TAG }}
+        fetch-depth: 1
+        submodules: false
+        persist-credentials: false
+
+    - name: set-python-${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: install-poetry
+      uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a  # v1.4.1
+      with:
+        version: 2.1.1
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_CODEARTIFACT_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_CODEARTIFACT_ACCESS_SECRET }}
+        aws-region: us-east-1
+
+    - name: configure-codeartifact-authentication
+      run: |
+        set -e
+        echo "Getting CodeArtifact token..."
+        CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token \
+          --domain flexcompute \
+          --domain-owner 625554095313 \
+          --query authorizationToken \
+          --output text)
+
+        echo "Configuring Poetry with CodeArtifact credentials..."
+        poetry config http-basic.codeartifact aws $CODEARTIFACT_AUTH_TOKEN
+        echo "✅ CodeArtifact authentication configured"
+
+    - name: install-project
+      shell: bash
+      run: |
+        poetry --version
+        python --version
+        python -m venv .venv
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          source .venv/Scripts/activate
+          python --version
+        else
+          source .venv/bin/activate
+          which python
+        fi
+        poetry env use python
+        poetry env info
+        poetry run pip install --upgrade pip wheel setuptools
+        poetry run pip install gdstk --only-binary gdstk
+        poetry install -E extras -E dev
+    
+    - name: verify-extras-installation
+      run: |
+        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_API_KEY }}
+        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_API_KEY }}
+        poetry run python -c "import tidy3d; print(f'tidy3d version: {tidy3d.__version__}')"
+        poetry run python -c "import tidy3d_extras; print(f'tidy3d-extras version: {tidy3d_extras.__version__}')"
+        cd tests/
+        poetry run pytest _test_tidy3d_extras_license.py
+
+    - name: run-doctests
+      run: |
+        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_API_KEY }}
+        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_API_KEY }}
+        poetry run pytest -rF --tb=short tidy3d
+
+    - name: run-tests-coverage
+      env:
+        PYTHONUNBUFFERED: "1"
+      run: |
+        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_API_KEY }}
+        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_API_KEY }}
+        poetry run pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
+        poetry run pytest --cov=tidy3d -rF --tb=short tests
+        poetry run coverage report -m
+        TOTAL_COVERAGE=$(poetry run coverage report --format=total)
+        echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
+        echo "### Total coverage: ${TOTAL_COVERAGE}%"

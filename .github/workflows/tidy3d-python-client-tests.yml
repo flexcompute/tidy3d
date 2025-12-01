@@ -14,15 +14,19 @@ on:
         type: boolean
         default: false
       cli_tests:
-        description: 'Run develop-cli tests'
+        description: 'develop-cli'
         type: boolean
         default: false
       submodule_tests:
-        description: 'Run submodule tests'
+        description: 'submodule-tests'
         type: boolean
         default: false
       version_match_tests:
-        description: 'Run version consistency checks'
+        description: 'version-consistency-checks'
+        type: boolean
+        default: false
+      extras_integration_tests:
+        description: 'integration-tidy3d-extras'
         type: boolean
         default: false
       release_tag:
@@ -30,7 +34,7 @@ on:
         required: false
         type: string
         default: ''
-  
+
   workflow_call:
     inputs:
       remote_tests:
@@ -55,6 +59,11 @@ on:
         default: false
       version_match_tests:
         description: 'Run version consistency checks'
+        type: boolean
+        required: false
+        default: false
+      extras_integration_tests:
+        description: 'Run tidy3d-extras integration tests'
         type: boolean
         required: false
         default: false
@@ -95,6 +104,7 @@ jobs:
       cli_tests: ${{ steps.determine-test-type.outputs.cli_tests }}
       submodule_tests: ${{ steps.determine-test-type.outputs.submodule_tests }}
       version_match_tests: ${{ steps.determine-test-type.outputs.version_match_tests }}
+      extras_integration_tests: ${{ steps.determine-test-type.outputs.extras_integration_tests }}
     steps:
       - name: determine-test-type
         id: determine-test-type
@@ -108,6 +118,7 @@ jobs:
           INPUT_CLI: ${{ github.event.inputs.cli_tests || inputs.cli_tests }}
           INPUT_SUBMODULE: ${{ github.event.inputs.submodule_tests || inputs.submodule_tests }}
           INPUT_VERSION_MATCH: ${{ github.event.inputs.version_match_tests || inputs.version_match_tests }}
+          INPUT_EXTRAS_INTEGRATION: ${{ github.event.inputs.extras_integration_tests || inputs.extras_integration_tests }}
         run: |
           echo "Event: $EVENT_NAME"
           echo "Draft: $DRAFT_STATE"
@@ -118,6 +129,7 @@ jobs:
           echo "Input cli: $INPUT_CLI"
           echo "Input submodule: $INPUT_SUBMODULE"
           echo "Input version_match: $INPUT_VERSION_MATCH"
+          echo "Input extras_integration: $INPUT_EXTRAS_INTEGRATION"
 
           remote_tests=false
           local_tests=false
@@ -126,6 +138,7 @@ jobs:
           version_match_tests=false
           code_quality_tests=false
           pr_review_tests=false
+          extras_integration_tests=false
           
             # Workflow_dispatch input override
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
@@ -150,6 +163,10 @@ jobs:
             if [[ "$INPUT_VERSION_MATCH" == "true" ]]; then
               version_match_tests=true
             fi
+
+            if [[ "$INPUT_EXTRAS_INTEGRATION" == "true" ]]; then
+              extras_integration_tests=true
+            fi
           fi
 
           # All PRs that have been triggered need local tests (remote reserved for merge queue/manual)
@@ -163,6 +180,7 @@ jobs:
               local_tests=true
               remote_tests=true
               code_quality_tests=true
+              extras_integration_tests=true
           fi
           
           echo "local_tests=$local_tests" >> $GITHUB_OUTPUT
@@ -172,6 +190,7 @@ jobs:
           echo "version_match_tests=$version_match_tests" >> $GITHUB_OUTPUT
           echo "code_quality_tests=$code_quality_tests" >> $GITHUB_OUTPUT
           echo "pr_review_tests=$pr_review_tests" >> $GITHUB_OUTPUT
+          echo "extras_integration_tests=$extras_integration_tests" >> $GITHUB_OUTPUT
           echo "code_quality_tests=$code_quality_tests"
           echo "pr_review_tests=$pr_review_tests"
           echo "local_tests=$local_tests"
@@ -179,6 +198,7 @@ jobs:
           echo "cli_tests=$cli_tests"
           echo "submodule_tests=$submodule_tests"
           echo "version_match_tests=$version_match_tests"
+          echo "extras_integration_tests=$extras_integration_tests"
 
   lint:
     needs: determine-test-scope
@@ -919,7 +939,16 @@ jobs:
           
           echo ""
           echo "=== Submodule Checks Passed ==="
-  
+
+  extras-integration-tests:
+    name: extras-integration-tests
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.extras_integration_tests == 'true'
+    uses: ./.github/workflows/tidy3d-extras-python-client-tests-integration.yml
+    with:
+      release_tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+
   workflow-validation:
     name: workflow-validation
     if: always()
@@ -936,6 +965,7 @@ jobs:
       - develop-cli-tests
       - verify-version-consistency
       - test-submodules
+      - extras-integration-tests
     runs-on: ubuntu-latest
     steps:
       - name: check-linting-result
@@ -1002,6 +1032,12 @@ jobs:
         if: ${{ needs.determine-test-scope.outputs.submodule_tests == 'true' && needs.test-submodules.result != 'success' && needs.test-submodules.result != 'skipped' }}
         run: |
           echo "❌ Submodule tests failed."
+          exit 1
+
+      - name: check-extras-integration-tests-result
+        if: ${{ needs.determine-test-scope.outputs.extras_integration_tests == 'true' && needs.extras-integration-tests.result != 'success' && needs.extras-integration-tests.result != 'skipped' }}
+        run: |
+          echo "❌ tidy3d-extras integration tests failed."
           exit 1
 
       - name: all-checks-passed
