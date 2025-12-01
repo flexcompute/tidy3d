@@ -17,6 +17,7 @@ from .parametrizations import (
 )
 from .penalties import ErosionDilationPenalty, make_curvature_penalty, make_erosion_dilation_penalty
 from .projections import ramp_projection, smoothed_projection, tanh_projection
+from .symmetries import symmetrize_diagonal, symmetrize_mirror, symmetrize_rotation
 
 __all__ = [
     "CircularFilter",
@@ -35,5 +36,8 @@ __all__ = [
     "make_gaussian_filter",
     "ramp_projection",
     "smoothed_projection",
+    "symmetrize_diagonal",
+    "symmetrize_mirror",
+    "symmetrize_rotation",
     "tanh_projection",
 ]

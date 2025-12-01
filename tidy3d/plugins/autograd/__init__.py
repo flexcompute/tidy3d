@@ -36,6 +36,10 @@ from .invdes import (
     make_filter_and_project,
     make_gaussian_filter,
     ramp_projection,
+    smoothed_projection,
+    symmetrize_diagonal,
+    symmetrize_mirror,
+    symmetrize_rotation,
     tanh_projection,
 )
 from .primitives import gaussian_filter, interpolate_spline
@@ -79,6 +83,10 @@ __all__ = [
     "scalar_objective",
     "smooth_max",
     "smooth_min",
+    "smoothed_projection",
+    "symmetrize_diagonal",
+    "symmetrize_mirror",
+    "symmetrize_rotation",
     "tanh_projection",
     "threshold",
     "trapz",

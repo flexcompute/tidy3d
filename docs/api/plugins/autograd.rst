@@ -85,4 +85,7 @@ Inverse Design
     tidy3d.plugins.autograd.invdes.ramp_projection
     tidy3d.plugins.autograd.invdes.tanh_projection
     tidy3d.plugins.autograd.invdes.smoothed_projection
+    tidy3d.plugins.autograd.invdes.symmetrize_mirror
+    tidy3d.plugins.autograd.invdes.symmetrize_rotation
+    tidy3d.plugins.autograd.invdes.symmetrize_diagonal
 
