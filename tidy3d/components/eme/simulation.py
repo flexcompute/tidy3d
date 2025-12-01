@@ -48,6 +48,7 @@ MAX_MONITOR_INTERNAL_DATA_SIZE_GB = 50
 MAX_SIMULATION_DATA_SIZE_GB = 50
 WARN_MODE_NUM_CELLS = 1e5
 MAX_MODE_NUM_CELLS = 5e6
+WARN_COEFF_DATA_SIZE_GB = 0.5
 
 
 # eme specific simulation parameters
@@ -231,6 +232,13 @@ class EMESimulation(AbstractYeeGridSimulation):
         title="Store Port Modes",
         description="Whether to store the modes associated with the two ports. "
         "Required to find scattering matrix in basis besides the computational basis.",
+    )
+
+    store_coeffs: bool = pd.Field(
+        True,
+        title="Store Coefficients",
+        description="Whether to store the internal coefficients from the EME simulation. "
+        "The results are stored in 'EMESimulationData.coeffs'.",
     )
 
     normalize: bool = pd.Field(
@@ -752,6 +760,12 @@ class EMESimulation(AbstractYeeGridSimulation):
     def _validate_monitor_setup(self) -> None:
         """Check monitor setup."""
         for i, monitor in enumerate(self.monitors):
+            if isinstance(monitor, EMECoefficientMonitor):
+                log.warning(
+                    "'EMECoefficientMonitor' is deprecated. "
+                    "The full coefficient data is stored in "
+                    "'EMESimulationData.coeffs'."
+                )
             if isinstance(monitor, EMEMonitor):
                 _ = self._monitor_eme_cell_indices(monitor=monitor)
             if (
@@ -854,11 +868,70 @@ class EMESimulation(AbstractYeeGridSimulation):
 
                 total_size_gb += monitor_size_gb
 
+        # coefficients
+        if self.store_coeffs:
+            coeffs_size_b = 0
+            bytes_complex = 8
+            num_freqs = len(self.freqs)
+            num_modes = self.max_num_modes
+            num_eme_cells = self.eme_grid.num_cells
+            num_sweep = self._num_sweep
+            # A and B coefficients
+            coeffs_size_b += (
+                4 * bytes_complex * num_freqs * num_modes * num_modes * num_eme_cells * num_sweep
+            )
+            # interface smatrices
+            coeffs_size_b += (
+                4
+                * bytes_complex
+                * num_freqs
+                * num_modes
+                * num_modes
+                * (num_eme_cells - 1)
+                * self._num_sweep_interfaces
+            )
+            # n_complex and flux
+            coeffs_size_b += (
+                2 * bytes_complex * num_freqs * num_modes * num_eme_cells * self._num_sweep_modes
+            )
+            # overlaps
+            coeffs_size_b += (
+                2
+                * bytes_complex
+                * num_freqs
+                * num_modes
+                * num_modes
+                * (num_eme_cells - 1)
+                * self._num_sweep_modes
+            )
+            # self-overlaps
+            coeffs_size_b += (
+                bytes_complex
+                * num_freqs
+                * num_modes
+                * num_modes
+                * num_eme_cells
+                * self._num_sweep_modes
+            )
+
+            coeffs_size_gb = coeffs_size_b / 1e9
+            if coeffs_size_gb > WARN_COEFF_DATA_SIZE_GB:
+                log.warning(
+                    "Simulation 'coeffs' have estimated storage size "
+                    f"{coeffs_size_gb:1.2f}GB. "
+                    "Consider setting 'store_coeffs=False' "
+                    "or reducing the number of frequencies, modes, "
+                    "EME cells, or sweep indices."
+                )
+
+            total_size_gb += coeffs_size_gb
+
         if total_size_gb > MAX_SIMULATION_DATA_SIZE_GB:
             raise SetupError(
                 f"Simulation's monitors have {total_size_gb:.2f}GB of estimated storage, "
                 f"a maximum of {MAX_SIMULATION_DATA_SIZE_GB:.2f}GB are allowed. Note that "
-                "this estimate includes the port modes if 'store_port_modes' is 'True'."
+                "this estimate includes the port modes if 'store_port_modes' is 'True' "
+                "and the 'coeffs' if 'store_coeffs' is 'True'."
             )
 
         # Make sure that internal storage from mode solvers also does not exceed the limit.

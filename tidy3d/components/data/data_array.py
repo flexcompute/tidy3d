@@ -1185,6 +1185,31 @@ class EMESMatrixDataArray(DataArray):
     _data_attrs = {"long_name": "scattering matrix element"}
 
 
+class EMEInterfaceSMatrixDataArray(DataArray):
+    """Scattering matrix elements at a single cell interface for a fixed pair of ports,
+    possibly with an extra sweep index.
+    Example
+    -------
+    >>> mode_index_in = [0, 1]
+    >>> mode_index_out = [0, 1, 2]
+    >>> eme_cell_index = [2, 4]
+    >>> f = [2e14]
+    >>> sweep_index = np.arange(10)
+    >>> coords = dict(
+    ...     f=f,
+    ...     sweep_index=sweep_index,
+    ...     eme_cell_index=eme_cell_index,
+    ...     mode_index_out=mode_index_out,
+    ...     mode_index_in=mode_index_in,
+    ... )
+    >>> fd = EMEInterfaceSMatrixDataArray((1 + 1j) * np.random.random((1, 10, 2, 3, 2)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "sweep_index", "eme_cell_index", "mode_index_out", "mode_index_in")
+    _data_attrs = {"long_name": "scattering matrix element"}
+
+
 class EMEModeIndexDataArray(DataArray):
     """Complex-valued effective propagation index of an EME mode,
     also indexed by EME cell.
@@ -1201,6 +1226,24 @@ class EMEModeIndexDataArray(DataArray):
     __slots__ = ()
     _dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
     _data_attrs = {"long_name": "Propagation index"}
+
+
+class EMEFluxDataArray(DataArray):
+    """Power flux of an EME mode, also indexed by EME cell.
+
+    Example
+    -------
+    >>> f = [2e14, 3e14]
+    >>> sweep_index = np.arange(2)
+    >>> eme_cell_index = np.arange(5)
+    >>> mode_index = np.arange(4)
+    >>> coords = dict(f=f, sweep_index=sweep_index, eme_cell_index=eme_cell_index, mode_index=mode_index)
+    >>> data = EMEFluxDataArray(np.random.random((2,2,5,4)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
+    _data_attrs = {"units": WATT, "long_name": "flux"}
 
 
 class ChargeDataArray(DataArray):
@@ -1592,8 +1635,10 @@ DATA_ARRAY_TYPES = [
     EMEScalarFieldDataArray,
     EMEScalarModeFieldDataArray,
     EMESMatrixDataArray,
+    EMEInterfaceSMatrixDataArray,
     EMECoefficientDataArray,
     EMEModeIndexDataArray,
+    EMEFluxDataArray,
     EMEFreqModeDataArray,
     ChargeDataArray,
     SteadyVoltageDataArray,

@@ -12879,6 +12879,10 @@
       },
       "type": "array"
     },
+    "store_coeffs": {
+      "default": true,
+      "type": "boolean"
+    },
     "store_port_modes": {
       "default": true,
       "type": "boolean"

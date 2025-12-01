@@ -285,6 +285,9 @@ def test_eme_monitor():
 
 def test_eme_simulation():
     sim = make_eme_sim()
+    # no log except deprecated coeffs monitor
+    with AssertLogLevel(None):
+        _ = sim.updated_copy(monitors=[sim.monitors[0], *list(sim.monitors[2:])])
     _ = sim.plot(x=0, ax=AX)
     _ = sim.plot(y=0, ax=AX)
     _ = sim.plot(z=0, ax=AX)
@@ -311,16 +314,16 @@ def test_eme_simulation():
 
     # test warning for not providing wavelength in autogrid
     grid_spec = td.GridSpec.auto(min_steps_per_wvl=20)
+    sim = sim.updated_copy(grid_spec=grid_spec)
     with AssertLogLevel("INFO", contains_str="wavelength"):
-        sim = sim.updated_copy(grid_spec=grid_spec)
+        _ = sim.updated_copy(monitors=[])
     # multiple freqs are ok, but not for autogrid
     _ = sim.updated_copy(
         grid_spec=td.GridSpec.uniform(dl=0.2), freqs=[10000000000.0, *list(sim.freqs)]
     )
     with AssertLogLevel("INFO", contains_str="wavelength"):
         _ = sim.updated_copy(
-            freqs=[*list(sim.freqs), 10000000000.0],
-            grid_spec=grid_spec,
+            freqs=[*list(sim.freqs), 10000000000.0], grid_spec=grid_spec, monitors=[]
         )
 
     # test port offsets
@@ -460,6 +463,17 @@ def test_eme_simulation():
     )
     with AssertLogLevel("WARNING", contains_str="estimated storage"):
         sim_bad.validate_pre_upload()
+    # coeffs warning
+    sim_bad = sim.updated_copy(
+        size=(10, 10, 10),
+        monitors=[],
+        store_port_modes=False,
+        freqs=list(1e14 * np.linspace(1, 2, 100)),
+        eme_grid_spec=td.EMEUniformGrid(mode_spec=td.EMEModeSpec(num_modes=100), num_cells=100),
+        grid_spec=sim.grid_spec.updated_copy(wavelength=1),
+    )
+    with AssertLogLevel("WARNING", contains_str="store_coeffs"):
+        sim_bad.validate_pre_upload()
     sim_bad = sim.updated_copy(
         size=(10, 10, 10),
         monitors=[large_monitor],
@@ -558,12 +572,14 @@ def test_eme_simulation():
             constraint="passive",
             eme_grid_spec=td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=40)),
             grid_spec=sim.grid_spec.updated_copy(wavelength=1),
+            monitors=[],
         )
         sim_good.validate_pre_upload()
         sim_good = sim.updated_copy(
             constraint=None,
             eme_grid_spec=td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=60)),
             grid_spec=sim.grid_spec.updated_copy(wavelength=1),
+            monitors=[],
         )
         sim_good.validate_pre_upload()
     # warn about num modes with constraint
@@ -731,6 +747,47 @@ def _get_eme_smatrix_data_array(num_modes_in=2, num_modes_out=3, num_freqs=2, nu
     return smatrix_entry
 
 
+def _get_eme_interface_smatrix_data_array(
+    num_modes_in=2, num_modes_out=3, num_freqs=2, num_sweep=0
+):
+    if num_modes_in != 0:
+        mode_index_in = np.arange(num_modes_in)
+    else:
+        mode_index_in = [0]
+    if num_modes_out != 0:
+        mode_index_out = np.arange(num_modes_out)
+    else:
+        mode_index_out = [0]
+    if num_sweep != 0:
+        sweep_index = np.arange(num_sweep)
+    else:
+        sweep_index = [0]
+    eme_cell_index = np.arange(3)
+
+    f = td.C_0 * np.linspace(1, 2, num_freqs)
+
+    data = (1 + 1j) * np.random.random(
+        (len(f), len(sweep_index), len(eme_cell_index), len(mode_index_out), len(mode_index_in))
+    )
+    coords = {
+        "f": f,
+        "sweep_index": sweep_index,
+        "eme_cell_index": eme_cell_index,
+        "mode_index_out": mode_index_out,
+        "mode_index_in": mode_index_in,
+    }
+    smatrix_entry = td.EMEInterfaceSMatrixDataArray(data, coords=coords)
+
+    if num_modes_in == 0:
+        smatrix_entry = smatrix_entry.drop_vars("mode_index_in")
+    if num_modes_out == 0:
+        smatrix_entry = smatrix_entry.drop_vars("mode_index_out")
+    if num_sweep == 0:
+        smatrix_entry = smatrix_entry.drop_vars("sweep_index")
+
+    return smatrix_entry
+
+
 def _get_eme_smatrix_dataset(num_modes_1=3, num_modes_2=4, num_sweep=0):
     S11 = _get_eme_smatrix_data_array(
         num_modes_in=num_modes_1, num_modes_out=num_modes_1, num_sweep=num_sweep
@@ -745,6 +802,35 @@ def _get_eme_smatrix_dataset(num_modes_1=3, num_modes_2=4, num_sweep=0):
         num_modes_in=num_modes_2, num_modes_out=num_modes_2, num_sweep=num_sweep
     )
     return td.EMESMatrixDataset(S11=S11, S12=S12, S21=S21, S22=S22)
+
+
+def _get_eme_interface_smatrix_dataset(num_modes_1=3, num_modes_2=4, num_sweep=0):
+    S11 = _get_eme_interface_smatrix_data_array(
+        num_modes_in=num_modes_1, num_modes_out=num_modes_1, num_sweep=num_sweep
+    )
+    S12 = _get_eme_interface_smatrix_data_array(
+        num_modes_in=num_modes_2, num_modes_out=num_modes_1, num_sweep=num_sweep
+    )
+    S21 = _get_eme_interface_smatrix_data_array(
+        num_modes_in=num_modes_1, num_modes_out=num_modes_2, num_sweep=num_sweep
+    )
+    S22 = _get_eme_interface_smatrix_data_array(
+        num_modes_in=num_modes_2, num_modes_out=num_modes_2, num_sweep=num_sweep
+    )
+    return td.EMEInterfaceSMatrixDataset(S11=S11, S12=S12, S21=S21, S22=S22)
+
+
+def _get_eme_overlaps_dataset(num_modes_1=3, num_modes_2=4, num_sweep=0):
+    O11 = _get_eme_interface_smatrix_data_array(
+        num_modes_in=num_modes_1, num_modes_out=num_modes_1, num_sweep=num_sweep
+    )
+    O12 = _get_eme_interface_smatrix_data_array(
+        num_modes_in=num_modes_2, num_modes_out=num_modes_1, num_sweep=num_sweep
+    )
+    O21 = _get_eme_interface_smatrix_data_array(
+        num_modes_in=num_modes_1, num_modes_out=num_modes_2, num_sweep=num_sweep
+    )
+    return td.EMEOverlapDataset(O11=O11, O12=O12, O21=O21)
 
 
 def _get_eme_coeff_data_array(num_sweep=0):
@@ -787,7 +873,26 @@ def _get_eme_coeff_data_array(num_sweep=0):
 def _get_eme_coeff_dataset(num_sweep=0):
     A = _get_eme_coeff_data_array(num_sweep=num_sweep)
     B = _get_eme_coeff_data_array(num_sweep=num_sweep)
-    return td.EMECoefficientDataset(A=A, B=B)
+    flux = _get_eme_flux_data_array(num_sweep=num_sweep)
+    n_complex = _get_eme_mode_index_data_array(num_sweep=num_sweep)
+    interface_smatrices = _get_eme_interface_smatrix_dataset(num_sweep=num_sweep)
+    overlaps = _get_eme_overlaps_dataset(num_sweep=num_sweep)
+    return td.EMECoefficientDataset(
+        A=A,
+        B=B,
+        flux=flux,
+        n_complex=n_complex,
+        interface_smatrices=interface_smatrices,
+        overlaps=overlaps,
+    )
+
+
+def test_eme_normalize_coeff_dataset():
+    coeffs = _get_eme_coeff_dataset()
+    coeffs_normalized = coeffs.normalized_copy
+    assert coeffs_normalized.flux is None
+    with pytest.raises(ValidationError):
+        _ = coeffs_normalized.normalized_copy
 
 
 def test_eme_coeff_data_array():
@@ -812,6 +917,29 @@ def _get_eme_mode_index_data_array(num_sweep=0):
     data = td.EMEModeIndexDataArray(
         (1 + 1j)
         * np.random.random((len(f), len(sweep_index), len(eme_cell_index), len(mode_index))),
+        coords=coords,
+    )
+    if num_sweep == 0:
+        data = data.drop_vars("sweep_index")
+    return data
+
+
+def _get_eme_flux_data_array(num_sweep=0):
+    f = [td.C_0, 3e14]
+    mode_index = np.arange(10)
+    eme_cell_index = np.arange(7)
+    if num_sweep != 0:
+        sweep_index = np.arange(num_sweep)
+    else:
+        sweep_index = [0]
+    coords = {
+        "f": f,
+        "sweep_index": sweep_index,
+        "eme_cell_index": eme_cell_index,
+        "mode_index": mode_index,
+    }
+    data = td.EMEFluxDataArray(
+        np.random.random((len(f), len(sweep_index), len(eme_cell_index), len(mode_index))),
         coords=coords,
     )
     if num_sweep == 0:
@@ -1305,7 +1433,7 @@ def test_eme_periodicity():
 
     # remove the field monitor, now it passes
     desired_cell_index_pairs = set([(i, i + 1) for i in range(6)] + [(5, 1)])
-    with AssertLogLevel(None):
+    with AssertLogLevel("WARNING", contains_str="deprecated"):
         sim = sim.updated_copy(
             monitors=[m for m in sim.monitors if not isinstance(m, td.EMEFieldMonitor)]
         )
