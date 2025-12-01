@@ -24,6 +24,7 @@ import xarray as xr
 import yaml
 from autograd.tracer import isbox
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
+from pydantic.fields import FieldInfo
 
 from tidy3d.compat import Self
 from tidy3d.exceptions import FileError
@@ -44,15 +45,17 @@ FORBID_SPECIAL_CHARACTERS = ["/"]
 TRACED_FIELD_KEYS_ATTR = "__tidy3d_traced_field_keys__"
 TYPE_TO_CLASS_MAP: dict[str, type[Tidy3dBaseModel]] = {}
 
+_CacheReturn = TypeVar("_CacheReturn")
 
-def cache(prop):
+
+def cache(prop: Callable[[Any], _CacheReturn]) -> Callable[[Any], _CacheReturn]:
     """Decorates a property to cache the first computed value and return it on subsequent calls."""
 
     # note, we could also just use `prop` as dict key, but hashing property might be slow
     prop_name = prop.__name__
 
     @wraps(prop)
-    def cached_property_getter(self):
+    def cached_property_getter(self: Any) -> _CacheReturn:
         """The new property method to be returned by decorator."""
 
         stored_value = self._cached_properties.get(prop_name)
@@ -67,20 +70,25 @@ def cache(prop):
     return cached_property_getter
 
 
-def cached_property(cached_property_getter):
+def cached_property(cached_property_getter: Callable[[Any], _CacheReturn]) -> property:
     """Shortcut for property(cache()) of a getter."""
 
     return property(cache(cached_property_getter))
 
 
-def cached_property_guarded(key_func):
+_GuardedReturn = TypeVar("_GuardedReturn")
+
+
+def cached_property_guarded(
+    key_func: Callable[[Any], Any],
+) -> Callable[[Callable[[Any], _GuardedReturn]], property]:
     """Like cached_property, but invalidates when the key_func(self) changes."""
 
-    def _decorator(getter):
+    def _decorator(getter: Callable[[Any], _GuardedReturn]) -> property:
         prop_name = getter.__name__
 
         @wraps(getter)
-        def _guarded(self):
+        def _guarded(self: Any) -> _GuardedReturn:
             cache_store = self._cached_properties.get(prop_name)
             current_key = key_func(self)
             if cache_store is not None:
@@ -126,7 +134,7 @@ def _get_valid_extension(fname: PathLike) -> str:
     )
 
 
-def _fmt_ann_literal(ann) -> str:
+def _fmt_ann_literal(ann: Any) -> str:
     """Spell the annotation exactly as written."""
     if ann is None:
         return "Any"
@@ -175,7 +183,7 @@ class Tidy3dBaseModel(BaseModel):
 
     @field_validator("name", check_fields=False)
     @classmethod
-    def _validate_name_no_special_characters(cls, name):
+    def _validate_name_no_special_characters(cls: type[T], name: Optional[str]) -> Optional[str]:
         if name is None:
             return name
         for character in FORBID_SPECIAL_CHARACTERS:
@@ -185,13 +193,13 @@ class Tidy3dBaseModel(BaseModel):
                 )
         return name
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """Init method, includes post-init validators."""
         log.begin_capture()
         super().__init__(**kwargs)
         log.end_capture(self)
 
-    def __init_subclass__(cls: type[T], **kwargs):
+    def __init_subclass__(cls: type[T], **kwargs: Any) -> None:
         """Injects a constant discriminator field before Pydantic builds the model.
 
         Adds
@@ -211,7 +219,7 @@ class Tidy3dBaseModel(BaseModel):
         super().__init_subclass__(**kwargs)
 
     @classmethod
-    def __pydantic_init_subclass__(cls: type[T], **kwargs):
+    def __pydantic_init_subclass__(cls: type[T], **kwargs: Any) -> None:
         super().__pydantic_init_subclass__(**kwargs)
 
         # add docstring once pydantic is done constructing the class
@@ -306,7 +314,7 @@ class Tidy3dBaseModel(BaseModel):
         if not update:
             return {}
 
-        def get_tuple_element_type(annotation) -> Optional[type]:
+        def get_tuple_element_type(annotation: Any) -> Optional[type]:
             """Get the element type of a tuple annotation if it has one consistent type."""
             origin = get_origin(annotation)
             if origin is tuple:
@@ -320,7 +328,7 @@ class Tidy3dBaseModel(BaseModel):
                         return args[0]
             return None
 
-        def should_convert_to_tuple(annotation) -> tuple[bool, Optional[type]]:
+        def should_convert_to_tuple(annotation: Any) -> tuple[bool, Optional[type[Any]]]:
             """Check if the given annotation represents a tuple type and return element type if any."""
             origin = get_origin(annotation)
 
@@ -336,7 +344,7 @@ class Tidy3dBaseModel(BaseModel):
 
             return False, None
 
-        def convert_value(value: Any, field_info) -> Any:
+        def convert_value(value: Any, field_info: FieldInfo) -> Any:
             """Convert value based on field type information."""
             annotation = field_info.annotation
 
@@ -423,7 +431,11 @@ class Tidy3dBaseModel(BaseModel):
         return processed
 
     def copy(
-        self, *, deep: bool = True, validate: bool = True, update: Mapping[str, Any] | None = None
+        self,
+        *,
+        deep: bool = True,
+        validate: bool = True,
+        update: Optional[Mapping[str, Any]] = None,
     ) -> Self:
         """Return a copy of the model.
 
@@ -433,7 +445,7 @@ class Tidy3dBaseModel(BaseModel):
             Whether to make a deep copy first (same as v1).
         validate : bool = True
             If ``True``, run full Pydantic validation on the copied data.
-        update : Mapping[str, Any] | None = None
+        update : Optional[Mapping[str, Any]] = None
             Optional mapping of fields to overwrite (passed straight
             through to ``model_copy(update=...)``).
         """
@@ -458,7 +470,12 @@ class Tidy3dBaseModel(BaseModel):
         return new_model
 
     def updated_copy(
-        self, path: str | None = None, *, deep: bool = True, validate: bool = True, **kwargs: Any
+        self,
+        path: Optional[str] = None,
+        *,
+        deep: bool = True,
+        validate: bool = True,
+        **kwargs: Any,
     ) -> Self:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
 
@@ -680,7 +697,7 @@ class Tidy3dBaseModel(BaseModel):
         fname: PathLike,
         group_path: Optional[str] = None,
         lazy: bool = False,
-        on_load: Optional[Callable] = None,
+        on_load: Optional[Callable[[Any], None]] = None,
         **parse_obj_kwargs: Any,
     ) -> Self:
         """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
@@ -689,13 +706,13 @@ class Tidy3dBaseModel(BaseModel):
         ----------
         fname : PathLike
             Full path to the file to load the :class:`Tidy3dBaseModel` from.
-        group_path : str | None = None
+        group_path : Optional[str] = None
             Path to a group inside the file to use as the base level. Only for hdf5 files.
             Starting `/` is optional.
         lazy : bool = False
             Whether to load the actual data (``lazy=False``) or return a proxy that loads
             the data when accessed (``lazy=True``).
-        on_load : Callable | None = None
+        on_load : Optional[Callable[[Any], None]] = None
             Callback function executed once the model is fully materialized.
             Only used if ``lazy=True``. The callback is invoked with the loaded
             instance as its sole argument, enabling post-processing such as
@@ -963,7 +980,9 @@ class Tidy3dBaseModel(BaseModel):
         return {cls.get_tuple_group_name(index=i): val for i, val in enumerate(tuple_values)}
 
     @classmethod
-    def get_sub_model(cls: type[T], group_path: str, model_dict: dict | list) -> dict:
+    def get_sub_model(
+        cls: type[T], group_path: str, model_dict: Union[dict[str, Any], list[Any]]
+    ) -> dict:
         """Get the sub model for a given group path."""
 
         for key in group_path.split("/"):
@@ -1115,14 +1134,14 @@ class Tidy3dBaseModel(BaseModel):
 
     def to_hdf5(
         self,
-        fname: PathLike | io.BytesIO,
+        fname: Union[PathLike, io.BytesIO],
         custom_encoders: Optional[list[Callable]] = None,
     ) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
         ----------
-        fname : PathLike | BytesIO
+        fname : Union[PathLike, BytesIO]
             Full path to the .hdf5 file or buffer to save the :class:`Tidy3dBaseModel` to.
         custom_encoders : List[Callable]
             List of functions accepting (fname: str, group_path: str, value: Any) that take
@@ -1260,13 +1279,15 @@ class Tidy3dBaseModel(BaseModel):
         return cls._validate_model_dict(model_dict, **model_validate_kwargs)
 
     def to_hdf5_gz(
-        self, fname: PathLike | io.BytesIO, custom_encoders: Optional[list[Callable]] = None
+        self,
+        fname: Union[PathLike, io.BytesIO],
+        custom_encoders: Optional[list[Callable]] = None,
     ) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
 
         Parameters
         ----------
-        fname : PathLike | BytesIO
+        fname : Union[PathLike, BytesIO]
             Full path to the .hdf5.gz file or buffer to save the :class:`Tidy3dBaseModel` to.
         custom_encoders : List[Callable]
             List of functions accepting (fname: str, group_path: str, value: Any) that take
@@ -1305,7 +1326,7 @@ class Tidy3dBaseModel(BaseModel):
         if getattr(self, "__pydantic_extra__", None) != getattr(other, "__pydantic_extra__", None):
             return False
 
-        def _fields_equal(a, b) -> bool:
+        def _fields_equal(a: Any, b: Any) -> bool:
             a = get_static(a)
             b = get_static(b)
 
@@ -1439,7 +1460,7 @@ class Tidy3dBaseModel(BaseModel):
         """Recursively insert a map of paths to autograd-traced fields into a copy of this obj."""
         self_dict = self.model_dump(round_trip=True)
 
-        def insert_value(x, path: tuple[str, ...], sub_dict: dict) -> None:
+        def insert_value(x: Any, path: tuple[str, ...], sub_dict: dict[str, Any]) -> None:
             """Insert a value into the path into a dictionary."""
             current_dict = sub_dict
             for key in path[:-1]:
@@ -1464,7 +1485,7 @@ class Tidy3dBaseModel(BaseModel):
         return self.__class__.model_validate(self_dict)
 
     def _serialized_traced_field_keys(
-        self, field_mapping: AutogradFieldMap | None = None
+        self, field_mapping: Optional[AutogradFieldMap] = None
     ) -> Optional[str]:
         """Return a serialized, order-independent representation of traced field paths."""
 
@@ -1643,7 +1664,7 @@ class Tidy3dBaseModel(BaseModel):
 
         return sci_min, sci_max
 
-    def __rich_repr__(self):
+    def __rich_repr__(self) -> rich.repr.Result:
         """How to pretty-print instances of ``Tidy3dBaseModel``."""
         for name in type(self).model_fields:
             value = getattr(self, name)
@@ -1672,9 +1693,9 @@ class Tidy3dBaseModel(BaseModel):
 
 
 def _make_lazy_proxy(
-    target_cls: type,
+    target_cls: type[Tidy3dBaseModel],
     on_load: Optional[Callable[[Any], None]] = None,
-) -> type:
+) -> type[Tidy3dBaseModel]:
     """
     Return a lazy-loading proxy subclass of ``target_cls``.
 
@@ -1682,7 +1703,7 @@ def _make_lazy_proxy(
     ----------
     target_cls : type
         Must implement ``dict_from_file`` and ``model_validate``.
-    on_load : Callable[[Any], None] | None = None
+    on_load : Optional[Callable[[Any], None]] = None
         A function to call with the fully loaded instance once loaded.
 
     Returns
@@ -1700,13 +1721,13 @@ def _make_lazy_proxy(
             fname: PathLike,
             group_path: Optional[str],
             parse_obj_kwargs: Any,
-        ):
+        ) -> None:
             # store lazy context only in __dict__
             object.__setattr__(self, "_lazy_fname", Path(fname))
             object.__setattr__(self, "_lazy_group_path", group_path)
             object.__setattr__(self, "_lazy_parse_obj_kwargs", dict(parse_obj_kwargs or {}))
 
-        def copy(self, **kwargs: Any):
+        def copy(self, **kwargs: Any) -> Self:
             """Return another lazy proxy instead of materializing."""
             return _LazyProxy(
                 object.__getattribute__(self, "_lazy_fname"),
@@ -1717,7 +1738,7 @@ def _make_lazy_proxy(
                 },
             )
 
-        def __getattribute__(self, name: str):
+        def __getattribute__(self, name: str) -> Any:
             # Attributes that must *not* trigger materialization
             if name.startswith("_lazy_") or name in {
                 "__class__",

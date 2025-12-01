@@ -6,8 +6,16 @@ from abc import ABC, abstractmethod
 from typing import Any, Literal, Optional
 
 import numpy as np
-from pydantic import Field, NonNegativeFloat, PositiveInt, field_validator, model_validator
+from pydantic import (
+    Field,
+    FieldValidationInfo,
+    NonNegativeFloat,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
 
+from tidy3d.compat import Self
 from tidy3d.constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -73,7 +81,7 @@ class Monitor(AbstractMonitor):
     )
 
     @property
-    def _to_solver_monitor(self):
+    def _to_solver_monitor(self) -> Self:
         """Monitor definition that will be used to define the field recording during the time
         stepping."""
         return self
@@ -111,7 +119,9 @@ class FreqMonitor(Monitor, ABC):
 
     @field_validator("freqs")
     @classmethod
-    def _warn_num_freqs(cls, val, info):
+    def _warn_num_freqs(
+        cls: type[FreqMonitor], val: FreqArray, info: FieldValidationInfo
+    ) -> FreqArray:
         """Warn if number of frequencies is too large."""
         if len(val) > WARN_NUM_FREQS:
             log.warning(
@@ -163,7 +173,7 @@ class TimeMonitor(Monitor, ABC):
     )
 
     @model_validator(mode="after")
-    def _warn_interval_default(self):
+    def _warn_interval_default(self) -> Self:
         """If all defaults used for time sampler, warn and set ``interval=1`` internally."""
         val = self.interval
 
@@ -190,7 +200,7 @@ class TimeMonitor(Monitor, ABC):
         return self
 
     @model_validator(mode="after")
-    def stop_greater_than_start(self):
+    def stop_greater_than_start(self) -> Self:
         """Ensure sure stop is greater than or equal to start."""
         stop = self.stop
         start = self.start
@@ -412,7 +422,9 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
 
     @field_validator("mode_spec")
     @classmethod
-    def _warn_num_modes(cls, val, info):
+    def _warn_num_modes(
+        cls: type[ModeMonitor], val: ModeSpec, info: FieldValidationInfo
+    ) -> ModeSpec:
         """Warn if number of modes is too large."""
         if val.num_modes > WARN_NUM_MODES:
             log.warning(
@@ -654,14 +666,14 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
     )
 
     @property
-    def integration_surfaces(self):
+    def integration_surfaces(self) -> list[SurfaceIntegrationMonitor]:
         """Surfaces of the monitor where fields will be recorded for subsequent integration."""
         if self.size.count(0.0) == 0:
             return self.surfaces_with_exclusion(**self.model_dump())
         return [self]
 
     @model_validator(mode="after")
-    def normal_dir_exists_for_surface(self):
+    def normal_dir_exists_for_surface(self) -> Self:
         """If the monitor is a surface, set default ``normal_dir`` if not provided.
         If the monitor is a box, warn that ``normal_dir`` is relevant only for surfaces."""
         if self.size.count(0.0) != 1:
@@ -676,7 +688,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
         return self
 
     @model_validator(mode="after")
-    def check_excluded_surfaces(self):
+    def check_excluded_surfaces(self) -> Self:
         """Error if ``exclude_surfaces`` is provided for a surface monitor."""
         exclude_surfaces = self.exclude_surfaces
         if exclude_surfaces is None:
@@ -803,7 +815,7 @@ class ModeMonitor(AbstractModeMonitor):
     """
 
     @property
-    def _to_solver_monitor(self):
+    def _to_solver_monitor(self) -> Self:
         """Monitor definition that will be used to define the field recording during the time
         stepping."""
         return self.updated_copy(colocate=False)
@@ -863,7 +875,7 @@ class ModeSolverMonitor(AbstractModeMonitor):
         return self.mode_spec._sampling_freqs_mode_solver_data(freqs=self.freqs)
 
     @model_validator(mode="after")
-    def set_store_fields(self):
+    def set_store_fields(self) -> Self:
         """Ensure 'store_fields_direction' is compatible with 'direction'."""
         store_fields_direction = self.store_fields_direction
         direction = self.direction
@@ -919,7 +931,7 @@ class FieldProjectionSurface(Tidy3dBaseModel):
 
     @field_validator("monitor")
     @classmethod
-    def is_plane(cls, val):
+    def is_plane(cls, val: FieldMonitor) -> FieldMonitor:
         """Ensures that the monitor is a plane, i.e., its ``size`` attribute has exactly 1 zero"""
         size = val.size
         if size.count(0.0) != 1:
@@ -991,7 +1003,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     )
 
     @model_validator(mode="after")
-    def window_size_for_surface(self):
+    def window_size_for_surface(self) -> Self:
         """Ensures that windowing is applied for surface monitors only."""
         val = self.window_size
         size = self.size
@@ -1007,7 +1019,11 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
 
     @field_validator("window_size")
     @classmethod
-    def window_size_leq_one(cls, val, info):
+    def window_size_leq_one(
+        cls: type[AbstractFieldProjectionMonitor],
+        val: tuple[float, float],
+        info: FieldValidationInfo,
+    ) -> tuple[float, float]:
         """Ensures that each component of the window size is less than or equal to 1."""
         if val[0] > 1 or val[1] > 1:
             raise ValidationError(
@@ -1519,7 +1535,7 @@ class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
     )
 
     @model_validator(mode="after")
-    def reciprocal_vector_range(self):
+    def reciprocal_vector_range(self) -> Self:
         """Ensure that ux, uy are in [-1, 1]."""
         maxabs_ux = max(list(self.ux), key=abs)
         maxabs_uy = max(list(self.uy), key=abs)
@@ -1595,7 +1611,7 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
 
     @field_validator("size")
     @classmethod
-    def diffraction_monitor_size(cls, val):
+    def diffraction_monitor_size(cls: type[DiffractionMonitor], val: Size) -> Size:
         """Ensure that the monitor is infinite in the transverse direction."""
         if val.count(inf) != 2:
             raise SetupError(

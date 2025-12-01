@@ -7,10 +7,11 @@ import pathlib
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from os import PathLike
-from typing import Any, Literal, Optional, Union, get_args
+from typing import Any, Callable, Literal, Optional, Union, get_args
 
 import autograd.numpy as np
 import xarray as xr
+from numpy.typing import NDArray
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -38,6 +39,7 @@ from .boundary import (
     AbsorberSpec,
     BlochBoundary,
     Boundary,
+    BoundaryEdgeType,
     BoundarySpec,
     InternalAbsorber,
     ModeABCBoundary,
@@ -192,11 +194,13 @@ FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
 RF_FREQ_WARNING = 300e9
 
 
-def validate_boundaries_for_zero_dims(warn_on_change: bool = True):
+def validate_boundaries_for_zero_dims(
+    warn_on_change: bool = True,
+) -> Callable[[AbstractYeeGridSimulation], AbstractYeeGridSimulation]:
     """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
 
     @model_validator(mode="after")
-    def boundaries_for_zero_dims(self):
+    def boundaries_for_zero_dims(self: AbstractYeeGridSimulation) -> AbstractYeeGridSimulation:
         """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
         val = self.boundary_spec
         boundaries = val.to_list
@@ -366,7 +370,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
     """
 
-    simulation_type: Optional[Literal["autograd_fwd", "autograd_bwd", "tidy3d", None]] = Field(
+    simulation_type: Optional[Literal["autograd_fwd", "autograd_bwd", "tidy3d"]] = Field(
         "tidy3d",
         title="Simulation Type",
         description="Tag used internally to distinguish types of simulations for "
@@ -389,12 +393,14 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
     @field_validator("simulation_type")
     @classmethod
-    def _validate_simulation_type_tidy3d(cls, val):
+    def _validate_simulation_type_tidy3d(
+        cls, val: Optional[Literal["autograd_fwd", "autograd_bwd", "tidy3d"]]
+    ) -> Literal["autograd_fwd", "autograd_bwd", "tidy3d"]:
         """Enforce the simulation_type is 'tidy3d' if passed as None for bkwrds compatibility."""
         return "tidy3d" if val is None else val
 
     @model_validator(mode="after")
-    def _validate_num_lumped_elements(self):
+    def _validate_num_lumped_elements(self) -> Self:
         """Error if too many lumped elements present."""
         val = self.lumped_elements
         if val is None:
@@ -411,7 +417,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         return self
 
     @model_validator(mode="after")
-    def _check_3d_simulation_with_lumped_elements(self):
+    def _check_3d_simulation_with_lumped_elements(self) -> Self:
         """Error if Simulation contained lumped elements and is not a 3D simulation"""
         val = self.lumped_elements
         size = self.size
@@ -444,7 +450,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         return num_cells_in_monitor(monitor)
 
     @model_validator(mode="after")
-    def _validate_boundary_spec_symmetry(self):
+    def _validate_boundary_spec_symmetry(self) -> Self:
         """Error if symmetry is imposed along an axis but the boundary conditions are not the same
         on both sides."""
 
@@ -982,7 +988,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         return pml_thicknesses
 
     @cached_property
-    def _internal_layerrefinement_boundary_types(self):
+    def _internal_layerrefinement_boundary_types(self) -> list[list[Optional[str]]]:
         """Boundary types for layer refinement."""
         boundary_types = [[None, None], [None, None], [None, None]]
         for dim, boundary in enumerate(self.boundary_spec.to_list):
@@ -1292,7 +1298,12 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             The supplied or created matplotlib axes.
         """
 
-        def set_plot_params(boundary_edge, lim, side, thickness):
+        def set_plot_params(
+            boundary_edge: Union[ABCBoundary, ModeABCBoundary, BoundaryEdgeType],
+            lim: float,
+            side: Literal[-1, 1],
+            thickness: float,
+        ) -> tuple[PlotParams, float]:
             """Return the line plot properties such as color and opacity based on the boundary"""
             if isinstance(boundary_edge, PECBoundary):
                 plot_params = plot_params_pec.copy(deep=True)
@@ -1488,7 +1499,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         """Dictionary collecting various properties of the grids in the simulation."""
         return self.grid.info
 
-    def _subgrid(self, span_inds: np.ndarray, grid: Grid = None):
+    def _subgrid(self, span_inds: np.ndarray, grid: Grid = None) -> Grid:
         """Take a subgrid of the simulation grid with cell span defined by ``span_inds`` along the
         three dimensions. Optionally, a grid different from the simulation grid can be provided.
         The ``span_inds`` can also extend beyond the grid, in which case the grid is padded based
@@ -1534,7 +1545,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         return num_layers
 
-    def _snap_zero_dim(self, grid: Grid, skip_axis: Axis = None):
+    def _snap_zero_dim(self, grid: Grid, skip_axis: Optional[Axis] = None) -> Grid:
         """Snap a grid to the simulation center along any dimension along which simulation is
         effectively 0D, defined as having a single pixel. This is more general than just checking
         size = 0."""
@@ -1560,7 +1571,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
     def _discretize_inds_monitor(
         self, monitor: Union[Monitor, Box], colocate: Optional[bool] = None
-    ):
+    ) -> NDArray:
         """Start and stopping indexes for the cells where data needs to be recorded to fully cover
         a ``monitor``. This is used during the solver run. The final grid on which a monitor data
         lives is computed in ``discretize_monitor``, with the difference being that 0-sized
@@ -1705,7 +1716,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             subpixel_sim = tidy3d_extras["mod"].SubpixelSimulation.from_simulation(self)
             return subpixel_sim.epsilon_on_grid(grid=grid, coord_key=coord_key, freq=freq)
 
-        def get_eps(structure: Structure, frequency: float, coords: Coords):
+        def get_eps(structure: Structure, frequency: float, coords: Coords) -> complex:
             """Select the correct epsilon component if field locations are requested."""
             if coord_key[0] != "E":
                 return np.mean(structure.eps_diagonal(frequency, coords), axis=0)
@@ -1716,7 +1727,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 col = ["x", "y", "z"].index(coord_key[2])
             return structure.eps_comp(row, col, frequency, coords)
 
-        def make_eps_data(coords: Coords):
+        def make_eps_data(coords: Coords) -> xr.DataArray:
             """returns epsilon data on grid of points defined by coords"""
             arrays = (np.array(coords.x), np.array(coords.y), np.array(coords.z))
             eps_background = get_eps(
@@ -3014,7 +3025,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @model_validator(mode="before")
     @classmethod
-    def _update_simulation(cls, data):
+    def _update_simulation(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Update the simulation if it is an earlier version."""
 
         # if no version, assume it's already updated
@@ -3026,7 +3037,7 @@ class Simulation(AbstractYeeGridSimulation):
         return updater.update_to_current()
 
     @model_validator(mode="after")
-    def _validate_auto_grid_wavelength(self):
+    def _validate_auto_grid_wavelength(self) -> Self:
         """Check that wavelength can be defined if there is auto grid spec."""
         val = self.grid_spec
         if val.wavelength is None and val.auto_grid_used:
@@ -3048,7 +3059,7 @@ class Simulation(AbstractYeeGridSimulation):
     # _plane_waves_in_homo = validate_plane_wave_intersections()
 
     @model_validator(mode="after")
-    def bloch_with_symmetry(self):
+    def bloch_with_symmetry(self) -> Self:
         """Error if a Bloch boundary is applied with symmetry"""
         val = self.boundary_spec
         boundaries = val.to_list
@@ -3062,7 +3073,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def plane_wave_boundaries(self):
+    def plane_wave_boundaries(self) -> Self:
         """Error if there are plane wave sources incompatible with boundary conditions."""
         boundaries = self.boundary_spec.to_list
         sources = self.sources
@@ -3115,7 +3126,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def bloch_boundaries_diff_mnt(self):
+    def bloch_boundaries_diff_mnt(self) -> Self:
         """Error if there are diffraction monitors incompatible with boundary conditions."""
 
         monitors = self.monitors
@@ -3154,7 +3165,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def tfsf_boundaries(self):
+    def tfsf_boundaries(self) -> Self:
         """Error if the boundary conditions are incompatible with TFSF sources, if any."""
         boundaries = self.boundary_spec.to_list
         sources = self.sources
@@ -3227,7 +3238,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def tfsf_with_symmetry(self):
+    def tfsf_with_symmetry(self) -> Self:
         """Error if a TFSF source is applied with symmetry"""
         for source in self.sources:
             if isinstance(source, TFSF) and not all(sym == 0 for sym in self.symmetry):
@@ -3243,7 +3254,7 @@ class Simulation(AbstractYeeGridSimulation):
         ]
 
     @model_validator(mode="after")
-    def check_fixed_angle_components(self):
+    def check_fixed_angle_components(self) -> Self:
         """Error if a fixed-angle plane wave is combined with other sources
         or fully anisotropic mediums or gain mediums."""
 
@@ -3291,10 +3302,12 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _validate_frequency_mode_abc(self):
+    def _validate_frequency_mode_abc(self) -> Self:
         """Warn if ModeABCBoundary expects a frequency from a source, but there are multiple sources with different central frequencies."""
 
-        def boundary_needs_freq(boundary):
+        def boundary_needs_freq(
+            boundary: Union[ModeABCBoundary, ABCBoundary, BoundaryEdgeType],
+        ) -> bool:
             return (isinstance(boundary, ModeABCBoundary) and boundary.freq_spec is None) or (
                 isinstance(boundary, ABCBoundary)
                 and (
@@ -3332,7 +3345,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _validate_absorber_in_zero_dims(self):
+    def _validate_absorber_in_zero_dims(self) -> Self:
         """Error if internal absorber is oriented along zero size dim."""
         val = self.internal_absorbers
         if val is None:
@@ -3349,7 +3362,9 @@ class Simulation(AbstractYeeGridSimulation):
 
     @field_validator("sources")
     @classmethod
-    def _validate_num_sources(cls, val):
+    def _validate_num_sources(
+        cls, val: Optional[tuple[SourceType, ...]]
+    ) -> Optional[tuple[SourceType, ...]]:
         """Error if too many sources present."""
 
         if val is None:
@@ -3366,7 +3381,9 @@ class Simulation(AbstractYeeGridSimulation):
 
     @field_validator("structures")
     @classmethod
-    def _validate_2d_geometry_has_2d_medium(cls, val):
+    def _validate_2d_geometry_has_2d_medium(
+        cls, val: tuple[Structure, ...]
+    ) -> tuple[Structure, ...]:
         """Warn if a geometry bounding box has zero size in a certain dimension."""
 
         if val is None:
@@ -3392,7 +3409,9 @@ class Simulation(AbstractYeeGridSimulation):
 
     @field_validator("structures")
     @classmethod
-    def _validate_incompatible_material_intersections(cls, val):
+    def _validate_incompatible_material_intersections(
+        cls, val: tuple[Structure, ...]
+    ) -> tuple[Structure, ...]:
         """Check for intersections of incompatible materials."""
         structures = val
         incompatible_indices = []
@@ -3422,7 +3441,7 @@ class Simulation(AbstractYeeGridSimulation):
         return val
 
     @model_validator(mode="after")
-    def _structures_not_close_pml(self):
+    def _structures_not_close_pml(self) -> Self:
         """Warn if any structures lie at the simulation boundaries."""
         val = self.boundary_spec
 
@@ -3438,7 +3457,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         with log as consolidated_logger:
 
-            def warn(structure, istruct, side) -> None:
+            def warn(structure: Structure, istruct: int, side: str) -> None:
                 """Warning message for a structure too close to PML."""
                 obj_descr = named_obj_descr(structure, "structures", istruct)
                 consolidated_logger.warning(
@@ -3482,7 +3501,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _warn_monitor_mediums_frequency_range(self):
+    def _warn_monitor_mediums_frequency_range(self) -> Self:
         """Warn user if any DFT monitors have frequencies outside of medium frequency range."""
         val = self.monitors
 
@@ -3535,7 +3554,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _warn_monitor_simulation_frequency_range(self):
+    def _warn_monitor_simulation_frequency_range(self) -> Self:
         """Warn if any DFT monitors have frequencies outside of the simulation frequency range."""
         val = self.monitors
 
@@ -3571,7 +3590,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def diffraction_monitor_boundaries(self):
+    def diffraction_monitor_boundaries(self) -> Self:
         """If any :class:`.DiffractionMonitor` exists, ensure boundary conditions in the
         transverse directions are periodic or Bloch."""
         monitors = self.monitors
@@ -3595,7 +3614,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _projection_monitors_homogeneous(self):
+    def _projection_monitors_homogeneous(self) -> Self:
         """Error if any field projection monitor is not in a homogeneous region."""
         val = self.monitors
 
@@ -3679,7 +3698,7 @@ class Simulation(AbstractYeeGridSimulation):
         return mediums
 
     @model_validator(mode="after")
-    def _abc_boundaries_homogeneous(self):
+    def _abc_boundaries_homogeneous(self) -> Self:
         """Error if abc boundaries intersect multiple mediums or anisotropic mediums."""
         val = self.boundary_spec
         if val is None:
@@ -3730,7 +3749,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @field_validator("monitors")
     @classmethod
-    def _projection_direction(cls, val):
+    def _projection_direction(cls, val: tuple[MonitorType, ...]) -> tuple[MonitorType, ...]:
         """Warn if field projection observation points are behind surface projection monitors."""
         # This validator is in simulation.py rather than monitor.py because volume monitors are
         # eventually converted to their bounding surface projection monitors, in which case we
@@ -3792,7 +3811,7 @@ class Simulation(AbstractYeeGridSimulation):
         return val
 
     @model_validator(mode="after")
-    def proj_distance_for_approx(self):
+    def proj_distance_for_approx(self) -> Self:
         """Warn if projection distance for projection monitors is not large compared to monitor or,
         simulation size, yet far_field_approx is True."""
         val = self.monitors
@@ -3822,7 +3841,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _integration_surfaces_in_bounds(self):
+    def _integration_surfaces_in_bounds(self) -> Self:
         """Error if all of the integration surfaces are outside of the simulation domain."""
         val = self.monitors
 
@@ -3843,7 +3862,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _projection_monitors_distance(self):
+    def _projection_monitors_distance(self) -> Self:
         """Warn if the projection distance is large for exact projections."""
         val = self.monitors
 
@@ -3876,7 +3895,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _projection_mnts_2d(self):
+    def _projection_mnts_2d(self) -> Self:
         """
         Validate if the field projection monitor is set up for a 2D simulation and
         ensure the observation parameters are configured correctly.
@@ -3981,7 +4000,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def diffraction_and_directivity_monitor_medium(self):
+    def diffraction_and_directivity_monitor_medium(self) -> Self:
         """If any :class:`.DiffractionMonitor` or  :class:`.DirectivityMonitor` exists, ensure it does not lie in a lossy medium."""
         monitors = self.monitors
         structures = self.structures
@@ -3999,7 +4018,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _warn_grid_size_too_small(self):
+    def _warn_grid_size_too_small(self) -> Self:
         """Warn user if any grid size is too large compared to minimum wavelength in material."""
         val = self.grid_spec
 
@@ -4062,7 +4081,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _source_homogeneous_isotropic(self):
+    def _source_homogeneous_isotropic(self) -> Self:
         """Error if a plane wave or gaussian beam source is not in a homogeneous and isotropic
         region.
         """
@@ -4135,7 +4154,7 @@ class Simulation(AbstractYeeGridSimulation):
                         and source.num_freqs > 1
                     ):
 
-                        def radius(waist_radius, waist_distance, k0):
+                        def radius(waist_radius: float, waist_distance: float, k0: float) -> float:
                             """Gaussian beam radius at a given waist distance and k0."""
                             z_r = waist_radius**2 * k0 / 2
                             return waist_radius * np.sqrt(1 + (waist_distance / z_r) ** 2)
@@ -4178,7 +4197,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _check_normalize_index(self):
+    def _check_normalize_index(self) -> Self:
         """Check validity of normalize index in context of simulation.sources."""
         val = self.normalize_index
 
@@ -4217,7 +4236,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _validate_low_freq_smoothing(self):
+    def _validate_low_freq_smoothing(self) -> Self:
         """Validate the low frequency smoothing parameters."""
         # check that all monitors are present and they are mode monitors
         val = self.low_freq_smoothing
@@ -4235,7 +4254,7 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _validate_scene(self):
+    def _validate_scene(self) -> Self:
         _ = self.scene
         self._validate_no_structures_pml()
         self._validate_tfsf_nonuniform_grid()
@@ -5081,7 +5100,7 @@ class Simulation(AbstractYeeGridSimulation):
         )
         return Scene.intersecting_structures(test_object=test_object, structures=structures)
 
-    def monitor_medium(self, monitor: MonitorType):
+    def monitor_medium(self, monitor: MonitorType) -> AbstractMedium:
         """Return the medium in which the given monitor resides.
 
         Parameters
@@ -5221,7 +5240,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     def to_gds(
         self,
-        cell,
+        cell: gdstk.Cell,
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
@@ -5364,7 +5383,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         return (freq_min, freq_max)
 
-    def plot_3d(self, width=800, height=800) -> None:
+    def plot_3d(self, width: int = 800, height: int = 800) -> None:
         """Render 3D plot of ``Simulation`` (in jupyter notebook only).
         Parameters
         ----------
@@ -5525,7 +5544,7 @@ class Simulation(AbstractYeeGridSimulation):
         return int(np.prod([float(nc) for nc in self.grid.num_cells]))
 
     @property
-    def _num_computational_grid_points_dim(self):
+    def _num_computational_grid_points_dim(self) -> list[int]:
         """Number of cells in the computational domain for this simulation along each dimension."""
         num_cells = self.grid.num_cells
         num_cells_comp_domain = []
@@ -5540,7 +5559,7 @@ class Simulation(AbstractYeeGridSimulation):
         return num_cells_comp_domain
 
     @property
-    def num_computational_grid_points(self):
+    def num_computational_grid_points(self) -> int:
         """Number of cells in the computational domain for this simulation. This is usually
         different from ``num_cells`` due to the boundary conditions. Specifically, all boundary
         conditions apart from :class:`Periodic` require an extra pixel at the end of the simulation

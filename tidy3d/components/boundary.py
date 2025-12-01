@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -41,14 +42,16 @@ MIN_NUM_STABLE_PML_LAYERS = 6
 MIN_NUM_ABSORBER_LAYERS = 6
 
 
-def warn_num_layers_factory(min_num_layers: int, descr: str):
+def warn_num_layers_factory(
+    min_num_layers: int, descr: str
+) -> Callable[[type[AbsorberSpec], int], int]:
     """Several similar classes defined have a ``num_layers`` data member, and they generate
     similar warning messages when ``num_layers`` is too small.  This function creates a pydantic
     validator which can be shared with all of these classes to create these warning messages."""
 
     @field_validator("num_layers")
     @classmethod
-    def _warn_num_layers(cls, val):
+    def _warn_num_layers(cls: type[AbsorberSpec], val: int) -> int:
         if val < min_num_layers:
             cls_name = cls.__name__
             log.warning(
@@ -87,7 +90,7 @@ class Periodic(BoundaryEdge):
     """Periodic boundary condition class."""
 
     @property
-    def bloch_vec(self):
+    def bloch_vec(self) -> int:
         """Periodic boundaries are effectively Bloch boundaries with ``bloch_vec == 0``.
         In practice, periodic boundaries do not force the use of complex fields, while Bloch
         boundaries do, even with ``bloch_vec == 0``. Thus, it is more efficient to use periodic.
@@ -133,7 +136,7 @@ class ABCBoundary(AbstractABCBoundary):
     )
 
     @model_validator(mode="after")
-    def _conductivity_only_with_float_permittivity(self):
+    def _conductivity_only_with_float_permittivity(self) -> Self:
         """Validate that conductivity can be provided only with float permittivity."""
         if self.conductivity is not None and self.permittivity is None:
             raise ValidationError(
@@ -204,7 +207,7 @@ class BroadbandModeABCSpec(Tidy3dBaseModel):
 
     @field_validator("frequency_range", mode="after")
     @classmethod
-    def validate_frequency_range(cls, val):
+    def validate_frequency_range(cls, val: FreqBound) -> FreqBound:
         """Validate that max frequency is greater than min frequency."""
         _assert_min_freq(val[0], "min frequency")
         if val[1] <= val[0]:
@@ -244,7 +247,7 @@ class BroadbandModeABCSpec(Tidy3dBaseModel):
         )
 
     @property
-    def _frequency_grid(self) -> np.ndarray:
+    def _frequency_grid(self) -> NDArray:
         """Frequency grid for the broadband mode absorption boundary conditions.
         Propagation constant is sampled at these frequencies and fitted using pole-residue pair model.
         """
@@ -288,7 +291,7 @@ class ModeABCBoundary(AbstractABCBoundary):
 
     @field_validator("plane")
     @classmethod
-    def is_plane(cls, val):
+    def is_plane(cls, val: Box) -> Box:
         """Raise validation error if not planar."""
         if val.size.count(0.0) != 1:
             raise ValidationError(
@@ -301,7 +304,7 @@ class ModeABCBoundary(AbstractABCBoundary):
         cls,
         source: ModeSource,
         freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
-    ) -> ModeABCBoundary:
+    ) -> Self:
         """Instantiate from a ``ModeSource``.
 
         Parameters
@@ -340,7 +343,7 @@ class ModeABCBoundary(AbstractABCBoundary):
         monitor: Union[ModeMonitor, ModeSolverMonitor],
         mode_index: NonNegativeInt = 0,
         freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
-    ) -> ModeABCBoundary:
+    ) -> Self:
         """Instantiate from a ``ModeMonitor`` or ``ModeSolverMonitor``.
 
         Parameters
@@ -402,7 +405,9 @@ class InternalAbsorber(Box):
 
     @field_validator("boundary_spec")
     @classmethod
-    def _must_provide_permittivity(cls, val):
+    def _must_provide_permittivity(
+        cls, val: Union[ModeABCBoundary, ABCBoundary]
+    ) -> Union[ModeABCBoundary, ABCBoundary]:
         """Validate that permittivity is provided for ABCBoundary."""
         if isinstance(val, ABCBoundary) and val.permittivity is None:
             raise ValidationError(
@@ -428,7 +433,7 @@ class InternalAbsorber(Box):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        ax: Ax = None,
+        ax: Optional[Ax] = None,
         **patch_kwargs: Any,
     ) -> Ax:
         """Plot this absorber."""
@@ -494,7 +499,11 @@ class BlochBoundary(BoundaryEdge):
 
     @classmethod
     def from_source(
-        cls, source: BlochSourceType, domain_size: float, axis: Axis, medium: Medium = None
+        cls,
+        source: BlochSourceType,
+        domain_size: float,
+        axis: Axis,
+        medium: Optional[Medium] = None,
     ) -> Self:
         """Set the Bloch vector component based on a given angled source and its center frequency.
            Note that if a broadband angled source is used, only the frequency components near the
@@ -966,7 +975,7 @@ class Boundary(Tidy3dBaseModel):
     )
 
     @model_validator(mode="after")
-    def bloch_on_both_sides(self):
+    def bloch_on_both_sides(self) -> Self:
         """Error if a Bloch boundary is applied on only one side."""
         num_bloch = isinstance(self.plus, BlochBoundary) + isinstance(self.minus, BlochBoundary)
         if num_bloch == 1:
@@ -976,7 +985,7 @@ class Boundary(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
-    def periodic_with_pml(self):
+    def periodic_with_pml(self) -> Self:
         """Error if PBC is specified with a PML."""
         num_pbc = isinstance(self.plus, Periodic) + isinstance(self.minus, Periodic)
         num_pml = isinstance(
@@ -987,7 +996,7 @@ class Boundary(Tidy3dBaseModel):
         return self
 
     @model_validator(mode="after")
-    def periodic_with_pec_pmc(self):
+    def periodic_with_pec_pmc(self) -> Self:
         """
         If a PBC is specified along with PEC or PMC on the other side, manually set the PBC
         to PEC or PMC so that no special treatment of halos is required.
@@ -1014,7 +1023,7 @@ class Boundary(Tidy3dBaseModel):
         return self
 
     @classmethod
-    def periodic(cls):
+    def periodic(cls) -> Self:
         """Periodic boundary specification on both sides along a dimension.
 
         Example
@@ -1026,7 +1035,7 @@ class Boundary(Tidy3dBaseModel):
         return cls(plus=plus, minus=minus)
 
     @classmethod
-    def bloch(cls, bloch_vec: complex):
+    def bloch(cls, bloch_vec: complex) -> Self:
         """Bloch boundary specification on both sides along a dimension.
 
         Parameters
@@ -1045,8 +1054,12 @@ class Boundary(Tidy3dBaseModel):
 
     @classmethod
     def bloch_from_source(
-        cls, source: BlochSourceType, domain_size: float, axis: Axis, medium: Medium = None
-    ):
+        cls,
+        source: BlochSourceType,
+        domain_size: float,
+        axis: Axis,
+        medium: Optional[Medium] = None,
+    ) -> Self:
         """Bloch boundary specification on both sides along a dimension based on a given source.
 
         Parameters
@@ -1078,7 +1091,7 @@ class Boundary(Tidy3dBaseModel):
         return cls(plus=plus, minus=minus)
 
     @classmethod
-    def pec(cls):
+    def pec(cls) -> Self:
         """PEC boundary specification on both sides along a dimension.
 
         Example
@@ -1090,7 +1103,7 @@ class Boundary(Tidy3dBaseModel):
         return cls(plus=plus, minus=minus)
 
     @classmethod
-    def pmc(cls):
+    def pmc(cls) -> Self:
         """PMC boundary specification on both sides along a dimension.
 
         Example
@@ -1106,7 +1119,7 @@ class Boundary(Tidy3dBaseModel):
         cls,
         permittivity: Optional[PositiveFloat] = None,
         conductivity: Optional[NonNegativeFloat] = None,
-    ):
+    ) -> Self:
         """ABC boundary specification on both sides along a dimension.
 
         Example
@@ -1130,7 +1143,7 @@ class Boundary(Tidy3dBaseModel):
         mode_spec: ModeSpecType = DEFAULT_MODE_SPEC_MODE_ABC,
         mode_index: NonNegativeInt = 0,
         freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
-    ):
+    ) -> Self:
         """One-way wave equation mode ABC boundary specification on both sides along a dimension.
 
         Parameters
@@ -1170,7 +1183,7 @@ class Boundary(Tidy3dBaseModel):
         cls,
         source: ModeSource,
         freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
-    ):
+    ) -> Self:
         """One-way wave equation mode ABC boundary specification on both sides along a dimension constructed from a mode source.
 
         Parameters
@@ -1197,7 +1210,7 @@ class Boundary(Tidy3dBaseModel):
         monitor: Union[ModeMonitor, ModeSolverMonitor],
         mode_index: NonNegativeInt = 0,
         freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
-    ):
+    ) -> Self:
         """One-way wave equation mode ABC boundary specification on both sides along a dimension constructed from a mode monitor.
 
         Example
@@ -1219,7 +1232,9 @@ class Boundary(Tidy3dBaseModel):
         return cls(plus=plus, minus=minus)
 
     @classmethod
-    def pml(cls, num_layers: NonNegativeInt = 12, parameters: PMLParams = DefaultPMLParameters):
+    def pml(
+        cls, num_layers: NonNegativeInt = 12, parameters: PMLParams = DefaultPMLParameters
+    ) -> Self:
         """PML boundary specification on both sides along a dimension.
 
         Parameters
@@ -1239,8 +1254,10 @@ class Boundary(Tidy3dBaseModel):
 
     @classmethod
     def stable_pml(
-        cls, num_layers: NonNegativeInt = 40, parameters: PMLParams = DefaultStablePMLParameters
-    ):
+        cls,
+        num_layers: NonNegativeInt = 40,
+        parameters: PMLParams = DefaultStablePMLParameters,
+    ) -> Self:
         """Stable PML boundary specification on both sides along a dimension.
 
         Parameters
@@ -1260,8 +1277,10 @@ class Boundary(Tidy3dBaseModel):
 
     @classmethod
     def absorber(
-        cls, num_layers: NonNegativeInt = 40, parameters: PMLParams = DefaultAbsorberParameters
-    ):
+        cls,
+        num_layers: NonNegativeInt = 40,
+        parameters: PMLParams = DefaultAbsorberParameters,
+    ) -> Self:
         """Adiabatic absorber boundary specification on both sides along a dimension.
 
         Parameters
@@ -1341,7 +1360,7 @@ class BoundarySpec(Tidy3dBaseModel):
 
     @field_validator("x", "y", "z", mode="before")
     @classmethod
-    def dict_to_boundary(cls, v):
+    def dict_to_boundary(cls, v: Any) -> Any:
         """Convert dict representation to Boundary object if needed."""
         if isinstance(v, dict) and "plus" in v and "minus" in v:
             return Boundary(**v)
@@ -1369,7 +1388,7 @@ class BoundarySpec(Tidy3dBaseModel):
         raise DataError(f"field_name '{field_name}' not found")
 
     @classmethod
-    def pml(cls, x: bool = False, y: bool = False, z: bool = False):
+    def pml(cls, x: bool = False, y: bool = False, z: bool = False) -> Self:
         """PML along specified directions
 
         Parameters
@@ -1392,7 +1411,7 @@ class BoundarySpec(Tidy3dBaseModel):
         )
 
     @classmethod
-    def pec(cls, x: bool = False, y: bool = False, z: bool = False):
+    def pec(cls, x: bool = False, y: bool = False, z: bool = False) -> Self:
         """PEC along specified directions
 
         Parameters
@@ -1415,7 +1434,7 @@ class BoundarySpec(Tidy3dBaseModel):
         )
 
     @classmethod
-    def pmc(cls, x: bool = False, y: bool = False, z: bool = False):
+    def pmc(cls, x: bool = False, y: bool = False, z: bool = False) -> Self:
         """PMC along specified directions
 
         Parameters
@@ -1438,7 +1457,7 @@ class BoundarySpec(Tidy3dBaseModel):
         )
 
     @classmethod
-    def all_sides(cls, boundary: BoundaryEdge):
+    def all_sides(cls, boundary: BoundaryEdge) -> Self:
         """Set a given boundary condition on all six sides of the domain
 
         Parameters
