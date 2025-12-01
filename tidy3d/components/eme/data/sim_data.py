@@ -17,7 +17,7 @@ from tidy3d.components.types import annotate_type
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
-from .dataset import EMESMatrixDataset
+from .dataset import EMECoefficientDataset, EMESMatrixDataset
 from .monitor_data import EMEFieldData, EMEModeSolverData, EMEMonitorDataType
 
 
@@ -37,6 +37,12 @@ class EMESimulationData(AbstractYeeGridSimulationData):
 
     smatrix: Optional[EMESMatrixDataset] = pd.Field(
         None, title="S Matrix", description="Scattering matrix of the EME simulation."
+    )
+
+    coeffs: Optional[EMECoefficientDataset] = pd.Field(
+        None,
+        title="Coefficients",
+        description="Coefficients from the EME simulation. Useful for debugging and optimization.",
     )
 
     port_modes_raw: Optional[EMEModeSolverData] = pd.Field(
