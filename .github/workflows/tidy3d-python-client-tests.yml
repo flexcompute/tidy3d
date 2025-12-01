@@ -14,23 +14,34 @@ on:
         type: boolean
         default: false
       cli_tests:
-        description: 'Run develop-cli tests'
+        description: 'develop-cli'
         type: boolean
         default: false
       submodule_tests:
-        description: 'Run submodule tests'
+        description: 'submodule-tests'
         type: boolean
         default: false
       version_match_tests:
-        description: 'Run version consistency checks'
+        description: 'version-consistency-checks'
         type: boolean
         default: false
+      extras_integration_tests:
+        description: 'integration-tidy3d-extras'
+        type: boolean
+        default: false
+      test_type:
+        description: 'test-type (basic or full)'
+        type: choice
+        options:
+          - basic
+          - full
+        default: 'basic'
       release_tag:
         description: 'Release Tag (v2.10.0, v2.10.0rc1)'
         required: false
         type: string
         default: ''
-  
+
   workflow_call:
     inputs:
       remote_tests:
@@ -58,6 +69,16 @@ on:
         type: boolean
         required: false
         default: false
+      extras_integration_tests:
+        description: 'Run tidy3d-extras integration tests'
+        type: boolean
+        required: false
+        default: false
+      test_type:
+        description: 'Test type for extras integration tests (basic or full)'
+        type: string
+        required: false
+        default: 'basic'
       release_tag:
         description: 'Release Tag (v2.10.0, v2.10.0rc1)'
         required: false
@@ -95,6 +116,8 @@ jobs:
       cli_tests: ${{ steps.determine-test-type.outputs.cli_tests }}
       submodule_tests: ${{ steps.determine-test-type.outputs.submodule_tests }}
       version_match_tests: ${{ steps.determine-test-type.outputs.version_match_tests }}
+      extras_integration_tests: ${{ steps.determine-test-type.outputs.extras_integration_tests }}
+      test_type: ${{ steps.determine-test-type.outputs.test_type }}
     steps:
       - name: determine-test-type
         id: determine-test-type
@@ -108,6 +131,8 @@ jobs:
           INPUT_CLI: ${{ github.event.inputs.cli_tests || inputs.cli_tests }}
           INPUT_SUBMODULE: ${{ github.event.inputs.submodule_tests || inputs.submodule_tests }}
           INPUT_VERSION_MATCH: ${{ github.event.inputs.version_match_tests || inputs.version_match_tests }}
+          INPUT_EXTRAS_INTEGRATION: ${{ github.event.inputs.extras_integration_tests || inputs.extras_integration_tests }}
+          INPUT_TEST_TYPE: ${{ github.event.inputs.test_type || inputs.test_type }}
         run: |
           echo "Event: $EVENT_NAME"
           echo "Draft: $DRAFT_STATE"
@@ -118,6 +143,8 @@ jobs:
           echo "Input cli: $INPUT_CLI"
           echo "Input submodule: $INPUT_SUBMODULE"
           echo "Input version_match: $INPUT_VERSION_MATCH"
+          echo "Input extras_integration: $INPUT_EXTRAS_INTEGRATION"
+          echo "Input test_type: $INPUT_TEST_TYPE"
 
           remote_tests=false
           local_tests=false
@@ -126,9 +153,11 @@ jobs:
           version_match_tests=false
           code_quality_tests=false
           pr_review_tests=false
+          extras_integration_tests=false
+          test_type="basic"
           
-            # Workflow_dispatch input override
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            # Workflow_dispatch and workflow_call input override
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
             code_quality_tests=true
             # Each option is self contained
             if [[ "$INPUT_REMOTE" == "true" ]]; then
@@ -150,6 +179,10 @@ jobs:
             if [[ "$INPUT_VERSION_MATCH" == "true" ]]; then
               version_match_tests=true
             fi
+
+            if [[ "$INPUT_EXTRAS_INTEGRATION" == "true" ]]; then
+              extras_integration_tests=true
+            fi
           fi
 
           # All PRs that have been triggered need local tests (remote reserved for merge queue/manual)
@@ -163,8 +196,15 @@ jobs:
               local_tests=true
               remote_tests=true
               code_quality_tests=true
+              extras_integration_tests=true
+              test_type="basic"
           fi
-          
+
+          # Set test_type based on input or event
+          if [[ -n "$INPUT_TEST_TYPE" ]]; then
+            test_type="$INPUT_TEST_TYPE"
+          fi
+
           echo "local_tests=$local_tests" >> $GITHUB_OUTPUT
           echo "remote_tests=$remote_tests" >> $GITHUB_OUTPUT
           echo "cli_tests=$cli_tests" >> $GITHUB_OUTPUT
@@ -172,6 +212,8 @@ jobs:
           echo "version_match_tests=$version_match_tests" >> $GITHUB_OUTPUT
           echo "code_quality_tests=$code_quality_tests" >> $GITHUB_OUTPUT
           echo "pr_review_tests=$pr_review_tests" >> $GITHUB_OUTPUT
+          echo "extras_integration_tests=$extras_integration_tests" >> $GITHUB_OUTPUT
+          echo "test_type=$test_type" >> $GITHUB_OUTPUT
           echo "code_quality_tests=$code_quality_tests"
           echo "pr_review_tests=$pr_review_tests"
           echo "local_tests=$local_tests"
@@ -179,6 +221,8 @@ jobs:
           echo "cli_tests=$cli_tests"
           echo "submodule_tests=$submodule_tests"
           echo "version_match_tests=$version_match_tests"
+          echo "extras_integration_tests=$extras_integration_tests"
+          echo "test_type=$test_type"
 
   lint:
     needs: determine-test-scope
@@ -593,7 +637,7 @@ jobs:
       run: |
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
         # pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
-        pytest --cov=tidy3d -rF --tb=short tests
+        pytest --cov=tidy3d -rF --tb=short --ignore=tests/_test_tidy3d_extras_license.py tests
         coverage report -m
         coverage xml -o ${GITHUB_WORKSPACE}/coverage.xml
         TOTAL_COVERAGE=$(coverage report --format=total)
@@ -731,7 +775,7 @@ jobs:
         PYTHONUNBUFFERED: "1"
       run: |
         poetry run pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
-        poetry run pytest --cov=tidy3d -rF --tb=short tests
+        poetry run pytest --cov=tidy3d -rF --tb=short --ignore=tests/_test_tidy3d_extras_license.py tests
         poetry run coverage report -m
         TOTAL_COVERAGE=$(poetry run coverage report --format=total)
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
@@ -919,7 +963,17 @@ jobs:
           
           echo ""
           echo "=== Submodule Checks Passed ==="
-  
+
+  extras-integration-tests:
+    name: extras-integration-tests
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.extras_integration_tests == 'true'
+    uses: ./.github/workflows/tidy3d-extras-python-client-tests-integration.yml
+    with:
+      release_tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+      test_type: ${{ needs.determine-test-scope.outputs.test_type }}
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+
   workflow-validation:
     name: workflow-validation
     if: always()
@@ -936,6 +990,7 @@ jobs:
       - develop-cli-tests
       - verify-version-consistency
       - test-submodules
+      - extras-integration-tests
     runs-on: ubuntu-latest
     steps:
       - name: check-linting-result
@@ -1002,6 +1057,12 @@ jobs:
         if: ${{ needs.determine-test-scope.outputs.submodule_tests == 'true' && needs.test-submodules.result != 'success' && needs.test-submodules.result != 'skipped' }}
         run: |
           echo "❌ Submodule tests failed."
+          exit 1
+
+      - name: check-extras-integration-tests-result
+        if: ${{ needs.determine-test-scope.outputs.extras_integration_tests == 'true' && needs.extras-integration-tests.result != 'success' && needs.extras-integration-tests.result != 'skipped' }}
+        run: |
+          echo "❌ tidy3d-extras integration tests failed."
           exit 1
 
       - name: all-checks-passed

@@ -1,0 +1,111 @@
+"""Test that the license check raises an error if the api key is invalid."""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+
+import pytest
+
+import tidy3d as td
+
+
+def _extension_can_load() -> bool:
+    """Return True if the tidy3d_extras extension can be loaded on this platform."""
+    try:
+        import tidy3d_extras
+
+        # Check if the extension module is actually available
+        return hasattr(tidy3d_extras, "extension")
+    except Exception:
+        return False
+
+
+def _local_subpixel_works_with_bad_key() -> bool:
+    """Return True if local subpixel succeeds even with a bad API key."""
+    sim = td.Simulation(
+        size=(1, 0, 0),
+        grid_spec=td.GridSpec.auto(wavelength=1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        run_time=1e-30,
+    )
+    prev_pref = td.config.simulation.use_local_subpixel
+    td.config.simulation.use_local_subpixel = True
+    try:
+        _ = sim.epsilon_on_grid(
+            grid=sim.discretize(sim.geometry),
+            freq=td.C_0 / 1.55,
+        )
+        return True
+    except td.exceptions.Tidy3dImportError:
+        return False
+    finally:
+        td.config.simulation.use_local_subpixel = prev_pref
+
+
+def test_license_check(monkeypatch, caplog):
+    monkeypatch.setenv("SIMCLOUD_APIKEY", "BADKEY")
+
+    # package should still import successfully, just without .extension
+    result = subprocess.run(
+        [sys.executable, "-c", "import tidy3d_extras"],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=os.path.dirname(__file__),
+    )
+    assert result.returncode == 0
+    print(result.stdout)
+
+    # calling local_subpixel should fail with a clear error message when the API key is bad
+    with pytest.raises(subprocess.CalledProcessError) as excinfo:
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import _test_tidy3d_extras_license; _test_tidy3d_extras_license.subpixel()",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=os.path.dirname(__file__),
+        )
+    print(result.stdout)
+    print(excinfo.value.stdout)
+    print(excinfo.value.stderr)
+
+    # Check if the extension can actually load on this platform
+    # On some platforms (e.g., macOS with certain Python versions), the extension
+    # may fail to load due to ABI compatibility issues before license checks can run
+    extension_loads = _extension_can_load()
+
+    combined_output = excinfo.value.stdout + excinfo.value.stderr
+
+    # Core license / auth failure - only check if extension loads properly
+    if extension_loads:
+        assert "Incorrect API Key" in combined_output, (
+            "Expected 'Incorrect API Key' error when extension loads but API key is invalid"
+        )
+
+    # tidy3d-extras initialization and feature error messages should always be present
+    assert (
+        "invalid API key" in combined_output or "did not initialize correctly" in combined_output
+    ), "Expected tidy3d-extras initialization error message"
+    assert "local_subpixel" in combined_output, (
+        "Expected 'local_subpixel' to be mentioned in error message"
+    )
+
+
+def subpixel():
+    sim = td.Simulation(
+        size=(1, 0, 0),
+        grid_spec=td.GridSpec.auto(wavelength=1),
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        run_time=1e-30,
+    )
+    td.config.simulation.use_local_subpixel = True
+    _ = sim.epsilon_on_grid(
+        grid=sim.discretize(sim.geometry),
+        freq=td.C_0 / 1.55,
+    )
