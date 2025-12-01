@@ -17,7 +17,18 @@ jobs:
     with:
       run-workflow: true
 
-  submodule-tests:
-    uses: ./.github/workflows/tidy3d-python-client-submodules-test.yml
+  daily-release:
+    uses: ./.github/workflows/tidy3d-python-client-release.yml
+    permissions:
+      contents: write
+      pull-requests: write
+      security-events: write
+      id-token: write
     with:
-      run-workflow: true
+      release_tag: 'daily-0.0.0'
+      release_type: 'draft'
+      workflow_control: 'start-tag'
+      client_tests: true
+      cli_tests: true
+      submodule_tests: false
+    secrets: inherit # zizmor: ignore[secrets-inherit]
