@@ -2740,7 +2740,7 @@ class Box(SimplePlaneIntersection, Centered):
         perps1 = np.zeros_like(grid_points)
         perps2 = np.zeros_like(grid_points)
 
-        normals[:, axis_normal] = 1
+        normals[:, axis_normal] = -1 if (min_max_index == 0) else 1
         perps1[:, axis_perp[0]] = 1
         perps2[:, axis_perp[1]] = 1
 
