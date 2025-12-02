@@ -69,7 +69,10 @@ PERMITTIVITY_MONITOR = td.PermittivityMonitor(size=SIZE_3D, name="permittivity",
 MEDIUM_MONITOR = td.MediumMonitor(size=SIZE_3D, name="medium", freqs=FREQS)
 MODE_MONITOR = td.ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs=FREQS)
 MODE_MONITOR_WITH_FIELDS = td.ModeMonitor(
-    size=SIZE_2D, name="mode_solver", mode_spec=MODE_SPEC, freqs=FS, store_fields_direction="+"
+    size=SIZE_2D, name="mode_with_fields", mode_spec=MODE_SPEC, freqs=FS, store_fields_direction="+"
+)
+MODE_SOLVER_MONITOR = td.ModeSolverMonitor(
+    size=SIZE_2D, name="mode_solver", mode_spec=MODE_SPEC, freqs=FS, direction="+"
 )
 FLUX_MONITOR = td.FluxMonitor(size=SIZE_2D, freqs=FREQS, name="flux")
 FLUX_TIME_MONITOR = td.FluxTimeMonitor(size=SIZE_2D, interval=INTERVAL, name="flux_time")
@@ -99,6 +102,7 @@ MONITORS = [
     FLUX_TIME_MONITOR,
     DIFFRACTION_MONITOR,
     DIRECTIVITY_MONITOR,
+    MODE_SOLVER_MONITOR,
 ]
 
 GRID_SPEC = td.GridSpec(wavelength=2.0)
@@ -187,6 +191,20 @@ def make_scalar_mode_field_data_array_smooth(grid_key: str, symmetry=True, rot: 
             + np.sin(rot) * np.array(ZS)[None, None, :, None, None]
         )
     )
+
+    return td.ScalarModeFieldDataArray(
+        values, coords={"x": XS, "y": [0.0], "z": ZS, "f": FS, "mode_index": MODE_INDICES}
+    )
+
+
+def make_scalar_mode_field_solver_data_array(
+    grid_key: str, symmetry=True, colocate: Optional[bool] = None
+):
+    monitor = MODE_SOLVER_MONITOR
+    if colocate is not None:
+        monitor = monitor.updated_copy(colocate=colocate)
+    XS, YS, ZS = get_xyz(monitor, grid_key, symmetry)
+    values = (1 + 0.1j) * np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
 
     return td.ScalarModeFieldDataArray(
         values, coords={"x": XS, "y": [0.0], "z": ZS, "f": FS, "mode_index": MODE_INDICES}

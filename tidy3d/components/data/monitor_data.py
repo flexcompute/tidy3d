@@ -687,11 +687,14 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return self.complex_poynting.real
 
     def package_flux_results(self, flux_values: DataArray) -> Any:
-        """How to package flux"""
+        """How to package flux based on the coordinates present in the data."""
+        # Choose appropriate data array type based on coordinates
+        if "mode_index" in flux_values.dims:
+            return FreqModeDataArray(flux_values)
         return FluxDataArray(flux_values)
 
     @cached_property
-    def complex_flux(self) -> FluxDataArray:
+    def complex_flux(self) -> Union[FluxDataArray, FreqModeDataArray]:
         """Flux for data corresponding to a 2D monitor."""
 
         # Compute flux by integrating Poynting vector in-plane
@@ -704,7 +707,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return self.package_flux_results(flux_values)
 
     @cached_property
-    def flux(self) -> FluxDataArray:
+    def flux(self) -> Union[FluxDataArray, FreqModeDataArray]:
         """Flux for data corresponding to a 2D monitor."""
         return self.complex_flux.real
 
@@ -2549,11 +2552,11 @@ class ModeSolverData(ModeData):
 
         # Fields are modified by a linear interpolation to the exact monitor position
         if distances_primal.size > 1:
-            phase_primal = phase_primal.interp(**{normal_dim: 0})
+            phase_primal = phase_primal.interp(**{normal_dim: 0}).drop_vars(normal_dim)
         else:
             phase_primal = phase_primal.squeeze(dim=normal_dim)
         if distances_dual.size > 1:
-            phase_dual = phase_dual.interp(**{normal_dim: 0})
+            phase_dual = phase_dual.interp(**{normal_dim: 0}).drop_vars(normal_dim)
         else:
             phase_dual = phase_dual.squeeze(dim=normal_dim)
 

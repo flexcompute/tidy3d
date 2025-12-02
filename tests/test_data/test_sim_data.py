@@ -27,6 +27,7 @@ from .test_monitor_data import (
     make_flux_data,
     make_flux_time_data,
     make_mode_data,
+    make_mode_data_with_fields,
     make_mode_solver_data,
     make_permittivity_data,
 )
@@ -42,7 +43,9 @@ AUX_FIELD_TIME = make_aux_field_time_data(symmetry=False)
 PERMITTIVITY_SYM = make_permittivity_data()
 PERMITTIVITY = make_permittivity_data(symmetry=False)
 MODE = make_mode_data()
+MODE_WITH_FIELDS = make_mode_data_with_fields()
 MODE_SOLVER = make_mode_solver_data()
+
 FLUX = make_flux_data()
 FLUX_TIME = make_flux_time_data()
 DIFFRACTION = make_diffraction_data()
@@ -53,25 +56,27 @@ MONITOR_DATA = (
     FIELD,
     FIELD_TIME,
     AUX_FIELD_TIME,
-    MODE_SOLVER,
+    MODE_WITH_FIELDS,
     PERMITTIVITY,
     MODE,
     FLUX,
     FLUX_TIME,
     DIFFRACTION,
     DIRECTIVITY,
+    MODE_SOLVER,
 )
 MONITOR_DATA_SYM = (
     FIELD_SYM,
     FIELD_TIME_SYM,
     AUX_FIELD_TIME_SYM,
-    MODE_SOLVER,
+    MODE_WITH_FIELDS,
     PERMITTIVITY_SYM,
     MODE,
     FLUX,
     FLUX_TIME,
     DIFFRACTION,
     DIRECTIVITY,
+    MODE_SOLVER,
 )
 MONITOR_DATA_DICT = {data.monitor.name: data for data in MONITOR_DATA}
 MONITOR_DATA_DICT_SYM = {data.monitor.name: data for data in MONITOR_DATA_SYM}
@@ -188,10 +193,10 @@ def test_plot(phase):
     # plot mode field data
     for field_cmp in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
         _ = sim_data.plot_field(
-            "mode_solver", field_cmp, val="real", f=1e14, mode_index=1, phase=phase
+            "mode_with_fields", field_cmp, val="real", f=1e14, mode_index=1, phase=phase
         )
         plt.close()
-    _ = sim_data.plot_field("mode_solver", "int", f=1e14, mode_index=1, phase=phase)
+    _ = sim_data.plot_field("mode_with_fields", "int", f=1e14, mode_index=1, phase=phase)
     plt.close()
 
 
@@ -223,13 +228,13 @@ def test_plot_field_missing_field_value():
         sim_data.plot_field(field_monitor_name="field", field_name="Ex", val="test")
 
 
-@pytest.mark.parametrize("monitor_name", ["field", "field_time", "mode_solver"])
+@pytest.mark.parametrize("monitor_name", ["field", "field_time", "mode_with_fields"])
 def test_intensity(monitor_name):
     sim_data = make_sim_data()
     _ = sim_data.get_intensity(monitor_name)
 
 
-@pytest.mark.parametrize("monitor_name", ["field", "field_time", "mode_solver"])
+@pytest.mark.parametrize("monitor_name", ["field", "field_time", "mode_with_fields"])
 def test_poynting(monitor_name):
     sim_data = make_sim_data()
     mnt_data = sim_data[monitor_name]
@@ -329,7 +334,7 @@ def test_logscale():
 def test_sel_kwarg_freq():
     """Use freq in sel_kwarg, should still work (but warning) for 1.6.x"""
     sim_data = make_sim_data()
-    sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", freq=1e14, mode_index=1)
+    sim_data.plot_field("mode_with_fields", "Ex", y=0.0, val="real", freq=1e14, mode_index=1)
     plt.close()
 
 
@@ -346,12 +351,12 @@ def test_sel_kwarg_len1():
     # data has no y dimension (only exists at y=0)
 
     # passing y=0 sel kwarg should still work
-    sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", f=1e14, mode_index=1)
+    sim_data.plot_field("mode_with_fields", "Ex", y=0.0, val="real", f=1e14, mode_index=1)
     plt.close()
 
     # passing y=1 sel kwarg should error
     with pytest.raises(KeyError):
-        sim_data.plot_field("mode_solver", "Ex", y=-1.0, val="real", f=1e14, mode_index=1)
+        sim_data.plot_field("mode_with_fields", "Ex", y=-1.0, val="real", f=1e14, mode_index=1)
         plt.close()
 
 
