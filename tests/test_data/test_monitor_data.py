@@ -23,9 +23,11 @@ from tidy3d.components.data.monitor_data import (
     FluxTimeData,
     MediumData,
     ModeData,
+    ModeSolverData,
     PermittivityData,
 )
 from tidy3d.components.data.zbf import ZBFData
+from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.constants import UnitScaling
 from tidy3d.exceptions import DataError
 
@@ -45,6 +47,7 @@ from .test_data_arrays import (
     MEDIUM_MONITOR,
     MODE_MONITOR,
     MODE_MONITOR_WITH_FIELDS,
+    MODE_SOLVER_MONITOR,
     PERMITTIVITY_MONITOR,
     SIM,
     SIM_SYM,
@@ -59,6 +62,7 @@ from .test_data_arrays import (
     make_scalar_field_time_data_array,
     make_scalar_mode_field_data_array,
     make_scalar_mode_field_data_array_smooth,
+    make_scalar_mode_field_solver_data_array,
 )
 
 # data array instances
@@ -144,7 +148,7 @@ def make_aux_field_time_data(symmetry: bool = True):
     )
 
 
-def make_mode_solver_data():
+def make_mode_data_with_fields():
     mode_data = ModeData(
         monitor=MODE_MONITOR_WITH_FIELDS,
         Ex=make_scalar_mode_field_data_array("Ex"),
@@ -168,7 +172,7 @@ def make_mode_solver_data():
     return mode_data_norm
 
 
-def make_mode_solver_data_smooth(conjugated_dot_product: bool = True):
+def make_mode_data_with_fields_smooth(conjugated_dot_product: bool = True):
     mode_data = ModeData(
         monitor=MODE_MONITOR_WITH_FIELDS.updated_copy(
             conjugated_dot_product=conjugated_dot_product
@@ -186,6 +190,41 @@ def make_mode_solver_data_smooth(conjugated_dot_product: bool = True):
         n_group=N_GROUP.copy(),
         grid_primal_correction=GRID_CORRECTION,
         grid_dual_correction=GRID_CORRECTION,
+        amps=AMPS.copy(),
+    )
+    # Mode solver data needs to be normalized
+    scaling = np.sqrt(np.abs(mode_data.symmetry_expanded_copy.flux))
+    norm_data_dict = {key: val / scaling for key, val in mode_data.field_components.items()}
+    mode_data_norm = mode_data.copy(update=norm_data_dict)
+    return mode_data_norm
+
+
+def make_mode_solver_data():
+    # finite grid corrections
+    grid_factors, relative_grid_distances = ModeSolver._grid_correction(
+        simulation=SIM_SYM,
+        plane=MODE_SOLVER_MONITOR,
+        mode_spec=MODE_SOLVER_MONITOR.mode_spec,
+        n_complex=N_COMPLEX,
+        direction=MODE_SOLVER_MONITOR.direction,
+    )
+
+    mode_data = ModeSolverData(
+        monitor=MODE_SOLVER_MONITOR,
+        Ex=make_scalar_mode_field_solver_data_array("Ex"),
+        Ey=make_scalar_mode_field_solver_data_array("Ey"),
+        Ez=make_scalar_mode_field_solver_data_array("Ez"),
+        Hx=make_scalar_mode_field_solver_data_array("Hx"),
+        Hy=make_scalar_mode_field_solver_data_array("Hy"),
+        Hz=make_scalar_mode_field_solver_data_array("Hz"),
+        symmetry=SIM_SYM.symmetry,
+        symmetry_center=SIM_SYM.center,
+        grid_expanded=SIM_SYM.discretize_monitor(MODE_SOLVER_MONITOR),
+        n_complex=N_COMPLEX.copy(),
+        grid_primal_correction=grid_factors[0],
+        grid_dual_correction=grid_factors[1],
+        grid_distances_primal=relative_grid_distances[0],
+        grid_distances_dual=relative_grid_distances[1],
         amps=AMPS.copy(),
     )
     # Mode solver data needs to be normalized
@@ -340,8 +379,8 @@ def test_field_time_data():
         _ = data.dot(data)
 
 
-def test_mode_solver_data():
-    data = make_mode_solver_data()
+def test_mode_data_with_fields():
+    data = make_mode_data_with_fields()
     for field in "EH":
         for component in "xyz":
             _ = getattr(data, field + component)
@@ -394,6 +433,24 @@ def test_mode_solver_data():
         np.shape(modes_info[key]) == ()
         for key in ["TE (Ex) fraction", "wg TE fraction", "wg TM fraction", "mode area"]
     )
+
+
+def test_mode_solver_data():
+    data = make_mode_solver_data()
+    for field in "EH":
+        for component in "xyz":
+            _ = getattr(data, field + component)
+
+    # Compute flux directly
+    flux1 = np.abs(data.flux)
+    # Compute flux as dot product with itself
+    flux2 = np.abs(data.dot(data))
+    # Assert result is the same
+    assert np.allclose(flux1, flux2)
+
+    # Make sure bug fixed where extra coord was still present in poynting field
+    normal_dim = "xyz"[data.monitor._normal_axis]
+    assert normal_dim not in data.poynting.coords
 
 
 def test_permittivity_data():
@@ -557,7 +614,7 @@ def test_colocate():
     _ = data.colocate(x=[+0.1, 0.5], y=None, z=[+0.1, 0.5])
 
     # data outside range of len(coord)==1 dimension
-    data = make_mode_solver_data()
+    data = make_mode_data_with_fields()
     with pytest.raises(DataError):
         _ = data.colocate(x=[+0.1, 0.5], y=1.0, z=[+0.1, 0.5])
 
@@ -567,7 +624,7 @@ def test_colocate():
 
 def test_time_reversed_copy():
     _ = make_field_data().time_reversed_copy
-    _ = make_mode_solver_data().time_reversed_copy
+    _ = make_mode_data_with_fields().time_reversed_copy
     time_data = make_field_time_data()
     reversed_time_data = time_data.time_reversed_copy
     assert np.allclose(time_data.Ex.values, reversed_time_data.Ex.values[..., ::-1])
@@ -645,7 +702,7 @@ def test_empty_io(tmp_path):
 
 def test_mode_solver_plot_field():
     """Ensure we get a helpful error if trying to .plot_field with a ModeData."""
-    ms_data = make_mode_solver_data()
+    ms_data = make_mode_data_with_fields()
     with pytest.raises(DeprecationWarning):
         ms_data.plot_field(1, 2, 3, z=5, b=True)
     plt.close()
@@ -701,7 +758,7 @@ def test_diffraction_data_use_medium():
 
 
 @pytest.mark.parametrize("conjugated_dot_product", [True, False])
-def test_mode_solver_data_sort(conjugated_dot_product):
+def test_mode_data_with_fields_sort(conjugated_dot_product):
     # test basic matching algorithm
     arr = np.array([[1, 2, 3], [6, 5, 4], [7, 9, 8]])
     pairs, values = ModeData._find_closest_pairs(arr)
@@ -710,7 +767,7 @@ def test_mode_solver_data_sort(conjugated_dot_product):
 
     # test sorting function
     # get smooth data
-    data = make_mode_solver_data_smooth(conjugated_dot_product=conjugated_dot_product)
+    data = make_mode_data_with_fields_smooth(conjugated_dot_product=conjugated_dot_product)
     # make it unsorted
     num_modes = len(data.Ex.coords["mode_index"])
     num_freqs = len(data.Ex.coords["f"])
@@ -753,7 +810,7 @@ def test_mode_solver_data_sort(conjugated_dot_product):
 
 
 def test_mode_solver_numerical_grid_data():
-    mode_data = make_mode_solver_data().symmetry_expanded_copy
+    mode_data = make_mode_data_with_fields().symmetry_expanded_copy
     # _tangential_fields property applies the numerical correction and expands the symmetry
     tan_fields = mode_data._tangential_fields
     # Check that data is only slightly different
@@ -765,7 +822,7 @@ def test_mode_solver_numerical_grid_data():
 
 
 def test_outer_dot():
-    mode_data = make_mode_solver_data()
+    mode_data = make_mode_data_with_fields()
     field_data = make_field_data_2d()
     dot = mode_data.outer_dot(mode_data)
     assert "mode_index_0" in dot.coords and "mode_index_1" in dot.coords
@@ -797,7 +854,7 @@ def test_outer_dot():
 
 
 def test_translated_copy():
-    mode_data = make_mode_solver_data()
+    mode_data = make_mode_data_with_fields()
     field_data = make_field_data_2d()
 
     vector = (1, 0, 0)
