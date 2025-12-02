@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fix to `outer_dot` when frequencies stored in the data were not in increasing order. Previously, the result would be provided with re-sorted frequencies, which would not match the order of the original data.
 - Fixed bug where an extra spatial coordinate could appear in `complex_flux` and `ImpedanceCalculator` results.
+- Fixed normal for `Box` shape gradient computation to always point outward from boundary which is needed for correct PEC handling.
 
 ## [2.10.0rc3] - 2025-11-26
 
