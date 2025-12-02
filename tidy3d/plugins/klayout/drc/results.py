@@ -5,19 +5,22 @@ from __future__ import annotations
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.types import Coordinate2D
 from tidy3d.exceptions import FileError
+from tidy3d.log import log
 
 # Types for DRC markers
 DRCEdge = tuple[Coordinate2D, Coordinate2D]
 DRCEdgePair = tuple[DRCEdge, DRCEdge]
 DRCPolygon = tuple[Coordinate2D, ...]
 DRCMultiPolygon = tuple[DRCPolygon, ...]
+
+UNLIMITED_VIOLATION_WARNING_COUNT = 100_000
 
 
 def parse_edge(value: str) -> EdgeMarker:
@@ -290,13 +293,20 @@ class DRCResults(Tidy3dBaseModel):
         return summary
 
     @classmethod
-    def load(cls, resultsfile: Union[str, Path]) -> DRCResults:
+    def load(
+        cls,
+        resultsfile: Union[str, Path],
+        max_results: Optional[int] = None,
+    ) -> DRCResults:
         """Create a :class:`.DRCResults` instance from a results file.
 
         Parameters
         ----------
         resultsfile : Union[str, Path]
             Path to the KLayout DRC results file.
+        max_results : Optional[int]
+            Maximum number of markers to load from the file. If ``None`` (default), all markers are
+            loaded.
 
         Returns
         -------
@@ -316,16 +326,26 @@ class DRCResults(Tidy3dBaseModel):
         >>> results = DRCResults.load(resultsfile="drc_results.lyrdb") # doctest: +SKIP
         >>> print(results) # doctest: +SKIP
         """
-        return cls(violations_by_category=violations_from_file(resultsfile=resultsfile))
+        violations = violations_from_file(
+            resultsfile=resultsfile,
+            max_results=max_results,
+        )
+        return cls.construct(violations_by_category=violations)
 
 
-def violations_from_file(resultsfile: Union[str, Path]) -> dict[str, DRCViolation]:
+def violations_from_file(
+    resultsfile: Union[str, Path],
+    max_results: Optional[int] = None,
+) -> dict[str, DRCViolation]:
     """Loads a KLayout DRC results file and returns the results as a dictionary of :class:`.DRCViolation` objects.
 
     Parameters
     ----------
     resultsfile : Union[str, Path]
         Path to the KLayout DRC results file.
+    max_results : Optional[int]
+        Maximum number of markers to load from the file. If ``None`` (default), all markers are
+        loaded.
 
     Returns
     -------
@@ -339,6 +359,9 @@ def violations_from_file(resultsfile: Union[str, Path]) -> dict[str, DRCViolatio
     ET.ParseError
         If the DRC result file is not a valid XML file.
     """
+    if max_results is not None and max_results <= 0:
+        raise ValueError("'max_results' must be a positive integer.")
+
     # Parse the results file
     try:
         xmltree = ET.parse(resultsfile)
@@ -354,20 +377,37 @@ def violations_from_file(resultsfile: Union[str, Path]) -> dict[str, DRCViolatio
         if category_name is None:
             raise FileError("Encountered DRC category without a name in results file.")
         category_name = category_name.strip().strip("'\"")
-        violations[category_name] = DRCViolation(category=category_name, markers=())
+        violations[category_name] = []
+
+    # Prepare the items and warn if necessary
+    items = list(xmltree.getroot().findall(".//item"))
+    total_markers = len(items)
+    if max_results is None and total_markers > UNLIMITED_VIOLATION_WARNING_COUNT:
+        log.warning(
+            f"DRC result file contains many markers ({total_markers}), "
+            "which can affect loading performance. "
+            "Pass 'max_results' to limit loaded results."
+        )
+    elif max_results is not None and total_markers > max_results:
+        log.warning(
+            f"DRC result file contains {total_markers} markers; "
+            f"only the first {max_results} were loaded due to 'max_results'."
+        )
 
     # Parse markers
-    for item in xmltree.getroot().findall(".//item"):
+    for idx, item in enumerate(items):
+        if max_results is not None and idx >= max_results:
+            break
         category_el = item.find("category")
         if category_el is None or category_el.text is None:
             raise FileError("Encountered DRC item without a category in results file.")
         category = category_el.text.strip().strip("'\"")
         value = item.find("values/value").text
         marker = parse_violation_value(value)
-        if category not in violations:
-            violations[category] = DRCViolation(category=category, markers=())
-        violations[category] = DRCViolation(
-            category=category,
-            markers=(*violations[category].markers, marker),
-        )
-    return violations
+        markers = violations.setdefault(category, [])
+        markers.append(marker)
+
+    return {
+        category: DRCViolation(category=category, markers=tuple(markers))
+        for category, markers in violations.items()
+    }

@@ -160,6 +160,7 @@ class DRCRunner(Tidy3dBaseModel):
         td_object_gds_savefile: Path = DEFAULT_GDSFILE,
         resultsfile: Path = DEFAULT_RESULTSFILE,
         drc_args: Optional[dict[str, str]] = None,
+        max_results: Optional[int] = None,
         **to_gds_file_kwargs: Any,
     ) -> DRCResults:
         """Runs KLayout's DRC on a GDS file or a Tidy3D object. The Tidy3D object can be a :class:`.Geometry`, :class:`.Structure`, or :class:`.Simulation`.
@@ -174,6 +175,9 @@ class DRCRunner(Tidy3dBaseModel):
             The path to save the KLayout DRC results file to. Defaults to ``"drc_results.lyrdb"``.
         drc_args : Optional[dict[str, str]] = None
             Additional key/value pairs passed through to KLayout as ``-rd key=value`` CLI arguments.
+        max_results : Optional[int]
+            Maximum number of markers to load from the results file. ``None`` (default) loads all
+            markers.
         **to_gds_file_kwargs
             Additional keyword arguments to pass to the Tidy3D object-specific ``to_gds_file()`` method.
 
@@ -215,16 +219,22 @@ class DRCRunner(Tidy3dBaseModel):
             verbose=self.verbose,
             drc_args={} if drc_args is None else drc_args,
         )
-        return run_drc_on_gds(config=config)
+        return run_drc_on_gds(
+            config=config,
+            max_results=max_results,
+        )
 
 
-def run_drc_on_gds(config: DRCConfig) -> DRCResults:
+def run_drc_on_gds(config: DRCConfig, max_results: Optional[int] = None) -> DRCResults:
     """Runs KLayout's DRC on a GDS file.
 
     Parameters
     ----------
     config : :class:`.DRCConfig`
         The configuration for the DRC run.
+    max_results : Optional[int]
+        Maximum number of markers to load from the results file. ``None`` (default) loads all
+        markers.
 
     Returns
     -------
@@ -267,4 +277,7 @@ def run_drc_on_gds(config: DRCConfig) -> DRCResults:
     if config.verbose:
         console.log("KLayout DRC completed successfully.")
 
-    return DRCResults.load(resultsfile=config.resultsfile)
+    return DRCResults.load(
+        resultsfile=config.resultsfile,
+        max_results=max_results,
+    )

@@ -35,6 +35,66 @@ def _basic_drc_config_kwargs(tmp_path: Path) -> dict[str, Path | bool]:
     }
 
 
+def _write_results_file(
+    tmp_path: Path,
+    *,
+    category: str = "min_width",
+    num_items: int = 1,
+    filename: str = "many_results.lyrdb",
+) -> Path:
+    """Write a simple DRC results file with the requested number of items."""
+
+    template_header = f"""\
+<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<report-database>
+ <categories>
+  <category>
+   <name>{category}</name>
+   <description>auto</description>
+   <categories></categories>
+  </category>
+ </categories>
+ <cells></cells>
+ <items>
+"""
+    template_footer = """\
+ </items>
+</report-database>
+"""
+    item = """\
+  <item>
+   <tags/>
+   <category>{category}</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge: (0.0,0.0;1.0,1.0)</value>
+   </values>
+  </item>
+"""
+    contents = [template_header]
+    contents.extend(item.format(category=category) for _ in range(num_items))
+    contents.append(template_footer)
+    path = tmp_path / filename
+    path.write_text("".join(contents))
+    return path
+
+
+def _capture_log_warnings(monkeypatch):
+    """Capture calls to td.log.warning."""
+
+    messages = []
+
+    def fake_warning(message, *args, **kwargs):
+        messages.append(message % args if args else message)
+
+    monkeypatch.setattr(td.log, "warning", fake_warning)
+    return messages
+
+
 def test_check_klayout_not_installed(monkeypatch):
     """check_installation raises when KLayout is not on PATH.
 
@@ -62,7 +122,7 @@ def test_runner_passes_drc_args_to_config(monkeypatch, tmp_path):
     resultsfile = tmp_path / "results.lyrdb"
     captured_config = {}
 
-    def mock_run_drc_on_gds(config):
+    def mock_run_drc_on_gds(config, **_kwargs):
         captured_config["config"] = config
         return DRCResults.load(filepath / "drc_results.lyrdb")
 
@@ -101,7 +161,7 @@ def test_run_drc_on_gds_appends_custom_args(monkeypatch, tmp_path):
     monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.drc.drc.run", fake_run)
     monkeypatch.setattr(
         f"{KLAYOUT_PLUGIN_PATH}.drc.drc.DRCResults.load",
-        lambda resultsfile: DRCResults(violations_by_category={}),
+        lambda resultsfile, **_kwargs: DRCResults(violations_by_category={}),
     )
 
     config = DRCConfig(
@@ -276,7 +336,7 @@ class TestDRCRunner:
         """Calls DRCRunner.run with dummy run_drc_on_gds()"""
 
         # monkeypatch run_drc_on_gds() since the test machines do not have KLayout installed
-        def mock_run_drc_on_gds(config):
+        def mock_run_drc_on_gds(config, **_kwargs):
             return DRCResults.load(filepath / "drc_results.lyrdb")
 
         monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.drc.drc.run_drc_on_gds", mock_run_drc_on_gds)
@@ -608,3 +668,27 @@ class TestDRCResults:
         """Test parsing unknown violation type."""
         with pytest.raises(ValueError):
             parse_violation_value("unknown: (1.0,2.0)")
+
+    def test_results_warn_without_limit(self, monkeypatch, tmp_path):
+        """Warn when no limit is set and a category exceeds the threshold."""
+
+        warnings = _capture_log_warnings(monkeypatch)
+        monkeypatch.setattr(
+            f"{KLAYOUT_PLUGIN_PATH}.drc.results.UNLIMITED_VIOLATION_WARNING_COUNT",
+            3,
+        )
+        results_path = _write_results_file(tmp_path, num_items=4)
+        results = DRCResults.load(results_path)
+        assert results["min_width"].count == 4
+        assert len(warnings) == 1
+        assert "many markers (4)" in warnings[0]
+
+    def test_results_warn_when_limit_truncates(self, monkeypatch, tmp_path):
+        """Warn when the global limit removes markers."""
+
+        warnings = _capture_log_warnings(monkeypatch)
+        results_path = _write_results_file(tmp_path, category="overflow", num_items=4)
+        results = DRCResults.load(results_path, max_results=2)
+        assert results["overflow"].count == 2
+        assert len(warnings) == 1
+        assert "only the first 2" in warnings[0]

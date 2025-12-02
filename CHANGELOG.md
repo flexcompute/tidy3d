@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Removed validator that would warn if `PerturbationMedium` values could become numerically unstable, since an error will anyway be raised if this actually happens when the medium is converted using actual perturbation data.
 - Improved performance of adjoint gradient computation for `PolySlab` and `Cylinder` geometries through vectorized sidewall patch collection (~4x speedup).
+- Added optional `max_results` handling to the kLayout `DRCLoader` and `DRCRunner` and speeded up parsing of big result sets.
 
 ### Fixed
 

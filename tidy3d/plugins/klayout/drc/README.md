@@ -10,6 +10,8 @@ For a full quickstart example, please see [this quickstart notebook](https://git
 
 - Run DRC on GDS files or Tidy3D objects ([Geometry](https://docs.flexcompute.com/projects/tidy3d/en/latest/api/_autosummary/tidy3d.Geometry.html), [Structure](https://docs.flexcompute.com/projects/tidy3d/en/latest/api/_autosummary/tidy3d.Structure.html#tidy3d.Structure), or [Simulation](https://docs.flexcompute.com/projects/tidy3d/en/latest/api/_autosummary/tidy3d.Simulation.html#tidy3d.Simulation)) with `DRCRunner.run()`.
 - Load DRC results into a `DRCResults` data structure with `DRCResults.load()`.
+- Limit how many violation markers are loaded by passing `max_results` to `DRCRunner.run()`,
+  `run_drc_on_gds()`, or `DRCResults.load()`.
 
 ## Prerequisites
 
@@ -132,3 +134,12 @@ from tidy3d.plugins.klayout.drc import DRCResults
 
 print(DRCResults.load("drc_results.lyrdb"))
 ```
+
+### Limiting Loaded Results
+
+Large designs can generate an enormous number of violations. Pass the optional `max_results`
+argument to `DRCRunner.run()`, `run_drc_on_gds()`, or `DRCResults.load()` to retain only the first
+`N` markers across all categories. When the option is not set, a warning is emitted if more than
+100,000 markers are present so you can set an appropriate limit. When the option is set and more
+total violations are present than the limit allows, a warning indicates that the results were
+truncated before parsing individual markers.
