@@ -13,7 +13,7 @@ import tidy3d.plugins.mode.web as msweb
 from tidy3d import ScalarFieldDataArray
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.mode.derivatives import create_sfactor_b, create_sfactor_f
-from tidy3d.components.mode.solver import compute_modes
+from tidy3d.components.mode.solver import TOL_DEGENERATE_CANDIDATE, EigSolver, compute_modes
 from tidy3d.components.mode_spec import MODE_DATA_KEYS
 from tidy3d.exceptions import DataError, SetupError
 from tidy3d.plugins.mode import ModeSolver
@@ -963,7 +963,16 @@ def test_mode_solver_nan_pol_fraction():
 
     md = ms.solve()
     check_ms_reduction(ms)
+    # Inject NaN at mode_index=5 for selected field components
+    nan_fields = {}
+    for field_name in ["Ex", "Ez", "Hx", "Hz"]:
+        field = getattr(md, field_name)
+        data = field.values.copy()
+        data[..., 5] = np.nan
+        nan_fields[field_name] = field.copy(data=data)
 
+    md = md.updated_copy(**nan_fields)
+    md = ms._filter_polarization(md)
     assert list(np.where(np.isnan(md.pol_fraction.te))[1]) == [9]
 
 
@@ -1503,3 +1512,52 @@ def test_sort_spec_track_freq():
     assert np.allclose(modes_lowest.Ex.abs, modes_lowest_retracked.Ex.abs)
     assert np.all(modes_lowest.n_eff == modes_lowest_retracked.n_eff)
     assert np.all(modes_lowest.n_group == modes_lowest_retracked.n_group)
+
+
+def test_degenerate_mode_processing():
+    """Ensure degenerate modes returned by mode solver are bi-orthogonal."""
+    freq0 = td.C_0
+    sim_size = (0, 2, 2)
+    inf = 10
+    W1 = 0.3
+    n = 1.5
+    num_modes = 4
+    mode_spec = td.ModeSpec(num_modes=num_modes)
+    medium = td.Medium(permittivity=n**2)
+    geom1 = td.Box.from_bounds((-inf, -W1 / 2, -W1 / 2), (inf, W1 / 2, W1 / 2))
+    wg1 = td.Structure(geometry=geom1, medium=medium)
+
+    grid_spec = td.GridSpec.uniform(dl=0.2)
+
+    sim = td.Simulation(
+        size=sim_size,
+        structures=[wg1],
+        grid_spec=grid_spec,
+        run_time=10 / freq0,
+    )
+
+    ms = ModeSolver(
+        simulation=sim,
+        plane=sim.geometry,
+        mode_spec=mode_spec,
+        freqs=[freq0],
+        direction="+",
+    )
+
+    mode_data = ms.data_raw
+
+    degen_sets = EigSolver._identify_degenerate_modes(
+        mode_data.n_complex.values[0, :], TOL_DEGENERATE_CANDIDATE
+    )
+    assert len(degen_sets) == 1
+
+    S = mode_data.outer_dot(mode_data, conjugate=False).isel(f=0).values
+    threshold = 1e-7
+    off_diag_mask = ~np.eye(S.shape[0], dtype=bool)
+    large_vals = np.abs(S) > threshold
+    problem_mask = off_diag_mask & large_vals
+
+    indices = np.argwhere(problem_mask)
+    msg = f"Found {len(indices)} off-diagonal values > {threshold}:\n"
+    msg += "\n".join(f"  |S[{i},{j}]| = {np.abs(S[i, j]):.4e}" for i, j in indices)
+    assert not np.any(problem_mask), msg
