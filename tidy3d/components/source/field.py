@@ -19,6 +19,7 @@ from tidy3d.components.validators import (
     assert_plane,
     assert_single_freq_in_range,
     assert_volumetric,
+    warn_backward_waist_distance,
     warn_if_dataset_none,
 )
 from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, inf
@@ -602,6 +603,7 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         ge=1,
         le=20,
     )
+    _backward_waist_warning = warn_backward_waist_distance("waist_distance")
 
 
 class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
@@ -662,6 +664,7 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         ge=1,
         le=20,
     )
+    _backward_waist_warning = warn_backward_waist_distance("waist_distances")
 
 
 class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):

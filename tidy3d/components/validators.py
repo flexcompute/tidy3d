@@ -306,6 +306,31 @@ def warn_if_dataset_none(field_name: str):
     return _warn_if_none
 
 
+def warn_backward_waist_distance(field_name: str):
+    """Warn if a backward-propagating beam uses a non-zero waist distance."""
+
+    @pydantic.root_validator(allow_reuse=True)
+    def _warn_backward_nonzero(cls, values):
+        """Emit deprecation warning for backward propagation with non-zero waist."""
+        direction = values.get("direction")
+        if direction != "-":
+            return values
+        waist_value = values.get(field_name)
+        waist_array = np.atleast_1d(waist_value)
+        if not np.all(np.isclose(waist_array, 0.0)):
+            log.warning(
+                f"Behavior of {cls.__name__} with direction '-' and non-zero '{field_name}' will "
+                "change in version 2.11 to be consistent with upcoming beam overlap monitors and "
+                "ports. Currently, the waist distance is interpreted w.r.t. the directed "
+                "propagation axis, so switching 'direction' also switches the position of the "
+                "waist in the global reference frame. In the future, the waist position will be "
+                "defined such that it is the same for backward- and forward-propagating beams.",
+            )
+        return values
+
+    return _warn_backward_nonzero
+
+
 def assert_single_freq_in_range(field_name: str):
     """Assert only one frequency supplied in source and it's in source time range."""
 

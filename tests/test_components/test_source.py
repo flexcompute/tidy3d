@@ -338,6 +338,58 @@ def test_FieldSource():
     # plt.close()
 
 
+def test_gaussian_beam_backward_waist_distance_warning():
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
+
+    with AssertLogLevel(
+        "WARNING",
+        contains_str="GaussianBeam with direction '-' and non-zero 'waist_distance'",
+    ):
+        td.GaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="-",
+            waist_distance=1.0,
+        )
+
+    with AssertLogLevel(None):
+        td.GaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="-",
+            waist_distance=0.0,
+        )
+
+
+def test_astigmatic_gaussian_beam_backward_waist_distance_warning():
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
+
+    with AssertLogLevel(
+        "WARNING",
+        contains_str="AstigmaticGaussianBeam with direction '-' and non-zero 'waist_distances'",
+    ):
+        td.AstigmaticGaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="-",
+            waist_sizes=(0.2, 0.4),
+            waist_distances=(0.1, 0.0),
+        )
+
+    with AssertLogLevel(None):
+        td.AstigmaticGaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="-",
+            waist_sizes=(0.2, 0.4),
+            waist_distances=(0.0, 0.0),
+        )
+
+
 def test_pol_arrow():
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 

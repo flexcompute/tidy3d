@@ -20,7 +20,7 @@ from .medium import Medium, MediumType
 from .monitor import FieldMonitor
 from .source.field import FixedAngleSpec, FixedInPlaneKSpec
 from .types import TYPE_TAG_STR, Direction, FreqArray, Numpy
-from .validators import assert_plane
+from .validators import assert_plane, warn_backward_waist_distance
 
 DEFAULT_RESOLUTION = 200
 
@@ -374,6 +374,7 @@ class GaussianBeamProfile(BeamProfile):
         "For an angled beam, the distance is defined along the rotated propagation direction.",
         units=MICROMETER,
     )
+    _backward_waist_warning = warn_backward_waist_distance("waist_distance")
 
     def beam_params(self, z: Numpy, k0: Numpy) -> tuple[Numpy, Numpy, Numpy]:
         """Compute the parameters needed to evaluate a Gaussian beam at z.
@@ -440,6 +441,7 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
         "the beam plane.",
         units=MICROMETER,
     )
+    _backward_waist_warning = warn_backward_waist_distance("waist_distances")
 
     def beam_params(self, z: Numpy, k0: Numpy) -> tuple[Numpy, Numpy, Numpy, Numpy]:
         """Compute the parameters needed to evaluate an astigmatic Gaussian beam at z.
