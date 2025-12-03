@@ -13,6 +13,8 @@ from tidy3d.components.beam import (
 )
 from tidy3d.components.data.monitor_data import FieldData
 
+from ..utils import AssertLogLevel
+
 FREQS = np.linspace(1e14, 2e14, 10).tolist()
 
 
@@ -88,6 +90,63 @@ def test_astigmatic_gaussian_beam():
     # field_data_bwd.Ez.abs.isel(f=0).plot(ax=ax[2, 1])
     # plt.show()
     assert field_data.flux == -field_data_bwd.flux
+
+
+def test_gaussian_beam_profile_backward_waist_distance_warning():
+    center = (0, 0, 0)
+    size = (10, 10, 0)
+    resolution = 100
+
+    with AssertLogLevel(
+        "WARNING",
+        contains_str="GaussianBeamProfile with direction '-' and non-zero 'waist_distance'",
+    ):
+        GaussianBeamProfile(
+            center=center,
+            size=size,
+            resolution=resolution,
+            freqs=FREQS,
+            direction="-",
+            waist_distance=1.0,
+        )
+
+    with AssertLogLevel(None):
+        GaussianBeamProfile(
+            center=center,
+            size=size,
+            resolution=resolution,
+            freqs=FREQS,
+            direction="-",
+            waist_distance=0.0,
+        )
+
+
+def test_astigmatic_gaussian_beam_profile_backward_waist_distance_warning():
+    center = (0, 0, 0)
+    size = (0, 20, 20)
+
+    with AssertLogLevel(
+        "WARNING",
+        contains_str="AstigmaticGaussianBeamProfile with direction '-' and non-zero 'waist_distances'",
+    ):
+        AstigmaticGaussianBeamProfile(
+            center=center,
+            size=size,
+            freqs=FREQS,
+            direction="-",
+            waist_sizes=(4.0, 2.0),
+            waist_distances=(1.0, 0.0),
+        )
+
+    with AssertLogLevel(None):
+        AstigmaticGaussianBeamProfile(
+            center=center,
+            size=size,
+            freqs=FREQS,
+            direction="-",
+            waist_sizes=(4.0, 2.0),
+            waist_distances=(0.0, 0.0),
+        )
 
 
 def test_invalid_beam_size():
