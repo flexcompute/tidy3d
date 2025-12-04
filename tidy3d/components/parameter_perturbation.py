@@ -1248,7 +1248,7 @@ class AbstractDeltaModel(Tidy3dBaseModel):
         """Return the perturbation range of the model."""
 
     @abstractmethod
-    def delta_n(self) -> HeatPerturbationType:
+    def delta_n(self) -> HeatPerturbationType:  # type: ignore[type-var]
         """Return the perturbation range of the model."""
 
 

@@ -56,7 +56,7 @@ class AxisAlignedCurrentIntegral(AxisAlignedCurrentIntegralSpec):
         h_field_name = f"H{h_component}"
         v_field_name = f"H{v_component}"
         # Validate that fields are present
-        em_field._check_fields_stored([h_field_name, v_field_name])
+        em_field._check_fields_stored([h_field_name, v_field_name])  # type: ignore[list-item]
         h_horizontal = em_field.field_components[h_field_name]
         h_vertical = em_field.field_components[v_field_name]
 

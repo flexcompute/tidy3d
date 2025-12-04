@@ -1203,7 +1203,7 @@ class LayerRefinementSpec(Box):
         cls,
         axis: Axis,
         bounds: tuple[float, float],
-        min_steps_along_axis: np.PositiveFloat = None,
+        min_steps_along_axis: PositiveFloat = None,
         bounds_refinement: GridRefinement = None,
         bounds_snapping: Literal["bounds", "lower", "upper", "center"] = "lower",
         corner_finder: Union[CornerFinderSpec, None, object] = Undefined,
@@ -1223,7 +1223,7 @@ class LayerRefinementSpec(Box):
             Specifies dimension of the layer normal axis (0,1,2) -> (x,y,z).
         bounds : tuple[float, float]
             Minimum and maximum positions of the layer along axis dimension.
-        min_steps_along_axis : np.PositiveFloat = None
+        min_steps_along_axis : PositiveFloat = None
             Minimal number of steps along axis.
         bounds_refinement : GridRefinement = None
             Mesh refinement factor around layer bounds.
@@ -1279,7 +1279,7 @@ class LayerRefinementSpec(Box):
         rmin: Coordinate,
         rmax: Coordinate,
         axis: Axis = None,
-        min_steps_along_axis: np.PositiveFloat = None,
+        min_steps_along_axis: PositiveFloat = None,
         bounds_refinement: GridRefinement = None,
         bounds_snapping: Literal["bounds", "lower", "upper", "center"] = "lower",
         corner_finder: CornerFinderSpec = Undefined,
@@ -1301,7 +1301,7 @@ class LayerRefinementSpec(Box):
         axis : Axis
             Specifies dimension of the layer normal axis (0,1,2) -> (x,y,z). If ``None``, apply the dimension
             along which the layer thas smallest thickness.
-        min_steps_along_axis : np.PositiveFloat = None
+        min_steps_along_axis : PositiveFloat = None
             Minimal number of steps along axis.
         bounds_refinement : GridRefinement = None
             Mesh refinement factor around layer bounds.
@@ -1356,7 +1356,7 @@ class LayerRefinementSpec(Box):
         cls,
         structures: list[Structure],
         axis: Axis = None,
-        min_steps_along_axis: np.PositiveFloat = None,
+        min_steps_along_axis: PositiveFloat = None,
         bounds_refinement: GridRefinement = None,
         bounds_snapping: Literal["bounds", "lower", "upper", "center"] = "lower",
         corner_finder: CornerFinderSpec = Undefined,
@@ -1376,7 +1376,7 @@ class LayerRefinementSpec(Box):
         axis : Axis
             Specifies dimension of the layer normal axis (0,1,2) -> (x,y,z). If ``None``, apply the dimension
             along which the bounding box of the structures thas smallest thickness.
-        min_steps_along_axis : np.PositiveFloat = None
+        min_steps_along_axis : PositiveFloat = None
             Minimal number of steps along axis.
         bounds_refinement : GridRefinement = None
             Mesh refinement factor around layer bounds.
@@ -2131,7 +2131,7 @@ class LayerRefinementSpec(Box):
         x: ArrayFloat1D,
         y: ArrayFloat1D,
         merged_geos: list[tuple[Any, Shapely]],
-        boundaries: list[list[Optional[str], Optional[str]], list[Optional[str], Optional[str]]],
+        boundaries: list[list[Optional[str]]],
     ) -> tuple[
         np.typing.NDArray[np.int_],
         np.typing.NDArray[np.float64],
@@ -2552,26 +2552,23 @@ class GridSpec(Tidy3dBaseModel):
         return len(self.layer_refinement_specs) > 0
 
     @property
-    def snapping_points_used(self) -> list[bool, bool, bool]:
+    def snapping_points_used(self) -> tuple[bool, bool, bool]:
         """Along each axis, ``True`` if any snapping point is used. However,
         it is still ``False`` if all snapping points take value ``None`` along the axis.
         """
 
         # empty list
-        if len(self.snapping_points) == 0:
-            return [False] * 3
+        if not self.snapping_points:
+            return False, False, False
 
-        snapping_used = [False] * 3
-        for point in self.snapping_points:
-            for ind_coord, coord in enumerate(point):
-                if snapping_used[ind_coord]:
-                    continue
-                if coord is not None:
-                    snapping_used[ind_coord] = True
-        return snapping_used
+        x_used = any(p[0] is not None for p in self.snapping_points)
+        y_used = any(p[1] is not None for p in self.snapping_points)
+        z_used = any(p[2] is not None for p in self.snapping_points)
+
+        return x_used, y_used, z_used
 
     @property
-    def override_structures_used(self) -> list[bool, bool, bool]:
+    def override_structures_used(self) -> tuple[bool, bool, bool]:
         """Along each axis, ``True`` if any override structure is used. However,
         it is still ``False`` if only :class:`.MeshOverrideStructure` is supplied, and
         their ``dl[axis]`` all take the ``None`` value.
@@ -2579,18 +2576,18 @@ class GridSpec(Tidy3dBaseModel):
 
         # empty override_structure list
         if len(self.override_structures) == 0:
-            return [False] * 3
+            return False, False, False
 
         override_used = [False] * 3
         for structure in self.override_structures:
             # override used in all axes if any `Structure` is present
             if isinstance(structure, Structure):
-                return [True] * 3
+                return True, True, True
 
             for dl_axis, dl in enumerate(structure.dl):
                 if (not override_used[dl_axis]) and (dl is not None):
                     override_used[dl_axis] = True
-        return override_used
+        return tuple(override_used)
 
     def internal_snapping_points(
         self,

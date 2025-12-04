@@ -9,7 +9,6 @@ from pydantic import Field, model_validator
 
 from tidy3d.compat import Self
 from tidy3d.components.data.data_array import (
-    DataArray,
     IndexedFieldVoltageDataArray,
     IndexedVoltageDataArray,
     PointDataArray,
@@ -54,7 +53,7 @@ class SteadyPotentialData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> dict[str, DataArray]:
+    def field_components(self) -> dict[str, Optional[FieldDataset]]:
         """Maps the field components to their associated data."""
         return {"potential": self.potential}
 
@@ -90,7 +89,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     # p = holes
 
     @property
-    def field_components(self) -> dict[str, DataArray]:
+    def field_components(self) -> dict[str, Optional[UnstructuredFieldType]]:
         """Maps the field components to their associated data."""
         return {"electrons": self.electrons, "holes": self.holes}
 
@@ -179,7 +178,7 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> dict[str, DataArray]:
+    def field_components(self) -> dict[str, Optional[UnstructuredFieldType]]:
         """Maps the field components to their associated data."""
         return {"Ec": self.Ec, "Ev": self.Ev, "Ei": self.Ei, "Efn": self.Efn, "Efp": self.Efp}
 

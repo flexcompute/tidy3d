@@ -38,7 +38,7 @@ class AxisAlignedVoltageIntegral(AxisAlignedPathIntegral, AxisAlignedVoltageInte
         e_component = "xyz"[self.main_axis]
         field_name = f"E{e_component}"
         # Validate that fields are present
-        em_field._check_fields_stored([field_name])
+        em_field._check_fields_stored([field_name])  # type: ignore[list-item]
         e_field = em_field.field_components[field_name]
 
         voltage = self.compute_integral(e_field)

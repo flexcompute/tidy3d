@@ -175,7 +175,7 @@ class Custom2DPathIntegral(Custom2DPathIntegralSpec):
         v_field_name = f"{field}{dim2}"
 
         # Validate that fields are present
-        em_field._check_fields_stored([h_field_name, v_field_name])
+        em_field._check_fields_stored([h_field_name, v_field_name])  # type: ignore[list-item]
 
         # Select fields lying on the plane
         plane_indexer = {dim3: self.position}

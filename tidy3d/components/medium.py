@@ -1116,6 +1116,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         # attempting to pass an UnstructuredGridDataset with zero points
         if isinstance(field, UnstructuredGridDataset):
             return any(len(subfield) == 0 for subfield in [field.points, field.cells, field.values])
+        return False
 
     def _derivative_field_cmp(
         self,

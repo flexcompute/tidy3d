@@ -220,7 +220,7 @@ class TriangleMesh(base.Geometry, ABC):
 
     @classmethod
     @verify_packages_import(["trimesh"])
-    def from_trimesh(cls, mesh: trimesh.Trimesh) -> TriangleMesh:
+    def from_trimesh(cls, mesh: Trimesh) -> TriangleMesh:
         """Create a :class:`.TriangleMesh` from a ``trimesh.Trimesh`` object.
 
         Parameters

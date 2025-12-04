@@ -36,7 +36,7 @@ def get_static(item: Any) -> Any:
     return item
 
 
-def split_list(x: list[Any], index: int) -> (list[Any], list[Any]):
+def split_list(x: list[Any], index: int) -> tuple[list, list]:
     """Split a list at a given index."""
     x = list(x)
     return x[:index], x[index:]
@@ -55,6 +55,7 @@ def contains(target: Any, seq: Iterable[Any]) -> bool:
         if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
             if contains(target, x):
                 return True
+    return False
 
 
 def hasbox(obj: Any) -> bool:

@@ -156,7 +156,7 @@ class Logger:
         exc_type: Optional[type[BaseException]],
         exc_value: Optional[BaseException],
         traceback: Optional[TracebackType],
-    ) -> Optional[bool]:
+    ) -> Literal[False]:
         """Exist a consolidation context (report the number of messages discarded)."""
         if self._counts is not None:
             total = sum(v for v in self._counts.values())

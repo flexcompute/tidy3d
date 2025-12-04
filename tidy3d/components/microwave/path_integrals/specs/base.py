@@ -91,6 +91,7 @@ class AxisAlignedPathIntegralSpec(AbstractAxesRH, Box):
         for index, value in enumerate(self.size):
             if value != 0:
                 return index
+        return None
 
     def _vertices_2D(self, axis: Axis) -> tuple[Coordinate2D, Coordinate2D]:
         """Returns the two vertices of this path in the plane defined by ``axis``."""

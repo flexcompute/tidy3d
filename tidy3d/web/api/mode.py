@@ -233,6 +233,7 @@ def run_batch(
                     if verbose:
                         progress.update(pbar, advance=1)
                     return None
+        return None
 
     if verbose:
         console.log(f"[cyan]Running a batch of [deep_pink4]{num_mode_solvers} mode solvers.\n")

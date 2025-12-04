@@ -50,7 +50,7 @@ def get_user_agent() -> str:
     return os.environ.get("TIDY3D_AGENT", f"Python-Client/{get_version()}")
 
 
-def api_key() -> None:
+def api_key() -> Optional[str]:
     """Get the api key for the current environment."""
 
     if os.environ.get(SIMCLOUD_APIKEY):
@@ -103,7 +103,7 @@ def api_key_auth(request: requests.request) -> requests.request:
     return request
 
 
-def get_headers() -> dict[str, str]:
+def get_headers() -> dict[str, Optional[str]]:
     """get headers for http request.
 
     Returns

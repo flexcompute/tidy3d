@@ -779,7 +779,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _car_2_cyn(
         self, mode_solver_data: ModeSolverData
-    ) -> dict[Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]]:
+    ) -> dict[str, Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]]:
         """Convert cartesian fields to cylindrical fields centered at the
         rotated bend center."""
 
@@ -980,7 +980,7 @@ class ModeSolver(Tidy3dBaseModel):
     def _mode_rotation(
         self,
         solver_ref_data_cylindrical: dict[
-            Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]
+            str, Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]
         ],
         solver: ModeSolver,
     ) -> ModeSolverData:

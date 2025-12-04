@@ -185,7 +185,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
         ],
         old_sim_bounds: Bound,
         new_sim_bounds: Bound,
-    ) -> list[Union[Structure, MeshOverrideStructure, LayerRefinementSpec, LumpedElement], ...]:
+    ) -> list[Union[Structure, MeshOverrideStructure, LayerRefinementSpec, LumpedElement]]:
         """Duplicate or expand a list of objects."""
 
         locations = self._antenna_locations

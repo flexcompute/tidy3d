@@ -1278,7 +1278,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         return [src_broadband], post_norm_amps
 
     @staticmethod
-    def _adjoint_src_width_broadband(adj_srcs: list[SourceType]) -> float:
+    def _adjoint_src_width_broadband(adj_srcs: list[SourceType]) -> tuple[float, float]:
         """Find the adjoint source fwidth that sufficiently covers all adjoint frequencies."""
 
         adj_srcs_f0 = [adj_src.source_time._freq0 for adj_src in adj_srcs]

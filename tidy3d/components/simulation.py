@@ -3538,7 +3538,7 @@ class Simulation(AbstractYeeGridSimulation):
                             medium_str = f"The medium associated with {medium_descr}"
                             custom_loc = [
                                 "structures",
-                                medium_index - 1,
+                                str(medium_index - 1),
                                 "medium",
                                 "frequency_range",
                             ]

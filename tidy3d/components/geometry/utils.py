@@ -10,6 +10,7 @@ from typing import Any, Optional, Union
 
 import numpy as np
 import shapely
+from numpy.typing import ArrayLike
 from pydantic import Field, NonNegativeInt
 from shapely.geometry import (
     Polygon,
@@ -464,7 +465,7 @@ class SnappingSpec(Tidy3dBaseModel):
     )
 
 
-def get_closest_value(test: float, coords: np.ArrayLike, upper_bound_idx: int) -> float:
+def get_closest_value(test: float, coords: ArrayLike, upper_bound_idx: int) -> float:
     """Helper to choose the closest value in an array to a given test value,
     using the index of the upper bound. The ``upper_bound_idx`` corresponds to the first value in
     the ``coords`` array which is greater than or equal to the test value.
@@ -492,7 +493,7 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol: float 
 
     def get_lower_bound(
         test: float,
-        coords: np.ArrayLike,
+        coords: ArrayLike,
         upper_bound_idx: int,
         rel_tol: float,
         strict_bounds: bool,
@@ -509,7 +510,7 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol: float 
         ----------
         test : float
             The value to snap.
-        coords : np.ArrayLike
+        coords : ArrayLike
             Sorted array of coordinate values to snap to.
         upper_bound_idx : int
             Index from ``np.searchsorted(coords, test, side="left")`` - the first index where
@@ -549,7 +550,7 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol: float 
 
     def get_upper_bound(
         test: float,
-        coords: np.ArrayLike,
+        coords: ArrayLike,
         upper_bound_idx: int,
         rel_tol: float,
         strict_bounds: bool,
@@ -566,7 +567,7 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol: float 
         ----------
         test : float
             The value to snap.
-        coords : np.ArrayLike
+        coords : ArrayLike
             Sorted array of coordinate values to snap to.
         upper_bound_idx : int
             Index from ``np.searchsorted(coords, test, side="left")`` - the first index where

@@ -808,7 +808,7 @@ class PermittivityDataset(AbstractMediumPropertyDataset):
         return {"eps_xx": "Ex", "eps_yy": "Ey", "eps_zz": "Ez"}
 
     @property
-    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> dict[str, None]:
         """Maps field components to their (positive) symmetry eigenvalues."""
         return {"eps_xx": None, "eps_yy": None, "eps_zz": None}
 
@@ -865,7 +865,7 @@ class MediumDataset(AbstractMediumPropertyDataset):
         }
 
     @property
-    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> dict[str, None]:
         """Maps field components to their (positive) symmetry eigenvalues."""
         return {
             "eps_xx": None,

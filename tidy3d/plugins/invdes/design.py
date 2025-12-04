@@ -106,7 +106,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         kwargs.setdefault("task_name", self.task_name)
         return run(simulation, **kwargs)
 
-    def run_async(self, simulations: dict[str, td.Simulation], **kwargs: Any) -> web.BatchData:  # noqa: F821
+    def run_async(self, simulations: dict[str, td.Simulation], **kwargs: Any) -> td.web.BatchData:
         """Run a batch of tidy3d simulations."""
         from tidy3d.web import run_async
 
@@ -330,7 +330,7 @@ class InverseDesignMulti(AbstractInverseDesign):
         simulation_list = [design.to_simulation(params) for design in self.designs]
         return dict(zip(self.task_names, simulation_list))
 
-    def to_simulation_data(self, params: anp.ndarray, **kwargs: Any) -> web.BatchData:  # noqa: F821
+    def to_simulation_data(self, params: anp.ndarray, **kwargs: Any) -> td.web.BatchData:
         """Convert the ``InverseDesignMulti`` to a set of ``td.Simulation``s and run async."""
         simulations = self.to_simulation(params)
         return self.run_async(simulations, **kwargs)

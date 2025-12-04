@@ -284,7 +284,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
     def _symmetry_update_dict(self) -> dict:
         """Dictionary of data fields to create data with expanded symmetry."""
 
-        update_dict = {}
+        update_dict: dict[str, Optional[tuple[float, float, float], DataArray]] = {}
         warn_interp = False
         for field_name, scalar_data in self.field_components.items():
             eigenval_fn = self.symmetry_eigenvalues[field_name]

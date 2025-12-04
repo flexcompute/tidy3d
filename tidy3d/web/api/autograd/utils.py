@@ -1,7 +1,7 @@
 # utility functions for autograd web API
 from __future__ import annotations
 
-from typing import Union
+from typing import Optional, Union
 
 import numpy as np
 
@@ -15,7 +15,7 @@ def get_derivative_maps(
     eps_fwd: td.PermittivityData,
     fld_adj: td.FieldData,
     eps_adj: td.PermittivityData,
-) -> dict[str, td.FieldData]:
+) -> dict[str, Optional[td.FieldData]]:
     """Get electric and displacement field derivative maps."""
     der_map_E = derivative_map_E(fld_fwd=fld_fwd, fld_adj=fld_adj)
     der_map_D = derivative_map_D(fld_fwd=fld_fwd, eps_fwd=eps_fwd, fld_adj=fld_adj, eps_adj=eps_adj)

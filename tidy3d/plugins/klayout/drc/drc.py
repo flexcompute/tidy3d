@@ -267,7 +267,8 @@ def run_drc_on_gds(config: DRCConfig) -> DRCResults:
     output = run(cmd, capture_output=True)
 
     if output.returncode != 0:
-        raise RuntimeError(f"KLayout DRC failed with error message: '{output.stderr}'.")
+        msg = output.stderr.decode(errors="replace")
+        raise RuntimeError(f"KLayout DRC failed with error message: '{msg}'.")
     if config.verbose:
         console.log("KLayout DRC completed successfully.")
 

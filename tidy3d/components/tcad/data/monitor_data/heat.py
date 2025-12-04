@@ -7,7 +7,6 @@ from typing import Optional, Union
 from pydantic import Field
 
 from tidy3d.components.data.data_array import (
-    DataArray,
     ScalarFieldTimeDataArray,
     SpatialDataArray,
 )
@@ -56,6 +55,6 @@ class TemperatureData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> dict[str, DataArray]:
+    def field_components(self) -> dict[str, Optional[FieldDataset]]:
         """Maps the field components to their associated data."""
         return {"temperature": self.temperature}

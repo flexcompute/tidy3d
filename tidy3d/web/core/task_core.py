@@ -190,7 +190,6 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
             simulation_type = "tidy3d"
 
         folder = Folder.get(folder_name, create=True)
-
         if task_type in ["RF", "TERMINAL_CM", "MODAL_CM"]:
             payload = {
                 "groupName": task_name,
@@ -203,13 +202,12 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
             payload = {
                 "taskName": task_name,
                 "taskType": task_type,
-                "callbackUrl": callback_url,
+                "callbackUrl": callback_url,  # type: ignore[dict-item]
                 "simulationType": simulation_type,
-                "parentTasks": parent_tasks,
+                "parentTasks": parent_tasks,  # type: ignore[dict-item]
                 "fileType": file_type,
             }
             resp = http.post(f"{projects_endpoint}/{folder.folder_id}/tasks", payload)
-        print(resp)
         return SimulationTask(**resp, taskType=task_type, folder_name=folder_name)
 
     def get_url(self) -> str:
@@ -478,7 +476,7 @@ class SimulationTask(WebTask):
             An object containing the task's latest data.
         """
         resp = http.get(f"tidy3d/tasks/{self.task_id}/detail")
-        return TaskInfo(**{"taskId": self.task_id, "taskType": self.task_type, **resp})
+        return TaskInfo(**{"taskId": self.task_id, "taskType": self.task_type, **resp})  # type: ignore[dict-item]
 
     def get_simulation_json(self, to_file: PathLike, verbose: bool = True) -> None:
         """Get json file for a :class:`.Simulation` from server.

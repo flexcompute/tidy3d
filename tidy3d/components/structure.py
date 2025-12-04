@@ -329,7 +329,7 @@ class Structure(AbstractStructure):
 
     def _make_adjoint_monitors(
         self, freqs: list[float], index: int, field_keys: list[str]
-    ) -> (FieldMonitor, PermittivityMonitor):
+    ) -> tuple[FieldMonitor, PermittivityMonitor]:
         """Generate the field and permittivity monitor for this structure."""
 
         geometry = self.geometry

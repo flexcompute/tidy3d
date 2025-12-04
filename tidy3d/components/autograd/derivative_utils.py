@@ -336,7 +336,7 @@ class DerivativeInfo:
             ("D_adj", self.D_adj),
         ]
         if self.is_medium_pec:
-            interpolator_groups += [("H_fwd", self.H_fwd), ("H_adj", self.H_adj)]
+            interpolator_groups += [("H_fwd", self.H_fwd), ("H_adj", self.H_adj)]  # type: ignore[list-item]
         for group_key, data_dict in interpolator_groups:
             _make_lazy_interpolator_group(data_dict, group_key, is_field_group=True)
 

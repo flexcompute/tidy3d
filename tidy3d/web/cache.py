@@ -598,6 +598,7 @@ class LocalCache:
             return entry
         except Exception as e:
             log.error("Failed to fetch cache results: " + str(e))
+        return None
 
     def store_result(
         self,

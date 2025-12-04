@@ -713,11 +713,8 @@ class RLCNetwork(MicrowaveBaseModel):
         elif self.network_topology == "series":
             result_medium = RLCNetwork._series_network_to_equivalent_medium(scaling_factor, R, L, C)
             return result_medium
-        else:
-            result_medium = RLCNetwork._parallel_network_to_equivalent_medium(
-                scaling_factor, R, L, C
-            )
-            return result_medium
+        result_medium = RLCNetwork._parallel_network_to_equivalent_medium(scaling_factor, R, L, C)
+        return result_medium
 
     @staticmethod
     def _series_network_to_equivalent_medium(
@@ -1066,7 +1063,7 @@ class LinearLumpedElement(RectangularLumpedElement):
         structures.append(self.to_structure(grid))
         return structures
 
-    def estimate_parasitic_elements(self, grid: Grid) -> tuple[float, float]:
+    def estimate_parasitic_elements(self, grid: Grid) -> Optional[tuple[float, float]]:
         """Provides an estimate for the parasitic inductance and capacitance associated with the
         connections. These wire or sheet connections are used when the lumped element is not
         distributed over the voltage axis.
@@ -1143,6 +1140,7 @@ class LinearLumpedElement(RectangularLumpedElement):
             # but there will be a contribution to inductance from the single connection
             L = inductance_straight_rectangular_wire(common_size, v_axis)
             return (L, 0)
+        return None
 
     def admittance(self, freqs: np.ndarray) -> np.ndarray:
         """Returns the admittance of this lumped element at the frequencies specified by ``freqs``.

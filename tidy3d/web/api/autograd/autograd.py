@@ -600,7 +600,7 @@ def _run_primitive(
 def _run_async_primitive(
     sim_fields_dict: dict[str, AutogradFieldMap],
     sims_original: dict[str, td.Simulation],
-    aux_data_dict: dict[dict[str, Any]],
+    aux_data_dict: dict[str, dict[str, Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     **run_async_kwargs: Any,

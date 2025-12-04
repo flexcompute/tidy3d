@@ -3646,7 +3646,7 @@ description = "Jupyter Notebook Tools for Sphinx"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version == \"3.10\" and (extra == \"dev\" or extra == \"docs\")"
+markers = "extra == \"dev\" or extra == \"docs\""
 files = [
     {file = "nbsphinx-0.9.8-py3-none-any.whl", hash = "sha256:92d95ee91784e56bc633b60b767a6b6f23a0445f891e24641ce3c3f004759ccf"},
     {file = "nbsphinx-0.9.8.tar.gz", hash = "sha256:d0765908399a8ee2b57be7ae881cf2ea58d66db3af7bbf33e6eb48f83bea5495"},
@@ -7816,4 +7816,4 @@ vtk = ["vtk"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "0c727cd9ee2b0de68ad7361e72b4c9c33e1775c416e6f9ff0a0aa3e08aab18b6"
+content-hash = "ddb5e0056895125af6d8ddff750bb0eaab7eee34cf031fd3374f5c0c11dc9c5c"

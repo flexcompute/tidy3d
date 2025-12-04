@@ -115,9 +115,9 @@ def get_kernel_size_px(
         raise ValueError("Either 'size_px' or both 'radius' and 'dl' must be provided.")
 
     if np.isscalar(radius):
-        radius = [radius] * len(dl) if isinstance(dl, Iterable) else [radius]
+        radius = [radius] * len(dl) if isinstance(dl, Iterable) else [radius]  # type: ignore[list-item]
     if np.isscalar(dl):
-        dl = [dl] * len(radius)
+        dl = [dl] * len(radius)  # type: ignore[list-item]
 
     radius_px = [np.ceil(r / g) for r, g in zip(radius, dl)]
     return (
