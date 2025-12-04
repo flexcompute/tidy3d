@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.data.data_array import (
     CurrentIntegralResultType,
     ImpedanceResultType,
@@ -67,20 +68,22 @@ class ImpedanceCalculator(MicrowaveBaseModel):
     >>> _ = ImpedanceCalculator(voltage_integral=v_int)
     """
 
-    voltage_integral: Optional[VoltageIntegralType] = pd.Field(
+    voltage_integral: Optional[VoltageIntegralType] = Field(
         None,
         title="Voltage Integral",
         description="Definition of path integral for computing voltage.",
     )
 
-    current_integral: Optional[CurrentIntegralType] = pd.Field(
+    current_integral: Optional[CurrentIntegralType] = Field(
         None,
         title="Current Integral",
         description="Definition of contour integral for computing current.",
     )
 
     def compute_impedance(
-        self, em_field: IntegrableMonitorDataType, return_voltage_and_current=False
+        self,
+        em_field: IntegrableMonitorDataType,
+        return_voltage_and_current: bool = False,
     ) -> Union[
         ImpedanceResultType,
         tuple[ImpedanceResultType, VoltageIntegralResultType, CurrentIntegralResultType],
@@ -94,7 +97,7 @@ class ImpedanceCalculator(MicrowaveBaseModel):
         em_field : :class:`.IntegrableMonitorDataType`
             The electromagnetic field data that will be used for computing the characteristic
             impedance.
-        return_voltage_and_current: bool
+        return_voltage_and_current: bool = False
             When ``True``, returns additional :class:`.IntegralResultType` that represent the voltage
             and current associated with the supplied fields.
 
@@ -156,12 +159,13 @@ class ImpedanceCalculator(MicrowaveBaseModel):
             return (impedance, voltage, current)
         return impedance
 
-    @pd.validator("current_integral", always=True)
-    def check_voltage_or_current(cls, val, values):
+    @model_validator(mode="after")
+    def check_voltage_or_current(self) -> Self:
         """Raise validation error if both ``voltage_integral`` and ``current_integral``
         are not provided."""
-        if not values.get("voltage_integral") and not val:
+        val = self.current_integral
+        if not self.voltage_integral and not val:
             raise ValidationError(
                 "At least one of 'voltage_integral' or 'current_integral' must be provided."
             )
-        return val
+        return self

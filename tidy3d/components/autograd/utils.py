@@ -1,25 +1,39 @@
 # utilities for working with autograd
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, Union
 
 import autograd.numpy as anp
-from autograd.tracer import getval
+from autograd.numpy.numpy_boxes import ArrayBox
+from autograd.tracer import getval, isbox
+from numpy.typing import ArrayLike, NDArray
 
 __all__ = [
     "asarray1d",
     "contains",
     "get_static",
+    "hasbox",
     "is_tidy_box",
     "pack_complex_vec",
     "split_list",
 ]
 
 
-def get_static(x: Any) -> Any:
-    """Get the 'static' (untraced) version of some value."""
-    return getval(x)
+def get_static(item: Any) -> Any:
+    """
+    Get the 'static' (untraced) version of some value by recursively calling getval
+    on Box instances within a nested structure.
+    """
+    if isbox(item):
+        return getval(item)
+    elif isinstance(item, list):
+        return [get_static(x) for x in item]
+    elif isinstance(item, tuple):
+        return tuple(get_static(x) for x in item)
+    elif isinstance(item, dict):
+        return {k: get_static(v) for k, v in item.items()}
+    return item
 
 
 def split_list(x: list[Any], index: int) -> (list[Any], list[Any]):
@@ -41,15 +55,25 @@ def contains(target: Any, seq: Iterable[Any]) -> bool:
         if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
             if contains(target, x):
                 return True
+
+
+def hasbox(obj: Any) -> bool:
+    """True if any element inside obj is an autograd Box."""
+    if isbox(obj):
+        return True
+    if isinstance(obj, Mapping):
+        return any(hasbox(v) for v in obj.values())
+    if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
+        return any(hasbox(i) for i in obj)
     return False
 
 
-def pack_complex_vec(z):
+def pack_complex_vec(z: Union[NDArray, ArrayBox]) -> Union[NDArray, ArrayBox]:
     """Ravel [Re(z); Im(z)] into one real vector (autograd-safe)."""
     return anp.concatenate([anp.ravel(anp.real(z)), anp.ravel(anp.imag(z))])
 
 
-def asarray1d(x):
+def asarray1d(x: Union[ArrayLike, ArrayBox]) -> Union[NDArray, ArrayBox]:
     """Autograd-friendly 1D flatten: returns ndarray of shape (-1,)."""
     x = anp.array(x)
     return x if x.ndim == 1 else anp.ravel(x)

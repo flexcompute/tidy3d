@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Optional, Union
 
 import numpy as np
 import xarray as xr
@@ -10,6 +10,7 @@ import xarray as xr
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
     CurrentIntegralResultType,
+    DataArray,
     FreqDataArray,
     FreqModeDataArray,
     IntegralResultType,
@@ -74,7 +75,9 @@ class AxisAlignedCurrentIntegral(AxisAlignedCurrentIntegralSpec):
         return _make_current_data_array(current)
 
     def _to_path_integrals(
-        self, h_horizontal=None, h_vertical=None
+        self,
+        h_horizontal: Optional[DataArray] = None,
+        h_vertical: Optional[DataArray] = None,
     ) -> tuple[AxisAlignedPathIntegral, ...]:
         """Returns four ``AxisAlignedPathIntegral`` instances, which represent a contour
         integral around the surface defined by ``self.size``."""

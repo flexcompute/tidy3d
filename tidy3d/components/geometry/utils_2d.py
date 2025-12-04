@@ -88,12 +88,12 @@ def subdivide(
     ----------
     geom : Geometry
         A 2D geometry associated with the :class:`.Medium2D`.
-    structures : List[Structure]
+    structures : list[Structure]
         List of structures that are checked for intersection with ``geom``.
 
     Returns
     -------
-    List[Tuple[Geometry, Structure, Structure]]
+    list[tuple[Geometry, Structure, Structure]]
         List of the created partitions. Each element of the list represents a partition of the 2D geometry,
         which includes the newly created structures below and above.
 

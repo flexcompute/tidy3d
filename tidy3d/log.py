@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from os import PathLike
-from typing import Any, Callable, Optional, Union
+from types import TracebackType
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 
+from pydantic import BaseModel
 from rich.console import Console
 from rich.text import Text
-from typing_extensions import Literal
 
+from tidy3d.compat import Self
+
+if TYPE_CHECKING:
+    from rich.progress import Progress as RichProgress
 # Note: "SUPPORT" and "USER" levels are meant for backend runs only.
 # Logging in frontend code should just use the standard debug/info/warning/error/critical.
 LogLevel = Literal["DEBUG", "SUPPORT", "USER", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -80,7 +86,7 @@ class LogHandler:
         self.log_level_format = log_level_format
         self.prefix_every_line = prefix_every_line
 
-    def handle(self, level, level_name, message) -> None:
+    def handle(self, level: int, level_name: str, message: str) -> None:
         """Output log messages depending on log level"""
         if level >= self.level:
             stack = inspect.stack()
@@ -132,20 +138,25 @@ class Logger:
         """Turn on/off tree-like capturing of log messages."""
         self._capture = capture
 
-    def captured_warnings(self):
+    def captured_warnings(self) -> list[dict[str, Any]]:
         """Get the formatted list of captured log messages."""
         captured_warnings = self._captured_warnings
         self._captured_warnings = []
         return captured_warnings
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         """If suppression is enabled, enter a consolidation context (only a single message is
         emitted)."""
         if self.suppression and self._counts is None:
             self._counts = {}
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> Optional[bool]:
         """Exist a consolidation context (report the number of messages discarded)."""
         if self._counts is not None:
             total = sum(v for v in self._counts.values())
@@ -177,7 +188,7 @@ class Logger:
         else:
             self._stack = [stack_item]
 
-    def end_capture(self, model) -> None:
+    def end_capture(self, model: BaseModel) -> None:
         """End capturing log stack for consolidated validation log.
 
         This method is used after all model validations and is included in the initialization of
@@ -208,7 +219,7 @@ class Logger:
                 hash_ = hash(model)
                 self._stack[-1]["children"][hash_] = stack_item
 
-    def _parse_warning_capture(self, current_loc, stack_item) -> None:
+    def _parse_warning_capture(self, current_loc: list[Any], stack_item: dict[str, Any]) -> None:
         """Process capture tree to compile formatted captured warnings."""
 
         if "parent_fields" in stack_item:
@@ -451,7 +462,7 @@ def get_logging_console() -> Console:
 class NoOpProgress:
     """Dummy progress manager that doesn't show any output."""
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args: Any, **kwargs: Any) -> None:
@@ -465,7 +476,7 @@ class NoOpProgress:
 
 
 @contextmanager
-def Progress(console, show_progress):
+def Progress(console: Console, show_progress: bool) -> Iterator[Union[RichProgress, NoOpProgress]]:
     """Progress manager that wraps ``rich.Progress`` if ``show_progress`` is ``True``,
     and ``NoOpProgress`` otherwise."""
     if show_progress:

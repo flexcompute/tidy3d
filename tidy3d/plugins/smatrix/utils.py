@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Union
 
 import numpy as np
+from numpy.typing import NDArray
 
 from tidy3d.components.data.data_array import (
     DataArray,
@@ -28,7 +29,7 @@ from tidy3d.plugins.smatrix.ports.types import (
 from tidy3d.plugins.smatrix.types import SParamDef
 
 
-def port_array_inv(matrix: DataArray):
+def port_array_inv(matrix: DataArray) -> NDArray:
     """Helper to invert a port matrix.
 
     Parameters
@@ -105,7 +106,7 @@ def check_port_impedance_sign(Z_numpy: np.ndarray) -> None:
             )
 
 
-def compute_F(Z_numpy: ArrayFloat1D, s_param_def: SParamDef = "pseudo"):
+def compute_F(Z_numpy: ArrayFloat1D, s_param_def: SParamDef = "pseudo") -> float:
     r"""Helper to convert port impedance matrix to F, which is used for
     computing scattering parameters
 

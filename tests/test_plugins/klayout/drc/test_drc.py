@@ -6,8 +6,8 @@ import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import pydantic.v1 as pd
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.exceptions import FileError
@@ -122,7 +122,7 @@ def test_drc_config_args_require_mapping(tmp_path):
     """drc_args must be a mapping and refuses other iterables."""
 
     kwargs = _basic_drc_config_kwargs(tmp_path)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         DRCConfig(**kwargs, drc_args=["not", "a", "mapping"])
 
 
@@ -130,7 +130,7 @@ def test_drc_config_args_reject_reserved_keys(tmp_path):
     """Reserved keys such as gdsfile cannot be overridden via drc_args."""
 
     kwargs = _basic_drc_config_kwargs(tmp_path)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         DRCConfig(**kwargs, drc_args={"gdsfile": "custom.gds"})
 
 
@@ -153,7 +153,7 @@ def test_drc_config_args_unstringifiable_value(tmp_path):
     kwargs = _basic_drc_config_kwargs(tmp_path)
 
     with pytest.raises(
-        pd.ValidationError, match="Could not coerce keys and values of drc_args to strings."
+        ValidationError, match="Could not coerce keys and values of drc_args to strings."
     ):
         DRCConfig(**kwargs, drc_args={"bad": Unstringifiable()})
 
@@ -373,7 +373,7 @@ class TestDRCRunner:
         if drc_file_suffix == ".lydrc":
             drc_content = TestDRCRunner.wrap_drc_to_lydrc(drc_content)
         self.write_drcrunset(tmp_path, f"bad_drcrunset{drc_file_suffix}", drc_content)
-        with pytest.raises(pd.ValidationError) as e:
+        with pytest.raises(ValidationError) as e:
             self.run(
                 monkeypatch=monkeypatch,
                 drc_runsetfile=tmp_path / f"bad_drcrunset{drc_file_suffix}",
@@ -386,7 +386,7 @@ class TestDRCRunner:
     def test_check_gdsfile_exists(self, monkeypatch, tmp_path, good_drcrunset_content):
         """Test gdsfile existence checking works"""
         self.write_drcrunset(tmp_path, "good_drcfile.drc", good_drcrunset_content)
-        with pytest.raises(pd.ValidationError):
+        with pytest.raises(ValidationError):
             self.run(
                 monkeypatch=monkeypatch,
                 drc_runsetfile=tmp_path / "good_drcfile.drc",
@@ -402,7 +402,7 @@ class TestDRCRunner:
         """Test gdsfile filetype checking works"""
         self.write_drcrunset(tmp_path, "good_drcfile.drc", good_drcrunset_content)
         geom.to_gds_file(tmp_path / "test.g2ds", **geom_to_gds_kwargs)
-        with pytest.raises(pd.ValidationError):
+        with pytest.raises(ValidationError):
             self.run(
                 monkeypatch=monkeypatch,
                 drc_runsetfile=tmp_path / "good_drcfile.drc",
@@ -415,7 +415,7 @@ class TestDRCRunner:
     def test_check_designrulefile_exists(self, monkeypatch, tmp_path, geom, geom_to_gds_kwargs):
         """Test design rule file existence checking works"""
         geom.to_gds_file(tmp_path / "test.gds", **geom_to_gds_kwargs)
-        with pytest.raises(pd.ValidationError):
+        with pytest.raises(ValidationError):
             self.run(
                 monkeypatch=monkeypatch,
                 drc_runsetfile=tmp_path / "not_a_drc_file.drc",
@@ -431,7 +431,7 @@ class TestDRCRunner:
         """Test design rule file filetype checking works"""
         geom.to_gds_file(tmp_path / "test.gds", **geom_to_gds_kwargs)
         self.write_drcrunset(tmp_path, "good_drcfile.drc2", good_drcrunset_content)
-        with pytest.raises(pd.ValidationError):
+        with pytest.raises(ValidationError):
             self.run(
                 monkeypatch=monkeypatch,
                 drc_runsetfile=tmp_path / "good_drcfile.drc2",

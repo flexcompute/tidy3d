@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Optional
 
-import pydantic.v1 as pd
+from pydantic import Field, PositiveInt
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
@@ -24,14 +24,14 @@ DEFAULT_REFERENCE_IMPEDANCE = 50
 class AbstractLumpedPort(AbstractTerminalPort):
     """Class representing a single lumped port."""
 
-    impedance: Complex = pd.Field(
+    impedance: Complex = Field(
         DEFAULT_REFERENCE_IMPEDANCE,
         title="Reference impedance",
         description="Reference port impedance for scattering parameter computation.",
         units=OHM,
     )
 
-    num_grid_cells: Optional[pd.PositiveInt] = pd.Field(
+    num_grid_cells: Optional[PositiveInt] = Field(
         DEFAULT_PORT_NUM_CELLS,
         title="Port grid cells",
         description="Number of mesh grid cells associated with the port along each direction, "
@@ -39,7 +39,7 @@ class AbstractLumpedPort(AbstractTerminalPort):
         "A value of ``None`` will turn off automatic mesh refinement.",
     )
 
-    enable_snapping_points: bool = pd.Field(
+    enable_snapping_points: bool = Field(
         True,
         title="Snap Grid To Lumped Port",
         description="When enabled, snapping points are automatically generated to snap grids to key "

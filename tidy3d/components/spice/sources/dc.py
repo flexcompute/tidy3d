@@ -23,12 +23,11 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-import pydantic.v1 as pd
+from pydantic import Field, FiniteFloat, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayFloat1D
-from tidy3d.constants import AMP, VOLT
-from tidy3d.constants import inf as td_inf
+from tidy3d.constants import AMP, VOLT, inf
 
 
 class DCVoltageSource(Tidy3dBaseModel):
@@ -48,15 +47,14 @@ class DCVoltageSource(Tidy3dBaseModel):
     >>> voltage_source = td.DCVoltageSource(voltage=voltages)
     """
 
-    name: Optional[str] = pd.Field(
+    name: Optional[str] = Field(
         None,
         title="Name",
         description="Unique name for the DC voltage source",
         min_length=1,
     )
 
-    voltage: ArrayFloat1D = pd.Field(
-        ...,
+    voltage: ArrayFloat1D = Field(
         title="Voltage",
         description="DC voltage usually used as source in :class:`VoltageBC` boundary conditions.",
         units=VOLT,
@@ -66,10 +64,11 @@ class DCVoltageSource(Tidy3dBaseModel):
     # standalone field. Keeping for compatibility, remove in 3.0.
     units: Literal[VOLT] = VOLT
 
-    @pd.validator("voltage")
-    def check_voltage(cls, val):
+    @field_validator("voltage")
+    @classmethod
+    def check_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         for v in val:
-            if v == td_inf:
+            if v == inf:
                 raise ValueError(f"Voltages must be finite. Currently  voltage={val}.")
         return val
 
@@ -108,14 +107,14 @@ class DCCurrentSource(Tidy3dBaseModel):
     >>> current_source = td.DCCurrentSource(current=0.4)
     """
 
-    name: Optional[str] = pd.Field(
+    name: Optional[str] = Field(
         None,
         title="Name",
         description="Unique name for the DC current source",
         min_length=1,
     )
 
-    current: pd.FiniteFloat = pd.Field(
+    current: FiniteFloat = Field(
         title="Current",
         description="DC current usually used as source in :class:`CurrentBC` boundary conditions.",
         units=AMP,

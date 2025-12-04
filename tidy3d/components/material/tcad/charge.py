@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Optional, Union
 
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.medium import AbstractMedium
 from tidy3d.components.tcad.doping import ConstantDoping, DopingBoxType
@@ -26,12 +27,16 @@ class AbstractChargeMedium(AbstractMedium):
     """Abstract class for Charge specifications
     Currently, permittivity is treated as a constant."""
 
-    permittivity: float = pd.Field(
-        1.0, ge=1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
+    permittivity: float = Field(
+        1.0,
+        ge=1.0,
+        title="Permittivity",
+        description="Relative permittivity.",
+        units=PERMITTIVITY,
     )
 
     @property
-    def charge(self):
+    def charge(self) -> Self:
         """
         This means that a charge medium has been defined inherently within this solver medium.
         This provides interconnection with the :class:`MultiPhysicsMedium` higher-dimensional classes.
@@ -75,8 +80,7 @@ class ChargeConductorMedium(AbstractChargeMedium):
         A relative permittivity will be assumed 1 if no value is specified.
     """
 
-    conductivity: pd.PositiveFloat = pd.Field(
-        ...,
+    conductivity: PositiveFloat = Field(
         title="Electric conductivity",
         description="Electric conductivity of material.",
         units=CONDUCTIVITY,
@@ -256,53 +260,48 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     """
 
-    N_c: Union[EffectiveDOSModelType, pd.PositiveFloat] = pd.Field(
-        ...,
+    N_c: Union[EffectiveDOSModelType, PositiveFloat] = Field(
         title="Effective density of electron states",
         description=":math:`N_c` Effective density of states in the conduction band.",
         units=PERCMCUBE,
     )
 
-    N_v: Union[EffectiveDOSModelType, pd.PositiveFloat] = pd.Field(
-        ...,
+    N_v: Union[EffectiveDOSModelType, PositiveFloat] = Field(
         title="Effective density of hole states",
         description=":math:`N_v` Effective density of states in the valence band.",
         units=PERCMCUBE,
     )
 
-    E_g: Union[EnergyBandGapModelType, pd.PositiveFloat] = pd.Field(
-        ...,
+    E_g: Union[EnergyBandGapModelType, PositiveFloat] = Field(
         title="Band-gap energy",
         description=":math:`E_g` Band-gap energy",
         units=ELECTRON_VOLT,
     )
 
-    mobility_n: MobilityModelType = pd.Field(
-        ...,
+    mobility_n: MobilityModelType = Field(
         title="Mobility model for electrons",
         description="Mobility model for electrons",
     )
 
-    mobility_p: MobilityModelType = pd.Field(
-        ...,
+    mobility_p: MobilityModelType = Field(
         title="Mobility model for holes",
         description="Mobility model for holes",
     )
 
-    R: tuple[RecombinationModelType, ...] = pd.Field(
-        [],
+    R: tuple[RecombinationModelType, ...] = Field(
+        (),
         title="Generation-Recombination models",
         description="Array containing the R models to be applied to the material.",
     )
 
-    delta_E_g: BandGapNarrowingModelType = pd.Field(
+    delta_E_g: Optional[BandGapNarrowingModelType] = Field(
         None,
         title="Bandgap narrowing model.",
         description=":math:`\\Delta E_g` Bandgap narrowing model.",
         units=ELECTRON_VOLT,
     )
 
-    N_a: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
+    N_a: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = Field(
         (),
         title="Doping: Acceptor concentration",
         description="Concentration of acceptor impurities, which create mobile holes, resulting in p-type material. "
@@ -311,7 +310,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         units=PERCMCUBE,
     )
 
-    N_d: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
+    N_d: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = Field(
         (),
         title="Doping: Donor concentration",
         description="Concentration of donor impurities, which create mobile electrons, resulting in n-type material. "
@@ -321,8 +320,9 @@ class SemiconductorMedium(AbstractChargeMedium):
     )
 
     # DEPRECATION VALIDATORS
-    @pd.validator("N_c", always=True)
-    def check_nc_uses_model(cls, val, values):
+    @field_validator("N_c")
+    @classmethod
+    def check_nc_uses_model(cls, val: Union[EffectiveDOSModelType, float]) -> EffectiveDOSModelType:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(
@@ -332,8 +332,9 @@ class SemiconductorMedium(AbstractChargeMedium):
             return ConstantEffectiveDOS(N=val)
         return val
 
-    @pd.validator("N_v", always=True)
-    def check_nv_uses_model(cls, val, values):
+    @field_validator("N_v")
+    @classmethod
+    def check_nv_uses_model(cls, val: Union[EffectiveDOSModelType, float]) -> EffectiveDOSModelType:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(
@@ -343,8 +344,11 @@ class SemiconductorMedium(AbstractChargeMedium):
             return ConstantEffectiveDOS(N=val)
         return val
 
-    @pd.validator("E_g", always=True)
-    def check_eg_uses_model(cls, val, values):
+    @field_validator("E_g")
+    @classmethod
+    def check_eg_uses_model(
+        cls, val: Union[EnergyBandGapModelType, float]
+    ) -> EnergyBandGapModelType:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(
@@ -354,8 +358,11 @@ class SemiconductorMedium(AbstractChargeMedium):
             return ConstantEnergyBandGap(eg=val)
         return val
 
-    @pd.validator("N_d", always=True)
-    def check_nd_uses_model(cls, val, values):
+    @field_validator("N_d")
+    @classmethod
+    def check_nd_uses_model(
+        cls, val: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]]
+    ) -> Union[SpatialDataArray, tuple[DopingBoxType, ...]]:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(
@@ -365,8 +372,11 @@ class SemiconductorMedium(AbstractChargeMedium):
             return (ConstantDoping(concentration=val),)
         return val
 
-    @pd.validator("N_a", always=True)
-    def check_na_uses_model(cls, val, values):
+    @field_validator("N_a")
+    @classmethod
+    def check_na_uses_model(
+        cls, val: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]]
+    ) -> Union[SpatialDataArray, tuple[DopingBoxType, ...]]:
         """Issue deprecation warning if float is provided"""
         if isinstance(val, (float, int)):
             log.warning(

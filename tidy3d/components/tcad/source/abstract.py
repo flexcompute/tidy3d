@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 
-import pydantic.v1 as pd
+from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.source import AbstractSource
@@ -27,13 +27,14 @@ class StructureBasedHeatChargeSource(AbstractHeatChargeSource):
     """Abstract class associated with structures. Sources associated
     to structures must derive from this class"""
 
-    structures: tuple[str, ...] = pd.Field(
+    structures: tuple[str, ...] = Field(
         title="Target Structures",
         description="Names of structures where to apply heat source.",
     )
 
-    @pd.validator("structures", always=True)
-    def check_non_empty_structures(cls, val):
+    @field_validator("structures")
+    @classmethod
+    def check_non_empty_structures(cls, val: tuple[str, ...]) -> tuple[str, ...]:
         """Error if source doesn't point at any structures."""
         if len(val) == 0:
             raise SetupError("List of structures for heat source is empty.")

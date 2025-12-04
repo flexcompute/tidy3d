@@ -5,6 +5,7 @@ import autograd.numpy as anp
 import numpy as np
 import numpy.testing as npt
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
@@ -256,7 +257,6 @@ def make_invdes_multi():
     region = make_design_region()
 
     simulations = n * [simulation]
-    # post_process_fns = n * [post_process_fn]
 
     invdes = tdi.InverseDesignMulti(
         design_region=region,
@@ -273,12 +273,12 @@ def test_invdes_multi_same_length():
     invdes = make_invdes_multi()
     n = len(invdes.simulations)
 
-    output_monitor_names = (n + 1) * [["test"]]
+    output_monitor_names = (n + 1) * [("test",)]
 
     with pytest.raises(ValueError):
         _ = invdes.updated_copy(output_monitor_names=output_monitor_names)
 
-    output_monitor_names = [([MNT_NAME1, MNT_NAME2], None)[i % 2] for i in range(n)]
+    output_monitor_names = [((MNT_NAME1, MNT_NAME2), None)[i % 2] for i in range(n)]
     invdes = invdes.updated_copy(output_monitor_names=output_monitor_names)
 
     _ = invdes.designs
@@ -445,13 +445,13 @@ def test_invdes_io(tmp_path, use_emulated_run):  # noqa: F811
     design = optimizer.design
 
     for obj in (design, optimizer, result):
-        obj.json()
+        obj.model_dump_json()
 
         path = str(tmp_path / "obj.hdf5")
         obj.to_file(path)
         obj2 = obj.from_file(path)
 
-        assert obj2.json() == obj.json()
+        assert obj2.model_dump_json() == obj.model_dump_json()
 
 
 def test_objective_utilities(use_emulated_run):  # noqa: F811
@@ -601,29 +601,29 @@ def test_validate_invdes_metric():
     """Test the _validate_metric_monitor_name validator."""
     invdes = make_invdes()
     metric = ModePower(monitor_name="invalid_monitor", f=[FREQ0])
-    with pytest.raises(ValueError, match="monitors"):
+    with pytest.raises(ValidationError, match="monitors"):
         invdes.updated_copy(metric=metric)
 
     metric = ModePower(monitor_name=MNT_NAME2, mode_index=10, f=[FREQ0])
-    with pytest.raises(ValueError, match="mode index"):
+    with pytest.raises(ValidationError, match="mode index"):
         invdes.updated_copy(metric=metric)
 
     metric = ModePower(monitor_name=MNT_NAME2, mode_index=0, f=[FREQ0 / 2])
-    with pytest.raises(ValueError, match="frequencies"):
+    with pytest.raises(ValidationError, match="frequencies"):
         invdes.updated_copy(metric=metric)
 
     metric = ModePower(monitor_name=MNT_NAME2, mode_index=0)
     monitor = mnt2.updated_copy(freqs=[FREQ0, FREQ0 / 2])
-    invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=[monitor]))
-    with pytest.raises(ValueError, match="single frequency"):
+    invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=(monitor,)))
+    with pytest.raises(ValidationError, match="single frequency"):
         invdes.updated_copy(metric=metric)
 
     metric = ModeAmp(monitor_name=MNT_NAME2, mode_index=0) + ModePower(
         monitor_name=MNT_NAME2, mode_index=0
     )
     monitor = mnt2.updated_copy(freqs=[FREQ0])
-    invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=[monitor]))
-    with pytest.raises(ValueError, match="must return a real"):
+    invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=(monitor,)))
+    with pytest.raises(ValidationError, match="must return a real"):
         invdes.updated_copy(metric=metric)
 
 
