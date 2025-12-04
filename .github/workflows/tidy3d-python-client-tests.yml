@@ -577,10 +577,10 @@ jobs:
           set -e
           base_version="${BASE_VERSION}"
           base_ref="${BASE_REF}"
-          if [[ "$base_version" == *rc* ]]; then
-            echo "✅ Passing: Schema changed on a release candidate version ($base_version) in base branch '${base_ref}', which is permitted."
+          if [[ "$base_version" == *rc* ]] || [[ "$base_version" == *dev* ]]; then
+            echo "✅ Passing: Schema changed on a pre-release version ($base_version) in base branch '${base_ref}', which is permitted."
           else
-            echo "❌ Failing: Schema changed on a non-rc release version ($base_version) in base branch '${base_ref}'."
+            echo "❌ Failing: Schema changed on a non-pre-release version ($base_version) in base branch '${base_ref}'."
             exit 1
           fi
            

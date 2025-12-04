@@ -16,6 +16,7 @@ from pandas import DataFrame, Index
 
 from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
+from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
 from tidy3d.components.mode_spec import ModeSortSpec, ModeSpec
@@ -61,7 +62,7 @@ from tidy3d.components.validators import (
     enforce_monitor_fields_present,
     required_if_symmetry_present,
 )
-from tidy3d.constants import C_0, EPSILON_0, ETA_0, MICROMETER, UnitScaling
+from tidy3d.constants import C_0, EPSILON_0, ETA_0, MICROMETER, UnitScaling, fp_eps
 from tidy3d.exceptions import DataError, SetupError, Tidy3dNotImplementedError, ValidationError
 from tidy3d.log import log
 
@@ -730,6 +731,94 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             area *= np.cos(self.monitor.mode_spec.angle_theta)
 
         return FreqModeDataArray(area)
+
+    def _bounding_box_mask(self, bounding_box: Box) -> DataArray:
+        """Create a mask selecting cells whose centers lie within ``bounding_box``."""
+
+        tan_dims = self._tangential_dims
+        intensity = self.intensity
+        coords = {dim: intensity.coords[dim].values for dim in tan_dims}
+
+        lower, upper = bounding_box.bounds
+        axis_indices = ["xyz".index(dim) for dim in tan_dims]
+
+        masks_1d = []
+        for dim, axis_idx in zip(tan_dims, axis_indices):
+            coord_vals = coords[dim]
+            lower_bound = lower[axis_idx]
+            upper_bound = upper[axis_idx]
+            masks_1d.append((coord_vals >= lower_bound) & (coord_vals <= upper_bound))
+
+        if len(masks_1d) != 2:
+            raise DataError("Bounding box masking currently supports planar monitors only.")
+
+        mask_values = (masks_1d[0][:, None] & masks_1d[1][None, :]).astype(float)
+        mask = DataArray(mask_values, coords={dim: coords[dim] for dim in tan_dims}, dims=tan_dims)
+        return mask
+
+    def _validate_bounding_box_intersection(self, bounding_box: Box) -> None:
+        """Ensure bounding box intersects the monitor plane."""
+
+        zero_dims = self.monitor.zero_dims
+        if len(zero_dims) != 1:
+            raise DataError("Bounding box fill fraction requires a planar monitor.")
+
+        normal_axis = zero_dims[0]
+        plane_coord = self.monitor.center[normal_axis]
+        lower, upper = bounding_box.bounds
+        lower_bound = lower[normal_axis]
+        upper_bound = upper[normal_axis]
+        tol = fp_eps
+        if plane_coord < lower_bound - tol or plane_coord > upper_bound + tol:
+            raise ValidationError(
+                "Bounding box must intersect the monitor plane when using 'fill_fraction_box'."
+            )
+
+    def fill_fraction(self, bounding_box: Box) -> FreqModeDataArray:
+        """Return the field-energy fill fraction within ``bounding_box``.
+        The fill fraction is defined as the ratio between the integrated field intensity inside
+        the bounding box and the total integrated intensity over the monitor plane.
+
+        Parameters
+        ----------
+        bounding_box : Box
+            The bounding box used to compute the fill fraction.
+
+        Returns
+        -------
+        FreqModeDataArray
+            Fill fraction values for each frequency and mode index.
+        """
+
+        self._check_fields_stored(["Ex", "Ey", "Ez"])
+        self._validate_bounding_box_intersection(bounding_box)
+
+        intensity = self.intensity
+        area = self._diff_area
+        mask = self._bounding_box_mask(bounding_box)
+
+        weighted_total = (intensity * area).sum(dim=area.dims)
+        weighted_box = (intensity * mask * area).sum(dim=area.dims)
+
+        fill_values = (weighted_box / weighted_total.where(weighted_total != 0)).fillna(0.0)
+
+        return FreqModeDataArray(fill_values)
+
+    @cached_property
+    def fill_fraction_box(self) -> FreqModeDataArray:
+        """Convenience accessor using the :class:`Box` defined on ``sort_spec``.
+
+        The component of the box along the propagation axis does not influence the fill fraction,
+        but the box must intersect the monitor plane.
+        """
+
+        sort_spec = getattr(self.monitor.mode_spec, "sort_spec", None)
+        bounding_box = None if sort_spec is None else sort_spec.bounding_box
+        if bounding_box is None:
+            raise DataError(
+                "ModeSortSpec.bounding_box must be set to access 'fill_fraction_box' metric."
+            )
+        return self.fill_fraction(bounding_box)
 
     def dot(
         self, field_data: Union[FieldData, ModeData, ModeSolverData], conjugate: bool = True
@@ -2329,6 +2418,72 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return self.updated_copy(**modify_data)
 
+    def _apply_mode_subset(self, subset_inds_2d: np.ndarray) -> ModeSolverData:
+        """Return copy of self containing only the selected modes.
+
+        Parameters
+        ----------
+        subset_inds_2d : np.ndarray
+            Array of shape ``(num_freqs, num_modes_keep)`` containing the indices of the original
+            modes to retain at each frequency.
+
+        Returns
+        -------
+        :class:`.ModeSolverData`
+            Copy of self with only the retained modes.
+        """
+
+        subset_inds_2d = np.asarray(subset_inds_2d, dtype=int)
+        if subset_inds_2d.ndim != 2:
+            raise DataError(
+                "subset_inds_2d must be a 2D array of shape (num_freqs, num_modes_keep)."
+            )
+
+        num_freqs, num_keep = subset_inds_2d.shape
+        if num_keep == 0:
+            raise DataError("Cannot create a mode subset with zero modes.")
+
+        num_modes_full = self.n_eff["mode_index"].size
+
+        modify_data = {}
+        new_mode_index_coord = np.arange(num_keep)
+
+        for key, data in self.data_arrs.items():
+            if "mode_index" not in data.dims or "f" not in data.dims:
+                continue
+
+            dims_orig = tuple(data.dims)
+            coords_out = {
+                k: (v.values if hasattr(v, "values") else np.asarray(v))
+                for k, v in data.coords.items()
+            }
+
+            f_axis = data.get_axis_num("f")
+            m_axis = data.get_axis_num("mode_index")
+            src_order = (
+                [f_axis] + [ax for ax in range(data.ndim) if ax not in (f_axis, m_axis)] + [m_axis]
+            )
+
+            arr = np.moveaxis(data.data, src_order, range(data.ndim))
+            nf, nm = arr.shape[0], arr.shape[-1]
+            if nf != num_freqs or nm != num_modes_full:
+                raise DataError(
+                    "subset_inds_2d shape does not match array shape in _apply_mode_subset."
+                )
+
+            arr2 = arr.reshape(nf, -1, nm)
+            inds = subset_inds_2d[:, None, :]
+            arr2_subset = np.take_along_axis(arr2, inds, axis=2)
+            arr_subset = arr2_subset.reshape(arr.shape[:-1] + (num_keep,))
+            arr_subset = np.moveaxis(arr_subset, range(data.ndim), src_order)
+
+            coords_out["mode_index"] = new_mode_index_coord
+            coords_out["f"] = data.coords["f"].values
+
+            modify_data[key] = DataArray(arr_subset, coords=coords_out, dims=dims_orig)
+
+        return self.updated_copy(**modify_data)
+
     def sort_modes(
         self, sort_spec: Optional[ModeSortSpec] = None, track_freq: Optional[TrackFreq] = None
     ) -> ModeSolverData:
@@ -2360,35 +2515,53 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         if track_freq is None and sort_spec is None:
             return self
 
-        num_freqs = self.n_eff["f"].size
-        num_modes = self.n_eff["mode_index"].size
+        data = self
+        if sort_spec is not None and sort_spec != self.monitor.mode_spec.sort_spec:
+            # replace the monitor sort_spec with the provided sort_spec
+            data = self.updated_copy(
+                path="monitor/mode_spec", sort_spec=sort_spec, deep=False, validate=False
+            )
+
+        num_freqs = data.n_eff["f"].size
+        num_modes = data.n_eff["mode_index"].size
         all_inds = np.arange(num_modes)
-        identity = np.arange(num_modes)
-        sort_inds_2d = np.tile(identity, (num_freqs, 1))
 
         # Helper to compute ordered indices within a subset
-        def _order_indices(indices, vals_all):
+        def _order_indices(indices, vals_all, sort_order):
             if indices.size == 0:
                 return indices
             vals = vals_all.isel(mode_index=indices)
             order = np.argsort(vals)
-            if sort_spec.sort_order == "descending":
+            if sort_order == "descending":
                 order = order[::-1]
             return indices[order]
 
         # Precompute metrics if provided
-        filter_metric = None
-        sort_metric = None
-        if sort_spec.filter_key is not None:
-            filter_metric = getattr(self, sort_spec.filter_key)
-        if sort_spec.sort_key is not None:
-            sort_metric = getattr(self, sort_spec.sort_key)
+        fill_fraction_metric = None
+
+        def _metric_for_key(key: Optional[str]):
+            nonlocal fill_fraction_metric
+            if key is None:
+                return None
+            if key == "fill_fraction_box":
+                if sort_spec is None or sort_spec.bounding_box is None:
+                    raise ValidationError(
+                        "ModeSortSpec.bounding_box must be defined when using 'fill_fraction_box'."
+                    )
+                if fill_fraction_metric is None:
+                    fill_fraction_metric = data.fill_fraction_box
+                return fill_fraction_metric
+            return getattr(data, key)
+
+        filter_metric = _metric_for_key(sort_spec.filter_key) if sort_spec else None
+        sort_metric = _metric_for_key(sort_spec.sort_key) if sort_spec else None
+        identity = np.arange(num_modes)
+        sort_inds_2d = np.tile(identity, (num_freqs, 1))
 
         for ifreq in range(num_freqs):
             # Build groups according to filter if requested
             if filter_metric is not None:
                 vals_filt = filter_metric.isel(f=ifreq).values
-                # Boolean mask for modes in the first group
                 if sort_spec.filter_order == "over":
                     mask_first = vals_filt >= sort_spec.filter_reference
                 else:
@@ -2404,8 +2577,8 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 vals_sort = sort_metric.isel(f=ifreq)
                 if sort_spec.sort_reference is not None:
                     vals_sort = np.abs(vals_sort - sort_spec.sort_reference)
-                g1 = _order_indices(group1, vals_sort)
-                g2 = _order_indices(group2, vals_sort)
+                g1 = _order_indices(group1, vals_sort, sort_spec.sort_order)
+                g2 = _order_indices(group2, vals_sort, sort_spec.sort_order)
                 sort_inds = np.concatenate([g1, g2])
             else:
                 # only filtering applied, keep original ordering within groups
@@ -2413,11 +2586,15 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
             sort_inds_2d[ifreq, : len(sort_inds)] = sort_inds
 
-        # If all rows are identity, skip
         if np.all(sort_inds_2d == np.tile(identity, (num_freqs, 1))):
-            data_sorted = self
+            if sort_spec is not None:
+                data_sorted = data.updated_copy(
+                    path="monitor/mode_spec", sort_spec=sort_spec, deep=False, validate=False
+                )
+            else:
+                data_sorted = data
         else:
-            data_sorted = self._apply_mode_reorder(sort_inds_2d)  # this creates a copy
+            data_sorted = data._apply_mode_reorder(sort_inds_2d)
             data_sorted = data_sorted.updated_copy(
                 path="monitor/mode_spec", sort_spec=sort_spec, deep=False, validate=False
             )
@@ -2425,9 +2602,68 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         # Sort modes across frequencies if requested.
         # Note: after sorting, ``track_freq`` is set in ``sort_spec`` regardless of how it was
         # provided. The deprecated ``mode_spec.track_freq`` is cleared.
-        track_freq = track_freq or sort_spec.track_freq
+        sort_spec_track_freq = sort_spec.track_freq if sort_spec is not None else None
+        track_freq = track_freq or sort_spec_track_freq
         if track_freq and num_freqs > 1:
             data_sorted = data_sorted.overlap_sort(track_freq)
+
+        keep_inds = None
+        keep_modes = sort_spec.keep_modes if sort_spec is not None else "all"
+        keep_mask = None
+        filter_metric_sorted = None
+        if keep_modes == "filtered" or isinstance(keep_modes, int):
+            # Re-evaluate the filter after sorting/tracking so modes are dropped consistently.
+            # filter key can be None if keep_modes is an int
+            if sort_spec.filter_key is not None:
+                if sort_spec.filter_key == "fill_fraction_box":
+                    filter_metric_sorted = data_sorted.fill_fraction_box
+                else:
+                    filter_metric_sorted = getattr(data_sorted, sort_spec.filter_key)
+                masks_after = []
+                for ifreq in range(num_freqs):
+                    vals = filter_metric_sorted.isel(f=ifreq).values
+                    if sort_spec.filter_order == "over":
+                        mask = vals >= sort_spec.filter_reference
+                    else:
+                        mask = vals <= sort_spec.filter_reference
+                    masks_after.append(mask)
+
+                keep_mask = np.all(np.stack(masks_after, axis=0), axis=0)
+            if keep_modes == "filtered":
+                # keep_mask and filter_metric_sorted will not be None here
+                # because we validate that filter_key is not None when
+                # keep_modes == "filtered"
+                if not np.any(keep_mask):
+                    raise ValidationError(
+                        "Filtering removes all modes; relax the filter threshold or change 'keep_modes'."
+                    )
+                num_modes_sorted = filter_metric_sorted.sizes["mode_index"]
+                if keep_mask.sum() < num_modes_sorted:
+                    keep_inds = np.where(keep_mask)[0]
+            elif isinstance(keep_modes, int):
+                if keep_mask is not None and keep_mask.sum() < keep_modes:
+                    log.warning(
+                        f"'keep_modes={keep_modes}' requests {keep_modes} modes, but only "
+                        f"{keep_mask.sum()} modes pass the filter. All {keep_modes} modes will be kept. "
+                        "Consider relaxing the filter threshold or lowering 'keep_modes'."
+                    )
+                if keep_modes > num_modes:
+                    raise ValidationError(
+                        f"'keep_modes={keep_modes}' is greater than the total number of modes."
+                    )
+                keep_inds = np.arange(keep_modes)
+
+        if keep_inds is not None:
+            subset_inds_2d = np.tile(keep_inds, (num_freqs, 1))
+            data_subset = data_sorted._apply_mode_subset(subset_inds_2d)
+            mspec = data_subset.monitor.mode_spec
+            mspec_updated = mspec.updated_copy(num_modes=keep_inds.size, validate=False)
+            monitor_updated = data_subset.monitor.updated_copy(
+                mode_spec=mspec_updated, validate=False
+            )
+            data_sorted = data_subset.updated_copy(
+                monitor=monitor_updated, deep=False, validate=False
+            )
 
         return data_sorted
 
