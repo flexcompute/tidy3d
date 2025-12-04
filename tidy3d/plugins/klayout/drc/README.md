@@ -19,19 +19,21 @@ For a full quickstart example, please see [this quickstart notebook](https://git
 
 To install KLayout, please refer to https://www.klayout.de/build.html. 
 
-After installation, the application may need to be manually added to the system PATH. The method to add KLayout to your system PATH depends on your operating system. For example, on MacOS, you can add the following line to your `~/.zshrc` file. This will permanently add KLayout to your PATH:
-```zsh
-export PATH="$PATH:/Applications/klayout.app/Contents/MacOS"
-```
+This module will attempt to locate the klayout executable in the typical installation locations after KLayout has been installed on your system.
 
-To check if KLayout has been added to the system PATH, you can use the provided `check_installation()` utility:
+To check if KLayout is found by this module, you can use the provided `check_installation()` utility:
 ```python
 from tidy3d.plugins.klayout import check_installation
 # Prints the full path to the executable if found, otherwise returns None
 print(check_installation())
 ```
-
 The full path to the application should be displayed if KLayout has been added to the system PATH.
+
+If the installation could not be found, the application may need to be manually added to the system PATH. The method to add KLayout to your system PATH depends on your operating system. For example, on MacOS, you can add the following line to your `~/.zshrc` file. This will permanently add KLayout to your PATH:
+```zsh
+export PATH="$PATH:/Applications/klayout.app/Contents/MacOS"
+```
+Run `check_installation()` again to check if the application is found.
 
 2. Provide a KLayout DRC runset script that defines the source (input gds) using `source($gdsfile)` and the report (output result file) using `report("DRC results", $resultsfile)`. Please refer to the [DRC Runset Formatting section below](#drc-runset-file-formatting).
 

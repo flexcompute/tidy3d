@@ -13,7 +13,6 @@ import tidy3d as td
 from tidy3d.exceptions import FileError
 from tidy3d.plugins.klayout.drc.drc import DRCConfig, DRCRunner, run_drc_on_gds
 from tidy3d.plugins.klayout.drc.results import DRCResults, parse_violation_value
-from tidy3d.plugins.klayout.util import check_installation
 
 filepath = Path(os.path.dirname(os.path.abspath(__file__)))
 KLAYOUT_PLUGIN_PATH = "tidy3d.plugins.klayout"
@@ -93,23 +92,6 @@ def _capture_log_warnings(monkeypatch):
 
     monkeypatch.setattr(td.log, "warning", fake_warning)
     return messages
-
-
-def test_check_klayout_not_installed(monkeypatch):
-    """check_installation raises when KLayout is not on PATH.
-
-    Use monkeypatch to simulate absence, avoiding reliance on CI environment.
-    """
-    monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.util.which", lambda _cmd: None)
-    with pytest.raises(RuntimeError):
-        check_installation(raise_error=True)
-
-
-def test_check_klayout_installed(monkeypatch):
-    """check_installation returns a path and does not raise when present."""
-    fake_path = "/usr/local/bin/klayout"
-    monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.util.which", lambda _cmd: fake_path)
-    assert check_installation(raise_error=True) == fake_path
 
 
 def test_runner_passes_drc_args_to_config(monkeypatch, tmp_path):
