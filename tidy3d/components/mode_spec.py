@@ -9,6 +9,7 @@ from typing import Literal, Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
+from tidy3d.components.geometry.base import Box
 from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -25,6 +26,7 @@ MODE_DATA_KEYS = Literal[
     "wg_TE_fraction",
     "wg_TM_fraction",
     "mode_area",
+    "fill_fraction_box",
 ]
 
 
@@ -38,8 +40,9 @@ class ModeSortSpec(Tidy3dBaseModel):
         applied to ``filter_key``: modes "over" or "under" ``filter_reference`` are placed first,
         with the remaining modes placed next. Second, an optional sorting step orders modes within
         each group according to ``sort_key``, optionally with respect to ``sort_reference`` and in
-        the specified ``sort_order``.
-
+        the specified ``sort_order``. If ``keep_modes`` is set to "filtered", the modes that do
+        not meet the filter criterion are removed instead of being appended as a second group. If
+        ``keep_modes`` is set to an integer, that is the number of modes that will be kept.
     """
 
     # Filtering stage
@@ -57,6 +60,25 @@ class ModeSortSpec(Tidy3dBaseModel):
         "over",
         title="Filtering order",
         description="Select whether the first group contains values over or under the reference.",
+    )
+    bounding_box: Optional[Box] = pd.Field(
+        None,
+        title="Bounding box",
+        description=(
+            "Regular 3D tidy3d :class:`Box` used by metrics such as ``'fill_fraction_box'``. "
+            "The extent along the propagation axis is ignored for the metric, but the box must "
+            "still intersect the monitor plane. Required when filtering or sorting with that key."
+        ),
+    )
+    keep_modes: Union[Literal["all"], Literal["filtered"], pd.PositiveInt] = pd.Field(
+        "all",
+        title="Keep Modes",
+        description=(
+            "If ``filtered``, modes that do not satisfy the filter criterion are removed entirely "
+            "instead of being appended after the filtered group. Only modes passing the filter "
+            "at every tracked frequency are kept. "
+            "If a positive integer is given, that is the number of modes which will be kept."
+        ),
     )
 
     # Sorting stage
@@ -88,6 +110,24 @@ class ModeSortSpec(Tidy3dBaseModel):
         "frequencies. The mode sorting would then be exact at the specified frequency, "
         "while at other frequencies it can change depending on the mode tracking.",
     )
+
+    @pd.validator("keep_modes", always=True)
+    def _drop_requires_filter(cls, val, values):
+        if val == "filtered" and values.get("filter_key") is None:
+            raise ValidationError(
+                "ModeSortSpec.keep_modes 'filtered' requires 'filter_key' to be set."
+            )
+        return val
+
+    @pd.root_validator(skip_on_failure=True)
+    def _bounding_box_required_for_fill_fraction(cls, values):
+        bbox = values.get("bounding_box")
+        keys = (values.get("filter_key"), values.get("sort_key"))
+        if any(key == "fill_fraction_box" for key in keys) and bbox is None:
+            raise ValidationError(
+                "ModeSortSpec.bounding_box must be set when using 'fill_fraction_box'."
+            )
+        return values
 
 
 class FrequencySamplingSpec(Tidy3dBaseModel, ABC):
@@ -565,6 +605,24 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "frequency. Requires frequency tracking to be enabled (``sort_spec.track_freq`` must "
         "not be ``None``) to ensure consistent mode ordering across frequencies.",
     )
+
+    @pd.validator("sort_spec", always=True)
+    def _keep_modes_at_most_num_modes(cls, val, values):
+        if val is not None:
+            if isinstance(val.keep_modes, int):
+                num_modes = values.get("num_modes")
+                if val.keep_modes > num_modes:
+                    raise ValidationError(
+                        "ModeSortSpec.keep_modes cannot be larger than 'num_modes'. "
+                        f"Currently these are {val.keep_modes} and {num_modes}. "
+                        "The mode solver computes 'num_modes' modes, applies "
+                        "the mode sorting and filtering from the 'ModeSortSpec', "
+                        "and then keeps the top 'keep_modes' modes. Consider lowering "
+                        "'keep_modes', increasing 'num_modes', setting "
+                        "'keep_modes=\"filtered\"' to keep exactly those modes matching "
+                        "the filter, or setting 'keep_modes=\"all\"' to keep all modes."
+                    )
+        return val
 
     @pd.validator("bend_axis", always=True)
     @skip_if_fields_missing(["bend_radius"])

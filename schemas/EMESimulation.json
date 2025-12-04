@@ -5418,9 +5418,11 @@
           ],
           "default": {
             "attrs": {},
+            "bounding_box": null,
             "filter_key": null,
             "filter_order": "over",
             "filter_reference": 0.0,
+            "keep_modes": "all",
             "sort_key": null,
             "sort_order": "ascending",
             "sort_reference": null,
@@ -8166,9 +8168,11 @@
           ],
           "default": {
             "attrs": {},
+            "bounding_box": null,
             "filter_key": null,
             "filter_order": "over",
             "filter_reference": 0.0,
+            "keep_modes": "all",
             "sort_key": null,
             "sort_order": "ascending",
             "sort_reference": null,
@@ -8246,9 +8250,11 @@
             "precision": "double",
             "sort_spec": {
               "attrs": {},
+              "bounding_box": null,
               "filter_key": null,
               "filter_order": "over",
               "filter_reference": 0.0,
+              "keep_modes": "all",
               "sort_key": null,
               "sort_order": "ascending",
               "sort_reference": null,
@@ -8527,9 +8533,11 @@
             "precision": "double",
             "sort_spec": {
               "attrs": {},
+              "bounding_box": null,
               "filter_key": null,
               "filter_order": "over",
               "filter_reference": 0.0,
+              "keep_modes": "all",
               "sort_key": null,
               "sort_order": "ascending",
               "sort_reference": null,
@@ -8621,10 +8629,18 @@
           "default": {},
           "type": "object"
         },
+        "bounding_box": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Box"
+            }
+          ]
+        },
         "filter_key": {
           "enum": [
             "TE_fraction",
             "TM_fraction",
+            "fill_fraction_box",
             "k_eff",
             "mode_area",
             "n_eff",
@@ -8645,10 +8661,32 @@
           "default": 0.0,
           "type": "number"
         },
+        "keep_modes": {
+          "anyOf": [
+            {
+              "enum": [
+                "all"
+              ],
+              "type": "string"
+            },
+            {
+              "enum": [
+                "filtered"
+              ],
+              "type": "string"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            }
+          ],
+          "default": "all"
+        },
         "sort_key": {
           "enum": [
             "TE_fraction",
             "TM_fraction",
+            "fill_fraction_box",
             "k_eff",
             "mode_area",
             "n_eff",
@@ -8783,9 +8821,11 @@
           ],
           "default": {
             "attrs": {},
+            "bounding_box": null,
             "filter_key": null,
             "filter_order": "over",
             "filter_reference": 0.0,
+            "keep_modes": "all",
             "sort_key": null,
             "sort_order": "ascending",
             "sort_reference": null,
