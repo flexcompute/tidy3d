@@ -248,7 +248,7 @@ def run_drc_on_gds(config: DRCConfig, max_results: Optional[int] = None) -> DRCR
     >>> results = run_drc_on_gds(config) # doctest: +SKIP
     >>> print(results) # doctest: +SKIP
     """
-    check_installation(raise_error=True)
+    klayout_cmd = check_installation(raise_error=True)
 
     if config.verbose:
         console = get_logging_console()
@@ -257,7 +257,7 @@ def run_drc_on_gds(config: DRCConfig, max_results: Optional[int] = None) -> DRCR
         )
     # run klayout DRC as a subprocess
     cmd = [
-        "klayout",
+        klayout_cmd,
         "-b",
         "-r",
         config.drc_runset,
