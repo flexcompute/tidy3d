@@ -564,12 +564,14 @@ class Scene(Tidy3dBaseModel):
         shape: Shapely,
         ax: Ax,
         fill: bool = True,
+        property: str = "heat_conductivity",
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium."""
         plot_params_struct = self._get_structure_plot_params(
             medium=medium,
             mat_index=mat_index,
             fill=fill,
+            property=property,
         )
         ax = self.box.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
         return ax
@@ -579,6 +581,7 @@ class Scene(Tidy3dBaseModel):
         mat_index: int,
         medium: MultiPhysicsMediumType3D,
         fill: bool = True,
+        property: str = "heat_conductivity",
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in scene.plot()."""
 
@@ -628,6 +631,9 @@ class Scene(Tidy3dBaseModel):
             if hasattr(medium, "viz_spec"):
                 if medium.viz_spec is not None:
                     plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+
+        if property == "charge":
+            plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
 
         if not fill:
             plot_params = plot_params.copy(update={"fill": False})
@@ -1496,7 +1502,9 @@ class Scene(Tidy3dBaseModel):
         z: Optional[float] = None,
         alpha: Optional[float] = None,
         cbar: bool = True,
-        property: str = "heat_conductivity",
+        property: Literal[
+            "heat_conductivity", "electric_conductivity", "charge"
+        ] = "heat_conductivity",
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
@@ -1517,9 +1525,9 @@ class Scene(Tidy3dBaseModel):
             Defaults to the structure default alpha.
         cbar : bool = True
             Whether to plot a colorbar for the thermal conductivity.
-        property : str = "heat_conductivity"
+        property : Literal["heat_conductivity", "electric_conductivity", "charge"] = "heat_conductivity"
             The heat-charge siimulation property to plot. The options are
-            ["heat_conductivity", "electric_conductivity"]
+            ["heat_conductivity", "electric_conductivity", "charge"]
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -1615,7 +1623,9 @@ class Scene(Tidy3dBaseModel):
         z: Optional[float] = None,
         alpha: Optional[float] = None,
         cbar: bool = True,
-        property: str = "heat_conductivity",
+        property: Literal[
+            "heat_conductivity", "electric_conductivity", "charge"
+        ] = "heat_conductivity",
         reverse: bool = False,
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
@@ -1676,16 +1686,26 @@ class Scene(Tidy3dBaseModel):
 
         property_val_min, property_val_max = self.heat_charge_property_bounds(property=property)
         for medium, shape in medium_shapes:
-            ax = self._plot_shape_structure_heat_charge_property(
-                alpha=alpha,
-                medium=medium,
-                property_val_min=property_val_min,
-                property_val_max=property_val_max,
-                reverse=reverse,
-                shape=shape,
-                ax=ax,
-                property=property,
-            )
+            if property == "charge":
+                ax = self._plot_shape_structure(
+                    medium=medium,
+                    mat_index=self.medium_map[medium],
+                    shape=shape,
+                    ax=ax,
+                    fill=True,
+                    property=property,
+                )
+            else:
+                ax = self._plot_shape_structure_heat_charge_property(
+                    alpha=alpha,
+                    medium=medium,
+                    property_val_min=property_val_min,
+                    property_val_max=property_val_max,
+                    reverse=reverse,
+                    shape=shape,
+                    ax=ax,
+                    property=property,
+                )
 
         if cbar:
             label = ""
@@ -1732,6 +1752,8 @@ class Scene(Tidy3dBaseModel):
                 medium for medium in medium_list if isinstance(medium.charge, ChargeConductorMedium)
             ]
             cond_list = [medium.charge.conductivity for medium in cond_mediums]
+        elif property == "charge":
+            return 0, 1  # Return a default range for 'charge' property
 
         if len(cond_list) == 0:
             cond_list = [0]
@@ -1786,6 +1808,10 @@ class Scene(Tidy3dBaseModel):
             cond_medium = medium.charge.conductivity
         elif property == "doping":
             cond_medium = None
+        elif property == "charge":
+            plot_params = plot_params.copy(
+                update={"facecolor": "lightgray", "edgecolor": "k", "linewidth": 1}
+            )
 
         if cond_medium is not None:
             delta_cond = cond_medium - property_val_min

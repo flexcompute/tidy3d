@@ -1187,7 +1187,7 @@ class HeatChargeSimulation(AbstractSimulation):
             Opacity of the monitors. If ``None``, uses Tidy3d default.
         property : str = "heat_conductivity"
             Specified the type of simulation for which the plot will be tailored.
-            Options are ["heat_conductivity", "electric_conductivity", "source"]
+            Options are ["heat_conductivity", "electric_conductivity", "source", "charge"]
         hlim : Tuple[float, float] = None
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
@@ -1204,6 +1204,8 @@ class HeatChargeSimulation(AbstractSimulation):
         )
 
         cbar_cond = True
+        if property == "charge":
+            cbar_cond = False
 
         simulation_types = self._get_simulation_types()
         if property == "source" and len(simulation_types) > 1:
@@ -1215,9 +1217,15 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         if len(simulation_types) == 1:
             if (
-                property == "heat_conductivity" and TCADAnalysisTypes.CONDUCTION in simulation_types
-            ) or (
-                property == "electric_conductivity" and TCADAnalysisTypes.HEAT in simulation_types
+                (
+                    property == "heat_conductivity"
+                    and TCADAnalysisTypes.CONDUCTION in simulation_types
+                )
+                or (
+                    property == "electric_conductivity"
+                    and TCADAnalysisTypes.HEAT in simulation_types
+                )
+                or (property == "charge" and TCADAnalysisTypes.CHARGE not in simulation_types)
             ):
                 raise ValueError(
                     f"'property' in 'plot_property()' was defined as {property} but the "
@@ -1378,7 +1386,7 @@ class HeatChargeSimulation(AbstractSimulation):
         # plot boundary conditions
         if property == "heat_conductivity" or property == "source":
             new_boundaries = [(b, s) for b, s in boundaries if isinstance(b.condition, HeatBCTypes)]
-        elif property == "electric_conductivity":
+        elif property == "electric_conductivity" or property == "charge":
             new_boundaries = [
                 (b, s) for b, s in boundaries if isinstance(b.condition, ElectricBCTypes)
             ]
@@ -1762,7 +1770,7 @@ class HeatChargeSimulation(AbstractSimulation):
         # get appropriate sources
         if property == "heat_conductivity" or property == "source":
             source_list = [s for s in self.sources if isinstance(s, HeatSourceTypes)]
-        elif property == "electric_conductivity":
+        elif property == "electric_conductivity" or property == "charge":
             source_list = [s for s in self.sources if isinstance(s, ChargeSourceTypes)]
 
         # distribute source where there are assigned
@@ -1818,6 +1826,7 @@ class HeatChargeSimulation(AbstractSimulation):
     def source_bounds(self, property: str = "heat_conductivity") -> tuple[float, float]:
         """Compute range of heat sources present in the simulation."""
 
+        rate_list = []
         if property == "heat_conductivity" or property == "source":
             rate_list = [
                 np.mean(source.rate) for source in self.sources if isinstance(source, HeatSource)

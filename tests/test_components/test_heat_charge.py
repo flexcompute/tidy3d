@@ -84,6 +84,12 @@ class CHARGE_SIMULATION:
 
 
 @pytest.fixture(scope="module")
+def charge_tolerance():
+    """Charge tolerance settings for simulations."""
+    return td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400)
+
+
+@pytest.fixture(scope="module")
 def mediums():
     """Creates mediums with different specifications."""
     fluid_medium = td.Medium(
@@ -385,7 +391,7 @@ def voltage_capacitance_simulation(mediums, structures, boundary_conditions, mon
         condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0)),
     )
 
-    # Let’s pick a couple of monitors. We'll definitely include the CapacitanceMonitor
+    # Let's pick a couple of monitors. We'll definitely include the CapacitanceMonitor
     # (monitors[8] -> 'cap_mt1') so that we can measure capacitance. We can also include
     # a potential monitor to see the fields, e.g. monitors[4] -> volt_mnt1 for demonstration.
     cap_monitor = monitors[8]  # 'capacitance_mnt1'
@@ -1527,11 +1533,6 @@ class TestCharge:
             unstructured=True,
         )
 
-    # Define charge settings as fixtures within the class
-    @pytest.fixture(scope="class")
-    def charge_tolerance(self):
-        return td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400)
-
     def test_charge_simulation(
         self,
         Si_n,
@@ -2513,3 +2514,29 @@ def test_generation_recombination():
         beta_n=1,
         beta_p=1,
     )
+
+
+def test_plot_property_charge(heat_simulation, conduction_simulation, charge_tolerance):
+    """Test plot_property with property="charge"."""
+
+    # transform the conduction simulation into a charge simulation
+    new_structs = []
+    for struct in conduction_simulation.structures:
+        new_medium = CHARGE_SIMULATION.intrinsic_Si.updated_copy(name=struct.medium.name)
+        new_structs.append(struct.updated_copy(medium=new_medium))
+    analysis_spec = td.IsothermalSteadyChargeDCAnalysis(
+        temperature=300,
+        convergence_dv=0.1,
+        tolerance_settings=charge_tolerance,
+    )
+    charge_simulation = conduction_simulation.updated_copy(
+        structures=new_structs,
+        analysis_spec=analysis_spec,
+        validate=False,
+    )
+    charge_simulation.plot_property(property="charge", z=0)
+
+    with pytest.raises(ValueError):
+        heat_simulation.plot_property(property="charge", z=0)
+    with pytest.raises(ValueError):
+        conduction_simulation.plot_property(property="charge", z=0)
