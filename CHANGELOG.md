@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added optional `max_results` handling to the kLayout `DRCLoader` and `DRCRunner` and speeded up parsing of big result sets.
 
 ### Fixed
+- Fix to `outer_dot` when frequencies stored in the data were not in increasing order. Previously, the result would be provided with re-sorted frequencies, which would not match the order of the original data.
 - Fixed bug where an extra spatial coordinate could appear in `complex_flux` and `ImpedanceCalculator` results.
 
 ## [2.10.0rc3] - 2025-11-26

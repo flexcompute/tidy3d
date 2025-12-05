@@ -850,7 +850,22 @@ def test_outer_dot():
 
     dot = mode_data.outer_dot(field_data)
 
-    assert len(dot.f) == 2
+    expected_freqs = [freq for freq in mode_data.Ex.f.values if freq in field_data.Ex.f.values]
+    assert dot.sizes["f"] == len(expected_freqs)
+    assert np.array_equal(dot.f.values, np.array(expected_freqs))
+
+    # ensure frequency order follows the first dataset when the other is unordered
+    field_data_full = make_field_data_2d()
+    reversed_inds = list(range(field_data_full.Ex.sizes["f"] - 1, -1, -1))
+    field_data_reordered = field_data_full.copy(
+        update={
+            name: component.isel(f=reversed_inds)
+            for name, component in field_data_full.field_components.items()
+        }
+    )
+
+    dot_ordered = field_data_full.outer_dot(field_data_reordered)
+    assert np.array_equal(dot_ordered.f.values, field_data_full.Ex.f.values)
 
 
 def test_translated_copy():
@@ -1118,7 +1133,7 @@ class TestZBF:
 
     def test_tozbf_modedata_fails(self, tmp_path, mode_data):
         """Asserts that Modedata.to_zbf() fails if mode_index is not specified"""
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError):
             _ = mode_data.to_zbf(
                 fname=tmp_path / "testzbf_modedata_fail.zbf",
                 background_refractive_index=1,
@@ -1133,7 +1148,7 @@ class TestZBF:
     @pytest.mark.parametrize("n_y", [16, 2**14, 33])
     def test_tozbf_nxny_fails(self, tmp_path, field_data, n_x, n_y):
         """Asserts that to_zbf() fails when n_x and n_y are invalid values."""
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError):
             _ = field_data.to_zbf(
                 fname=tmp_path / "testzbf_nxny_fail.zbf",
                 background_refractive_index=1,
@@ -1146,7 +1161,7 @@ class TestZBF:
     @pytest.mark.parametrize("units", ["mmm", "123"])
     def test_tozbf_units_fails(self, tmp_path, field_data, units):
         """Asserts that to_zbf() fails when units are invalid."""
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError):
             _ = field_data.to_zbf(
                 fname=tmp_path / "testzbf_nxny_fail.zbf",
                 background_refractive_index=1,
@@ -1190,7 +1205,7 @@ class TestZBF:
             units="mm",
         )
         # this should fail
-        with pytest.raises(ValueError) as e:
+        with pytest.raises(ValueError):
             _ = td.FieldDataset.from_zbf(filename=zbf_filename, dim1=dim1, dim2=dim2)
 
 
