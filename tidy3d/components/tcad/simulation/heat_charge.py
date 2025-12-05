@@ -109,6 +109,18 @@ HeatBCTypes = (TemperatureBC, HeatFluxBC, ConvectionBC)
 HeatSourceTypes = (UniformHeatSource, HeatSource, HeatFromElectricSource)
 ChargeSourceTypes = ()
 ElectricBCTypes = (VoltageBC, CurrentBC, InsulatingBC)
+ChargeTypes = (
+    SteadyChargeDCAnalysis,
+    IsothermalSteadyChargeDCAnalysis,
+    SSACAnalysis,
+    IsothermalSSACAnalysis,
+)
+ChargeMonitorTypes = (
+    SteadyPotentialMonitor,
+    SteadyFreeCarrierMonitor,
+    SteadyCapacitanceMonitor,
+    SteadyCurrentDensityMonitor,
+)
 
 AnalysisSpecType = Union[ElectricalAnalysisType, UnsteadyHeatAnalysis]
 
@@ -683,13 +695,6 @@ class HeatChargeSimulation(AbstractSimulation):
     def check_charge_simulation(cls, values):
         """Makes sure that Charge simulations are set correctly."""
 
-        ChargeMonitorType = (
-            SteadyPotentialMonitor,
-            SteadyFreeCarrierMonitor,
-            SteadyCapacitanceMonitor,
-            SteadyCurrentDensityMonitor,
-        )
-
         simulation_types = cls._check_simulation_types(values=values)
 
         if TCADAnalysisTypes.CHARGE in simulation_types:
@@ -707,7 +712,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
             # check that we have at least one charge monitor
             monitors = values["monitors"]
-            if not any(isinstance(mnt, ChargeMonitorType) for mnt in monitors):
+            if not any(isinstance(mnt, ChargeMonitorTypes) for mnt in monitors):
                 raise SetupError(
                     "Charge simulations require the definition of, at least, one of these monitors: "
                     "'[SteadyPotentialMonitor, SteadyFreeCarrierMonitor, SteadyCapacitanceMonitor, SteadyCurrentDensityMonitor]' "
@@ -723,7 +728,13 @@ class HeatChargeSimulation(AbstractSimulation):
                             "Currently, Charge simulations support only unstructured monitors. Please set "
                             f"monitor '{mnt.name}' to 'unstructured = True'."
                         )
-
+            # check that we have at least one semiconductor medium
+            structures = values["structures"]
+            sc_present = HeatChargeSimulation._check_if_semiconductor_present(structures=structures)
+            if not sc_present:
+                raise SetupError(
+                    f"{TCADAnalysisTypes.CHARGE} simulations require the definition of at least one semiconductor medium."
+                )
         return values
 
     @pd.root_validator(skip_on_failure=True)
@@ -880,23 +891,23 @@ class HeatChargeSimulation(AbstractSimulation):
 
         boundaries = list(values["boundary_spec"])
         sources = list(values["sources"])
+        analysis_spec = values["analysis_spec"]
 
         structures = list(values["structures"])
+
+        if isinstance(analysis_spec, ChargeTypes):
+            simulation_types.append(TCADAnalysisTypes.CHARGE)
+
         semiconductor_present = HeatChargeSimulation._check_if_semiconductor_present(
             structures=structures
         )
-        if semiconductor_present:
-            simulation_types.append(TCADAnalysisTypes.CHARGE)
 
         for boundary in boundaries:
             if isinstance(boundary.condition, HeatBCTypes):
                 simulation_types.append(TCADAnalysisTypes.HEAT)
             if isinstance(boundary.condition, ElectricBCTypes):
-                # for the time being, assume tha the simulation will be of
-                # type CHARGE if we have semiconductors
-                if semiconductor_present:
-                    simulation_types.append(TCADAnalysisTypes.CHARGE)
-                else:
+                # Add CONDUCTION type if we have no semiconductors
+                if not semiconductor_present:
                     simulation_types.append(TCADAnalysisTypes.CONDUCTION)
 
         for source in sources:
@@ -1060,7 +1071,7 @@ class HeatChargeSimulation(AbstractSimulation):
                         raise SetupError(
                             f"Unsteady simulations require the temperature monitor '{mnt.name}' to be unstructured."
                         )
-            # additionaly check that the SolidSpec has capacity and density defined
+            # additionally check that the SolidSpec has capacity and density defined
             capacities = []
             densities = []
             conductivities = []
@@ -1115,7 +1126,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @pd.root_validator(skip_on_failure=True)
     def check_non_isothermal_is_possible(cls, values):
-        """Make sure that when a non-isothermal case is defined the structrures
+        """Make sure that when a non-isothermal case is defined the structures
         have both electrical and thermal properties."""
 
         analysis_spec = values.get("analysis_spec")
@@ -1492,7 +1503,7 @@ class HeatChargeSimulation(AbstractSimulation):
     ) -> tuple[tuple[HeatChargeBoundarySpec, Shapely], ...]:
         """Construct Simulation, StructureSimulation, Structure, and MediumMedium boundaries."""
 
-        # forward foop to take care of Simulation, StructureSimulation, Structure,
+        # forward loop to take care of Simulation, StructureSimulation, Structure,
         # and MediumMediums
         boundaries = []  # bc_spec, structure name, shape, bounds
         background_shapes = []
@@ -1583,7 +1594,7 @@ class HeatChargeSimulation(AbstractSimulation):
     ) -> tuple[tuple[HeatChargeBoundarySpec, Shapely], ...]:
         """Construct StructureStructure boundaries."""
 
-        # backward foop to take care of StructureStructure
+        # backward loop to take care of StructureStructure
         # we do it in this way because we define the boundary between
         # two overlapping structures A and B, where A comes before B, as
         # boundary(B) intersected by A
@@ -1690,7 +1701,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # construct boundaries in 2 passes:
 
-        # 1. forward foop to take care of Simulation, StructureSimulation, Structure,
+        # 1. forward loop to take care of Simulation, StructureSimulation, Structure,
         # and MediumMediums
         boundaries = HeatChargeSimulation._construct_forward_boundaries(
             shapes=shapes,
@@ -1933,17 +1944,8 @@ class HeatChargeSimulation(AbstractSimulation):
         """
         simulation_types = []
 
-        # NOTE: for the time being, if a simulation has SemiconductorMedium
-        # then we consider it of being a 'TCADAnalysisTypes.CHARGE'
-        ChargeTypes = (
-            SteadyChargeDCAnalysis,
-            IsothermalSteadyChargeDCAnalysis,
-            SSACAnalysis,
-            IsothermalSSACAnalysis,
-        )
         if isinstance(self.analysis_spec, ChargeTypes):
-            if self._check_if_semiconductor_present(self.structures):
-                return [TCADAnalysisTypes.CHARGE]
+            return [TCADAnalysisTypes.CHARGE]
 
         # check if unsteady heat
         if isinstance(self.analysis_spec, UnsteadyHeatAnalysis):

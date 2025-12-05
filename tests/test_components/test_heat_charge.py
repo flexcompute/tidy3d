@@ -8,6 +8,7 @@ import pytest
 from matplotlib import pyplot as plt
 
 import tidy3d as td
+from tidy3d.components.tcad.simulation.heat_charge import TCADAnalysisTypes
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
@@ -2512,4 +2513,87 @@ def test_generation_recombination():
         E_p_crit=2.03e6,
         beta_n=1,
         beta_p=1,
+    )
+
+
+def test_heat_only_simulation_with_semiconductor():
+    """Test that a heat-only simulation with semiconductors does not trigger charge simulation.
+    Charge simulations are only triggered when `analysis_spec` is provided, not just when
+    semiconductors are present in the simulation.
+    """
+
+    # Create a semiconductor medium
+    semiconductor_medium = td.MultiPhysicsMedium(
+        optical=td.Medium(permittivity=5, conductivity=0.01),
+        heat=td.SolidMedium(conductivity=3, capacity=2),
+        charge=td.SemiconductorMedium(
+            N_c=td.ConstantEffectiveDOS(N=1e10),
+            N_v=td.ConstantEffectiveDOS(N=1e10),
+            E_g=td.ConstantEnergyBandGap(eg=1),
+            mobility_n=td.ConstantMobilityModel(mu=1500),
+            mobility_p=td.ConstantMobilityModel(mu=1500),
+        ),
+        name="semiconductor",
+    )
+
+    # Create a non-semiconductor solid medium
+    solid_medium = td.MultiPhysicsMedium(
+        optical=td.Medium(permittivity=5, conductivity=0.01),
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        charge=td.ChargeConductorMedium(conductivity=1),
+        name="solid",
+    )
+
+    # Create structures with both semiconductor and other materials
+    semiconductor_structure = td.Structure(
+        geometry=td.Box(center=(-0.5, 0, 0), size=(1, 1, 1)),
+        medium=semiconductor_medium,
+        name="semiconductor_structure",
+    )
+
+    solid_structure = td.Structure(
+        geometry=td.Box(center=(0.5, 0, 0), size=(1, 1, 1)),
+        medium=solid_medium,
+        name="solid_structure",
+    )
+
+    # Create heat-only boundary conditions (no electric BCs)
+    thermal_bc = td.HeatChargeBoundarySpec(
+        condition=td.TemperatureBC(temperature=300),
+        placement=td.StructureBoundary(structure="solid_structure"),
+    )
+
+    # Create heat source
+    heat_source = td.HeatSource(structures=["solid_structure"], rate=100)
+
+    # Create heat monitor (no charge monitors)
+    temp_monitor = td.TemperatureMonitor(
+        center=(0, 0, 0), size=(2, 1, 1), name="temp_monitor", unstructured=True
+    )
+
+    # Create heat-only simulation (no analysis_spec, no electric BCs)
+    heat_sim = td.HeatChargeSimulation(
+        medium=td.MultiPhysicsMedium(
+            heat=td.FluidMedium(), charge=td.ChargeInsulatorMedium(), name="air"
+        ),
+        structures=[semiconductor_structure, solid_structure],
+        center=(0, 0, 0),
+        size=(3, 3, 3),
+        boundary_spec=[thermal_bc],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        sources=[heat_source],
+        monitors=[temp_monitor],
+    )
+
+    # Verify that only HEAT simulation type is returned, not CHARGE
+    simulation_types = heat_sim._get_simulation_types()
+    assert TCADAnalysisTypes.HEAT in simulation_types, (
+        "Heat simulation should be triggered when heat sources/BCs are present."
+    )
+    assert TCADAnalysisTypes.CHARGE not in simulation_types, (
+        "Charge simulation should NOT be triggered when ChargeTypes analysis_spec is not provided, "
+        "even if semiconductors are present in the simulation."
+    )
+    assert TCADAnalysisTypes.CONDUCTION not in simulation_types, (
+        "Conduction simulation should NOT be triggered when no electric BCs are present."
     )
