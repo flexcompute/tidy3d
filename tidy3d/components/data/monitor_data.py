@@ -12,7 +12,7 @@ from typing import Any, Callable, Literal, Optional, Union, get_args
 import autograd.numpy as np
 import pydantic.v1 as pd
 import xarray as xr
-from pandas import DataFrame
+from pandas import DataFrame, Index
 
 from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
@@ -916,9 +916,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         coords = (arrays[0].coords, arrays[1].coords)
 
         # Common frequencies to both data arrays
-        f = np.array(sorted(set(coords[0]["f"].values).intersection(coords[1]["f"].values)))
-        isel1 = [list(coords[0]["f"].values).index(freq) for freq in f]
-        isel2 = [list(coords[1]["f"].values).index(freq) for freq in f]
+        freq_self = Index(coords[0]["f"].values)
+        freq_other = Index(coords[1]["f"].values)
+        common_freqs = freq_self.intersection(freq_other, sort=False)
+        f = common_freqs.to_numpy()
+        # Keep frequency order consistent with the current data while aligning the other dataset.
+        isel1 = freq_self.get_indexer(common_freqs)
+        isel2 = freq_other.get_indexer(common_freqs)
 
         # Mode indices, if available
         modes_in_self = "mode_index" in coords[0]
