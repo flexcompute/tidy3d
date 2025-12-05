@@ -1526,7 +1526,7 @@ class Scene(Tidy3dBaseModel):
         cbar : bool = True
             Whether to plot a colorbar for the thermal conductivity.
         property : Literal["heat_conductivity", "electric_conductivity", "charge"] = "heat_conductivity"
-            The heat-charge siimulation property to plot. The options are
+            The heat-charge simulation property to plot. The options are
             ["heat_conductivity", "electric_conductivity", "charge"]
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
@@ -1808,10 +1808,6 @@ class Scene(Tidy3dBaseModel):
             cond_medium = medium.charge.conductivity
         elif property == "doping":
             cond_medium = None
-        elif property == "charge":
-            plot_params = plot_params.copy(
-                update={"facecolor": "lightgray", "edgecolor": "k", "linewidth": 1}
-            )
 
         if cond_medium is not None:
             delta_cond = cond_medium - property_val_min
