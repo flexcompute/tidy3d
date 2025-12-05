@@ -4282,7 +4282,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         # issue warning
         if rf_component_breakdown_msg != "":
-            msg = " ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using RF-specific components in this simulation."
+            msg = "RF simulations and functionality will require new license requirements in an upcoming release. All RF-specific classes are now available within the sub-package 'tidy3d.rf'."
             msg += rf_component_breakdown_msg
             log.warning(msg, log_once=True)
 

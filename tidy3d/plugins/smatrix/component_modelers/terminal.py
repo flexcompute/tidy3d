@@ -210,14 +210,6 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         description="The low frequency smoothing parameters for the terminal component simulation.",
     )
 
-    @pd.root_validator(pre=False)
-    def _warn_refactor_2_10(cls, values):
-        log.warning(
-            f"ℹ️ ⚠️ The {cls.__name__} class was refactored in tidy3d version 2.10. Migration documentation will be provided, and existing functionality can be accessed in a different way.",
-            log_once=True,
-        )
-        return values
-
     @property
     def _sim_with_sources(self) -> Simulation:
         """Instance of :class:`.Simulation` with all sources and absorbers added for each port, for plotting."""
