@@ -134,7 +134,7 @@ VoltageIntegralTypes = VoltageIntegralType
 # Instantiate on plugin import till we unite with toplevel
 warnings.filterwarnings(
     "once",
-    message="ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+    message="RF simulations and functionality will require new license requirements in an upcoming release. All RF-specific classes are now available within the sub-package 'tidy3d.rf'.",
     category=FutureWarning,
 )
 

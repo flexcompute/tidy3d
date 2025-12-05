@@ -251,6 +251,13 @@ class Logger:
     ) -> None:
         """Distribute log messages to all handlers"""
 
+        # Check global cache if requested (before composing/capturing to avoid duplicates)
+        if log_once:
+            # Use the message body before composition as key
+            if message in self._static_cache:
+                return
+            self._static_cache.add(message)
+
         # Compose message
         if len(args) > 0:
             try:
@@ -266,13 +273,6 @@ class Logger:
             if custom_loc is None:
                 custom_loc = []
             self._stack[-1]["messages"].append((level_name, composed_message, custom_loc))
-
-        # Check global cache if requested
-        if log_once:
-            # Use the message body before composition as key
-            if message in self._static_cache:
-                return
-            self._static_cache.add(message)
 
         # Context-local logger emits a single message and consolidates the rest
         if self._counts is not None:

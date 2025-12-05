@@ -6,7 +6,7 @@ S-Matrix Component Modelers Plugin
 This plugin provides component modelers for computing S-parameters (scattering parameters) for both **photonics** and **RF/microwave** applications. The plugin supports:
 
 * **Photonics**: Modal component modelers for photonic devices (waveguides, splitters, filters, etc.)
-* **RF/Microwave**: Terminal component modelers for microwave circuits and antennas (available in :class:`tidy3d.rf` subpackage)
+* **RF/Microwave**: Terminal component modelers for microwave circuits and antennas (available in :class:`tidy3d.rf` subpackage as well)
 
 .. warning::
 
@@ -28,21 +28,26 @@ For photonics applications, use the **ModalComponentModeler** which computes mod
 
 RF/Microwave Component Modelers
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. seealso::
+   
+   For classes related to microwave/RF modeling, please refer to the main `Microwave and RF <../microwave/index.html>`_ page and `tidy3d.rf` sub-package. 
 
-For RF and microwave applications, use the **TerminalComponentModeler** (available in ``tidy3d.rf``) which computes terminal-based S-parameters.
+
+For RF and microwave applications, use the **TerminalComponentModeler** (available in ``tidy3d.rf`` as well) which computes terminal-based S-parameters.
 
 .. warning::
 
    RF simulations will require new license requirements in an upcoming release. All RF-specific classes are available in the ``tidy3d.rf`` subpackage.
 
+
 .. autosummary::
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.rf.TerminalComponentModeler
-   tidy3d.rf.TerminalComponentModelerData
-   tidy3d.rf.LumpedPort
-   tidy3d.rf.CoaxialLumpedPort
+   tidy3d.plugins.smatrix.TerminalComponentModeler
+   tidy3d.plugins.smatrix.TerminalComponentModelerData
+   tidy3d.plugins.smatrix.LumpedPort
+   tidy3d.plugins.smatrix.CoaxialLumpedPort
    tidy3d.rf.WavePort
    tidy3d.rf.MicrowaveSMatrixData
    tidy3d.rf.TerminalPortDataArray

@@ -102,6 +102,14 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "Otherwise, a default source time will be constructed.",
     )
 
+    @pd.root_validator(pre=False)
+    def _warn_refactor_2_10(cls, values):
+        log.warning(
+            f"'{cls.__name__}' was refactored (tidy3d 'v2.10.0'). Existing functionality is available differently. Please consult the migration documentation: https://docs.flexcompute.com/projects/tidy3d/en/latest/api/microwave/microwave_migration.html",
+            log_once=True,
+        )
+        return values
+
     @pd.validator("simulation", always=True)
     def _sim_has_no_sources(cls, val):
         """Make sure simulation has no sources as they interfere with tool."""
