@@ -1000,7 +1000,6 @@ class Batch(WebContainer):
         download_on_success: bool = False,
         path_dir: PathLike = DEFAULT_DATA_DIR,
         replace_existing: bool = False,
-        postprocess_worker_group: Optional[str] = None,
     ) -> None:
         """
         Monitor progress of each running task.
