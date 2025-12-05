@@ -1,4 +1,4 @@
-"""File containing classes required for the setup of a DEVSIM case."""
+"""Semiconductor doping definitions."""
 
 from __future__ import annotations
 

@@ -117,7 +117,6 @@ flax = { version = ">=0.8.2", optional = true }
 sax = { version = "^0.11", optional = true }
 vtk = { version = ">=9.2.6", optional = true }
 sphinxemoji = { version = "*", optional = true }
-devsim = { version = "*", optional = true }
 cma = { version = "*", optional = true }
 openpyxl = { version = "*", optional = true }
 tidy3d-extras = { version = "2.10.0", optional = true }
@@ -172,7 +171,6 @@ dev = [
   'trimesh',
   'scikit-rf',
   'vtk',
-  'devsim',
   'cma',
   'diff-cover',
   'openpyxl',
@@ -215,7 +213,6 @@ docs = [
   "sphinx-tabs",
   "sphinxemoji",
   "myst-parser",
-  "devsim",
   "cma",
   "openpyxl"
 ]
@@ -224,7 +221,7 @@ scikit-rf = ["scikit-rf"]
 trimesh = ["trimesh", "networkx", "rtree"]
 vtk = ["vtk"]
 ruff = ["ruff"]
-heatcharge = ["trimesh", "vtk", "devsim"]
+heatcharge = ["trimesh", "vtk"]
 # plugins with extra deps
 pytorch = ["torch"]
 design = ["bayesian-optimization", "pygad", "pyswarms"]
