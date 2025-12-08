@@ -4,10 +4,14 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
+
+if TYPE_CHECKING:
+    from tidy3d.components.tcad.mesher import VolumeMesher
 
 import numpy as np
 import pydantic.v1 as pd
+from pydantic.v1 import PrivateAttr
 
 try:
     from matplotlib import colormaps
@@ -345,6 +349,40 @@ class HeatChargeSimulation(AbstractSimulation):
         description="The `analysis_spec` is used to specify the type of simulation. Currently, it is used to "
         "specify Charge simulations or transient Heat simulations.",
     )
+
+    _as_single_step: bool = PrivateAttr(default=False)
+
+    def _as_single_step_copy(self) -> HeatChargeSimulation:
+        """Return a copy of this simulation marked to run as a single step.
+
+        This prevents infinite recursion when workflow_steps() is called on the
+        solve step of a HeatChargeSimulation.
+        """
+        copy = self.copy()
+        copy._as_single_step = True
+        return copy
+
+    def workflow_steps(self) -> list[tuple[str, Union[HeatChargeSimulation, VolumeMesher]]]:
+        """Return the workflow steps for this simulation.
+
+        For HeatChargeSimulation, there are two steps: mesh generation and solve.
+        If this simulation is already marked as a single step (via _as_single_step),
+        only the solve step is returned to prevent infinite recursion.
+
+        Returns
+        -------
+        list[tuple[str, Union[HeatChargeSimulation, VolumeMesher]]]
+            List of (step_name, simulation) tuples representing the workflow steps.
+        """
+        if self._as_single_step:
+            return [("solve", self)]
+
+        from tidy3d.components.tcad.mesher import VolumeMesher
+
+        return [
+            ("mesh", VolumeMesher(simulation=self)),
+            ("solve", self._as_single_step_copy()),
+        ]
 
     def _post_init_validators(self) -> None:
         """Call validators taking ``self`` that get run after init."""

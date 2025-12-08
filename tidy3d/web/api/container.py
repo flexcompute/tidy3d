@@ -555,6 +555,24 @@ class Job(WebContainer):
             values["task_name"] = stub.get_default_task_name()
         return values
 
+    @pd.validator("simulation", always=True)
+    def _validate_single_step_only(cls, simulation: WorkflowType) -> WorkflowType:
+        """Ensure the simulation is a single-step workflow.
+
+        Multi-step workflows (like HeatChargeSimulation) should use MultiStepJob instead.
+        """
+        if hasattr(simulation, "workflow_steps"):
+            steps = simulation.workflow_steps()
+            if len(steps) > 1:
+                step_names = [name for name, _ in steps]
+                raise ValueError(
+                    f"'Job' does not support multi-step workflows. "
+                    f"The simulation has {len(steps)} steps: {step_names}. "
+                    "Use 'MultiStepJob' from 'tidy3d.web' for multi-step workflows, "
+                    "or use 'web.run()' which handles multi-step workflows automatically."
+                )
+        return simulation
+
 
 class BatchData(Tidy3dBaseModel, Mapping):
     """

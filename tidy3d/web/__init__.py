@@ -15,6 +15,7 @@ core_config.set_config(log, get_logging_console(), __version__)
 # autograd compatible wrappers for run and run_async
 from .api.autograd.autograd import run_async
 from .api.container import Batch, BatchData, Job
+from .api.multi_step_job import MultiStepJob
 from .api.run import run
 from .api.webapi import (
     abort,
@@ -43,6 +44,7 @@ __all__ = [
     "Batch",
     "BatchData",
     "Job",
+    "MultiStepJob",
     "abort",
     "account",
     "configure",

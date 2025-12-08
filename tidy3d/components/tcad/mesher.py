@@ -30,3 +30,15 @@ class VolumeMesher(Tidy3dBaseModel):
         Currently no validation but method is required when calling ``web.upload``.
         """
         return
+
+    def workflow_steps(self) -> list[tuple[str, VolumeMesher]]:
+        """Return the workflow steps for this mesher.
+
+        For VolumeMesher, there is only one step: mesh generation.
+
+        Returns
+        -------
+        list[tuple[str, VolumeMesher]]
+            A list containing a single tuple: the step name "mesh" and this mesher instance.
+        """
+        return [("mesh", self)]

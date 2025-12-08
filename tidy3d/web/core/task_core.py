@@ -805,24 +805,38 @@ class SimulationTask(WebTask):
                         "A single parent 'task_id' corresponding to the task in which the meshing "
                         "was run must be provided."
                     )
+                parent_task_id = parent_tasks[0]
                 try:
                     # get mesh task info
-                    mesh_task = SimulationTask.get(parent_tasks[0], verbose=False)
-                    assert mesh_task.task_type == "VOLUME_MESH"
-                    assert mesh_task.status == "success"
+                    mesh_task = SimulationTask.get(parent_task_id, verbose=False)
+                    if mesh_task.task_type != "VOLUME_MESH":
+                        raise ValidationError(
+                            f"Parent task '{parent_task_id}' has type '{mesh_task.task_type}', "
+                            f"expected 'VOLUME_MESH'."
+                        )
+                    if mesh_task.status != "success":
+                        raise ValidationError(
+                            f"Parent task '{parent_task_id}' has status '{mesh_task.status}', "
+                            f"expected 'success'."
+                        )
                     # get up-to-date task info
                     task = SimulationTask.get(self.task_id, verbose=False)
                     if task.fileMd5 != mesh_task.childFileMd5:
                         raise ValidationError(
-                            "Simulation stored in parent task 'VolumeMesher' does not match the "
-                            "current simulation."
+                            f"Simulation stored in parent task '{parent_task_id}' does not match "
+                            "the current simulation."
                         )
+                except ValidationError:
+                    raise
                 except Exception as e:
                     raise ValidationError(
-                        "The parent task must be a 'VolumeMesher' task which has been successfully "
-                        "run and is associated to the same 'HeatChargeSimulation' as provided here."
+                        f"The parent task '{parent_task_id}' must be a 'VolumeMesher' task which "
+                        "has been successfully run and is associated to the same "
+                        "'HeatChargeSimulation' as provided here."
                     ) from e
 
+            except WebError:
+                raise
             except Exception as e:
                 raise WebError(f"Provided 'parent_tasks' failed validation: {e!s}") from e
 

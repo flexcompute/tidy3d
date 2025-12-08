@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import tempfile
 import time
 from os import PathLike
 from pathlib import Path
-from typing import Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 from requests import HTTPError
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
@@ -73,6 +74,45 @@ SOLVER_NAME = {
     "HEAT_CHARGE": "HeatCharge",
     "VOLUME_MESH": "VolumeMesher",
 }
+
+
+def single_step_only(func: Callable) -> Callable:
+    """Decorator that validates a simulation is single-step before proceeding.
+
+    This decorator checks if the simulation passed to the decorated function
+    has multiple workflow steps. If so, it raises a WebError indicating that
+    the function only supports single-step workflows and that MultiStepJob
+    should be used instead.
+
+    Parameters
+    ----------
+    func : Callable
+        The function to decorate. Must accept 'simulation' as first positional
+        argument or as a keyword argument.
+
+    Returns
+    -------
+    Callable
+        The decorated function with single-step validation.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        # Get simulation from args or kwargs
+        simulation = kwargs.get("simulation") or (args[0] if args else None)
+        if simulation is not None and hasattr(simulation, "workflow_steps"):
+            steps = simulation.workflow_steps()
+            if len(steps) > 1:
+                step_names = [name for name, _ in steps]
+                raise WebError(
+                    f"'{func.__name__}' does not support multi-step workflows. "
+                    f"The simulation has {len(steps)} steps: {step_names}. "
+                    "Use 'MultiStepJob' from 'tidy3d.web' for multi-step workflows, "
+                    "or use 'web.run()' which handles multi-step workflows automatically."
+                )
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 def _get_url(task_id: str) -> str:
@@ -377,6 +417,30 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
+    # Check if this is a multi-step workflow
+    if hasattr(simulation, "workflow_steps"):
+        steps = simulation.workflow_steps()
+        if len(steps) > 1:
+            # Delegate to MultiStepJob for multi-step workflows
+            from tidy3d.web.api.multi_step_job import MultiStepJob
+
+            job = MultiStepJob(
+                simulation=simulation,
+                task_name=task_name,
+                folder_name=folder_name,
+                callback_url=callback_url,
+                solver_version=solver_version,
+                verbose=verbose,
+                pay_type=pay_type if isinstance(pay_type, PayType) else PayType(pay_type),
+                reduce_simulation=reduce_simulation
+                if isinstance(reduce_simulation, bool)
+                else False,
+                simulation_type=simulation_type,
+                worker_group=worker_group,
+                lazy=lazy,
+            )
+            return job.run(path=path, priority=priority)
+
     restored_path, _ = restore_simulation_if_cached(
         simulation=simulation,
         path=path,
@@ -444,6 +508,7 @@ def _get_task_urls(
 
 
 @wait_for_connection
+@single_step_only
 def upload(
     simulation: WorkflowType,
     task_name: Optional[str] = None,
