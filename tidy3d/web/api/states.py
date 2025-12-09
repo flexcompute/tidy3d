@@ -42,7 +42,7 @@ COMPLETED_STATES = {
 
 END_STATES = ERROR_STATES | COMPLETED_STATES
 
-POST_VALIDATE_STATES = {"validate_success", "validate_warn"}
+POST_VALIDATE_STATES = {"validate_success", "validate_warn", "warning"}
 
 RUNNING_STATES = (
     PRE_VALIDATE_STATES | POST_VALIDATE_STATES | {"running"} | POST_RUN_STATES | COMPLETED_STATES
