@@ -1,5 +1,18 @@
 from __future__ import annotations
 
+# progression order for a typical run
+PROGRESSION_ORDER = (
+    "draft",
+    "queued",
+    "preprocess",
+    "running",
+    "postprocess",
+    "success",
+)
+
+MAX_STEPS = len(PROGRESSION_ORDER) - 1
+COMPLETED_PERCENT = 100
+
 PRE_ERROR_STATES = {
     "aborting",
 }
@@ -18,14 +31,17 @@ ERROR_STATES = {
 
 PRE_VALIDATE_STATES = {
     "draft",
-    "queued",
-    "queued_solver",
-    "preprocess",
     "validating",
     "validate",
 }
 
-POST_RUN_STATES = {
+QUEUED_STATES = {"queued", "queued_solver"}
+
+PREPROCESS_STATES = {"preprocess"}
+
+RUNNING_STATES = {"running", "preprocess_success"}
+
+POSTPROCESS_STATES = {
     "postprocess",
     "run_success",
 }
@@ -42,70 +58,66 @@ COMPLETED_STATES = {
 
 END_STATES = ERROR_STATES | COMPLETED_STATES
 
-POST_VALIDATE_STATES = {"validate_success", "validate_warn"}
+POST_VALIDATE_STATES = {"validate_success", "validate_warn", "warning"}
 
-RUNNING_STATES = (
-    PRE_VALIDATE_STATES | POST_VALIDATE_STATES | {"running"} | POST_RUN_STATES | COMPLETED_STATES
+DRAFT_STATES = PRE_VALIDATE_STATES | POST_VALIDATE_STATES
+
+ALL_POST_VALIDATE_STATES = POST_VALIDATE_STATES | RUNNING_STATES | POSTPROCESS_STATES | END_STATES
+
+VALID_PROGRESS_STATES = (
+    DRAFT_STATES
+    | QUEUED_STATES
+    | POST_VALIDATE_STATES
+    | RUNNING_STATES
+    | POSTPROCESS_STATES
+    | COMPLETED_STATES
+    | PRE_ERROR_STATES
 )
-
-ALL_POST_VALIDATE_STATES = POST_VALIDATE_STATES | {"running"} | POST_RUN_STATES | END_STATES
-
-VALID_PROGRESS_STATES = RUNNING_STATES | PRE_ERROR_STATES
 
 ALL_STATES = VALID_PROGRESS_STATES | ERROR_STATES
 
-
-PROGRESSION_ORDER = (
-    "draft",
-    "queued",
-    "queued_solver",
-    "preprocess",
-    "validating",
-    "validate",
-    "validate_success",
-    "validate_warn",
-    "running",
-    "postprocess",
-    "run_success",
-    "visualize",
-    "success",
-    "completed",
+STATE_PROGRESS_PERCENTAGE = dict.fromkeys(ALL_STATES, 0)
+STATE_PROGRESS_PERCENTAGE.update(dict.fromkeys(COMPLETED_STATES, COMPLETED_PERCENT))
+STATE_PROGRESS_PERCENTAGE.update(
+    {state: round((1 / MAX_STEPS) * COMPLETED_PERCENT) for state in QUEUED_STATES}
+)
+STATE_PROGRESS_PERCENTAGE.update(
+    {state: round((2 / MAX_STEPS) * COMPLETED_PERCENT) for state in PREPROCESS_STATES}
+)
+STATE_PROGRESS_PERCENTAGE.update(
+    {state: round((3 / MAX_STEPS) * COMPLETED_PERCENT) for state in RUNNING_STATES}
+)
+STATE_PROGRESS_PERCENTAGE.update(
+    {state: round((4 / MAX_STEPS) * COMPLETED_PERCENT) for state in POSTPROCESS_STATES}
 )
 
-MAX_STEPS = len(PROGRESSION_ORDER) - 1
-COMPLETED_PERCENT = 100
 
+def status_to_stage(status: str) -> tuple[str, int]:
+    """Map task status to monotonic stage for progress bars.
 
-STATE_PROGRESS_PERCENTAGE = {
-    # --- Progression States ---
-    "draft": round((0 / MAX_STEPS) * COMPLETED_PERCENT),  # 0%
-    "queued": round((1 / MAX_STEPS) * COMPLETED_PERCENT),  # 8%
-    "queued_solver": round((2 / MAX_STEPS) * COMPLETED_PERCENT),  # 15%
-    "preprocess": round((3 / MAX_STEPS) * COMPLETED_PERCENT),  # 23%
-    "validating": round((4 / MAX_STEPS) * COMPLETED_PERCENT),  # 31%
-    "validate": round((5 / MAX_STEPS) * COMPLETED_PERCENT),  # 38%
-    "validate_success": round((6 / MAX_STEPS) * COMPLETED_PERCENT),  # 46%
-    "validate_warn": round((7 / MAX_STEPS) * COMPLETED_PERCENT),  # 54%
-    "running": round((8 / MAX_STEPS) * COMPLETED_PERCENT),  # 62%
-    "run_success": round((9 / MAX_STEPS) * COMPLETED_PERCENT),  # 69%
-    "postprocess": round((10 / MAX_STEPS) * COMPLETED_PERCENT),  # 77%
-    "visualize": round((11 / MAX_STEPS) * COMPLETED_PERCENT),  # 85%
-    "success": COMPLETED_PERCENT,  # 100%
-    "completed": COMPLETED_PERCENT,  # 100%
-    "postprocess_success": COMPLETED_PERCENT,  # 100%
-    "diverge": COMPLETED_PERCENT,
-    "diverged": COMPLETED_PERCENT,
-    # --- Error States ---
-    # All error states map to 0%
-    "validate_fail": 0,
-    "error": 0,
-    "errored": 0,
-    "blocked": 0,
-    "run_failed": 0,
-    "aborted": 0,
-    "deleted": 0,
-    "validate_error": 0,
-    "preprocess_error": 0,
-    "run_error": 0,
-    "postprocess_error": 0,
-}
+    Parameters
+    ----------
+    status : str
+        The task status string.
+
+    Returns
+    -------
+    tuple[str, int]
+        A tuple of (stage_name, stage_index) where stage_index corresponds
+        to the position in PROGRESSION_ORDER.
+    """
+    s = (status or "").lower()
+    if s in DRAFT_STATES:
+        return ("draft", 0)
+    if s in QUEUED_STATES:
+        return ("queued", 1)
+    if s in PREPROCESS_STATES:
+        return ("preprocess", 2)
+    if s in RUNNING_STATES:
+        return ("running", 3)
+    if s in POSTPROCESS_STATES:
+        return ("postprocess", 4)
+    if s in COMPLETED_STATES:
+        return ("success", 5)
+    # Unknown states map to earliest stage to avoid showing 100% prematurely
+    return (s or "unknown", 0)
