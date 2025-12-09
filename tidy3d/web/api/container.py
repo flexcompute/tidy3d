@@ -41,6 +41,7 @@ from tidy3d.web.api.states import (
     ERROR_STATES,
     PRE_ERROR_STATES,
     PRE_VALIDATE_STATES,
+    QUEUED_STATES,
     RUNNING_STATES,
     STATE_PROGRESS_PERCENTAGE,
 )
@@ -1068,7 +1069,7 @@ class Batch(WebContainer):
                 status_part = f"→ [red]{status:<{status_width}}"
             elif status in COMPLETED_STATES:
                 status_part = f"→ [green]{status:<{status_width}}"
-            elif status in (PRE_ERROR_STATES | PRE_VALIDATE_STATES):
+            elif status in (PRE_ERROR_STATES | PRE_VALIDATE_STATES | QUEUED_STATES):
                 status_part = f"→ [yellow]{status:<{status_width}}"
             elif status in RUNNING_STATES:
                 status_part = f"→ [blue]{status:<{status_width}}"
