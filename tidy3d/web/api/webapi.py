@@ -23,7 +23,9 @@ from tidy3d.web.api.states import (
     ALL_POST_VALIDATE_STATES,
     END_STATES,
     ERROR_STATES,
+    MAX_STEPS,
     STATE_PROGRESS_PERCENTAGE,
+    status_to_stage,
 )
 from tidy3d.web.cache import CacheEntry, _store_mode_solver_in_cache, resolve_local_cache
 from tidy3d.web.core.account import Account
@@ -1192,28 +1194,6 @@ def load(
     return stub_data
 
 
-def _status_to_stage(status: str) -> tuple[str, int]:
-    """Map task status to monotonic stage for progress bars."""
-    s = (status or "").lower()
-    # Map a broader set of states to monotonic stages for progress bars
-    if s in ("draft", "created"):
-        return ("draft", 0)
-    if s in ("queue", "queued"):
-        return ("queued", 1)
-    if s in ("validating",):
-        return ("validating", 2)
-    if s in ("validate_success", "validate_warn", "preprocess", "preprocessing"):
-        return ("preprocess", 3)
-    if s in ("running", "preprocess_success"):
-        return ("running", 4)
-    if s in ("run_success", "postprocess"):
-        return ("postprocess", 5)
-    if s in ("success", "postprocess_success"):
-        return ("success", 6)
-    # Unknown states map to earliest stage to avoid showing 100% prematurely
-    return (s or "unknown", 0)
-
-
 def _monitor_modeler_batch(
     task_id: str,
     verbose: bool = True,
@@ -1230,7 +1210,7 @@ def _monitor_modeler_batch(
     # Non-verbose path: poll without progress bars then return
     if not verbose:
         # Run phase
-        while _status_to_stage(status)[0] not in END_STATES:
+        while status_to_stage(status)[0] not in END_STATES:
             time.sleep(REFRESH_TIME)
             detail = _get_batch_detail_handle_error_status(task)
             status = detail.status.lower()
@@ -1252,8 +1232,8 @@ def _monitor_modeler_batch(
         # Phase: Run (aggregate + per-task)
         p_run = progress.add_task("Run Total", total=1.0)
         task_bars: dict[str, int] = {}
-        stage = _status_to_stage(status)[0]
-        prev_stage = _status_to_stage(status)[0]
+        stage = status_to_stage(status)[0]
+        prev_stage = status_to_stage(status)[0]
         console.log(f"Batch status = {status}")
 
         # Note: get_status errors if an erroring status occurred
@@ -1270,7 +1250,7 @@ def _monitor_modeler_batch(
                 for name, t in name_to_task.items():
                     if name not in task_bars:
                         tstatus = (t.status or "draft").lower()
-                        _, idx = _status_to_stage(tstatus)
+                        _, idx = status_to_stage(tstatus)
                         pbar = progress.add_task(
                             f"  {name}",
                             total=1.0,
@@ -1285,8 +1265,8 @@ def _monitor_modeler_batch(
                 for t in detail.tasks or []:
                     n_members += 1
                     tstatus = (t.status or "draft").lower()
-                    _, idx = _status_to_stage(tstatus)
-                    acc += max(0.0, min(1.0, idx / 6.0))
+                    _, idx = status_to_stage(tstatus)
+                    acc += max(0.0, min(1.0, idx / MAX_STEPS))
                 run_frac = (acc / float(n_members)) if n_members else 0.0
             else:
                 run_frac = (r / total) if total else 0.0
@@ -1300,7 +1280,7 @@ def _monitor_modeler_batch(
                     if not t:
                         continue
                     tstatus = (t.status or "draft").lower()
-                    _, idx = _status_to_stage(tstatus)
+                    _, idx = status_to_stage(tstatus)
                     desc = f"  {tname} [{tstatus or 'draft'}]"
                     progress.update(
                         pbar,
@@ -1313,7 +1293,7 @@ def _monitor_modeler_batch(
             time.sleep(REFRESH_TIME)
             detail = _get_batch_detail_handle_error_status(task)
             status = detail.status.lower()
-            stage = _status_to_stage(status)[0]
+            stage = status_to_stage(status)[0]
 
         if console is not None:
             console.log("Modeler has finished running successfully.")
