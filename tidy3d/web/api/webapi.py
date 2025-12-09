@@ -1198,18 +1198,19 @@ def _status_to_stage(status: str) -> tuple[str, int]:
     # Map a broader set of states to monotonic stages for progress bars
     if s in ("draft", "created"):
         return ("draft", 0)
+    # Validation states map to 0 since users can validate multiple times before submitting
+    if s in ("validating", "validate", "validate_success", "validate_warn", "warning"):
+        return (s, 0)
     if s in ("queue", "queued"):
         return ("queued", 1)
-    if s in ("validating",):
-        return ("validating", 2)
-    if s in ("validate_success", "validate_warn", "preprocess", "preprocessing"):
-        return ("preprocess", 3)
+    if s in ("preprocess", "preprocessing"):
+        return ("preprocess", 2)
     if s in ("running", "preprocess_success"):
-        return ("running", 4)
+        return ("running", 3)
     if s in ("run_success", "postprocess"):
-        return ("postprocess", 5)
+        return ("postprocess", 4)
     if s in ("success", "postprocess_success"):
-        return ("success", 6)
+        return ("success", 5)
     # Unknown states map to earliest stage to avoid showing 100% prematurely
     return (s or "unknown", 0)
 
@@ -1286,7 +1287,7 @@ def _monitor_modeler_batch(
                     n_members += 1
                     tstatus = (t.status or "draft").lower()
                     _, idx = _status_to_stage(tstatus)
-                    acc += max(0.0, min(1.0, idx / 6.0))
+                    acc += max(0.0, min(1.0, idx / 5.0))
                 run_frac = (acc / float(n_members)) if n_members else 0.0
             else:
                 run_frac = (r / total) if total else 0.0
