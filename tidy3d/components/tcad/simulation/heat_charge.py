@@ -1413,9 +1413,9 @@ class HeatChargeSimulation(AbstractSimulation):
         plot_params = plot_params_heat_bc
         condition = boundary_spec.condition
 
-        if isinstance(condition, TemperatureBC):
+        if isinstance(condition, (TemperatureBC, VoltageBC)):
             plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_TEMPERATURE)
-        elif isinstance(condition, HeatFluxBC):
+        elif isinstance(condition, (HeatFluxBC, CurrentBC)):
             plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_FLUX)
         elif isinstance(condition, ConvectionBC):
             plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_CONVECTION)
