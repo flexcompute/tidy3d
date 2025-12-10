@@ -3594,6 +3594,9 @@ class GeometryGroup(Geometry):
             geo_info = derivative_info.updated_copy(
                 paths=[tuple(geo_path)],
                 bounds=geo.bounds,
+                bounds_intersect=self.bounds_intersection(
+                    geo.bounds, derivative_info.simulation_bounds
+                ),
                 eps_approx=True,
                 deep=False,
                 interpolators=interpolators,

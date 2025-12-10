@@ -5,8 +5,10 @@ import copy
 import cProfile
 import typing
 import warnings
+from dataclasses import dataclass
 from importlib import reload
 from os.path import join
+from types import MethodType
 
 import autograd as ag
 import autograd.numpy as anp
@@ -20,6 +22,7 @@ from autograd.test_util import check_grads
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d import Box, Geometry, GeometryGroup
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.field_map import FieldMap
 from tidy3d.components.autograd.utils import is_tidy_box
@@ -3093,3 +3096,79 @@ def test_frequency_coordinate_alignment():
     # Selecting non-existent frequency should fail
     with pytest.raises(KeyError):
         _slice_field_data(field_data_multi, np.array([1.5e14]))
+
+
+def test_geometry_group_passes_intersected_bounds_to_children():
+    """GeometryGroup should clip bounds_intersect for each child geometry."""
+
+    @dataclass
+    class SimpleDerivativeInfo:
+        paths: list[tuple]
+        bounds: tuple
+        bounds_intersect: tuple
+        simulation_bounds: tuple
+        interpolators: dict | None = None
+
+        def create_interpolators(self, dtype: float = float):
+            return self.interpolators or {}
+
+        def updated_copy(self, **kwargs):
+            data = {
+                "paths": self.paths,
+                "bounds": self.bounds,
+                "bounds_intersect": self.bounds_intersect,
+                "simulation_bounds": self.simulation_bounds,
+                "interpolators": self.interpolators,
+            }
+            data.update({k: v for k, v in kwargs.items() if k in data})
+            return SimpleDerivativeInfo(**data)
+
+    fully_inside_box = Box(center=(-1.0, 0.0, 0.0), size=(1.0, 1.0, 1.0))
+    big_box = Box(center=(0.0, 0.0, 0.0), size=(10.0, 10.0, 10.0))
+
+    def record_method(self, derivative_info):
+        object.__setattr__(self, "recorded_bounds_intersect", derivative_info.bounds_intersect)
+        return {derivative_info.paths[0]: 0.0}
+
+    boxes = (fully_inside_box, big_box)
+
+    for box in boxes:
+        object.__setattr__(box, "recorded_bounds_intersect", None)
+        object.__setattr__(box, "_compute_derivatives", MethodType(record_method, box))
+    group = GeometryGroup(geometries=boxes)
+
+    # case where group bounds bigger than sim bounds
+    sim_bounds = ((-5.0, -5.0, -5.0), (5.0, 5.0, 5.0))
+
+    deriv_info = SimpleDerivativeInfo(
+        paths=[("geom", idx, "dummy") for idx, _ in enumerate(boxes)],
+        bounds=group.bounds,
+        bounds_intersect=Geometry.bounds_intersection(group.bounds, sim_bounds),
+        simulation_bounds=sim_bounds,
+        interpolators={},
+    )
+
+    group._compute_derivatives(deriv_info)
+
+    assert (
+        object.__getattribute__(fully_inside_box, "recorded_bounds_intersect")
+        == fully_inside_box.bounds
+    )
+    assert object.__getattribute__(big_box, "recorded_bounds_intersect") == sim_bounds
+
+    # case where sim bounds bigger than group bounds
+    sim_bounds = ((-20.0, -20.0, -20.0), (20.0, 20.0, 20.0))
+
+    deriv_info = SimpleDerivativeInfo(
+        paths=[("geom", idx, "dummy") for idx, _ in enumerate(boxes)],
+        bounds=group.bounds,
+        bounds_intersect=Geometry.bounds_intersection(group.bounds, sim_bounds),
+        simulation_bounds=sim_bounds,
+        interpolators={},
+    )
+
+    group._compute_derivatives(deriv_info)
+
+    assert object.__getattribute__(big_box, "recorded_bounds_intersect") == group.bounds, (
+        f"got {object.__getattribute__(big_box, 'recorded_bounds_intersect')} and {group.bounds}"
+    )
