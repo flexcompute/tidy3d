@@ -154,5 +154,45 @@ def test_supports_local_subpixel_requires_extras_when_forced(monkeypatch):
         reload_config(profile="default")
 
 
+def test_supports_local_subpixel_no_error_logged_when_optional(monkeypatch, caplog):
+    """Regression test for FXC-4374: no ERROR should be logged when preference=None
+    and tidy3d-extras is unavailable, since the decorator handles it gracefully."""
+    import logging
+
+    reload_config(profile="default")
+    tidy3d_extras["mod"] = None
+    tidy3d_extras["use_local_subpixel"] = None
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "tidy3d_extras":
+            raise ImportError("forced failure")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    try:
+        # preference=None is the default - feature is optional
+        config.update_section("simulation", use_local_subpixel=None)
+
+        @supports_local_subpixel
+        def get_flag():
+            return tidy3d_extras["use_local_subpixel"]
+
+        with caplog.at_level(logging.ERROR):
+            result = get_flag()
+
+        # Should fall back gracefully without logging errors
+        assert result is False
+        assert not any("tidy3d-extras" in record.message for record in caplog.records), (
+            "ERROR was logged but should have been suppressed for optional feature check"
+        )
+    finally:
+        tidy3d_extras["mod"] = None
+        tidy3d_extras["use_local_subpixel"] = None
+        reload_config(profile="default")
+
+
 if __name__ == "__main__":
     pytest.main()

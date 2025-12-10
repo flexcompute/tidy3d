@@ -10,10 +10,11 @@ from .log import log
 class Tidy3dError(ValueError):
     """Any error in tidy3d"""
 
-    def __init__(self, message: Optional[str] = None) -> None:
+    def __init__(self, message: Optional[str] = None, log_error: bool = True) -> None:
         """Log just the error message and then raise the Exception."""
         super().__init__(message)
-        log.error(message)
+        if log_error:
+            log.error(message)
 
 
 class ConfigError(Tidy3dError):
