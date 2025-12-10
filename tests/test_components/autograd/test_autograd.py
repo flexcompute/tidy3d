@@ -527,6 +527,31 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     )
     cylinder = td.Structure(geometry=cylinder_geo, medium=polyslab.medium)
 
+    # triangle mesh geometry with param-dependent medium response
+    base_vertices = np.array(
+        [
+            (0.0, 0.0, 0.0),
+            (0.6, 0.0, 0.0),
+            (0.0, 0.6, 0.0),
+            (0.0, 0.0, 0.6),
+        ],
+    )
+    faces = np.array(
+        [
+            (0, 2, 1),
+            (0, 1, 3),
+            (0, 3, 2),
+            (1, 2, 3),
+        ],
+        dtype=int,
+    )
+    triangle_mesh_geo = td.TriangleMesh.from_vertices_faces(base_vertices, faces)
+    mesh_eps = 1.8 + 0.2 * anp.abs(vector @ params)
+    triangle_mesh = td.Structure(
+        geometry=triangle_mesh_geo,
+        medium=td.Medium(permittivity=mesh_eps),
+    )
+
     return {
         "medium": medium,
         "center_list": center_list,
@@ -541,6 +566,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         "pole_res": pole_res,
         "custom_pole_res": custom_pole_res,
         "cylinder": cylinder,
+        "triangle_mesh": triangle_mesh,
     }
 
 
@@ -638,6 +664,7 @@ structure_keys_ = (
     "pole_res",
     "custom_pole_res",
     "cylinder",
+    "triangle_mesh",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 

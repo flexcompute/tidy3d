@@ -41,6 +41,22 @@ if SHOW_PRINT_STATEMENTS:
     sys.stdout = sys.stderr
 
 
+def angled_overlap_deg(v1, v2):
+    norm_v1 = np.linalg.norm(v1)
+    norm_v2 = np.linalg.norm(v2)
+
+    if np.isclose(norm_v1, 0.0) or np.isclose(norm_v2, 0.0):
+        if not (np.isclose(norm_v1, 0.0) and np.isclose(norm_v2, 0.0)):
+            return np.inf
+
+        return 0.0
+
+    dot = np.minimum(1.0, np.sum((v1 / np.linalg.norm(v1)) * (v2 / np.linalg.norm(v2))))
+    angle_deg = np.arccos(dot) * 180.0 / np.pi
+
+    return angle_deg
+
+
 def case_identifier(is_3d: bool, infinite_dim_2d: int | None, shift_box_center: bool) -> str:
     geometry_tag = "3d" if is_3d else f"2d_infinite_dim_{infinite_dim_2d}"
     shift_tag = "shifted" if shift_box_center else "centered"
@@ -421,21 +437,6 @@ def test_box_and_polyslab_gradients_match(
             f"test_diff_init_{'3' if is_3d else '2'}d_infinite_dim_{infinite_dim_2d}.npz"
         )
         np.savez(npz_path, **test_data)
-
-    def angled_overlap_deg(v1, v2):
-        norm_v1 = np.linalg.norm(v1)
-        norm_v2 = np.linalg.norm(v2)
-
-        if np.isclose(norm_v1, 0.0) or np.isclose(norm_v2, 0.0):
-            if not (np.isclose(norm_v1, 0.0) and np.isclose(norm_v2, 0.0)):
-                return np.inf
-
-            return 0.0
-
-        dot = np.minimum(1.0, np.sum((v1 / np.linalg.norm(v1)) * (v2 / np.linalg.norm(v2))))
-        angle_deg = np.arccos(dot) * 180.0 / np.pi
-
-        return angle_deg
 
     box_polyslab_overlap_deg = angled_overlap_deg(box_grad_filtered, polyslab_grad_filtered)
     fd_overlap_deg = angled_overlap_deg(fd_box, fd_polyslab)

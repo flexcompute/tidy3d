@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added `symmetrize_mirror`, `symmetrize_rotation`, `symmetrize_diagonal` functions to the autograd plugin. They can be used for enforcing symmetries in topology optimization.
 - Klayout plugin automatically finds klayout installation path at common locations.
+- Added autograd support for `TriangleMesh`, allowing gradient computation with respect to mesh vertices for inverse design.
 
 ### Changed
 - Removed validator that would warn if `PerturbationMedium` values could become numerically unstable, since an error will anyway be raised if this actually happens when the medium is converted using actual perturbation data.

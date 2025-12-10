@@ -9,20 +9,21 @@ import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 import shapely
+from pydantic.v1 import PrivateAttr
 from shapely.geometry.base import BaseGeometry
 
 from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.geometry import base
+from tidy3d.components.geometry.mesh import TriangleMesh
+from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
-
-from . import base
-from .polyslab import PolySlab
 
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
@@ -32,6 +33,61 @@ _N_SHAPELY_QUAD_SEGS_VISUALIZATION = 200
 
 # Default number of points to discretize polyslab in `Cylinder.to_polyslab()`
 _N_PTS_CYLINDER_POLYSLAB = 51
+_MAX_ICOSPHERE_SUBDIVISIONS = 7  # this would have 164K vertices and 328K faces
+_DEFAULT_EDGE_FRACTION = 0.25
+
+
+def _base_icosahedron() -> tuple[np.ndarray, np.ndarray]:
+    """Return vertices and faces of a unit icosahedron."""
+
+    phi = (1.0 + np.sqrt(5.0)) / 2.0
+    vertices = np.array(
+        [
+            (-1, phi, 0),
+            (1, phi, 0),
+            (-1, -phi, 0),
+            (1, -phi, 0),
+            (0, -1, phi),
+            (0, 1, phi),
+            (0, -1, -phi),
+            (0, 1, -phi),
+            (phi, 0, -1),
+            (phi, 0, 1),
+            (-phi, 0, -1),
+            (-phi, 0, 1),
+        ],
+        dtype=float,
+    )
+    vertices /= np.linalg.norm(vertices, axis=1)[:, None]
+    faces = np.array(
+        [
+            (0, 11, 5),
+            (0, 5, 1),
+            (0, 1, 7),
+            (0, 7, 10),
+            (0, 10, 11),
+            (1, 5, 9),
+            (5, 11, 4),
+            (11, 10, 2),
+            (10, 7, 6),
+            (7, 1, 8),
+            (3, 9, 4),
+            (3, 4, 2),
+            (3, 2, 6),
+            (3, 6, 8),
+            (3, 8, 9),
+            (4, 9, 5),
+            (2, 4, 11),
+            (6, 2, 10),
+            (8, 6, 7),
+            (9, 8, 1),
+        ],
+        dtype=int,
+    )
+    return vertices, faces
+
+
+_ICOSAHEDRON_VERTS, _ICOSAHEDRON_FACES = _base_icosahedron()
 
 
 class Sphere(base.Centered, base.Circular):
@@ -41,6 +97,8 @@ class Sphere(base.Centered, base.Circular):
     -------
     >>> b = Sphere(center=(1,2,3), radius=2)
     """
+
+    _icosphere_cache: dict[int, tuple[np.ndarray, float]] = PrivateAttr(default_factory=dict)
 
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
@@ -203,6 +261,94 @@ class Sphere(base.Centered, base.Circular):
                 area *= 0.5
 
         return area
+
+    @classmethod
+    def unit_sphere_triangles(
+        cls,
+        *,
+        target_edge_length: Optional[float] = None,
+        subdivisions: Optional[int] = None,
+    ) -> np.ndarray:
+        """Return unit sphere triangles discretized via an icosphere."""
+
+        unit_tris = UNIT_SPHERE._unit_sphere_triangles(
+            target_edge_length=target_edge_length,
+            subdivisions=subdivisions,
+            copy_result=True,
+        )
+        return unit_tris
+
+    def _unit_sphere_triangles(
+        self,
+        *,
+        target_edge_length: Optional[float] = None,
+        subdivisions: Optional[int] = None,
+        copy_result: bool = True,
+    ) -> np.ndarray:
+        """Return cached unit-sphere triangles with optional copying."""
+        if target_edge_length is not None and subdivisions is not None:
+            raise ValueError("Specify either target_edge_length OR subdivisions, not both.")
+
+        if subdivisions is None:
+            subdivisions = self._subdivisions_for_edge(target_edge_length)
+
+        triangles, _ = self._icosphere_data(subdivisions)
+        return np.array(triangles, copy=copy_result)
+
+    def _subdivisions_for_edge(self, target_edge_length: Optional[float]) -> int:
+        if target_edge_length is None or target_edge_length <= 0.0:
+            return 0
+
+        for subdiv in range(_MAX_ICOSPHERE_SUBDIVISIONS + 1):
+            _, max_edge = self._icosphere_data(subdiv)
+            if max_edge <= target_edge_length:
+                return subdiv
+
+        log.warning(
+            f"Requested sphere mesh edge length {target_edge_length:.3e} μm requires more than "
+            f"{_MAX_ICOSPHERE_SUBDIVISIONS} subdivisions. "
+            "Clipping to the finest available mesh.",
+            log_once=True,
+        )
+        return _MAX_ICOSPHERE_SUBDIVISIONS
+
+    def _icosphere_data(self, subdivisions: int) -> tuple[np.ndarray, float]:
+        cache = self._icosphere_cache
+        if subdivisions in cache:
+            return cache[subdivisions]
+
+        vertices = np.asarray(_ICOSAHEDRON_VERTS, dtype=float)
+        faces = np.asarray(_ICOSAHEDRON_FACES, dtype=int)
+        if subdivisions > 0:
+            vertices = vertices.copy()
+            faces = faces.copy()
+            for _ in range(subdivisions):
+                vertices, faces = TriangleMesh.subdivide_faces(vertices, faces)
+
+        norms = np.linalg.norm(vertices, axis=1, keepdims=True)
+        norms = np.where(norms == 0.0, 1.0, norms)
+        vertices = vertices / norms
+
+        triangles = vertices[faces]
+        max_edge = self._max_edge_length(triangles)
+        cache[subdivisions] = (triangles, max_edge)
+        return triangles, max_edge
+
+    @staticmethod
+    def _max_edge_length(triangles: np.ndarray) -> float:
+        v = triangles
+        edges = np.stack(
+            [
+                v[:, 1] - v[:, 0],
+                v[:, 2] - v[:, 1],
+                v[:, 0] - v[:, 2],
+            ],
+            axis=1,
+        )
+        return float(np.linalg.norm(edges, axis=2).max())
+
+
+UNIT_SPHERE = Sphere(center=(0.0, 0.0, 0.0), radius=1.0)
 
 
 class Cylinder(base.Centered, base.Circular, base.Planar):
