@@ -7,7 +7,6 @@ and is intended to be removed in a future release.
 from __future__ import annotations
 
 import os
-import ssl
 import warnings
 from pathlib import Path
 from typing import Any, Optional
@@ -160,7 +159,7 @@ class LegacyEnvironmentConfig:
         s3_region: Optional[str] = None,
         ssl_verify: Optional[bool] = None,
         enable_caching: Optional[bool] = None,
-        ssl_version: Optional[ssl.TLSVersion] = None,
+        ssl_version: Optional[str] = None,
         env_vars: Optional[dict[str, str]] = None,
         environment: Optional[LegacyEnvironment] = None,
     ) -> None:
@@ -239,11 +238,11 @@ class LegacyEnvironmentConfig:
         self._set_pending("enable_caching", value)
 
     @property
-    def ssl_version(self) -> Optional[ssl.TLSVersion]:
+    def ssl_version(self) -> Optional[str]:
         return self._value("ssl_version")
 
     @ssl_version.setter
-    def ssl_version(self, value: Optional[ssl.TLSVersion]) -> None:
+    def ssl_version(self, value: Optional[str]) -> None:
         self._set_pending("ssl_version", value)
 
     @property
@@ -363,7 +362,7 @@ class LegacyEnvironment:
         config.enable_caching = enable_caching
         self._sync_to_manager()
 
-    def set_ssl_version(self, ssl_version: Optional[ssl.TLSVersion]) -> None:
+    def set_ssl_version(self, ssl_version: Optional[str]) -> None:
         config = self.current
         config.ssl_version = ssl_version
         self._sync_to_manager()

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import ssl
 from os import PathLike
 from pathlib import Path
 from typing import Any, Literal, Optional
@@ -27,6 +26,8 @@ from tidy3d.log import DEFAULT_LEVEL, LogLevel, log, set_log_suppression, set_lo
 
 from .registry import get_manager as _get_attached_manager
 from .registry import register_handler, register_section
+
+TLS_VERSION_CHOICES = {"TLSv1", "TLSv1_1", "TLSv1_2", "TLSv1_3"}
 
 
 class ConfigSection(BaseModel):
@@ -328,10 +329,13 @@ class WebConfig(ConfigSection):
         le=300,
     )
 
-    ssl_version: Optional[ssl.TLSVersion] = Field(
+    ssl_version: Optional[str] = Field(
         None,
         title="SSL/TLS version",
-        description="Optional SSL/TLS version to enforce for requests.",
+        description=(
+            "Optional TLS version override to enforce for requests. Accepts values such as "
+            "'TLSv1_2'."
+        ),
     )
 
     env_vars: dict[str, str] = Field(
@@ -349,13 +353,33 @@ class WebConfig(ConfigSection):
             secret = data.get("apikey")
             if isinstance(secret, SecretStr):
                 data["apikey"] = secret.get_secret_value()
-        ssl_version = data.get("ssl_version")
-        if isinstance(ssl_version, ssl.TLSVersion):
-            data["ssl_version"] = ssl_version.value
         for field in ("api_endpoint", "website_endpoint"):
             if field in data and data[field] is not None:
                 data[field] = str(data[field])
         return data
+
+    @field_validator("ssl_version", mode="before")
+    @classmethod
+    def _convert_and_check_ssl_version_name(cls, value: Any) -> Optional[str]:
+        """Convert SSL enum to string and check if valid.
+
+        Accepted examples:
+            "TLSv1"
+            "TLSv1_2"
+            ssl.TLSVersion.TLSv1_2.name  -> "TLSv1_2"
+        """
+        if value is None:
+            return None
+
+        # Prefer enum.name if present, otherwise raw string
+        candidate = getattr(value, "name", value)
+        candidate = str(candidate).strip()
+
+        if candidate not in TLS_VERSION_CHOICES:
+            allowed = ", ".join(sorted(TLS_VERSION_CHOICES))
+            raise ValueError(f"Invalid TLS version {candidate!r}. Must be one of: {allowed}")
+
+        return candidate
 
     @field_validator("api_endpoint", "website_endpoint", mode="before")
     @classmethod
