@@ -3,17 +3,23 @@
 from __future__ import annotations
 
 from abc import ABC
+from os import PathLike
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
+from autograd import numpy as anp
+from numpy.typing import NDArray
 
+from tidy3d.components.autograd import AutogradFieldMap, get_static
+from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
 from tidy3d.components.data.dataset import TriangleMeshDataset
 from tidy3d.components.data.validators import validate_no_nans
 from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.config import config
 from tidy3d.constants import fp_eps, inf
 from tidy3d.exceptions import DataError, ValidationError
 from tidy3d.log import log
@@ -44,6 +50,7 @@ class TriangleMesh(base.Geometry, ABC):
     )
 
     _no_nans_mesh = validate_no_nans("mesh_dataset")
+    _barycentric_samples: dict[int, NDArray] = pydantic.PrivateAttr(default_factory=dict)
 
     @pydantic.root_validator(pre=True)
     @verify_packages_import(["trimesh"])
@@ -69,7 +76,9 @@ class TriangleMesh(base.Geometry, ABC):
 
         import trimesh
 
-        mesh = cls._triangles_to_trimesh(val.surface_mesh)
+        surface_mesh = val.surface_mesh
+        triangles = get_static(surface_mesh.data)
+        mesh = cls._triangles_to_trimesh(triangles)
         if not all(np.array(mesh.area_faces) > AREA_SIZE_THRESHOLD):
             old_tol = trimesh.tol.merge
             trimesh.tol.merge = np.sqrt(2 * AREA_SIZE_THRESHOLD)
@@ -216,6 +225,28 @@ class TriangleMesh(base.Geometry, ABC):
             return process_single(meshes[solid_index])
         raise ValidationError("No solid found at 'solid_index' in the stl file.")
 
+    @verify_packages_import(["trimesh"])
+    def to_stl(
+        self,
+        filename: PathLike,
+        *,
+        binary: bool = True,
+    ) -> None:
+        """Export this TriangleMesh to an STL file.
+
+        Parameters
+        ----------
+        filename : str
+            Output STL filename.
+        binary : bool = True
+            Whether to write binary STL. Set False for ASCII STL.
+        """
+        triangles = get_static(self.mesh_dataset.surface_mesh.data)
+        mesh = self._triangles_to_trimesh(triangles)
+
+        file_type = "stl" if binary else "stl_ascii"
+        mesh.export(file_obj=filename, file_type=file_type)
+
     @classmethod
     @verify_packages_import(["trimesh"])
     def from_trimesh(cls, mesh: trimesh.Trimesh) -> TriangleMesh:
@@ -234,7 +265,7 @@ class TriangleMesh(base.Geometry, ABC):
         return cls.from_vertices_faces(mesh.vertices, mesh.faces)
 
     @classmethod
-    def from_triangles(cls, triangles: np.ndarray) -> TriangleMesh:
+    def from_triangles(cls, triangles: NDArray) -> TriangleMesh:
         """Create a :class:`.TriangleMesh` from a numpy array
         containing the triangles of a surface mesh.
 
@@ -251,7 +282,7 @@ class TriangleMesh(base.Geometry, ABC):
             The custom surface mesh geometry given by the triangles provided.
 
         """
-        triangles = np.array(triangles)
+        triangles = get_static(anp.array(triangles))
         if len(triangles.shape) != 3 or triangles.shape[1] != 3 or triangles.shape[2] != 3:
             raise ValidationError(
                 f"Provided 'triangles' must be an N x 3 x 3 array, given {triangles.shape}."
@@ -268,7 +299,7 @@ class TriangleMesh(base.Geometry, ABC):
 
     @classmethod
     @verify_packages_import(["trimesh"])
-    def from_vertices_faces(cls, vertices: np.ndarray, faces: np.ndarray) -> TriangleMesh:
+    def from_vertices_faces(cls, vertices: NDArray, faces: NDArray) -> TriangleMesh:
         """Create a :class:`.TriangleMesh` from numpy arrays containing the data
         of a surface mesh. The first array contains the vertices, and the second array contains
         faces formed from triples of the vertices.
@@ -305,11 +336,15 @@ class TriangleMesh(base.Geometry, ABC):
     @classmethod
     @verify_packages_import(["trimesh"])
     def _triangles_to_trimesh(
-        cls, triangles: np.ndarray
+        cls, triangles: NDArray
     ) -> Trimesh:  # -> We need to get this out of the classes and into functional methods operating on a class (maybe still referenced to the class)
         """Convert an (N, 3, 3) numpy array of triangles to a ``trimesh.Trimesh``."""
         import trimesh
 
+        # ``triangles`` may contain autograd ``ArrayBox`` entries when differentiating
+        # geometry parameters. ``trimesh`` expects plain ``float`` values, so strip any
+        # tracing information before constructing the mesh.
+        triangles = get_static(anp.array(triangles))
         return trimesh.Trimesh(**trimesh.triangles.to_kwargs(triangles))
 
     @classmethod
@@ -319,7 +354,7 @@ class TriangleMesh(base.Geometry, ABC):
         direction: Literal["-", "+"],
         base: float,
         grid: tuple[np.ndarray, np.ndarray],
-        height: np.ndarray,
+        height: NDArray,
     ) -> TriangleMesh:
         """Construct a TriangleMesh object from grid based height information.
 
@@ -643,9 +678,7 @@ class TriangleMesh(base.Geometry, ABC):
             log.warning(f"Error encountered: {e}")
             return self.bounding_box.intersections_plane(x=x, y=y, z=z, cleanup=cleanup)
 
-    def inside(
-        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> np.ndarray[bool]:
+    def inside(self, x: NDArray, y: NDArray, z: NDArray) -> np.ndarray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
         with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
         volume of the :class:`Geometry`, and ``False`` otherwise.
@@ -667,7 +700,6 @@ class TriangleMesh(base.Geometry, ABC):
 
         arrays = tuple(map(np.array, (x, y, z)))
         self._ensure_equal_shape(*arrays)
-        inside = np.zeros((arrays[0].size,), dtype=bool)
         arrays_flat = map(np.ravel, arrays)
         arrays_stacked = np.stack(tuple(arrays_flat), axis=-1)
         inside = self.trimesh.contains(arrays_stacked)
@@ -713,3 +745,536 @@ class TriangleMesh(base.Geometry, ABC):
         )
 
         return base.Geometry.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute adjoint derivatives for a ``TriangleMesh`` geometry."""
+        vjps: AutogradFieldMap = {}
+
+        if not self.mesh_dataset:
+            raise DataError("Can't compute derivatives without mesh data.")
+
+        valid_paths = {("mesh_dataset", "surface_mesh")}
+        for path in derivative_info.paths:
+            if path not in valid_paths:
+                raise ValueError(f"No derivative defined w.r.t. 'TriangleMesh' field '{path}'.")
+
+        if ("mesh_dataset", "surface_mesh") not in derivative_info.paths:
+            return vjps
+
+        triangles = np.asarray(self.triangles, dtype=config.adjoint.gradient_dtype_float)
+
+        # early exit if geometry is completely outside simulation bounds
+        sim_min, sim_max = map(np.asarray, derivative_info.simulation_bounds)
+        mesh_min, mesh_max = map(np.asarray, self.bounds)
+        if np.any(mesh_max < sim_min) or np.any(mesh_min > sim_max):
+            log.warning(
+                "'TriangleMesh' lies completely outside the simulation domain.",
+                log_once=True,
+            )
+            zeros = np.zeros_like(triangles)
+            vjps[("mesh_dataset", "surface_mesh")] = zeros
+            return vjps
+
+        # gather surface samples within the simulation bounds
+        dx = derivative_info.adaptive_vjp_spacing()
+        samples = self._collect_surface_samples(
+            triangles=triangles,
+            spacing=dx,
+            sim_min=sim_min,
+            sim_max=sim_max,
+        )
+
+        if samples["points"].shape[0] == 0:
+            zeros = np.zeros_like(triangles)
+            vjps[("mesh_dataset", "surface_mesh")] = zeros
+            return vjps
+
+        interpolators = derivative_info.interpolators
+        if interpolators is None:
+            interpolators = derivative_info.create_interpolators(
+                dtype=config.adjoint.gradient_dtype_float
+            )
+
+        g = derivative_info.evaluate_gradient_at_points(
+            samples["points"],
+            samples["normals"],
+            samples["perps1"],
+            samples["perps2"],
+            interpolators,
+        )
+
+        # accumulate per-vertex contributions using barycentric weights
+        weights = (samples["weights"] * g).real
+        normals = samples["normals"]
+        faces = samples["faces"]
+        bary = samples["barycentric"]
+
+        contrib_vec = weights[:, None] * normals
+
+        triangle_grads = np.zeros_like(triangles, dtype=config.adjoint.gradient_dtype_float)
+        for vertex_idx in range(3):
+            scaled = contrib_vec * bary[:, vertex_idx][:, None]
+            np.add.at(triangle_grads[:, vertex_idx, :], faces, scaled)
+
+        vjps[("mesh_dataset", "surface_mesh")] = triangle_grads
+        return vjps
+
+    def _collect_surface_samples(
+        self,
+        triangles: NDArray,
+        spacing: float,
+        sim_min: NDArray,
+        sim_max: NDArray,
+    ) -> dict[str, np.ndarray]:
+        """Deterministic per-triangle sampling used historically."""
+
+        dtype = config.adjoint.gradient_dtype_float
+        tol = config.adjoint.edge_clip_tolerance
+
+        sim_min = np.asarray(sim_min, dtype=dtype)
+        sim_max = np.asarray(sim_max, dtype=dtype)
+
+        points_list: list[np.ndarray] = []
+        normals_list: list[np.ndarray] = []
+        perps1_list: list[np.ndarray] = []
+        perps2_list: list[np.ndarray] = []
+        weights_list: list[np.ndarray] = []
+        faces_list: list[np.ndarray] = []
+        bary_list: list[np.ndarray] = []
+
+        spacing = max(float(spacing), np.finfo(float).eps)
+        triangles_arr = np.asarray(triangles, dtype=dtype)
+
+        sim_extents = sim_max - sim_min
+        valid_axes = np.abs(sim_extents) > tol
+        collapsed_indices = np.flatnonzero(np.isclose(sim_extents, 0.0, atol=tol))
+        collapsed_axis: Optional[int] = None
+        plane_value: Optional[float] = None
+        if collapsed_indices.size == 1:
+            collapsed_axis = int(collapsed_indices[0])
+            plane_value = float(sim_min[collapsed_axis])
+
+        warned = False
+        warning_msg = "Some triangles from the mesh lie outside the simulation bounds - this may lead to inaccurate gradients."
+        for face_index, tri in enumerate(triangles_arr):
+            area, normal = self._triangle_area_and_normal(tri)
+            if area <= AREA_SIZE_THRESHOLD:
+                continue
+
+            perps = self._triangle_tangent_basis(tri, normal)
+            if perps is None:
+                continue
+            perp1, perp2 = perps
+
+            if collapsed_axis is not None and plane_value is not None:
+                samples, outside_bounds = self._collect_surface_samples_2d(
+                    triangle=tri,
+                    face_index=face_index,
+                    normal=normal,
+                    perp1=perp1,
+                    perp2=perp2,
+                    spacing=spacing,
+                    collapsed_axis=collapsed_axis,
+                    plane_value=plane_value,
+                    sim_min=sim_min,
+                    sim_max=sim_max,
+                    valid_axes=valid_axes,
+                    tol=tol,
+                    dtype=dtype,
+                )
+            else:
+                samples, outside_bounds = self._collect_surface_samples_3d(
+                    triangle=tri,
+                    face_index=face_index,
+                    normal=normal,
+                    perp1=perp1,
+                    perp2=perp2,
+                    area=area,
+                    spacing=spacing,
+                    sim_min=sim_min,
+                    sim_max=sim_max,
+                    valid_axes=valid_axes,
+                    tol=tol,
+                    dtype=dtype,
+                )
+
+            if outside_bounds and not warned:
+                log.warning(warning_msg)
+                warned = True
+
+            if samples is None:
+                continue
+
+            points_list.append(samples["points"])
+            normals_list.append(samples["normals"])
+            perps1_list.append(samples["perps1"])
+            perps2_list.append(samples["perps2"])
+            weights_list.append(samples["weights"])
+            faces_list.append(samples["faces"])
+            bary_list.append(samples["barycentric"])
+
+        if not points_list:
+            return {
+                "points": np.zeros((0, 3), dtype=dtype),
+                "normals": np.zeros((0, 3), dtype=dtype),
+                "perps1": np.zeros((0, 3), dtype=dtype),
+                "perps2": np.zeros((0, 3), dtype=dtype),
+                "weights": np.zeros((0,), dtype=dtype),
+                "faces": np.zeros((0,), dtype=int),
+                "barycentric": np.zeros((0, 3), dtype=dtype),
+            }
+
+        return {
+            "points": np.concatenate(points_list, axis=0),
+            "normals": np.concatenate(normals_list, axis=0),
+            "perps1": np.concatenate(perps1_list, axis=0),
+            "perps2": np.concatenate(perps2_list, axis=0),
+            "weights": np.concatenate(weights_list, axis=0),
+            "faces": np.concatenate(faces_list, axis=0),
+            "barycentric": np.concatenate(bary_list, axis=0),
+        }
+
+    def _collect_surface_samples_2d(
+        self,
+        triangle: NDArray,
+        face_index: int,
+        normal: np.ndarray,
+        perp1: np.ndarray,
+        perp2: np.ndarray,
+        spacing: float,
+        collapsed_axis: int,
+        plane_value: float,
+        sim_min: np.ndarray,
+        sim_max: np.ndarray,
+        valid_axes: np.ndarray,
+        tol: float,
+        dtype: np.dtype,
+    ) -> tuple[Optional[dict[str, np.ndarray]], bool]:
+        """Collect samples when the simulation bounds collapse onto a 2D plane."""
+
+        segments = self._triangle_plane_segments(
+            triangle=triangle, axis=collapsed_axis, plane_value=plane_value, tol=tol
+        )
+
+        points: list[np.ndarray] = []
+        normals: list[np.ndarray] = []
+        perps1_list: list[np.ndarray] = []
+        perps2_list: list[np.ndarray] = []
+        weights: list[np.ndarray] = []
+        faces: list[np.ndarray] = []
+        barycentric: list[np.ndarray] = []
+        outside_bounds = False
+
+        for start, end in segments:
+            vec = end - start
+            length = float(np.linalg.norm(vec))
+            if length <= tol:
+                continue
+
+            subdivisions = max(1, int(np.ceil(length / spacing)))
+            t_vals = (np.arange(subdivisions, dtype=dtype) + 0.5) / subdivisions
+            sample_points = start[None, :] + t_vals[:, None] * vec[None, :]
+            bary = self._barycentric_coordinates(triangle, sample_points, tol)
+
+            inside_mask = np.ones(sample_points.shape[0], dtype=bool)
+            if np.any(valid_axes):
+                min_bound = (sim_min - tol)[valid_axes]
+                max_bound = (sim_max + tol)[valid_axes]
+                coords = sample_points[:, valid_axes]
+                inside_mask = np.all(coords >= min_bound, axis=1) & np.all(
+                    coords <= max_bound, axis=1
+                )
+
+            outside_bounds = outside_bounds or (not np.all(inside_mask))
+            if not np.any(inside_mask):
+                continue
+
+            sample_points = sample_points[inside_mask]
+            bary_inside = bary[inside_mask]
+            n_inside = sample_points.shape[0]
+
+            normal_tile = np.repeat(normal[None, :], n_inside, axis=0)
+            perp1_tile = np.repeat(perp1[None, :], n_inside, axis=0)
+            perp2_tile = np.repeat(perp2[None, :], n_inside, axis=0)
+            weights_tile = np.full(n_inside, length / subdivisions, dtype=dtype)
+            faces_tile = np.full(n_inside, face_index, dtype=int)
+
+            points.append(sample_points)
+            normals.append(normal_tile)
+            perps1_list.append(perp1_tile)
+            perps2_list.append(perp2_tile)
+            weights.append(weights_tile)
+            faces.append(faces_tile)
+            barycentric.append(bary_inside)
+
+        if not points:
+            return None, outside_bounds
+
+        samples = {
+            "points": np.concatenate(points, axis=0),
+            "normals": np.concatenate(normals, axis=0),
+            "perps1": np.concatenate(perps1_list, axis=0),
+            "perps2": np.concatenate(perps2_list, axis=0),
+            "weights": np.concatenate(weights, axis=0),
+            "faces": np.concatenate(faces, axis=0),
+            "barycentric": np.concatenate(barycentric, axis=0),
+        }
+        return samples, outside_bounds
+
+    def _collect_surface_samples_3d(
+        self,
+        triangle: NDArray,
+        face_index: int,
+        normal: np.ndarray,
+        perp1: np.ndarray,
+        perp2: np.ndarray,
+        area: float,
+        spacing: float,
+        sim_min: np.ndarray,
+        sim_max: np.ndarray,
+        valid_axes: np.ndarray,
+        tol: float,
+        dtype: np.dtype,
+    ) -> tuple[Optional[dict[str, np.ndarray]], bool]:
+        """Collect samples when the simulation bounds represent a full 3D region."""
+
+        edge_lengths = (
+            np.linalg.norm(triangle[1] - triangle[0]),
+            np.linalg.norm(triangle[2] - triangle[1]),
+            np.linalg.norm(triangle[0] - triangle[2]),
+        )
+        subdivisions = self._subdivision_count(area, spacing, edge_lengths)
+        barycentric = self._get_barycentric_samples(subdivisions, dtype)
+        num_samples = barycentric.shape[0]
+        base_weight = area / num_samples
+
+        sample_points = barycentric @ triangle
+
+        inside_mask = np.all(
+            sample_points[:, valid_axes] >= (sim_min - tol)[valid_axes], axis=1
+        ) & np.all(sample_points[:, valid_axes] <= (sim_max + tol)[valid_axes], axis=1)
+        outside_bounds = not np.all(inside_mask)
+        if not np.any(inside_mask):
+            return None, outside_bounds
+
+        sample_points = sample_points[inside_mask]
+        bary_inside = barycentric[inside_mask]
+        n_samples_inside = sample_points.shape[0]
+
+        normal_tile = np.repeat(normal[None, :], n_samples_inside, axis=0)
+        perp1_tile = np.repeat(perp1[None, :], n_samples_inside, axis=0)
+        perp2_tile = np.repeat(perp2[None, :], n_samples_inside, axis=0)
+        weights_tile = np.full(n_samples_inside, base_weight, dtype=dtype)
+        faces_tile = np.full(n_samples_inside, face_index, dtype=int)
+
+        samples = {
+            "points": sample_points,
+            "normals": normal_tile,
+            "perps1": perp1_tile,
+            "perps2": perp2_tile,
+            "weights": weights_tile,
+            "faces": faces_tile,
+            "barycentric": bary_inside,
+        }
+        return samples, outside_bounds
+
+    @staticmethod
+    def _triangle_area_and_normal(triangle: NDArray) -> tuple[float, np.ndarray]:
+        """Return area and outward normal of the provided triangle."""
+
+        edge01 = triangle[1] - triangle[0]
+        edge02 = triangle[2] - triangle[0]
+        cross = np.cross(edge01, edge02)
+        norm = np.linalg.norm(cross)
+        if norm <= 0.0:
+            return 0.0, np.zeros(3, dtype=triangle.dtype)
+        normal = (cross / norm).astype(triangle.dtype, copy=False)
+        area = 0.5 * norm
+        return area, normal
+
+    @staticmethod
+    def _triangle_plane_segments(
+        triangle: NDArray, axis: int, plane_value: float, tol: float
+    ) -> list[tuple[np.ndarray, np.ndarray]]:
+        """Return intersection segments between a triangle and an axis-aligned plane."""
+
+        vertices = np.asarray(triangle)
+        distances = vertices[:, axis] - plane_value
+        edges = ((0, 1), (1, 2), (2, 0))
+
+        segments: list[tuple[np.ndarray, np.ndarray]] = []
+        points: list[np.ndarray] = []
+
+        def add_point(pt: np.ndarray) -> None:
+            for existing in points:
+                if np.linalg.norm(existing - pt) <= tol:
+                    return
+            points.append(pt.copy())
+
+        for i, j in edges:
+            di = distances[i]
+            dj = distances[j]
+            vi = vertices[i]
+            vj = vertices[j]
+
+            if abs(di) <= tol and abs(dj) <= tol:
+                segments.append((vi.copy(), vj.copy()))
+                continue
+
+            if di * dj > 0.0:
+                continue
+
+            if abs(di) <= tol:
+                add_point(vi)
+                continue
+
+            if abs(dj) <= tol:
+                add_point(vj)
+                continue
+
+            denom = di - dj
+            if abs(denom) <= tol:
+                continue
+            t = di / denom
+            if t < 0.0 or t > 1.0:
+                continue
+            point = vi + t * (vj - vi)
+            add_point(point)
+
+        if segments:
+            return segments
+
+        if len(points) >= 2:
+            return [(points[0], points[1])]
+
+        return []
+
+    @staticmethod
+    def _barycentric_coordinates(triangle: NDArray, points: np.ndarray, tol: float) -> np.ndarray:
+        """Compute barycentric coordinates of ``points`` with respect to ``triangle``."""
+
+        pts = np.asarray(points, dtype=triangle.dtype)
+        v0 = triangle[0]
+        v1 = triangle[1]
+        v2 = triangle[2]
+        v0v1 = v1 - v0
+        v0v2 = v2 - v0
+
+        d00 = float(np.dot(v0v1, v0v1))
+        d01 = float(np.dot(v0v1, v0v2))
+        d11 = float(np.dot(v0v2, v0v2))
+        denom = d00 * d11 - d01 * d01
+        if abs(denom) <= tol:
+            return np.tile(
+                np.array([1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0], dtype=triangle.dtype), (pts.shape[0], 1)
+            )
+
+        v0p = pts - v0
+        d20 = v0p @ v0v1
+        d21 = v0p @ v0v2
+        v = (d11 * d20 - d01 * d21) / denom
+        w = (d00 * d21 - d01 * d20) / denom
+        u = 1.0 - v - w
+        bary = np.stack((u, v, w), axis=1)
+        return bary.astype(triangle.dtype, copy=False)
+
+    @classmethod
+    def _subdivision_count(
+        cls,
+        area: float,
+        spacing: float,
+        edge_lengths: Optional[tuple[float, float, float]] = None,
+    ) -> int:
+        """Determine the number of subdivisions needed for the given area and spacing."""
+
+        spacing = max(float(spacing), np.finfo(float).eps)
+
+        target = np.sqrt(max(area, 0.0))
+        area_based = np.ceil(np.sqrt(2.0) * target / spacing)
+
+        edge_based = 0.0
+        if edge_lengths:
+            max_edge = max(edge_lengths)
+            if max_edge > 0.0:
+                edge_based = np.ceil(max_edge / spacing)
+
+        subdivisions = max(1, int(max(area_based, edge_based)))
+        return subdivisions
+
+    def _get_barycentric_samples(self, subdivisions: int, dtype: np.dtype) -> np.ndarray:
+        """Return barycentric sample coordinates for a subdivision level."""
+
+        cache = self._barycentric_samples
+        if subdivisions not in cache:
+            cache[subdivisions] = self._build_barycentric_samples(subdivisions)
+        return cache[subdivisions].astype(dtype, copy=False)
+
+    @staticmethod
+    def _build_barycentric_samples(subdivisions: int) -> np.ndarray:
+        """Construct barycentric sampling points for a given subdivision level."""
+
+        if subdivisions <= 1:
+            return np.array([[1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0]])
+
+        bary = []
+        for i in range(subdivisions):
+            for j in range(subdivisions - i):
+                l1 = (i + 1.0 / 3.0) / subdivisions
+                l2 = (j + 1.0 / 3.0) / subdivisions
+                l0 = 1.0 - l1 - l2
+                bary.append((l0, l1, l2))
+        return np.asarray(bary, dtype=float)
+
+    @staticmethod
+    def subdivide_faces(vertices: NDArray, faces: NDArray) -> tuple[np.ndarray, np.ndarray]:
+        """Uniformly subdivide each triangular face by inserting edge midpoints."""
+
+        midpoint_cache: dict[tuple[int, int], int] = {}
+        verts_list = [np.asarray(v, dtype=float) for v in vertices]
+
+        def midpoint(i: int, j: int) -> int:
+            key = (i, j) if i < j else (j, i)
+            if key in midpoint_cache:
+                return midpoint_cache[key]
+            vm = 0.5 * (verts_list[i] + verts_list[j])
+            verts_list.append(vm)
+            idx = len(verts_list) - 1
+            midpoint_cache[key] = idx
+            return idx
+
+        new_faces: list[tuple[int, int, int]] = []
+        for tri in faces:
+            a = midpoint(tri[0], tri[1])
+            b = midpoint(tri[1], tri[2])
+            c = midpoint(tri[2], tri[0])
+            new_faces.extend(((tri[0], a, c), (tri[1], b, a), (tri[2], c, b), (a, b, c)))
+
+        verts_arr = np.asarray(verts_list, dtype=float)
+        return verts_arr, np.asarray(new_faces, dtype=int)
+
+    @staticmethod
+    def _triangle_tangent_basis(
+        triangle: NDArray, normal: NDArray
+    ) -> Optional[tuple[np.ndarray, np.ndarray]]:
+        """Compute orthonormal tangential vectors for a triangle."""
+
+        tol = np.finfo(triangle.dtype).eps
+        edges = [triangle[1] - triangle[0], triangle[2] - triangle[0], triangle[2] - triangle[1]]
+
+        edge = None
+        for candidate in edges:
+            length = np.linalg.norm(candidate)
+            if length > tol:
+                edge = (candidate / length).astype(triangle.dtype, copy=False)
+                break
+
+        if edge is None:
+            return None
+
+        perp1 = edge
+        perp2 = np.cross(normal, perp1)
+        perp2_norm = np.linalg.norm(perp2)
+        if perp2_norm <= tol:
+            return None
+        perp2 = (perp2 / perp2_norm).astype(triangle.dtype, copy=False)
+        return perp1, perp2

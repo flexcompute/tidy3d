@@ -82,12 +82,9 @@ class DataArray(xr.DataArray):
         if isbox(data) and not is_tidy_box(data):
             data = TidyArrayBox.from_arraybox(data)
         # do the same for xr.Variable or xr.DataArray type
-        elif (
-            isinstance(data, (xr.Variable, xr.DataArray))
-            and isbox(data.data)
-            and not is_tidy_box(data.data)
-        ):
-            data.data = TidyArrayBox.from_arraybox(data.data)
+        elif isinstance(data, (xr.Variable, xr.DataArray)):
+            if isbox(data.data) and not is_tidy_box(data.data):
+                data.data = TidyArrayBox.from_arraybox(data.data)
         super().__init__(data, *args, **kwargs)
 
     @classmethod

@@ -867,7 +867,7 @@ def test_polyslab_merge():
         return td.PolySlab.from_gds(gds_cell=cell, gds_layer=0, axis=2, slab_bounds=(-1, 1))
 
     polyslabs_gap = make_polyslabs(gap_size=0.3)
-    assert len(polyslabs_gap) == 2, "untouching polylsabs were merged incorrectly."
+    assert len(polyslabs_gap) == 2, "untouching polyslabs were merged incorrectly."
 
     polyslabs_touching = make_polyslabs(gap_size=0)
     assert len(polyslabs_touching) == 1, "polyslabs didn't merge correctly."
@@ -1095,6 +1095,29 @@ def test_custom_surface_geometry(tmp_path):
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     vertices_small = vertices * 1e-6
     td.TriangleMesh.from_vertices_faces(vertices_small, faces)
+
+
+@pytest.mark.parametrize("binary", [True, False])
+def test_triangle_mesh_to_stl_roundtrip(tmp_path, binary):
+    """Exporting with 'to_stl' should be readable via 'from_stl'."""
+
+    vertices = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
+    mesh = td.TriangleMesh.from_vertices_faces(vertices, faces)
+
+    export_path = tmp_path / ("mesh_binary.stl" if binary else "mesh_ascii.stl")
+    mesh.to_stl(str(export_path), binary=binary)
+
+    roundtrip = td.TriangleMesh.from_stl(str(export_path))
+
+    assert np.allclose(roundtrip.triangles, mesh.triangles)
 
 
 def test_geo_group_sim():
