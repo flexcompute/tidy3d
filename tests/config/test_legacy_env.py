@@ -43,9 +43,9 @@ def test_env_pending_overrides_apply_on_activation(mock_config_dir, config_manag
         assert current_manager.profile == "dev"
         dev_web = current_manager.get_section("web")
         assert dev_web.enable_caching is False
-        assert dev_web.ssl_version == ssl.TLSVersion.TLSv1_2
+        assert dev_web.ssl_version == "TLSv1_2"
         assert Env.current.enable_caching is False
-        assert Env.current.ssl_version == ssl.TLSVersion.TLSv1_2
+        assert Env.current.ssl_version == "TLSv1_2"
     finally:
         reload_config(profile="default")
 

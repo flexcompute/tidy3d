@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Optional, TypeAlias
@@ -12,6 +13,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
 
+from tidy3d import log
 from tidy3d.config import config
 
 from . import core_config
@@ -200,7 +202,16 @@ def http_interceptor(func: Callable[..., Any]) -> Callable[..., JSONType]:
 
 class TLSAdapter(HTTPAdapter):
     def init_poolmanager(self, *args: Any, **kwargs: Any) -> None:
-        context = create_urllib3_context(ssl_version=config.web.ssl_version)
+        try:
+            ssl_version = (
+                ssl.TLSVersion[config.web.ssl_version]
+                if config.web.ssl_version is not None
+                else None
+            )
+        except KeyError:
+            log.warning(f"Invalid SSL/TLS version '{config.web.ssl_version}', using default")
+            ssl_version = None
+        context = create_urllib3_context(ssl_version=ssl_version)
         kwargs["ssl_context"] = context
         return super().init_poolmanager(*args, **kwargs)
 
