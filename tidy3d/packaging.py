@@ -183,8 +183,13 @@ def get_numpy_major_version(module=np):
     return major_version
 
 
-def _check_tidy3d_extras_available():
+def _check_tidy3d_extras_available(quiet: bool = False):
     """Helper function to check if 'tidy3d-extras' is available and version matched.
+
+    Parameters
+    ----------
+    quiet : bool
+        If True, suppress error logging when raising exceptions.
 
     Raises
     ------
@@ -199,7 +204,8 @@ def _check_tidy3d_extras_available():
         raise Tidy3dImportError(
             "The package 'tidy3d-extras' is absent. "
             "Please install the 'tidy3d-extras' package using, for "
-            r"example, 'pip install tidy3d\[extras]'."
+            r"example, 'pip install tidy3d\[extras]'.",
+            log_error=not quiet,
         )
 
     try:
@@ -207,14 +213,16 @@ def _check_tidy3d_extras_available():
 
     except ImportError as exc:
         raise Tidy3dImportError(
-            "The package 'tidy3d-extras' did not initialize correctly."
+            "The package 'tidy3d-extras' did not initialize correctly.",
+            log_error=not quiet,
         ) from exc
 
     if not hasattr(tidy3d_extras_mod, "__version__"):
         raise Tidy3dImportError(
             "The package 'tidy3d-extras' did not initialize correctly. "
             "Please install the 'tidy3d-extras' package using, for "
-            r"example, 'pip install tidy3d\[extras]'."
+            r"example, 'pip install tidy3d\[extras]'.",
+            log_error=not quiet,
         )
 
     version = tidy3d_extras_mod.__version__
@@ -222,26 +230,30 @@ def _check_tidy3d_extras_available():
     if version is None:
         raise Tidy3dImportError(
             "The package 'tidy3d-extras' did not initialize correctly, "
-            "likely due to an invalid API key."
+            "likely due to an invalid API key.",
+            log_error=not quiet,
         )
 
     if version != __version__:
         raise Tidy3dImportError(
             f"The version of 'tidy3d-extras' is {version}, but the version of 'tidy3d' is {__version__}. "
             "They must match. You can install the correct "
-            r"version using 'pip install tidy3d\[extras]'."
+            r"version using 'pip install tidy3d\[extras]'.",
+            log_error=not quiet,
         )
 
     tidy3d_extras["mod"] = tidy3d_extras_mod
 
 
-def check_tidy3d_extras_licensed_feature(feature_name: str):
+def check_tidy3d_extras_licensed_feature(feature_name: str, quiet: bool = False):
     """Helper function to check if a specific feature is licensed in 'tidy3d-extras'.
 
     Parameters
     ----------
     feature_name : str
         The name of the feature to check for.
+    quiet : bool
+        If True, suppress error logging when raising exceptions.
 
     Raises
     ------
@@ -250,17 +262,19 @@ def check_tidy3d_extras_licensed_feature(feature_name: str):
     """
 
     try:
-        _check_tidy3d_extras_available()
+        _check_tidy3d_extras_available(quiet=quiet)
     except Tidy3dImportError as exc:
         raise Tidy3dImportError(
-            f"The package 'tidy3d-extras' is required for this feature '{feature_name}'."
+            f"The package 'tidy3d-extras' is required for this feature '{feature_name}'.",
+            log_error=not quiet,
         ) from exc
 
     features = tidy3d_extras["mod"].extension._features()
     if feature_name not in features:
         raise Tidy3dImportError(
             f"The feature '{feature_name}' is not available with your license. "
-            "Please contact Tidy3D support, or upgrade your license."
+            "Please contact Tidy3D support, or upgrade your license.",
+            log_error=not quiet,
         )
 
 
@@ -277,7 +291,7 @@ def supports_local_subpixel(fn):
             return fn(*args, **kwargs)
 
         try:
-            check_tidy3d_extras_licensed_feature("local_subpixel")
+            check_tidy3d_extras_licensed_feature("local_subpixel", quiet=True)
         except Tidy3dImportError as exc:
             tidy3d_extras["use_local_subpixel"] = False
             if preference is True:
