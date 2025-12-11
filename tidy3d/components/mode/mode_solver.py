@@ -352,18 +352,6 @@ class ModeSolver(Tidy3dBaseModel):
         """Validate that the microwave mode spec is correctly setup."""
         mode_spec._check_path_integrals_within_box(plane)
 
-    def workflow_steps(self) -> list[tuple[str, ModeSolver]]:
-        """Return the workflow steps for this mode solver.
-
-        For ModeSolver, there is only one step.
-
-        Returns
-        -------
-        list[tuple[str, ModeSolver]]
-            List of (step_name, simulation) tuples representing the workflow steps.
-        """
-        return [("solve", self)]
-
     @cached_property
     def normal_axis(self) -> Axis:
         """Axis normal to the mode plane."""

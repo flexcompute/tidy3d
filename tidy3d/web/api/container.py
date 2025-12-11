@@ -559,18 +559,16 @@ class Job(WebContainer):
     def _validate_single_step_only(cls, simulation: WorkflowType) -> WorkflowType:
         """Ensure the simulation is a single-step workflow.
 
-        Multi-step workflows (like HeatChargeSimulation) should use MultiStepJob instead.
+        Multi-step workflows (like HeatChargeSimulation) should use WebWorkflow instead.
         """
-        if hasattr(simulation, "workflow_steps"):
-            steps = simulation.workflow_steps()
-            if len(steps) > 1:
-                step_names = [name for name, _ in steps]
-                raise ValueError(
-                    f"'Job' does not support multi-step workflows. "
-                    f"The simulation has {len(steps)} steps: {step_names}. "
-                    "Use 'MultiStepJob' from 'tidy3d.web' for multi-step workflows, "
-                    "or use 'web.run()' which handles multi-step workflows automatically."
-                )
+        from tidy3d.components.workflow import is_multi_step_simulation
+
+        if is_multi_step_simulation(simulation):
+            raise ValueError(
+                "'Job' does not support multi-step workflows. "
+                "Use 'WebWorkflow' from 'tidy3d.web' for multi-step workflows, "
+                "or use 'web.run()' which handles multi-step workflows automatically."
+            )
         return simulation
 
 

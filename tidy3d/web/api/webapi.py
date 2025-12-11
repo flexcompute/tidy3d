@@ -417,29 +417,27 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
-    # Check if this is a multi-step workflow
-    if hasattr(simulation, "workflow_steps"):
-        steps = simulation.workflow_steps()
-        if len(steps) > 1:
-            # Delegate to MultiStepJob for multi-step workflows
-            from tidy3d.web.api.multi_step_job import MultiStepJob
+    # Check if this is a multi-step workflow using the registry
+    from tidy3d.components.workflow import is_multi_step_simulation
 
-            job = MultiStepJob(
-                simulation=simulation,
-                task_name=task_name,
-                folder_name=folder_name,
-                callback_url=callback_url,
-                solver_version=solver_version,
-                verbose=verbose,
-                pay_type=pay_type if isinstance(pay_type, PayType) else PayType(pay_type),
-                reduce_simulation=reduce_simulation
-                if isinstance(reduce_simulation, bool)
-                else False,
-                simulation_type=simulation_type,
-                worker_group=worker_group,
-                lazy=lazy,
-            )
-            return job.run(path=path, priority=priority)
+    if is_multi_step_simulation(simulation):
+        # Delegate to WebWorkflow for multi-step workflows
+        from tidy3d.web.api.workflow import WebWorkflow
+
+        workflow_executor = WebWorkflow(
+            simulation=simulation,
+            task_name=task_name,
+            folder_name=folder_name,
+            callback_url=callback_url,
+            solver_version=solver_version,
+            verbose=verbose,
+            pay_type=pay_type if isinstance(pay_type, PayType) else PayType(pay_type),
+            reduce_simulation=reduce_simulation if isinstance(reduce_simulation, bool) else False,
+            simulation_type=simulation_type,
+            worker_group=worker_group,
+            lazy=lazy,
+        )
+        return workflow_executor.run(path=path, priority=priority)
 
     restored_path, _ = restore_simulation_if_cached(
         simulation=simulation,

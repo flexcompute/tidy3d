@@ -463,18 +463,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 )
         return val
 
-    def workflow_steps(self) -> list[tuple[str, AbstractYeeGridSimulation]]:
-        """Return the workflow steps for this simulation.
-
-        For Yee grid simulations (FDTD, EME, ModeSimulation), there is only one step.
-
-        Returns
-        -------
-        list[tuple[str, AbstractYeeGridSimulation]]
-            List of (step_name, simulation) tuples representing the workflow steps.
-        """
-        return [("solve", self)]
-
     @cached_property
     def _subpixel(self) -> SubpixelSpec:
         """Subpixel averaging method evaluated based on self.subpixel."""

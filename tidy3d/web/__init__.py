@@ -15,7 +15,6 @@ core_config.set_config(log, get_logging_console(), __version__)
 # autograd compatible wrappers for run and run_async
 from .api.autograd.autograd import run_async
 from .api.container import Batch, BatchData, Job
-from .api.multi_step_job import MultiStepJob
 from .api.run import run
 from .api.webapi import (
     abort,
@@ -37,6 +36,7 @@ from .api.webapi import (
     # run, # NOTE: use autograd one now (see below)
     upload,
 )
+from .api.workflow import MultiStepJob, WebWorkflow
 from .cli import tidy3d_cli
 from .cli.app import configure_fn as configure
 
@@ -45,6 +45,7 @@ __all__ = [
     "BatchData",
     "Job",
     "MultiStepJob",
+    "WebWorkflow",
     "abort",
     "account",
     "configure",

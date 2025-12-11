@@ -11,9 +11,10 @@ from pydantic.v1 import PrivateAttr
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+from tidy3d.components.workflow import Workflow
 from tidy3d.log import log
 from tidy3d.web.api import webapi as web
-from tidy3d.web.api.container import DEFAULT_DATA_PATH, Job
+from tidy3d.web.api.container import DEFAULT_DATA_PATH
 from tidy3d.web.core.constants import TaskId
 from tidy3d.web.core.types import PayType
 
@@ -133,7 +134,6 @@ class MultiStepJob(Tidy3dBaseModel):
     )
 
     _steps: list[StepInfo] = PrivateAttr(default_factory=list)
-    _step_jobs: dict[str, Job] = PrivateAttr(default_factory=dict)
     _current_step_index: int = PrivateAttr(default=0)
 
     def __init__(self, **data: Any) -> None:
@@ -579,3 +579,506 @@ class MultiStepJob(Tidy3dBaseModel):
         job = cls(**job_kwargs)
         job.load_state(state_path)
         return job
+
+
+class WebWorkflowState(pd.BaseModel):
+    """Serializable state of a WebWorkflow for saving/loading."""
+
+    task_name: Optional[str] = None
+    folder_name: str = "default"
+    solver_version: Optional[str] = None
+    simulation_type: str = "tidy3d"
+    current_step_index: int = 0
+    steps: list[StepInfo] = pd.Field(default_factory=list)
+
+
+class WebWorkflow(Tidy3dBaseModel):
+    """
+    Execute a workflow on the server.
+
+    This is the v2 interface for running multi-step workflows. It takes a
+    `Workflow` object that defines the execution graph and handles the
+    execution of each step.
+
+    For backward compatibility, you can also pass a simulation directly
+    and the appropriate workflow will be constructed automatically.
+
+    Examples
+    --------
+    >>> from tidy3d.web import WebWorkflow
+    >>> from tidy3d.components.workflow import HeatChargeWorkflow
+    >>>
+    >>> # Explicit workflow construction
+    >>> workflow = HeatChargeWorkflow.from_simulation(heat_charge_sim)
+    >>> wf = WebWorkflow(workflow=workflow, task_name="my_heat_sim")
+    >>> data = wf.run(path="results.hdf5")
+    >>>
+    >>> # Or pass simulation directly (workflow auto-constructed)
+    >>> wf = WebWorkflow(simulation=heat_charge_sim, task_name="my_heat_sim")
+    >>> data = wf.run(path="results.hdf5")
+    """
+
+    workflow: Workflow = pd.Field(
+        None,
+        title="Workflow",
+        description="The workflow to execute. If not provided, constructed from simulation.",
+    )
+
+    simulation: WorkflowType = pd.Field(
+        None,
+        title="Simulation",
+        description="Simulation to run. Used to construct workflow if workflow not provided.",
+        discriminator="type",
+    )
+
+    task_name: str = pd.Field(
+        None,
+        title="Task Name",
+        description="Base name for the workflow tasks. Step names will be appended.",
+    )
+
+    folder_name: str = pd.Field(
+        "default",
+        title="Folder Name",
+        description="Name of folder to store tasks on web UI.",
+    )
+
+    callback_url: Optional[str] = pd.Field(
+        None,
+        title="Callback URL",
+        description="Http PUT url to receive simulation finish event.",
+    )
+
+    solver_version: Optional[str] = pd.Field(
+        None,
+        title="Solver Version",
+        description="Custom solver version to use.",
+    )
+
+    verbose: bool = pd.Field(
+        True,
+        title="Verbose",
+        description="Whether to print info messages and progressbars.",
+    )
+
+    pay_type: PayType = pd.Field(
+        PayType.AUTO,
+        title="Payment Type",
+        description="Specify the payment method.",
+    )
+
+    reduce_simulation: bool = pd.Field(
+        False,
+        title="Reduce Simulation",
+        description="Whether to reduce structures to the simulation domain.",
+    )
+
+    simulation_type: str = pd.Field(
+        "tidy3d",
+        title="Simulation Type",
+        description="Type of simulation, used internally only.",
+    )
+
+    worker_group: Optional[str] = pd.Field(
+        None,
+        title="Worker Group",
+        description="Worker group for the simulation.",
+    )
+
+    lazy: bool = pd.Field(
+        False,
+        title="Lazy",
+        description="Whether to load data lazily.",
+    )
+
+    _steps: list[StepInfo] = PrivateAttr(default_factory=list)
+    _current_step_index: int = PrivateAttr(default=0)
+    _resolved_workflow: Workflow = PrivateAttr(default=None)
+
+    @pd.root_validator(pre=True)
+    def _resolve_workflow_or_simulation(cls, values: dict) -> dict:
+        """Ensure we have either a workflow or a simulation to construct one from."""
+        workflow = values.get("workflow")
+        simulation = values.get("simulation")
+
+        if workflow is None and simulation is None:
+            raise ValueError("Either 'workflow' or 'simulation' must be provided")
+
+        return values
+
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
+        self._initialize_workflow()
+
+    def _initialize_workflow(self) -> None:
+        """Initialize the workflow and steps."""
+        from tidy3d.components.workflow import get_workflow_for_simulation
+
+        if self.workflow is not None:
+            self._resolved_workflow = self.workflow
+        elif self.simulation is not None:
+            # Try to get a workflow for this simulation type
+            workflow = get_workflow_for_simulation(self.simulation)
+            if workflow is not None:
+                self._resolved_workflow = workflow
+            else:
+                # Single-step simulation - create trivial workflow
+                from tidy3d.components.workflow import (
+                    SimulationDataOutput,
+                    Step,
+                    Workflow,
+                )
+
+                self._resolved_workflow = Workflow(
+                    steps=(
+                        Step(
+                            name="solve",
+                            simulation=self.simulation,
+                            outputs=(SimulationDataOutput(data_type_name="SimulationData"),),
+                        ),
+                    )
+                )
+
+        # Initialize step info from workflow
+        self._steps = [
+            StepInfo(name=step.name, task_id=None, status="pending")
+            for step in self._resolved_workflow.steps
+        ]
+
+    @property
+    def steps(self) -> list[StepInfo]:
+        """Return the list of workflow steps."""
+        return self._steps
+
+    @property
+    def num_steps(self) -> int:
+        """Return the number of steps in this workflow."""
+        return len(self._steps)
+
+    @property
+    def is_multi_step(self) -> bool:
+        """Return True if this workflow has more than one step."""
+        return self.num_steps > 1
+
+    @property
+    def current_step(self) -> Optional[StepInfo]:
+        """Return the current step being executed."""
+        if self._current_step_index < self.num_steps:
+            return self._steps[self._current_step_index]
+        return None
+
+    def _get_step_task_name(self, step_name: str) -> str:
+        """Generate a task name for a specific step."""
+        base_name = self.task_name or "workflow_task"
+        if self.num_steps == 1:
+            return base_name
+        return f"{base_name}_{step_name}"
+
+    def _get_step_simulation(self, step_index: int) -> WorkflowType:
+        """Get the simulation object for a specific step."""
+        return self._resolved_workflow.steps[step_index].simulation
+
+    def _get_parent_task_ids(self, step_index: int) -> Optional[tuple[TaskId, ...]]:
+        """Get parent task IDs for a step based on its inputs."""
+        step = self._resolved_workflow.steps[step_index]
+        if not step.inputs:
+            return None
+
+        # Build parent task IDs from input source steps
+        parent_ids = []
+        for inp in step.inputs:
+            source_idx = self._resolved_workflow.get_step_index(inp.source_step)
+            if source_idx is not None and self._steps[source_idx].task_id:
+                parent_ids.append(self._steps[source_idx].task_id)
+
+        return tuple(parent_ids) if parent_ids else None
+
+    def upload_step(self, step_index: int) -> TaskId:
+        """Upload a specific step to the server.
+
+        Parameters
+        ----------
+        step_index : int
+            Index of the step to upload.
+
+        Returns
+        -------
+        TaskId
+            The server task ID for this step.
+        """
+        if step_index >= self.num_steps:
+            raise ValueError(f"Step index {step_index} out of range (max {self.num_steps - 1})")
+
+        step = self._steps[step_index]
+        step_sim = self._get_step_simulation(step_index)
+        parent_tasks = self._get_parent_task_ids(step_index)
+
+        task_id = web.upload(
+            simulation=step_sim,
+            task_name=self._get_step_task_name(step.name),
+            folder_name=self.folder_name,
+            callback_url=self.callback_url,
+            verbose=self.verbose,
+            simulation_type=self.simulation_type,
+            parent_tasks=list(parent_tasks) if parent_tasks else None,
+            solver_version=self.solver_version,
+        )
+
+        step.task_id = task_id
+        step.status = "uploaded"
+
+        if self.verbose:
+            log.info(f"Step '{step.name}' uploaded with task_id: {task_id}")
+
+        return task_id
+
+    def start_step(self, step_index: int, priority: Optional[int] = None) -> None:
+        """Start a specific step on the server.
+
+        Parameters
+        ----------
+        step_index : int
+            Index of the step to start.
+        priority : int, optional
+            Priority in the queue (1-10).
+        """
+        step = self._steps[step_index]
+        if not step.task_id:
+            raise ValueError(f"Step '{step.name}' has not been uploaded yet")
+
+        web.start(
+            step.task_id,
+            solver_version=self.solver_version,
+            worker_group=self.worker_group,
+            pay_type=self.pay_type,
+            priority=priority,
+        )
+        step.status = "running"
+
+        if self.verbose:
+            log.info(f"Step '{step.name}' started")
+
+    def monitor_step(self, step_index: int) -> None:
+        """Monitor progress of a specific step.
+
+        Parameters
+        ----------
+        step_index : int
+            Index of the step to monitor.
+        """
+        step = self._steps[step_index]
+        if not step.task_id:
+            raise ValueError(f"Step '{step.name}' has not been uploaded yet")
+
+        web.monitor(step.task_id, verbose=self.verbose)
+        step.status = "completed"
+
+    def download_step(self, step_index: int, path: PathLike) -> None:
+        """Download results from a specific step.
+
+        Parameters
+        ----------
+        step_index : int
+            Index of the step to download.
+        path : PathLike
+            Path to save the results.
+        """
+        step = self._steps[step_index]
+        if not step.task_id:
+            raise ValueError(f"Step '{step.name}' has not been uploaded yet")
+
+        web.download(task_id=step.task_id, path=path, verbose=self.verbose)
+
+    def load_step(self, step_index: int, path: PathLike) -> WorkflowDataType:
+        """Download and load results from a specific step.
+
+        Parameters
+        ----------
+        step_index : int
+            Index of the step to load.
+        path : PathLike
+            Path to save/load the results.
+
+        Returns
+        -------
+        WorkflowDataType
+            The loaded data for this step.
+        """
+        step = self._steps[step_index]
+        if not step.task_id:
+            raise ValueError(f"Step '{step.name}' has not been uploaded yet")
+
+        return web.load(task_id=step.task_id, path=path, verbose=self.verbose, lazy=self.lazy)
+
+    def run_step(
+        self,
+        step_index: int,
+        path: PathLike,
+        priority: Optional[int] = None,
+    ) -> WorkflowDataType:
+        """Run a single step completely: upload, start, monitor, and load.
+
+        Parameters
+        ----------
+        step_index : int
+            Index of the step to run.
+        path : PathLike
+            Path to save the results.
+        priority : int, optional
+            Priority in the queue (1-10).
+
+        Returns
+        -------
+        WorkflowDataType
+            The loaded data for this step.
+        """
+        self.upload_step(step_index)
+        self.start_step(step_index, priority=priority)
+        self.monitor_step(step_index)
+        return self.load_step(step_index, path=path)
+
+    def run(
+        self,
+        path: PathLike = DEFAULT_DATA_PATH,
+        priority: Optional[int] = None,
+    ) -> WorkflowDataType:
+        """Run all workflow steps sequentially and return the final result.
+
+        Parameters
+        ----------
+        path : PathLike
+            Path to download final results file (.hdf5), including filename.
+        priority : int, optional
+            Priority in the queue (1-10).
+
+        Returns
+        -------
+        WorkflowDataType
+            Object containing the final simulation results.
+        """
+        path = Path(path)
+        parent_dir = path.parent
+        if parent_dir != Path(".") and not parent_dir.exists():
+            parent_dir.mkdir(parents=True, exist_ok=True)
+
+        if self.verbose and self.num_steps > 1:
+            log.info(
+                f"Running workflow with {self.num_steps} steps: {[s.name for s in self._steps]}"
+            )
+
+        # Path for saving intermediate state
+        state_path = self._get_state_path(path)
+
+        data = None
+        for i, step in enumerate(self._steps):
+            if self.verbose and self.num_steps > 1:
+                log.info(f"Running step {i + 1}/{self.num_steps}: '{step.name}'")
+
+            # Use intermediate path for non-final steps
+            if i < self.num_steps - 1:
+                step_path = parent_dir / f"{path.stem}_{step.name}{path.suffix}"
+            else:
+                step_path = path
+
+            data = self.run_step(i, path=step_path, priority=priority)
+            self._current_step_index = i + 1
+
+            # Save state after each step
+            self.save_state(state_path)
+
+        return data
+
+    def get_step_status(self, step_index: int) -> str:
+        """Get the status of a specific step."""
+        if step_index >= self.num_steps:
+            raise ValueError(f"Step index {step_index} out of range")
+
+        step = self._steps[step_index]
+        if step.task_id:
+            info = web.get_info(task_id=step.task_id)
+            return info.status
+        return step.status
+
+    @property
+    def status(self) -> dict[str, str]:
+        """Return status of all steps."""
+        return {step.name: self.get_step_status(i) for i, step in enumerate(self._steps)}
+
+    def estimate_cost(self, verbose: bool = True) -> dict[str, float]:
+        """Estimate cost for all steps."""
+        costs = {}
+        for i, step in enumerate(self._steps):
+            if step.task_id:
+                costs[step.name] = web.estimate_cost(
+                    step.task_id, verbose=verbose, solver_version=self.solver_version
+                )
+            else:
+                self.upload_step(i)
+                costs[step.name] = web.estimate_cost(
+                    step.task_id, verbose=verbose, solver_version=self.solver_version
+                )
+        return costs
+
+    def real_cost(self, verbose: bool = True) -> dict[str, float]:
+        """Get actual billed cost for all completed steps."""
+        costs = {}
+        for step in self._steps:
+            if step.task_id and step.status == "completed":
+                costs[step.name] = web.real_cost(step.task_id, verbose=verbose)
+        return costs
+
+    def delete(self) -> None:
+        """Delete all server-side data associated with this workflow."""
+        for step in self._steps:
+            if step.task_id:
+                try:
+                    web.delete(step.task_id)
+                    if self.verbose:
+                        log.info(f"Deleted step '{step.name}' (task_id: {step.task_id})")
+                except Exception as e:
+                    log.warning(f"Failed to delete step '{step.name}': {e}")
+
+    def _get_state_path(self, data_path: PathLike) -> Path:
+        """Get the path for the state file based on data path."""
+        data_path = Path(data_path)
+        return data_path.parent / f"{data_path.stem}_workflow_state.json"
+
+    def save_state(self, path: PathLike) -> Path:
+        """Save the current state of the workflow to a JSON file."""
+        path = Path(path)
+        state = WebWorkflowState(
+            task_name=self.task_name,
+            folder_name=self.folder_name,
+            solver_version=self.solver_version,
+            simulation_type=self.simulation_type,
+            current_step_index=self._current_step_index,
+            steps=self._steps,
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(state.json(indent=2))
+        if self.verbose:
+            log.info(f"Saved WebWorkflow state to: {path}")
+        return path
+
+    def load_state(self, path: PathLike) -> None:
+        """Load workflow state from a JSON file."""
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"State file not found: {path}")
+
+        state = WebWorkflowState.parse_file(path)
+
+        self._current_step_index = state.current_step_index
+        for i, step_data in enumerate(state.steps):
+            if i < len(self._steps):
+                self._steps[i].task_id = step_data.task_id
+                self._steps[i].status = step_data.status
+
+        if self.verbose:
+            log.info(f"Loaded WebWorkflow state from: {path}")
+            for step in self._steps:
+                log.info(f"  Step '{step.name}': task_id={step.task_id}, status={step.status}")
+
+
+# Resolve forward references for Workflow type
+WebWorkflow.update_forward_refs()

@@ -343,16 +343,6 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         )
         return data.smatrix()
 
-    def workflow_steps(self) -> list[tuple[str, AbstractComponentModeler]]:
-        """Return the workflow steps for this component modeler.
-
-        Returns
-        -------
-        list[tuple[str, AbstractComponentModeler]]
-            A list containing a single tuple: the step name "solve" and this modeler instance.
-        """
-        return [("solve", self)]
-
     def validate_pre_upload(self):
         """Validate the modeler before upload."""
         self.base_sim.validate_pre_upload(source_required=False)
