@@ -2,8 +2,6 @@
 # PolySlab and TriangleMesh geometries representing the same rectangular slab.
 from __future__ import annotations
 
-import sys
-
 import autograd.numpy as anp
 import numpy as np
 import pytest
@@ -32,7 +30,6 @@ MESH_SPACING_UM = WL_UM / 40.0
 FINITE_DIFFERENCE_STEP = MESH_SPACING_UM
 LOCAL_GRADIENT = True
 VERBOSE = False
-SHOW_PRINT_STATEMENTS = True
 PLOT_FD_ADJ_COMPARISON = False
 SAVE_OUTPUT_DATA = True
 COMPARE_TO_FINITE_DIFFERENCE = True
@@ -76,9 +73,6 @@ if PLOT_FD_ADJ_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
 else:
     pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
-
-if SHOW_PRINT_STATEMENTS:
-    sys.stdout = sys.stderr
 
 
 def _triangles_from_params(params, box_center):
@@ -151,7 +145,7 @@ def make_objective(
 )
 @pytest.mark.parametrize("shift_box_center", (True, False))
 def test_polyslab_and_trianglemesh_gradients_match(
-    is_3d, infinite_dim_2d, shift_box_center, tmp_path
+    is_3d, infinite_dim_2d, shift_box_center, tmp_path, redirect_stdout_to_stderr
 ):
     """Test that the triangle mesh and polyslab gradients match for rectangular slab geometries. Allow
     comparison as well to finite difference values."""

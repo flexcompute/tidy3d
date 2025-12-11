@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import operator
-import sys
 
 import autograd as ag
 import matplotlib.pylab as plt
@@ -18,10 +17,9 @@ NUM_FINITE_DIFFERENCE = 10
 SAVE_FD_ADJ_DATA = False
 SAVE_FD_LOC = 0
 SAVE_ADJ_LOC = 1
-LOCAL_GRADIENT = False
+LOCAL_GRADIENT = True
 VERBOSE = False
 NUMERICAL_RESULTS_SUBDIR = "numerical_field_test"
-SHOW_PRINT_STATEMENTS = False
 
 RMS_THRESHOLD = 0.25
 
@@ -29,9 +27,6 @@ if PLOT_FD_ADJ_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
 else:
     pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
-
-if SHOW_PRINT_STATEMENTS:
-    sys.stdout = sys.stderr
 
 
 FINITE_DIFF_PERM_SEED = 1.5**2
@@ -219,7 +214,9 @@ for idx in range(len(mesh_wvls_um)):
 
 @pytest.mark.numerical
 @pytest.mark.parametrize("field_data_test_parameters", field_data_test_parameters)
-def test_finite_difference_field_data(field_data_test_parameters, rng, numerical_case_dir):
+def test_finite_difference_field_data(
+    field_data_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
+):
     """Test a variety of autograd permittivity gradients for FieldData by"""
     """comparing them to numerical finite difference."""
 

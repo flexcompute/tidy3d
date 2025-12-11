@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import operator
-import sys
 
 import autograd as ag
 import matplotlib.pylab as plt
@@ -25,7 +24,6 @@ SAVE_FD_LOC = 0
 SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
-SHOW_PRINT_STATEMENTS = True
 USE_POLYSLAB_FOR_BOX = False
 NUMERICAL_RESULTS_DATA_DIR = (
     "./numerical_rf_box_polyslab_test/" if USE_POLYSLAB_FOR_BOX else "./numerical_rf_box_box_test/"
@@ -37,9 +35,6 @@ if PLOT_FD_ADJ_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
 else:
     pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
-
-if SHOW_PRINT_STATEMENTS:
-    sys.stdout = sys.stderr
 
 
 def get_sim_geometry(mesh_wvl_um):
@@ -446,7 +441,9 @@ for idx in range(len(mesh_wvls_um)):
     ),
     indirect=["dir_name"],
 )
-def test_finite_difference_2d_box_pec(rf_2d_test_parameters, rng, tmp_path, create_directory):
+def test_finite_difference_2d_box_pec(
+    rf_2d_test_parameters, rng, tmp_path, create_directory, redirect_stdout_to_stderr
+):
     """Test a variety of autograd permittivity gradients for 2D PEC boxes by"""
     """comparing them to numerical finite difference."""
 
@@ -571,17 +568,16 @@ def test_finite_difference_2d_box_pec(rf_2d_test_parameters, rng, tmp_path, crea
     width_data[SAVE_FD_LOC, :] = all_width_fd
     width_data[SAVE_ADJ_LOC, :] = all_width_adj
 
-    if SHOW_PRINT_STATEMENTS:
-        print(f"\n2D PEC Box Test {test_number} Summary:")
-        print(f"Mesh wavelength (um): {mesh_wvl_um}")
-        print(f"Adjoint wavelength (um): {adj_wvl_um}")
-        print(f"Monitor size (wavelengths): {monitor_size_wvl}")
-        print(f"Mesh refinement factor: {mesh_refinement_factor}")
-        print(f"Eval function: {eval_fn_name}")
-        print(f"Width mean (std): {width_error_mean} ({width_error_std})")
-        print(f"Width norm mean (std): {width_error_norm_mean} ({width_error_norm_std})")
-        print(f"Width overlap deg: {width_overlap_deg}")
-        print("\n")
+    print(f"\n2D PEC Box Test {test_number} Summary:")
+    print(f"Mesh wavelength (um): {mesh_wvl_um}")
+    print(f"Adjoint wavelength (um): {adj_wvl_um}")
+    print(f"Monitor size (wavelengths): {monitor_size_wvl}")
+    print(f"Mesh refinement factor: {mesh_refinement_factor}")
+    print(f"Eval function: {eval_fn_name}")
+    print(f"Width mean (std): {width_error_mean} ({width_error_std})")
+    print(f"Width norm mean (std): {width_error_norm_mean} ({width_error_norm_std})")
+    print(f"Width overlap deg: {width_overlap_deg}")
+    print("\n")
 
     if SAVE_FD_ADJ_DATA:
         np.save(
@@ -626,7 +622,9 @@ def test_finite_difference_2d_box_pec(rf_2d_test_parameters, rng, tmp_path, crea
     ),
     indirect=["dir_name"],
 )
-def test_finite_difference_3d_box_pec(rf_3d_test_parameters, rng, tmp_path, create_directory):
+def test_finite_difference_3d_box_pec(
+    rf_3d_test_parameters, rng, tmp_path, create_directory, redirect_stdout_to_stderr
+):
     """Test a variety of autograd permittivity gradients for 3D PEC boxes by"""
     """comparing them to numerical finite difference."""
 
@@ -773,20 +771,19 @@ def test_finite_difference_3d_box_pec(rf_3d_test_parameters, rng, tmp_path, crea
     z_coord_data[SAVE_FD_LOC, :] = all_z_coord_fd
     z_coord_data[SAVE_ADJ_LOC, :] = all_z_coord_adj
 
-    if SHOW_PRINT_STATEMENTS:
-        print(f"\n3D PEC Box Test {test_number} Summary:")
-        print(f"Mesh wavelength (um): {mesh_wvl_um}")
-        print(f"Adjoint wavelength (um): {adj_wvl_um}")
-        print(f"Monitor size (wavelengths): {monitor_size_wvl}")
-        print(f"Box z thickness (wavelengths): {box_z_thickness_wvl}")
-        print(f"Eval function: {eval_fn_name}")
-        print(f"Width mean (std): {width_error_mean} ({width_error_std})")
-        print(f"Width norm mean (std): {width_error_norm_mean} ({width_error_norm_std})")
-        print(f"Width overlap deg: {width_overlap_deg}")
-        print(f"Z mean (std): {z_coord_error_mean} ({z_coord_error_std})")
-        print(f"Z norm mean (std): {z_coord_error_norm_mean} ({z_coord_error_norm_std})")
-        print(f"Z overlap deg: {z_coord_overlap_deg}")
-        print("\n")
+    print(f"\n3D PEC Box Test {test_number} Summary:")
+    print(f"Mesh wavelength (um): {mesh_wvl_um}")
+    print(f"Adjoint wavelength (um): {adj_wvl_um}")
+    print(f"Monitor size (wavelengths): {monitor_size_wvl}")
+    print(f"Box z thickness (wavelengths): {box_z_thickness_wvl}")
+    print(f"Eval function: {eval_fn_name}")
+    print(f"Width mean (std): {width_error_mean} ({width_error_std})")
+    print(f"Width norm mean (std): {width_error_norm_mean} ({width_error_norm_std})")
+    print(f"Width overlap deg: {width_overlap_deg}")
+    print(f"Z mean (std): {z_coord_error_mean} ({z_coord_error_std})")
+    print(f"Z norm mean (std): {z_coord_error_norm_mean} ({z_coord_error_norm_std})")
+    print(f"Z overlap deg: {z_coord_overlap_deg}")
+    print("\n")
 
     if SAVE_FD_ADJ_DATA:
         np.save(

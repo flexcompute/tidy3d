@@ -2,7 +2,6 @@
 # and PolySlab geometries.
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import autograd.numpy as anp
@@ -24,7 +23,6 @@ MESH_SPACING_UM = WL_UM / 40.0
 FINITE_DIFFERENCE_STEP = MESH_SPACING_UM
 LOCAL_GRADIENT = True
 VERBOSE = False
-SHOW_PRINT_STATEMENTS = True
 PLOT_FD_ADJ_COMPARISON = False
 SAVE_OUTPUT_DATA = True
 COMPARE_TO_FINITE_DIFFERENCE = True
@@ -36,9 +34,6 @@ if PLOT_FD_ADJ_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
 else:
     pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
-
-if SHOW_PRINT_STATEMENTS:
-    sys.stdout = sys.stderr
 
 
 def angled_overlap_deg(v1, v2):
@@ -336,7 +331,7 @@ def squeeze_dimension(array: np.ndarray, is_3d: bool, infinite_dim: int | None) 
 )
 @pytest.mark.parametrize("shift_box_center", (True, False))
 def test_box_and_polyslab_gradients_match(
-    is_3d, infinite_dim_2d, shift_box_center, numerical_case_dir
+    is_3d, infinite_dim_2d, shift_box_center, numerical_case_dir, redirect_stdout_to_stderr
 ):
     """Test that the box and polyslab gradients match for rectangular slab geometries. Allow
     comparison as well to finite difference values."""

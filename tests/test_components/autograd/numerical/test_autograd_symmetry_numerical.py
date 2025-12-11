@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import operator
-import sys
 from pathlib import Path
 
 import autograd as ag
@@ -20,7 +19,6 @@ SAVE_FD_LOC = 0
 SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = False
 VERBOSE = False
-SHOW_PRINT_STATEMENTS = True
 
 RMS_THRESHOLD = 0.25
 
@@ -28,9 +26,6 @@ if PLOT_SYMMETRY_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
 else:
     pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
-
-if SHOW_PRINT_STATEMENTS:
-    sys.stdout = sys.stderr
 
 
 FINITE_DIFF_PERM_SEED = 1.5**2
@@ -229,7 +224,9 @@ for idx in range(len(mesh_wvls_um)):
 
 @pytest.mark.numerical
 @pytest.mark.parametrize("field_symmetry_test_parameters", field_symmetry_test_parameters)
-def test_adjoint_difference_symmetry(field_symmetry_test_parameters, rng, numerical_case_dir):
+def test_adjoint_difference_symmetry(
+    field_symmetry_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
+):
     """Test the gradient is not affected by symmetry when using field sources."""
 
     num_tests = 0
@@ -334,10 +331,9 @@ def test_adjoint_difference_symmetry(field_symmetry_test_parameters, rng, numeri
         mag_compare = np.sqrt(np.mean(grad_data**2))
         rms_error = np.sqrt(np.mean((grad_data_base - grad_data) ** 2))
 
-        if SHOW_PRINT_STATEMENTS:
-            print(f"Testing {eval_fn_name} objective")
-            print(f"Symmetry comparison: {symmetries[0]}, {symmetries[idx]}")
-            print(f"RMS error (normalized): {rms_error / np.sqrt(mag_base * mag_compare)}")
+        print(f"Testing {eval_fn_name} objective")
+        print(f"Symmetry comparison: {symmetries[0]}, {symmetries[idx]}")
+        print(f"RMS error (normalized): {rms_error / np.sqrt(mag_base * mag_compare)}")
 
         assert np.isclose(rms_error / np.sqrt(mag_base * mag_compare), 0.0, atol=0.075), (
             "Expected adjoint gradients to be the same with and without symmetry"

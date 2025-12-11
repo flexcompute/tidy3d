@@ -1,4 +1,4 @@
-# test autograd and compares to numerically computed finite difference gradients
+# test GeometryGroup gradient consistency when there are no overlapping structures
 from __future__ import annotations
 
 import operator
@@ -7,23 +7,21 @@ import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
-from scipy.ndimage import gaussian_filter
 
 import tidy3d as td
 import tidy3d.web as web
 
-PLOT_FD_ADJ_COMPARISON = False
-NUM_FINITE_DIFFERENCE = 10
-SAVE_FD_ADJ_DATA = False
+PLOT_FD_ADJ_COMPARISON = True
+SAVE_FD_ADJ_DATA = True
 SAVE_FD_LOC = 0
 SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
-NUMERICAL_RESULTS_SUBDIR = "numerical_mode_polyslab_test"
+NUMERICAL_RESULTS_SUBDIR = "numerical_geometry_group_test"
 
 NUM_MODE_MONITOR_FREQUENCIES = 4
 
-RMS_THRESHOLD = 0.25
+RMS_THRESHOLD = 1e-5
 
 if PLOT_FD_ADJ_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
@@ -31,6 +29,22 @@ else:
     pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
 
 MESH_FACTOR_DESIGN = 60.0
+
+
+def angled_overlap_deg(v1, v2):
+    norm_v1 = np.linalg.norm(v1)
+    norm_v2 = np.linalg.norm(v2)
+
+    if np.isclose(norm_v1, 0.0) or np.isclose(norm_v2, 0.0):
+        if not (np.isclose(norm_v1, 0.0) and np.isclose(norm_v2, 0.0)):
+            return np.inf
+
+        return 0.0
+
+    dot = np.minimum(1.0, np.sum((v1 / np.linalg.norm(v1)) * (v2 / np.linalg.norm(v2))))
+    angle_deg = np.arccos(dot) * 180.0 / np.pi
+
+    return angle_deg
 
 
 def get_sim_geometry(mesh_wvl_um, offset_y_size_wvl=0):
@@ -42,7 +56,8 @@ def make_base_sim(
     adj_wvl_um,
     geometry_size_wvl,
     box_for_override,
-    run_time=5e-11,
+    background_medium,
+    run_time=1e-11,
 ):
     """Creates a base simulation with input/output waveguides, mode sources, and mode monitors."""
     sim_geometry = get_sim_geometry(mesh_wvl_um)
@@ -74,14 +89,6 @@ def make_base_sim(
 
     fwidth_src = td.C_0 * ((1.0 / wl_min_src_um) - (1.0 / wl_max_src_um))
     freq0 = td.C_0 / adj_wvl_um
-
-    pulse = td.GaussianPulse(freq0=freq0, fwidth=fwidth_src)
-    src = td.PlaneWave(
-        center=(0, 0, -2 * mesh_wvl_um),
-        size=src_size,
-        source_time=pulse,
-        direction="+",
-    )
 
     wg_input_left = -0.75 * sim_size_um[0]
     wg_input_right = sim_center_um[0] - 0.5 * geometry_size_wvl[0] * mesh_wvl_um
@@ -162,11 +169,6 @@ def make_base_sim(
         direction="+",
     )
 
-    monitor_index_block = td.Box(
-        center=(0, 0, 0.25 * sim_size_um[2] + mesh_wvl_um),
-        size=(*tuple(2 * size for size in sim_size_um[0:2]), mesh_wvl_um + 0.5 * sim_size_um[2]),
-    )
-
     sim_base = td.Simulation(
         center=sim_center_um,
         size=sim_size_um,
@@ -181,73 +183,116 @@ def make_base_sim(
         run_time=run_time,
         boundary_spec=boundary_spec,
         subpixel=True,
+        medium=background_medium,
     )
 
     return sim_base
 
 
-def create_objective_function(
+def create_objective_functions(
     create_sim_base,
     eval_fn,
     sim_path_dir,
     mode_layer_height_um,
     polyslab_height_um,
     polyslab_permittivity,
+    embedded_permittivity,
 ):
-    """Create an objective function for the test based on the base simulation, type of evaluation function on
-    the electromagnetic data, and geometric and material parameters."""
+    """Create an objective function to use for the test based on different base simulation creation,
+    objective function, geometric, and optical parameters.."""
 
-    def objective(vertices):
-        sim_base = create_sim_base()
+    num_polyslab_chunks = 3
+    offset_angles = np.linspace(0, 2 * np.pi, num_polyslab_chunks, endpoint=False)
+    vertices_per_chunk = NUM_VERTICES // num_polyslab_chunks
 
-        simulation_dict = {}
-        for idx in range(len(vertices)):
-            vertices_x = vertices[idx][0:NUM_VERTICES]
-            vertices_y = vertices[idx][NUM_VERTICES:]
+    def make_objective(geometry_group: bool):
+        def objective(vertices):
+            sim_base = create_sim_base()
 
-            max_x = np.max(vertices_x)
-            min_x = np.min(vertices_x)
-            max_y = np.max(vertices_y)
-            min_y = np.min(vertices_y)
+            simulation_dict = {}
+            for idx in range(len(vertices)):
+                get_vertex_set = vertices[idx]
 
-            width = max_x - min_x
-            height = max_y - min_y
-            center_x = 0.5 * (min_x + max_x)
-            center_y = 0.5 * (min_y + max_y)
+                vertices_x = np.array(get_vertex_set[0:NUM_VERTICES])
+                vertices_y = np.array(get_vertex_set[NUM_VERTICES:])
 
-            make_polyslab = td.PolySlab(
-                slab_bounds=(
-                    0.5 * mode_layer_height_um - 0.5 * polyslab_height_um,
-                    0.5 * mode_layer_height_um + 0.5 * polyslab_height_um,
-                ),
-                axis=2,
-                vertices=tuple(zip(vertices_x, vertices_y)),
+                polyslab_geometries = []
+
+                # break the single polyslab into multiple chunks that can either be inserted separately or
+                # inside a GeometryGroup depending on the boolean flag geometry_group
+                for chunk_idx in range(num_polyslab_chunks):
+                    chunk_start = chunk_idx * vertices_per_chunk
+                    chunk_end = np.minimum(chunk_start + vertices_per_chunk, NUM_VERTICES)
+
+                    vertices_x_offset = vertices_x[chunk_start:chunk_end] + 0.2 * np.cos(
+                        offset_angles[chunk_idx]
+                    )
+                    vertices_y_offset = vertices_y[chunk_start:chunk_end] + 0.2 * np.sin(
+                        offset_angles[chunk_idx]
+                    )
+
+                    make_polyslab = td.PolySlab(
+                        slab_bounds=(
+                            0.5 * mode_layer_height_um - 0.5 * polyslab_height_um,
+                            0.5 * mode_layer_height_um + 0.5 * polyslab_height_um,
+                        ),
+                        axis=2,
+                        vertices=tuple(zip(vertices_x_offset, vertices_y_offset)),
+                    )
+
+                    polyslab_geometries.append(make_polyslab)
+
+                group_geom = td.GeometryGroup(geometries=polyslab_geometries)
+                group_geom_box = group_geom.bounding_box
+
+                embedding_structure = td.Structure(
+                    geometry=group_geom_box, medium=td.Medium(permittivity=embedded_permittivity)
+                )
+
+                if geometry_group:
+                    polyslab_structures = [
+                        td.Structure(
+                            geometry=group_geom,
+                            medium=td.Medium(permittivity=polyslab_permittivity),
+                        )
+                    ]
+                else:
+                    polyslab_structures = [
+                        td.Structure(
+                            geometry=g, medium=td.Medium(permittivity=polyslab_permittivity)
+                        )
+                        for g in polyslab_geometries
+                    ]
+
+                sim_with_polyslabs = sim_base.updated_copy(
+                    structures=(*sim_base.structures, embedding_structure, *polyslab_structures)
+                )
+
+                simulation_dict[f"numerical_geometry_group_testing_{geometry_group}_{idx}"] = (
+                    sim_with_polyslabs.copy()
+                )
+
+            sim_data = web.run_async(
+                simulation_dict,
+                path_dir=sim_path_dir,
+                local_gradient=LOCAL_GRADIENT,
+                verbose=VERBOSE,
             )
 
-            polyslab_structure = td.Structure(
-                geometry=make_polyslab, medium=td.Medium(permittivity=polyslab_permittivity)
-            )
+            objective_vals = []
+            for idx in range(len(vertices)):
+                objective_vals.append(
+                    eval_fn(sim_data[f"numerical_geometry_group_testing_{geometry_group}_{idx}"])
+                )
 
-            sim_with_polyslab = sim_base.updated_copy(
-                structures=(*sim_base.structures, polyslab_structure)
-            )
+            if len(vertices) == 1:
+                return objective_vals[0]
 
-            simulation_dict[f"numerical_mode_polyslab_testing_{idx}"] = sim_with_polyslab.copy()
+            return objective_vals
 
-        sim_data = web.run_async(
-            simulation_dict, path_dir=sim_path_dir, local_gradient=LOCAL_GRADIENT, verbose=VERBOSE
-        )
+        return objective
 
-        objective_vals = []
-        for idx in range(len(vertices)):
-            objective_vals.append(eval_fn(sim_data[f"numerical_mode_polyslab_testing_{idx}"]))
-
-        if len(vertices) == 1:
-            return objective_vals[0]
-
-        return objective_vals
-
-    return objective
+    return make_objective(geometry_group=False), make_objective(geometry_group=True)
 
 
 # Parameters for controlling the test geometry and material parameters as well as the
@@ -255,79 +300,61 @@ def create_objective_function(
 MODE_LAYER_HEIGHT_WVL = 0.25
 POLYSLAB_HEIGHT_WVL = MODE_LAYER_HEIGHT_WVL / 8.0
 WG_WIDTH_WVL = 0.275
+GEOMETRY_SIZE_WVL = 4.0
 SUBSTRATE_INDEX = 1.5
-
 WG_INDEX = 3.5
 
 FINITE_DIFF_PERM_SEED = 0.5 * (1.0**2 + WG_INDEX**2)
 
 # Number of vertices to put in the test polyslab.
 NUM_VERTICES = 15
+MESH_WVL_UM = 1.55
+ADJ_WVL_UM = 1.5
+POLYSLAB_INDEX = 2.5
 
-mesh_wvls_um = [1.55, 1.55, 10 * 1.55, 10 * 1.55]
-adj_wvls_um = [1.5, 2.0, 10 * 1.55, 10 * 2.0]
-geometry_sizes_wvl = [(3.0, 3.0, MODE_LAYER_HEIGHT_WVL)]
-polyslab_indices = np.linspace(SUBSTRATE_INDEX, WG_INDEX, 5)
+embedded_permittivities = [1.0**2, 1.5**2]
+simulation_background_permittivites = [1.0**2, 1.75**2]
 
-mode_data_test_parameters = []
+geometry_group_test_parameters = []
 
 test_number = 0
-for idx in range(len(mesh_wvls_um)):
-    mesh_wvl_um = mesh_wvls_um[idx]
-    adj_wvl_um = adj_wvls_um[idx]
+for embedded_permittivity in embedded_permittivities:
+    for simulation_background_permittivity in simulation_background_permittivites:
+        geometry_group_test_parameters.append(
+            {
+                "embedded_permittivity": embedded_permittivity,
+                "simulation_background_permittivity": simulation_background_permittivity,
+                "test_number": test_number,
+            }
+        )
 
-    for geometry_size_wvl in geometry_sizes_wvl:
-        for polyslab_index in polyslab_indices:
-            polyslab_permittivity = polyslab_index**2
-
-            mode_data_test_parameters.append(
-                {
-                    "mesh_wvl_um": mesh_wvl_um,
-                    "adj_wvl_um": adj_wvl_um,
-                    "geometry_size_wvl": geometry_size_wvl,
-                    "polyslab_permittivity": polyslab_permittivity,
-                    "test_number": test_number,
-                }
-            )
-
-            test_number += 1
+        test_number += 1
 
 
 @pytest.mark.numerical
-@pytest.mark.parametrize("mode_data_test_parameters", mode_data_test_parameters)
+@pytest.mark.parametrize("geometry_group_test_parameters", geometry_group_test_parameters)
 def test_finite_difference_mode_data_polyslab(
-    mode_data_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
+    geometry_group_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
 ):
-    """Test a variety of autograd permittivity gradients for ModeData in combination with polyslab by"""
-    """comparing them to numerical finite difference."""
+    """Test that GeometryGroup gradients are consistent with not using a GeometryGroup when there
+    are no overlapping structures."""
 
-    test_results = np.zeros((2, NUM_FINITE_DIFFERENCE))
-
-    test_number = mode_data_test_parameters["test_number"]
+    test_number = geometry_group_test_parameters["test_number"]
 
     (
-        mesh_wvl_um,
-        adj_wvl_um,
-        geometry_size_wvl,
-        polyslab_permittivity,
+        embedded_permittivity,
+        simulation_background_permittivity,
         test_number,
     ) = operator.itemgetter(
-        "mesh_wvl_um",
-        "adj_wvl_um",
-        "geometry_size_wvl",
-        "polyslab_permittivity",
+        "embedded_permittivity",
+        "simulation_background_permittivity",
         "test_number",
-    )(mode_data_test_parameters)
+    )(geometry_group_test_parameters)
 
-    adj_freq = td.C_0 / adj_wvl_um
-
-    dim_x_um = geometry_size_wvl[0] * mesh_wvl_um * 2
-    dim_y_um = geometry_size_wvl[1] * mesh_wvl_um * 2
-    thickness_um = geometry_size_wvl[2] * mesh_wvl_um
-
-    dim_x = 1 + int(dim_x_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
-    dim_y = 1 + int(dim_y_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
-    Nz = 1 + int(thickness_um / (mesh_wvl_um / MESH_FACTOR_DESIGN))
+    adj_wvl_um = ADJ_WVL_UM
+    mesh_wvl_um = MESH_WVL_UM
+    geometry_size_wvl = (GEOMETRY_SIZE_WVL, GEOMETRY_SIZE_WVL, MODE_LAYER_HEIGHT_WVL)
+    polyslab_permittivity = POLYSLAB_INDEX**2
 
     sim_geometry = get_sim_geometry(mesh_wvl_um)
 
@@ -376,7 +403,7 @@ def test_finite_difference_mode_data_polyslab(
 
     polyslab_height_um = POLYSLAB_HEIGHT_WVL * adj_wvl_um
 
-    objective = create_objective_function(
+    objective_no_geom_group, objective_geom_group = create_objective_functions(
         lambda mesh_wvl_um=mesh_wvl_um,
         adj_wvl_um=adj_wvl_um,
         geometry_size_wvl=geometry_size_wvl,
@@ -386,78 +413,54 @@ def test_finite_difference_mode_data_polyslab(
             adj_wvl_um=adj_wvl_um,
             geometry_size_wvl=geometry_size_wvl,
             box_for_override=box_for_override,
+            background_medium=td.Medium(permittivity=simulation_background_permittivity),
         ),
         eval_fn,
         sim_path_dir=str(sim_path_dir),
         mode_layer_height_um=MODE_LAYER_HEIGHT_WVL * mesh_wvl_um,
         polyslab_height_um=polyslab_height_um,
         polyslab_permittivity=polyslab_permittivity,
+        embedded_permittivity=embedded_permittivity,
     )
 
-    obj_val_and_grad = ag.value_and_grad(objective)
-
-    # Empirically chosen step size for these tests to get good finite difference gradients.
-    # In the future, can be replaced by checking convergence of finite difference gradient with
-    # chosen step size.
-    fd_step = (
-        0.2 * adj_wvl_um
-    )  # 0.5 * mesh_wvl_um#0.1 * mesh_wvl_um# 0.3 * mesh_wvl_um#0.2 * mesh_wvl_um
-
-    all_vertex = []
-    pattern_dot_adj_gradient = np.zeros(NUM_FINITE_DIFFERENCE)
+    obj_val_and_grad_no_geom_group = ag.value_and_grad(objective_no_geom_group)
+    obj_val_and_grad_geom_group = ag.value_and_grad(objective_geom_group)
 
     angles = np.linspace(0, 2 * np.pi, NUM_VERTICES + 1)[0:-1]
     vertex_centers_x = 1.1 * mesh_wvl_um * np.cos(angles)
     vertex_centers_y = 0.8 * mesh_wvl_um * np.sin(angles)
 
-    obj, adj_grad = obj_val_and_grad([list(vertex_centers_x) + list(vertex_centers_y)])
-
-    for fd_idx in range(NUM_FINITE_DIFFERENCE):
-        # Create random perturbation of vertices to check against the computed adjoint gradient.
-        random_pattern = rng.random(2 * NUM_VERTICES) - 0.5
-        random_pattern = gaussian_filter(random_pattern, sigma=1)
-        random_pattern /= np.linalg.norm(random_pattern)
-
-        pattern_dot_adj_gradient[fd_idx] = np.sum(random_pattern * adj_grad)
-
-        vertex_centers_up_x = vertex_centers_x + random_pattern[0:NUM_VERTICES] * fd_step
-        vertex_centers_up_y = vertex_centers_y + random_pattern[NUM_VERTICES:] * fd_step
-
-        vertex_centers_down_x = vertex_centers_x - random_pattern[0:NUM_VERTICES] * fd_step
-        vertex_centers_down_y = vertex_centers_y - random_pattern[NUM_VERTICES:] * fd_step
-
-        all_vertex.append(list(vertex_centers_up_x) + list(vertex_centers_up_y))
-        all_vertex.append(list(vertex_centers_down_x) + list(vertex_centers_down_y))
-
-    all_obj = objective(all_vertex)
-
-    fd_grad = np.zeros(NUM_FINITE_DIFFERENCE)
-    for fd_idx in range(NUM_FINITE_DIFFERENCE):
-        obj_up_location = 2 * fd_idx
-        obj_down_location = 2 * fd_idx + 1
-
-        fd_grad[fd_idx] = (all_obj[obj_up_location] - all_obj[obj_down_location]) / (2 * fd_step)
-
-    rms_error = np.linalg.norm(fd_grad - pattern_dot_adj_gradient)
-    fd_mag = np.linalg.norm(fd_grad)
-    adj_mag = np.linalg.norm(pattern_dot_adj_gradient)
-    percentage_error = 100.0 * np.mean(
-        np.abs(fd_grad - pattern_dot_adj_gradient) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
+    obj_no_geom_group, adj_grad_no_geom_group = obj_val_and_grad_no_geom_group(
+        [list(vertex_centers_x) + list(vertex_centers_y)]
     )
+    obj_geom_group, adj_grad_geom_group = obj_val_and_grad_geom_group(
+        [list(vertex_centers_x) + list(vertex_centers_y)]
+    )
+
+    adj_grad_no_geom_group = np.squeeze(np.array(adj_grad_no_geom_group))
+    adj_grad_geom_group = np.squeeze(np.array(adj_grad_geom_group))
+
+    rms_error = np.linalg.norm(adj_grad_no_geom_group - adj_grad_geom_group)
+    no_geom_group_mag = np.linalg.norm(adj_grad_no_geom_group)
+    geom_group_mag = np.linalg.norm(adj_grad_geom_group)
+
+    overlap_deg = angled_overlap_deg(adj_grad_no_geom_group, adj_grad_geom_group)
 
     print("\n" * 3)
     print("-" * 20)
     print(f"Numerical test #{test_number}")
-    print(f"Mesh and adjoint wavelengths: {mesh_wvl_um}, {adj_wvl_um}")
-    print(f"Geometry size: {geometry_size_wvl}")
+    print(f"Background permittivity: {simulation_background_permittivity}")
+    print(f"Embedded permittivity: {embedded_permittivity}")
     print(f"RMS Error: {rms_error}")
-    print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
-    print(f"Percentage Error: {percentage_error}")
+    print(f"No Geom Group, Geom Group magnitudes: {no_geom_group_mag}, {geom_group_mag}")
+    print(f"Overlap (deg): {overlap_deg}")
     print("-" * 20)
     print("\n" * 3)
 
-    test_results[SAVE_FD_LOC, :] = fd_grad
-    test_results[SAVE_ADJ_LOC, :] = pattern_dot_adj_gradient
+    test_results = np.zeros((2, len(adj_grad_no_geom_group)))
+
+    test_results[0, :] = adj_grad_no_geom_group
+    test_results[1, :] = adj_grad_geom_group
 
     save_idx = test_number + 1
     save_path = None
@@ -467,7 +470,9 @@ def test_finite_difference_mode_data_polyslab(
         save_path = results_dir / f"results_{save_idx}.npy"
 
     try:
-        assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
+        assert rms_error < RMS_THRESHOLD * np.sqrt(no_geom_group_mag * geom_group_mag), (
+            "RMS error magnitude too large"
+        )
     finally:
         if save_path is not None:
             np.save(save_path, test_results)
@@ -475,11 +480,10 @@ def test_finite_difference_mode_data_polyslab(
     test_number += 1
 
     if PLOT_FD_ADJ_COMPARISON:
-        plt.plot(pattern_dot_adj_gradient, color="g", linewidth=2.0)
-        plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--")
+        plt.plot(adj_grad_no_geom_group, color="g", linewidth=2.0)
+        plt.plot(adj_grad_geom_group, color="b", linewidth=1.5, linestyle="--")
         plt.title("Gradient:")
-        plt.legend(["Adjoint", "Finite difference"])
-        plt.xlabel("Sample number")
+        plt.legend(["No Geom Group", "Geom Group"])
+        plt.xlabel("Vertex")
         plt.ylabel("Gradient value")
-        plt.legend()
         plt.show()

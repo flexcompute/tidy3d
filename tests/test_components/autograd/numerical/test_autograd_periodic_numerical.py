@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import operator
-import sys
 
 import autograd as ag
 import matplotlib.pylab as plt
@@ -18,10 +17,9 @@ NUM_FINITE_DIFFERENCE = 10
 SAVE_FD_ADJ_DATA = True
 SAVE_FD_LOC = 0
 SAVE_ADJ_LOC = 1
-LOCAL_GRADIENT = False
+LOCAL_GRADIENT = True
 VERBOSE = False
 NUMERICAL_RESULTS_SUBDIR = "numerical_periodic_test"
-SHOW_PRINT_STATEMENTS = False
 
 RMS_THRESHOLD = 0.25
 
@@ -29,9 +27,6 @@ if PLOT_FD_ADJ_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
 else:
     pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
-
-if SHOW_PRINT_STATEMENTS:
-    sys.stdout = sys.stderr
 
 
 FINITE_DIFF_PERM_SEED = 1.5**2
@@ -266,7 +261,9 @@ for idx in range(len(mesh_wvls_um)):
 
 @pytest.mark.numerical
 @pytest.mark.parametrize("periodic_test_parameters", periodic_test_parameters)
-def test_finite_difference_diffraction_data(periodic_test_parameters, rng, numerical_case_dir):
+def test_finite_difference_diffraction_data(
+    periodic_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
+):
     """Test a variety of autograd permittivity gradients for DiffractionData by"""
     """comparing them to numerical finite difference."""
 
@@ -410,19 +407,17 @@ def test_finite_difference_diffraction_data(periodic_test_parameters, rng, numer
         results_dir.mkdir(parents=True, exist_ok=True)
         save_path = results_dir / f"results_{save_idx}.npy"
 
+    if PLOT_FD_ADJ_COMPARISON:
+        plt.plot(pattern_dot_adj_gradient, color="g", linewidth=2.0)
+        plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--")
+        plt.title(f"Gradient for objective: {eval_fn_name}")
+        plt.legend(["Adjoint", "Finite difference"])
+        plt.xlabel("Sample number")
+        plt.ylabel("Gradient value")
+        plt.show()
+
     try:
         assert rms_error < RMS_THRESHOLD * fd_mag, "RMS error magnitude too large"
     finally:
         if save_path is not None:
             np.save(save_path, test_results)
-
-    test_number += 1
-
-    if PLOT_FD_ADJ_COMPARISON:
-        plt.plot(pattern_dot_adj_gradient, color="g", linewidth=2.0)
-        plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--")
-        plt.title(f"Gradient for objective: {eval_fn_name}")
-        plt.legend(["Finite difference", "Adjoint"])
-        plt.xlabel("Sample number")
-        plt.ylabel("Gradient value")
-        plt.show()

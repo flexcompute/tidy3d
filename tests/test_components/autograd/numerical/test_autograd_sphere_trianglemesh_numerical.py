@@ -2,7 +2,6 @@
 # geometries, comparing to finite differences for validation.
 from __future__ import annotations
 
-import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Callable
@@ -38,7 +37,6 @@ PERMITTIVITY = N_MAT**2
 ICOSAHEDRON_SUBDIVISIONS = 3
 LOCAL_GRADIENT = True
 VERBOSE = False
-SHOW_PRINT_STATEMENTS = True
 SAVE_OUTPUT_DATA = True
 ANGLE_OVERLAP_FD_ADJ_THRESH_DEG = 10.0
 VERTEX_FD_STEP = 1e-3
@@ -49,9 +47,6 @@ td.config.adjoint.points_per_wavelength = 10
 measure_flux_spec = False
 
 freqs = td.C_0 / np.linspace(0.6, 0.7, 101)
-
-if SHOW_PRINT_STATEMENTS:
-    sys.stdout = sys.stderr
 
 
 def make_base_simulation(
@@ -228,7 +223,7 @@ def finite_difference_params(objective, params: anp.ndarray, finite_diff_step) -
         valid_indices.append(idx)
 
     objectives = objective(anp.stack(perturbations))
-    objectives = np.asarray(objectives, dtype=float)
+    objectives = np.squeeze(np.asarray(objectives, dtype=float))
     fd = np.zeros_like(np.asarray(params, dtype=float))
     for pair_idx, param_idx in enumerate(valid_indices):
         obj_up = objectives[2 * pair_idx]
@@ -326,7 +321,7 @@ def make_objective(
 @pytest.mark.parametrize("scale_axis", (0,))
 @pytest.mark.parametrize("overlap_cube", (False,))
 def test_sphere_triangles_match_fd(
-    scale_factor, scale_axis, overlap_cube, tmp_path, numerical_case_dir
+    scale_factor, scale_axis, overlap_cube, tmp_path, numerical_case_dir, redirect_stdout_to_stderr
 ):
     """
     Compares FD gradients with gradients from _compute_derivatives in TriangleMesh.
@@ -397,7 +392,9 @@ def test_sphere_triangles_match_fd(
 
 
 @pytest.mark.skip
-def test_grad_insensitive_to_face_splitting(tmp_path, numerical_case_dir):
+def test_grad_insensitive_to_face_splitting(
+    tmp_path, numerical_case_dir, redirect_stdout_to_stderr
+):
     scale_factor = 1
     scale_axis = 0
 
@@ -493,7 +490,7 @@ def test_grad_insensitive_to_face_splitting(tmp_path, numerical_case_dir):
 @pytest.mark.parametrize("scale_axis", SCALE_AXES)
 @pytest.mark.parametrize("overlap_cube", (False, True))
 def test_triangle_sphere_fd_step_sweep_ref(
-    tmp_path, scale_factor, scale_axis, overlap_cube, numerical_case_dir
+    tmp_path, scale_factor, scale_axis, overlap_cube, numerical_case_dir, redirect_stdout_to_stderr
 ):
     global SPHERE_RADIUS_UM
     SPHERE_RADIUS_UM = SPHERE_RADIUS_UM * 4

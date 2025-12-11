@@ -11,6 +11,9 @@ def setup_fwd(
 ) -> td.Simulation:
     """Return a forward simulation with adjoint monitors attached."""
 
+    # Ensure there aren't any traced geometries with custom media
+    sim_original._check_custom_medium_geometry_overlap(sim_fields)
+
     # Always try to build the variant that includes adjoint monitors so that
     # errors in monitor placement are caught early.
     sim_with_adj_mon = sim_original._with_adjoint_monitors(sim_fields)

@@ -368,7 +368,12 @@ class Structure(AbstractStructure):
             interval_space = monitor_cfg.monitor_interval_poly
 
         field_components_for_adjoint = [f"E{dim}" for dim in "xyz"]
-        if self.medium.is_pec:
+
+        background_medium_pec = (
+            self.background_medium is not None
+        ) and self.background_medium.is_pec
+        if self.medium.is_pec or background_medium_pec:
+            # record H-fields when the structure medium or its background is marked PEC
             field_components_for_adjoint += [f"H{dim}" for dim in "xyz"]
 
         mnt_fld = FieldMonitor(

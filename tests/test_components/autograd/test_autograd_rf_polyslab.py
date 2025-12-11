@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import operator
-import sys
 
 import autograd as ag
 import matplotlib.pylab as plt
@@ -26,15 +25,11 @@ SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
 NUMERICAL_RESULTS_DATA_DIR = "./numerical_rf_polyslab_test/"
-SHOW_PRINT_STATEMENTS = False
 
 if PLOT_FD_ADJ_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
 else:
     pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
-
-if SHOW_PRINT_STATEMENTS:
-    sys.stdout = sys.stderr
 
 
 def get_sim_geometry(mesh_wvl_um):
@@ -127,6 +122,8 @@ def create_objective_function_2D(create_sim_base, eval_fn, polyslab_z_value, sim
     def objective(polyslab_param_arrays):
         sim_base = create_sim_base()
 
+        layer_refinement_specs = []
+
         simulation_dict = {}
         for idx in range(len(polyslab_param_arrays)):
             get_polyslab_params = polyslab_param_arrays[idx]
@@ -142,8 +139,18 @@ def create_objective_function_2D(create_sim_base, eval_fn, polyslab_z_value, sim
                 )
             ]
 
+            layer_refinement_specs.append(
+                td.LayerRefinementSpec.from_layer_bounds(
+                    axis=2,
+                    bounds=(polyslab_z_value, polyslab_z_value),
+                )
+            )
+
             sim_with_block = sim_base.updated_copy(
-                structures=tuple(list(sim_base.structures) + polyslab_structures)
+                structures=tuple(list(sim_base.structures) + polyslab_structures),
+                grid_spec=sim_base.grid_spec.updated_copy(
+                    layer_refinement_specs=layer_refinement_specs
+                ),
             )
 
             simulation_dict[f"numerical_rf_polyslab_2d_testing_{idx}"] = sim_with_block.copy()
@@ -177,6 +184,8 @@ def create_objective_function_3D(
     def objective(polyslab_param_arrays):
         sim_base = create_sim_base()
 
+        layer_refinement_specs = []
+
         simulation_dict = {}
         for idx in range(len(polyslab_param_arrays)):
             get_polyslab_params = polyslab_param_arrays[idx]
@@ -195,8 +204,21 @@ def create_objective_function_3D(
                 )
             ]
 
+            layer_refinement_specs.append(
+                td.LayerRefinementSpec.from_layer_bounds(
+                    axis=2,
+                    bounds=(
+                        polyslab_z_value - 0.5 * polyslab_z_thickness,
+                        polyslab_z_value + 0.5 * polyslab_z_thickness,
+                    ),
+                )
+            )
+
             sim_with_block = sim_base.updated_copy(
-                structures=tuple(list(sim_base.structures) + polyslab_structures)
+                structures=tuple(list(sim_base.structures) + polyslab_structures),
+                grid_spec=sim_base.grid_spec.updated_copy(
+                    layer_refinement_specs=layer_refinement_specs
+                ),
             )
 
             simulation_dict[f"numerical_rf_polyslab_3d_testing_{idx}"] = sim_with_block.copy()
@@ -396,7 +418,9 @@ for idx in range(len(mesh_wvls_um)):
     ),
     indirect=["dir_name"],
 )
-def test_finite_difference_2d_polyslab_pec(rf_2d_test_parameters, rng, tmp_path, create_directory):
+def test_finite_difference_2d_polyslab_pec(
+    rf_2d_test_parameters, rng, tmp_path, create_directory, redirect_stdout_to_stderr
+):
     """Test a variety of autograd permittivity gradients for 2D `PolySlab` PEC by"""
     """comparing them to numerical finite difference."""
 
@@ -496,17 +520,16 @@ def test_finite_difference_2d_polyslab_pec(rf_2d_test_parameters, rng, tmp_path,
     vertex_data[SAVE_FD_LOC, :] = vertex_fd
     vertex_data[SAVE_ADJ_LOC, :] = vertex_adj
 
-    if SHOW_PRINT_STATEMENTS:
-        print(f"\n2D PEC PolySlab Test {test_number} Summary:")
-        print(f"Mesh wavelength (um): {mesh_wvl_um}")
-        print(f"Adjoint wavelength (um): {adj_wvl_um}")
-        print(f"Monitor size (wavelengths): {monitor_size_wvl}")
-        print(f"Mesh refinement factor: {mesh_refinement_factor}")
-        print(f"Eval function: {eval_fn_name}")
-        print(f"Vertex mean (std): {vertex_error_mean} ({vertex_error_std})")
-        print(f"Vertex norm mean (std): {vertex_error_norm_mean} ({vertex_error_norm_std})")
-        print(f"Vertex overlap deg: {vertex_overlap_deg}")
-        print("\n")
+    print(f"\n2D PEC PolySlab Test {test_number} Summary:")
+    print(f"Mesh wavelength (um): {mesh_wvl_um}")
+    print(f"Adjoint wavelength (um): {adj_wvl_um}")
+    print(f"Monitor size (wavelengths): {monitor_size_wvl}")
+    print(f"Mesh refinement factor: {mesh_refinement_factor}")
+    print(f"Eval function: {eval_fn_name}")
+    print(f"Vertex mean (std): {vertex_error_mean} ({vertex_error_std})")
+    print(f"Vertex norm mean (std): {vertex_error_norm_mean} ({vertex_error_norm_std})")
+    print(f"Vertex overlap deg: {vertex_overlap_deg}")
+    print("\n")
 
     if SAVE_FD_ADJ_DATA:
         np.save(
@@ -553,7 +576,9 @@ def test_finite_difference_2d_polyslab_pec(rf_2d_test_parameters, rng, tmp_path,
     ),
     indirect=["dir_name"],
 )
-def test_finite_difference_3d_polyslab_pec(rf_3d_test_parameters, rng, tmp_path, create_directory):
+def test_finite_difference_3d_polyslab_pec(
+    rf_3d_test_parameters, rng, tmp_path, create_directory, redirect_stdout_to_stderr
+):
     """Test a variety of autograd permittivity gradients for 3D PEC `PolySlab` by"""
     """comparing them to numerical finite difference."""
 
@@ -652,17 +677,16 @@ def test_finite_difference_3d_polyslab_pec(rf_3d_test_parameters, rng, tmp_path,
     vertex_data[SAVE_FD_LOC, :] = vertex_fd
     vertex_data[SAVE_ADJ_LOC, :] = vertex_adj
 
-    if SHOW_PRINT_STATEMENTS:
-        print(f"\n3D PEC PolySlab Test {test_number} Summary:")
-        print(f"Mesh wavelength (um): {mesh_wvl_um}")
-        print(f"Adjoint wavelength (um): {adj_wvl_um}")
-        print(f"Monitor size (wavelengths): {monitor_size_wvl}")
-        print(f"Polyslab z thickness (wavelengths): {polyslab_z_thickness_wvl}")
-        print(f"Eval function: {eval_fn_name}")
-        print(f"Vertex mean (std): {vertex_error_mean} ({vertex_error_std})")
-        print(f"Vertex norm mean (std): {vertex_error_norm_mean} ({vertex_error_norm_std})")
-        print(f"Vertex overlap deg: {vertex_overlap_deg}")
-        print("\n")
+    print(f"\n3D PEC PolySlab Test {test_number} Summary:")
+    print(f"Mesh wavelength (um): {mesh_wvl_um}")
+    print(f"Adjoint wavelength (um): {adj_wvl_um}")
+    print(f"Monitor size (wavelengths): {monitor_size_wvl}")
+    print(f"Polyslab z thickness (wavelengths): {polyslab_z_thickness_wvl}")
+    print(f"Eval function: {eval_fn_name}")
+    print(f"Vertex mean (std): {vertex_error_mean} ({vertex_error_std})")
+    print(f"Vertex norm mean (std): {vertex_error_norm_mean} ({vertex_error_norm_std})")
+    print(f"Vertex overlap deg: {vertex_overlap_deg}")
+    print("\n")
 
     if SAVE_FD_ADJ_DATA:
         np.save(

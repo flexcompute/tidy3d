@@ -19,7 +19,6 @@ validation for conductivity gradients in CustomMedium.
 from __future__ import annotations
 
 import operator
-import sys
 
 import autograd as ag
 import matplotlib.pylab as plt
@@ -38,7 +37,6 @@ SAVE_ADJ_LOC = 1
 LOCAL_GRADIENT = True
 VERBOSE = False
 NUMERICAL_RESULTS_SUBDIR = "numerical_conductivity_test"
-SHOW_PRINT_STATEMENTS = False
 
 RMS_THRESHOLD = 0.6
 
@@ -46,10 +44,6 @@ if PLOT_FD_ADJ_COMPARISON:
     pytestmark = pytest.mark.usefixtures("mpl_config_interactive")
 else:
     pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
-
-if SHOW_PRINT_STATEMENTS:
-    sys.stdout = sys.stderr
-
 
 # Constants for conductivity testing
 CONDUCTIVITY_SEED = 0.01
@@ -327,7 +321,7 @@ for idx in range(len(mesh_wvls_um)):
 @pytest.mark.numerical
 @pytest.mark.parametrize("conductivity_data_test_parameters", conductivity_data_test_parameters)
 def test_finite_difference_conductivity_data(
-    conductivity_data_test_parameters, rng, numerical_case_dir
+    conductivity_data_test_parameters, rng, numerical_case_dir, redirect_stdout_to_stderr
 ):
     """Test autograd conductivity gradients by comparing to numerical finite difference.
 

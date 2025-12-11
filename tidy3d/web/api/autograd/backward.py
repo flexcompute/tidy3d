@@ -150,7 +150,6 @@ def postprocess_adj(
         D_fwd = E_to_D(fld_fwd, eps_fwd)
         D_adj = E_to_D(fld_adj, eps_fwd)
 
-        # compute the derivatives for this structure
         structure = sim_data_fwd.simulation.structures[structure_index]
 
         # compute epsilon arrays for all frequencies
@@ -169,19 +168,9 @@ def postprocess_adj(
                 f"but derivative map has: {adjoint_frequencies}. "
             )
 
-        eps_in = _compute_eps_array(structure.medium, adjoint_frequencies)
-        eps_out = _compute_eps_array(sim_data_orig.simulation.medium, adjoint_frequencies)
-
-        # handle background medium if present
-        if structure.background_medium:
-            eps_background = _compute_eps_array(structure.background_medium, adjoint_frequencies)
-        else:
-            eps_background = None
-
         # auto permittivity detection
         sim_orig = sim_data_orig.simulation
         plane_eps = eps_fwd.monitor.geometry
-
         sim_orig_grid_spec = td.components.grid.grid_spec.GridSpec.from_grid(sim_orig.grid)
 
         # permittivity without this structure
@@ -191,8 +180,23 @@ def postprocess_adj(
             structures=structs_no_struct, monitors=[], sources=[], grid_spec=sim_orig_grid_spec
         )
 
+        # for the outside permittivity of the structure, resize the bounds of the permittivity region
+        # to make sure we capture data outside the structure bounds
+        low_coords = [center - 0.5 * size for center, size in zip(plane_eps.center, plane_eps.size)]
+        high_coords = [
+            center + 0.5 * size for center, size in zip(plane_eps.center, plane_eps.size)
+        ]
+
+        low_bounds = sim_orig.grid.boundaries.get_bounding_values(low_coords, "left", buffer=1)
+        high_bounds = sim_orig.grid.boundaries.get_bounding_values(high_coords, "right", buffer=1)
+
+        resized_center = [0.5 * (low + high) for low, high in zip(low_bounds, high_bounds)]
+        resized_size = [(high - low) for low, high in zip(low_bounds, high_bounds)]
+
+        resize_plane_eps = plane_eps.updated_copy(center=resized_center, size=resized_size)
+
         eps_no_structure_data = [
-            sim_no_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
+            sim_no_structure.epsilon(box=resize_plane_eps, coord_key="centers", freq=f)
             for f in adjoint_frequencies
         ]
 
@@ -200,14 +204,29 @@ def postprocess_adj(
             f=adjoint_frequencies
         )
 
-        if structure.medium.is_pec:
+        if structure.medium.is_custom:
+            # we can't make an infinite structure from a custom medium permittivity
             eps_inf_structure = None
         else:
+            geometry_box = structure.geometry.bounding_box
+            background_structures_2d = []
+            sim_inf_background_medium = sim_orig.medium
+            if np.any(np.array(geometry_box.size) == 0.0):
+                zero_coordinate = tuple(geometry_box.size).index(0.0)
+                new_size = [td.inf, td.inf, td.inf]
+                new_size[zero_coordinate] = 0.0
+
+                background_structures_2d = [
+                    structure.updated_copy(geometry=geometry_box.updated_copy(size=new_size))
+                ]
+            else:
+                sim_inf_background_medium = structure.medium
+
             # permittivity with infinite structure
             structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
             sim_inf_structure = sim_orig.updated_copy(
-                structures=structs_inf_struct,
-                medium=structure.medium,
+                structures=background_structures_2d + structs_inf_struct,
+                medium=sim_inf_background_medium,
                 monitors=[],
                 sources=[],
                 grid_spec=sim_orig_grid_spec,
@@ -224,7 +243,7 @@ def postprocess_adj(
 
         # compute bounds intersection
         struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds
-        rmin_sim, rmax_sim = sim_data_orig.simulation.bounds
+        rmin_sim, rmax_sim = sim_orig.bounds
         rmin_intersect = tuple([max(a, b) for a, b in zip(rmin_sim, rmin_struct)])
         rmax_intersect = tuple([min(a, b) for a, b in zip(rmax_sim, rmax_struct)])
         bounds_intersect = (rmin_intersect, rmax_intersect)
@@ -275,11 +294,6 @@ def postprocess_adj(
                 )
 
             # slice epsilon arrays
-            eps_in_chunk = eps_in.sel(f=select_adjoint_freqs)
-            eps_out_chunk = eps_out.sel(f=select_adjoint_freqs)
-            eps_background_chunk = (
-                eps_background.sel(f=select_adjoint_freqs) if eps_background is not None else None
-            )
             eps_no_structure_chunk = (
                 eps_no_structure.sel(f=select_adjoint_freqs)
                 if eps_no_structure is not None
@@ -304,16 +318,15 @@ def postprocess_adj(
                 H_fwd=H_fwd_chunk,
                 H_adj=H_adj_chunk,
                 eps_data=eps_data_chunk,
-                eps_in=eps_in_chunk,
-                eps_out=eps_out_chunk,
-                eps_background=eps_background_chunk,
+                eps_in=eps_inf_structure_chunk,
+                eps_out=eps_no_structure_chunk,
                 frequencies=select_adjoint_freqs,  # only chunk frequencies
-                eps_no_structure=eps_no_structure_chunk,
-                eps_inf_structure=eps_inf_structure_chunk,
                 bounds=struct_bounds,
                 bounds_intersect=bounds_intersect,
                 simulation_bounds=sim_data_orig.simulation.bounds,
                 is_medium_pec=structure.medium.is_pec,
+                background_medium_is_pec=structure.background_medium
+                and structure.background_medium.is_pec,
             )
 
             # compute derivatives for chunk

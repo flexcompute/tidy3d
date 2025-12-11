@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import autograd
@@ -113,3 +114,46 @@ def dir_name(request):
 def create_directory(dir_name):
     if dir_name is not None:
         directory = Path(dir_name).mkdir(parents=True, exist_ok=True)
+
+
+class OutputTee:
+    """Helper class to write to two streams at once."""
+
+    def __init__(self, original_stdout, stderr):
+        self.original_stdout = original_stdout
+        self.stderr = stderr
+
+    def write(self, message):
+        # Write to the original stdout (so pytest capture works)
+        self.original_stdout.write(message)
+        # Write to stderr (so you see it immediately)
+        # We generally want to flush immediately for debug prints
+        self.stderr.write(message)
+        self.stderr.flush()
+
+    def flush(self):
+        self.original_stdout.flush()
+        self.stderr.flush()
+
+    def __getattr__(self, attr):
+        # Pass any other method calls (like isatty) to the original stream
+        return getattr(self.original_stdout, attr)
+
+
+@pytest.fixture()
+def redirect_stdout_to_stderr(request):
+    """
+    Automatically wraps sys.stdout to write to both stdout and stderr.
+    This ensures output is visible during parallel execution without
+    breaking pytest capturing.
+    """
+    # 1. Capture the current stdout (which might be pytest's capture buffer)
+    original_stdout = sys.stdout
+
+    # 2. Replace stdout with our Tee
+    sys.stdout = OutputTee(original_stdout, sys.stderr)
+
+    yield
+
+    # 3. Restore original stdout after test finishes
+    sys.stdout = original_stdout
