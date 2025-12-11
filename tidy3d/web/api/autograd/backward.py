@@ -169,20 +169,40 @@ def postprocess_adj(
                 f"but derivative map has: {adjoint_frequencies}. "
             )
 
-        eps_in = _compute_eps_array(structure.medium, adjoint_frequencies)
-        eps_out = _compute_eps_array(sim_data_orig.simulation.medium, adjoint_frequencies)
+        # eps_in = _compute_eps_array(structure.medium, adjoint_frequencies)
+        # eps_out = _compute_eps_array(sim_data_orig.simulation.medium, adjoint_frequencies)
 
-        # handle background medium if present
-        if structure.background_medium:
-            eps_background = _compute_eps_array(structure.background_medium, adjoint_frequencies)
-        else:
-            eps_background = None
+        # # handle background medium if present
+        # if structure.background_medium:
+        #     eps_background = _compute_eps_array(structure.background_medium, adjoint_frequencies)
+        # else:
+        #     eps_background = None
 
         # auto permittivity detection
         sim_orig = sim_data_orig.simulation
         plane_eps = eps_fwd.monitor.geometry
 
+        # auto permittivity detection for non-box geometries
+        # if not isinstance(structure.geometry, td.Box):
+
+        # todo: sort this out: if we have a custom medium, we shouldn't be doing shape gradients so we don't need
+        # an eps_in or eps_out
+        # if not structure.medium.is_custom:
+        #     sim_orig = sim_data_orig.simulation
+        #     plane_eps = eps_fwd.monitor.geometry
+
         sim_orig_grid_spec = td.components.grid.grid_spec.GridSpec.from_grid(sim_orig.grid)
+
+        #
+        # eps_out we get by removing the structure and getting the permittivity. This should work
+        # every time - the background medium shouldn't need to be specified except that we will use
+        # a PEC or LossyMetal background medium indication to know which type of gradient we need
+        # to perform.
+        #
+        # we can use the structure popping for geometry group as well even though it won't be as
+        # accurate since all of the geometries will be popped simultaneously. However, we will assume
+        # the structures in the geometry group are not overlapping each other
+        #
 
         # permittivity without this structure
         structs_no_struct = list(sim_orig.structures)
@@ -190,7 +210,6 @@ def postprocess_adj(
         sim_no_structure = sim_orig.updated_copy(
             structures=structs_no_struct, monitors=[], sources=[], grid_spec=sim_orig_grid_spec
         )
-
         eps_no_structure_data = [
             sim_no_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
             for f in adjoint_frequencies
@@ -200,27 +219,37 @@ def postprocess_adj(
             f=adjoint_frequencies
         )
 
-        if structure.medium.is_pec:
-            eps_inf_structure = None
-        else:
-            # permittivity with infinite structure
-            structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
-            sim_inf_structure = sim_orig.updated_copy(
-                structures=structs_inf_struct,
-                medium=structure.medium,
-                monitors=[],
-                sources=[],
-                grid_spec=sim_orig_grid_spec,
-            )
+        #
+        # for eps_in, we need to be careful about making something like PEC the background medium
+        # because if it is a PEC2D we will get a validation error. However, for eps_in, we might
+        # need to collect for PEC and LossyMetal because you could have a dielectric overlapping
+        # those structures. We will assume this works for geometry group too even though all geometries
+        # will be removed simultaneously.
+        #
 
-            eps_inf_structure_data = [
-                sim_inf_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
-                for f in adjoint_frequencies
-            ]
+        background_medium_simulation = (
+            td.PECMedium() if (structure.medium == td.PEC2D) else structure.medium
+        )
 
-            eps_inf_structure = xr.concat(eps_inf_structure_data, dim="f").assign_coords(
-                f=adjoint_frequencies
-            )
+        # permittivity with infinite structure
+        structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
+        sim_inf_structure = sim_orig.updated_copy(
+            structures=structs_inf_struct,
+            medium=background_medium_simulation,
+            monitors=[],
+            sources=[],
+            grid_spec=sim_orig_grid_spec,
+        )
+
+        eps_inf_structure_data = [
+            sim_inf_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
+            for f in adjoint_frequencies
+        ]
+
+        eps_inf_structure = xr.concat(eps_inf_structure_data, dim="f").assign_coords(
+            f=adjoint_frequencies
+        )
+
 
         # compute bounds intersection
         struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds
@@ -275,11 +304,6 @@ def postprocess_adj(
                 )
 
             # slice epsilon arrays
-            eps_in_chunk = eps_in.sel(f=select_adjoint_freqs)
-            eps_out_chunk = eps_out.sel(f=select_adjoint_freqs)
-            eps_background_chunk = (
-                eps_background.sel(f=select_adjoint_freqs) if eps_background is not None else None
-            )
             eps_no_structure_chunk = (
                 eps_no_structure.sel(f=select_adjoint_freqs)
                 if eps_no_structure is not None
@@ -304,16 +328,15 @@ def postprocess_adj(
                 H_fwd=H_fwd_chunk,
                 H_adj=H_adj_chunk,
                 eps_data=eps_data_chunk,
-                eps_in=eps_in_chunk,
-                eps_out=eps_out_chunk,
-                eps_background=eps_background_chunk,
+                eps_in=eps_inf_structure_chunk,
+                eps_out=eps_no_structure_chunk,
                 frequencies=select_adjoint_freqs,  # only chunk frequencies
-                eps_no_structure=eps_no_structure_chunk,
-                eps_inf_structure=eps_inf_structure_chunk,
                 bounds=struct_bounds,
                 bounds_intersect=bounds_intersect,
                 simulation_bounds=sim_data_orig.simulation.bounds,
                 is_medium_pec=structure.medium.is_pec,
+                background_medium_is_pec=structure.background_medium
+                and structure.background_medium.is_pec,
             )
 
             # compute derivatives for chunk

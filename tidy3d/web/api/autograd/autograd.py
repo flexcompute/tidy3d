@@ -465,7 +465,7 @@ def _run(
 def _run_async(
     simulations: dict[str, td.Simulation],
     local_gradient: bool = False,
-    max_num_adjoint_per_fwd: typing.Optional[int] = None,
+    max_num_adjoint_per_fwd: typing.Optional[int] = 10,  # None,
     **run_async_kwargs: Any,
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""
