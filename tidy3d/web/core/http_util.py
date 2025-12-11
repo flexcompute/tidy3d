@@ -195,7 +195,10 @@ def http_interceptor(func: Callable[..., Any]) -> Callable[..., JSONType]:
                 log = get_logger()
                 log.warning(warning)
 
-        return result.get("data") if "data" in result else result
+        if isinstance(result, dict) and "data" in result:
+            return result.get("data")
+        else:
+            return result
 
     return wrapper
 
