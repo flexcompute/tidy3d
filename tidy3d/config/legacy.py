@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 import toml
 
+from tidy3d._runtime import WASM_BUILD
 from tidy3d.log import LogLevel, log
 
 # TODO(FXC-3827): Remove LegacyConfigWrapper/Environment shims and related helpers in Tidy3D 2.12.
@@ -304,7 +305,7 @@ class LegacyEnvironmentConfig:
 
     def _web_section(self) -> dict[str, Any]:
         manager = self.manager
-        if manager is None:
+        if manager is None or WASM_BUILD:
             return {}
         profile = normalize_profile_name(self._name)
         if manager.profile == profile:
