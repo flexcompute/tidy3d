@@ -205,6 +205,45 @@ class Coords(Tidy3dBaseModel):
 
         return interp_array
 
+    def get_bounding_indices(
+        self, coordinate: Coordinate, side: Literal["left", "right"], buffer: int = 0
+    ) -> tuple[int, int, int]:
+        """Find the bounding indices up to a buffer corresponding to the supplied coordinate. For x, y, z
+        values supplied in coordinate, look for index into the x, y, and z coordinate arrays such that the
+        value at that index bounds the supplied coordinate entry on either the 'right' or 'left' side specified by
+        the side parameter. An optional buffer of number of indices can be specified with the default 0. All indices
+        are bound by 0 and the length of each coordinate array so that they can be directly used to index into the
+        coordinate arrays without going out of bounds."""
+
+        if not ((side == "left") or (side == "right")):
+            raise ValueError(f"Side should be 'left' or 'right', but got side={side}.")
+
+        coords = self.to_dict
+        coord_indices = []
+        for idx, key in enumerate("xyz"):
+            coords_for_axis = coords[key]
+            index = np.searchsorted(coords_for_axis, coordinate[idx], side=side)
+
+            if side == "left":
+                index -= 1 + buffer
+            else:
+                index += buffer
+
+            coord_indices.append(np.clip(index, 0, len(coords_for_axis) - 1))
+
+        return tuple(coord_indices)
+
+    def get_bounding_values(
+        self, coordinate: Coordinate, side: Literal["left", "right"], buffer: int = 0
+    ) -> Coordinate:
+        """Find the bounding values corresponding to the supplied coordinate. The bounding values extract the values
+        out of the coordinate arrays for the indices found in `get_bounding_indices`."""
+
+        bounding_indices = self.get_bounding_indices(coordinate, side, buffer)
+
+        coords = self.to_dict
+        return tuple(coords[key][bounding_indices[idx]] for idx, key in enumerate("xyz"))
+
     def spatial_interp(
         self,
         array: Union[SpatialDataArray, ScalarFieldDataArray, UnstructuredGridDatasetType],

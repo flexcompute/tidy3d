@@ -83,6 +83,9 @@ def _patch_cmp_to_const(monkeypatch, cls, dJ_const):
 
 def _make_di(paths, freq):
     """Construct a minimal DerivativeInfo shared by custom dispersive tests."""
+
+    eps_keys = ["eps_xx", "eps_yy", "eps_zz"]
+
     return DerivativeInfo(
         paths=paths,
         E_der_map={},
@@ -91,16 +94,19 @@ def _make_di(paths, freq):
         D_fwd={},
         E_adj={},
         D_adj={},
-        eps_data={},
-        eps_in=2.0,
-        eps_out=1.0,
+        eps_data={
+            key: td.ScalarFieldDataArray(
+                [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [200e12]}
+            )
+            for key in eps_keys
+        },
         frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_no_structure=td.ScalarFieldDataArray(
-            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.0]}
+        eps_out=td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
         ),
-        eps_inf_structure=td.ScalarFieldDataArray(
-            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.0]}
+        eps_in=td.ScalarFieldDataArray(
+            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
         ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
@@ -1859,6 +1865,8 @@ def test_pole_residue(monkeypatch):
         for j in range(2):
             field_paths.append(("poles", i, j))
 
+    eps_keys = ["eps_xx", "eps_yy", "eps_zz"]
+
     info = DerivativeInfo(
         paths=field_paths,
         E_der_map={},
@@ -1867,15 +1875,18 @@ def test_pole_residue(monkeypatch):
         D_fwd={},
         E_adj={},
         D_adj={},
-        eps_data={},
-        eps_in=2.0,
-        eps_out=1.0,
+        eps_data={
+            key: td.ScalarFieldDataArray(
+                [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [200e12]}
+            )
+            for key in eps_keys
+        },
         frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_no_structure=td.ScalarFieldDataArray(
+        eps_out=td.ScalarFieldDataArray(
             [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
         ),
-        eps_inf_structure=td.ScalarFieldDataArray(
+        eps_in=td.ScalarFieldDataArray(
             [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
         ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
@@ -1905,6 +1916,8 @@ def test_pole_residue(monkeypatch):
 def test_adaptive_spacing(eps_real):
     freq = 5e9
 
+    eps_keys = ["eps_xx", "eps_yy", "eps_zz"]
+
     info = DerivativeInfo(
         paths={},
         E_der_map={},
@@ -1913,13 +1926,20 @@ def test_adaptive_spacing(eps_real):
         D_fwd={},
         E_adj={},
         D_adj={},
-        eps_data={},
-        eps_in=eps_real,
-        eps_out=1.0,
+        eps_data={
+            key: td.ScalarFieldDataArray(
+                [[[[eps_real]]]], coords={"x": [0], "y": [0], "z": [0], "f": [200e12]}
+            )
+            for key in eps_keys
+        },
+        eps_in=td.ScalarFieldDataArray(
+            [[[[eps_real]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
+        eps_out=td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
         frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_no_structure={},
-        eps_inf_structure={},
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
     )
@@ -1935,6 +1955,8 @@ def test_adaptive_spacing(eps_real):
 def test_cylinder_discretization(eps_real):
     freq = 5e9
 
+    eps_keys = ["eps_xx", "eps_yy", "eps_zz"]
+
     info = DerivativeInfo(
         paths={},
         E_der_map={},
@@ -1943,13 +1965,20 @@ def test_cylinder_discretization(eps_real):
         D_fwd={},
         E_adj={},
         D_adj={},
-        eps_data={},
-        eps_in=eps_real,
-        eps_out=1.0,
+        eps_data={
+            key: td.ScalarFieldDataArray(
+                [[[[eps_real]]]], coords={"x": [0], "y": [0], "z": [0], "f": [200e12]}
+            )
+            for key in eps_keys
+        },
+        eps_in=td.ScalarFieldDataArray(
+            [[[[eps_real]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
+        eps_out=td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
         frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_no_structure={},
-        eps_inf_structure={},
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
     )
@@ -2019,6 +2048,8 @@ def test_custom_pole_residue(monkeypatch):
         for j in range(2):
             field_paths.append(("poles", i, j))
 
+    eps_keys = ["eps_xx", "eps_yy", "eps_zz"]
+
     info = DerivativeInfo(
         paths=field_paths,
         E_der_map={},
@@ -2027,16 +2058,19 @@ def test_custom_pole_residue(monkeypatch):
         D_fwd={},
         E_adj={},
         D_adj={},
-        eps_data={},
-        eps_in=2.0,
-        eps_out=1.0,
+        eps_data={
+            key: td.ScalarFieldDataArray(
+                [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [200e12]}
+            )
+            for key in eps_keys
+        },
         frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_no_structure=td.ScalarFieldDataArray(
-            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        eps_in=td.ScalarFieldDataArray(
+            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
         ),
-        eps_inf_structure=td.ScalarFieldDataArray(
-            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        eps_out=td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
         ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
@@ -2072,6 +2106,8 @@ def test_custom_pole_residue_unstructured_derivatives():
     pr = custom_poleresidue_u
     field_paths = [("eps_inf",), ("poles", 0, 0), ("poles", 0, 1)]
 
+    eps_keys = ["eps_xx", "eps_yy", "eps_zz"]
+
     info = DerivativeInfo(
         paths=field_paths,
         E_der_map={},
@@ -2080,16 +2116,19 @@ def test_custom_pole_residue_unstructured_derivatives():
         D_fwd={},
         E_adj={},
         D_adj={},
-        eps_data={},
-        eps_in=2.0,
-        eps_out=1.0,
+        eps_data={
+            key: td.ScalarFieldDataArray(
+                [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [200e12]}
+            )
+            for key in eps_keys
+        },
         frequencies=[3e8],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_no_structure=td.ScalarFieldDataArray(
-            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        eps_out=td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [3e8]}
         ),
-        eps_inf_structure=td.ScalarFieldDataArray(
-            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        eps_in=td.ScalarFieldDataArray(
+            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [3e8]}
         ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
         simulation_bounds=((-2, -2, -2), (2, 2, 2)),
@@ -3059,6 +3098,68 @@ def test_custom_medium_conductivity_only_gradient(rng, use_emulated_run, tmp_pat
     val, grad = ag.value_and_grad(objective)(params0)
 
     assert anp.all(grad != 0.0), "some gradients are 0 for conductivity-only test"
+
+
+@pytest.mark.parametrize("use_run_async", (False, True))
+def test_error_custom_medium_and_geometry_traced(rng, use_run_async, use_emulated_run, tmp_path):
+    """Test that we properly error when there is a combination of custom medium and
+    geometry gradients."""
+    monitor, postprocess = make_monitors()["field_point"]
+
+    def objective(all_params):
+        """Objective function testing only conductivity gradient (constant permittivity)."""
+        params = all_params[0:-3]
+        size_params = all_params[-3:]
+
+        len_arr = np.prod(DA_SHAPE)
+        matrix = rng.random((len_arr, N_PARAMS))
+
+        # variable permittivity
+        eps_arr = 1.5 + 1.5 * (anp.tanh(3 * matrix @ params).reshape(DA_SHAPE) + 1)
+
+        nx, ny, nz = DA_SHAPE
+        coords = {
+            "x": np.linspace(-0.5, 0.5, nx),
+            "y": np.linspace(-0.5, 0.5, ny),
+            "z": np.linspace(-0.5, 0.5, nz),
+        }
+
+        custom_med_struct = td.Structure(
+            geometry=td.Box(center=(0, 0, 0), size=tuple(size_params)),
+            medium=td.CustomMedium(
+                permittivity=td.SpatialDataArray(eps_arr, coords=coords),
+            ),
+        )
+
+        sim = SIM_BASE.updated_copy(
+            structures=[custom_med_struct],
+            monitors=[monitor],
+        )
+
+        if use_run_async:
+            data = run_async(
+                [sim],
+                path_dir=str(tmp_path),
+                verbose=False,
+            )[0]
+        else:
+            data = run(
+                sim,
+                path=str(tmp_path / "sim_test.hdf5"),
+                task_name="error_custom_medium_and_geometry_traced_test",
+                verbose=False,
+            )
+        return postprocess(data, data[monitor.name])
+
+    box_sizes = [1.0, 1.0, 1.0]
+    all_params = np.array(list(params0) + box_sizes)
+
+    with pytest.raises(
+        AdjointError,
+        match="Detected structure at index 0 containing a CustomMedium "
+        "type and traced geometry attributes.",
+    ):
+        val, grad = ag.value_and_grad(objective)(all_params)
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)

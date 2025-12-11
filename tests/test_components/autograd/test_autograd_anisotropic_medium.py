@@ -41,14 +41,12 @@ def _derivative_info(paths: list[tuple[str, ...]], freq: float):
         E_adj={},
         D_adj={},
         eps_data={},
-        eps_in=2.0,
-        eps_out=1.0,
         frequencies=np.array([freq]),
         bounds=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
         bounds_intersect=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
         simulation_bounds=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
-        eps_no_structure=eps_no,
-        eps_inf_structure=eps_inf,
+        eps_out=eps_no,
+        eps_in=eps_inf,
     )
 
 
@@ -147,14 +145,12 @@ def test_anisotropic_medium_conductivity_uses_projected_d_map():
         E_adj={},
         D_adj={},
         eps_data={},
-        eps_in=2.0,
-        eps_out=1.0,
         frequencies=np.array([freq]),
         bounds=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
         bounds_intersect=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
         simulation_bounds=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
-        eps_no_structure=eps_no,
-        eps_inf_structure=eps_inf,
+        eps_out=eps_no,
+        eps_in=eps_inf,
     )
 
     medium = td.AnisotropicMedium(

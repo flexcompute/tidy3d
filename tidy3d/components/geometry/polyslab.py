@@ -2169,8 +2169,10 @@ class PolySlab(base.Planar):
         areas = np.full(n_pts, length / n_seg)  # patch length
 
         normals_xyz = self.unpop_axis_vect(
-            np.full(n_pts, -1 if min_max_index == 0 else 1),
-            np.zeros_like(xy),
+            np.full(
+                n_pts, -1 if min_max_index == 0 else 1, dtype=config.adjoint.gradient_dtype_float
+            ),
+            np.zeros_like(xy, dtype=config.adjoint.gradient_dtype_float),
         )
         perps1_xyz = self.unpop_axis_vect(np.zeros(n_pts), dir_vec_plane)
         perps2_xyz = self.unpop_axis_vect(np.zeros(n_pts), np.zeros_like(dir_vec_plane))

@@ -3595,7 +3595,6 @@ class GeometryGroup(Geometry):
                 bounds_intersect=self.bounds_intersection(
                     geo.bounds, derivative_info.simulation_bounds
                 ),
-                eps_approx=True,
                 deep=False,
                 interpolators=interpolators,
             )

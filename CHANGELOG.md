@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `warn_once` option to logging configuration (`td.config.logging.warn_once`) that causes each unique warning message to be shown only once per process, reducing noise from repeated validation warnings.
 
 ### Changed
+- Unified inside/outside permittivity handling for all geometries when computing shape gradients.
+- Enabled PEC gradients for dielectric structures embedded in PEC through use of `background_medium` field in `Structure` which includes shapes with combinations of dielectric-dielectric and dielectric-PEC boundaries.
 
 ### Fixed
 - Fixed interpolation handling for permittivity and conductivity gradients in `CustomPoleResidue`.
@@ -42,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Handling of zero values when using `sim_data.plot_field` with `scale=dB`.
 - Fixed `intersections_plane` method in `PolySlab`, which sometimes missed vertices for planes coincident with `PolySlab` side faces.
 - Fixed `http_interceptor` crash on non-dict JSON responses
+- Fixed gradient regression for `Box` geometries where outside permittivity was not being correctly sampled.
 
 ## [2.10.0] - 2025-12-18
 

@@ -16,6 +16,7 @@ from pydantic import (
     Field,
     NonNegativeFloat,
     NonNegativeInt,
+    NonPositiveFloat,
     PositiveInt,
     SecretStr,
     field_serializer,
@@ -157,6 +158,25 @@ class AdjointConfig(ConfigSection):
             "stencils for autograd evaluations."
         ),
         ge=0.0,
+    )
+
+    boundary_snapping_fraction: float = Field(
+        0.65,
+        title="Boundary snapping fraction",
+        description=(
+            "Fraction of minimum local grid size to use for snapping coordinates outside of "
+            "a boundary when computing shape gradients. Should be at least 0.5."
+        ),
+        ge=0.5,
+    )
+
+    pec_detection_threshold: NonPositiveFloat = Field(
+        -100.0,
+        title="PEC detection threshold",
+        description=(
+            "Value the real permittivity should be below to consider it a PEC material in "
+            "the shape gradient boundary integration."
+        ),
     )
 
     local_gradient: bool = Field(
