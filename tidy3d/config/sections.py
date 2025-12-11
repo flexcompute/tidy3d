@@ -22,6 +22,7 @@ from pydantic import (
     field_validator,
 )
 
+from tidy3d._runtime import WASM_BUILD
 from tidy3d.log import DEFAULT_LEVEL, LogLevel, log, set_log_suppression, set_logging_level
 
 from .registry import get_manager as _get_attached_manager
@@ -279,7 +280,6 @@ def apply_adjoint(config: AdjointConfig) -> None:
     )
 
 
-@register_section("web")
 class WebConfig(ConfigSection):
     """Web/HTTP configuration."""
 
@@ -411,7 +411,6 @@ class WebConfig(ConfigSection):
         return "/".join([base.rstrip("/"), path_str.lstrip("/")])
 
 
-@register_handler("web")
 def apply_web(config: WebConfig) -> None:
     """Apply web-related environment variable overrides."""
 
@@ -437,7 +436,6 @@ def _default_cache_directory() -> Path:
     return (base / "tidy3d" / "simulations").resolve()
 
 
-@register_section("local_cache")
 class LocalCacheConfig(ConfigSection):
     """Settings controlling the optional local simulation cache."""
 
@@ -489,8 +487,17 @@ class PluginsContainer(ConfigSection):
     model_config = ConfigDict(extra="allow")
 
 
+# Register web and local_cache sections only in non-WASM environments
+# where filesystem and network features are available
+if not WASM_BUILD:
+    register_section("web")(WebConfig)
+    register_handler("web")(apply_web)
+    register_section("local_cache")(LocalCacheConfig)
+
+
 __all__ = [
     "AdjointConfig",
+    "LocalCacheConfig",
     "LoggingConfig",
     "MicrowaveConfig",
     "PluginsContainer",
