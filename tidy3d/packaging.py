@@ -291,7 +291,7 @@ def supports_local_subpixel(fn):
             return fn(*args, **kwargs)
 
         try:
-            check_tidy3d_extras_licensed_feature("local_subpixel", quiet=True)
+            check_tidy3d_extras_licensed_feature("local_subpixel", quiet=(preference is None))
         except Tidy3dImportError as exc:
             tidy3d_extras["use_local_subpixel"] = False
             if preference is True:
