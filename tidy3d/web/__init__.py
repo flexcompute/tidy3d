@@ -36,7 +36,7 @@ from .api.webapi import (
     # run, # NOTE: use autograd one now (see below)
     upload,
 )
-from .api.workflow import MultiStepJob, WebWorkflow
+from .api.workflow import WebWorkflow
 from .cli import tidy3d_cli
 from .cli.app import configure_fn as configure
 
@@ -44,7 +44,6 @@ __all__ = [
     "Batch",
     "BatchData",
     "Job",
-    "MultiStepJob",
     "WebWorkflow",
     "abort",
     "account",
