@@ -19,7 +19,7 @@ from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
 from tidy3d.web.api.container import BatchData
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
-from tidy3d.web.api.webapi import load, restore_simulation_if_cached
+from tidy3d.web.api.webapi import default_data_filename, load, restore_simulation_if_cached
 from tidy3d.web.api.webapi import run as run_webapi
 from tidy3d.web.core.types import PayType
 
@@ -104,7 +104,7 @@ def run(
     simulation: WorkflowType,
     task_name: typing.Optional[str] = None,
     folder_name: str = "default",
-    path: PathLike = "simulation_data.hdf5",
+    path: typing.Optional[PathLike] = None,
     callback_url: typing.Optional[str] = None,
     verbose: bool = True,
     progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
@@ -132,8 +132,9 @@ def run(
         Name of task. If not provided, a default name will be generated.
     folder_name : str = "default"
         Name of folder to store task on web UI.
-    path : PathLike = "simulation_data.hdf5"
-        Path to download results file (.hdf5), including filename.
+    path : Optional[PathLike] = None
+        Path to download results file (.hdf5), including filename. When ``None``, a task-type-
+        specific default filename is used.
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
@@ -220,20 +221,20 @@ def run(
 
     lazy = False if lazy is None else bool(lazy)
 
+    stub = Tidy3dStub(simulation=simulation)
     if task_name is None:
-        stub = Tidy3dStub(simulation=simulation)
         task_name = stub.get_default_task_name()
 
     # component modeler path: route autograd-valid modelers to local run
     from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
 
-    path = Path(path)
+    resolved_path = Path(path) if path is not None else Path(default_data_filename(stub.get_type()))
 
     if isinstance(simulation, typing.get_args(ComponentModelerType)):
         if any(is_valid_for_autograd(s) for s in simulation.sim_dict.values()):
             from tidy3d.plugins.smatrix import run as smatrix_run
 
-            path_dir = path.parent
+            path_dir = resolved_path.parent
             return smatrix_run._run_local(
                 simulation,
                 path_dir=path_dir,
@@ -252,7 +253,7 @@ def run(
             simulation=simulation,
             task_name=task_name,
             folder_name=folder_name,
-            path=path,
+            path=resolved_path,
             callback_url=callback_url,
             verbose=verbose,
             progress_callback_upload=progress_callback_upload,
@@ -272,7 +273,7 @@ def run(
         simulation=simulation,
         task_name=task_name,
         folder_name=folder_name,
-        path=path,
+        path=resolved_path,
         callback_url=callback_url,
         verbose=verbose,
         progress_callback_upload=progress_callback_upload,
@@ -563,7 +564,7 @@ def _run_primitive(
         )
     else:
         sim_original = sim_original.updated_copy(simulation_type="autograd_fwd", deep=False)
-        restored_path, task_id_fwd = restore_simulation_if_cached(
+        restored_path, task_id_fwd, _ = restore_simulation_if_cached(
             simulation=sim_original,
             path=run_kwargs.get("path", None),
             reduce_simulation=run_kwargs.get("reduce_simulation", "auto"),

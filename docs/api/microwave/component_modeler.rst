@@ -55,6 +55,9 @@ Alternatively, use the ``tidy3d.web.run()`` method to perform all of the above i
    # Upload, run simulation, and download data
    my_tcm_data = tidy3d.web.run(my_tcm, task_name='my_task_name', path='my/local/download/path')
 
+If ``path`` is omitted, the component modeler results download to ``cm_data.hdf5`` in the working
+directory by default.
+
 To get the S-matrix from the results, use the ``smatrix()`` method of the :class:`.TerminalComponentModelerData` object.
 
 .. code-block:: python
