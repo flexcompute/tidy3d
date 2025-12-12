@@ -23,7 +23,7 @@ DRCMultiPolygon = tuple[DRCPolygon, ...]
 UNLIMITED_VIOLATION_WARNING_COUNT = 100_000
 
 
-def parse_edge(value: str) -> EdgeMarker:
+def parse_edge(value: str, *, cell: str) -> EdgeMarker:
     """
     Extract coordinates from edge format: ``(x1,y1;x2,y2)``.
 
@@ -31,11 +31,13 @@ def parse_edge(value: str) -> EdgeMarker:
     ----------
     value : str
         The edge value string from DRC result database, with format ``(x1,y1;x2,y2)``.
+    cell : str
+        Cell name associated with the violation marker.
 
     Returns
     -------
     :class:`.EdgeMarker`
-        :class:`.EdgeMarker` containing start and end points of the edge.
+        :class:`.EdgeMarker` containing start and end points of the edge in ``cell``.
 
     Raises
     ------
@@ -47,11 +49,11 @@ def parse_edge(value: str) -> EdgeMarker:
     match = re.match(pattern, value)
     if match:
         coords = [float(x) for x in match.groups()]
-        return EdgeMarker(edge=((coords[0], coords[1]), (coords[2], coords[3])))
+        return EdgeMarker(cell=cell, edge=((coords[0], coords[1]), (coords[2], coords[3])))
     raise ValueError(f"Invalid edge format: '{value}'.")
 
 
-def parse_edge_pair(value: str) -> EdgePairMarker:
+def parse_edge_pair(value: str, *, cell: str) -> EdgePairMarker:
     """
     Extract coordinates from edge-pair format: ``(x1,y1;x2,y2)|(x3,y3;x4,y4)``.
 
@@ -59,11 +61,13 @@ def parse_edge_pair(value: str) -> EdgePairMarker:
     ----------
     value : str
         The edge-pair value string from DRC result database, with format ``(x1,y1;x2,y2)|(x3,y3;x4,y4)``.
+    cell : str
+        Cell name associated with the violation marker.
 
     Returns
     -------
     :class:`.EdgePairMarker`
-        :class:`.EdgePairMarker` containing both edges' coordinates.
+        :class:`.EdgePairMarker` containing both edges' coordinates in ``cell``.
 
     Raises
     ------
@@ -78,10 +82,11 @@ def parse_edge_pair(value: str) -> EdgePairMarker:
     if match:
         coords = [float(x) for x in match.groups()]
         return EdgePairMarker(
+            cell=cell,
             edge_pair=(
                 ((coords[0], coords[1]), (coords[2], coords[3])),
                 ((coords[4], coords[5]), (coords[6], coords[7])),
-            )
+            ),
         )
     raise ValueError(f"Invalid edge-pair format: '{value}'.")
 
@@ -120,7 +125,7 @@ def parse_polygon_coordinates(coords_str: str) -> DRCPolygon:
     return tuple(coords)
 
 
-def parse_polygons(value: str) -> MultiPolygonMarker:
+def parse_polygons(value: str, *, cell: str) -> MultiPolygonMarker:
     """
     Extract coordinates from polygon format: ``(x1,y1;x2,y2;...)`` including multiple polygons separated by ``/``.
 
@@ -129,11 +134,13 @@ def parse_polygons(value: str) -> MultiPolygonMarker:
     value : str
         The polygon value string from DRC result database, with format ``(x1,y1;x2,y2;...)``
         or multiple polygons separated by ``/`` like ``(x1,y1;.../x3,y3;...)``.
+    cell : str
+        Cell name associated with the violation marker.
 
     Returns
     -------
     :class:`.MultiPolygonMarker`
-        :class:`.MultiPolygonMarker` containing one or more polygon shapes.
+        :class:`.MultiPolygonMarker` containing one or more polygon shapes in ``cell``.
 
     Raises
     ------
@@ -154,10 +161,10 @@ def parse_polygons(value: str) -> MultiPolygonMarker:
     for part in polygon_parts:
         polygons.append(parse_polygon_coordinates(part.strip()))
 
-    return MultiPolygonMarker(polygons=tuple(polygons))
+    return MultiPolygonMarker(cell=cell, polygons=tuple(polygons))
 
 
-def parse_violation_value(value: str) -> Union[EdgeMarker, EdgePairMarker, MultiPolygonMarker]:
+def parse_violation_value(value: str, *, cell: str) -> DRCMarker:
     """
     Parse a violation value based on its type (edge, edge-pair, or polygon).
 
@@ -165,11 +172,13 @@ def parse_violation_value(value: str) -> Union[EdgeMarker, EdgePairMarker, Multi
     ----------
     value : str
         The value string from DRC result database.
+    cell : str
+        Cell name associated with the violation marker.
 
     Returns
     -------
-    Union[:class:`.EdgeMarker`, :class:`.EdgePairMarker`, :class:`.MultiPolygonMarker`]
-        The parsed violation marker.
+    :class:`.DRCMarker`
+        The parsed violation marker, annotated with the originating cell name.
 
     Raises
     ------
@@ -177,17 +186,23 @@ def parse_violation_value(value: str) -> Union[EdgeMarker, EdgePairMarker, Multi
         If the violation marker type is invalid.
     """
     if value.startswith("edge: "):
-        return parse_edge(value=value.replace("edge: ", ""))
+        return parse_edge(value=value.replace("edge: ", ""), cell=cell)
     elif value.startswith("edge-pair: "):
-        return parse_edge_pair(value=value.replace("edge-pair: ", ""))
+        return parse_edge_pair(value=value.replace("edge-pair: ", ""), cell=cell)
     elif value.startswith("polygon: "):
-        return parse_polygons(value=value.replace("polygon: ", ""))
+        return parse_polygons(value=value.replace("polygon: ", ""), cell=cell)
     raise ValueError(
         f"Invalid marker type (should start with 'edge:', 'edge-pair:', or 'polygon:'): '{value}'."
     )
 
 
-class EdgeMarker(Tidy3dBaseModel):
+class DRCMarker(Tidy3dBaseModel):
+    """Base marker storing the cell in which the violation was detected."""
+
+    cell: str = pd.Field(title="Cell", description="Cell name where the violation occurred.")
+
+
+class EdgeMarker(DRCMarker):
     """A class for storing KLayout DRC edge marker results."""
 
     edge: DRCEdge = pd.Field(
@@ -196,7 +211,7 @@ class EdgeMarker(Tidy3dBaseModel):
     )
 
 
-class EdgePairMarker(Tidy3dBaseModel):
+class EdgePairMarker(DRCMarker):
     """A class for storing KLayout DRC edge pair marker results."""
 
     edge_pair: DRCEdgePair = pd.Field(
@@ -205,16 +220,13 @@ class EdgePairMarker(Tidy3dBaseModel):
     )
 
 
-class MultiPolygonMarker(Tidy3dBaseModel):
+class MultiPolygonMarker(DRCMarker):
     """A class for storing KLayout DRC multi-polygon marker results."""
 
     polygons: DRCMultiPolygon = pd.Field(
         title="DRC Multi-Polygon Marker",
         description="The multi-polygon marker of the DRC violation. The format is (polygon1, polygon2, ...), where each polygon has format ((x1, y1), (x2, y2), ...).",
     )
-
-
-DRCMarker = Union[EdgeMarker, EdgePairMarker, MultiPolygonMarker]
 
 
 class DRCViolation(Tidy3dBaseModel):
@@ -231,6 +243,26 @@ class DRCViolation(Tidy3dBaseModel):
     def count(self) -> int:
         """The number of DRC markers in this category."""
         return len(self.markers)
+
+    @cached_property
+    def violated_cells(self) -> tuple[str, ...]:
+        """Tuple of cells containing markers for this violation."""
+        seen = []
+        for marker in self.markers:
+            if marker.cell not in seen:
+                seen.append(marker.cell)
+        return tuple(seen)
+
+    @cached_property
+    def violations_by_cell(self) -> dict[str, DRCViolation]:
+        """Return a violation per cell scoped to those markers."""
+        by_cell: dict[str, list[DRCMarker]] = {}
+        for marker in self.markers:
+            by_cell.setdefault(marker.cell, []).append(marker)
+        return {
+            cell: DRCViolation(category=self.category, markers=tuple(cell_markers))
+            for cell, cell_markers in by_cell.items()
+        }
 
     def __str__(self) -> str:
         """Get a nice string summary of the number of markers in this category."""
@@ -261,6 +293,21 @@ class DRCResults(Tidy3dBaseModel):
         return {
             category: violation.count for category, violation in self.violations_by_category.items()
         }
+
+    @cached_property
+    def violations_by_cell(self) -> dict[str, list[DRCViolation]]:
+        """Aggregate violations grouped by cell across all categories."""
+        by_cell: dict[str, list[DRCViolation]] = {}
+        for violation in self.violations_by_category.values():
+            for cell, cell_violation in violation.violations_by_cell.items():
+                cell_violations = by_cell.setdefault(cell, [])
+                cell_violations.append(cell_violation)
+        return by_cell
+
+    @cached_property
+    def violated_cells(self) -> tuple[str, ...]:
+        """Tuple of cells that contain at least one violation."""
+        return tuple(self.violations_by_cell.keys())
 
     @cached_property
     def categories(self) -> tuple[str, ...]:
@@ -402,8 +449,12 @@ def violations_from_file(
         if category_el is None or category_el.text is None:
             raise FileError("Encountered DRC item without a category in results file.")
         category = category_el.text.strip().strip("'\"")
+        cell_el = item.find("cell")
+        if cell_el is None or cell_el.text is None:
+            raise FileError("Encountered DRC item without a cell in results file.")
+        cell = cell_el.text.strip().strip("'\"")
         value = item.find("values/value").text
-        marker = parse_violation_value(value)
+        marker = parse_violation_value(value, cell=cell)
         markers = violations.setdefault(category, [])
         markers.append(marker)
 
