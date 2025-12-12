@@ -320,6 +320,7 @@ norecursedirs = [
   "tests/test_cli",
   "tests/_test_data",
   "tests/_test_notebooks",
+  "tests/_test_tidy3d_extras_license.py",
   "tidy3d/web",
   "docs/notebooks",
   "docs/faq",

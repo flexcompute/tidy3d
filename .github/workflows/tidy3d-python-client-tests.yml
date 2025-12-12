@@ -637,7 +637,7 @@ jobs:
       run: |
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
         # pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
-        pytest --cov=tidy3d -rF --tb=short --ignore=tests/_test_tidy3d_extras_license.py tests
+        pytest --cov=tidy3d -rF --tb=short tests
         coverage report -m
         coverage xml -o ${GITHUB_WORKSPACE}/coverage.xml
         TOTAL_COVERAGE=$(coverage report --format=total)
@@ -775,7 +775,7 @@ jobs:
         PYTHONUNBUFFERED: "1"
       run: |
         poetry run pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
-        poetry run pytest --cov=tidy3d -rF --tb=short --ignore=tests/_test_tidy3d_extras_license.py tests
+        poetry run pytest --cov=tidy3d -rF --tb=short tests
         poetry run coverage report -m
         TOTAL_COVERAGE=$(poetry run coverage report --format=total)
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
