@@ -12,7 +12,12 @@ import pytest
 import tidy3d as td
 from tidy3d.exceptions import FileError
 from tidy3d.plugins.klayout.drc.drc import DRCConfig, DRCRunner, run_drc_on_gds
-from tidy3d.plugins.klayout.drc.results import DRCResults, parse_violation_value
+from tidy3d.plugins.klayout.drc.results import (
+    DRCResults,
+    DRCViolation,
+    EdgeMarker,
+    parse_violation_value,
+)
 
 filepath = Path(os.path.dirname(os.path.abspath(__file__)))
 KLAYOUT_PLUGIN_PATH = "tidy3d.plugins.klayout"
@@ -40,6 +45,7 @@ def _write_results_file(
     category: str = "min_width",
     num_items: int = 1,
     filename: str = "many_results.lyrdb",
+    cells: tuple[str, ...] | None = None,
 ) -> Path:
     """Write a simple DRC results file with the requested number of items."""
 
@@ -64,7 +70,7 @@ def _write_results_file(
   <item>
    <tags/>
    <category>{category}</category>
-   <cell>TOP</cell>
+   <cell>{cell}</cell>
    <visited>false</visited>
    <multiplicity>1</multiplicity>
    <comment/>
@@ -75,7 +81,11 @@ def _write_results_file(
   </item>
 """
     contents = [template_header]
-    contents.extend(item.format(category=category) for _ in range(num_items))
+    for idx in range(num_items):
+        cell = "TOP"
+        if cells is not None and idx < len(cells):
+            cell = cells[idx]
+        contents.append(item.format(category=category, cell=cell))
     contents.append(template_footer)
     path = tmp_path / filename
     path.write_text("".join(contents))
@@ -556,6 +566,62 @@ class TestDRCResults:
             (-0.206, 0.342),
             (-0.206, 0.24),
         )
+        for violation in drc_results.violations_by_category.values():
+            for marker in violation.markers:
+                assert marker.cell == "TOP"
+
+    def test_drc_violation_cell_helpers(self):
+        """DRCViolation provides cell-aware helpers."""
+        violation = DRCViolation(
+            category="cat_a",
+            markers=(
+                EdgeMarker(cell="CELL_A", edge=((0.0, 0.0), (1.0, 1.0))),
+                EdgeMarker(cell="CELL_B", edge=((1.0, 1.0), (2.0, 2.0))),
+                EdgeMarker(cell="CELL_A", edge=((0.5, 0.5), (1.5, 1.5))),
+            ),
+        )
+        assert violation.violated_cells == ("CELL_A", "CELL_B")
+
+        by_cell = violation.violations_by_cell
+        assert set(by_cell) == {"CELL_A", "CELL_B"}
+        assert by_cell["CELL_B"].count == 1
+
+        markers_cell_a = by_cell["CELL_A"].markers
+        assert all(marker.cell == "CELL_A" for marker in markers_cell_a)
+
+    def test_drc_results_cell_helpers(self):
+        """DRCResults aggregates violations across cells."""
+        violation_a = DRCViolation(
+            category="cat_a",
+            markers=(
+                EdgeMarker(cell="CELL_A", edge=((0.0, 0.0), (1.0, 1.0))),
+                EdgeMarker(cell="CELL_B", edge=((1.0, 1.0), (2.0, 2.0))),
+            ),
+        )
+        violation_b = DRCViolation(
+            category="cat_b",
+            markers=(
+                EdgeMarker(cell="CELL_B", edge=((2.0, 2.0), (3.0, 3.0))),
+                EdgeMarker(cell="CELL_C", edge=((3.0, 3.0), (4.0, 4.0))),
+            ),
+        )
+        results = DRCResults(
+            violations_by_category={
+                "cat_a": violation_a,
+                "cat_b": violation_b,
+            }
+        )
+        assert results.violated_cells == ("CELL_A", "CELL_B", "CELL_C")
+
+        violations_by_cell = results.violations_by_cell
+        assert set(violations_by_cell) == {"CELL_A", "CELL_B", "CELL_C"}
+        assert len(violations_by_cell["CELL_A"]) == 1
+        assert len(violations_by_cell["CELL_C"]) == 1
+
+        cell_b_violations = violations_by_cell["CELL_B"]
+        assert {violation.category for violation in cell_b_violations} == {"cat_a", "cat_b"}
+        for violation in cell_b_violations:
+            assert all(marker.cell == "CELL_B" for marker in violation.markers)
 
     @pytest.mark.parametrize(
         "edge_value, expected_edge",
@@ -566,30 +632,34 @@ class TestDRCResults:
     )
     def test_parse_edge(self, edge_value, expected_edge):
         """Test parsing edge violation values."""
-        edge_result = parse_violation_value(edge_value)
+        edge_result = parse_violation_value(edge_value, cell="TEST_CELL")
         assert edge_result.edge == expected_edge
+        assert edge_result.cell == "TEST_CELL"
 
     def test_parse_edge_pair(self):
         """Test parsing edge-pair violation values."""
         edge_pair_value = "edge-pair: (1.0,2.0;3.0,4.0)|(5.0,6.0;7.0,8.0)"
-        edge_pair_result = parse_violation_value(edge_pair_value)
+        edge_pair_result = parse_violation_value(edge_pair_value, cell="TEST_CELL")
         assert edge_pair_result.edge_pair[0] == ((1.0, 2.0), (3.0, 4.0))
         assert edge_pair_result.edge_pair[1] == ((5.0, 6.0), (7.0, 8.0))
+        assert edge_pair_result.cell == "TEST_CELL"
 
     def test_parse_polygon(self):
         """Test parsing a single polygon violation string."""
         polygon_value = "polygon: (1.0,2.0;3.0,4.0;5.0,6.0;1.0,2.0)"
-        polygon_result = parse_violation_value(polygon_value)
+        polygon_result = parse_violation_value(polygon_value, cell="TEST_CELL")
         assert polygon_result.polygons[0] == ((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (1.0, 2.0))
+        assert polygon_result.cell == "TEST_CELL"
 
     def test_parse_multiple_polygons(self):
         """Test parsing multiple polygons violation string."""
         polygon_value = (
             "polygon: (1.0,2.0;3.0,4.0;5.0,6.0;1.0,2.0/7.0,8.0;9.0,10.0;11.0,12.0;7.0,8.0)"
         )
-        polygon_result = parse_violation_value(polygon_value)
+        polygon_result = parse_violation_value(polygon_value, cell="TEST_CELL")
         assert polygon_result.polygons[0] == ((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (1.0, 2.0))
         assert polygon_result.polygons[1] == ((7.0, 8.0), (9.0, 10.0), (11.0, 12.0), (7.0, 8.0))
+        assert polygon_result.cell == "TEST_CELL"
 
     @pytest.mark.parametrize(
         "invalid_edge",
@@ -605,7 +675,7 @@ class TestDRCResults:
     def test_parse_invalid_edge_format(self, invalid_edge):
         """Test parsing invalid violation format."""
         with pytest.raises(ValueError):
-            parse_violation_value(invalid_edge)
+            parse_violation_value(invalid_edge, cell="TEST_CELL")
 
     @pytest.mark.parametrize(
         "invalid_edge_pair",
@@ -618,7 +688,7 @@ class TestDRCResults:
     def test_parse_invalid_edge_pair_format(self, invalid_edge_pair):
         """Test parsing invalid edge-pair violation format."""
         with pytest.raises(ValueError):
-            parse_violation_value(invalid_edge_pair)
+            parse_violation_value(invalid_edge_pair, cell="TEST_CELL")
 
     @pytest.mark.parametrize(
         "invalid_polygon",
@@ -631,7 +701,7 @@ class TestDRCResults:
     def test_parse_invalid_polygon_format(self, invalid_polygon):
         """Test parsing invalid polygon violation format."""
         with pytest.raises(ValueError):
-            parse_violation_value(invalid_polygon)
+            parse_violation_value(invalid_polygon, cell="TEST_CELL")
 
     @pytest.mark.parametrize(
         "invalid_polygons",
@@ -644,12 +714,12 @@ class TestDRCResults:
     def test_parse_invalid_polygon_format_multiple_polygons(self, invalid_polygons):
         """Test parsing invalid polygon violation format with multiple polygons."""
         with pytest.raises(ValueError) as e:
-            parse_violation_value(invalid_polygons)
+            parse_violation_value(invalid_polygons, cell="TEST_CELL")
 
     def test_parse_violation_value_unknown_type(self):
         """Test parsing unknown violation type."""
         with pytest.raises(ValueError):
-            parse_violation_value("unknown: (1.0,2.0)")
+            parse_violation_value("unknown: (1.0,2.0)", cell="TEST_CELL")
 
     def test_results_warn_without_limit(self, monkeypatch, tmp_path):
         """Warn when no limit is set and a category exceeds the threshold."""
