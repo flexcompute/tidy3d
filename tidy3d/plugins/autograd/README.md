@@ -2,7 +2,7 @@
 
 As of version 2.7.0, Tidy3D provides native support for automatic differentiation (AD), empowering you to perform gradient-based optimization and sensitivity analysis of photonic devices directly within your simulation workflow.
 
-The gradient calculation is performed efficiently using the **adjoint method**, which requires only one additional simulation per gradient evaluation, regardless of the number of design parameters. This makes it feasible to optimize devices with thousands of parameters.
+The gradient calculation is performed efficiently using the **adjoint method**, which requires typically only one additional simulation per gradient evaluation, regardless of the number of design parameters. This makes it feasible to optimize devices with thousands of parameters.
 
 This implementation is powered by the `autograd` library and replaces the previous `jax`-based `adjoint` plugin, offering several key benefits:
 
@@ -63,7 +63,7 @@ An inverse design optimization loop in Tidy3D generally follows these steps:
 
 ## Key Features at a Glance
 
-* **Geometry + Material coverage**: Optimize standard geometries (including `PolySlab` sidewall angles) and dispersive media without custom wrappers.
+* **Geometry + Material coverage**: Optimize most geometries (including `PolySlab` sidewall angles or `TriangleMesh` vertices) and dispersive media without custom wrappers.
 * **Topology-friendly workflows**: `CustomMedium` plus the plugin’s filters/projections let you impose fabrication constraints while staying differentiable.
 * **Broadband + adjoint throttling**: A single broadband source can drive gradients; adjoint jobs are auto-grouped and limited by `max_num_adjoint_per_fwd`.
 * **Circuit and batch gradients**: `td.web.run` transparently differentiates `run_async` batches and S-matrix modelers whenever any child sim is autograd-ready.
@@ -124,19 +124,22 @@ Tidy3D's AD framework supports a wide range of design scenarios.
 
 #### Geometry
 
-| Component | Traceable Attributes | Example Use Case |
-| :--- | :--- | :--- |
-| `Box` | `.center`, `.size` | Shape Optimization |
-| `Cylinder` | `.center`, `.radius`, `.length` | Shape Optimization |
-| `PolySlab` | `.vertices`, `.slab_bounds`, `.sidewall_angle`, `dilation` | Shape Optimization & taper tuning |
-| `GeometryGroup` | `.geometries` | Grouping for performance |
+| Component       | Traceable Attributes                                       | Example Use Case                  |
+|:----------------|:-----------------------------------------------------------|:----------------------------------|
+| `Box`           | `.center`, `.size`                                         | Shape Optimization                |
+| `Cylinder`      | `.center`, `.radius`, `.length`                            | Shape Optimization                |
+| `PolySlab`      | `.vertices`, `.slab_bounds`, `.sidewall_angle`, `dilation` | Shape Optimization & taper tuning |
+| `GeometryGroup` | `.geometries`                                              | Grouping for performance          |
+| `TriangleMesh`  | `.mesh_dataset.surface_mesh`                               | 3D Shape Optimization             |
 
 #### Base Materials
 
-| Component | Traceable Attributes | Example Use Case |
-| :--- | :--- | :--- |
-| `Medium` | `.permittivity` (isotropic, non-dispersive) | Material Optimization |
-| `CustomMedium` | Permittivity data array | Topology Optimization |
+| Component                 | Traceable Attributes | Example Use Case                           |
+|:--------------------------| :--- |:-------------------------------------------|
+| `Medium`                  | `.permittivity` (isotropic, non-dispersive) | Material Optimization                      |
+| `CustomMedium`            | Permittivity data array | Topology Optimization                      |
+| `AnisotropicMedium`       | Permittivity data array | Material Optimization of Photonic Crystals |
+| `CustomAnisotropicMedium` | Permittivity data array | Topology Optimization of Photonic Crystals |
 
 #### Dispersive Models
 
