@@ -174,52 +174,49 @@ def postprocess_adj(
         else:
             eps_background = None
 
-        # auto permittivity detection for non-box geometries
-        if not isinstance(structure.geometry, td.Box):
-            sim_orig = sim_data_orig.simulation
-            plane_eps = eps_fwd.monitor.geometry
+        # auto permittivity detection
+        sim_orig = sim_data_orig.simulation
+        plane_eps = eps_fwd.monitor.geometry
 
-            sim_orig_grid_spec = td.components.grid.grid_spec.GridSpec.from_grid(sim_orig.grid)
+        sim_orig_grid_spec = td.components.grid.grid_spec.GridSpec.from_grid(sim_orig.grid)
 
-            # permittivity without this structure
-            structs_no_struct = list(sim_orig.structures)
-            structs_no_struct.pop(structure_index)
-            sim_no_structure = sim_orig.updated_copy(
-                structures=structs_no_struct, monitors=[], sources=[], grid_spec=sim_orig_grid_spec
+        # permittivity without this structure
+        structs_no_struct = list(sim_orig.structures)
+        structs_no_struct.pop(structure_index)
+        sim_no_structure = sim_orig.updated_copy(
+            structures=structs_no_struct, monitors=[], sources=[], grid_spec=sim_orig_grid_spec
+        )
+
+        eps_no_structure_data = [
+            sim_no_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
+            for f in adjoint_frequencies
+        ]
+
+        eps_no_structure = xr.concat(eps_no_structure_data, dim="f").assign_coords(
+            f=adjoint_frequencies
+        )
+
+        if structure.medium.is_pec:
+            eps_inf_structure = None
+        else:
+            # permittivity with infinite structure
+            structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
+            sim_inf_structure = sim_orig.updated_copy(
+                structures=structs_inf_struct,
+                medium=structure.medium,
+                monitors=[],
+                sources=[],
+                grid_spec=sim_orig_grid_spec,
             )
 
-            eps_no_structure_data = [
-                sim_no_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
+            eps_inf_structure_data = [
+                sim_inf_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
                 for f in adjoint_frequencies
             ]
 
-            eps_no_structure = xr.concat(eps_no_structure_data, dim="f").assign_coords(
+            eps_inf_structure = xr.concat(eps_inf_structure_data, dim="f").assign_coords(
                 f=adjoint_frequencies
             )
-
-            if structure.medium.is_pec:
-                eps_inf_structure = None
-            else:
-                # permittivity with infinite structure
-                structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
-                sim_inf_structure = sim_orig.updated_copy(
-                    structures=structs_inf_struct,
-                    medium=structure.medium,
-                    monitors=[],
-                    sources=[],
-                    grid_spec=sim_orig_grid_spec,
-                )
-
-                eps_inf_structure_data = [
-                    sim_inf_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
-                    for f in adjoint_frequencies
-                ]
-
-                eps_inf_structure = xr.concat(eps_inf_structure_data, dim="f").assign_coords(
-                    f=adjoint_frequencies
-                )
-        else:
-            eps_no_structure = eps_inf_structure = None
 
         # compute bounds intersection
         struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds

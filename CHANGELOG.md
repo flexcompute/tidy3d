@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed bug where an extra spatial coordinate could appear in `complex_flux` and `ImpedanceCalculator` results.
 - Fixed normal for `Box` shape gradient computation to always point outward from boundary which is needed for correct PEC handling.
 - Fixed `Box` gradients within `GeometryGroup` where the group intersection boundaries were forwarded.
+- Fixed `Box` gradients to use automatic permittivity detection for inside/outside permittivity.
 
 ## [2.10.0rc3] - 2025-11-26
 
