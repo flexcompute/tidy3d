@@ -473,7 +473,7 @@ def test_eme_simulation():
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
     with AssertLogLevel("WARNING", contains_str="store_coeffs"):
-        sim_bad.validate_pre_upload()
+        sim_bad.updated_copy(store_coeffs=True).validate_pre_upload()
     sim_bad = sim.updated_copy(
         size=(10, 10, 10),
         monitors=[large_monitor],
@@ -1433,15 +1433,16 @@ def test_eme_periodicity():
 
     # remove the field monitor, now it passes
     desired_cell_index_pairs = set([(i, i + 1) for i in range(6)] + [(5, 1)])
-    with AssertLogLevel("WARNING", contains_str="deprecated"):
-        sim = sim.updated_copy(
-            monitors=[m for m in sim.monitors if not isinstance(m, td.EMEFieldMonitor)]
-        )
-        sim2 = sim.updated_copy(num_reps=2, path="eme_grid_spec/subgrids/1")
-        assert set(sim2._cell_index_pairs) == desired_cell_index_pairs
+    sim = sim.updated_copy(
+        monitors=[m for m in sim.monitors if not isinstance(m, td.EMEFieldMonitor)]
+    )
+    sim2 = sim.updated_copy(num_reps=2, path="eme_grid_spec/subgrids/1")
+    assert set(sim2._cell_index_pairs) == desired_cell_index_pairs
     # sweep can't have coeff monitor
     with pytest.raises(SetupError):
         _ = sim.updated_copy(sweep_spec=sweep_spec)
+    with pytest.raises(SetupError):
+        _ = sim.updated_copy(sweep_spec=sweep_spec, store_coeffs=True, monitors=[])
     # remove coeff monitor too, now it passes
     with AssertLogLevel(None):
         sim = sim.updated_copy(

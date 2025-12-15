@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `symmetrize_mirror`, `symmetrize_rotation`, `symmetrize_diagonal` functions to the autograd plugin. They can be used for enforcing symmetries in topology optimization.
 - Klayout plugin automatically finds klayout installation path at common locations.
 - Added autograd support for `TriangleMesh`, allowing gradient computation with respect to mesh vertices for inverse design.
-- Added `EMESimulationData.coeffs` to store coefficients from the EME solver, including mode overlaps, interface S matrices, and effective propagation indices.
+- Added `EMESimulation.store_coeffs` to store coefficients from the EME solver, including mode overlaps, interface S matrices, and effective propagation indices.
 - Get cell-related information from violation markers in `DRCResults` and `DRCViolation` to the klayout plugin: Use for example `DRCResults.violations_by_cell` to group them.
 
 ### Changed
