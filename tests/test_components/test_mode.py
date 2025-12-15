@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 
 import numpy as np
-import pydantic.v1 as pydantic
+import pydantic as pd
 import pytest
 from matplotlib import pyplot as plt
 
@@ -37,29 +37,29 @@ def test_modes():
     for opt in ["lowest", "highest", "central"]:
         _ = td.ModeSpec(num_modes=3, sort_spec=td.ModeSortSpec(track_freq=opt))
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.ModeSpec(num_modes=3, track_freq="middle")
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.ModeSpec(num_modes=3, track_freq=4)
 
 
 def test_bend_axis_not_given():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.ModeSpec(bend_radius=1.0, bend_axis=None)
 
 
 def test_zero_radius():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.ModeSpec(bend_radius=0.0, bend_axis=1)
 
 
 def test_glancing_incidence():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.ModeSpec(angle_theta=np.pi / 2)
 
 
 def test_group_index_step_validation():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.ModeSpec(group_index_step=1.0)
 
     ms = td.ModeSpec(group_index_step=True)
@@ -76,7 +76,7 @@ def test_angle_rotation_with_phi():
     td.ModeSpec(angle_phi=np.pi, angle_rotation=True)
 
     # Case where angle_phi is not a multiple of np.pi and angle_rotation is True
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         td.ModeSpec(angle_phi=np.pi / 3, angle_rotation=True)
 
 
@@ -128,22 +128,22 @@ def test_validation_from_simulation():
     _ = sim.updated_copy(structures=[reg_geometry], monitors=[rot_monitor])
 
     # Test that transforming a geometry with an infinite extent raises an error
-    with pytest.raises(SetupError):
+    with pytest.raises((SetupError, pd.ValidationError)):
         sim.updated_copy(structures=[inf_geometry], monitors=[rot_monitor])
 
     # Test that transforming an anisotropic medium raises an error
-    with pytest.raises(SetupError):
+    with pytest.raises((SetupError, pd.ValidationError)):
         sim.updated_copy(structures=[anisotropic_geometry], monitors=[rot_monitor])
 
     # Same thing with a ModeSource
-    with pytest.raises(SetupError):
+    with pytest.raises((SetupError, pd.ValidationError)):
         sim.updated_copy(structures=[inf_geometry], sources=[rot_source])
 
-    with pytest.raises(SetupError):
+    with pytest.raises((SetupError, pd.ValidationError)):
         sim.updated_copy(structures=[anisotropic_geometry], sources=[rot_source])
 
     # Same thing with ModeSimulation
-    with pytest.raises(SetupError):
+    with pytest.raises((SetupError, pd.ValidationError)):
         td.ModeSimulation(
             structures=[inf_geometry],
             size=(0, 5, 5),
@@ -151,7 +151,7 @@ def test_validation_from_simulation():
             freqs=[td.C_0],
         )
 
-    with pytest.raises(SetupError):
+    with pytest.raises((SetupError, pd.ValidationError)):
         td.ModeSimulation(
             structures=[anisotropic_geometry],
             size=(0, 5, 5),
@@ -172,7 +172,7 @@ def get_mode_sim():
         freqs=FS,
         mode_spec=mode_spec,
         grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FS[0]),
-        monitors=[permittivity_monitor],
+        monitors=(permittivity_monitor,),
     )
     return sim
 
@@ -201,14 +201,14 @@ def test_mode_sim():
     assert sim.plane == sim.geometry
 
     # must be planar or have plane
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(size=(3, 3, 3), plane=None)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(size=(3, 3, 3), plane=td.Box(size=(3, 3, 3)))
     _ = sim.updated_copy(size=(3, 3, 3), plane=td.Box(size=(3, 3, 0)))
 
     # plane must intersect sim geometry
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(size=(3, 3, 3), plane=td.Box(center=(5, 5, 5), size=(1, 1, 0)))
 
     # test warning for not providing wavelength in autogrid
@@ -257,7 +257,7 @@ def test_mode_sim():
     )
 
     assert td.ModeSimulation.from_simulation(sim) == sim
-    assert td.ModeSimulation.from_mode_solver(sim._mode_solver) == sim.updated_copy(monitors=[])
+    assert td.ModeSimulation.from_mode_solver(sim._mode_solver) == sim.updated_copy(monitors=())
     _ = td.ModeSimulation.from_simulation(
         simulation=fdtd_sim,
         plane=td.Box(size=(4, 4, 0)),

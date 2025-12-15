@@ -3,15 +3,23 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
-from pydantic.v1 import NonNegativeFloat, PositiveInt, conint
+from numpy.typing import NDArray
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    PositiveFloat,
+    PositiveInt,
+    conint,
+    field_validator,
+    model_validator,
+)
 from scipy.signal.windows import blackman, blackmanharris, chebwin, hamming, hann, kaiser, taylor
 from scipy.special import j0, jn_zeros
 
-from tidy3d.components.base import skip_if_fields_missing
+from tidy3d.compat import Self
 from tidy3d.components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box, Geometry
@@ -33,7 +41,7 @@ from tidy3d.log import log
 class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
     """Abstract base for phased array calculators."""
 
-    taper: Union[RectangularTaper, RadialTaper] = pd.Field(
+    taper: Optional[Union[RectangularTaper, RadialTaper]] = Field(
         None,
         discriminator=TYPE_TAG_STR,
         title="Antenna Array Taper",
@@ -76,7 +84,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
 
         return 0.5 * (rmax + rmin)
 
-    def _detect_antenna_bounds(self, simulation: Simulation):
+    def _detect_antenna_bounds(self, simulation: Simulation) -> Bound:
         """Detect the bounds of the antenna in the simulation."""
         # directions in which we will need to tile simulation
         extend_dims = self._extend_dims
@@ -129,7 +137,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
 
     def _try_to_expand_geometry(
         self, geometry: Geometry, old_sim_bounds: Bound, new_sim_bounds: Bound
-    ):
+    ) -> Geometry:
         """Try to expand geometry to cover the entire simulation domain."""
 
         can_expand = isinstance(geometry, Box) and all(
@@ -177,7 +185,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
         ],
         old_sim_bounds: Bound,
         new_sim_bounds: Bound,
-    ):
+    ) -> list[Union[Structure, MeshOverrideStructure, LayerRefinementSpec, LumpedElement]]:
         """Duplicate or expand a list of objects."""
 
         locations = self._antenna_locations
@@ -245,7 +253,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
         antenna_bounds: Bound,
         new_sim_bounds: Bound,
         old_sim_bounds: Bound,
-    ):
+    ) -> list[MonitorType]:
         """Expand monitors."""
 
         extend_dims = self._extend_dims
@@ -314,7 +322,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
 
     def _duplicate_structures(
         self, structures: tuple[Structure, ...], new_sim_bounds: Bound, old_sim_bounds: Bound
-    ):
+    ) -> list[Structure]:
         """Duplicate structures."""
 
         return self._duplicate_or_expand_list_of_objects(
@@ -327,7 +335,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
         lumped_elements: tuple[LumpedElement, ...],
         old_sim_bounds: Bound,
         new_sim_bounds: Bound,
-    ):
+    ) -> tuple[list[SourceType], list[LumpedElement]]:
         """Duplicate sources and lumped elements."""
         array_lumped_elements = self._duplicate_or_expand_list_of_objects(
             objects=lumped_elements, old_sim_bounds=old_sim_bounds, new_sim_bounds=new_sim_bounds
@@ -353,7 +361,7 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
 
     def _duplicate_grid_specs(
         self, grid_spec: GridSpec, old_sim_bounds: Bound, new_sim_bounds: Bound
-    ):
+    ) -> GridSpec:
         """Duplicate grid specs."""
 
         array_overrides = self._duplicate_or_expand_list_of_objects(
@@ -370,12 +378,12 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
         array_snapping_points = []
         for translation_vector in self._antenna_locations:
             for snapping_point in grid_spec.snapping_points:
-                new_snapping_point = [
+                new_snapping_point = tuple(
                     snapping_point[dim] + translation_vector[dim]
                     if snapping_point[dim] is not None
                     else None
                     for dim in range(3)
-                ]
+                )
                 array_snapping_points.append(new_snapping_point)
 
         return grid_spec.updated_copy(
@@ -731,35 +739,49 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
     ... )
     """
 
-    array_size: tuple[PositiveInt, PositiveInt, PositiveInt] = pd.Field(
+    array_size: tuple[PositiveInt, PositiveInt, PositiveInt] = Field(
         title="Array Size",
         description="Number of antennas along x, y, and z directions.",
     )
 
-    spacings: tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = pd.Field(
+    spacings: tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = Field(
         title="Antenna Spacings",
         description="Center-to-center spacings between antennas along x, y, and z directions.",
     )
 
-    phase_shifts: tuple[float, float, float] = pd.Field(
+    phase_shifts: tuple[float, float, float] = Field(
         (0, 0, 0),
         title="Phase Shifts",
         description="Phase-shifts between antennas along x, y, and z directions.",
     )
 
-    amp_multipliers: tuple[Optional[ArrayLike], Optional[ArrayLike], Optional[ArrayLike]] = (
-        pd.Field(
-            (None, None, None),
-            title="Amplitude Multipliers",
-            description="Amplitude multipliers spatially distributed along x, y, and z directions.",
-        )
+    amp_multipliers: tuple[Optional[ArrayLike], Optional[ArrayLike], Optional[ArrayLike]] = Field(
+        (None, None, None),
+        title="Amplitude Multipliers",
+        description="Amplitude multipliers spatially distributed along x, y, and z directions.",
     )
 
-    @pd.validator("amp_multipliers", pre=True, always=True)
-    @skip_if_fields_missing(["array_size"])
-    def _check_amp_multipliers(cls, val, values):
+    @field_validator("array_size", "spacings", "phase_shifts", "amp_multipliers", mode="before")
+    @classmethod
+    def _convert_list_to_tuple(cls, v: Any) -> Any:
+        """Convert lists to tuples for tuple fields."""
+        if isinstance(v, list):
+            return tuple(v)
+        # Handle numpy arrays
+        try:
+            import numpy as np
+
+            if isinstance(v, np.ndarray):
+                return tuple(v.tolist())
+        except ImportError:
+            pass
+        return v
+
+    @model_validator(mode="after")
+    def _check_amp_multipliers(self) -> Self:
         """Check that the length of the amplitude multipliers is equal to the array size along each dimension."""
-        array_size = values.get("array_size")
+        val = self.amp_multipliers
+        array_size = self.array_size
         if len(val) != 3:
             raise ValueError("'amp_multipliers' must have 3 elements.")
         if val[0] is not None and len(val[0]) != array_size[0]:
@@ -774,7 +796,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
             raise ValueError(
                 f"'amp_multipliers' has length of {len(val[2])} along the z direction, but the array size is {array_size[2]}."
             )
-        return val
+        return self
 
     @property
     def _antenna_locations(self) -> ArrayLike:
@@ -999,7 +1021,7 @@ class HannWindow(AbstractWindow):
 class ChebWindow(AbstractWindow):
     """Standard Chebyshev window for tapering with configurable sidelobe attenuation."""
 
-    attenuation: pd.PositiveFloat = pd.Field(
+    attenuation: PositiveFloat = Field(
         default=30,
         title="Attenuation",
         description="Desired attenuation level of sidelobes.",
@@ -1026,7 +1048,7 @@ class ChebWindow(AbstractWindow):
 class KaiserWindow(AbstractWindow):
     """Class for Kaiser window."""
 
-    beta: pd.NonNegativeFloat = pd.Field(
+    beta: NonNegativeFloat = Field(
         ...,
         title="Shape Parameter",
         description="Shape parameter, determines trade-off between main-lobe width and side lobe level.",
@@ -1052,20 +1074,20 @@ class KaiserWindow(AbstractWindow):
 class TaylorWindow(AbstractWindow):
     """Taylor window with configurable sidelobe suppression and sidelobe count."""
 
-    sll: pd.PositiveFloat = pd.Field(
+    sll: PositiveFloat = Field(
         default=30,
         title="Sidelobe Suppression Level",
         description="Desired suppression of sidelobe level relative to the DC gain.",
         units="dB",
     )
 
-    nbar: conint(gt=0, le=10) = pd.Field(
+    nbar: conint(gt=0, le=10) = Field(
         default=4,
         title="Number of Nearly Constant Sidelobes",
         description="Number of nearly constant level sidelobes adjacent to the mainlobe.",
     )
 
-    def _get_weights_discrete(self, N):
+    def _get_weights_discrete(self, N: int) -> NDArray:
         """
         Generate a 1D Taylor window of length N.
 
@@ -1081,7 +1103,7 @@ class TaylorWindow(AbstractWindow):
         """
         return taylor(N, self.nbar, self.sll)
 
-    def _get_exp_weights(self, mus: np.ndarray):
+    def _get_exp_weights(self, mus: NDArray) -> NDArray:
         """
         Compute expansion coefficients B_l for the circular Taylor taper.
 
@@ -1182,21 +1204,21 @@ class AbstractTaper(MicrowaveBaseModel, ABC):
 class RectangularTaper(AbstractTaper):
     """Class for rectangular taper."""
 
-    window_x: Optional[RectangularWindowType] = pd.Field(
+    window_x: Optional[RectangularWindowType] = Field(
         None,
         title="X Axis Window",
         description="Window type used to taper array antenna along x axis.",
         discriminator=TYPE_TAG_STR,
     )
 
-    window_y: Optional[RectangularWindowType] = pd.Field(
+    window_y: Optional[RectangularWindowType] = Field(
         None,
         title="Y Axis Window",
         description="Window type used to taper array antenna along y axis.",
         discriminator=TYPE_TAG_STR,
     )
 
-    window_z: Optional[RectangularWindowType] = pd.Field(
+    window_z: Optional[RectangularWindowType] = Field(
         None,
         title="Z Axis Window",
         description="Window type used to taper array antenna along z axis.",
@@ -1220,11 +1242,11 @@ class RectangularTaper(AbstractTaper):
         """
         return cls(window_x=window, window_y=window, window_z=window)
 
-    @pd.root_validator
-    def check_at_least_one_window(cls, values):
-        if not any([values.get("window_x"), values.get("window_y"), values.get("window_z")]):
+    @model_validator(mode="after")
+    def check_at_least_one_window(self) -> Self:
+        if not any([self.window_x, self.window_y, self.window_z]):
             raise ValueError("At least one window (x, y, or z) must be provided.")
-        return values
+        return self
 
     def amp_multipliers(
         self, array_size: tuple[PositiveInt, PositiveInt, PositiveInt]
@@ -1258,7 +1280,7 @@ class RectangularTaper(AbstractTaper):
 class RadialTaper(AbstractTaper):
     """Class for Radial Taper."""
 
-    window: TaylorWindow = pd.Field(
+    window: TaylorWindow = Field(
         ..., title="Window Object", description="Window type used to taper array antenna."
     )
 
@@ -1296,4 +1318,4 @@ class RadialTaper(AbstractTaper):
         return (amps,)
 
 
-RectangularAntennaArrayCalculator.update_forward_refs()
+RectangularAntennaArrayCalculator.model_rebuild()

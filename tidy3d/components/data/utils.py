@@ -7,7 +7,8 @@ from typing import Union
 import numpy as np
 import xarray as xr
 
-from tidy3d.components.types import ArrayLike, annotate_type
+from tidy3d.components.types import ArrayLike
+from tidy3d.components.types.base import discriminated_union
 
 from .data_array import DataArray, SpatialDataArray
 from .unstructured.base import UnstructuredGridDataset
@@ -17,7 +18,10 @@ from .unstructured.triangular import TriangularGridDataset
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
 
 CustomSpatialDataType = Union[SpatialDataArray, UnstructuredGridDatasetType]
-CustomSpatialDataTypeAnnotated = Union[SpatialDataArray, annotate_type(UnstructuredGridDatasetType)]
+CustomSpatialDataTypeAnnotated = Union[
+    discriminated_union(UnstructuredGridDatasetType),
+    SpatialDataArray,
+]
 
 
 def _get_numpy_array(data_array: Union[ArrayLike, DataArray, UnstructuredGridDataset]) -> ArrayLike:

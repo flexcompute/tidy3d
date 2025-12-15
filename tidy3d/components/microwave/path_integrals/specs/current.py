@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Any, Literal, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.geometry.bound_ops import bounds_union
 from tidy3d.components.microwave.base import MicrowaveBaseModel
@@ -40,19 +41,18 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
 
     _plane_validator = assert_plane()
 
-    sign: Direction = pd.Field(
-        ...,
+    sign: Direction = Field(
         title="Direction of Contour Integral",
         description="Positive indicates current flowing in the positive normal axis direction.",
     )
 
-    extrapolate_to_endpoints: bool = pd.Field(
+    extrapolate_to_endpoints: bool = Field(
         False,
         title="Extrapolate to Endpoints",
         description="This parameter is passed to :class:`AxisAlignedPathIntegral` objects when computing the contour integral.",
     )
 
-    snap_contour_to_grid: bool = pd.Field(
+    snap_contour_to_grid: bool = Field(
         False,
         title="Snap Contour to Grid",
         description="This parameter is passed to :class:`AxisAlignedPathIntegral` objects when computing the contour integral.",
@@ -64,9 +64,12 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
         for index, value in enumerate(self.size):
             if value == 0:
                 return index
+        raise SetupError("AxisAlignedCurrentIntegralSpec requires a zero-sized dimension.")
 
     def _to_path_integral_specs(
-        self, h_horizontal=None, h_vertical=None
+        self,
+        h_horizontal: Optional[DataArray] = None,
+        h_vertical: Optional[DataArray] = None,
     ) -> tuple[AxisAlignedPathIntegralSpec, ...]:
         """Returns four ``AxisAlignedPathIntegralSpec`` instances, which represent a contour
         integral around the surface defined by ``self.size``."""
@@ -312,15 +315,13 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
     """
 
     path_specs: tuple[Union[AxisAlignedCurrentIntegralSpec, Custom2DCurrentIntegralSpec], ...] = (
-        pd.Field(
-            ...,
+        Field(
             title="Path Specifications",
             description="Definition of the disjoint path specifications for each isolated contour integral.",
         )
     )
 
-    sum_spec: Literal["sum", "split"] = pd.Field(
-        ...,
+    sum_spec: Literal["sum", "split"] = Field(
         title="Sum Specification",
         description="Determines the method used to combine the currents calculated by the different "
         "current integrals defined by ``path_specs``. ``sum`` simply adds all currents, while ``split`` "
@@ -364,8 +365,11 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
             ax = path_spec.plot(x=x, y=y, z=z, ax=ax, **path_kwargs)
         return ax
 
-    @pd.validator("path_specs", always=True)
-    def _path_specs_not_empty(cls, val):
+    @field_validator("path_specs")
+    @classmethod
+    def _path_specs_not_empty(
+        cls, val: tuple[Union[AxisAlignedCurrentIntegralSpec, Custom2DCurrentIntegralSpec], ...]
+    ) -> tuple[Union[AxisAlignedCurrentIntegralSpec, Custom2DCurrentIntegralSpec], ...]:
         """Makes sure at least one path spec has been supplied"""
         # overall shape of vertices
         if len(val) < 1:

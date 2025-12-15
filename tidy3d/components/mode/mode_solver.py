@@ -6,16 +6,33 @@ from __future__ import annotations
 
 from functools import wraps
 from math import isclose
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union, get_args
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    ParamSpec,
+    TypeVar,
+    Union,
+    get_args,
+)
 
 import numpy as np
-import pydantic.v1 as pydantic
 import xarray as xr
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
 
+from tidy3d.compat import Self
 from tidy3d.components.base import (
     Tidy3dBaseModel,
     cached_property,
-    skip_if_fields_missing,
 )
 from tidy3d.components.boundary import PML, Absorber, Boundary, BoundarySpec, PECBoundary, StablePML
 from tidy3d.components.data.data_array import (
@@ -57,7 +74,6 @@ from tidy3d.components.source.time import SourceTime
 from tidy3d.components.structure import Structure
 from tidy3d.components.subpixel_spec import SurfaceImpedance
 from tidy3d.components.types import (
-    TYPE_TAG_STR,
     ArrayComplex3D,
     ArrayComplex4D,
     ArrayFloat1D,
@@ -72,6 +88,7 @@ from tidy3d.components.types import (
     PlotScale,
     Symmetry,
 )
+from tidy3d.components.types.base import TYPE_TAG_STR, discriminated_union
 from tidy3d.components.types.mode_spec import ModeSpecType
 from tidy3d.components.types.monitor_data import ModeSolverDataType
 from tidy3d.components.validators import (
@@ -108,9 +125,9 @@ FIELD_DECAY_CUTOFF = 1e-2
 # Maximum allowed size of the field data produced by the mode solver
 MAX_MODES_DATA_SIZE_GB = 20
 
-MODE_SIMULATION_TYPE = Union[Simulation, EMESimulation]
-MODE_SIMULATION_DATA_TYPE = Union[SimulationData, EMESimulationData]
-MODE_PLANE_TYPE = Union[Box, ModeSource, ModeMonitor, ModeSolverMonitor]
+MODE_SIMULATION_TYPE = discriminated_union(Union[Simulation, EMESimulation])
+MODE_SIMULATION_DATA_TYPE = discriminated_union(Union[SimulationData, EMESimulationData])
+MODE_PLANE_TYPE = discriminated_union(Union[Box, ModeSource, ModeMonitor, ModeSolverMonitor])
 
 # When using ``angle_rotation`` without a bend, use a very large effective radius
 EFFECTIVE_RADIUS_FACTOR = 10_000
@@ -118,19 +135,23 @@ EFFECTIVE_RADIUS_FACTOR = 10_000
 # Log a warning when the PML covers more than this portion of the mode plane in any axis
 WARN_THICK_PML_PERCENT = 50
 
+P = ParamSpec("P")
+R = TypeVar("R")
 
-def require_fdtd_simulation(fn):
+
+def require_fdtd_simulation(fn: Callable[P, R]) -> Callable[P, R]:
     """Decorate a function to check that ``simulation`` is an FDTD ``Simulation``."""
 
     @wraps(fn)
-    def _fn(self, **kwargs: Any):
+    def _fn(*args: P.args, **kwargs: P.kwargs) -> R:
         """New decorated function."""
+        self = args[0]
         if not isinstance(self.simulation, Simulation):
             raise SetupError(
                 f"The function '{fn.__name__}' is only supported "
                 "for 'simulation' of type FDTD 'Simulation'."
             )
-        return fn(self, **kwargs)
+        return fn(*args, **kwargs)
 
     return _fn
 
@@ -154,52 +175,49 @@ class ModeSolver(Tidy3dBaseModel):
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
-    simulation: MODE_SIMULATION_TYPE = pydantic.Field(
-        ...,
+    simulation: MODE_SIMULATION_TYPE = Field(
         title="Simulation",
         description="Simulation or EMESimulation defining all structures and mediums.",
         discriminator="type",
     )
 
-    plane: MODE_PLANE_TYPE = pydantic.Field(
-        ...,
+    plane: MODE_PLANE_TYPE = Field(
         title="Plane",
         description="Cross-sectional plane in which the mode will be computed.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    mode_spec: ModeSpecType = pydantic.Field(
-        ...,
+    mode_spec: ModeSpecType = Field(
         title="Mode specification",
         description="Container with specifications about the modes to be solved for.",
         discriminator=TYPE_TAG_STR,
     )
 
-    freqs: FreqArray = pydantic.Field(
-        ..., title="Frequencies", description="A list of frequencies at which to solve."
+    freqs: FreqArray = Field(
+        title="Frequencies",
+        description="A list of frequencies at which to solve.",
     )
 
-    direction: Direction = pydantic.Field(
+    direction: Direction = Field(
         "+",
         title="Propagation direction",
         description="Direction of waveguide mode propagation along the axis defined by its normal "
         "dimension.",
     )
 
-    colocate: bool = pydantic.Field(
+    colocate: bool = Field(
         True,
         title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default is ``True``.",
     )
 
-    conjugated_dot_product: bool = pydantic.Field(
+    conjugated_dot_product: bool = Field(
         True,
         title="Conjugated Dot Product",
         description="Use conjugated or non-conjugated dot product for mode decomposition.",
     )
 
-    fields: tuple[EMField, ...] = pydantic.Field(
+    fields: tuple[EMField, ...] = Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor. Note that some "
@@ -207,8 +225,9 @@ class ModeSolver(Tidy3dBaseModel):
         "like ``mode_area`` require all E-field components.",
     )
 
-    @pydantic.validator("simulation", pre=True, always=True)
-    def _convert_to_simulation(cls, val):
+    @field_validator("simulation")
+    @classmethod
+    def _convert_to_simulation(cls, val: MODE_SIMULATION_TYPE) -> MODE_SIMULATION_TYPE:
         """Convert to regular Simulation if e.g. JaxSimulation given."""
         if hasattr(val, "to_simulation"):
             val = val.to_simulation()[0]
@@ -218,8 +237,9 @@ class ModeSolver(Tidy3dBaseModel):
             )
         return val
 
-    @pydantic.validator("plane", always=True)
-    def is_plane(cls, val):
+    @field_validator("plane")
+    @classmethod
+    def is_plane(cls, val: MODE_PLANE_TYPE) -> MODE_PLANE_TYPE:
         """Raise validation error if not planar."""
         if val.size.count(0.0) != 1:
             raise ValidationError(f"ModeSolver plane must be planar, given size={val}")
@@ -228,53 +248,66 @@ class ModeSolver(Tidy3dBaseModel):
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
 
-    @pydantic.validator("plane", always=True)
-    @skip_if_fields_missing(["simulation"])
-    def plane_in_sim_bounds(cls, val, values):
+    @model_validator(mode="after")
+    def plane_in_sim_bounds(self) -> Self:
         """Check that the plane is at least partially inside the simulation bounds."""
-        sim_center = values.get("simulation").center
-        sim_size = values.get("simulation").size
-        sim_box = Box(size=sim_size, center=sim_center)
-
-        if not sim_box.intersects(val):
+        sim_box = Box(size=self.simulation.size, center=self.simulation.center)
+        if not sim_box.intersects(self.plane):
             raise SetupError("'ModeSolver.plane' must intersect 'ModeSolver.simulation'.")
-        return val
+        return self
 
-    @pydantic.validator("plane", always=True)
-    @skip_if_fields_missing(["simulation"])
-    def _warn_plane_crosses_symmetry(cls, val, values):
+    @model_validator(mode="after")
+    def _warn_plane_crosses_symmetry(self) -> Self:
         """Warn if the mode plane crosses the symmetry plane of the underlying simulation but
         the centers do not match."""
-        simulation = values.get("simulation")
-        bounds = val.bounds
-        # now check in each dimension whether we cross symmetry plane
         for dim in range(3):
-            if simulation.symmetry[dim] != 0:
+            if self.simulation.symmetry[dim] != 0:
                 crosses_symmetry = (
-                    bounds[0][dim] < simulation.center[dim]
-                    and bounds[1][dim] > simulation.center[dim]
+                    self.plane.bounds[0][dim] < self.simulation.center[dim]
+                    and self.plane.bounds[1][dim] > self.simulation.center[dim]
                 )
                 if crosses_symmetry:
-                    if not isclose(val.center[dim], simulation.center[dim]):
+                    if not isclose(self.plane.center[dim], self.simulation.center[dim]):
                         log.warning(
                             f"The original simulation is symmetric along {'xyz'[dim]} direction. "
                             "The mode simulation region does cross the symmetry plane but is "
                             "not symmetric with respect to it. To preserve correct symmetry, "
                             "the requested simulation region will be expanded by the solver."
                         )
-        return val
+        return self
 
-    def _post_init_validators(self) -> None:
-        self._validate_mode_plane_radius(
-            mode_spec=self.mode_spec,
-            plane=self.plane,
-            sim_geom=self.simulation.geometry,
-        )
+    @model_validator(mode="after")
+    def _validate_warn_thick_pml(self) -> Self:
+        """Warn if the pml covers a significant portion of the mode plane."""
         self._warn_thick_pml(simulation=self.simulation, plane=self.plane, mode_spec=self.mode_spec)
         self._validate_rotate_structures()
-        self._validate_num_grid_points()
-        if self._has_microwave_mode_spec:
-            self._validate_microwave_mode_spec(mode_spec=self.mode_spec, plane=self.plane)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_bend_radius(self) -> Self:
+        """Validate that the bend radius is not too small."""
+        sim_box = Box(size=self.simulation.size, center=self.simulation.center)
+        self._validate_mode_plane_radius(self.mode_spec, self.plane, sim_box)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_rotate_structures_after(self) -> Self:
+        self._validate_rotate_structures()
+        return self
+
+    @model_validator(mode="after")
+    def _validate_num_grid_points(self) -> Self:
+        """Upper bound of the product of the number of grid points and the number of modes. The bound is very loose: subspace
+        size times the size of eigenvector can be indexed by a 32bit integer.
+        """
+        num_cells, _, num_modes = self._num_cells_freqs_modes
+        relaxation_factor = 2
+        if num_cells * (20 + 2 * num_modes) * relaxation_factor > 2**32 - 1:
+            raise SetupError(
+                "Too many grid points on the modal plane. Please reduce the modal plane size, apply a coarser grid, "
+                "or reduce the number of modes."
+            )
+        return self
 
     @classmethod
     def _warn_thick_pml(
@@ -285,10 +318,7 @@ class ModeSolver(Tidy3dBaseModel):
         msg_prefix: str = "'ModeSolver'",
     ) -> None:
         """Warn if the pml covers a significant portion of the mode plane."""
-        coord_0, coord_1 = cls._plane_grid(
-            simulation=simulation,
-            plane=plane,
-        )
+        coord_0, coord_1 = cls._plane_grid(simulation=simulation, plane=plane)
         num_cells = [len(coord_0), len(coord_1)]
         effective_num_pml = cls._effective_num_pml(
             simulation=simulation, plane=plane, mode_spec=mode_spec
@@ -319,7 +349,6 @@ class ModeSolver(Tidy3dBaseModel):
             return
 
         mode_plane = cls._mode_plane(plane=plane, sim_geom=sim_geom)
-
         # radial axis is the plane axis that is not the bend axis
         _, plane_axs = mode_plane.pop_axis([0, 1, 2], mode_plane.size.index(0.0))
         radial_ax = plane_axs[(mode_spec.bend_axis + 1) % 2]
@@ -335,17 +364,34 @@ class ModeSolver(Tidy3dBaseModel):
         if np.abs(self.mode_spec.angle_theta) > 0 and self.mode_spec.angle_rotation:
             _ = self._rotate_structures
 
-    def _validate_num_grid_points(self) -> None:
-        """Upper bound of the product of the number of grid points and the number of modes. The bound is very loose: subspace
-        size times the size of eigenvector can be indexed by a 32bit integer.
-        """
-        num_cells, _, num_modes = self._num_cells_freqs_modes
-        relaxation_factor = 2
-        if num_cells * (20 + 2 * num_modes) * relaxation_factor > 2**32 - 1:
+    @staticmethod
+    def _make_rotated_structures(
+        structures: list[Structure], translate_kwargs: dict, rotate_kwargs: dict
+    ) -> list[Structure]:
+        try:
+            rotated_structures = []
+            for structure in structures:
+                if not isinstance(structure.medium, get_args(IsotropicUniformMediumType)):
+                    raise NotImplementedError(
+                        "Mode solver plane intersects an unsupported medium. "
+                        "Only uniform isotropic media are supported for the plane rotation."
+                    )
+
+                # Rotate and apply translations
+                geometry = structure.geometry
+                geometry = (
+                    geometry.translated(**{key: -val for key, val in translate_kwargs.items()})
+                    .rotated(**rotate_kwargs)
+                    .translated(**translate_kwargs)
+                )
+
+                rotated_structures.append(structure.updated_copy(geometry=geometry))
+
+            return rotated_structures
+        except Exception as e:
             raise SetupError(
-                "Too many grid points on the modal plane. Please reduce the modal plane size, apply a coarser grid, "
-                "or reduce the number of modes."
-            )
+                f"'angle_rotation' set to True but could not rotate structures: {e!s}"
+            ) from e
 
     @classmethod
     def _validate_microwave_mode_spec(cls, mode_spec: MicrowaveModeSpec, plane: Box) -> None:
@@ -358,7 +404,7 @@ class ModeSolver(Tidy3dBaseModel):
         return self.plane.size.index(0.0)
 
     @staticmethod
-    def plane_center_tangential(plane) -> tuple[float, float]:
+    def plane_center_tangential(plane: MODE_PLANE_TYPE) -> tuple[float, float]:
         """Mode lane center in the tangential axes."""
         _, plane_center = plane.pop_axis(plane.center, plane.size.index(0.0))
         return plane_center
@@ -379,7 +425,7 @@ class ModeSolver(Tidy3dBaseModel):
             if not isclose(simulation.center[dim], plane.center[dim]):
                 mode_symmetry[dim] = 0
         _, solver_sym = plane.pop_axis(mode_symmetry, axis=normal_axis)
-        return solver_sym
+        return tuple(solver_sym)
 
     @cached_property
     def solver_symmetry(self) -> tuple[Symmetry, Symmetry]:
@@ -651,7 +697,7 @@ class ModeSolver(Tidy3dBaseModel):
         return rotated_mode_data
 
     @cached_property
-    def rotated_structures_copy(self):
+    def rotated_structures_copy(self) -> ModeSolver:
         """Create a copy of the original ModeSolver with rotated structures
         to the simulation and updates the ModeSpec to disable bend correction
         and reset angles to normal."""
@@ -696,35 +742,6 @@ class ModeSolver(Tidy3dBaseModel):
         structs_in = Scene.intersecting_structures(self.plane, self.simulation.structures)
         return self._make_rotated_structures(structs_in, translate_kwargs, rotate_kwargs)
 
-    @staticmethod
-    def _make_rotated_structures(
-        structures: list[Structure], translate_kwargs: dict, rotate_kwargs: dict
-    ):
-        try:
-            rotated_structures = []
-            for structure in structures:
-                if not isinstance(structure.medium, get_args(IsotropicUniformMediumType)):
-                    raise NotImplementedError(
-                        "Mode solver plane intersects an unsupported medium. "
-                        "Only uniform isotropic media are supported for the plane rotation."
-                    )
-
-                # Rotate and apply translations
-                geometry = structure.geometry
-                geometry = (
-                    geometry.translated(**{key: -val for key, val in translate_kwargs.items()})
-                    .rotated(**rotate_kwargs)
-                    .translated(**translate_kwargs)
-                )
-
-                rotated_structures.append(structure.updated_copy(geometry=geometry))
-
-            return rotated_structures
-        except Exception as e:
-            raise SetupError(
-                f"'angle_rotation' set to True but could not rotate structures: {e!s}"
-            ) from e
-
     @cached_property
     def rotated_bend_center(self) -> list:
         """Calculate the center at the rotated bend such that the modal plane is normal
@@ -738,7 +755,7 @@ class ModeSolver(Tidy3dBaseModel):
     # # Leaving for future reference if needed
     # def _ref_data_straight(
     #     self, mode_solver_data: ModeSolverData
-    # ) -> Dict[Union[ScalarModeFieldDataArray, ModeIndexDataArray]]:
+    # ) -> dict[Union[ScalarModeFieldDataArray, ModeIndexDataArray]]:
     #     """Convert reference data to be centered at the monitor center."""
 
     #     # Reference solution stored
@@ -762,7 +779,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _car_2_cyn(
         self, mode_solver_data: ModeSolverData
-    ) -> dict[Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]]:
+    ) -> dict[str, Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]]:
         """Convert cartesian fields to cylindrical fields centered at the
         rotated bend center."""
 
@@ -854,7 +871,7 @@ class ModeSolver(Tidy3dBaseModel):
     # # Leaving for future reference if needed
     # def _mode_rotation_straight(
     #     self,
-    #     solver_ref_data: Dict[Union[ModeSolverData]],
+    #     solver_ref_data: dict[Union[ModeSolverData]],
     #     solver: ModeSolver,
     # ) -> ModeSolverData:
     #     """Rotate the mode solver solution from the reference plane
@@ -963,7 +980,7 @@ class ModeSolver(Tidy3dBaseModel):
     def _mode_rotation(
         self,
         solver_ref_data_cylindrical: dict[
-            Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]
+            str, Union[ScalarModeFieldCylindricalDataArray, ModeIndexDataArray]
         ],
         solver: ModeSolver,
     ) -> ModeSolverData:
@@ -1105,7 +1122,7 @@ class ModeSolver(Tidy3dBaseModel):
         return theta_ref
 
     @cached_property
-    def _bend_radius(self):
+    def _bend_radius(self) -> float:
         """A bend_radius to use when ``angle_rotation`` is on. When there is no bend defined, we
         use an effectively very large radius, much larger than the mode plane. This is only used
         for the rotation of the fields - the reference modes are still computed without any
@@ -1117,7 +1134,7 @@ class ModeSolver(Tidy3dBaseModel):
         return EFFECTIVE_RADIUS_FACTOR * largest_dim
 
     @cached_property
-    def bend_center(self) -> list:
+    def bend_center(self) -> list[float]:
         """Computes the bend center based on plane center, angle_theta and angle_phi."""
         _, id_bend_uv = self.plane.pop_axis((0, 1, 2), axis=self.bend_axis_3d)
 
@@ -1361,7 +1378,7 @@ class ModeSolver(Tidy3dBaseModel):
         """Normalize modes. Note: this modifies ``mode_solver_data`` in-place."""
         mode_solver_data._normalize_modes()
 
-    def _filter_components(self, mode_solver_data: ModeSolverData):
+    def _filter_components(self, mode_solver_data: ModeSolverData) -> ModeSolverData:
         skip_components = {
             comp: None
             for comp in mode_solver_data.field_components.keys()
@@ -1369,7 +1386,7 @@ class ModeSolver(Tidy3dBaseModel):
         }
         return mode_solver_data.updated_copy(**skip_components, validate=False)
 
-    def _filter_polarization(self, mode_solver_data: ModeSolverData):
+    def _filter_polarization(self, mode_solver_data: ModeSolverData) -> ModeSolverData:
         """Filter polarization."""
         filter_pol = self.mode_spec.filter_pol
         if filter_pol is None:
@@ -1480,7 +1497,7 @@ class ModeSolver(Tidy3dBaseModel):
             :class:`.SimulationData` object containing the effective index and mode fields.
         """
         monitor_data = self.data
-        new_monitors = [*list(self.simulation.monitors), monitor_data.monitor]
+        new_monitors = (*self.simulation.monitors, monitor_data.monitor)
         new_simulation = self.simulation.copy(update={"monitors": new_monitors})
         if isinstance(new_simulation, Simulation):
             return SimulationData(simulation=new_simulation, data=(monitor_data,))
@@ -1613,7 +1630,13 @@ class ModeSolver(Tidy3dBaseModel):
         return n_complex, fields, eps_spec
 
     @staticmethod
-    def _postprocess_solver_fields(solver_fields, normal_axis, plane, mode_spec, coords):
+    def _postprocess_solver_fields(
+        solver_fields: ArrayComplex4D,
+        normal_axis: Axis,
+        plane: MODE_PLANE_TYPE,
+        mode_spec: ModeSpec,
+        coords: tuple[ArrayFloat1D, ArrayFloat1D],
+    ) -> dict[str, ArrayComplex4D]:
         """Postprocess `solver_fields` from `compute_modes` to proper coordinate"""
         fields = {key: [] for key in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
         diff_coords = (np.diff(coords[0]), np.diff(coords[1]))
@@ -1673,7 +1696,9 @@ class ModeSolver(Tidy3dBaseModel):
         return np.stack(plane.unpop_axis(f_n, f_ts, axis=2), axis=0)
 
     @classmethod
-    def _postprocess_solver_fields_inverse(cls, fields, normal_axis: Axis, plane: MODE_PLANE_TYPE):
+    def _postprocess_solver_fields_inverse(
+        cls, fields: dict[str, ArrayComplex4D], normal_axis: Axis, plane: MODE_PLANE_TYPE
+    ) -> ArrayComplex4D:
         """Convert ``fields`` to ``solver_fields``. Doesn't change gauge."""
         E = [fields[key] for key in ("Ex", "Ey", "Ez")]
         H = [fields[key] for key in ("Hx", "Hy", "Hz")]
@@ -1791,7 +1816,7 @@ class ModeSolver(Tidy3dBaseModel):
     @staticmethod
     def _process_fields(
         mode_fields: ArrayComplex4D,
-        mode_index: pydantic.NonNegativeInt,
+        mode_index: NonNegativeInt,
         normal_axis: Axis,
         plane: MODE_PLANE_TYPE,
         diff_coords: tuple[ArrayFloat1D, ArrayFloat1D],
@@ -2019,8 +2044,8 @@ class ModeSolver(Tidy3dBaseModel):
         self,
         source_time: SourceTime,
         direction: Direction = None,
-        mode_index: pydantic.NonNegativeInt = 0,
-        num_freqs: pydantic.PositiveInt = 1,
+        mode_index: NonNegativeInt = 0,
+        num_freqs: PositiveInt = 1,
         **kwargs: Any,
     ) -> ModeSource:
         """Creates :class:`.ModeSource` from a :class:`.ModeSolver` instance plus additional
@@ -2065,7 +2090,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         Parameters
         ----------
-        freqs : List[float]
+        freqs : list[float]
             Frequencies to include in Monitor (Hz).
             If not specified, passes ``self.freqs``.
         name : str
@@ -2158,7 +2183,7 @@ class ModeSolver(Tidy3dBaseModel):
         self,
         source_time: SourceTime,
         direction: Direction = None,
-        mode_index: pydantic.NonNegativeInt = 0,
+        mode_index: NonNegativeInt = 0,
     ) -> Simulation:
         """Creates :class:`.Simulation` from a :class:`.ModeSolver`. Creates a copy of
         the ModeSolver's original simulation with a ModeSource added corresponding to
@@ -2200,7 +2225,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         Parameters
         ----------
-        freqs : List[float] = None
+        freqs : list[float] = None
             Frequencies to include in Monitor (Hz).
             If not specified, uses the frequencies from the mode solver.
         name : str
@@ -2245,7 +2270,7 @@ class ModeSolver(Tidy3dBaseModel):
     def plot_field(
         self,
         field_name: str,
-        val: Literal["real", "imag", "abs"] = "real",
+        val: Literal["real", "imag", abs] = "real",
         scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
         robust: bool = True,
@@ -2531,7 +2556,7 @@ class ModeSolver(Tidy3dBaseModel):
     @classmethod
     def _effective_num_pml(
         cls, simulation: Simulation, plane: Box, mode_spec: ModeSpec
-    ) -> tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]:
+    ) -> tuple[NonNegativeFloat, NonNegativeFloat]:
         """Number of cells of the mode solver pml."""
         coord_0, coord_1 = cls._plane_grid(simulation=simulation, plane=plane)
 
@@ -2546,8 +2571,8 @@ class ModeSolver(Tidy3dBaseModel):
     def _pml_thickness(
         cls, simulation: Simulation, plane: Box, mode_spec: ModeSpec
     ) -> tuple[
-        tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat],
-        tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat],
+        tuple[NonNegativeFloat, NonNegativeFloat],
+        tuple[NonNegativeFloat, NonNegativeFloat],
     ]:
         """Thickness of the mode solver pml in the form
         ((plus0, minus0), (plus1, minus1))
@@ -2585,7 +2610,7 @@ class ModeSolver(Tidy3dBaseModel):
     @classmethod
     def _mode_plane_size(
         cls, simulation: Simulation, plane: Box
-    ) -> tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]:
+    ) -> tuple[NonNegativeFloat, NonNegativeFloat]:
         """The size of the mode plane intersected with the simulation."""
         _, h_lim, v_lim, _ = cls._center_and_lims(simulation=simulation, plane=plane)
         return h_lim[1] - h_lim[0], v_lim[1] - v_lim[0]
@@ -2593,7 +2618,7 @@ class ModeSolver(Tidy3dBaseModel):
     @classmethod
     def _mode_plane_size_no_pml(
         cls, simulation: Simulation, plane: Box, mode_spec: ModeSpec
-    ) -> tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]:
+    ) -> tuple[NonNegativeFloat, NonNegativeFloat]:
         """The size of the remaining portion of the mode plane, after the pml
         has been removed."""
         size = cls._mode_plane_size(simulation=simulation, plane=plane)
@@ -2726,7 +2751,7 @@ class ModeSolver(Tidy3dBaseModel):
         self._validate_modes_size()
 
     @cached_property
-    def reduced_simulation_copy(self):
+    def reduced_simulation_copy(self) -> Self:
         """Strip objects not used by the mode solver from simulation object.
         This might significantly reduce upload time in the presence of custom mediums.
         """
@@ -2772,9 +2797,9 @@ class ModeSolver(Tidy3dBaseModel):
         # extract sub-simulation removing everything irrelevant
         new_sim = self.simulation.subsection(
             region=new_sim_box,
-            monitors=[],
-            sources=[],
-            internal_absorbers=[],
+            monitors=(),
+            sources=(),
+            internal_absorbers=(),
             warn_symmetry_expansion=False,  # we already warn upon mode solver creation
             grid_spec="identical",
             boundary_spec=new_bspec,
@@ -2787,10 +2812,10 @@ class ModeSolver(Tidy3dBaseModel):
         )
         # Let's only validate mode solver where geometry validation is skipped: geometry replaced by its bounding
         # box
-        structures = [
+        structures = tuple(
             strc.updated_copy(geometry=strc.geometry.bounding_box, deep=False)
             for strc in new_sim.structures
-        ]
+        )
         # skip validation as it's validated already in subsection
         aux_new_sim = new_sim.updated_copy(structures=structures, deep=False, validate=False)
         # validate mode solver here where geometry is replaced by its bounding box
@@ -2839,7 +2864,7 @@ class ModeSolver(Tidy3dBaseModel):
         self._cached_properties.pop("data", None)
         self._cached_properties.pop("sim_data", None)
 
-    def plot_3d(self, width=800, height=800) -> None:
+    def plot_3d(self, width: int = 800, height: int = 800) -> None:
         """Render 3D plot of ``ModeSolver`` (in jupyter notebook only).
         Parameters
         ----------

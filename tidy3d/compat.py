@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
-import functools
 import importlib
+from functools import cache
 
-from packaging.version import parse as parse_version
+from packaging.version import parse
 
 try:
     from xarray.structure import alignment
 except ImportError:
     from xarray.core import alignment
 
+try:
+    from typing import Self, TypeAlias  # Python >= 3.11
+except ImportError:  # Python <3.11
+    from typing_extensions import Self, TypeAlias
 
-@functools.lru_cache(maxsize=8)
-def _shapely_is_older_than(version: str) -> bool:
-    return parse_version(importlib.metadata.version("shapely")) < parse_version(version)
+
+@cache
+def _package_is_older_than(package: str, version: str) -> bool:
+    return parse(importlib.metadata.version(package)) < parse(version)
 
 
-__all__ = ["alignment"]
+__all__ = ["Self", "TypeAlias", "_package_is_older_than", "alignment"]

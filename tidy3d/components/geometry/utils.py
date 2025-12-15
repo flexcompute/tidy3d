@@ -9,8 +9,9 @@ from math import isclose
 from typing import Any, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pydantic
 import shapely
+from numpy.typing import ArrayLike
+from pydantic import Field, NonNegativeInt
 from shapely.geometry import (
     Polygon,
 )
@@ -101,7 +102,7 @@ def merging_geometries_on_plane(
 
     Parameters
     ----------
-    geometries : List[GeometryType]
+    geometries : list[GeometryType]
         List of structures to filter on the plane.
     plane : Box
         Plane specification.
@@ -117,7 +118,7 @@ def merging_geometries_on_plane(
 
     Returns
     -------
-    List[Tuple[Any, Shapely]]
+    list[tuple[Any, Shapely]]
         List of shapes and their property value on the plane after merging.
     """
 
@@ -287,7 +288,7 @@ def from_shapely(
         of any of those.
     axis : int
         Integer index defining the extrusion axis: 0 (x), 1 (y), or 2 (z).
-    slab_bounds: Tuple[float, float]
+    slab_bounds: tuple[float, float]
         Minimal and maximal positions of the extruded slab along ``axis``.
     dilation : float
         Dilation of the polygon in the base by shifting each edge along its normal outwards
@@ -360,7 +361,7 @@ def vertices_from_shapely(shape: Shapely) -> ArrayFloat2D:
 
     Returns
     -------
-    List[Tuple[ArrayFloat2D]]
+    list[tuple[ArrayFloat2D]]
         List of tuples ``(exterior, *interiors)``.
     """
     if shape.geom_type == "LinearRing":
@@ -446,21 +447,17 @@ class SnapBehavior(Enum):
 class SnappingSpec(Tidy3dBaseModel):
     """Specifies how to apply grid snapping along each dimension."""
 
-    location: tuple[SnapLocation, SnapLocation, SnapLocation] = pydantic.Field(
-        ...,
+    location: tuple[SnapLocation, SnapLocation, SnapLocation] = Field(
         title="Location",
         description="Describes which positions in the grid will be considered for snapping.",
     )
 
-    behavior: tuple[SnapBehavior, SnapBehavior, SnapBehavior] = pydantic.Field(
-        ...,
+    behavior: tuple[SnapBehavior, SnapBehavior, SnapBehavior] = Field(
         title="Behavior",
         description="Describes how snapping positions will be chosen.",
     )
 
-    margin: Optional[
-        tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt, pydantic.NonNegativeInt]
-    ] = pydantic.Field(
+    margin: Optional[tuple[NonNegativeInt, NonNegativeInt, NonNegativeInt]] = Field(
         (0, 0, 0),
         title="Margin",
         description="Number of additional grid points to consider when expanding or contracting "
@@ -468,7 +465,7 @@ class SnappingSpec(Tidy3dBaseModel):
     )
 
 
-def get_closest_value(test: float, coords: np.ArrayLike, upper_bound_idx: int) -> float:
+def get_closest_value(test: float, coords: ArrayLike, upper_bound_idx: int) -> float:
     """Helper to choose the closest value in an array to a given test value,
     using the index of the upper bound. The ``upper_bound_idx`` corresponds to the first value in
     the ``coords`` array which is greater than or equal to the test value.
@@ -496,7 +493,7 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol: float 
 
     def get_lower_bound(
         test: float,
-        coords: np.ArrayLike,
+        coords: ArrayLike,
         upper_bound_idx: int,
         rel_tol: float,
         strict_bounds: bool,
@@ -513,7 +510,7 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol: float 
         ----------
         test : float
             The value to snap.
-        coords : np.ArrayLike
+        coords : ArrayLike
             Sorted array of coordinate values to snap to.
         upper_bound_idx : int
             Index from ``np.searchsorted(coords, test, side="left")`` - the first index where
@@ -553,7 +550,7 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol: float 
 
     def get_upper_bound(
         test: float,
-        coords: np.ArrayLike,
+        coords: ArrayLike,
         upper_bound_idx: int,
         rel_tol: float,
         strict_bounds: bool,
@@ -570,7 +567,7 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol: float 
         ----------
         test : float
             The value to snap.
-        coords : np.ArrayLike
+        coords : ArrayLike
             Sorted array of coordinate values to snap to.
         upper_bound_idx : int
             Index from ``np.searchsorted(coords, test, side="left")`` - the first index where
@@ -614,7 +611,7 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol: float 
         interval_max: float,
         coords: np.ndarray,
         snap_type: SnapBehavior,
-        snap_margin: pydantic.NonNegativeInt,
+        snap_margin: NonNegativeInt,
     ) -> tuple[float, float]:
         """Helper that snaps a supplied interval [interval_min, interval_max] to a
         sorted array representing coordinate values.

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field
 from typing_extensions import Self
 
 from tidy3d.components.geometry.base import Geometry
@@ -27,8 +27,7 @@ from tidy3d.constants import fp_eps
 class AxisAlignedVoltageIntegralSpec(AxisAlignedPathIntegralSpec):
     """Class for specifying the voltage calculation between two points defined by an axis-aligned line."""
 
-    sign: Direction = pd.Field(
-        ...,
+    sign: Direction = Field(
         title="Direction of Path Integral",
         description="Positive indicates V=Vb-Va where position b has a larger coordinate along the axis of integration.",
     )

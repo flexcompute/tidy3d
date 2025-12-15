@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Optional
 
 import numpy as np
-import pydantic.v1 as pd
 import shapely
 import xarray as xr
+from numpy.typing import NDArray
+from pydantic import Field, field_validator
 from typing_extensions import Self
 
 from tidy3d.components.base import cached_property
@@ -68,7 +70,7 @@ class AxisAlignedPathIntegralSpec(AbstractAxesRH, Box):
 
     _line_validator = assert_line()
 
-    extrapolate_to_endpoints: bool = pd.Field(
+    extrapolate_to_endpoints: bool = Field(
         False,
         title="Extrapolate to Endpoints",
         description="If the endpoints of the path integral terminate at or near a material interface, "
@@ -76,7 +78,7 @@ class AxisAlignedPathIntegralSpec(AbstractAxesRH, Box):
         "of the integral are ignored. Should be enabled when computing voltage between two conductors.",
     )
 
-    snap_path_to_grid: bool = pd.Field(
+    snap_path_to_grid: bool = Field(
         False,
         title="Snap Path to Grid",
         description="It might be desirable to integrate exactly along the Yee grid associated with "
@@ -84,11 +86,12 @@ class AxisAlignedPathIntegralSpec(AbstractAxesRH, Box):
     )
 
     @cached_property
-    def main_axis(self) -> Axis:
+    def main_axis(self) -> Optional[Axis]:
         """Axis for performing integration."""
         for index, value in enumerate(self.size):
             if value != 0:
                 return index
+        return None
 
     def _vertices_2D(self, axis: Axis) -> tuple[Coordinate2D, Coordinate2D]:
         """Returns the two vertices of this path in the plane defined by ``axis``."""
@@ -126,18 +129,16 @@ class Custom2DPathIntegralSpec(AbstractAxesRH):
     If the path is not closed, forward and backward differences are used at the endpoints.
     """
 
-    axis: Axis = pd.Field(
-        ..., title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
+    axis: Axis = Field(
+        title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
     )
 
-    position: float = pd.Field(
-        ...,
+    position: float = Field(
         title="Position",
         description="Position of the plane along the ``axis``.",
     )
 
-    vertices: ArrayFloat2D = pd.Field(
-        ...,
+    vertices: ArrayFloat2D = Field(
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the path. "
         "The index of dimension should be in the ascending order, which means "
@@ -148,7 +149,7 @@ class Custom2DPathIntegralSpec(AbstractAxesRH):
     )
 
     @staticmethod
-    def _compute_dl_component(coord_array: xr.DataArray, closed_contour=False) -> np.ndarray:
+    def _compute_dl_component(coord_array: xr.DataArray, closed_contour: bool = False) -> NDArray:
         """Computes the differential length element along the integration path."""
         dl = np.gradient(coord_array)
         if closed_contour:
@@ -185,7 +186,9 @@ class Custom2DPathIntegralSpec(AbstractAxesRH):
             A path integral defined on a circular path.
         """
 
-        def generate_circle_coordinates(radius: float, num_points: int, clockwise: bool):
+        def generate_circle_coordinates(
+            radius: float, num_points: int, clockwise: bool
+        ) -> tuple[np.ndarray, np.ndarray]:
             """Helper for generating x,y vertices around a circle in the local coordinate frame."""
             sign = 1.0
             if clockwise:
@@ -225,8 +228,9 @@ class Custom2DPathIntegralSpec(AbstractAxesRH):
         """Axis for performing integration."""
         return self.axis
 
-    @pd.validator("vertices", always=True)
-    def _correct_shape(cls, val):
+    @field_validator("vertices")
+    @classmethod
+    def _correct_shape(cls, val: ArrayFloat2D) -> ArrayFloat2D:
         """Makes sure vertices size is correct."""
         # overall shape of vertices
         if val.shape[1] != 2:

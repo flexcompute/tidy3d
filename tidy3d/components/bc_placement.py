@@ -5,8 +5,9 @@ from __future__ import annotations
 from abc import ABC
 from typing import Union
 
-import pydantic.v1 as pd
+from pydantic import Field, field_validator
 
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import SetupError
 
 from .base import Tidy3dBaseModel
@@ -25,7 +26,7 @@ class StructureBoundary(AbstractBCPlacement):
     >>> bc_placement = StructureBoundary(structure="box")
     """
 
-    structure: str = pd.Field(
+    structure: str = Field(
         title="Structure Name",
         description="Name of the structure.",
     )
@@ -39,13 +40,14 @@ class StructureStructureInterface(AbstractBCPlacement):
     >>> bc_placement = StructureStructureInterface(structures=["box", "sphere"])
     """
 
-    structures: tuple[str, str] = pd.Field(
+    structures: tuple[str, str] = Field(
         title="Structures",
         description="Names of two structures.",
     )
 
-    @pd.validator("structures", always=True)
-    def unique_names(cls, val):
+    @field_validator("structures")
+    @classmethod
+    def unique_names(cls, val: tuple[str, str]) -> tuple[str, str]:
         """Error if the same structure is provided twice"""
         if val[0] == val[1]:
             raise SetupError(
@@ -62,13 +64,14 @@ class MediumMediumInterface(AbstractBCPlacement):
     >>> bc_placement = MediumMediumInterface(mediums=["dieletric", "metal"])
     """
 
-    mediums: tuple[str, str] = pd.Field(
+    mediums: tuple[str, str] = Field(
         title="Mediums",
         description="Names of two mediums.",
     )
 
-    @pd.validator("mediums", always=True)
-    def unique_names(cls, val):
+    @field_validator("mediums")
+    @classmethod
+    def unique_names(cls, val: tuple[str, str]) -> tuple[str, str]:
         """Error if the same structure is provided twice"""
         if val[0] == val[1]:
             raise SetupError("The same medium is provided twice in 'MediumMediumInterface'.")
@@ -83,7 +86,7 @@ class SimulationBoundary(AbstractBCPlacement):
     >>> bc_placement = SimulationBoundary(surfaces=["x-", "x+"])
     """
 
-    surfaces: tuple[BoxSurface, ...] = pd.Field(
+    surfaces: tuple[BoxSurface, ...] = Field(
         ("x-", "x+", "y-", "y+", "z-", "z+"),
         title="Surfaces",
         description="Surfaces of simulation domain where to apply boundary conditions.",
@@ -98,22 +101,24 @@ class StructureSimulationBoundary(AbstractBCPlacement):
     >>> bc_placement = StructureSimulationBoundary(structure="box", surfaces=["y-", "y+"])
     """
 
-    structure: str = pd.Field(
+    structure: str = Field(
         title="Structure Name",
         description="Name of the structure.",
     )
 
-    surfaces: tuple[BoxSurface, ...] = pd.Field(
+    surfaces: tuple[BoxSurface, ...] = Field(
         ("x-", "x+", "y-", "y+", "z-", "z+"),
         title="Surfaces",
         description="Surfaces of simulation domain where to apply boundary conditions.",
     )
 
 
-BCPlacementType = Union[
-    StructureBoundary,
-    StructureStructureInterface,
-    MediumMediumInterface,
-    SimulationBoundary,
-    StructureSimulationBoundary,
-]
+BCPlacementType = discriminated_union(
+    Union[
+        StructureBoundary,
+        StructureStructureInterface,
+        MediumMediumInterface,
+        SimulationBoundary,
+        StructureSimulationBoundary,
+    ]
+)

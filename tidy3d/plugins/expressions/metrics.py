@@ -4,9 +4,10 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional, Union
 
 import autograd.numpy as np
-import pydantic.v1 as pd
 import xarray as xr
+from pydantic import Field, NonNegativeInt
 
+from tidy3d.compat import Self
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.types import Direction, FreqArray
 
@@ -64,23 +65,22 @@ class ModeAmp(Metric):
     (abs(ModeAmp("monitor1")) ** 2)
     """
 
-    monitor_name: str = pd.Field(
-        ...,
+    monitor_name: str = Field(
         title="Monitor Name",
         description="The name of the mode monitor. This needs to match the name of the monitor in the simulation.",
     )
-    f: Optional[Union[float, FreqArray]] = pd.Field(  # type: ignore
+    f: Optional[Union[float, FreqArray]] = Field(
         None,
         title="Frequency Array",
         description="The frequency array. If None, all frequencies in the monitor will be used.",
         alias="freqs",
     )
-    direction: Direction = pd.Field(
+    direction: Direction = Field(
         "+",
         title="Direction",
         description="The direction of propagation of the mode.",
     )
-    mode_index: pd.NonNegativeInt = pd.Field(
+    mode_index: NonNegativeInt = Field(
         0,
         title="Mode Index",
         description="The index of the mode.",
@@ -89,7 +89,7 @@ class ModeAmp(Metric):
     @classmethod
     def from_mode_monitor(
         cls, monitor: ModeMonitor, mode_index: int = 0, direction: Direction = "+"
-    ):
+    ) -> Self:
         return cls(
             monitor_name=monitor.name, f=monitor.freqs, mode_index=mode_index, direction=direction
         )

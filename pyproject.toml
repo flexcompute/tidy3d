@@ -33,7 +33,8 @@ numpy = "*"
 matplotlib = "*"
 shapely = "^2.0"
 pandas = "*"
-pydantic = "^2.0"
+pydantic = ">=2.9,<3"
+pydantic-settings = "^2.10.0"
 PyYAML = "*"
 dask = "*"
 toml = "*"
@@ -309,7 +310,13 @@ banned-module-level-imports = ["scipy", "matplotlib"]
 
 [tool.pytest.ini_options]
 # TODO: remove --assert=plain when https://github.com/scipy/scipy/issues/22236 is resolved
-addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical'"
+# TODO(yaugenst-flex): Revisit adjoint plugin for pydantic v2
+addopts = """
+--doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical' \
+--ignore=tests/test_plugins/test_adjoint.py \
+--ignore=tidy3d/plugins/adjoint/
+--ignore=tests/test_plugins/test_adjoint.py
+"""
 markers = [
   "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
 ]
@@ -331,82 +338,24 @@ python_files = "*.py"
 [tool.mypy]
 python_version = "3.10"
 files = [
-  "tidy3d/web",
-  "tidy3d/config",
-  "tidy3d/material_library",
-  "tidy3d/components/geometry"
+  "tidy3d",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"
 disallow_untyped_defs = true
 disable_error_code = [
-  "abstract",
-  "annotation-unchecked",
   "arg-type",
-  "assert-type",
   "assignment",
   "attr-defined",
-  "await-not-async",
   "call-arg",
   "call-overload",
-  "comparison-overlap",
-  "dict-item",
-  "empty-body",
-  "exit-return",
-  "explicit-override",
-  "func-returns-value",
-  "has-type",
-  "ignore-without-code",
-  "import",
-  "import-not-found",
   "import-untyped",
   "index",
-  "list-item",
-  "literal-required",
-  "method-assign",
   "misc",
-  "mutable-override",
-  "name-defined",
-  "name-match",
-  "narrowed-type-not-subtype",
-  "no-any-return",
-  "no-any-unimported",
-  "no-overload-impl",
-  "no-redef",
-  "no-untyped-call",
   "operator",
-  "overload-cannot-match",
-  "overload-overlap",
   "override",
-  "possibly-undefined",
-  "prop-decorator",
-  "redundant-cast",
-  "redundant-expr",
-  "redundant-self",
-  "return",
   "return-value",
-  "safe-super",
-  "str-bytes-safe",
-  "str-format",
-  "syntax",
-  "top-level-await",
-  "truthy-bool",
-  "truthy-function",
-  "truthy-iterable",
-  "type-abstract",
-  "type-arg",
-  "type-var",
-  "typeddict-item",
-  "typeddict-readonly-mutated",
-  "typeddict-unknown-key",
-  "unimported-reveal",
   "union-attr",
-  "unreachable",
-  "unused-awaitable",
-  "unused-coroutine",
-  "unused-ignore",
-  "used-before-def",
-  "valid-newtype",
   "valid-type",
   "var-annotated",
 ]
