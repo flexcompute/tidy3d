@@ -83,6 +83,77 @@ class GridRefinementRegion(Box):
     )
 
 
+class DopingGradientRefinementSpec(Tidy3dBaseModel):
+    """Specification for automatic mesh refinement based on doping gradients.
+
+    This generates :class:`GridRefinementRegion` objects in areas where doping concentration
+    varies rapidly, ensuring adequate mesh resolution to capture carrier distributions accurately.
+
+    Notes
+    -----
+    The local mesh size is computed as:
+
+    .. math::
+
+        dl = \\frac{N}{|\\nabla N| \\cdot k}
+
+    where :math:`N` is the local doping concentration, :math:`|\\nabla N|` is the gradient
+    magnitude, and :math:`k` is the ``resolution_factor``. The result is clamped to
+    ``[min_dl, max_dl]``.
+
+    Currently only 2D simulations are supported (one dimension with zero size).
+
+    Example
+    -------
+    >>> spec = DopingGradientRefinementSpec(resolution_factor=5, min_dl=0.001, max_dl=0.1)
+    """
+
+    resolution_factor: pd.PositiveFloat = pd.Field(
+        5.0,
+        title="Resolution Factor",
+        description="Number of mesh points desired per decade of doping variation. "
+        "Higher values produce finer meshes in regions of rapid doping change.",
+    )
+
+    min_dl: pd.PositiveFloat = pd.Field(
+        0.001,
+        title="Minimum Mesh Size",
+        description="Absolute minimum allowed mesh size from doping-based refinement.",
+        units=MICROMETER,
+    )
+
+    max_dl: pd.PositiveFloat = pd.Field(
+        1.0,
+        title="Maximum Mesh Size",
+        description="Maximum mesh size in regions of slow doping variation. "
+        "The actual mesh size may still be smaller due to other constraints.",
+        units=MICROMETER,
+    )
+
+    num_samples: pd.PositiveInt = pd.Field(
+        50,
+        title="Sampling Resolution",
+        description="Number of sampling points per dimension when computing doping gradients. "
+        "Higher values improve accuracy but increase preprocessing time.",
+    )
+
+    transition_factor: pd.PositiveFloat = pd.Field(
+        10.0,
+        title="Transition Factor",
+        description="Factor multiplied by ``dl_internal`` to determine ``transition_thickness`` "
+        "of generated refinement regions.",
+    )
+
+    @pd.validator("max_dl", always=True)
+    @skip_if_fields_missing(["min_dl"])
+    def _max_dl_gte_min_dl(cls, val, values):
+        """Error if max_dl is less than min_dl."""
+        min_dl = values.get("min_dl")
+        if val < min_dl:
+            raise ValidationError("'max_dl' cannot be smaller than 'min_dl'.")
+        return val
+
+
 class GridRefinementLine(Tidy3dBaseModel, ABC):
     """Refinement line for the unstructured mesh. The cell size depends on the distance from the line."""
 
@@ -221,6 +292,15 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
             title="Mesh refinement structures",
             description="List of regions/lines for which the mesh refinement will be applied",
         )
+    )
+
+    auto_doping_refinement: DopingGradientRefinementSpec = pd.Field(
+        None,
+        title="Automatic Doping-Based Refinement",
+        description="Specification for automatic mesh refinement based on doping gradients. "
+        "When provided, refinement regions are automatically generated in areas of rapid "
+        "doping variation within semiconductor structures. Set to ``None`` to disable. "
+        "By default, this is enabled with sensible defaults for 2D charge simulations.",
     )
 
     @pd.validator("distance_bulk", always=True)

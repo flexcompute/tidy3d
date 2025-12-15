@@ -92,6 +92,7 @@ from tidy3d.components.tcad.doping import ConstantDoping, CustomDoping, Gaussian
 from tidy3d.components.tcad.generation_recombination import FossumCarrierLifetime
 from tidy3d.components.tcad.grid import (
     DistanceUnstructuredGrid,
+    DopingGradientRefinementSpec,
     GridRefinementLine,
     GridRefinementRegion,
     UniformUnstructuredGrid,
@@ -594,6 +595,7 @@ __all__ = [
     "DirectivityMonitor",
     "DistanceUnstructuredGrid",
     "DistributedGeneration",
+    "DopingGradientRefinementSpec",
     "Drude",
     "DualValleyEffectiveDOS",
     "EMECoefficientData",

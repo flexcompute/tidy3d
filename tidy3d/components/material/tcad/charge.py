@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
+import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.data.data_array import SpatialDataArray
@@ -20,6 +21,10 @@ from tidy3d.components.tcad.types import (
 )
 from tidy3d.constants import CONDUCTIVITY, ELECTRON_VOLT, PERCMCUBE, PERMITTIVITY
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from tidy3d.components.tcad.grid import DopingGradientRefinementSpec, GridRefinementRegion
+    from tidy3d.components.types import Bound
 
 
 class AbstractChargeMedium(AbstractMedium):
@@ -375,3 +380,161 @@ class SemiconductorMedium(AbstractChargeMedium):
             )
             return (ConstantDoping(concentration=val),)
         return val
+
+    def compute_doping_refinement_regions(
+        self,
+        bounds: Bound,
+        spec: DopingGradientRefinementSpec,
+        normal_axis: int,
+    ) -> list[GridRefinementRegion]:
+        """Compute mesh refinement regions based on doping gradients.
+
+        This method samples the net doping (|N_d - N_a|) on a 2D grid within
+        the given bounds, computes the gradient magnitude, and generates
+        :class:`GridRefinementRegion` objects in areas of rapid doping variation.
+
+        Parameters
+        ----------
+        bounds : Bound
+            Tuple of (min_corner, max_corner) defining the sampling region.
+        spec : DopingGradientRefinementSpec
+            Specification controlling refinement parameters.
+        normal_axis : int
+            The axis normal to the 2D plane (0=x, 1=y, 2=z).
+
+        Returns
+        -------
+        list[GridRefinementRegion]
+            List of refinement regions to be added to the mesh specification.
+        """
+        from tidy3d.components.tcad.grid import GridRefinementRegion
+
+        refinement_regions = []
+
+        # Determine the in-plane axes
+        axes = [0, 1, 2]
+        axes.remove(normal_axis)
+        ax1, ax2 = axes
+
+        # Extract bounds
+        min_corner, max_corner = bounds
+        normal_pos = (min_corner[normal_axis] + max_corner[normal_axis]) / 2
+
+        # Create sampling grid
+        num_samples = spec.num_samples
+        coord_names = ["x", "y", "z"]
+
+        # Create 1D coordinate arrays for the 2D plane
+        coords_1 = np.linspace(min_corner[ax1], max_corner[ax1], num_samples)
+        coords_2 = np.linspace(min_corner[ax2], max_corner[ax2], num_samples)
+
+        # Build coords dict for sampling
+        coords = {coord_names[normal_axis]: np.array([normal_pos])}
+        coords[coord_names[ax1]] = coords_1
+        coords[coord_names[ax2]] = coords_2
+
+        # Compute net doping and gradient for N_d
+        net_doping = np.zeros((num_samples, num_samples, 1))
+        grad_magnitude = np.zeros((num_samples, num_samples, 1))
+
+        # Process donor doping (N_d)
+        if isinstance(self.N_d, tuple):
+            for doping_box in self.N_d:
+                doping_contrib = doping_box._get_contrib(coords, meshgrid=True)
+                grad_contrib = doping_box.gradient_magnitude(coords, meshgrid=True)
+                if doping_contrib.ndim == 2:
+                    doping_contrib = doping_contrib[:, :, np.newaxis]
+                    grad_contrib = grad_contrib[:, :, np.newaxis]
+                net_doping = net_doping + doping_contrib
+                grad_magnitude = np.maximum(grad_magnitude, grad_contrib)
+
+        # Process acceptor doping (N_a) - subtract from net doping
+        if isinstance(self.N_a, tuple):
+            for doping_box in self.N_a:
+                doping_contrib = doping_box._get_contrib(coords, meshgrid=True)
+                grad_contrib = doping_box.gradient_magnitude(coords, meshgrid=True)
+                if doping_contrib.ndim == 2:
+                    doping_contrib = doping_contrib[:, :, np.newaxis]
+                    grad_contrib = grad_contrib[:, :, np.newaxis]
+                net_doping = net_doping - doping_contrib
+                grad_magnitude = np.maximum(grad_magnitude, grad_contrib)
+
+        # Squeeze to 2D
+        net_doping = np.abs(net_doping.squeeze())
+        grad_magnitude = grad_magnitude.squeeze()
+
+        # Compute local mesh size: dl = N / (|grad_N| * k)
+        # Avoid division by zero
+        eps = 1e-10
+        local_dl = np.where(
+            grad_magnitude > eps,
+            net_doping / (grad_magnitude * spec.resolution_factor),
+            spec.max_dl,
+        )
+
+        # Clamp to [min_dl, max_dl]
+        local_dl = np.clip(local_dl, spec.min_dl, spec.max_dl)
+
+        # Find regions where mesh needs to be finer than max_dl
+        # Group contiguous fine regions into refinement boxes
+        needs_refinement = local_dl < spec.max_dl * 0.9  # 90% threshold
+
+        if not np.any(needs_refinement):
+            return refinement_regions
+
+        # Simple approach: create refinement regions around each connected component
+        # For efficiency, we use a grid-based clustering approach
+        from scipy import ndimage
+
+        labeled, num_features = ndimage.label(needs_refinement)
+
+        for label_id in range(1, num_features + 1):
+            mask = labeled == label_id
+
+            # Find bounding box of this region
+            rows, cols = np.where(mask)
+            if len(rows) == 0:
+                continue
+
+            row_min, row_max = rows.min(), rows.max()
+            col_min, col_max = cols.min(), cols.max()
+
+            # Get the minimum dl in this region
+            dl_internal = local_dl[mask].min()
+
+            # Compute region bounds in physical coordinates
+            region_min_1 = coords_1[row_min]
+            region_max_1 = coords_1[row_max]
+            region_min_2 = coords_2[col_min]
+            region_max_2 = coords_2[col_max]
+
+            # Build center and size for the refinement region
+            center = [0.0, 0.0, 0.0]
+            size = [0.0, 0.0, 0.0]
+
+            center[normal_axis] = normal_pos
+            size[normal_axis] = 0.0  # 2D refinement
+
+            center[ax1] = (region_min_1 + region_max_1) / 2
+            size[ax1] = region_max_1 - region_min_1
+
+            center[ax2] = (region_min_2 + region_max_2) / 2
+            size[ax2] = region_max_2 - region_min_2
+
+            # Add some padding
+            padding = dl_internal * 2
+            size[ax1] = size[ax1] + 2 * padding
+            size[ax2] = size[ax2] + 2 * padding
+
+            transition_thickness = dl_internal * spec.transition_factor
+
+            refinement_regions.append(
+                GridRefinementRegion(
+                    center=tuple(center),
+                    size=tuple(size),
+                    dl_internal=dl_internal,
+                    transition_thickness=transition_thickness,
+                )
+            )
+
+        return refinement_regions

@@ -66,6 +66,24 @@ class AbstractDopingBox(Box):
                 "The doping box must be 3D. If you want a 2D doping box, please set one of the dimensions to a large or infinite size."
             )
 
+    def gradient_magnitude(self, coords: dict, meshgrid: bool = True) -> np.ndarray:
+        """Compute the magnitude of the doping gradient at specified coordinates.
+
+        Parameters
+        ----------
+        coords : dict
+            Dictionary with keys 'x', 'y', 'z' containing coordinate arrays.
+        meshgrid : bool = True
+            If True, coordinates are treated as defining a meshgrid.
+            If False, coordinates are treated as parallel 1D arrays.
+
+        Returns
+        -------
+        np.ndarray
+            Magnitude of the doping gradient |∇N| at each coordinate.
+        """
+        raise NotImplementedError("Subclasses must implement gradient_magnitude")
+
 
 class ConstantDoping(AbstractDopingBox):
     """
@@ -99,6 +117,11 @@ class ConstantDoping(AbstractDopingBox):
         contrib[indices_in_box] = self.concentration
 
         return contrib.squeeze()
+
+    def gradient_magnitude(self, coords: dict, meshgrid: bool = True) -> np.ndarray:
+        """Gradient magnitude for constant doping is zero everywhere."""
+        indices_in_box, X, _, _ = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
+        return np.zeros(X.shape).squeeze()
 
 
 class GaussianDoping(AbstractDopingBox):
@@ -272,6 +295,39 @@ class GaussianDoping(AbstractDopingBox):
 
         return total_contrib.squeeze()
 
+    def gradient_magnitude(self, coords: dict, meshgrid: bool = True) -> np.ndarray:
+        """Compute gradient magnitude for Gaussian doping using finite differences.
+
+        For Gaussian doping, the gradient is computed numerically since the analytical
+        form involves products of Gaussians in each dimension.
+        """
+        # Use finite differences on the doping profile
+        doping = self._get_contrib(coords, meshgrid=meshgrid)
+
+        if meshgrid:
+            # Compute gradient using finite differences
+            dx = coords["x"][1] - coords["x"][0] if len(coords["x"]) > 1 else 1.0
+            dy = coords["y"][1] - coords["y"][0] if len(coords["y"]) > 1 else 1.0
+            dz = coords["z"][1] - coords["z"][0] if len(coords["z"]) > 1 else 1.0
+
+            # Use np.gradient for interior points with edge handling
+            grad_x = (
+                np.gradient(doping, dx, axis=0) if doping.shape[0] > 1 else np.zeros_like(doping)
+            )
+            grad_y = (
+                np.gradient(doping, dy, axis=1) if doping.shape[1] > 1 else np.zeros_like(doping)
+            )
+            grad_z = (
+                np.gradient(doping, dz, axis=2) if doping.shape[2] > 1 else np.zeros_like(doping)
+            )
+
+            grad_mag = np.sqrt(grad_x**2 + grad_y**2 + grad_z**2)
+            return grad_mag.squeeze()
+        else:
+            # For non-meshgrid, we cannot compute gradient directly
+            # Return zeros as a fallback (gradients require structured grid)
+            return np.zeros_like(doping)
+
 
 class CustomDoping(AbstractDopingBox):
     """Sets a custom doping in the specified box.
@@ -337,6 +393,30 @@ class CustomDoping(AbstractDopingBox):
             contrib[indices_in_box] = interp_res.values[indices_in_box]
 
         return contrib.squeeze()
+
+    def gradient_magnitude(self, coords: dict, meshgrid: bool = True) -> np.ndarray:
+        """Compute gradient magnitude for custom doping using finite differences."""
+        doping = self._get_contrib(coords, meshgrid=meshgrid)
+
+        if meshgrid:
+            dx = coords["x"][1] - coords["x"][0] if len(coords["x"]) > 1 else 1.0
+            dy = coords["y"][1] - coords["y"][0] if len(coords["y"]) > 1 else 1.0
+            dz = coords["z"][1] - coords["z"][0] if len(coords["z"]) > 1 else 1.0
+
+            grad_x = (
+                np.gradient(doping, dx, axis=0) if doping.shape[0] > 1 else np.zeros_like(doping)
+            )
+            grad_y = (
+                np.gradient(doping, dy, axis=1) if doping.shape[1] > 1 else np.zeros_like(doping)
+            )
+            grad_z = (
+                np.gradient(doping, dz, axis=2) if doping.shape[2] > 1 else np.zeros_like(doping)
+            )
+
+            grad_mag = np.sqrt(grad_x**2 + grad_y**2 + grad_z**2)
+            return grad_mag.squeeze()
+        else:
+            return np.zeros_like(doping)
 
 
 DopingBoxType = Union[ConstantDoping, GaussianDoping, CustomDoping]

@@ -53,6 +53,7 @@ from tidy3d.components.tcad.boundary.specification import (
 )
 from tidy3d.components.tcad.grid import (
     DistanceUnstructuredGrid,
+    GridRefinementRegion,
     UniformUnstructuredGrid,
     UnstructuredGridType,
 )
@@ -2006,3 +2007,160 @@ class HeatChargeSimulation(AbstractSimulation):
                 if isinstance(bc.condition.source, SSACVoltageSource):
                     amplitude = bc.condition.source.amplitude
         return (self.analysis_spec.freqs, amplitude)
+
+    def _get_normal_axis(self) -> int:
+        """Get the axis normal to the 2D simulation plane.
+
+        Returns
+        -------
+        int
+            Axis index (0=x, 1=y, 2=z) of the zero-size dimension.
+
+        Raises
+        ------
+        SetupError
+            If simulation is not 2D (exactly one zero-size dimension required).
+        """
+        zero_dims = [i for i, s in enumerate(self.size) if s == 0]
+        if len(zero_dims) != 1:
+            raise SetupError(
+                "Automatic doping refinement is only supported for 2D simulations "
+                f"(exactly one zero-size dimension). Found {len(zero_dims)} zero dimensions."
+            )
+        return zero_dims[0]
+
+    def generate_doping_refinement_regions(self) -> list[GridRefinementRegion]:
+        """Generate mesh refinement regions based on doping gradients in semiconductor structures.
+
+        This method analyzes all semiconductor structures in the simulation and generates
+        :class:`GridRefinementRegion` objects in areas where doping concentration varies
+        rapidly. The generated regions can be added to the grid specification.
+
+        Returns
+        -------
+        list[GridRefinementRegion]
+            List of refinement regions. Empty if no auto refinement is configured or
+            no semiconductor structures are present.
+
+        Notes
+        -----
+        This method requires:
+        - A 2D simulation (exactly one zero-size dimension)
+        - ``DistanceUnstructuredGrid`` with ``auto_doping_refinement`` specified
+        - At least one structure with ``SemiconductorMedium``
+
+        Example
+        -------
+        >>> # Get auto-generated refinement regions
+        >>> regions = sim.generate_doping_refinement_regions()
+        >>> # Add to existing mesh refinements
+        >>> new_grid = sim.grid_spec.updated_copy(
+        ...     mesh_refinements=sim.grid_spec.mesh_refinements + tuple(regions)
+        ... )
+        """
+        refinement_regions = []
+
+        # Check if auto refinement is configured
+        if not isinstance(self.grid_spec, DistanceUnstructuredGrid):
+            return refinement_regions
+
+        spec = self.grid_spec.auto_doping_refinement
+        if spec is None:
+            return refinement_regions
+
+        # Check for 2D simulation
+        try:
+            normal_axis = self._get_normal_axis()
+        except SetupError:
+            log.warning(
+                "Automatic doping refinement is only supported for 2D simulations. "
+                "Skipping auto refinement."
+            )
+            return refinement_regions
+
+        # Process each semiconductor structure
+        for structure in self.structures:
+            medium = structure.medium
+
+            # Handle MultiPhysicsMedium
+            if isinstance(medium, MultiPhysicsMedium):
+                charge_medium = medium.charge
+            else:
+                charge_medium = medium if isinstance(medium, SemiconductorMedium) else None
+
+            if not isinstance(charge_medium, SemiconductorMedium):
+                continue
+
+            # Check if there's non-trivial doping
+            has_doping = (isinstance(charge_medium.N_d, tuple) and len(charge_medium.N_d) > 0) or (
+                isinstance(charge_medium.N_a, tuple) and len(charge_medium.N_a) > 0
+            )
+
+            if not has_doping:
+                continue
+
+            # Get structure bounds, clipped to simulation domain
+            struct_bounds = structure.geometry.bounds
+            sim_bounds = self.bounds
+
+            clipped_bounds = (
+                tuple(max(struct_bounds[0][i], sim_bounds[0][i]) for i in range(3)),
+                tuple(min(struct_bounds[1][i], sim_bounds[1][i]) for i in range(3)),
+            )
+
+            # Generate refinement regions for this structure
+            struct_regions = charge_medium.compute_doping_refinement_regions(
+                bounds=clipped_bounds,
+                spec=spec,
+                normal_axis=normal_axis,
+            )
+
+            refinement_regions.extend(struct_regions)
+
+        return refinement_regions
+
+    def with_auto_doping_refinement(self) -> HeatChargeSimulation:
+        """Return a copy of this simulation with auto-generated doping refinement regions.
+
+        This is a convenience method that generates refinement regions based on
+        doping gradients and returns an updated simulation with these regions
+        added to the grid specification.
+
+        Returns
+        -------
+        HeatChargeSimulation
+            Copy of this simulation with additional refinement regions.
+
+        Example
+        -------
+        >>> sim_refined = sim.with_auto_doping_refinement()
+        """
+        if not isinstance(self.grid_spec, DistanceUnstructuredGrid):
+            return self
+
+        new_regions = self.generate_doping_refinement_regions()
+
+        if not new_regions:
+            return self
+
+        combined_refinements = list(self.grid_spec.mesh_refinements) + new_regions
+
+        # Merge overlapping regions by taking minimum dl_internal
+        merged_refinements = self._merge_refinement_regions(combined_refinements)
+
+        new_grid_spec = self.grid_spec.updated_copy(mesh_refinements=tuple(merged_refinements))
+
+        return self.updated_copy(grid_spec=new_grid_spec)
+
+    @staticmethod
+    def _merge_refinement_regions(
+        regions: list[GridRefinementRegion],
+    ) -> list[GridRefinementRegion]:
+        """Merge overlapping refinement regions by taking minimum dl_internal.
+
+        Currently implements a simple approach: no merging, just return as-is.
+        Future enhancement could implement proper spatial merging.
+        """
+        # For now, just return the regions as-is
+        # A more sophisticated approach would merge overlapping boxes
+        return regions
