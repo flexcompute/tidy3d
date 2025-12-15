@@ -5,15 +5,12 @@ from __future__ import annotations
 import os
 import tempfile
 import urllib
-from collections.abc import Mapping
 from datetime import datetime
 from enum import Enum
-from os import PathLike
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
 
 import boto3
-import rich
 from boto3.s3.transfer import TransferConfig
 from pydantic import BaseModel, Field
 from rich.progress import (
@@ -31,6 +28,13 @@ from .core_config import get_logger_console
 from .exceptions import WebError
 from .file_util import extract_gzip_file
 from .http_util import http
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from os import PathLike
+    from typing import Callable, Optional
+
+    import rich
 
 IN_TRANSIT_SUFFIX = ".tmp"
 

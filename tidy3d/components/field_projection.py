@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
 import xarray as xr
-from autograd.numpy.numpy_boxes import ArrayBox
-from numpy.typing import ArrayLike, NDArray
 from pydantic import Field, model_validator
 from rich.progress import track
 
-from tidy3d.compat import Self
 from tidy3d.constants import C_0, EPSILON_0, ETA_0, MICROMETER, MU_0
 from tidy3d.exceptions import SetupError
 from tidy3d.log import get_logging_console
@@ -33,16 +30,22 @@ from .data.monitor_data import (
     FieldProjectionKSpaceData,
 )
 from .data.sim_data import SimulationData
-from .medium import MediumType
 from .monitor import (
-    AbstractFieldProjectionMonitor,
-    FieldMonitor,
     FieldProjectionAngleMonitor,
     FieldProjectionCartesianMonitor,
-    FieldProjectionKSpaceMonitor,
     FieldProjectionSurface,
 )
-from .types import ArrayComplex4D, Coordinate, Direction
+from .types import ArrayComplex4D, Coordinate
+
+if TYPE_CHECKING:
+    from autograd.numpy.numpy_boxes import ArrayBox
+    from numpy.typing import ArrayLike, NDArray
+
+    from tidy3d.compat import Self
+
+    from .medium import MediumType
+    from .monitor import AbstractFieldProjectionMonitor, FieldMonitor, FieldProjectionKSpaceMonitor
+    from .types import Direction
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10

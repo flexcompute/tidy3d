@@ -1,12 +1,16 @@
 # validator utilities for invdes plugin
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
 
 from pydantic import field_validator, model_validator
-from pydantic._internal._decorators import ModelValidatorDecoratorInfo, PydanticDescriptorProxy
 
 import tidy3d as td
+
+if TYPE_CHECKING:
+    from typing import Callable, Optional
+
+    from pydantic._internal._decorators import ModelValidatorDecoratorInfo, PydanticDescriptorProxy
 
 # warn if pixel size is > PIXEL_SIZE_WARNING_THRESHOLD * (minimum wavelength in material)
 PIXEL_SIZE_WARNING_THRESHOLD = 0.1

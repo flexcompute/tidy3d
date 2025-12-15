@@ -3,21 +3,23 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
-from os import PathLike
-from types import TracebackType
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Union
 
-from pydantic import BaseModel
 from rich.console import Console
 from rich.text import Text
 
-from tidy3d.compat import Self
-
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from os import PathLike
+    from types import TracebackType
+    from typing import Callable, Optional
+
+    from pydantic import BaseModel
     from rich.progress import Progress as RichProgress
+
+    from tidy3d.compat import Self
 # Note: "SUPPORT" and "USER" levels are meant for backend runs only.
 # Logging in frontend code should just use the standard debug/info/warning/error/critical.
 LogLevel = Literal["DEBUG", "SUPPORT", "USER", "INFO", "WARNING", "ERROR", "CRITICAL"]

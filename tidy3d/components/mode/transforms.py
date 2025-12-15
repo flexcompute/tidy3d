@@ -10,10 +10,13 @@ Currently, the half-step offset in w is ignored, which should be a pretty good a
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 ArrayFloat = NDArray[np.floating]
 CoordsTuple = tuple[ArrayFloat, ArrayFloat]

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field, field_validator
 
-from tidy3d.components.autograd import TracedSize
 from tidy3d.components.tcad.monitors.abstract import HeatChargeMonitor
+
+if TYPE_CHECKING:
+    from tidy3d.components.autograd import TracedSize
 
 
 class VolumeMeshMonitor(HeatChargeMonitor):

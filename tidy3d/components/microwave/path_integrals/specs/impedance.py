@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 from pydantic import Field, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.path_integrals.types import (
     CurrentPathSpecType,
     VoltagePathSpecType,
 )
 from tidy3d.exceptions import SetupError
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 
 class AutoImpedanceSpec(MicrowaveBaseModel):

@@ -3,14 +3,18 @@ NOTE: Keeping this class for backward compatibility only"""
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from pydantic import model_validator
 
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-from tidy3d.components.types import Ax
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from tidy3d.components.types import Ax
 
 
 class HeatSimulation(HeatChargeSimulation):

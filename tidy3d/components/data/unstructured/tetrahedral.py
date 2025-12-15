@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from pydantic import PositiveInt
-from xarray import DataArray
-from xarray import DataArray as XrDataArray
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import CellDataArray, IndexedDataArray, PointDataArray
-from tidy3d.components.types import ArrayLike, Axis, Bound, Coordinate
 from tidy3d.exceptions import DataError
 from tidy3d.packaging import requires_vtk, vtk
 
@@ -19,7 +15,14 @@ from .base import UnstructuredGridDataset
 from .triangular import TriangularGridDataset
 
 if TYPE_CHECKING:
+    from typing import Literal, Optional, Union
+
+    from pydantic import PositiveInt
     from vtkmodules.vtkCommonDataModel import vtkUnstructuredGrid
+    from xarray import DataArray
+    from xarray import DataArray as XrDataArray
+
+    from tidy3d.components.types import ArrayLike, Axis, Bound, Coordinate
 
 
 class TetrahedralGridDataset(UnstructuredGridDataset):

@@ -4,35 +4,35 @@ from __future__ import annotations
 
 import numbers
 from abc import ABC, abstractmethod
-from os import PathLike
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from numpy.typing import DTypeLike, NDArray
 from pandas import RangeIndex
-from pydantic import Field, PositiveInt, field_validator, model_validator
-from vtkmodules.vtkCommonCore import vtkPoints
+from pydantic import Field, field_validator, model_validator
 from xarray import DataArray as XrDataArray
 
-from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
     DATA_ARRAY_MAP,
     CellDataArray,
-    DataArray,
     IndexedDataArray,
     IndexedDataArrayTypes,
     PointDataArray,
     SpatialDataArray,
 )
 from tidy3d.components.data.dataset import Dataset
-from tidy3d.components.types import ArrayLike, Axis, Bound
 from tidy3d.constants import inf
 from tidy3d.exceptions import DataError, Tidy3dNotImplementedError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import requires_vtk, vtk
 
 if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Literal, Optional, Union
+
+    from numpy.typing import DTypeLike, NDArray
+    from pydantic import PositiveInt
+    from vtkmodules.vtkCommonCore import vtkPoints
     from vtkmodules.vtkCommonDataModel import (
         vtkCellArray,
         vtkDataSet,
@@ -40,6 +40,10 @@ if TYPE_CHECKING:
         vtkPolyData,
         vtkUnstructuredGrid,
     )
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import DataArray
+    from tidy3d.components.types import ArrayLike, Axis, Bound
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000

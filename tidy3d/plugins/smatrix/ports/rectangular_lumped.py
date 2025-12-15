@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field, model_validator
 from shapely import union_all
 from shapely.geometry.base import BaseMultipartGeometry
 
-from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.geometry.utils import (
     SnapBehavior,
@@ -22,20 +18,30 @@ from tidy3d.components.geometry.utils import (
     snap_box_to_grid,
 )
 from tidy3d.components.geometry.utils_2d import increment_float
-from tidy3d.components.grid.grid import Grid, YeeGrid
-from tidy3d.components.lumped_element import LinearLumpedElement, LumpedResistor, RLCNetwork
+from tidy3d.components.lumped_element import LinearLumpedElement, RLCNetwork
 from tidy3d.components.medium import LossyMetalMedium, PECMedium
 from tidy3d.components.microwave.path_integrals.integrals.current import AxisAlignedCurrentIntegral
 from tidy3d.components.microwave.path_integrals.integrals.voltage import AxisAlignedVoltageIntegral
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import UniformCurrentSource
-from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.structure import Structure
-from tidy3d.components.types import Axis, FreqArray, LumpDistType
+from tidy3d.components.types import Axis, LumpDistType
 from tidy3d.components.validators import assert_line_or_plane
 from tidy3d.exceptions import SetupError, ValidationError
 
 from .base_lumped import AbstractLumpedPort
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Optional
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import FreqDataArray
+    from tidy3d.components.data.sim_data import SimulationData
+    from tidy3d.components.grid.grid import Grid, YeeGrid
+    from tidy3d.components.lumped_element import LumpedResistor
+    from tidy3d.components.source.time import GaussianPulse
+    from tidy3d.components.structure import Structure
+    from tidy3d.components.types import FreqArray
 
 
 class LumpedPort(AbstractLumpedPort, Box):

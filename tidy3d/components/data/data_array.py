@@ -4,36 +4,23 @@ from __future__ import annotations
 
 import pathlib
 from abc import ABC
-from collections.abc import Mapping
-from os import PathLike
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import autograd.numpy as anp
 import h5py
 import numpy as np
 import xarray as xr
 from autograd.tracer import isbox
-from numpy.typing import NDArray
-from pydantic.annotated_handlers import GetCoreSchemaHandler
-from pydantic.json_schema import GetJsonSchemaHandler, JsonSchemaValue
 from pydantic_core import core_schema
 from xarray.core import missing
 from xarray.core.indexes import PandasIndex
 from xarray.core.indexing import _outer_to_numpy_indexer
-from xarray.core.types import InterpOptions, Self
 from xarray.core.utils import OrderedSet, either_dict_or_kwargs
 from xarray.core.variable import as_variable
 
 from tidy3d.compat import alignment
-from tidy3d.components.autograd import (
-    InterpolationType,
-    TidyArrayBox,
-    get_static,
-    interpn,
-    is_tidy_box,
-)
+from tidy3d.components.autograd import TidyArrayBox, get_static, interpn, is_tidy_box
 from tidy3d.components.geometry.bound_ops import bounds_contains
-from tidy3d.components.types import Axis, Bound
 from tidy3d.constants import (
     AMP,
     HERTZ,
@@ -46,6 +33,19 @@ from tidy3d.constants import (
     WATT,
 )
 from tidy3d.exceptions import DataError, FileError
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from os import PathLike
+    from typing import Optional
+
+    from numpy.typing import NDArray
+    from pydantic.annotated_handlers import GetCoreSchemaHandler
+    from pydantic.json_schema import GetJsonSchemaHandler, JsonSchemaValue
+    from xarray.core.types import InterpOptions, Self
+
+    from tidy3d.components.autograd import InterpolationType
+    from tidy3d.components.types import Axis, Bound
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {

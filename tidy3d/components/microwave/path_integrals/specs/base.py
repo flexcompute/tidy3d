@@ -3,23 +3,30 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
-import xarray as xr
-from numpy.typing import NDArray
 from pydantic import Field, field_validator
-from typing_extensions import Self
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.microwave.base import MicrowaveBaseModel
-from tidy3d.components.types import ArrayFloat2D, Bound, Coordinate, Coordinate2D
-from tidy3d.components.types.base import Axis, Direction
+from tidy3d.components.types import ArrayFloat2D
+from tidy3d.components.types.base import Axis
 from tidy3d.components.validators import assert_line
 from tidy3d.constants import MICROMETER, fp_eps
 from tidy3d.exceptions import SetupError
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    import xarray as xr
+    from numpy.typing import NDArray
+    from typing_extensions import Self
+
+    from tidy3d.components.types import Bound, Coordinate, Coordinate2D
+    from tidy3d.components.types.base import Direction
 
 
 class AbstractAxesRH(MicrowaveBaseModel, ABC):

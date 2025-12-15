@@ -5,9 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Literal, Optional, Union
 
-from pydantic import Field, ValidationInfo, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.utils import _shift_value_signed
 from tidy3d.components.simulation import Simulation
@@ -23,13 +22,18 @@ from tidy3d.config import config
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.log import log
-from tidy3d.plugins.smatrix.ports.modal import ModalPortDataArray, Port
-from tidy3d.plugins.smatrix.ports.types import LumpedPortType, PortType, TerminalPortType
+from tidy3d.plugins.smatrix.ports.modal import Port
+from tidy3d.plugins.smatrix.ports.types import LumpedPortType, TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import Element, MatrixIndex, NetworkElement, NetworkIndex
 
 if TYPE_CHECKING:
+    from pydantic import ValidationInfo
+
+    from tidy3d.compat import Self
     from tidy3d.plugins.smatrix import MicrowaveSMatrixData
+    from tidy3d.plugins.smatrix.ports.modal import ModalPortDataArray
+    from tidy3d.plugins.smatrix.ports.types import PortType
     from tidy3d.web.core.types import PayType
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10

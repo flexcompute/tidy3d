@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from functools import cache
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
 import numpy as np
 import scipy.ndimage
 from autograd.extend import defjvp, defvjp, primitive
-from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Callable
+
+    from numpy.typing import NDArray
 
 
 def _normalize_sequence(value: float | Sequence[float], ndim: int) -> tuple[float, ...]:

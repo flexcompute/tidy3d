@@ -3,27 +3,33 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
 import numpy as np
 import shapely
 from pydantic import Field, PrivateAttr, model_validator
-from shapely.geometry.base import BaseGeometry
 
-from tidy3d.compat import Self
-from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
-from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd import TracedSize1D
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry import base
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.geometry.polyslab import PolySlab
-from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from shapely.geometry.base import BaseGeometry
+
+    from tidy3d.compat import Self
+    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40

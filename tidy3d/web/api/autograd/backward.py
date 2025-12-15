@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
 
 import tidy3d as td
-from tidy3d import Medium
-from tidy3d.components.autograd import AutogradFieldMap, get_static
+from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.config import config
@@ -15,6 +15,10 @@ from tidy3d.exceptions import AdjointError
 from tidy3d.packaging import disable_local_subpixel
 
 from .utils import E_to_D, get_derivative_maps
+
+if TYPE_CHECKING:
+    from tidy3d import Medium
+    from tidy3d.components.autograd import AutogradFieldMap
 
 
 def setup_adj(

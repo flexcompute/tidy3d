@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 import numpy as np
 from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.geometry.bound_ops import bounds_union
 from tidy3d.components.microwave.base import MicrowaveBaseModel
@@ -18,12 +17,18 @@ from tidy3d.components.microwave.path_integrals.specs.base import (
     Custom2DPathIntegralSpec,
 )
 from tidy3d.components.microwave.path_integrals.viz import ARROW_CURRENT, plot_params_current_path
-from tidy3d.components.types import Ax, Bound
-from tidy3d.components.types.base import Axis, Direction
+from tidy3d.components.types.base import Direction
 from tidy3d.components.validators import assert_plane
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from tidy3d.components.data.data_array import DataArray
+    from tidy3d.components.types import Ax, Bound
+    from tidy3d.components.types.base import Axis
 
 
 class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):

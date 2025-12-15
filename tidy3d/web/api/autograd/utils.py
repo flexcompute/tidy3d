@@ -1,11 +1,14 @@
 # utility functions for autograd web API
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 import tidy3d as td
+
+if TYPE_CHECKING:
+    from typing import Optional, Union
 
 """ E and D field gradient map calculation helpers. """
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import abc
 from copy import deepcopy
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Optional
 
 import autograd as ag
 import autograd.numpy as anp
@@ -16,6 +16,9 @@ from tidy3d.components.types import TYPE_TAG_STR
 from .base import InvdesBaseModel
 from .design import InverseDesignType
 from .result import InverseDesignResult
+
+if TYPE_CHECKING:
+    from typing import Callable
 
 
 class AbstractOptimizer(InvdesBaseModel, abc.ABC):

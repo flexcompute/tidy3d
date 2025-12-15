@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
 
 from tidy3d import ClipOperation, GeometryGroup, GridSpec, PolySlab
-from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.frequency_extrapolation import (
@@ -22,9 +21,8 @@ from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.monitor import DirectivityMonitor, ModeMonitor
-from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Ax, Complex, Coordinate
+from tidy3d.components.types import Complex, Coordinate
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, MICROMETER, OHM, fp_eps, inf
@@ -34,13 +32,18 @@ from tidy3d.plugins.smatrix.component_modelers.base import (
     FWIDTH_FRAC,
     AbstractComponentModeler,
 )
-from tidy3d.plugins.smatrix.data.data_array import PortDataArray
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
-from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
-from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import NetworkElement, NetworkIndex, SParamDef
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+    from tidy3d.components.simulation import Simulation
+    from tidy3d.components.types import Ax
+    from tidy3d.plugins.smatrix.data.data_array import PortDataArray
+    from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
+    from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 
 AUTO_RADIATION_MONITOR_NAME = "radiation"
 AUTO_RADIATION_MONITOR_BUFFER = 2

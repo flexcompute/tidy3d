@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from pydantic import Field
 
-from tidy3d.components.autograd.types import (
-    AutogradFieldMap,
-    TracedArrayLike,
-    TracedComplex,
-    TracedFloat,
-)
+from tidy3d.components.autograd.types import TracedArrayLike, TracedComplex, TracedFloat
 from tidy3d.components.base import Tidy3dBaseModel
+
+if TYPE_CHECKING:
+    from typing import Callable
+
+    from tidy3d.components.autograd.types import AutogradFieldMap
 
 
 class Tracer(Tidy3dBaseModel):

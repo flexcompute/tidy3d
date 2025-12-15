@@ -6,37 +6,18 @@ from __future__ import annotations
 
 from functools import wraps
 from math import isclose
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Literal,
-    Optional,
-    ParamSpec,
-    TypeVar,
-    Union,
-    get_args,
-)
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, Union, get_args
 
 import numpy as np
 import xarray as xr
-from pydantic import (
-    Field,
-    NonNegativeFloat,
-    NonNegativeInt,
-    PositiveInt,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import (
     Tidy3dBaseModel,
     cached_property,
 )
 from tidy3d.components.boundary import PML, Absorber, Boundary, BoundarySpec, PECBoundary, StablePML
 from tidy3d.components.data.data_array import (
-    FreqModeDataArray,
     ModeIndexDataArray,
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
@@ -49,7 +30,6 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.eme.data.sim_data import EMESimulationData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import (
     FullyAnisotropicMedium,
     IsotropicUniformMediumType,
@@ -57,40 +37,18 @@ from tidy3d.components.medium import (
 )
 from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
 from tidy3d.components.microwave.data.monitor_data import MicrowaveModeSolverData
-from tidy3d.components.microwave.impedance_calculator import (
-    CurrentIntegralType,
-    ImpedanceCalculator,
-    VoltageIntegralType,
-)
+from tidy3d.components.microwave.impedance_calculator import ImpedanceCalculator
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from tidy3d.components.microwave.path_integrals.factory import make_path_integrals
-from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource
-from tidy3d.components.source.time import SourceTime
-from tidy3d.components.structure import Structure
 from tidy3d.components.subpixel_spec import SurfaceImpedance
-from tidy3d.components.types import (
-    ArrayComplex3D,
-    ArrayComplex4D,
-    ArrayFloat1D,
-    ArrayFloat2D,
-    Ax,
-    Axis,
-    Axis2D,
-    Direction,
-    EMField,
-    EpsSpecType,
-    FreqArray,
-    PlotScale,
-    Symmetry,
-)
+from tidy3d.components.types import ArrayComplex3D, Direction, EMField, FreqArray
 from tidy3d.components.types.base import TYPE_TAG_STR, discriminated_union
 from tidy3d.components.types.mode_spec import ModeSpecType
-from tidy3d.components.types.monitor_data import ModeSolverDataType
 from tidy3d.components.validators import (
     validate_freqs_min,
     validate_freqs_not_empty,
@@ -101,7 +59,33 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
+    from typing import Callable, Literal, Optional
+
     from matplotlib.colors import Colormap
+    from pydantic import NonNegativeFloat, NonNegativeInt, PositiveInt
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import FreqModeDataArray
+    from tidy3d.components.grid.grid import Coords, Grid
+    from tidy3d.components.microwave.impedance_calculator import (
+        CurrentIntegralType,
+        VoltageIntegralType,
+    )
+    from tidy3d.components.mode_spec import ModeSpec
+    from tidy3d.components.source.time import SourceTime
+    from tidy3d.components.structure import Structure
+    from tidy3d.components.types import (
+        ArrayComplex4D,
+        ArrayFloat1D,
+        ArrayFloat2D,
+        Ax,
+        Axis,
+        Axis2D,
+        EpsSpecType,
+        PlotScale,
+        Symmetry,
+    )
+    from tidy3d.components.types.monitor_data import ModeSolverDataType
 from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
 
 # Importing the local solver may not work if e.g. scipy is not installed

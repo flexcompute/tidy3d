@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray
-from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
-from tidy3d.plugins.smatrix.types import NetworkIndex
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
+    from tidy3d.plugins.smatrix.types import NetworkIndex
 
 
 def get_antenna_metrics_data(

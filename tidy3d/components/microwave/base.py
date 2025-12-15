@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from tidy3d.compat import Self
+from typing import TYPE_CHECKING
+
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.config import config
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 
 class MicrowaveBaseModel(Tidy3dBaseModel):

@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from enum import Enum
-from typing import Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-from pydantic import Field, FiniteFloat, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base_sim.simulation import AbstractSimulation
 from tidy3d.components.bc_placement import (
     MediumMediumInterface,
@@ -78,18 +76,23 @@ from tidy3d.components.tcad.viz import (
     plot_params_heat_bc,
     plot_params_heat_source,
 )
-from tidy3d.components.types import (
-    TYPE_TAG_STR,
-    Ax,
-    Bound,
-    ScalarSymmetry,
-    Shapely,
-)
-from tidy3d.components.types.base import ArrayFloat1D, discriminated_union
-from tidy3d.components.viz import PlotParams, add_ax_if_none, equal_aspect
+from tidy3d.components.types import TYPE_TAG_STR, ScalarSymmetry
+from tidy3d.components.types.base import discriminated_union
+from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import VOLUMETRIC_HEAT_RATE, inf
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from typing import Literal
+
+    from pydantic import FiniteFloat
+
+    from tidy3d.compat import Self
+    from tidy3d.components.types import Ax, Bound, Shapely
+    from tidy3d.components.types.base import ArrayFloat1D
+    from tidy3d.components.viz import PlotParams
 
 try:
     from matplotlib import colormaps

@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
 from enum import Enum
 from math import isclose
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 import shapely
-from numpy.typing import ArrayLike
 from pydantic import Field, NonNegativeInt
 from shapely.geometry import (
     Polygon,
@@ -22,21 +20,27 @@ from shapely.geometry.base import (
 from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.grid.grid import Grid
-from tidy3d.components.types import (
-    ArrayFloat2D,
-    Axis,
-    Bound,
-    Coordinate,
-    Direction,
-    MatrixReal4x4,
-    PlanePosition,
-    Shapely,
-)
+from tidy3d.components.types import Shapely
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dError
 
 from . import base, mesh, polyslab, primitives
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from numpy.typing import ArrayLike
+
+    from tidy3d.components.grid.grid import Grid
+    from tidy3d.components.types import (
+        ArrayFloat2D,
+        Axis,
+        Bound,
+        Coordinate,
+        Direction,
+        MatrixReal4x4,
+        PlanePosition,
+    )
 
 GeometryType = Union[
     base.Box,

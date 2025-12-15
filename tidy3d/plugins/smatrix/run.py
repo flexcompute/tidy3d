@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from tidy3d.components.data.index import SimulationDataMap
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
-from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
 from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
-from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
-from tidy3d.web import Batch, BatchData
+from tidy3d.web import Batch
+
+if TYPE_CHECKING:
+    from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
+    from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
+    from tidy3d.web import BatchData
 
 DEFAULT_DATA_DIR = "."
 

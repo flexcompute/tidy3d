@@ -9,12 +9,15 @@ from __future__ import annotations
 import platform
 import re
 import subprocess
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import click
 
 from .index import develop
 from .utils import echo_and_check_subprocess, echo_and_run_subprocess, get_install_directory
+
+if TYPE_CHECKING:
+    from typing import Optional
 
 __all__ = [
     "activate_correct_poetry_python",

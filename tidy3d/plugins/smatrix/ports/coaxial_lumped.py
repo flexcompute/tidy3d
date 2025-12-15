@@ -2,32 +2,39 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
+from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.dataset import FieldDataset
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.geometry.utils_2d import increment_float
-from tidy3d.components.grid.grid import Grid, YeeGrid
 from tidy3d.components.lumped_element import CoaxialLumpedResistor
 from tidy3d.components.microwave.path_integrals.integrals.current import Custom2DCurrentIntegral
 from tidy3d.components.microwave.path_integrals.integrals.voltage import AxisAlignedVoltageIntegral
 from tidy3d.components.microwave.path_integrals.specs.base import AbstractAxesRH
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import CustomCurrentSource
-from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Axis, Coordinate, Direction, FreqArray, Size
+from tidy3d.components.types import Axis, Coordinate, Direction
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 
 from .base_lumped import AbstractLumpedPort
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import FreqDataArray
+    from tidy3d.components.data.sim_data import SimulationData
+    from tidy3d.components.grid.grid import Grid, YeeGrid
+    from tidy3d.components.source.time import GaussianPulse
+    from tidy3d.components.types import FreqArray, Size
 
 DEFAULT_COAX_SOURCE_NUM_POINTS = 11
 

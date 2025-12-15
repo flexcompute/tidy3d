@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Literal, Optional, Union
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 import xarray as xr
@@ -12,10 +12,15 @@ from pydantic import Field, NonNegativeFloat, PositiveInt, field_validator
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
 from tidy3d.components.data.monitor_data import FieldTimeData
-from tidy3d.components.types import ArrayComplex1D, ArrayComplex2D, ArrayComplex3D, ArrayFloat1D
+from tidy3d.components.types import ArrayComplex1D, ArrayFloat1D
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from typing import Literal, Union
+
+    from tidy3d.components.types import ArrayComplex2D, ArrayComplex3D
 
 INIT_NUM_FREQS = 200
 

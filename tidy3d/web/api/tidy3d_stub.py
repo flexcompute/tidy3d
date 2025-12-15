@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from os import PathLike
-from typing import Callable, Optional
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
@@ -36,6 +35,10 @@ from tidy3d.plugins.smatrix.data.terminal import (
 )
 from tidy3d.web.core.stub import TaskStub, TaskStubData
 from tidy3d.web.core.types import TaskType
+
+if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Callable, Optional
 
 TYPE_MAP: dict[type, TaskType] = {
     Simulation: TaskType.FDTD,

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC
+from typing import TYPE_CHECKING
 
 from pydantic import Field
 
 from tidy3d.components.base_sim.monitor import AbstractMonitor
-from tidy3d.components.types import ArrayFloat1D
+
+if TYPE_CHECKING:
+    from tidy3d.components.types import ArrayFloat1D
 
 BYTES_REAL = 4
 

@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from pydantic import Field, PositiveInt
-from xarray import DataArray
+from pydantic import Field
 from xarray import DataArray as XrDataArray
-
-from tidy3d.compat import Self
 
 try:
     from matplotlib import pyplot as plt
@@ -24,7 +21,7 @@ from tidy3d.components.data.data_array import (
     PointDataArray,
     SpatialDataArray,
 )
-from tidy3d.components.types import ArrayLike, Ax, Axis, Bound
+from tidy3d.components.types import Axis
 from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_grid
 from tidy3d.constants import inf
 from tidy3d.exceptions import DataError
@@ -39,7 +36,14 @@ from .base import (
 )
 
 if TYPE_CHECKING:
+    from typing import Literal, Optional, Union
+
+    from pydantic import PositiveInt
     from vtkmodules.vtkCommonDataModel import vtkPointSet
+    from xarray import DataArray
+
+    from tidy3d.compat import Self
+    from tidy3d.components.types import ArrayLike, Ax, Bound
 
 
 class TriangularGridDataset(UnstructuredGridDataset):

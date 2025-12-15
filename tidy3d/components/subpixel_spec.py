@@ -1,14 +1,15 @@
 # Defines specifications for subpixel averaging
 from __future__ import annotations
 
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 from pydantic import Field
 
-from tidy3d.compat import Self
-
 from .base import Tidy3dBaseModel, cached_property
 from .types.base import discriminated_union
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 # Default Courant number reduction rate in PEC conformal's scheme
 DEFAULT_COURANT_REDUCTION_PEC_CONFORMAL = 0.3

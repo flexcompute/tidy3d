@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
 from pydantic import (
@@ -16,22 +16,15 @@ from pydantic import (
     model_validator,
 )
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.base import Box, ClipOperation
-from tidy3d.components.lumped_element import LumpedElementType
-from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import MeshOverrideStructure, Structure, StructureType
 from tidy3d.components.types import (
     TYPE_TAG_STR,
     ArrayFloat1D,
     ArrayFloat2D,
     Axis,
-    Coordinate,
     CoordinateOptional,
-    PriorityMode,
-    Shapely,
-    Symmetry,
     Undefined,
 )
 from tidy3d.components.types.base import discriminated_union
@@ -42,6 +35,12 @@ from tidy3d.log import log
 from .corner_finder import CornerFinderSpec
 from .grid import Coords, Coords1D, Grid
 from .mesher import GradedMesher, MesherType
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+    from tidy3d.components.lumped_element import LumpedElementType
+    from tidy3d.components.source.utils import SourceType
+    from tidy3d.components.types import Coordinate, PriorityMode, Shapely, Symmetry
 
 # Scaling factor applied to internally generated lower bound of grid size that is computed from
 # estimated minimal grid size

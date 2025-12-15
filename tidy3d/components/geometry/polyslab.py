@@ -5,33 +5,19 @@ from __future__ import annotations
 import math
 from copy import copy
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 import shapely
 from autograd.tracer import getval
 from numpy.polynomial.legendre import leggauss as _leggauss
-from numpy.typing import NDArray
-from pydantic import Field, PositiveFloat, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
-from tidy3d.compat import Self
-from tidy3d.components.autograd import AutogradFieldMap, TracedArrayFloat2D, get_static
-from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd import TracedArrayFloat2D, get_static
 from tidy3d.components.autograd.types import TracedFloat
 from tidy3d.components.autograd.utils import hasbox
 from tidy3d.components.base import cached_property
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
-from tidy3d.components.types import (
-    ArrayFloat1D,
-    ArrayFloat2D,
-    ArrayLike,
-    Axis,
-    Bound,
-    Coordinate,
-    MatrixReal4x4,
-    PlanePosition,
-    Shapely,
-)
 from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dImportError, ValidationError
@@ -41,7 +27,26 @@ from tidy3d.packaging import verify_packages_import
 from . import base, triangulation
 
 if TYPE_CHECKING:
+    from typing import Optional, Union
+
     from gdstk import Cell
+    from numpy.typing import NDArray
+    from pydantic import PositiveFloat
+
+    from tidy3d.compat import Self
+    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.types import (
+        ArrayFloat1D,
+        ArrayFloat2D,
+        ArrayLike,
+        Axis,
+        Bound,
+        Coordinate,
+        MatrixReal4x4,
+        PlanePosition,
+        Shapely,
+    )
 
 # sampling polygon along dilation for validating polygon to be
 # non self-intersecting during the entire dilation process

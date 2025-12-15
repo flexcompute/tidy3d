@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
-from pydantic import NonNegativeFloat, PositiveInt
 
 from tidy3d.components.dispersion_fitter import (
     AdvancedFastFitterParam,
@@ -16,6 +15,11 @@ from tidy3d.components.medium import PoleResidue
 from tidy3d.constants import HBAR
 
 from .fit import DispersionFitter
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from pydantic import NonNegativeFloat, PositiveInt
 
 # numerical tolerance for pole relocation for fast fitter
 TOL = 1e-8

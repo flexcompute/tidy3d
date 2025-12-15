@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 import pandas
 from pydantic import Field, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from tidy3d.compat import Self
 
 # NOTE: Coords are args_dict from method and design. This may be changed in future to unify naming
 

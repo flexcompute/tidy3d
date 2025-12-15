@@ -5,58 +5,23 @@ from __future__ import annotations
 import functools
 import pathlib
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Sequence
-from os import PathLike
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 import autograd.numpy as np
-import pydantic
 import shapely
-from numpy.typing import ArrayLike, NDArray
-from pydantic import (
-    Field,
-    NonNegativeFloat,
-    NonNegativeInt,
-    PositiveFloat,
-    field_validator,
-    model_validator,
-)
-from typing_extensions import Self
+from pydantic import Field, NonNegativeFloat, field_validator, model_validator
 
 from tidy3d.compat import _package_is_older_than
-from tidy3d.components.autograd import (
-    AutogradFieldMap,
-    TracedCoordinate,
-    TracedFloat,
-    TracedSize,
-    get_static,
-)
-from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd import TracedCoordinate, TracedFloat, TracedSize, get_static
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
 from tidy3d.components.geometry.float_utils import increment_float
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
-from tidy3d.components.types import (
-    ArrayFloat2D,
-    ArrayFloat3D,
-    Ax,
-    Axis,
-    Bound,
-    ClipOperationType,
-    Coordinate,
-    Coordinate2D,
-    LengthUnit,
-    MatrixReal4x4,
-    PlanePosition,
-    Shapely,
-    Size,
-)
+from tidy3d.components.types import Axis, ClipOperationType, MatrixReal4x4, PlanePosition
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.viz import (
     ARROW_LENGTH,
     PLOT_BUFFER,
-    PlotParams,
-    VisualizationSpec,
     add_ax_if_none,
     arrow_style,
     equal_aspect,
@@ -76,9 +41,32 @@ from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+    from os import PathLike
+    from typing import Callable, Union
+
+    import pydantic
     from gdstk import Cell
     from matplotlib.backend_bases import Event
     from matplotlib.patches import FancyArrowPatch
+    from numpy.typing import ArrayLike, NDArray
+    from pydantic import NonNegativeInt, PositiveFloat
+    from typing_extensions import Self
+
+    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.types import (
+        ArrayFloat2D,
+        ArrayFloat3D,
+        Ax,
+        Bound,
+        Coordinate,
+        Coordinate2D,
+        LengthUnit,
+        Shapely,
+        Size,
+    )
+    from tidy3d.components.viz import PlotParams, VisualizationSpec
 
 try:
     from matplotlib import patches

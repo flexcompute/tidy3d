@@ -2,19 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import Field
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
-from tidy3d.components.data.utils import UnstructuredGridDataset, UnstructuredGridDatasetType
-from tidy3d.components.geometry.base import Box, Geometry
-from tidy3d.components.types import ArrayFloat1D, ArrayLike, Axis, Coordinate, InterpMethod
+from tidy3d.components.data.utils import UnstructuredGridDataset
+from tidy3d.components.types import ArrayFloat1D
 from tidy3d.exceptions import SetupError
+
+if TYPE_CHECKING:
+    from typing import Literal, Union
+
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.utils import UnstructuredGridDatasetType
+    from tidy3d.components.geometry.base import Box, Geometry
+    from tidy3d.components.types import ArrayLike, Axis, Coordinate, InterpMethod
 
 # data type of one dimensional coordinate array.
 Coords1D = ArrayFloat1D

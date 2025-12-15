@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat, PositiveInt
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.base import Box, ClipOperation
 from tidy3d.components.geometry.utils import merging_geometries_on_plane
 from tidy3d.components.medium import PEC, LossyMetalMedium
-from tidy3d.components.structure import Structure
-from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
 from tidy3d.constants import inf
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from tidy3d.components.structure import Structure
+    from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
 
 CORNER_ANGLE_THRESOLD = 0.25 * np.pi
 # For shapely circular shapes discretization.

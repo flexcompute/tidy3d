@@ -4,10 +4,9 @@ astigmatic Gaussian beam."""
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Literal, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import autograd.numpy as np
-from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat
 
 from tidy3d.constants import C_0, ETA_0, HERTZ, MICROMETER, RADIAN
@@ -22,6 +21,11 @@ from .monitor import FieldMonitor
 from .source.field import FixedAngleSpec, FixedInPlaneKSpec
 from .types import TYPE_TAG_STR, Direction, FreqArray
 from .validators import assert_plane, warn_backward_waist_distance
+
+if TYPE_CHECKING:
+    from typing import Literal
+
+    from numpy.typing import NDArray
 
 DEFAULT_RESOLUTION = 200
 

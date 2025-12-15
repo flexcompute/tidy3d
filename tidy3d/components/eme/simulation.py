@@ -2,48 +2,32 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
-from pydantic import (
-    Field,
-    NonNegativeFloat,
-    NonNegativeInt,
-    PositiveInt,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, NonNegativeFloat, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BoundarySpec, PECBoundary
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.grid.grid import Grid
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.medium import FullyAnisotropicMedium
-from tidy3d.components.monitor import AbstractModeMonitor, ModeSolverMonitor, Monitor
+from tidy3d.components.monitor import AbstractModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
 from tidy3d.components.simulation import (
     AbstractYeeGridSimulation,
     Simulation,
     validate_boundaries_for_zero_dims,
 )
-from tidy3d.components.structure import Structure
-from tidy3d.components.types import (
-    Ax,
-    Axis,
-    FreqArray,
-    Symmetry,
-)
+from tidy3d.components.types import Axis, FreqArray
 from tidy3d.components.types.base import discriminated_union
-from tidy3d.components.types.monitor import MonitorType
 from tidy3d.components.validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, inf
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
-from .grid import EMECompositeGrid, EMEExplicitGrid, EMEGrid, EMEGridSpec, EMEGridSpecType
+from .grid import EMECompositeGrid, EMEExplicitGrid, EMEGridSpecType
 from .monitor import (
     EMECoefficientMonitor,
     EMEFieldMonitor,
@@ -52,6 +36,20 @@ from .monitor import (
     EMEMonitorType,
 )
 from .sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep, EMEPeriodicitySweep, EMESweepSpecType
+
+if TYPE_CHECKING:
+    from typing import Union
+
+    from pydantic import NonNegativeInt, PositiveInt
+
+    from tidy3d.compat import Self
+    from tidy3d.components.grid.grid import Grid
+    from tidy3d.components.monitor import Monitor
+    from tidy3d.components.structure import Structure
+    from tidy3d.components.types import Ax, Symmetry
+    from tidy3d.components.types.monitor import MonitorType
+
+    from .grid import EMEGrid, EMEGridSpec
 
 try:
     import matplotlib as mpl

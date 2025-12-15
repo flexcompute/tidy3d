@@ -5,14 +5,18 @@ a set of Tidy3D simulations, allowing them to be accessed by name.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
-from typing import Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types.simulation import SimulationType
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from tidy3d.compat import Self
 
 
 class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):

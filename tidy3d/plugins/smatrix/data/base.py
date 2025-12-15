@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from pydantic import Field, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.data.index import SimulationDataMap
 from tidy3d.plugins.smatrix.component_modelers.base import AbstractComponentModeler
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import DataArray
 
 
 class AbstractComponentModelerData(ABC, Tidy3dBaseModel):

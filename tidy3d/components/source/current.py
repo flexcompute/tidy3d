@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 from math import cos, isclose, sin
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from pydantic import Field
 
@@ -16,7 +16,9 @@ from tidy3d.components.validators import assert_single_freq_in_range, warn_if_da
 from tidy3d.constants import MICROMETER
 
 from .base import Source
-from .time import SourceTimeType
+
+if TYPE_CHECKING:
+    from .time import SourceTimeType
 
 
 class CurrentSource(Source, ABC):

@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 from pydantic import Field, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
-from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.bound_ops import bounds_contains
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.path_integrals.specs.impedance import (
@@ -19,6 +17,10 @@ from tidy3d.components.microwave.path_integrals.specs.impedance import (
 from tidy3d.components.mode_spec import AbstractModeSpec
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+    from tidy3d.components.geometry.base import Box
 
 TEM_POLARIZATION_THRESHOLD = 0.995
 QTEM_POLARIZATION_THRESHOLD = 0.95

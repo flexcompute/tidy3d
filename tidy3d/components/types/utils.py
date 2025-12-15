@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
+
+if TYPE_CHECKING:
+    from pydantic import GetCoreSchemaHandler
 
 
 def _add_schema(arbitrary_type: type, title: str, field_type_str: str) -> None:

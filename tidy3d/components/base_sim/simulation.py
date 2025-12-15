@@ -3,37 +3,33 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import autograd.numpy as anp
 from pydantic import Field, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.medium import Medium, MediumType3D
 from tidy3d.components.scene import Scene
 from tidy3d.components.structure import Structure
-from tidy3d.components.types import (
-    TYPE_TAG_STR,
-    Ax,
-    Axis,
-    Bound,
-    LengthUnit,
-    PriorityMode,
-    Symmetry,
-)
+from tidy3d.components.types import TYPE_TAG_STR, LengthUnit, PriorityMode, Symmetry
 from tidy3d.components.validators import (
     _warn_unsupported_traced_argument,
     assert_objects_in_sim_bounds,
     assert_unique_names,
 )
-from tidy3d.components.viz import PlotParams, add_ax_if_none, equal_aspect, plot_params_symmetry
+from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_symmetry
 from tidy3d.exceptions import Tidy3dKeyError
 from tidy3d.log import log
 from tidy3d.version import __version__
 
-from .monitor import AbstractMonitor
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+    from tidy3d.components.types import Ax, Axis, Bound
+    from tidy3d.components.viz import PlotParams
+
+    from .monitor import AbstractMonitor
 
 
 class AbstractSimulation(Box, ABC):

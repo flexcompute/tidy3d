@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import functools
 import json
-from os import PathLike
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import yaml
 from pydantic import BaseModel
@@ -15,6 +14,9 @@ from .components.base import Tidy3dBaseModel
 from .exceptions import FileError, SetupError
 from .log import log
 from .version import __version__
+
+if TYPE_CHECKING:
+    from os import PathLike
 
 """Storing version numbers."""
 

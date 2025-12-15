@@ -3,20 +3,25 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
-import xarray as xr
 from pydantic import Field, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.base_sim.simulation import AbstractSimulation
-from tidy3d.components.data.utils import UnstructuredGridDatasetType
-from tidy3d.components.monitor import AbstractMonitor
-from tidy3d.components.types import FieldVal
 from tidy3d.exceptions import DataError, Tidy3dKeyError, ValidationError
+
+if TYPE_CHECKING:
+    from typing import Union
+
+    import xarray as xr
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.utils import UnstructuredGridDatasetType
+    from tidy3d.components.monitor import AbstractMonitor
+    from tidy3d.components.types import FieldVal
 
 
 class AbstractSimulationData(Tidy3dBaseModel, ABC):

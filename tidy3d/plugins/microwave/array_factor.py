@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -19,23 +18,32 @@ from pydantic import (
 from scipy.signal.windows import blackman, blackmanharris, chebwin, hamming, hann, kaiser, taylor
 from scipy.special import j0, jn_zeros
 
-from tidy3d.compat import Self
-from tidy3d.components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
+from tidy3d.components.data.monitor_data import DirectivityData
 from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.geometry.base import Box, Geometry
-from tidy3d.components.grid.grid_spec import GridSpec, LayerRefinementSpec
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.grid.grid_spec import LayerRefinementSpec
 from tidy3d.components.lumped_element import LumpedElement
-from tidy3d.components.medium import Medium, MediumType3D
+from tidy3d.components.medium import Medium
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.monitor import AbstractFieldProjectionMonitor
-from tidy3d.components.simulation import Simulation
-from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import MeshOverrideStructure, Structure
-from tidy3d.components.types import TYPE_TAG_STR, ArrayLike, Axis, Bound, Undefined
-from tidy3d.components.types.monitor import MonitorType
+from tidy3d.components.types import TYPE_TAG_STR, ArrayLike, Undefined
 from tidy3d.constants import C_0, inf
 from tidy3d.exceptions import Tidy3dNotImplementedError
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.monitor_data import AbstractFieldProjectionData
+    from tidy3d.components.geometry.base import Geometry
+    from tidy3d.components.grid.grid_spec import GridSpec
+    from tidy3d.components.medium import MediumType3D
+    from tidy3d.components.simulation import Simulation
+    from tidy3d.components.source.utils import SourceType
+    from tidy3d.components.types import Axis, Bound
+    from tidy3d.components.types.monitor import MonitorType
 
 
 class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):

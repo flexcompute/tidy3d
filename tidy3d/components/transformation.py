@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 from pydantic import Field, field_validator
@@ -13,7 +13,10 @@ from tidy3d.exceptions import ValidationError
 
 from .autograd import TracedFloat
 from .base import Tidy3dBaseModel, cached_property
-from .types import ArrayFloat2D, Axis, Coordinate, TensorReal
+from .types import Axis, Coordinate
+
+if TYPE_CHECKING:
+    from .types import ArrayFloat2D, TensorReal
 
 
 class AbstractRotation(ABC, Tidy3dBaseModel):

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
 from pydantic import Field, field_validator
 
 from .base import Expression
-from .types import ExpressionType, NumberOrExpression, NumberType
+from .types import NumberOrExpression
+
+if TYPE_CHECKING:
+    from .types import ExpressionType, NumberType
 
 
 class Function(Expression):

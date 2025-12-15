@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic import Field
 
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.data.base import AbstractComponentModelerData
-from tidy3d.plugins.smatrix.data.data_array import ModalPortDataArray
+
+if TYPE_CHECKING:
+    from tidy3d.plugins.smatrix.data.data_array import ModalPortDataArray
 
 
 class ModalComponentModelerData(AbstractComponentModelerData):

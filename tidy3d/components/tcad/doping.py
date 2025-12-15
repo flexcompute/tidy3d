@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 import xarray as xr
-from numpy.typing import ArrayLike, NDArray
 from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.autograd import TracedSize
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.geometry.base import Box
 from tidy3d.constants import MICROMETER, PERCMCUBE, inf
 from tidy3d.exceptions import SetupError
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike, NDArray
+
+    from tidy3d.compat import Self
 
 
 class AbstractDopingBox(Box):

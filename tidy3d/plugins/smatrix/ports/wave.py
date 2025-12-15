@@ -2,30 +2,35 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
-from pydantic import Field, NonNegativeFloat, NonNegativeInt, field_validator, model_validator
+from pydantic import Field, NonNegativeInt, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import ABCBoundary, InternalAbsorber, ModeABCBoundary
-from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.grid.grid import Grid
-from tidy3d.components.microwave.data.monitor_data import MicrowaveModeData
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor
-from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.frame import PECFrame
-from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.structure import MeshOverrideStructure
-from tidy3d.components.types import Axis, Direction, FreqArray
+from tidy3d.components.types import Direction
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.smatrix.ports.base_terminal import AbstractTerminalPort
+
+if TYPE_CHECKING:
+    from pydantic import NonNegativeFloat
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
+    from tidy3d.components.grid.grid import Grid
+    from tidy3d.components.microwave.data.monitor_data import MicrowaveModeData
+    from tidy3d.components.simulation import Simulation
+    from tidy3d.components.source.time import GaussianPulse
+    from tidy3d.components.types import Axis, FreqArray
 
 DEFAULT_WAVE_PORT_NUM_CELLS = 5
 MIN_WAVE_PORT_NUM_CELLS = 3

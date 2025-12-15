@@ -5,29 +5,18 @@ from __future__ import annotations
 import pathlib
 from collections import defaultdict
 from functools import cmp_to_key
-from os import PathLike
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
 from autograd.extend import Box as AutogradBox
-from pydantic import (
-    Field,
-    NonNegativeFloat,
-    NonNegativeInt,
-    PositiveFloat,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, PositiveFloat, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.config import config
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, Tidy3dImportError
 from tidy3d.log import log
 
-from .autograd.derivative_utils import DerivativeInfo
-from .autograd.types import AutogradFieldMap
 from .autograd.utils import contains, get_static
 from .base import Tidy3dBaseModel
 from .data.data_array import ScalarFieldDataArray
@@ -38,14 +27,22 @@ from .material.multi_physics import MultiPhysicsMedium
 from .material.types import StructureMediumType
 from .medium import AbstractCustomMedium, CustomMedium, LossyMetalMedium, Medium, Medium2D
 from .monitor import FieldMonitor, PermittivityMonitor
-from .types import TYPE_TAG_STR, Ax, Axis, PriorityMode
+from .types import TYPE_TAG_STR
 from .validators import validate_name_str
 from .viz import add_ax_if_none, equal_aspect
 
 if TYPE_CHECKING:
+    from os import PathLike
+
     import gdstk
+    from pydantic import NonNegativeFloat, NonNegativeInt
 
     from tidy3d import VisualizationSpec
+    from tidy3d.compat import Self
+
+    from .autograd.derivative_utils import DerivativeInfo
+    from .autograd.types import AutogradFieldMap
+    from .types import Ax, Axis, PriorityMode
 
 try:
     gdstk_available = True

@@ -7,7 +7,7 @@ import os
 import ssl
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Optional, TypeAlias
+from typing import TYPE_CHECKING, Any
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -29,6 +29,9 @@ from .constants import (
 )
 from .core_config import get_logger
 from .exceptions import WebError, WebNotFoundError
+
+if TYPE_CHECKING:
+    from typing import Callable, Optional, TypeAlias
 
 JSONType: TypeAlias = dict[str, Any] | list[Any] | str | int
 

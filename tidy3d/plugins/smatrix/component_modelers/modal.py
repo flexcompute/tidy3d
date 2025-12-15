@@ -2,24 +2,27 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import autograd.numpy as np
 from pydantic import Field
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.monitor import ModeMonitor
-from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Ax, Complex
+from tidy3d.components.types import Complex
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.plugins.smatrix.ports.modal import Port
 from tidy3d.plugins.smatrix.types import Element, MatrixIndex
 
 from .base import FWIDTH_FRAC, AbstractComponentModeler
+
+if TYPE_CHECKING:
+    from tidy3d.components.data.sim_data import SimulationData
+    from tidy3d.components.simulation import Simulation
+    from tidy3d.components.types import Ax
 
 
 class ModalComponentModeler(AbstractComponentModeler):

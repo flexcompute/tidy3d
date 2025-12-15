@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from pydantic import Field, PositiveInt
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
-from tidy3d.components.grid.grid import Grid, YeeGrid
-from tidy3d.components.lumped_element import LumpedElementType
-from tidy3d.components.monitor import FieldMonitor
-from tidy3d.components.types import Complex, Coordinate, FreqArray
+from tidy3d.components.types import Complex
 from tidy3d.constants import OHM
 
 from .base_terminal import AbstractTerminalPort
+
+if TYPE_CHECKING:
+    from tidy3d.components.grid.grid import Grid, YeeGrid
+    from tidy3d.components.lumped_element import LumpedElementType
+    from tidy3d.components.monitor import FieldMonitor
+    from tidy3d.components.types import Coordinate, FreqArray
 
 DEFAULT_PORT_NUM_CELLS = 3
 DEFAULT_REFERENCE_IMPEDANCE = 50

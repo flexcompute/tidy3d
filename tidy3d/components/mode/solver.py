@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import NDArray
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import EpsSpecType, ModeSolverType
 from tidy3d.constants import C_0, ETA_0, fp_eps, pec_val
 
 from .derivatives import create_d_matrices as d_mats
@@ -17,7 +15,12 @@ from .derivatives import create_s_matrices as s_mats
 from .transforms import angled_transform, radial_transform
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Literal, Optional, Union
+
     from scipy import sparse as sp
+
+    from tidy3d.components.types import EpsSpecType, ModeSolverType
 
 # Consider vec to be complex if norm(vec.imag)/norm(vec) > TOL_COMPLEX
 TOL_COMPLEX = 1e-10

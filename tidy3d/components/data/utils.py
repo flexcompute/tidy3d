@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 import xarray as xr
 
-from tidy3d.components.types import ArrayLike
 from tidy3d.components.types.base import discriminated_union
 
-from .data_array import DataArray, SpatialDataArray
+from .data_array import SpatialDataArray
 from .unstructured.base import UnstructuredGridDataset
 from .unstructured.tetrahedral import TetrahedralGridDataset
 from .unstructured.triangular import TriangularGridDataset
+
+if TYPE_CHECKING:
+    from tidy3d.components.types import ArrayLike
+
+    from .data_array import DataArray
 
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
 

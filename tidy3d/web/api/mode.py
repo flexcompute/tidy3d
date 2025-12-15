@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 import os
-import pathlib
 import tempfile
 import time
 from datetime import datetime
-from os import PathLike
-from typing import Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Optional
 
-import requests
 from botocore.exceptions import ClientError
 from joblib import Parallel, delayed
 from pydantic import Field
-from rich.progress import Progress, TaskID
+from rich.progress import Progress
 
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.eme.simulation import EMESimulation
@@ -30,6 +27,14 @@ from tidy3d.web.core.http_util import http
 from tidy3d.web.core.s3utils import download_file, download_gz_file, upload_file
 from tidy3d.web.core.task_core import Folder
 from tidy3d.web.core.types import PayType, ResourceLifecycle, Submittable
+
+if TYPE_CHECKING:
+    import pathlib
+    from os import PathLike
+    from typing import Callable, Literal, Union
+
+    import requests
+    from rich.progress import TaskID
 
 SIMULATION_JSON = "simulation.json"
 SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"

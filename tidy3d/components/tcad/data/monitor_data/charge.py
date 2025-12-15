@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 from pydantic import Field, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.data.data_array import (
     IndexedFieldVoltageDataArray,
     IndexedVoltageDataArray,
@@ -25,10 +24,14 @@ from tidy3d.components.tcad.monitors.charge import (
     SteadyFreeCarrierMonitor,
     SteadyPotentialMonitor,
 )
-from tidy3d.components.types import TYPE_TAG_STR, Ax
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.exceptions import DataError
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+    from tidy3d.components.types import Ax
 
 FieldDataset = Union[
     discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset]),

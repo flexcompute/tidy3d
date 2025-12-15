@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
-from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import getval, isbox
-from numpy.typing import ArrayLike, NDArray
+
+if TYPE_CHECKING:
+    from typing import Union
+
+    from autograd.numpy.numpy_boxes import ArrayBox
+    from numpy.typing import ArrayLike, NDArray
 
 __all__ = [
     "asarray1d",

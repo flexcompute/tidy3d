@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from types import ModuleType
-from typing import Callable, Literal, Optional, SupportsInt, Union
+from typing import TYPE_CHECKING
 
 import autograd.numpy as np
 import numpy as onp
@@ -13,12 +11,20 @@ from autograd.scipy.special import logsumexp
 from autograd.tracer import getval
 from numpy.fft import irfftn, rfftn
 from numpy.lib.stride_tricks import sliding_window_view
-from numpy.typing import NDArray
 from scipy.fft import next_fast_len
 
 from tidy3d.components.autograd.functions import add_at, interpn, trapz
 
-from .types import PaddingType
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from types import ModuleType
+    from typing import Callable, Literal, Optional, SupportsInt, Union
+
+    from numpy.typing import NDArray
+
+    from tidy3d.components.autograd import TracedArrayLike
+
+    from .types import PaddingType
 
 __all__ = [
     "add_at",
@@ -38,8 +44,6 @@ __all__ = [
     "threshold",
     "trapz",
 ]
-
-from tidy3d.components.autograd import TracedArrayLike
 
 
 def _normalize_axes(

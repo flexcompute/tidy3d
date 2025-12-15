@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import numbers
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Union
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import (
     BaseModel,
     BeforeValidator,
@@ -18,6 +17,9 @@ from pydantic import (
 )
 from pydantic.functional_serializers import PlainSerializer
 from pydantic.json_schema import WithJsonSchema
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 try:
     from matplotlib.axes import Axes

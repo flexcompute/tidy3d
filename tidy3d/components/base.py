@@ -10,12 +10,12 @@ import os
 import tempfile
 import typing as _t
 from collections import defaultdict
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from functools import total_ordering, wraps
 from math import ceil
 from os import PathLike
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional, TypeVar, Union, get_args, get_origin
+from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar, Union, get_args, get_origin
 
 import h5py
 import numpy as np
@@ -24,17 +24,25 @@ import xarray as xr
 import yaml
 from autograd.tracer import isbox
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
-from pydantic.fields import FieldInfo
 
-from tidy3d.compat import Self
 from tidy3d.exceptions import FileError
 from tidy3d.log import log
 
-from .autograd.types import AutogradFieldMap, TracedDict
+from .autograd.types import TracedDict
 from .autograd.utils import get_static
 from .data.data_array import DATA_ARRAY_MAP
 from .file_util import compress_file_to_gzip, extract_gzip_file
 from .types import TYPE_TAG_STR, Undefined
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from typing import Callable
+
+    from pydantic.fields import FieldInfo
+
+    from tidy3d.compat import Self
+
+    from .autograd.types import AutogradFieldMap
 
 INDENT_JSON_FILE = 4  # default indentation of json string in json files
 INDENT = None  # default indentation of json string used internally

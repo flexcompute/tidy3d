@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.types import ArrayFloat1D, Axis
 from tidy3d.components.validators import _warn_unsupported_traced_argument
-from tidy3d.components.viz import PlotParams, plot_params_monitor
+from tidy3d.components.viz import plot_params_monitor
+
+if TYPE_CHECKING:
+    from tidy3d.components.types import ArrayFloat1D, Axis
+    from tidy3d.components.viz import PlotParams
 
 
 class AbstractMonitor(Box, ABC):

@@ -10,26 +10,18 @@ import tempfile
 import time
 import uuid
 from abc import ABC
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
-from os import PathLike
 from pathlib import Path
-from typing import Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 from pydantic import Field, PositiveInt, PrivateAttr, model_validator
-from rich.progress import (
-    BarColumn,
-    Progress,
-    TaskID,
-    TaskProgressColumn,
-    TextColumn,
-    TimeElapsedColumn,
-)
+from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.types.base import discriminated_union
-from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+from tidy3d.components.types.workflow import WorkflowType
 from tidy3d.exceptions import DataError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api import webapi as web
@@ -49,8 +41,16 @@ from tidy3d.web.api.webapi import restore_simulation_if_cached
 from tidy3d.web.cache import _store_mode_solver_in_cache
 from tidy3d.web.core.constants import TaskId, TaskName
 from tidy3d.web.core.task_core import Folder
-from tidy3d.web.core.task_info import RunInfo, TaskInfo
 from tidy3d.web.core.types import PayType
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from os import PathLike
+
+    from rich.progress import TaskID
+
+    from tidy3d.components.types.workflow import WorkflowDataType
+    from tidy3d.web.core.task_info import RunInfo, TaskInfo
 
 # Max # of workers for parallel upload / download: above 10, performance is same but with warnings
 DEFAULT_NUM_WORKERS = 10

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat
 
 from tidy3d import constants as td_const
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.source.time import GaussianPulse
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
 class FreqRange(Tidy3dBaseModel):

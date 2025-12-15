@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
-from pydantic import Field, FieldValidationInfo, PositiveFloat, field_validator, model_validator
+from pydantic import Field, PositiveFloat, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.constants import HERTZ, RADIAN
 from tidy3d.exceptions import ValidationError
 
@@ -17,7 +16,14 @@ from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import SpatialDataArray
 from .data.validators import validate_no_nans
 from .time import AbstractTimeDependence
-from .types import Bound, InterpMethod
+from .types import InterpMethod
+
+if TYPE_CHECKING:
+    from pydantic import FieldValidationInfo
+
+    from tidy3d.compat import Self
+
+    from .types import Bound
 
 
 class AbstractTimeModulation(AbstractTimeDependence, ABC):

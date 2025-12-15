@@ -15,9 +15,11 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from shapely.geometry.base import BaseGeometry
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+    from shapely.geometry.base import BaseGeometry
 
 try:
     from matplotlib.patches import PathPatch
@@ -25,7 +27,6 @@ try:
 except ImportError:
     pass
 from numpy import array, concatenate, ones
-from numpy.typing import NDArray
 
 
 class Polygon:

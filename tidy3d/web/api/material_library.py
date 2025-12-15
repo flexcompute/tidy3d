@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import Field, TypeAdapter, field_validator
 
 from tidy3d.components.medium import MediumType
-from tidy3d.web.core.http_util import JSONType, http
+from tidy3d.web.core.http_util import http
 from tidy3d.web.core.types import Queryable
+
+if TYPE_CHECKING:
+    from tidy3d.web.core.http_util import JSONType
 
 
 class MaterialLibrary(Queryable):

@@ -3,14 +3,10 @@
 from __future__ import annotations
 
 import json
-from os import PathLike
 from typing import TYPE_CHECKING, Optional, Union
 
 from pydantic import Field, model_validator
-from rich.panel import Panel
-from rich.table import Table
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import SemiconductorMedium
@@ -24,7 +20,6 @@ from tidy3d.components.tcad.types import (
     ShockleyReedHallRecombination,
     SlotboomBandGapNarrowing,
 )
-from tidy3d.components.types import Axis
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
@@ -41,7 +36,14 @@ from .util import (
 )
 
 if TYPE_CHECKING:
+    from os import PathLike
+
     from IPython.lib.pretty import RepresentationPrinter
+    from rich.panel import Panel
+    from rich.table import Table
+
+    from tidy3d.compat import Self
+    from tidy3d.components.types import Axis
 
 
 def export_matlib_to_file(fname: PathLike = "matlib.json") -> None:

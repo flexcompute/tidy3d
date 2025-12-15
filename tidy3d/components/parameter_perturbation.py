@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import functools
 from abc import ABC, abstractmethod
-from typing import Callable, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Optional, TypeVar, Union
 
 import numpy as np
-import xarray as xr
 from pydantic import Field, NonNegativeFloat, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.types.base import ArrayComplex, ArrayFloat, discriminated_union
 from tidy3d.constants import C_0, CMCUBE, EPSILON_0, HERTZ, KELVIN, PERCMCUBE, inf
 from tidy3d.exceptions import DataError
@@ -32,13 +30,17 @@ from .data.utils import (
     _zeros_like,
 )
 from .data.validators import validate_no_nans
-from .types import (
-    Ax,
-    Complex,
-    FieldVal,
-    InterpMethod,
-)
+from .types import Complex, InterpMethod
 from .viz import add_ax_if_none
+
+if TYPE_CHECKING:
+    from typing import Callable
+
+    import xarray as xr
+
+    from tidy3d.compat import Self
+
+    from .types import Ax, FieldVal
 
 """ Generic perturbation classes """
 

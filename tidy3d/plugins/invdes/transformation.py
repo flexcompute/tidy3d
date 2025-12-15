@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
-import autograd.numpy as anp
 from pydantic import Field, PositiveFloat
 
 import tidy3d as td
@@ -12,6 +11,9 @@ from tidy3d.plugins.autograd.functions import threshold
 from tidy3d.plugins.autograd.invdes import make_filter_and_project
 
 from .base import InvdesBaseModel
+
+if TYPE_CHECKING:
+    import autograd.numpy as anp
 
 
 class AbstractTransformation(InvdesBaseModel, abc.ABC):

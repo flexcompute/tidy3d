@@ -1,19 +1,22 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import autograd.numpy as np
 import xarray as xr
 from pydantic import Field, NonNegativeInt
 
-from tidy3d.compat import Self
-from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.types import Direction, FreqArray
 
-from .base import Expression
-from .types import NumberType
 from .variables import Variable
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+    from tidy3d.components.monitor import ModeMonitor
+
+    from .base import Expression
+    from .types import NumberType
 
 
 def generate_validation_data(expr: Expression) -> dict[str, xr.Dataset]:

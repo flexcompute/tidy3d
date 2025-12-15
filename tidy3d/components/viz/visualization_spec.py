@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from pydantic import Field, ValidationInfo, field_validator
+from typing import TYPE_CHECKING
+
+from pydantic import Field, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from pydantic import ValidationInfo
 
 MATPLOTLIB_IMPORTED = True
 try:

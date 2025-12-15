@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Literal, Optional, Union
+from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import numpy as np
 from pydantic import (
@@ -16,13 +16,15 @@ from pydantic import (
     model_validator,
 )
 
-from tidy3d.compat import Self
 from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 from .base import Tidy3dBaseModel
 from .types import Axis2D, FreqArray, TrackFreq
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 GROUP_INDEX_STEP = 0.005
 MODE_DATA_KEYS = Literal[

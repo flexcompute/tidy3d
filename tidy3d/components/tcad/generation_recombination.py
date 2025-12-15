@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from typing import Literal, Union
+from typing import TYPE_CHECKING, Literal, Union
 
 import numpy as np
 from pydantic import Field, PositiveFloat, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.constants import PERCMCUBE, SECOND
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 
 class FossumCarrierLifetime(Tidy3dBaseModel):

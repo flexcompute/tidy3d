@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-from typing import Callable, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import autograd.numpy as np
-from numpy.typing import NDArray
 from pydantic import Field, NonNegativeFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import ArrayFloat2D
 from tidy3d.plugins.autograd.types import PaddingType
 
 from .parametrizations import FilterAndProject
+
+if TYPE_CHECKING:
+    from typing import Callable
+
+    from numpy.typing import NDArray
+
+    from tidy3d.components.types import ArrayFloat2D
 
 
 class ErosionDilationPenalty(Tidy3dBaseModel):

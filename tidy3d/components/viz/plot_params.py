@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from numpy import inf
 from pydantic import Field, NonNegativeFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.viz.visualization_spec import VisualizationSpec
+
+if TYPE_CHECKING:
+    from tidy3d.components.viz.visualization_spec import VisualizationSpec
 
 
 class AbstractPlotParams(Tidy3dBaseModel):

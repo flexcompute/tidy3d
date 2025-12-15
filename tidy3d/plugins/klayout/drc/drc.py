@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 from subprocess import run
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, FilePath, field_validator
 
@@ -23,6 +23,9 @@ from tidy3d.plugins.klayout.drc.defaults import (
 )
 from tidy3d.plugins.klayout.drc.results import DRCResults
 from tidy3d.plugins.klayout.util import check_installation
+
+if TYPE_CHECKING:
+    from typing import Optional, Union
 
 SUPPORTED_DRC_SUFFIXES: frozenset[str] = frozenset({".drc", ".lydrc"})
 

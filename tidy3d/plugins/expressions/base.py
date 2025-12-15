@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Generator
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from tidy3d.components.base import Tidy3dBaseModel
 
-from .types import ExpressionType, NumberOrExpression, NumberType
-
 if TYPE_CHECKING:
+    from collections.abc import Generator
+    from typing import Optional
+
     from .operators import (
         Abs,
         Add,
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
         Power,
         Subtract,
     )
+    from .types import ExpressionType, NumberOrExpression, NumberType
 
 
 class Expression(Tidy3dBaseModel, ABC):

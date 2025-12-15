@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
@@ -11,6 +10,9 @@ from numpy.typing import NDArray
 from tidy3d.constants import EPSILON_0, ETA_0
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Literal
+
     from scipy import sparse as sp
 
 ArrayFloat = NDArray[np.floating]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Literal, Optional, Union
+from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import numpy as np
 from pydantic import (
@@ -16,7 +16,6 @@ from pydantic import (
     model_validator,
 )
 
-from tidy3d.compat import Self
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
 from tidy3d.exceptions import ValidationError
@@ -32,7 +31,6 @@ from .geometry.utils import (
     snap_point_to_grid,
 )
 from .geometry.utils_2d import increment_float
-from .grid.grid import Grid
 from .medium import PEC2D, Debye, Drude, Lorentz, Medium, Medium2D, PoleResidue
 from .microwave.base import MicrowaveBaseModel
 from .microwave.formulas.circuit_parameters import (
@@ -43,16 +41,16 @@ from .microwave.formulas.circuit_parameters import (
 )
 from .monitor import FieldMonitor
 from .structure import MeshOverrideStructure, Structure
-from .types import (
-    Axis,
-    Axis2D,
-    Coordinate,
-    CoordinateOptional,
-    FreqArray,
-    LumpDistType,
-)
+from .types import Axis, Coordinate, LumpDistType
 from .validators import assert_line_or_plane, assert_plane, validate_name_str
-from .viz import PlotParams, plot_params_lumped_element
+from .viz import plot_params_lumped_element
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+
+    from .grid.grid import Grid
+    from .types import Axis2D, CoordinateOptional, FreqArray
+    from .viz import PlotParams
 
 DEFAULT_LUMPED_ELEMENT_NUM_CELLS = 1
 LOSS_FACTOR_INDUCTOR = 1e6

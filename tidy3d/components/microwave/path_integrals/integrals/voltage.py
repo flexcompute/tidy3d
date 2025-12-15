@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-from tidy3d.components.data.data_array import (
-    VoltageIntegralResultType,
-    _make_voltage_data_array,
-)
+from typing import TYPE_CHECKING
+
+from tidy3d.components.data.data_array import _make_voltage_data_array
 from tidy3d.components.microwave.path_integrals.integrals.base import (
     AxisAlignedPathIntegral,
     Custom2DPathIntegral,
-    IntegrableMonitorDataType,
 )
 from tidy3d.components.microwave.path_integrals.specs.voltage import (
     AxisAlignedVoltageIntegralSpec,
     Custom2DVoltageIntegralSpec,
 )
+
+if TYPE_CHECKING:
+    from tidy3d.components.data.data_array import VoltageIntegralResultType
+    from tidy3d.components.microwave.path_integrals.integrals.base import IntegrableMonitorDataType
 
 
 class AxisAlignedVoltageIntegral(AxisAlignedPathIntegral, AxisAlignedVoltageIntegralSpec):

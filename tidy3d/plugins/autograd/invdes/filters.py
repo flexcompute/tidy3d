@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Iterable
 from functools import lru_cache, partial
-from typing import Annotated, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Annotated, Any, Union
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import Field, PositiveInt
 
 import tidy3d as td
@@ -14,8 +12,16 @@ from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.plugins.autograd.functions import convolve
 from tidy3d.plugins.autograd.primitives import gaussian_filter as autograd_gaussian_filter
-from tidy3d.plugins.autograd.types import KernelType, PaddingType
+from tidy3d.plugins.autograd.types import PaddingType
 from tidy3d.plugins.autograd.utilities import get_kernel_size_px, make_kernel
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from typing import Callable, Optional
+
+    from numpy.typing import NDArray
+
+    from tidy3d.plugins.autograd.types import KernelType
 
 _GAUSSIAN_SIGMA_SCALE = 0.445  # empirically matches conic kernel response in 1D/2D tests
 _GAUSSIAN_PADDING_MAP = {

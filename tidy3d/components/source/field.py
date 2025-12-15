@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import Field, NonNegativeInt, PositiveFloat, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.source.frame import PECFrame
-from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, Coordinate, Direction
+from tidy3d.components.types import TYPE_TAG_STR, Axis, Direction
 from tidy3d.components.types.mode_spec import ModeSpecType
 from tidy3d.components.validators import (
     assert_plane,
@@ -29,6 +27,12 @@ from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 from .base import Source
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
+    from tidy3d.components.types import Ax, Coordinate
 
 # width of Chebyshev grid used for broadband sources (in units of pulse width)
 CHEB_GRID_WIDTH = 1.5

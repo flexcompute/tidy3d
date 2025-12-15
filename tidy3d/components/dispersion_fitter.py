@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -15,13 +14,21 @@ from pydantic import (
     model_validator,
 )
 
-from tidy3d.compat import Self
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import Progress, get_logging_console, log
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import ArrayComplex1D, ArrayComplex2D, ArrayFloat1D, ArrayFloat2D
+from .types import ArrayComplex1D
+
+if TYPE_CHECKING:
+    from typing import Union
+
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
+
+    from .types import ArrayComplex2D, ArrayFloat1D, ArrayFloat2D
 
 # numerical tolerance for pole relocation for fast fitter
 TOL = 1e-8

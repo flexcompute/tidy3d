@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
-import autograd.numpy as anp
 import numpy as np
 from pydantic import Field, field_validator, model_validator
 
 import tidy3d as td
-from tidy3d.compat import Self
 from tidy3d.components.autograd import get_static
 from tidy3d.exceptions import ValidationError
 from tidy3d.plugins.expressions.metrics import Metric, generate_validation_data
@@ -19,6 +17,11 @@ from tidy3d.plugins.expressions.types import ExpressionType
 from .base import InvdesBaseModel
 from .region import DesignRegionType
 from .validators import check_pixel_size
+
+if TYPE_CHECKING:
+    import autograd.numpy as anp
+
+    from tidy3d.compat import Self
 
 PostProcessFnType = Callable[[td.SimulationData], float]
 

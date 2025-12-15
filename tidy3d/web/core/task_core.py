@@ -6,10 +6,8 @@ import os
 import pathlib
 import tempfile
 from datetime import datetime
-from os import PathLike
-from typing import Callable, Optional, Union
+from typing import TYPE_CHECKING, Optional
 
-import requests
 from botocore.exceptions import ClientError
 from pydantic import Field, TypeAdapter
 
@@ -32,9 +30,16 @@ from .file_util import read_simulation_from_hdf5
 from .http_util import get_version as _get_protocol_version
 from .http_util import http
 from .s3utils import download_file, download_gz_file, upload_file
-from .stub import TaskStub
 from .task_info import BatchDetail, TaskInfo
 from .types import PayType, Queryable, ResourceLifecycle, Submittable, Tidy3DResource
+
+if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Callable, Union
+
+    import requests
+
+    from .stub import TaskStub
 
 
 class Folder(Tidy3DResource, Queryable, extra="allow"):

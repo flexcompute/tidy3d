@@ -5,13 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-from pydantic import Field, PositiveFloat, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BoundarySpec
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.grid.grid import Grid
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.monitor import (
     MediumMonitor,
@@ -25,12 +23,7 @@ from tidy3d.components.simulation import (
     validate_boundaries_for_zero_dims,
 )
 from tidy3d.components.source.field import ModeSource
-from tidy3d.components.types import (
-    Ax,
-    Direction,
-    EMField,
-    FreqArray,
-)
+from tidy3d.components.types import Direction, EMField, FreqArray
 from tidy3d.components.types.base import TYPE_TAG_STR, discriminated_union
 from tidy3d.components.types.mode_spec import ModeSpecType
 from tidy3d.constants import C_0
@@ -41,7 +34,12 @@ from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
 from .mode_solver import ModeSolver
 
 if TYPE_CHECKING:
+    from pydantic import PositiveFloat
+
+    from tidy3d.compat import Self
+    from tidy3d.components.grid.grid import Grid
     from tidy3d.components.mode.data.sim_data import ModeSimulationData
+    from tidy3d.components.types import Ax
 
 ModeSimulationMonitorType = Union[PermittivityMonitor, MediumMonitor]
 

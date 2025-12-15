@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
-from os import PathLike
-from typing import Literal, Optional, Union
+from typing import TYPE_CHECKING
 
-from tidy3d.components.types.workflow import WorkflowType
 from tidy3d.log import log
 from tidy3d.web.core.types import PayType
 
-from .container import DEFAULT_DATA_DIR, Batch, BatchData
+from .container import DEFAULT_DATA_DIR, Batch
+
+if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Literal, Optional, Union
+
+    from tidy3d.components.types.workflow import WorkflowType
+
+    from .container import BatchData
 
 
 def run_async(

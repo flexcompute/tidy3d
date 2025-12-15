@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from abc import ABC
+from typing import TYPE_CHECKING
 
 from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.source import AbstractSource
 from tidy3d.components.tcad.viz import plot_params_heat_source
-from tidy3d.components.viz import PlotParams
 from tidy3d.exceptions import SetupError
+
+if TYPE_CHECKING:
+    from tidy3d.components.viz import PlotParams
 
 
 class AbstractHeatChargeSource(AbstractSource, ABC):

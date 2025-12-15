@@ -6,17 +6,14 @@ import functools
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from math import isclose
-from typing import Any, Callable, Literal, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeVar, Union
 
 import autograd.numpy as np
 import numpy as npo
-import xarray as xr
 from autograd.differential_operators import tensor_jacobian_product
-from autograd.numpy.numpy_boxes import ArrayBox
 from numpy.typing import NDArray
 from pydantic import (
     Field,
-    FieldValidationInfo,
     NonNegativeFloat,
     PositiveFloat,
     PositiveInt,
@@ -24,9 +21,7 @@ from pydantic import (
     model_validator,
 )
 
-from tidy3d.compat import Self
 from tidy3d.components.autograd.utils import pack_complex_vec
-from tidy3d.components.types.base import PolesAndResidues
 from tidy3d.constants import (
     C_0,
     CONDUCTIVITY,
@@ -46,16 +41,11 @@ from tidy3d.constants import (
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
-from .autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
-from .autograd.types import (
-    AutogradFieldMap,
-    TracedFloat,
-    TracedPolesAndResidues,
-    TracedPositiveFloat,
-)
+from .autograd.derivative_utils import integrate_within_bounds
+from .autograd.types import TracedFloat, TracedPolesAndResidues, TracedPositiveFloat
 from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
-from .data.dataset import ElectromagneticFieldDataset, PermittivityDataset
+from .data.dataset import PermittivityDataset
 from .data.unstructured.base import UnstructuredGridDataset
 from .data.utils import (
     CustomSpatialDataType,
@@ -89,23 +79,32 @@ from .parameter_perturbation import (
     PermittivityPerturbation,
 )
 from .time_modulation import ModulationSpec
-from .transformation import RotationType
-from .types import (
-    TYPE_TAG_STR,
-    ArrayComplex1D,
-    ArrayComplex3D,
-    ArrayFloat1D,
-    Ax,
-    Axis,
-    Bound,
-    Complex,
-    FreqBound,
-    InterpMethod,
-    PermittivityComponent,
-    TensorReal,
-)
+from .types import TYPE_TAG_STR, FreqBound, InterpMethod, TensorReal
 from .validators import validate_name_str, validate_parameter_perturbation
 from .viz import VisualizationSpec, add_ax_if_none
+
+if TYPE_CHECKING:
+    import xarray as xr
+    from autograd.numpy.numpy_boxes import ArrayBox
+    from pydantic import FieldValidationInfo
+
+    from tidy3d.compat import Self
+    from tidy3d.components.types.base import PolesAndResidues
+
+    from .autograd.derivative_utils import DerivativeInfo
+    from .autograd.types import AutogradFieldMap
+    from .data.dataset import ElectromagneticFieldDataset
+    from .transformation import RotationType
+    from .types import (
+        ArrayComplex1D,
+        ArrayComplex3D,
+        ArrayFloat1D,
+        Ax,
+        Axis,
+        Bound,
+        Complex,
+        PermittivityComponent,
+    )
 
 ArrayFloat = NDArray[npo.floating]
 ArrayComplex = NDArray[np.complexfloating]

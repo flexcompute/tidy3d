@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import ssl
 from enum import Enum
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import requests
 from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.medium import PoleResidue
 from tidy3d.components.types import Undefined
@@ -20,6 +19,9 @@ from tidy3d.log import log
 from tidy3d.web.core.http_util import get_headers
 
 from .fit import DispersionFitter
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 BOUND_MAX_FACTOR = 10
 

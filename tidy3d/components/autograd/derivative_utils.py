@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-import xarray as xr
 from numpy.typing import NDArray
 
-from tidy3d.compat import Self
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
 from tidy3d.components.types import ArrayLike, Bound, Complex
 from tidy3d.config import config
@@ -18,6 +16,13 @@ from tidy3d.log import log
 
 from .types import PathType
 from .utils import get_static
+
+if TYPE_CHECKING:
+    from typing import Callable
+
+    import xarray as xr
+
+    from tidy3d.compat import Self
 
 FieldData = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]

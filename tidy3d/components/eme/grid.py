@@ -3,27 +3,25 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
-from pydantic import (
-    Field,
-    NonNegativeFloat,
-    NonNegativeInt,
-    PositiveInt,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, PositiveInt, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords1D
 from tidy3d.components.mode_spec import ModeInterpSpec, ModeSpec
-from tidy3d.components.structure import Structure
-from tidy3d.components.types import ArrayFloat1D, Axis, Coordinate, Size
+from tidy3d.components.types import ArrayFloat1D, Axis
 from tidy3d.constants import RADIAN, fp_eps, inf
 from tidy3d.exceptions import SetupError, ValidationError
+
+if TYPE_CHECKING:
+    from pydantic import NonNegativeFloat, NonNegativeInt
+
+    from tidy3d.compat import Self
+    from tidy3d.components.structure import Structure
+    from tidy3d.components.types import Coordinate, Size
 
 # grid limits
 MAX_NUM_MODES = 100

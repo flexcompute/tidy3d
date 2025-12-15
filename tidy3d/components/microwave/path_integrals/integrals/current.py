@@ -2,25 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import (
-    CurrentIntegralResultType,
-    DataArray,
-    FreqDataArray,
-    FreqModeDataArray,
-    IntegralResultType,
-    _make_current_data_array,
-)
+from tidy3d.components.data.data_array import FreqModeDataArray, _make_current_data_array
 from tidy3d.components.data.monitor_data import FieldTimeData
 from tidy3d.components.microwave.path_integrals.integrals.base import (
     AxisAlignedPathIntegral,
     Custom2DPathIntegral,
-    IntegrableMonitorDataType,
 )
 from tidy3d.components.microwave.path_integrals.specs.current import (
     AxisAlignedCurrentIntegralSpec,
@@ -29,6 +21,17 @@ from tidy3d.components.microwave.path_integrals.specs.current import (
 )
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from typing import Optional, Union
+
+    from tidy3d.components.data.data_array import (
+        CurrentIntegralResultType,
+        DataArray,
+        FreqDataArray,
+        IntegralResultType,
+    )
+    from tidy3d.components.microwave.path_integrals.integrals.base import IntegrableMonitorDataType
 
 
 class AxisAlignedCurrentIntegral(AxisAlignedCurrentIntegralSpec):

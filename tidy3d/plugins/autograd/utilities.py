@@ -2,16 +2,20 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from functools import reduce, wraps
-from typing import Any, Callable, Optional, ParamSpec, TypeVar, Union, overload
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, overload
 
 import autograd.numpy as anp
 import numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 
 from tidy3d.exceptions import Tidy3dError
 
-from .types import KernelType
+if TYPE_CHECKING:
+    from typing import Callable, Optional, Union
+
+    from numpy.typing import NDArray
+
+    from .types import KernelType
 
 P = ParamSpec("P")
 R = TypeVar("R")

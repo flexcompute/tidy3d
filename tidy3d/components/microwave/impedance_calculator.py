@@ -2,26 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 from pydantic import Field, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.data.data_array import (
-    CurrentIntegralResultType,
-    ImpedanceResultType,
-    VoltageIntegralResultType,
     _make_current_data_array,
     _make_impedance_data_array,
     _make_voltage_data_array,
 )
 from tidy3d.components.data.monitor_data import FieldTimeData
 from tidy3d.components.microwave.base import MicrowaveBaseModel
-from tidy3d.components.microwave.path_integrals.integrals.base import (
-    AxisAlignedPathIntegral,
-    IntegrableMonitorDataType,
-)
+from tidy3d.components.microwave.path_integrals.integrals.base import AxisAlignedPathIntegral
 from tidy3d.components.microwave.path_integrals.integrals.current import (
     AxisAlignedCurrentIntegral,
     CompositeCurrentIntegral,
@@ -33,6 +26,15 @@ from tidy3d.components.microwave.path_integrals.integrals.voltage import (
 )
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.exceptions import ValidationError
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import (
+        CurrentIntegralResultType,
+        ImpedanceResultType,
+        VoltageIntegralResultType,
+    )
+    from tidy3d.components.microwave.path_integrals.integrals.base import IntegrableMonitorDataType
 
 VoltageIntegralType = Union[AxisAlignedVoltageIntegral, Custom2DVoltageIntegral]
 CurrentIntegralType = Union[

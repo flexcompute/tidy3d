@@ -6,12 +6,10 @@ import math
 import pathlib
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from os import PathLike
-from typing import Any, Callable, Literal, Optional, Union, get_args
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union, get_args
 
 import autograd.numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -21,7 +19,6 @@ from pydantic import (
     model_validator,
 )
 
-from tidy3d.compat import Self
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
@@ -39,7 +36,6 @@ from .boundary import (
     AbsorberSpec,
     BlochBoundary,
     Boundary,
-    BoundaryEdgeType,
     BoundarySpec,
     InternalAbsorber,
     ModeABCBoundary,
@@ -49,16 +45,14 @@ from .boundary import (
     StablePML,
 )
 from .data.data_array import FreqDataArray, IndexedDataArray
-from .data.dataset import Dataset
 from .data.unstructured.tetrahedral import TetrahedralGridDataset
 from .data.unstructured.triangular import TriangularGridDataset
-from .data.utils import CustomSpatialDataType
 from .frequency_extrapolation import LowFrequencySmoothingSpec
 from .geometry.base import Box, Geometry, GeometryGroup
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import _shift_object, flatten_groups, traverse_geometries
 from .geometry.utils_2d import get_bounds, get_thickened_geom, snap_coordinate_to_grid, subdivide
-from .grid.grid import Coords, Coords1D, Grid
+from .grid.grid import Coords, Grid
 from .grid.grid_spec import AutoGrid, GridSpec, UniformGrid
 from .lumped_element import LumpedElementType
 from .medium import (
@@ -70,7 +64,6 @@ from .medium import (
     LossyMetalMedium,
     Medium,
     Medium2D,
-    MediumType,
     MediumType3D,
     PECMedium,
 )
@@ -91,7 +84,6 @@ from .monitor import (
     FreqMonitor,
     MediumMonitor,
     ModeMonitor,
-    Monitor,
     PermittivityMonitor,
     SurfaceIntegrationMonitor,
     TimeMonitor,
@@ -112,21 +104,9 @@ from .source.field import (
 from .source.frame import PECFrame
 from .source.time import ContinuousWave, CustomSourceTime
 from .source.utils import SourceType
-from .structure import MeshOverrideStructure, Structure
+from .structure import Structure
 from .subpixel_spec import SubpixelSpec
-from .types import (
-    TYPE_TAG_STR,
-    ArrayFloat1D,
-    ArrayFloat2D,
-    Ax,
-    Axis,
-    CoordinateOptional,
-    FreqBound,
-    InterpMethod,
-    PermittivityComponent,
-    Shapely,
-    Symmetry,
-)
+from .types import TYPE_TAG_STR, PermittivityComponent, Symmetry
 from .types.monitor import MonitorType
 from .validators import (
     assert_objects_contained_in_sim_bounds,
@@ -146,6 +126,32 @@ from .viz import (
     plot_params_pml,
     plot_sim_3d,
 )
+
+if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Callable
+
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
+
+    from .boundary import BoundaryEdgeType
+    from .data.dataset import Dataset
+    from .data.utils import CustomSpatialDataType
+    from .grid.grid import Coords1D
+    from .medium import MediumType
+    from .monitor import Monitor
+    from .structure import MeshOverrideStructure
+    from .types import (
+        ArrayFloat1D,
+        ArrayFloat2D,
+        Ax,
+        Axis,
+        CoordinateOptional,
+        FreqBound,
+        InterpMethod,
+        Shapely,
+    )
 
 try:
     import matplotlib as mpl

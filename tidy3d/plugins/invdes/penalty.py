@@ -2,15 +2,17 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
-import autograd.numpy as anp
 from pydantic import Field, NonNegativeFloat, PositiveFloat
 
 from tidy3d.constants import MICROMETER
 from tidy3d.plugins.autograd.invdes import make_erosion_dilation_penalty
 
 from .base import InvdesBaseModel
+
+if TYPE_CHECKING:
+    import autograd.numpy as anp
 
 
 class AbstractPenalty(InvdesBaseModel, abc.ABC):

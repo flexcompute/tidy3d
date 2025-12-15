@@ -6,21 +6,17 @@ import struct
 import warnings
 from abc import ABC
 from math import isclose
-from os import PathLike
-from typing import Any, Callable, Literal, Optional, SupportsComplex, Union, get_args
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_args
 
 import autograd.numpy as np
 import xarray as xr
-from numpy.typing import NDArray
-from pandas import DataFrame, Index
+from pandas import Index
 from pydantic import Field, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
-from tidy3d.components.mode_spec import ModeSortSpec, ModeSpec
 from tidy3d.components.monitor import (
     AuxFieldTimeMonitor,
     DiffractionMonitor,
@@ -38,23 +34,15 @@ from tidy3d.components.monitor import (
     ModeSolverMonitor,
     PermittivityMonitor,
 )
-from tidy3d.components.source.base import Source
-from tidy3d.components.source.current import CustomCurrentSource, PointDipole
+from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.field import CustomFieldSource, ModeSource, PlaneWave
-from tidy3d.components.source.time import GaussianPulse, SourceTimeType
+from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import (
     TYPE_TAG_STR,
     ArrayFloat1D,
-    ArrayFloat2D,
     Coordinate,
-    Direction,
-    EMField,
     EpsSpecType,
-    FreqArray,
-    PolarizationBasis,
-    Size,
     Symmetry,
-    TrackFreq,
     UnitsZBF,
 )
 from tidy3d.components.types.monitor import MonitorType
@@ -78,18 +66,14 @@ from .data_array import (
     FreqDataArray,
     FreqModeDataArray,
     GroupIndexDataArray,
-    MixedModeDataArray,
     ModeAmpsDataArray,
     ModeDispersionDataArray,
-    ModeIndexDataArray,
     ScalarFieldDataArray,
-    ScalarFieldTimeDataArray,
     TimeDataArray,
 )
 from .dataset import (
     AbstractFieldDataset,
     AuxFieldTimeDataset,
-    Dataset,
     ElectromagneticFieldDataset,
     FieldDataset,
     FieldTimeDataset,
@@ -97,6 +81,31 @@ from .dataset import (
     ModeSolverDataset,
     PermittivityDataset,
 )
+
+if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Literal, SupportsComplex
+
+    from numpy.typing import NDArray
+    from pandas import DataFrame
+
+    from tidy3d.compat import Self
+    from tidy3d.components.mode_spec import ModeSortSpec, ModeSpec
+    from tidy3d.components.source.base import Source
+    from tidy3d.components.source.current import PointDipole
+    from tidy3d.components.source.time import SourceTimeType
+    from tidy3d.components.types import (
+        ArrayFloat2D,
+        Direction,
+        EMField,
+        FreqArray,
+        PolarizationBasis,
+        Size,
+        TrackFreq,
+    )
+
+    from .data_array import MixedModeDataArray, ModeIndexDataArray, ScalarFieldTimeDataArray
+    from .dataset import Dataset
 
 Coords1D = ArrayFloat1D
 

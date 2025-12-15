@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import (
     DENSITY,
@@ -17,6 +16,9 @@ from tidy3d.constants import (
     THERMAL_CONDUCTIVITY,
     THERMAL_EXPANSIVITY,
 )
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 
 # Liquid class

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 from autograd.extend import defvjp, primitive
-from numpy.typing import NDArray
 
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from typing import Callable, Optional
+
+    from numpy.typing import NDArray
 
 
 def _assert_strictly_monotonic(x: NDArray) -> None:

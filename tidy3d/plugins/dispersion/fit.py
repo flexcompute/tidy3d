@@ -4,26 +4,31 @@ from __future__ import annotations
 
 import codecs
 import csv
-from collections.abc import Sequence
-from os import PathLike
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 import requests
 import scipy.optimize as opt
-from numpy.typing import NDArray
 from pydantic import Field, field_validator, model_validator
 from rich.progress import Progress
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.medium import AbstractMedium, PoleResidue
-from tidy3d.components.types import ArrayFloat1D, Ax
+from tidy3d.components.types import ArrayFloat1D
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.config import config
 from tidy3d.constants import C_0, HBAR, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError, WebError
 from tidy3d.log import get_logging_console, log
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from os import PathLike
+
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
+    from tidy3d.components.types import Ax
 
 
 class DispersionFitter(Tidy3dBaseModel):

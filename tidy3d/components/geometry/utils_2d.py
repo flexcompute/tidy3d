@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from math import isclose
+from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
@@ -10,11 +11,13 @@ import shapely
 from tidy3d.components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup
 from tidy3d.components.geometry.float_utils import increment_float
 from tidy3d.components.geometry.polyslab import _MIN_POLYGON_AREA, PolySlab
-from tidy3d.components.grid.grid import Grid
 from tidy3d.components.scene import Scene
-from tidy3d.components.structure import Structure
-from tidy3d.components.types import Axis, Shapely
 from tidy3d.constants import fp_eps
+
+if TYPE_CHECKING:
+    from tidy3d.components.grid.grid import Grid
+    from tidy3d.components.structure import Structure
+    from tidy3d.components.types import Axis, Shapely
 
 
 def snap_coordinate_to_grid(grid: Grid, center: float, axis: Axis) -> float:

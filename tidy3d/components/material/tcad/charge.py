@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.medium import AbstractMedium
 from tidy3d.components.tcad.doping import ConstantDoping, DopingBoxType
@@ -21,6 +20,9 @@ from tidy3d.components.tcad.types import (
 )
 from tidy3d.constants import CONDUCTIVITY, ELECTRON_VOLT, PERCMCUBE, PERMITTIVITY
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 
 class AbstractChargeMedium(AbstractMedium):

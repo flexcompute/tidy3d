@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from pydantic import Field, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (
-    DataArray,
     FreqVoltageDataArray,
     SpatialDataArray,
     SteadyVoltageDataArray,
@@ -32,14 +30,19 @@ from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-from tidy3d.components.types import Ax, RealFieldVal
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError, Tidy3dKeyError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
+    from typing import Literal, Union
+
     from matplotlib.colors import Colormap
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import DataArray
+    from tidy3d.components.types import Ax, RealFieldVal
 
 
 class DeviceCharacteristics(Tidy3dBaseModel):

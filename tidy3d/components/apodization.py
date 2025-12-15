@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.constants import SECOND
 from tidy3d.exceptions import SetupError
 
 from .base import Tidy3dBaseModel
-from .types import ArrayFloat1D, Ax
 from .viz import add_ax_if_none
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+
+    from .types import ArrayFloat1D, Ax
 
 
 class ApodizationSpec(Tidy3dBaseModel):

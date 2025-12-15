@@ -1,22 +1,18 @@
 # autograd wrapper for web functions
 from __future__ import annotations
 
-from os import PathLike
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional, Union, get_args
+from typing import TYPE_CHECKING, Any, get_args
 
 from autograd.extend import defvjp, primitive
 
 import tidy3d as td
-from tidy3d.components.autograd import AutogradFieldMap
 from tidy3d.components.autograd.types import TracedDict
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
-from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
-from tidy3d.web.api.container import BatchData
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
 from tidy3d.web.api.webapi import load, restore_simulation_if_cached
 from tidy3d.web.api.webapi import run as run_webapi
@@ -49,6 +45,14 @@ from .io_utils import (
 from .io_utils import (
     upload_sim_fields_keys as _upload_sim_fields_keys_impl,
 )
+
+if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Callable, Literal, Optional, Union
+
+    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+    from tidy3d.web.api.container import BatchData
 
 
 def _resolve_local_gradient(value: Optional[bool]) -> bool:

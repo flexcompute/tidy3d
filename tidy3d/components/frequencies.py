@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import Field, PositiveFloat, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.constants import C_0
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
 
 O_BAND = (1.260, 1.360)
 E_BAND = (1.360, 1.460)

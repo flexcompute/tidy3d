@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from pydantic import Field, NonNegativeFloat, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 
 class AbstractLowFrequencySmoothingSpec(Tidy3dBaseModel):

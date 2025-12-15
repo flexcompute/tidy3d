@@ -3,20 +3,25 @@
 from __future__ import annotations
 
 from math import isclose, isnan
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pandas import DataFrame
 from pydantic import Field, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.microwave.base import MicrowaveBaseModel
-from tidy3d.components.types import ArrayFloat1D, ArrayLike, Ax
+from tidy3d.components.types import ArrayFloat1D
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
 
 from .viz import plot_params_lobe_FNBW, plot_params_lobe_peak, plot_params_lobe_width
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from tidy3d.compat import Self
+    from tidy3d.components.types import ArrayLike, Ax
 
 # The minimum plateau size for peak finding, which is set to 0 to ensure that all peaks are found.
 # A value must be provided to retrieve additional information from `find_peaks`.

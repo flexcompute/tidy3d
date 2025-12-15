@@ -3,19 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
-from pydantic import (
-    Field,
-    FieldValidationInfo,
-    NonNegativeFloat,
-    PositiveInt,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, NonNegativeFloat, PositiveInt, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -27,19 +19,14 @@ from .medium import MediumType
 from .microwave.base import MicrowaveBaseModel
 from .mode_spec import ModeSpec
 from .types import (
-    ArrayFloat1D,
     AuxField,
-    Ax,
     Axis,
-    Bound,
     BoxSurface,
     Coordinate,
     Direction,
     EMField,
     FreqArray,
-    FreqBound,
     ObsGridArray,
-    Size,
 )
 from .validators import (
     assert_plane,
@@ -47,6 +34,13 @@ from .validators import (
     validate_freqs_not_empty,
 )
 from .viz import ARROW_ALPHA, ARROW_COLOR_MONITOR
+
+if TYPE_CHECKING:
+    from pydantic import FieldValidationInfo
+
+    from tidy3d.compat import Self
+
+    from .types import ArrayFloat1D, Ax, Bound, FreqBound, Size
 
 BYTES_REAL = 4
 BYTES_COMPLEX = 8

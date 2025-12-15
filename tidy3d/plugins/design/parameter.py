@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import Field, PositiveInt, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
 class Parameter(Tidy3dBaseModel, ABC):

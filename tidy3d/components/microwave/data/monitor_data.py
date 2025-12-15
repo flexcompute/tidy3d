@@ -4,16 +4,12 @@ reflection efficiency, gain, and realized gain.
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
-import xarray as xr
-from numpy.typing import NDArray
 from pydantic import Field
-from typing_extensions import Self
 
 from tidy3d.components.data.data_array import (
-    FieldProjectionAngleDataArray,
     FreqDataArray,
     FreqModeDataArray,
     ImpedanceFreqModeDataArray,
@@ -21,17 +17,28 @@ from tidy3d.components.data.data_array import (
 from tidy3d.components.data.monitor_data import DirectivityData, ModeData, ModeSolverData
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.data.data_array import (
-    AttenuationConstantArray,
     GroupVelocityArray,
-    PhaseConstantArray,
     PhaseVelocityArray,
     PropagationConstantArray,
 )
 from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
-from tidy3d.components.types import FreqArray, ModeClassification, PolarizationBasis
 from tidy3d.constants import C_0
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from typing import Literal
+
+    import xarray as xr
+    from numpy.typing import NDArray
+    from typing_extensions import Self
+
+    from tidy3d.components.data.data_array import FieldProjectionAngleDataArray
+    from tidy3d.components.microwave.data.data_array import (
+        AttenuationConstantArray,
+        PhaseConstantArray,
+    )
+    from tidy3d.components.types import FreqArray, ModeClassification, PolarizationBasis
 
 
 class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):

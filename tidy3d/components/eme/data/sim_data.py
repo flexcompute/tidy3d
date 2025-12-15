@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import EMEScalarFieldDataArray, EMESMatrixDataArray
-from tidy3d.components.data.monitor_data import FieldData, ModeData, ModeSolverData
+from tidy3d.components.data.monitor_data import ModeData, ModeSolverData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
@@ -18,7 +18,14 @@ from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 from .dataset import EMECoefficientDataset, EMESMatrixDataset
-from .monitor_data import EMEFieldData, EMEModeSolverData, EMEMonitorDataType
+from .monitor_data import EMEModeSolverData, EMEMonitorDataType
+
+if TYPE_CHECKING:
+    from typing import Literal, Union
+
+    from tidy3d.components.data.monitor_data import FieldData
+
+    from .monitor_data import EMEFieldData
 
 
 class EMESimulationData(AbstractYeeGridSimulationData):

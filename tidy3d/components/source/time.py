@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 from pydantic import Field, PositiveFloat, field_validator, model_validator
@@ -15,13 +15,16 @@ from tidy3d.components.data.data_array import TimeDataArray
 from tidy3d.components.data.dataset import TimeDataset
 from tidy3d.components.data.validators import validate_no_nans
 from tidy3d.components.time import AbstractTimeDependence
-from tidy3d.components.types import ArrayComplex1D, ArrayFloat1D, Ax, FreqBound, PlotVal
+from tidy3d.components.types import FreqBound
 from tidy3d.components.validators import warn_if_dataset_none
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import check_tidy3d_extras_licensed_feature, tidy3d_extras
+
+if TYPE_CHECKING:
+    from tidy3d.components.types import ArrayComplex1D, ArrayFloat1D, Ax, PlotVal
 
 # how many units of ``twidth`` from the ``offset`` until a gaussian pulse is considered "off"
 END_TIME_FACTOR_GAUSSIAN = 10

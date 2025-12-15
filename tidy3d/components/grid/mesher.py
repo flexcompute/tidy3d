@@ -8,21 +8,25 @@ import warnings
 from abc import ABC, abstractmethod
 from itertools import compress
 from math import isclose
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
-from pydantic import NonNegativeFloat, NonNegativeInt, PositiveFloat
 from pyroots import Brentq
 from shapely.errors import ShapelyDeprecationWarning
 from shapely.geometry import box as shapely_box
 from shapely.strtree import STRtree
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.structure import MeshOverrideStructure, Structure, StructureType
-from tidy3d.components.types import ArrayFloat1D, Axis, Bound, CoordinateOptional
+from tidy3d.components.structure import MeshOverrideStructure, Structure
 from tidy3d.constants import C_0, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from pydantic import NonNegativeFloat, NonNegativeInt, PositiveFloat
+
+    from tidy3d.components.structure import StructureType
+    from tidy3d.components.types import ArrayFloat1D, Axis, Bound, CoordinateOptional
 
 _ROOTS_TOL = 1e-10
 

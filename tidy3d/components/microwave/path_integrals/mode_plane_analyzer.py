@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from itertools import chain
 from math import isclose
+from typing import TYPE_CHECKING
 
 import shapely
 from pydantic import Field
@@ -19,12 +20,15 @@ from tidy3d.components.geometry.utils import (
     merging_geometries_on_plane,
     snap_box_to_grid,
 )
-from tidy3d.components.grid.grid import Grid
-from tidy3d.components.medium import LossyMetalMedium, Medium
-from tidy3d.components.structure import Structure
-from tidy3d.components.types import Axis, Bound, Coordinate, Shapely, Symmetry
+from tidy3d.components.medium import LossyMetalMedium
 from tidy3d.components.validators import assert_plane
 from tidy3d.exceptions import SetupError
+
+if TYPE_CHECKING:
+    from tidy3d.components.grid.grid import Grid
+    from tidy3d.components.medium import Medium
+    from tidy3d.components.structure import Structure
+    from tidy3d.components.types import Axis, Bound, Coordinate, Shapely, Symmetry
 
 
 class ModePlaneAnalyzer(Box):

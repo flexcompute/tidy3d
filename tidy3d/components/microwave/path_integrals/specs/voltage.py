@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field
-from typing_extensions import Self
 
 from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.microwave.path_integrals.specs.base import (
@@ -18,10 +17,16 @@ from tidy3d.components.microwave.path_integrals.viz import (
     plot_params_voltage_path,
     plot_params_voltage_plus,
 )
-from tidy3d.components.types import Ax
 from tidy3d.components.types.base import Direction
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import fp_eps
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from typing_extensions import Self
+
+    from tidy3d.components.types import Ax
 
 
 class AxisAlignedVoltageIntegralSpec(AxisAlignedPathIntegralSpec):

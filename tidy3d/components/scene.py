@@ -2,9 +2,31 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 import autograd.numpy as np
+
+if TYPE_CHECKING:
+    from typing import Literal, Union
+
+    from pydantic import NonNegativeInt
+
+    from tidy3d.compat import Self
+    from tidy3d.components.material.types import StructureMediumType
+
+    from .data.utils import CustomSpatialDataType
+    from .grid.grid import Grid
+    from .types import (
+        Ax,
+        Bound,
+        Coordinate,
+        InterpMethod,
+        PermittivityComponent,
+        PlotScale,
+        Shapely,
+        Size,
+    )
+    from .viz import PlotParams
 
 try:
     import matplotlib as mpl
@@ -12,15 +34,14 @@ try:
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 except ImportError:
     pass
-from pydantic import Field, NonNegativeInt, field_validator
+from pydantic import Field, field_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
     SemiconductorMedium,
 )
 from tidy3d.components.material.tcad.heat import SolidMedium, SolidSpec
-from tidy3d.components.material.types import MultiPhysicsMediumType3D, StructureMediumType
+from tidy3d.components.material.types import MultiPhysicsMediumType3D
 from tidy3d.components.tcad.doping import (
     ConstantDoping,
     CustomDoping,
@@ -34,7 +55,6 @@ from tidy3d.log import log
 
 from .base import Tidy3dBaseModel, cached_property
 from .data.utils import (
-    CustomSpatialDataType,
     SpatialDataArray,
     TetrahedralGridDataset,
     TriangularGridDataset,
@@ -42,7 +62,7 @@ from .data.utils import (
 )
 from .geometry.base import Box
 from .geometry.utils import merging_geometries_on_plane
-from .grid.grid import Coords, Grid
+from .grid.grid import Coords
 from .material.multi_physics import MultiPhysicsMedium
 from .medium import (
     AbstractCustomMedium,
@@ -52,26 +72,13 @@ from .medium import (
     Medium2D,
 )
 from .structure import Structure
-from .types import (
-    TYPE_TAG_STR,
-    Ax,
-    Bound,
-    Coordinate,
-    InterpMethod,
-    LengthUnit,
-    PermittivityComponent,
-    PlotScale,
-    PriorityMode,
-    Shapely,
-    Size,
-)
+from .types import TYPE_TAG_STR, LengthUnit, PriorityMode
 from .validators import assert_unique_names
 from .viz import (
     MEDIUM_CMAP,
     STRUCTURE_EPS_CMAP,
     STRUCTURE_EPS_CMAP_R,
     STRUCTURE_HEAT_COND_CMAP,
-    PlotParams,
     add_ax_if_none,
     equal_aspect,
     plot_params_fluid,

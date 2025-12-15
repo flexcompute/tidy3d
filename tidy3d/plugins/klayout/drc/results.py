@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
-from pathlib import Path
-from typing import Optional, Union
+from typing import TYPE_CHECKING
 
 from pydantic import Field
 
@@ -13,6 +12,10 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.types import Coordinate2D
 from tidy3d.exceptions import FileError
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Optional, Union
 
 # Types for DRC markers
 DRCEdge = tuple[Coordinate2D, Coordinate2D]

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import autograd.numpy as np
 from autograd import value_and_grad
-from numpy.typing import NDArray
 from pydantic import Field, NonNegativeFloat
 from scipy.optimize import minimize
 
@@ -17,6 +16,11 @@ from tidy3d.plugins.autograd.types import KernelType, PaddingType
 
 from .filters import make_filter
 from .projections import tanh_projection
+
+if TYPE_CHECKING:
+    from typing import Callable, Literal
+
+    from numpy.typing import NDArray
 
 
 class FilterAndProject(Tidy3dBaseModel):

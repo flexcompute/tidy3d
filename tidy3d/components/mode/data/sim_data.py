@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from pydantic import Field
 
@@ -10,14 +10,18 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.data.monitor_data import MediumData, PermittivityData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.mode.simulation import ModeSimulation
-from tidy3d.components.mode_spec import ModeSortSpec
-from tidy3d.components.types import TYPE_TAG_STR, Ax, PlotScale
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.monitor_data import ModeSolverDataType
 
 ModeSimulationMonitorDataType = Union[PermittivityData, MediumData]
 
 if TYPE_CHECKING:
+    from typing import Literal, Optional
+
     from matplotlib.colors import Colormap
+
+    from tidy3d.components.mode_spec import ModeSortSpec
+    from tidy3d.components.types import Ax, PlotScale
 
 
 class ModeSimulationData(AbstractYeeGridSimulationData):

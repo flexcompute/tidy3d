@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from html import escape
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
+    from typing import Union
+
     from IPython.core.display_functions import DisplayHandle
 
     from tidy3d import Scene, Simulation

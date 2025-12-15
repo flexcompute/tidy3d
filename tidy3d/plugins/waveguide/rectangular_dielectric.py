@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Annotated, Any, Optional, Union
 
 import numpy
 from matplotlib import pyplot
-from pydantic import Field, ValidationInfo, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
-from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.boundary import BoundarySpec, Periodic
-from tidy3d.components.data.data_array import FreqModeDataArray, ModeIndexDataArray
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.components.grid.grid_spec import GridSpec
@@ -21,7 +19,7 @@ from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.structure import Structure
-from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Size1D
+from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D, Axis, Coordinate, Size1D
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import C_0, MICROMETER, RADIAN, inf
 from tidy3d.exceptions import Tidy3dError, ValidationError
@@ -29,7 +27,14 @@ from tidy3d.log import log
 from tidy3d.plugins.mode.mode_solver import ModeSolver
 
 if TYPE_CHECKING:
+    from typing import Literal
+
     from matplotlib.colors import Colormap
+    from pydantic import ValidationInfo
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import FreqModeDataArray, ModeIndexDataArray
+    from tidy3d.components.types import Ax
 
 AnnotatedMedium = Annotated[MediumType, Field(discriminator=TYPE_TAG_STR)]
 

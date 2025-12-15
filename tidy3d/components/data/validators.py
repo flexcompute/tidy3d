@@ -1,16 +1,20 @@
 # special validators for Datasets
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import field_validator
-from pydantic_core.core_schema import ValidationInfo
 
 from tidy3d.exceptions import ValidationError
 
 from .data_array import DataArray
 from .dataset import AbstractFieldDataset, ScalarFieldDataArray
+
+if TYPE_CHECKING:
+    from typing import Callable, Optional
+
+    from pydantic_core.core_schema import ValidationInfo
 
 
 # this can't go in validators.py because that file imports dataset.py

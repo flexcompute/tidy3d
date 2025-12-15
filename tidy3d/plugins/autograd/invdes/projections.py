@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import autograd.numpy as np
-from numpy.typing import NDArray
 
 from tidy3d.plugins.autograd.constants import BETA_DEFAULT, ETA_DEFAULT
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
 def ramp_projection(array: NDArray, width: float = 0.1, center: float = 0.5) -> NDArray:

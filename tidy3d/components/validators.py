@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
+from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import FieldValidationInfo, field_validator, model_validator
+from pydantic import field_validator, model_validator
 
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -17,6 +17,10 @@ from .base import DATA_ARRAY_MAP
 from .geometry.base import Box
 
 if TYPE_CHECKING:
+    from typing import Callable, Optional
+
+    from pydantic import FieldValidationInfo
+
     from tidy3d import Simulation
     from tidy3d.components.base_sim.simulation import AbstractSimulation
     from tidy3d.components.data.monitor_data import AbstractFieldData

@@ -3,21 +3,18 @@
 from __future__ import annotations
 
 from abc import ABC
-from os import PathLike
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from autograd import numpy as anp
 from numpy.typing import NDArray
 from pydantic import Field, PrivateAttr, field_validator, model_validator
 
-from tidy3d.components.autograd import AutogradFieldMap, get_static
-from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd import get_static
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
 from tidy3d.components.data.dataset import TriangleMeshDataset
 from tidy3d.components.data.validators import validate_no_nans
-from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.config import config
 from tidy3d.constants import fp_eps, inf
@@ -28,7 +25,14 @@ from tidy3d.packaging import verify_packages_import
 from . import base
 
 if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Callable, Literal, Union
+
     from trimesh import Trimesh
+
+    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 
 AREA_SIZE_THRESHOLD = 1e-36
 

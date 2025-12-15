@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import Field
 
@@ -11,7 +11,7 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.types import TYPE_TAG_STR
-from tidy3d.log import Console, get_logging_console, log
+from tidy3d.log import get_logging_console, log
 from tidy3d.web.api.container import Batch, BatchData, Job
 
 from .method import (
@@ -23,6 +23,11 @@ from .method import (
 )
 from .parameter import ParameterAny, ParameterInt, ParameterType
 from .result import Result
+
+if TYPE_CHECKING:
+    from typing import Callable, Union
+
+    from tidy3d.log import Console
 
 
 class DesignSpace(Tidy3dBaseModel):

@@ -2,27 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.components.data.monitor_data import MonitorData
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.microwave.base import MicrowaveBaseModel
-from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
 from tidy3d.constants import C_0
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.data.base import AbstractComponentModelerData
-from tidy3d.plugins.smatrix.data.data_array import (
-    PortDataArray,
-    PortNameDataArray,
-    TerminalPortDataArray,
-)
+from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
 from tidy3d.plugins.smatrix.ports.types import LumpedPortType
-from tidy3d.plugins.smatrix.types import NetworkIndex, SParamDef
+from tidy3d.plugins.smatrix.types import SParamDef
 from tidy3d.plugins.smatrix.utils import (
     ab_to_s,
     check_port_impedance_sign,
@@ -32,6 +25,15 @@ from tidy3d.plugins.smatrix.utils import (
     compute_power_wave_amplitudes,
     s_to_z,
 )
+
+if TYPE_CHECKING:
+    from typing import Union
+
+    from tidy3d.components.data.monitor_data import MonitorData
+    from tidy3d.components.data.sim_data import SimulationData
+    from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
+    from tidy3d.plugins.smatrix.data.data_array import PortNameDataArray
+    from tidy3d.plugins.smatrix.types import NetworkIndex
 
 
 class MicrowaveSMatrixData(MicrowaveBaseModel):

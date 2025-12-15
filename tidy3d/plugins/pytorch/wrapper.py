@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import torch
 from autograd import make_vjp
-from torch.autograd.function import FunctionCtx
+
+if TYPE_CHECKING:
+    from typing import Callable
+
+    from torch.autograd.function import FunctionCtx
 
 
 def to_torch(fun: Callable[..., Any]) -> Callable[..., torch.Tensor]:

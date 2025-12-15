@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.validators import validate_name_str
-from tidy3d.components.viz import PlotParams
+
+if TYPE_CHECKING:
+    from tidy3d.components.viz import PlotParams
 
 
 class AbstractSource(Tidy3dBaseModel, ABC):

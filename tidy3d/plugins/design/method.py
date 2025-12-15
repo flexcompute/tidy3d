@@ -7,18 +7,20 @@ from typing import TYPE_CHECKING, Annotated, Any, Callable, Literal, Optional, U
 
 import numpy as np
 import scipy.stats.qmc as qmc
-from numpy.typing import NDArray
 from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt
-from rich.console import Console
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import inf
 
-from .parameter import ParameterAny, ParameterFloat, ParameterInt, ParameterType
+from .parameter import ParameterAny, ParameterFloat, ParameterInt
 
 if TYPE_CHECKING:
     import pygad
+    from numpy.typing import NDArray
+    from rich.console import Console
     from scipy.stats import qmc as qmc_type
+
+    from .parameter import ParameterType
 
 
 ArgsList = list[dict[str, Any]]

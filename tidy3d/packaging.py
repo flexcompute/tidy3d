@@ -9,7 +9,7 @@ from __future__ import annotations
 import functools
 from importlib import import_module
 from importlib.util import find_spec
-from typing import Any, Callable, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
 import numpy as np
 
@@ -17,6 +17,9 @@ from tidy3d.config import config
 
 from .exceptions import Tidy3dImportError
 from .version import __version__
+
+if TYPE_CHECKING:
+    from typing import Literal
 
 F = TypeVar("F", bound=Callable[..., Any])
 

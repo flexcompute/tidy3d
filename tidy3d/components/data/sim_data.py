@@ -7,43 +7,42 @@ import pathlib
 import re
 from abc import ABC
 from collections import defaultdict
-from os import PathLike
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import h5py
 import numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 from pydantic import Field
 
 from tidy3d.components.autograd.utils import split_list
 from tidy3d.components.base import JSON_TAG, Tidy3dBaseModel, cached_property
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.file_util import replace_values
-from tidy3d.components.monitor import Monitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import Structure
-from tidy3d.components.types import (
-    Ax,
-    Axis,
-    ColormapType,
-    FieldVal,
-    PlotScale,
-)
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.monitor_data import MonitorDataType, MonitorDataTypes
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError, FileError, SetupError, Tidy3dKeyError
 from tidy3d.log import log
 
-from .data_array import DataArray, FreqDataArray, TimeDataArray
+from .data_array import FreqDataArray, TimeDataArray
 from .monitor_data import AbstractFieldData, FieldTimeData
 
 if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Callable, Optional
+
     from matplotlib.colors import Colormap
+    from numpy.typing import NDArray
+
+    from tidy3d.components.monitor import Monitor
+    from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale
+
+    from .data_array import DataArray
 
 DATA_TYPE_MAP = {data.model_fields["monitor"].annotation: data for data in MonitorDataTypes}
 

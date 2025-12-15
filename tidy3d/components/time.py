@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 import numpy as np
 from pydantic import Field, NonNegativeFloat
@@ -11,8 +12,10 @@ from tidy3d.constants import RADIAN
 from tidy3d.exceptions import SetupError
 
 from .base import Tidy3dBaseModel
-from .types import ArrayFloat1D, Ax, PlotVal
 from .viz import add_ax_if_none
+
+if TYPE_CHECKING:
+    from .types import ArrayFloat1D, Ax, PlotVal
 
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
 DFT_CUTOFF = 1e-8

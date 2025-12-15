@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-from numpy.typing import NDArray
 from pydantic import (
     Field,
     NonNegativeFloat,
@@ -16,14 +15,8 @@ from pydantic import (
     model_validator,
 )
 
-from tidy3d.compat import Self
 from tidy3d.components.validators import _assert_min_freq, assert_plane
-from tidy3d.components.viz import (
-    ARROW_ALPHA,
-    ARROW_COLOR_ABSORBER,
-    PlotParams,
-    plot_params_absorber,
-)
+from tidy3d.components.viz import ARROW_ALPHA, ARROW_COLOR_ABSORBER, plot_params_absorber
 from tidy3d.constants import C_0, CONDUCTIVITY, EPSILON_0, HERTZ, MU_0, PML_SIGMA
 from tidy3d.exceptions import DataError, SetupError, ValidationError
 from tidy3d.log import log
@@ -32,10 +25,20 @@ from .base import Tidy3dBaseModel, cached_property
 from .geometry.base import Box
 from .medium import Medium
 from .mode_spec import ModeSpec
-from .monitor import ModeMonitor, ModeSolverMonitor
 from .source.field import TFSF, GaussianBeam, ModeSource, PlaneWave
-from .types import TYPE_TAG_STR, Ax, Axis, Complex, Direction, FreqBound
+from .types import TYPE_TAG_STR, Direction, FreqBound
 from .types.mode_spec import ModeSpecType
+
+if TYPE_CHECKING:
+    from typing import Callable
+
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
+    from tidy3d.components.viz import PlotParams
+
+    from .monitor import ModeMonitor, ModeSolverMonitor
+    from .types import Ax, Axis, Complex
 
 MIN_NUM_PML_LAYERS = 6
 MIN_NUM_STABLE_PML_LAYERS = 6
