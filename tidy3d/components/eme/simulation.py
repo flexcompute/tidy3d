@@ -235,7 +235,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     )
 
     store_coeffs: bool = pd.Field(
-        True,
+        False,
         title="Store Coefficients",
         description="Whether to store the internal coefficients from the EME simulation. "
         "The results are stored in 'EMESimulationData.coeffs'.",
@@ -756,16 +756,14 @@ class EMESimulation(AbstractYeeGridSimulation):
                         f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMECoefficientMonitor', "
                         "which is not compatible with 'EMEPeriodicitySweep'."
                     )
+            if self.store_coeffs:
+                raise SetupError(
+                    "'EMESimulation.store_coeffs' is not compatible with 'EMEPeriodicitySweep'."
+                )
 
     def _validate_monitor_setup(self) -> None:
         """Check monitor setup."""
         for i, monitor in enumerate(self.monitors):
-            if isinstance(monitor, EMECoefficientMonitor):
-                log.warning(
-                    "'EMECoefficientMonitor' is deprecated. "
-                    "The full coefficient data is stored in "
-                    "'EMESimulationData.coeffs'."
-                )
             if isinstance(monitor, EMEMonitor):
                 _ = self._monitor_eme_cell_indices(monitor=monitor)
             if (

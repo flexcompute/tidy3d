@@ -286,15 +286,6 @@ class EMECoefficientMonitor(EMEMonitor):
         "Not all monitors support values different from 1.",
     )
 
-    num_sweep: Optional[pd.NonNegativeInt] = pd.Field(
-        None,
-        title="Number of Sweep Indices",
-        description="Number of sweep indices for the monitor to record. "
-        "Cannot exceed the number of sweep indices for the simulation. "
-        "If the sweep does not change the monitor data, the sweep index "
-        "will be omitted. A value of 'None' will record all sweep indices.",
-    )
-
     def storage_size(
         self,
         num_cells: int,
