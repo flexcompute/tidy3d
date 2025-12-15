@@ -302,9 +302,20 @@ class GaussianDoping(AbstractDopingBox):
         form involves products of Gaussians in each dimension.
         """
         # Use finite differences on the doping profile
+        # Note: _get_contrib calls squeeze(), so we need to handle different dimensionalities
         doping = self._get_contrib(coords, meshgrid=meshgrid)
 
         if meshgrid:
+            # Ensure doping is 3D for consistent gradient computation
+            if doping.ndim == 2:
+                # Determine which axis was squeezed (has length 1 in coords)
+                if len(coords["x"]) == 1:
+                    doping = doping[np.newaxis, :, :]
+                elif len(coords["y"]) == 1:
+                    doping = doping[:, np.newaxis, :]
+                else:
+                    doping = doping[:, :, np.newaxis]
+
             # Compute gradient using finite differences
             dx = coords["x"][1] - coords["x"][0] if len(coords["x"]) > 1 else 1.0
             dy = coords["y"][1] - coords["y"][0] if len(coords["y"]) > 1 else 1.0
@@ -399,6 +410,16 @@ class CustomDoping(AbstractDopingBox):
         doping = self._get_contrib(coords, meshgrid=meshgrid)
 
         if meshgrid:
+            # Ensure doping is 3D for consistent gradient computation
+            if doping.ndim == 2:
+                # Determine which axis was squeezed (has length 1 in coords)
+                if len(coords["x"]) == 1:
+                    doping = doping[np.newaxis, :, :]
+                elif len(coords["y"]) == 1:
+                    doping = doping[:, np.newaxis, :]
+                else:
+                    doping = doping[:, :, np.newaxis]
+
             dx = coords["x"][1] - coords["x"][0] if len(coords["x"]) > 1 else 1.0
             dy = coords["y"][1] - coords["y"][0] if len(coords["y"]) > 1 else 1.0
             dz = coords["z"][1] - coords["z"][0] if len(coords["z"]) > 1 else 1.0

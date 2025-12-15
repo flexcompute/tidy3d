@@ -2597,3 +2597,222 @@ def test_heat_only_simulation_with_semiconductor():
     assert TCADAnalysisTypes.CONDUCTION not in simulation_types, (
         "Conduction simulation should NOT be triggered when no electric BCs are present."
     )
+
+
+def test_auto_doping_refinement():
+    """Test automatic doping-based mesh refinement generation."""
+    # Create a semiconductor medium with Gaussian doping (pn junction)
+    Si_doped = td.MultiPhysicsMedium(
+        charge=td.SemiconductorMedium(
+            permittivity=11.7,
+            N_d=(
+                td.GaussianDoping(
+                    center=(0.1, 0, 0),
+                    size=(0.2, 0.5, td.inf),  # Use inf for the zero dimension
+                    ref_con=1e15,
+                    concentration=1e18,
+                    width=0.05,
+                    source="xmin",
+                ),
+            ),
+            N_a=(
+                td.GaussianDoping(
+                    center=(-0.1, 0, 0),
+                    size=(0.2, 0.5, td.inf),  # Use inf for the zero dimension
+                    ref_con=1e15,
+                    concentration=1e18,
+                    width=0.05,
+                    source="xmax",
+                ),
+            ),
+            N_c=td.ConstantEffectiveDOS(N=2.86e19),
+            N_v=td.ConstantEffectiveDOS(N=3.1e19),
+            E_g=td.ConstantEnergyBandGap(eg=1.11),
+            mobility_n=td.ConstantMobilityModel(mu=1500),
+            mobility_p=td.ConstantMobilityModel(mu=500),
+        ),
+        name="Si_doped",
+    )
+
+    # Create structure
+    semiconductor_structure = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(0.5, 0.5, td.inf)),
+        medium=Si_doped,
+        name="semiconductor",
+    )
+
+    # Create oxide medium (insulator)
+    oxide = td.MultiPhysicsMedium(
+        charge=td.ChargeInsulatorMedium(permittivity=3.9),
+        name="oxide",
+    )
+
+    # Create a grid spec with auto doping refinement enabled
+    grid_with_auto = td.DistanceUnstructuredGrid(
+        dl_interface=0.01,
+        dl_bulk=0.1,
+        distance_interface=0.02,
+        distance_bulk=0.2,
+        auto_doping_refinement=td.DopingGradientRefinementSpec(
+            resolution_factor=5.0,
+            min_dl=0.005,
+            max_dl=0.05,
+            num_samples=30,
+            transition_factor=10.0,
+        ),
+    )
+
+    # Create a 2D HeatChargeSimulation
+    sim = td.HeatChargeSimulation(
+        medium=oxide,
+        structures=[semiconductor_structure],
+        center=(0, 0, 0),
+        size=(1, 1, 0),  # 2D simulation (z=0)
+        boundary_spec=[],
+        grid_spec=grid_with_auto,
+        sources=[],
+        monitors=[],
+    )
+
+    # Test generate_doping_refinement_regions
+    regions = sim.generate_doping_refinement_regions()
+
+    # Should generate some refinement regions for the doping gradients
+    assert isinstance(regions, list), "Should return a list of regions"
+
+    # Check that regions are GridRefinementRegion objects
+    for region in regions:
+        assert isinstance(region, td.GridRefinementRegion), (
+            f"Expected GridRefinementRegion, got {type(region)}"
+        )
+        # Check that dl_internal is within expected bounds
+        assert 0.005 <= region.dl_internal <= 0.05, (
+            f"dl_internal {region.dl_internal} outside expected range [0.005, 0.05]"
+        )
+
+    # Test with_auto_doping_refinement
+    sim_refined = sim.with_auto_doping_refinement()
+    assert isinstance(sim_refined, td.HeatChargeSimulation), "Should return a HeatChargeSimulation"
+
+    # The refined simulation should have the auto-generated regions added to mesh_refinements
+    if len(regions) > 0:
+        assert len(sim_refined.grid_spec.mesh_refinements) >= len(regions), (
+            "Refined simulation should have at least as many mesh refinements as auto-generated regions"
+        )
+
+
+def test_auto_doping_refinement_disabled():
+    """Test that auto doping refinement can be disabled."""
+    Si_doped = td.MultiPhysicsMedium(
+        charge=td.SemiconductorMedium(
+            permittivity=11.7,
+            N_d=(
+                td.GaussianDoping(
+                    center=(0.1, 0, 0),
+                    size=(0.2, 0.5, td.inf),  # Use inf for the zero dimension
+                    ref_con=1e15,
+                    concentration=1e18,
+                    width=0.05,
+                    source="xmin",
+                ),
+            ),
+            N_c=td.ConstantEffectiveDOS(N=2.86e19),
+            N_v=td.ConstantEffectiveDOS(N=3.1e19),
+            E_g=td.ConstantEnergyBandGap(eg=1.11),
+            mobility_n=td.ConstantMobilityModel(mu=1500),
+            mobility_p=td.ConstantMobilityModel(mu=500),
+        ),
+        name="Si_doped",
+    )
+
+    semiconductor_structure = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(0.5, 0.5, td.inf)),
+        medium=Si_doped,
+        name="semiconductor",
+    )
+
+    oxide = td.MultiPhysicsMedium(
+        charge=td.ChargeInsulatorMedium(permittivity=3.9),
+        name="oxide",
+    )
+
+    # Grid with auto_doping_refinement explicitly disabled
+    grid_no_auto = td.DistanceUnstructuredGrid(
+        dl_interface=0.01,
+        dl_bulk=0.1,
+        distance_interface=0.02,
+        distance_bulk=0.2,
+        auto_doping_refinement=None,
+    )
+
+    sim = td.HeatChargeSimulation(
+        medium=oxide,
+        structures=[semiconductor_structure],
+        center=(0, 0, 0),
+        size=(1, 1, 0),
+        boundary_spec=[],
+        grid_spec=grid_no_auto,
+        sources=[],
+        monitors=[],
+    )
+
+    # Should return empty list when auto_doping_refinement is None
+    regions = sim.generate_doping_refinement_regions()
+    assert regions == [], "Should return empty list when auto_doping_refinement is None"
+
+
+def test_auto_doping_refinement_3d_warning():
+    """Test that auto doping refinement warns for 3D simulations."""
+    Si_doped = td.MultiPhysicsMedium(
+        charge=td.SemiconductorMedium(
+            permittivity=11.7,
+            N_d=(
+                td.ConstantDoping(
+                    center=(0.1, 0, 0),
+                    size=(0.2, 0.5, 0.2),
+                    concentration=1e18,
+                ),
+            ),
+            N_c=td.ConstantEffectiveDOS(N=2.86e19),
+            N_v=td.ConstantEffectiveDOS(N=3.1e19),
+            E_g=td.ConstantEnergyBandGap(eg=1.11),
+            mobility_n=td.ConstantMobilityModel(mu=1500),
+            mobility_p=td.ConstantMobilityModel(mu=500),
+        ),
+        name="Si_doped",
+    )
+
+    semiconductor_structure = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(0.5, 0.5, 0.5)),
+        medium=Si_doped,
+        name="semiconductor",
+    )
+
+    oxide = td.MultiPhysicsMedium(
+        charge=td.ChargeInsulatorMedium(permittivity=3.9),
+        name="oxide",
+    )
+
+    grid_with_auto = td.DistanceUnstructuredGrid(
+        dl_interface=0.01,
+        dl_bulk=0.1,
+        distance_interface=0.02,
+        distance_bulk=0.2,
+        auto_doping_refinement=td.DopingGradientRefinementSpec(),
+    )
+
+    # 3D simulation
+    sim = td.HeatChargeSimulation(
+        medium=oxide,
+        structures=[semiconductor_structure],
+        center=(0, 0, 0),
+        size=(1, 1, 1),  # 3D simulation
+        boundary_spec=[],
+        grid_spec=grid_with_auto,
+        sources=[],
+        monitors=[],
+    )
+
+    # Should return empty list for 3D simulation (with warning logged)
+    regions = sim.generate_doping_refinement_regions()
+    assert regions == [], "Should return empty list for 3D simulations"

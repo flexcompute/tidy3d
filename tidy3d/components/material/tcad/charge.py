@@ -464,13 +464,13 @@ class SemiconductorMedium(AbstractChargeMedium):
         grad_magnitude = grad_magnitude.squeeze()
 
         # Compute local mesh size: dl = N / (|grad_N| * k)
-        # Avoid division by zero
+        # Avoid division by zero by setting gradient to a small value where it's near zero
         eps = 1e-10
-        local_dl = np.where(
-            grad_magnitude > eps,
-            net_doping / (grad_magnitude * spec.resolution_factor),
-            spec.max_dl,
-        )
+        grad_safe = np.maximum(grad_magnitude, eps)
+        local_dl = net_doping / (grad_safe * spec.resolution_factor)
+
+        # Where gradient was near zero, use max_dl
+        local_dl = np.where(grad_magnitude > eps, local_dl, spec.max_dl)
 
         # Clamp to [min_dl, max_dl]
         local_dl = np.clip(local_dl, spec.min_dl, spec.max_dl)
