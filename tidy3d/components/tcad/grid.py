@@ -241,6 +241,16 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         units=MICROMETER,
     )
 
+    dl_interface_semiconductor: pd.PositiveFloat = pd.Field(
+        None,
+        title="Semiconductor Interface Grid Size",
+        description="Grid size near interfaces between semiconductors and insulators (e.g., "
+        "Si/SiO2 interfaces). If ``None``, defaults to ``dl_interface``. Typically this should "
+        "be set to a smaller value than ``dl_interface`` to accurately resolve depletion "
+        "regions and charge accumulation at semiconductor-insulator boundaries.",
+        units=MICROMETER,
+    )
+
     dl_bulk: pd.PositiveFloat = pd.Field(
         ...,
         title="Bulk Grid Size",

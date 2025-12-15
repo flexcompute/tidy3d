@@ -2816,3 +2816,36 @@ def test_auto_doping_refinement_3d_warning():
     # Should return empty list for 3D simulation (with warning logged)
     regions = sim.generate_doping_refinement_regions()
     assert regions == [], "Should return empty list for 3D simulations"
+
+
+def test_dl_interface_semiconductor():
+    """Test that dl_interface_semiconductor parameter works correctly."""
+
+    # Test default behavior (None defaults to dl_interface)
+    grid1 = td.DistanceUnstructuredGrid(
+        dl_interface=0.1,
+        dl_bulk=1.0,
+        distance_interface=0.3,
+        distance_bulk=2.0,
+    )
+    assert grid1.dl_interface_semiconductor is None
+
+    # Test explicit setting
+    grid2 = td.DistanceUnstructuredGrid(
+        dl_interface=0.1,
+        dl_interface_semiconductor=0.02,
+        dl_bulk=1.0,
+        distance_interface=0.3,
+        distance_bulk=2.0,
+    )
+    assert grid2.dl_interface_semiconductor == 0.02
+
+    # Test that a smaller value can be set
+    grid3 = td.DistanceUnstructuredGrid(
+        dl_interface=0.1,
+        dl_interface_semiconductor=0.05,
+        dl_bulk=1.0,
+        distance_interface=0.3,
+        distance_bulk=2.0,
+    )
+    assert grid3.dl_interface_semiconductor < grid3.dl_interface
