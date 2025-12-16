@@ -4718,6 +4718,7 @@
           "type": "integer"
         },
         "num_sweep": {
+          "default": 1,
           "minimum": 0,
           "type": "integer"
         },
@@ -12880,7 +12881,7 @@
       "type": "array"
     },
     "store_coeffs": {
-      "default": true,
+      "default": false,
       "type": "boolean"
     },
     "store_port_modes": {
