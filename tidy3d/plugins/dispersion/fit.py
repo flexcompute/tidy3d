@@ -603,7 +603,9 @@ class DispersionFitter(Tidy3dBaseModel):
                 try:
                     _ = [float(x) for x in row]
                 except Exception as e:
-                    raise ValidationError("Invalid URL. Float data cannot be recognized.") from e
+                    raise ValidationError(
+                        f"Invalid URL. Float data cannot be recognized: {e!s}"
+                    ) from e
 
         if has_k > 1:
             raise ValidationError("Invalid URL. Too many k labels.")
@@ -663,7 +665,9 @@ class DispersionFitter(Tidy3dBaseModel):
         try:
             resp.raise_for_status()
         except Exception as e:
-            raise WebError("Connection to the website failed. Please provide a valid URL.") from e
+            raise WebError(
+                f"Connection to the website failed. Please provide a valid URL: {e!s}"
+            ) from e
 
         data_url = list(
             csv.reader(codecs.iterdecode(resp.iter_lines(), "utf-8"), delimiter=delimiter)

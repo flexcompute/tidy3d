@@ -511,7 +511,8 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                     raise ValueError(
                         "Automatic construction of radiation monitors failed. "
                         "Please address the reason or provide a tuple of DirectivityMonitor "
-                        "objects to the 'radiation_monitors' parameter."
+                        "objects to the 'radiation_monitors' parameter: "
+                        f"{e!s}"
                     ) from e
             else:
                 # DirectivityMonitor - use as-is

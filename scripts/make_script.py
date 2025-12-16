@@ -88,7 +88,7 @@ def main(args):
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(
             "Ruff formatting failed. Your script might not be compatible with make_script.py. "
-            "This could be due to unsupported features like CustomMedium."
+            f"This could be due to unsupported features like CustomMedium.\n{exc!s}"
         ) from exc
     finally:
         # remove the temporary file

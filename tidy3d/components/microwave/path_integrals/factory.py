@@ -148,6 +148,7 @@ def make_path_integrals(
             raise SetupError(
                 f"Failed to construct path integrals for the mode with index {idx} "
                 "from the impedance specification. "
-                "Please create a github issue so that the problem can be investigated."
+                "Please create a github issue so that the problem can be investigated: "
+                f"{e!s}"
             ) from e
     return (tuple(v_integrals), tuple(i_integrals))

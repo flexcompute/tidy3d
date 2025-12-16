@@ -520,7 +520,8 @@ class DataArray(xr.DataArray):
             raise ValueError(
                 "Couldn't reshape the supplied 'data' to update 'DataArray'. The provided data was "
                 f"of shape {data.shape} and tried to reshape to {new_shape}. If you encounter this "
-                "error please raise an issue on the tidy3d github repository with the context."
+                "error please raise an issue on the tidy3d github repository with the context: "
+                f"{e!s}"
             ) from e
 
         # broadcast data to repeat data along the selected dimensions to match mask

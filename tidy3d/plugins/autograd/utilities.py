@@ -232,7 +232,7 @@ def scalar_objective(func: Optional[Callable] = None, *, has_aux: bool = False) 
             raise Tidy3dError(
                 "An objective function's return value must be a scalar "
                 "but got an array with shape "
-                f"{getattr(result, 'shape', 'N/A')}."
+                f"{getattr(result, 'shape', 'N/A')}: {e!s}"
             ) from e
 
         # Ensure the result is real

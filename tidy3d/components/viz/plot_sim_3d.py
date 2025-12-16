@@ -68,7 +68,7 @@ def plot_sim_3d(sim, width=800, height=800, is_gz_base64=False) -> None:
     except ImportError as e:
         raise SetupError(
             "3D plotting requires ipython to be installed "
-            "and the code to be running on a jupyter notebook."
+            f"and the code to be running on a jupyter notebook: {e!s}"
         ) from e
 
     from base64 import b64encode

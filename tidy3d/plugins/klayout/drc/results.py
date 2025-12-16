@@ -413,9 +413,11 @@ def violations_from_file(
     try:
         xmltree = ET.parse(resultsfile)
     except FileNotFoundError as err:
-        raise FileError(f"DRC result file not found: '{resultsfile}'.") from err
+        raise FileError(f"DRC result file not found: '{resultsfile}': {err!s}") from err
     except ET.ParseError as err:
-        raise ET.ParseError(f"Invalid XML format in DRC result file: '{resultsfile}'.") from err
+        raise ET.ParseError(
+            f"Invalid XML format in DRC result file: '{resultsfile}': {err!s}"
+        ) from err
 
     # Initialize violations dict with all the categories
     violations = {}

@@ -51,7 +51,7 @@ def _normalize_axes(
             try:
                 ax = int(ax)
             except Exception as e:
-                raise TypeError(f"Axis {ax!r} could not be converted to an integer.") from e
+                raise TypeError(f"Axis {ax!r} could not be converted to an integer: {e!s}") from e
 
         if not -ndim <= ax < ndim:
             raise ValueError(f"Invalid axis {ax} for {kind} with ndim {ndim}.")
@@ -209,7 +209,7 @@ def _get_pad_indices(
     try:
         indices = onp.pad(onp.arange(n), (pad_left, pad_right), mode=mode)
     except ValueError as error:
-        raise ValueError(f"Unsupported padding mode: {mode}") from error
+        raise ValueError(f"Unsupported padding mode: {mode}: {error!s}") from error
     return numpy_module.asarray(indices, dtype=int)
 
 

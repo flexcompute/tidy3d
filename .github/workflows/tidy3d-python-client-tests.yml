@@ -224,6 +224,28 @@ jobs:
           echo "extras_integration_tests=$extras_integration_tests"
           echo "test_type=$test_type"
 
+  check-error-blind-chaining:
+    name: check blind-chaining of error messages
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+
+      - name: set-python-3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Run blind-chaining test
+        run: |
+          set -euo pipefail
+          python scripts/check_blind_chaining.py
+
   lint:
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
@@ -981,6 +1003,7 @@ jobs:
       - determine-test-scope
       - local-tests
       - remote-tests
+      - check-error-blind-chaining
       - lint
       - mypy
       - verify-schema-change
@@ -993,6 +1016,12 @@ jobs:
       - extras-integration-tests
     runs-on: ubuntu-latest
     steps:
+      - name: check-error-blind-chaining
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.check-error-blind-chaining.result != 'success' && needs.check-error-blind-chaining.result != 'skipped' }}
+        run: |
+          echo "❌ Detected blind-chained error messages."
+          exit 1
+
       - name: check-linting-result
         if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.lint.result != 'success' && needs.lint.result != 'skipped' }}
         run: |

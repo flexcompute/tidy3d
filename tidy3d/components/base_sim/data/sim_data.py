@@ -67,7 +67,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
             except Tidy3dKeyError as exc:
                 raise DataError(
                     f"Data with monitor name '{monitor_name}' supplied "
-                    f"but not found in the original '{sim.type}'."
+                    f"but not found in the original '{sim.type}': {exc!s}"
                 ) from exc
         return values
 

@@ -630,7 +630,8 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
             except Exception as e:
                 raise WebError(
                     "Failed to download the simulation data file from the server. "
-                    "Please confirm that the task was successfully run."
+                    "Please confirm that the task was successfully run: "
+                    f"{e!s}"
                 ) from e
 
         data = ModeSolverData.from_hdf5(to_file)

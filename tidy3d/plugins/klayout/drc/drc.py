@@ -98,7 +98,9 @@ class DRCConfig(Tidy3dBaseModel):
         try:
             v = {str(k): str(v) for k, v in v.items()}
         except Exception as e:
-            raise ValidationError("Could not coerce keys and values of drc_args to strings.") from e
+            raise ValidationError(
+                f"Could not coerce keys and values of drc_args to strings: {e!s}"
+            ) from e
         return v
 
     @validator("drc_args")

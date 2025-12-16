@@ -208,7 +208,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         try:
             type_value = obj[TYPE_TAG_STR]
         except KeyError as exc:
-            raise ValueError(f'Missing "{TYPE_TAG_STR}" in data') from exc
+            raise ValueError(f'Missing "{TYPE_TAG_STR}" in data: {exc!s}') from exc
         if not isinstance(type_value, str) or not type_value:
             raise ValueError(f'Invalid "{TYPE_TAG_STR}" value: {type_value!r}')
         return type_value
@@ -218,7 +218,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         try:
             return TYPE_TO_CLASS_MAP[type_value]
         except KeyError as exc:
-            raise ValueError(f"Unknown type: {type_value}") from exc
+            raise ValueError(f"Unknown type: {type_value}: {exc!s}") from exc
 
     @classmethod
     def _should_dispatch_to(cls, target_cls: type[Tidy3dBaseModel]) -> bool:
@@ -387,7 +387,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             raise AttributeError(
                 f"Could not field field '{field_name}' in the sub-component `path`. "
                 f"Found fields of '{tuple(self.__fields__.keys())}'. "
-                "Please double check the `path` passed to `.updated_copy()`."
+                "Please double check the `path` passed to `.updated_copy()`: "
+                f"{e!s}"
             ) from e
 
         if isinstance(sub_component, (list, tuple)):

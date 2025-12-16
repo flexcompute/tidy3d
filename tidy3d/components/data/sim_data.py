@@ -1382,5 +1382,6 @@ class SimulationData(AbstractYeeGridSimulationData):
             savemat(fname, modified_sim_dict, **kwargs)
         except Exception as e:
             raise ValueError(
-                "Could not save supplied 'SimulationData' to file. As this is an experimental feature, we may not be able to support the contents of your dataset. If you receive this error, please feel free to raise an issue on our front end repository so we can investigate."
+                "Could not save supplied 'SimulationData' to file. As this is an experimental feature, we may not be able to support the contents of your dataset. If you receive this error, please feel free to raise an issue on our front end repository so we can investigate "
+                f"{e!s}"
             ) from e

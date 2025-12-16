@@ -253,7 +253,7 @@ class FitterData(AdvancedFitterParam):
             resp = requests.get(f"{url_server}/health", verify=ssl_verify)
             resp.raise_for_status()
         except Exception as e:
-            raise WebError("Connection to the server failed. Please try again.") from e
+            raise WebError(f"Connection to the server failed. Please try again: {e!s}") from e
 
         return get_headers(), ssl_verify
 
@@ -292,10 +292,10 @@ class FitterData(AdvancedFitterParam):
                         "inner iterations, or to relax the RMS tolerance."
                     )
                 )
-                raise Tidy3dError(msg) from e
+                raise Tidy3dError(f"{msg}: {e!s}") from e
 
             raise WebError(
-                "Fitter failed. Try again, tune the parameters, or contact us for more help."
+                f"Fitter failed. Try again, tune the parameters, or contact us for more help: {e!s}"
             ) from e
 
         run_result = resp.json()

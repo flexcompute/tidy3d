@@ -322,7 +322,8 @@ class WebTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             except Exception as e:
                 raise WebError(
                     "Failed to download the data file from the server. "
-                    "Please confirm that the task completed successfully."
+                    "Please confirm that the task completed successfully: "
+                    f"{e!s}"
                 ) from e
         return file
 
@@ -820,7 +821,8 @@ class SimulationTask(WebTask):
                 except Exception as e:
                     raise ValidationError(
                         "The parent task must be a 'VolumeMesher' task which has been successfully "
-                        "run and is associated to the same 'HeatChargeSimulation' as provided here."
+                        "run and is associated to the same 'HeatChargeSimulation' as provided here: "
+                        f"{e!s}"
                     ) from e
 
             except Exception as e:

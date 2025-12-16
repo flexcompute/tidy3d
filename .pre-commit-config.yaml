@@ -11,6 +11,14 @@ repos:
        stages: [pre-commit]
      - id: ruff-format
        stages: [pre-commit]
+  - repo: local
+    hooks:
+      - id: blind-chaining-check
+        name: blind-chaining-check
+        entry: python scripts/check_blind_chaining.py
+        language: system
+        types: [python]
+        pass_filenames: false
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
     rev: v9.22.0
     hooks:

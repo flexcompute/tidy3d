@@ -1473,7 +1473,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         except ImportError as e:
             raise Tidy3dImportError(
                 "Python module 'gdstk' not found. To export geometries to .gds "
-                "files, please install it."
+                f"files, please install it: {e!s}"
             ) from e
 
         library = gdstk.Library()

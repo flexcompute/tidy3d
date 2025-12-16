@@ -632,7 +632,7 @@ class Structure(AbstractStructure):
         except ImportError as e:
             raise Tidy3dImportError(
                 "Python module 'gdstk' not found. To export geometries to .gds "
-                "files, please install it."
+                f"files, please install it: {e!s}"
             ) from e
         cell = library.new_cell(gds_cell_name)
         self.to_gds(

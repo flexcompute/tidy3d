@@ -423,7 +423,7 @@ class FieldProjector(Tidy3dBaseModel):
             currents_f = currents.sel(f=frequency)
         except Exception as e:
             raise SetupError(
-                f"Frequency {frequency} not found in fields for monitor '{surface.monitor.name}'."
+                f"Frequency {frequency} not found in fields for monitor '{surface.monitor.name}': {e!s}"
             ) from e
 
         idx_w, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)

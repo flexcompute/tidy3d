@@ -121,7 +121,7 @@ def _batch_detail_error(resource_id: str) -> Optional[WebError]:
         status = batch_detail.status.lower()
     except Exception as e:
         log.error(f"Could not retrieve batch details for '{resource_id}': {e}")
-        raise WebError(f"Failed to retrieve status for batch '{resource_id}'.") from e
+        raise WebError(f"Failed to retrieve status for batch '{resource_id}': {e!s}") from e
 
     if status not in ERROR_STATES:
         return
@@ -141,7 +141,7 @@ def _batch_detail_error(resource_id: str) -> Optional[WebError]:
             )
         except Exception as e:
             raise WebError(
-                "One or more subtasks failed validation. Failed to parse validation errors."
+                f"One or more subtasks failed validation. Failed to parse validation errors: {e!s}"
             ) from e
         raise WebError(full_error_msg)
 
@@ -1671,10 +1671,9 @@ def test() -> None:
         console.log("Authentication configured successfully!")
     except (WebError, HTTPError) as e:
         url = "https://docs.flexcompute.com/projects/tidy3d/en/latest/index.html"
-        msg = (
-            str(e)
-            + "\n\n"
-            + "It looks like the Tidy3D Python interface is not configured with your "
+        raise WebError(
+            f"{e!s}\n\n"
+            "It looks like the Tidy3D Python interface is not configured with your "
             "unique API key. "
             "To get your API key, sign into 'https://tidy3d.simulation.cloud' and copy it "
             "from your 'Account' page. Then you can configure tidy3d through command line "
@@ -1683,5 +1682,4 @@ def test() -> None:
             "'.tidy3d/config' (windows) with content like: \n\n"
             "apikey = 'XXX' \n\nHere XXX is your API key copied from your account page within quotes.\n\n"
             f"For details, check the instructions at {url}."
-        )
-        raise WebError(msg) from e
+        ) from e
