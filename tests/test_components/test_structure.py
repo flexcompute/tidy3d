@@ -264,3 +264,27 @@ def test_from_permittivity_array():
 
     grad = ag.grad(f)(1.0)
     assert not np.isclose(grad, 0.0)
+
+
+def test_to_gdstk_pixel_exact(tmp_path):
+    box = td.Box(center=(0, 0, 0), size=(2, 2, 2))
+    nx, ny = 50, 50
+    arr = np.ones((nx, ny, 1))
+    arr[20:30, 20:30] = 2
+    x = np.linspace(-1, 1, nx)
+    y = np.linspace(-1, 1, ny)
+    z = np.asarray([0])
+    coords = {"x": x, "y": y, "z": z}
+    permittivity = td.SpatialDataArray(arr, coords=coords)
+
+    medium = td.CustomMedium(permittivity=permittivity)
+    structure = td.Structure(geometry=box, medium=medium)
+    polygons = structure.to_gdstk(z=0, frequency=3e14, permittivity_threshold=1.5, pixel_exact=True)
+    assert polygons
+
+    fname = str(tmp_path / "structure-exact.gds")
+    structure.to_gds_file(fname, z=0, permittivity_threshold=1.5, frequency=3e14, pixel_exact=True)
+    cells = gdstk.read_gds(fname).cells
+    cell = cells[0]
+    assert np.allclose(cell.bounding_box(), ((-0.2, -0.2), (0.2, 0.2)), atol=0.01)
+    assert gdstk.inside([(0.1, 0.9), (0.5, 2.5), (0, 0)], cell.polygons) == (False, False, True)

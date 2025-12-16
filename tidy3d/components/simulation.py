@@ -5145,6 +5145,7 @@ class Simulation(AbstractYeeGridSimulation):
         gds_layer_dtype_map: Optional[
             dict[AbstractMedium, tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]]
         ] = None,
+        pixel_exact: bool = False,
     ) -> list:
         """Convert a simulation's planar slice to a .gds type polygon list.
 
@@ -5163,6 +5164,8 @@ class Simulation(AbstractYeeGridSimulation):
             Frequency for permittivity evaluation in case of custom medium (Hz).
         gds_layer_dtype_map : Dict
             Dictionary mapping mediums to GDSII layer and data type tuples.
+        pixel_exact : bool = False
+            If true export gds as pixel exact rectangles instead of gdstk contour if a custom medium is provided.
 
         Return
         ------
@@ -5194,6 +5197,7 @@ class Simulation(AbstractYeeGridSimulation):
                 frequency=frequency,
                 gds_layer=gds_layer,
                 gds_dtype=gds_dtype,
+                pixel_exact=pixel_exact,
             ):
                 pmin, pmax = polygon.bounding_box()
                 if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
@@ -5216,6 +5220,7 @@ class Simulation(AbstractYeeGridSimulation):
         gds_layer_dtype_map: Optional[
             dict[AbstractMedium, tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]]
         ] = None,
+        pixel_exact: bool = False,
     ) -> None:
         """Append the simulation structures to a .gds cell.
 
@@ -5236,6 +5241,8 @@ class Simulation(AbstractYeeGridSimulation):
             Frequency for permittivity evaluation in case of custom medium (Hz).
         gds_layer_dtype_map : Dict
             Dictionary mapping mediums to GDSII layer and data type tuples.
+        pixel_exact : bool = False
+            If true export gds as pixel exact rectangles instead of gdstk contour if a custom medium is provided.
         """
         if gds_layer_dtype_map is None:
             gds_layer_dtype_map = {}
@@ -5248,6 +5255,7 @@ class Simulation(AbstractYeeGridSimulation):
                 permittivity_threshold=permittivity_threshold,
                 frequency=frequency,
                 gds_layer_dtype_map=gds_layer_dtype_map,
+                pixel_exact=pixel_exact,
             )
             if len(polygons) > 0:
                 cell.add(*polygons)
@@ -5271,6 +5279,7 @@ class Simulation(AbstractYeeGridSimulation):
             dict[AbstractMedium, tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]]
         ] = None,
         gds_cell_name: str = "MAIN",
+        pixel_exact: bool = False,
     ) -> None:
         """Append the simulation structures to a .gds cell.
 
@@ -5293,6 +5302,8 @@ class Simulation(AbstractYeeGridSimulation):
             Dictionary mapping mediums to GDSII layer and data type tuples.
         gds_cell_name : str = 'MAIN'
             Name of the cell created in the .gds file to store the geometry.
+        pixel_exact : bool = False
+            If true export gds as pixel exact rectangles instead of gdstk contour if a custom medium is provided.
         """
         if gdstk_available:
             library = gdstk.Library()
@@ -5326,6 +5337,7 @@ class Simulation(AbstractYeeGridSimulation):
             permittivity_threshold=permittivity_threshold,
             frequency=frequency,
             gds_layer_dtype_map=gds_layer_dtype_map,
+            pixel_exact=pixel_exact,
         )
         fname = pathlib.Path(fname)
         fname.parent.mkdir(parents=True, exist_ok=True)
