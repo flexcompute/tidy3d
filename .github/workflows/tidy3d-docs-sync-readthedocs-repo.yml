@@ -76,6 +76,17 @@ jobs:
           fetch-tags: true
           persist-credentials: true
 
+      - name: convert-ssh-submodules-to-https
+        run: |
+          if [ -f .gitmodules ]; then
+            echo "Converting SSH submodule URLs to HTTPS..."
+            sed -i 's|git@github.com:|https://github.com/|g' .gitmodules
+            git submodule sync
+            echo "Submodule URLs converted successfully"
+          else
+            echo "No .gitmodules file found, skipping conversion"
+          fi
+
       - name: push-mirror-repo
         id: sync-result
         env:

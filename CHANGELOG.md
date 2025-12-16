@@ -8,29 +8,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Added `symmetrize_mirror`, `symmetrize_rotation`, `symmetrize_diagonal` functions to the autograd plugin. They can be used for enforcing symmetries in topology optimization.
-- Klayout plugin automatically finds klayout installation path at common locations.
-- Added autograd support for `TriangleMesh`, allowing gradient computation with respect to mesh vertices for inverse design.
-- Added `EMESimulation.store_coeffs` to store coefficients from the EME solver, including mode overlaps, interface S matrices, and effective propagation indices.
-- Get cell-related information from violation markers in `DRCResults` and `DRCViolation` to the klayout plugin: Use for example `DRCResults.violations_by_cell` to group them.
-- `pixel_exact` option for `to_gds` export of simulations and structures. If this option is set, any custom medium will be exported as rectangular pixels according to the specification of the medium coordinates.
 
 ### Changed
-- Removed validator that would warn if `PerturbationMedium` values could become numerically unstable, since an error will anyway be raised if this actually happens when the medium is converted using actual perturbation data.
-- Improved performance of adjoint gradient computation for `PolySlab` and `Cylinder` geometries through vectorized sidewall patch collection (~4x speedup).
-- Added optional `max_results` handling to the kLayout `DRCLoader` and `DRCRunner` and speeded up parsing of big result sets.
 
 ### Fixed
-- Fix to `outer_dot` when frequencies stored in the data were not in increasing order. Previously, the result would be provided with re-sorted frequencies, which would not match the order of the original data.
-- Fixed bug where an extra spatial coordinate could appear in `complex_flux` and `ImpedanceCalculator` results.
-- Fixed normal for `Box` shape gradient computation to always point outward from boundary which is needed for correct PEC handling.
-- Fixed `Box` gradients within `GeometryGroup` where the group intersection boundaries were forwarded.
-- Fixed `Box` gradients to use automatic permittivity detection for inside/outside permittivity.
-- Improved degenerate mode handling in the mode solver to ensure modes respect the bi-orthogonality condition.
 
-## [2.10.0rc3] - 2025-11-26
+## [2.10.0] - 2025-12-18
 
 ### Added
+- Added rectangular and radial taper support to `RectangularAntennaArrayCalculator` for phased array amplitude weighting; refactored array factor calculation for improved clarity and performance. 
+- Selective simulation capabilities to `TerminalComponentModeler` via `run_only` and `element_mappings` fields, allowing users to run fewer simulations and extract only needed scattering matrix elements.
+- Added KLayout plugin, with DRC functionality for running design rule checks in `plugins.klayout.drc`. Supports running DRC on GDS files as well as `Geometry`, `Structure`, and `Simulation` objects.
+- Added "mil" and "in" (inch) units to `plot_length_units`.
+- Objective functions that involve running `tidy3d.plugins.smatrix.ComponentModeler` can be differentiated with autograd.
+- Access field decay values in `SimulationData` via `sim_data.field_decay` as `TimeDataArray`.
+- Added ability to set first-order absorbing boundary conditions on simulation domain boundaries using either `ABCBoundary` or `ModeABCBoundary` classes.
+- Added `frame` field to `ModeSource` (default: `None`) and `WavePort` (default: `PECFrame()`). Setting this to `PECFrame(length=...)` automatically places a thin PEC frame of specified length around the source/port. The automatically created frames can be inspected using `Simulation._finalized` property.
+- Added `InternalAbsorber` class for placing first-order absorbing boundary conditions on planes inside the simulation domain. Internal absorbers are automatically wrapped in a PEC frame with a backing PEC plate on the non-absorbing side.
+- Added `absorber` field (default: `True`) to `WavePort` for automatically placing an absorber behind the port.
+- Added `conjugated_dot_product` field in `ModeMonitor` (default: `True`) and `WavePort` (default: `False`) to allow selecting the conjugated or non-conjugated dot product for mode decomposition.
+- Support for gradients with respect to the `conductivity` of a `CustomMedium`.
+- Added `VerticalNaturalConvectionCoeffModel`, a model for heat transfer due to natural convection from a vertical plate. It can be used in `ConvectionBC` to compute the heat transfer coefficient from fluid properties, using standard Nusselt number correlations for both laminar and turbulent flow.
+- Added `BroadbandModeABCSpec` class for setting broadband absorbing boundary conditions that can absorb waveguide modes over a specified frequency range using a pole-residue pair model.
+- `Scene.plot_3d()` method to make 3D rendering of scene.
+- Added native web and batch support to run `ModalComponentModeler` and `TerminalComponentModeler` workflows.
+- Added `SimulationMap` and `SimulationDataMap` immutable dictionary-like containers for managing collections of simulations and results.
+- Added `TerminalComponentModelerData`, `ComponentModelerData`, `MicrowaveSMatrixData`, and introduced multiple DataArrays for modeler workflow data structures.
+- Added autograd support for dispersive material models: `Sellmeier`, `Drude`, `Lorentz`, `Debye` and their custom medium variants.
+- Added check and exception for NaN data in the adjoint pipeline to raise issue to user before adjoint source creation failure.
+- Added autograd support for `TerminalComponentModeler` and `ModalComponentModeler`.
+- Added `initialize_params_from_simulation` to `tidy3d.plugins.autograd.invdes` to initialize topology design regions from an underlying simulation geometry.
+- Added autograd support for sidewall angles in `td.Cylinder` and `td.PolySlab`.
+- New `MediumMonitor` that returns both permittivity and permeability profiles.
+- Task names are now optional when using `run(sim)` or `Job`. When running multiple jobs (via `run_async` or `Batch`), you can also provide simulations as a list without specifying task names. The previous dictionary-based format with explicit task names is still supported.
+- Enabled lazy loading of data via `web.load(..., lazy=True)`. When used, this returns a lightweight proxy object holding a reference to the data. On first access to any field or method, the proxy transparently loads the full object (same as with the default lazy=False).
+- A new type of doping box has been introduced, `CustomDoping` which accepts a `SpatialDataArray` to define doping concentration. Unlike in the case where a `SpatialDataArray`, custom doping defined with `CustomDoping` have additive behavior, i.e., one can add other doping on top. This deprecates the `SpatialDataArray` as direct input for `N_a` and `N_d`.
+- Non-isothermal Charge simulations are now available. One can now run this type of simulations by using the `SteadyChargeDCAnalysis` as the `analysis_spec` of a `HeatChargeSimulation`. This type of simulations couple the heat equation with the drift-diffusion equations which allow to account for self heating behavior.
+- Because non-isothermal Charge simulations are now supported, new models for the effective density of states and bandgap energy have been introduced. These models are the following: `ConstantEffectiveDOS`, `IsotropicEffectiveDOS`, `MultiValleyEffectiveDOS`, `DualValleyEffectiveDOS`.
+- Added the Hurkx model for direct band-to-band tunneling `HurkxDirectBandToBandTunneling`.
+- Added Selberherr's model for impact ionization `SelberherrImpactIonization`.
 - Added S-parameter de-embedding to `TerminalComponentModelerData`, enabling recalculation with shifted reference planes.
 - Added optional automatic extrusion of structures intersecting with a `WavePort` via the new `extrude_structures` field, ensuring mode sources, absorbers, and PEC frames are fully contained.
 - Added support for `tidy3d-extras`, an optional plugin that enables more accurate local mode solving via subpixel averaging.
@@ -65,23 +81,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added more RF-specific mode characteristics to `MicrowaveModeData`, including propagation constants (alpha, beta, gamma), phase/group velocities, wave impedance, and automatic mode classification with configurable polarization thresholds in `MicrowaveModeSpec`.
 - Introduce `tidy3d.rf` namespace to consolidate all RF classes.
 - Added support for custom colormaps in `plot_field`.
-
-### Breaking Changes
-- Edge singularity correction at PEC and lossy metal edges defaults to `True`.
-- `angle_threshold` in `CornerFinderSpec` now defaults to `pi/4`.
-- `WavePort` has been refactored to use `MicrowaveModeSpec`. The fields `voltage_integral`, and `current_integral` have been removed. Impedance specifications are now defined in `MicrowaveModeSpec.impedance_specs`. Please see our migration guide for details on updating your code.
-
-### Planned Deprecation
-**Note: These changes only affect the microwave and smatrix plugins.**
-- Renamed path integral classes for improved consistency. Please see our migration guide for details on updating your code. Old class naming is aliased to the new classes for 2.10.
-  - `VoltageIntegralAxisAligned` → `AxisAlignedVoltageIntegral`
-  - `CurrentIntegralAxisAligned` → `AxisAlignedCurrentIntegral`
-  - `CustomPathIntegral2D` → `Custom2DPathIntegral`
-  - `CustomVoltageIntegral2D` → `Custom2DVoltageIntegral`
-  - `CustomCurrentIntegral2D` → `Custom2DCurrentIntegral`
-  - Path integral and impedance calculator classes have been refactored and moved from the microwave plugin into Tidy3D components. They are now publicly exported via the top-level package `__init__.py`.
+- Added `symmetrize_mirror`, `symmetrize_rotation`, `symmetrize_diagonal` functions to the autograd plugin. They can be used for enforcing symmetries in topology optimization.
+- Klayout plugin automatically finds klayout installation path at common locations.
+- Added autograd support for `TriangleMesh`, allowing gradient computation with respect to mesh vertices for inverse design.
+- Added `EMESimulation.store_coeffs` to store coefficients from the EME solver, including mode overlaps, interface S matrices, and effective propagation indices.
+- Get cell-related information from violation markers in `DRCResults` and `DRCViolation` to the klayout plugin: Use for example `DRCResults.violations_by_cell` to group them.
+- `pixel_exact` option for `to_gds` export of simulations and structures. If this option is set, any custom medium will be exported as rectangular pixels according to the specification of the medium coordinates.
 
 ### Changed
+- Adaptive minimum spacing for `PolySlab` integration is now wavelength relative and a minimum discretization is set for computing gradients for cylinders.
+- The `TerminalComponentModeler` defaults to the pseudo wave definition of scattering parameters. The new field `s_param_def` can be used to switch between either pseudo or power wave definitions.
+- Restructured the smatrix plugin with backwards-incompatible changes for a more robust architecture. Notably, `ComponentModeler` has been renamed to `ModalComponentModeler` and internal web API methods have been removed. Please see our migration guide for details on updating your workflows.
+- Prevent small bandwidth sources from being created in `TerminalComponentModeler` when modeler frequencies are close together.
+- `Simulation.epsilon` now samples off-diagonal elements of fully tensorial permittivity at grid *boundaries*, to be consistent with the how these enter the FDTD simulation. This means that all off-diagonal components are now sampled at the same locations.
+- Propagate `verbose` to `start` function in web API.
+- `LayerRefinementSpec` defaults to assuming structures made of different materials are interior-disjoint for more efficient mesh generation.
 - Improved performance of antenna metrics calculation by utilizing cached wave amplitude calculations instead of recomputing wave amplitudes for each port excitation in the `TerminalComponentModelerData`.
 - Changed hashing method in `Tidy3dBaseModel` from sha256 to md5.
 - Removed validators on limiting the number of geometries in a ClipOperation geometry.
@@ -96,8 +110,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default value of `EMEModeSpec.interp_spec` is `ModeInterpSpec.cheb(num_points=3, reduce_data=True)` for faster multi-frequency EME simulations.
 - Default value of `num_sweep` in `EMECoefficientMonitor` is now `None`, recording all sweep indices.
 - Maximum number of frequencies in an `EMESimulation` is now larger if mode interpolation via `ModeInterpSpec` is used.
+- Removed validator that would warn if `PerturbationMedium` values could become numerically unstable, since an error will anyway be raised if this actually happens when the medium is converted using actual perturbation data.
+- Improved performance of adjoint gradient computation for `PolySlab` and `Cylinder` geometries through vectorized sidewall patch collection (~4x speedup).
+- Added optional `max_results` handling to the kLayout `DRCLoader` and `DRCRunner` and speeded up parsing of big result sets.
 
 ### Fixed
+- Bug in `TerminalComponentModeler.get_antenna_metrics_data` when port amplitudes are set to zero.
+- Added missing `solver_version` keyword argument to `run_async`.
+- Fixed `interpn` data array method to be compatible with extrapolation outside of data array coordinates.
+- Fixed `overlap_sort` to use the same value of the `conjugated_dot_product` field in `ModeMonitor`, and added the `conjugated_dot_product` field to `ModeSolver` and `ModeSimulation`.
+- Stricter validation for `bend_radius` in mode simulations, preventing the bend center from coinciding with the simulation boundary.
+- Prevent autograd adjoint simulations from reusing out-of-range `normalize_index` values by defaulting their normalization to the first adjoint source when needed.
+- Subtasks validation errors from `web.upload(ComponentModeler)` previously were not being propagated to users, and hung without response.
 - Ensured the legacy `Env` proxy mirrors `config.web` profile switches and preserves API URL.
 - More robust `Sellmeier` and `Debye` material model, and prevent very large pole parameters in `PoleResidue` material model.
 - Bug in `WavePort` when more than one mode is requested in the `ModeSpec`.
@@ -112,73 +136,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed mode solver warnings about evaluating permittivity of a `Medium2D`.
 - Maximum number of grid points in an EME simulation is now based solely on transverse grid points. Maximum number of EME cells is unchanged.
 - Fixed handling of polygons with holes (interiors) in `subdivide()` function. The function now properly converts polygons with interiors into `PolySlab` geometries using subtraction operations with `GeometryGroup`.
+- Fix to `outer_dot` when frequencies stored in the data were not in increasing order. Previously, the result would be provided with re-sorted frequencies, which would not match the order of the original data.
+- Fixed bug where an extra spatial coordinate could appear in `complex_flux` and `ImpedanceCalculator` results.
+- Fixed normal for `Box` shape gradient computation to always point outward from boundary which is needed for correct PEC handling.
+- Fixed `Box` gradients within `GeometryGroup` where the group intersection boundaries were forwarded.
+- Fixed `Box` gradients to use automatic permittivity detection for inside/outside permittivity.
+- Improved degenerate mode handling in the mode solver to ensure modes respect the bi-orthogonality condition.
 
 ### Removed
 - Removed deprecated `use_complex_fields` parameter from `TwoPhotonAbsorption` and `KerrNonlinearity`. Parameters `beta` and `n2` are now real-valued only, as is `n0` if specified.
-
-## [2.10.0rc2] - 2025-10-01
-
-### Added
-- New `MediumMonitor` that returns both permittivity and permeability profiles.
-- Task names are now optional when using `run(sim)` or `Job`. When running multiple jobs (via `run_async` or `Batch`), you can also provide simulations as a list without specifying task names. The previous dictionary-based format with explicit task names is still supported.
-- Enabled lazy loading of data via `web.load(..., lazy=True)`. When used, this returns a lightweight proxy object holding a reference to the data. On first access to any field or method, the proxy transparently loads the full object (same as with the default lazy=False).
-- A new type of doping box has been introduced, `CustomDoping` which accepts a `SpatialDataArray` to define doping concentration. Unlike in the case where a `SpatialDataArray`, custom doping defined with `CustomDoping` have additive behavior, i.e., one can add other doping on top. This deprecates the `SpatialDataArray` as direct input for `N_a` and `N_d`.
-- Non-isothermal Charge simulations are now available. One can now run this type of simulations by using the `SteadyChargeDCAnalysis` as the `analysis_spec` of a `HeatChargeSimulation`. This type of simulations couple the heat equation with the drift-diffusion equations which allow to account for self heating behavior.
-- Because non-isothermal Charge simulations are now supported, new models for the effective density of states and bandgap energy have been introduced. These models are the following: `ConstantEffectiveDOS`, `IsotropicEffectiveDOS`, `MultiValleyEffectiveDOS`, `DualValleyEffectiveDOS`.
-- Added the Hurkx model for direct band-to-band tunneling `HurkxDirectBandToBandTunneling`.
-- Added Selberherr's model for impact ionization `SelberherrImpactIonization`.
-
-### Changed
-- `LayerRefinementSpec` defaults to assuming structures made of different materials are interior-disjoint for more efficient mesh generation.
-- Removal of the Adjoint plugin.
+- Removed the Adjoint plugin.
 - Deprecation of Python 3.9 support.
 
-### Fixed
-- Stricter validation for `bend_radius` in mode simulations, preventing the bend center from coinciding with the simulation boundary.
-- Prevent autograd adjoint simulations from reusing out-of-range `normalize_index` values by defaulting their normalization to the first adjoint source when needed.
-- Subtasks validation errors from `web.upload(ComponentModeler)` previously were not being propagated to users, and hung without response.
+### Breaking Changes
+- Native web and batch support of `ModalComponentModeler` and `TerminalComponentModeler` required changing these classes schemas considerably. 
+  - Equivalent behaviour is available using a different workflow.
+  - `folder_name`, `verbose`, `path_dir`, `batch_cached`, `verbose`, `callback_url` fields have been removed. They are accessible through the `tidy3d.web` interface.
+- Edge singularity correction at PEC and lossy metal edges defaults to `True`.
+- `angle_threshold` in `CornerFinderSpec` now defaults to `pi/4`.
+- `WavePort` has been refactored to use `MicrowaveModeSpec`. The fields `voltage_integral`, and `current_integral` have been removed. 
+- Impedance specifications are now defined in `MicrowaveModeSpec.impedance_specs`. Please see our [migration guide](https://docs.flexcompute.com/projects/tidy3d/en/v2.10.0/api/microwave/microwave_migration.html) for details on updating your code.
 
+### Planned Deprecation
+**Note: These changes only affect the microwave and smatrix plugins.**
+- Renamed path integral classes for improved consistency. Please see our [migration guide](https://docs.flexcompute.com/projects/tidy3d/en/v2.10.0/api/microwave/microwave_migration.html) for details on updating your code. Old class naming is aliased to the new classes for 2.10.
+  - `VoltageIntegralAxisAligned` → `AxisAlignedVoltageIntegral`
+  - `CurrentIntegralAxisAligned` → `AxisAlignedCurrentIntegral`
+  - `CustomPathIntegral2D` → `Custom2DPathIntegral`
+  - `CustomVoltageIntegral2D` → `Custom2DVoltageIntegral`
+  - `CustomCurrentIntegral2D` → `Custom2DCurrentIntegral`
+  - Path integral and impedance calculator classes have been refactored and moved from the microwave plugin into Tidy3D components. They are now publicly exported via the top-level package `__init__.py`.
 
-## [2.10.0rc1] - 2025-09-11
-
-### Added
-- Added rectangular and radial taper support to `RectangularAntennaArrayCalculator` for phased array amplitude weighting; refactored array factor calculation for improved clarity and performance. 
-- Selective simulation capabilities to `TerminalComponentModeler` via `run_only` and `element_mappings` fields, allowing users to run fewer simulations and extract only needed scattering matrix elements.
-- Added KLayout plugin, with DRC functionality for running design rule checks in `plugins.klayout.drc`. Supports running DRC on GDS files as well as `Geometry`, `Structure`, and `Simulation` objects.
-- Added "mil" and "in" (inch) units to `plot_length_units`.
-- Objective functions that involve running `tidy3d.plugins.smatrix.ComponentModeler` can be differentiated with autograd.
-- Access field decay values in `SimulationData` via `sim_data.field_decay` as `TimeDataArray`.
-- Added ability to set first-order absorbing boundary conditions on simulation domain boundaries using either `ABCBoundary` or `ModeABCBoundary` classes.
-- Added `frame` field to `ModeSource` (default: `None`) and `WavePort` (default: `PECFrame()`). Setting this to `PECFrame(length=...)` automatically places a thin PEC frame of specified length around the source/port. The automatically created frames can be inspected using `Simulation._finalized` property.
-- Added `InternalAbsorber` class for placing first-order absorbing boundary conditions on planes inside the simulation domain. Internal absorbers are automatically wrapped in a PEC frame with a backing PEC plate on the non-absorbing side.
-- Added `absorber` field (default: `True`) to `WavePort` for automatically placing an absorber behind the port.
-- Added `conjugated_dot_product` field in `ModeMonitor` (default: `True`) and `WavePort` (default: `False`) to allow selecting the conjugated or non-conjugated dot product for mode decomposition.
-- Support for gradients with respect to the `conductivity` of a `CustomMedium`.
-- Added `VerticalNaturalConvectionCoeffModel`, a model for heat transfer due to natural convection from a vertical plate. It can be used in `ConvectionBC` to compute the heat transfer coefficient from fluid properties, using standard Nusselt number correlations for both laminar and turbulent flow.
-- Added `BroadbandModeABCSpec` class for setting broadband absorbing boundary conditions that can absorb waveguide modes over a specified frequency range using a pole-residue pair model.
-- `Scene.plot_3d()` method to make 3D rendering of scene.
-- Added native web and batch support to run `ModalComponentModeler` and `TerminalComponentModeler` workflows.
-- Added `SimulationMap` and `SimulationDataMap` immutable dictionary-like containers for managing collections of simulations and results.
-- Added `TerminalComponentModelerData`, `ComponentModelerData`, `MicrowaveSMatrixData`, and introduced multiple DataArrays for modeler workflow data structures.
-- Added autograd support for dispersive material models: `Sellmeier`, `Drude`, `Lorentz`, `Debye` and their custom medium variants.
-- Added check and exception for NaN data in the adjoint pipeline to raise issue to user before adjoint source creation failure.
-- Added autograd support for `TerminalComponentModeler` and `ModalComponentModeler`.
-- Added `initialize_params_from_simulation` to `tidy3d.plugins.autograd.invdes` to initialize topology design regions from an underlying simulation geometry.
-- Added autograd support for sidewall angles in `td.Cylinder` and `td.PolySlab`.
-
-### Changed
-- Adaptive minimum spacing for `PolySlab` integration is now wavelength relative and a minimum discretization is set for computing gradients for cylinders.
-- The `TerminalComponentModeler` defaults to the pseudo wave definition of scattering parameters. The new field `s_param_def` can be used to switch between either pseudo or power wave definitions.
-- Restructured the smatrix plugin with backwards-incompatible changes for a more robust architecture. Notably, `ComponentModeler` has been renamed to `ModalComponentModeler` and internal web API methods have been removed. Please see our migration guide for details on updating your workflows.
-- Prevent small bandwidth sources from being created in `TerminalComponentModeler` when modeler frequencies are close together.
-- `Simulation.epsilon` now samples off-diagonal elements of fully tensorial permittivity at grid *boundaries*, to be consistent with the how these enter the FDTD simulation. This means that all off-diagonal components are now sampled at the same locations.
-- Propagate `verbose` to `start` function in web API.
-
-### Fixed
-- Bug in `TerminalComponentModeler.get_antenna_metrics_data` when port amplitudes are set to zero.
-- Added missing `solver_version` keyword argument to `run_async`.
-- Fixed `interpn` data array method to be compatible with extrapolation outside of data array coordinates.
-- Fixed `overlap_sort` to use the same value of the `conjugated_dot_product` field in `ModeMonitor`, and added the `conjugated_dot_product` field to `ModeSolver` and `ModeSimulation`.
 
 ## [2.9.3]
 
@@ -1918,10 +1906,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.10.0rc3...develop
-[2.10.0rc3]: https://github.com/flexcompute/tidy3d/compare/v2.10.0rc2...v2.10.0rc3
-[2.10.0rc2]: https://github.com/flexcompute/tidy3d/compare/v2.10.0rc1...v2.10.0rc2
-[2.10.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.9.3...v2.10.0rc1
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.10.0...develop
+[2.10.0]: https://github.com/flexcompute/tidy3d/compare/v2.9.3...v2.10.0
 [2.9.3]: https://github.com/flexcompute/tidy3d/compare/v2.9.2...v2.9.3
 [2.9.2]: https://github.com/flexcompute/tidy3d/compare/v2.9.1...v2.9.2
 [2.9.1]: https://github.com/flexcompute/tidy3d/compare/v2.9.0...v2.9.1
