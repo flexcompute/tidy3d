@@ -13,12 +13,12 @@ Core Workflow
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.api.webapi.run
-   tidy3d.web.api.webapi.upload
-   tidy3d.web.api.webapi.start
-   tidy3d.web.api.webapi.monitor
-   tidy3d.web.api.webapi.download
-   tidy3d.web.api.webapi.load
+   tidy3d.web.run
+   tidy3d.web.upload
+   tidy3d.web.start
+   tidy3d.web.monitor
+   tidy3d.web.download
+   tidy3d.web.load
    tidy3d.web.api.asynchronous.run_async
 
 Download Utilities
@@ -28,10 +28,10 @@ Download Utilities
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.api.webapi.download_json
-   tidy3d.web.api.webapi.download_hdf5
-   tidy3d.web.api.webapi.download_log
-   tidy3d.web.api.webapi.load_simulation
+   tidy3d.web.download_json
+   tidy3d.web.download_hdf5
+   tidy3d.web.download_log
+   tidy3d.web.load_simulation
 
 Task Information
 ~~~~~~~~~~~~~~~~
@@ -40,9 +40,9 @@ Task Information
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.api.webapi.get_info
-   tidy3d.web.api.webapi.get_run_info
-   tidy3d.web.api.webapi.get_tasks
+   tidy3d.web.get_info
+   tidy3d.web.get_run_info
+   tidy3d.web.get_tasks
 
 Cost Estimation
 ~~~~~~~~~~~~~~~
@@ -51,8 +51,8 @@ Cost Estimation
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.api.webapi.estimate_cost
-   tidy3d.web.api.webapi.real_cost
+   tidy3d.web.estimate_cost
+   tidy3d.web.real_cost
 
 Task Management
 ~~~~~~~~~~~~~~~
@@ -61,9 +61,9 @@ Task Management
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.api.webapi.delete
-   tidy3d.web.api.webapi.delete_old
-   tidy3d.web.api.webapi.abort
+   tidy3d.web.delete
+   tidy3d.web.delete_old
+   tidy3d.web.abort
 
 Account and System
 ~~~~~~~~~~~~~~~~~~
@@ -72,8 +72,8 @@ Account and System
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.api.webapi.account
-   tidy3d.web.api.webapi.test
+   tidy3d.web.account
+   tidy3d.web.test
 
 Job and Batch Containers
 -------------------------
@@ -82,9 +82,9 @@ Job and Batch Containers
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.api.container.Job
-   tidy3d.web.api.container.Batch
-   tidy3d.web.api.container.BatchData
+   tidy3d.web.Job
+   tidy3d.web.Batch
+   tidy3d.web.BatchData
 
 Information Containers
 ----------------------

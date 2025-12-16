@@ -31,11 +31,15 @@ MODE_DATA_KEYS = Literal[
 class ModeSortSpec(Tidy3dBaseModel):
     """Specification for filtering and sorting modes within each frequency.
 
-    First, an optional filtering step splits the modes into two groups based on a threshold
-    applied to ``filter_key``: modes "over" or "under" ``filter_reference`` are placed first,
-    with the remaining modes placed next. Second, an optional sorting step orders modes within
-    each group according to ``sort_key``, optionally with respect to ``sort_reference`` and in
-    the specified ``sort_order``.
+    Notes
+    -----
+
+        First, an optional filtering step splits the modes into two groups based on a threshold
+        applied to ``filter_key``: modes "over" or "under" ``filter_reference`` are placed first,
+        with the remaining modes placed next. Second, an optional sorting step orders modes within
+        each group according to ``sort_key``, optionally with respect to ``sort_reference`` and in
+        the specified ``sort_order``.
+
     """
 
     # Filtering stage
@@ -225,13 +229,14 @@ class CustomSampling(FrequencySamplingSpec):
 class ModeInterpSpec(Tidy3dBaseModel):
     """Specification for mode frequency interpolation.
 
-    Allows computing modes at a reduced set of frequencies and interpolating
-    to obtain results at all requested frequencies. This can significantly
-    reduce computational cost for broadband simulations where modes vary
-    smoothly with frequency.
+    Notes
+    -----
 
-    Note
-    ----
+        Allows computing modes at a reduced set of frequencies and interpolating
+        to obtain results at all requested frequencies. This can significantly
+        reduce computational cost for broadband simulations where modes vary
+        smoothly with frequency.
+
         Requires frequency tracking to be enabled (``mode_spec.sort_spec.track_freq``
         must not be ``None``) to ensure mode ordering is consistent across frequencies.
 

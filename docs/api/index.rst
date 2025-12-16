@@ -23,6 +23,7 @@ API |:computer:|
     heat/index
     charge/index
     eme/index
+    mode/index
     microwave/index
     plugins/index
     spice

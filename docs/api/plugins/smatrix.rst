@@ -1,7 +1,7 @@
 .. currentmodule:: tidy3d
 
 S-Matrix Component Modelers Plugin
-----------------------------------
+==================================
 
 This plugin provides component modelers for computing S-parameters (scattering parameters) for both **photonics** and **RF/microwave** applications. The plugin supports:
 
