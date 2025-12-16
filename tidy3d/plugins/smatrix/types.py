@@ -11,6 +11,10 @@ Element = tuple[MatrixIndex, MatrixIndex]  # the 'ij' in S_ij
 NetworkIndex = str  # the 'i' in S_ij
 NetworkElement = tuple[NetworkIndex, NetworkIndex]  # the 'ij' in S_ij
 
-# The definition of wave amplitudes used to construct the scattering matrix
-# in the TerminalComponentModeler
-SParamDef = Literal["pseudo", "power"]
+# The wave definition used to construct the scattering matrix in the TerminalComponentModeler.
+# See the TerminalComponentModeler and TerminalComponentModelerData docstrings for details.
+SParamDef = Literal[
+    "pseudo",
+    "power",
+    "symmetric_pseudo",
+]

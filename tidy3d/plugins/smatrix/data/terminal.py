@@ -52,7 +52,7 @@ class MicrowaveSMatrixData(MicrowaveBaseModel):
     s_param_def: SParamDef = pd.Field(
         "pseudo",
         title="Scattering Parameter Definition",
-        description="Whether scattering parameters are defined using the 'pseudo' or 'power' wave definitions.",
+        description="Wave definition: 'pseudo', 'power', or 'symmetric_pseudo'.",
     )
 
 
@@ -68,6 +68,25 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
     with the original simulation definition, and port simulation data, and the solver log.
 
 
+    **S-Parameter Definitions**
+
+    The ``s_param_def`` parameter controls which wave definition is used to compute scattering
+    parameters. Three definitions are supported:
+
+    - ``"pseudo"`` (default): Pseudo-waves as defined by Marks and Williams [1]. Uses scaling
+      factor :math:`F = \\sqrt{\\text{Re}(Z)} / (2|Z|)`. Wave amplitudes are :math:`a = F(V + ZI)`
+      and :math:`b = F(V - ZI)`.
+
+    - ``"power"``: Power waves as defined by Kurokawa [3] and described in Pozar [2]. Uses
+      scaling factor :math:`F = 1 / (2\\sqrt{\\text{Re}(Z)})`. Wave amplitudes are
+      :math:`a = F(V + ZI)` and :math:`b = F(V - Z^*I)` where :math:`Z^*` is the complex
+      conjugate. Ensures :math:`|a|^2 - |b|^2` represents actual power flow.
+
+    - ``"symmetric_pseudo"``: Equivalent to pseudo-waves except for the scaling factor. Uses
+      :math:`F = 1 / (2\\sqrt{Z})` where the square root is complex. This choice of scaling
+      factor ensures the S-matrix will be symmetric when the simulated device is reciprocal.
+
+
     **References**
 
     .. [1]  R. B. Marks and D. F. Williams, "A general waveguide circuit theory,"
@@ -75,6 +94,9 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
 
     .. [2]  D. M. Pozar, Microwave Engineering, 4th ed. Hoboken, NJ, USA:
             John Wiley & Sons, 2012.
+
+    .. [3]  K. Kurokawa, "Power Waves and the Scattering Matrix," IEEE Trans.
+            Microwave Theory Tech., vol. 13, no. 2, pp. 194-202, March 1965.
     """
 
     modeler: TerminalComponentModeler = pd.Field(
@@ -97,9 +119,9 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
             does not produce incident waves at other ports. This simplifies the
             S-matrix calculation and is required if not all ports are excited. If not
             provided, ``modeler.assume_ideal_excitation`` is used.
-        s_param_def: The definition of S-parameters to use, determining whether
-            "pseudo waves" or "power waves" are calculated. If not provided,
-            ``modeler.s_param_def`` is used.
+        s_param_def: Wave definition: "pseudo", "power", or "symmetric_pseudo".
+            If not provided, ``modeler.s_param_def`` is used.
+            See :class:`.TerminalComponentModeler` for details.
 
         Returns
         -------
@@ -348,8 +370,8 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
             Reference impedance at each port. If not provided, it is computed from the cached
             property :meth:`.port_reference_impedances`. Defaults to ``None``.
         s_param_def : SParamDef
-            The type of waves computed, either pseudo waves defined by Equation 53 and Equation 54 in [1],
-            or power waves defined by Equation 4.67 in [2].
+            Wave definition: "pseudo", "power", or "symmetric_pseudo".
+            See :class:`.TerminalComponentModeler` for details.
 
         Returns
         -------
@@ -425,9 +447,8 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
             S-matrix calculation and is required if not all ports are excited. If not
             provided, ``modeler.assume_ideal_excitation`` is used.
         s_param_def : SParamDef, optional
-            The definition of the scattering parameters used in the S-matrix calculation.
-            This can be either "pseudo" for pseudo waves (see [1]) or "power" for power
-            waves (see [2]). Defaults to "pseudo".
+            Wave definition: "pseudo", "power", or "symmetric_pseudo". Default is "pseudo".
+            See :class:`.TerminalComponentModeler` for details.
 
         Returns
         -------
@@ -512,8 +533,8 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         Parameters
         ----------
         s_param_def : SParamDef, optional
-            The type of waves to compute, either "pseudo" waves (Equation 53-54 in [1]) or
-            "power" waves (Equation 4.67 in [2]). Defaults to "pseudo".
+            Wave definition: "pseudo", "power", or "symmetric_pseudo". Default is "pseudo".
+            See :class:`.TerminalComponentModeler` for details.
 
         Returns
         -------
@@ -576,6 +597,25 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
             the power-wave amplitudes at each output port due to excitation at each input port.
         """
         return self.compute_port_wave_amplitude_matrices(s_param_def="power")
+
+    @cached_property
+    def port_symmetric_pseudo_wave_matrices(
+        self,
+    ) -> tuple[TerminalPortDataArray, TerminalPortDataArray]:
+        """Compute symmetric-pseudo wave amplitude matrices for all port combinations.
+
+        This method returns the incident (a) and reflected (b) symmetric-pseudo wave amplitude
+        matrices. These are equivalent to pseudo-waves except for the scaling factor, which
+        ensures the S-matrix will be symmetric when the simulated device is reciprocal.
+
+        Returns
+        -------
+        tuple[:class:`.TerminalPortDataArray`, :class:`.TerminalPortDataArray`]
+            A tuple containing the incident (a) and reflected (b) symmetric-pseudo wave
+            amplitude matrices. Each matrix has dimensions (f, port_out, port_in) representing
+            the wave amplitudes at each output port due to excitation at each input port.
+        """
+        return self.compute_port_wave_amplitude_matrices(s_param_def="symmetric_pseudo")
 
     # Mirror Utils
     # So they can be reused elsewhere without a class reimport
