@@ -9,6 +9,7 @@ import pydantic.v1 as pd
 import pytest
 
 import tidy3d as td
+import tidy3d.components.scene as scene_mod
 from tidy3d.components.scene import MAX_NUM_MEDIUMS
 from tidy3d.components.viz import STRUCTURE_EPS_CMAP, STRUCTURE_EPS_CMAP_R
 from tidy3d.exceptions import SetupError
@@ -198,6 +199,45 @@ def test_structure_eps_color_mapping():
     )
     expected_max_reverse = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP_R)(norm(5.0))
     assert np.allclose(pp_max_reverse.facecolor, expected_max_reverse)
+
+
+@pytest.mark.parametrize(
+    "medium, eps_min, eps_max, reverse, expected",
+    [
+        pytest.param(
+            td.Medium(permittivity=1.0), 1.0, 5.0, False, (1.0, 1.0, 1.0, 1.0), id="min-forward"
+        ),
+        pytest.param(
+            td.Medium(permittivity=5.0), 1.0, 5.0, False, (0.0, 0.0, 0.0, 1.0), id="max-forward"
+        ),
+        pytest.param(
+            td.Medium(permittivity=1.0), 1.0, 5.0, True, (0.0, 0.0, 0.0, 1.0), id="min-reverse"
+        ),
+        pytest.param(
+            td.Medium(permittivity=5.0), 1.0, 5.0, True, (1.0, 1.0, 1.0, 1.0), id="max-reverse"
+        ),
+        pytest.param(
+            td.Medium(permittivity=2.0), 2.0, 2.0, False, (0.5, 0.5, 0.5, 1.0), id="equal-forward"
+        ),
+        pytest.param(
+            td.Medium(permittivity=2.0), 2.0, 2.0, True, (0.5, 0.5, 0.5, 1.0), id="equal-reverse"
+        ),
+    ],
+)
+def test_structure_eps_color_mapping_no_matplotlib(
+    monkeypatch, medium, eps_min, eps_max, reverse, expected
+):
+    monkeypatch.setattr(scene_mod, "mpl", None)
+
+    params = SCENE_FULL._get_structure_eps_plot_params(
+        medium=medium,
+        freq=1,
+        eps_min=eps_min,
+        eps_max=eps_max,
+        reverse=reverse,
+    )
+
+    assert np.allclose(params.facecolor, expected)
 
 
 def test_num_mediums():
