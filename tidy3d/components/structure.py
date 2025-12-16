@@ -424,6 +424,7 @@ class Structure(AbstractStructure):
         frequency: pydantic.PositiveFloat = 0,
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
+        pixel_exact: bool = False,
     ) -> None:
         """Convert a structure's planar slice to a .gds type polygon.
 
@@ -435,15 +436,16 @@ class Structure(AbstractStructure):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        permittivity_threshold : float = 1.1
-            Permitivitty value used to define the shape boundaries for structures with custom
-            medim
+        permittivity_threshold : float = 1
+            Permitivitty value used to define the shape boundaries for structures with custom medium
         frequency : float = 0
             Frequency for permittivity evaluaiton in case of custom medium (Hz).
         gds_layer : int = 0
             Layer index to use for the shapes stored in the .gds file.
         gds_dtype : int = 0
             Data-type index to use for the shapes stored in the .gds file.
+        pixel_exact : bool = False
+            If true export gds as pixel exact rectangles instead of gdstk contour if a custom medium is provided.
 
         Return
         ------
@@ -457,27 +459,72 @@ class Structure(AbstractStructure):
             axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
             bb_min, bb_max = self.geometry.bounds
 
-            # Set the contour scale to be the minimal cooridante step size w.r.t. the 3 main axes,
-            # skipping those with a single coordniate. In case all axes have only a single coordinate,
-            # use the largest bounding box dimension.
             eps, _, _ = self.medium.eps_dataarray_freq(frequency=frequency)
-            scale = max(b - a for a, b in zip(bb_min, bb_max))
-            for coord in (eps.x, eps.y, eps.z):
-                if len(coord) > 1:
-                    scale = min(scale, np.diff(coord).min())
+            if pixel_exact:
+                coords = Coords(
+                    x=eps.x if x is None else x,
+                    y=eps.y if y is None else y,
+                    z=eps.z if z is None else z,
+                )
+            else:
+                # Set the contour scale to be the minimal cooridante step size w.r.t. the 3 main axes,
+                # skipping those with a single coordniate. In case all axes have only a single coordinate,
+                # use the largest bounding box dimension.
+                scale = max(b - a for a, b in zip(bb_min, bb_max))
+                for coord in (eps.x, eps.y, eps.z):
+                    if len(coord) > 1:
+                        scale = min(scale, np.diff(coord).min())
+                coords = Coords(
+                    x=np.arange(bb_min[0], bb_max[0] + scale * 0.9, scale) if x is None else x,
+                    y=np.arange(bb_min[1], bb_max[1] + scale * 0.9, scale) if y is None else y,
+                    z=np.arange(bb_min[2], bb_max[2] + scale * 0.9, scale) if z is None else z,
+                )
 
-            coords = Coords(
-                x=np.arange(bb_min[0], bb_max[0] + scale * 0.9, scale) if x is None else x,
-                y=np.arange(bb_min[1], bb_max[1] + scale * 0.9, scale) if y is None else y,
-                z=np.arange(bb_min[2], bb_max[2] + scale * 0.9, scale) if z is None else z,
-            )
             eps = self.medium.eps_diagonal_on_grid(frequency=frequency, coords=coords)
-            eps = np.stack((eps[0].real, eps[1].real, eps[2].real), axis=3).max(axis=3).squeeze()
-            contours = gdstk.contour(eps.T, permittivity_threshold, scale, precision=scale * 1e-3)
+            eps = (
+                np.stack((eps[0].real, eps[1].real, eps[2].real), axis=3)
+                .max(axis=3)
+                .squeeze(axis=axis)
+            )
 
-            _, (dx, dy) = self.geometry.pop_axis(bb_min, axis)
-            for polygon in contours:
-                polygon.translate(dx, dy)
+            if pixel_exact:
+                # Convert coordinates to numpy arrays for efficient processing
+                _, (w, h) = self.geometry.pop_axis((coords.x, coords.y, coords.z), axis)
+                w, h = np.asarray(w), np.asarray(h)
+                _, (wmin, hmin) = self.geometry.pop_axis(bb_min, axis)
+                _, (wmax, hmax) = self.geometry.pop_axis(bb_max, axis)
+
+                # Determine boundaries by taking the midpoint between adjacent coordinates
+                if w.size > 1:
+                    dw = np.diff(w) * 0.5
+                    wb = np.concatenate(([wmin], w[:-1] + dw, [wmax]))
+                else:
+                    wb = np.array([wmin, wmax])
+
+                if h.size > 1:
+                    dh = np.diff(h) * 0.5
+                    hb = np.concatenate(([hmin], h[:-1] + dh, [hmax]))
+                else:
+                    hb = np.array([hmin, hmax])
+
+                # Create boolean mask where permittivity exceeds threshold
+                mask = eps > permittivity_threshold
+                w_idxs, h_idxs = np.where(mask)
+
+                # Generate list of gdstk.Polygon (rectangles)
+                contours = [
+                    gdstk.rectangle((wb[wi], hb[hi]), (wb[wi + 1], hb[hi + 1]))
+                    for wi, hi in zip(w_idxs, h_idxs)
+                ]
+
+            else:
+                contours = gdstk.contour(
+                    eps.T, permittivity_threshold, scale, precision=scale * 1e-3
+                )
+
+                _, (dx, dy) = self.geometry.pop_axis(bb_min, axis)
+                for polygon in contours:
+                    polygon.translate(dx, dy)
 
             polygons = gdstk.boolean(polygons, contours, "and", layer=gds_layer, datatype=gds_dtype)
 
@@ -493,6 +540,7 @@ class Structure(AbstractStructure):
         frequency: pydantic.PositiveFloat = 0,
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
+        pixel_exact: bool = False,
     ) -> None:
         """Append a structure's planar slice to a .gds cell.
 
@@ -515,6 +563,8 @@ class Structure(AbstractStructure):
             Layer index to use for the shapes stored in the .gds file.
         gds_dtype : int = 0
             Data-type index to use for the shapes stored in the .gds file.
+        pixel_exact : bool = False
+            If true export gds as pixel exact rectangles instead of gdstk contour if a custom medium is provided.
         """
         if not isinstance(cell, gdstk.Cell):
             if "gdstk" in cell.__class__.__name__.lower() and not gdstk_available:
@@ -531,6 +581,7 @@ class Structure(AbstractStructure):
             frequency=frequency,
             gds_layer=gds_layer,
             gds_dtype=gds_dtype,
+            pixel_exact=pixel_exact,
         )
         if polygons:
             cell.add(*polygons)
@@ -546,6 +597,7 @@ class Structure(AbstractStructure):
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
         gds_cell_name: str = "MAIN",
+        pixel_exact: bool = False,
     ) -> None:
         """Export a structure's planar slice to a .gds file.
 
@@ -570,6 +622,8 @@ class Structure(AbstractStructure):
             Data-type index to use for the shapes stored in the .gds file.
         gds_cell_name : str = 'MAIN'
             Name of the cell created in the .gds file to store the geometry.
+        pixel_exact : bool = False
+            If true export gds as pixel exact rectangles instead of gdstk contour if a custom medium is provided.
         """
         try:
             import gdstk
@@ -590,6 +644,7 @@ class Structure(AbstractStructure):
             frequency=frequency,
             gds_layer=gds_layer,
             gds_dtype=gds_dtype,
+            pixel_exact=pixel_exact,
         )
         fname = pathlib.Path(fname)
         fname.parent.mkdir(parents=True, exist_ok=True)
