@@ -11,7 +11,7 @@ try:
     import matplotlib.pylab as plt
     from mpl_toolkits.axes_grid1 import make_axes_locatable
 except ImportError:
-    pass
+    mpl = None
 import pydantic.v1 as pd
 
 from tidy3d.components.material.tcad.charge import (
@@ -1446,14 +1446,24 @@ class Scene(Tidy3dBaseModel):
             plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
         else:
             eps_medium = medium._eps_plot(frequency=freq, eps_component=eps_component)
-            active_norm = (
-                norm if norm is not None else mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
-            )
-            color_value = float(active_norm(eps_medium))
+            if norm is not None:
+                color_value = float(norm(eps_medium))
+            elif mpl is not None:
+                active_norm = mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
+                color_value = float(active_norm(eps_medium))
+            else:
+                if eps_max == eps_min:
+                    color_value = 0.5
+                else:
+                    color_value = (eps_medium - eps_min) / (eps_max - eps_min)
             color_value = min(1.0, max(0.0, color_value))
-            cmap_name = _get_colormap(reverse=reverse)
-            cmap = mpl.cm.get_cmap(cmap_name)
-            rgba = tuple(float(component) for component in cmap(color_value))
+            if mpl is not None:
+                cmap_name = _get_colormap(reverse=reverse)
+                cmap = mpl.cm.get_cmap(cmap_name)
+                rgba = tuple(float(component) for component in cmap(color_value))
+            else:
+                gray_value = color_value if reverse else 1.0 - color_value
+                rgba = (gray_value, gray_value, gray_value, 1.0)
             plot_params = plot_params.copy(update={"facecolor": rgba})
 
         return plot_params
