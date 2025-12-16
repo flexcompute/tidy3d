@@ -18345,7 +18345,8 @@
       "default": "pseudo",
       "enum": [
         "power",
-        "pseudo"
+        "pseudo",
+        "symmetric_pseudo"
       ],
       "type": "string"
     },

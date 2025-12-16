@@ -107,22 +107,19 @@ def check_port_impedance_sign(Z_numpy: np.ndarray) -> None:
 
 def compute_F(Z_numpy: ArrayFloat1D, s_param_def: SParamDef = "pseudo"):
     r"""Helper to convert port impedance matrix to F, which is used for
-    computing scattering parameters
+    computing scattering parameters and represents the scaling factor
+    applied to forward and backward waves.
 
     The matrix F is used when converting between S and Z parameters for circuits
-    with differing port impedances. Its diagonal elements are defined as
-
-    .. math::
-
-        F_{kk} = 1 / (2 * \sqrt{Re(Z_k)})
-
+    with differing port impedances.
 
     Parameters
     ----------
     Z_numpy : ArrayFloat1D
         NumPy array of complex port impedances.
     s_param_def : SParamDef, optional
-        The type of wave amplitudes, by default "pseudo".
+        Wave definition: "pseudo", "power", or "symmetric_pseudo". Default is "pseudo".
+        See :class:`.TerminalComponentModeler` for details.
 
     Returns
     -------
@@ -132,8 +129,16 @@ def compute_F(Z_numpy: ArrayFloat1D, s_param_def: SParamDef = "pseudo"):
     # Defined in [2] after equation 4.67
     if s_param_def == "power":
         return 1.0 / (2.0 * np.sqrt(np.real(Z_numpy)))
-    # Equation 75 from [1]
-    return np.sqrt(np.real(Z_numpy)) / (2.0 * np.abs(Z_numpy))
+    elif s_param_def == "pseudo":
+        # Equation 75 from [1]
+        return np.sqrt(np.real(Z_numpy)) / (2.0 * np.abs(Z_numpy))
+    elif s_param_def == "symmetric_pseudo":
+        return 1.0 / (2.0 * np.sqrt(Z_numpy))
+    else:
+        raise ValueError(
+            f"Unsupported S-parameter definition '{s_param_def}'. "
+            "Supported values are 'pseudo', 'symmetric_pseudo', and 'power'."
+        )
 
 
 def compute_port_VI(
@@ -231,9 +236,8 @@ def s_to_z(
     reference : Union[complex, :class:`.PortDataArray`]
         The reference impedance used at each port.
     s_param_def : SParamDef, optional
-        The type of wave amplitudes used for computing the scattering matrix, either pseudo waves
-        defined by Equation 53 and Equation 54 in [1] or power waves defined by Equation 4.67 in [2].
-        By default "pseudo".
+        Wave definition: "pseudo", "power", or "symmetric_pseudo". Default is "pseudo".
+        See :class:`.TerminalComponentModeler` for details.
 
     Returns
     -------
@@ -269,7 +273,7 @@ def s_to_z(
     # Use conjugate when S matrix is power-wave based
     if s_param_def == "power":
         Zport_mod = np.conj(Zport)
-    else:
+    else:  # both pseudo and symmetric pseudo use this
         Zport_mod = Zport
 
     # From equation 74 from [1] for pseudo waves

@@ -58,8 +58,8 @@ def terminal_construct_smatrix(
         waves at other ports. This simplifies the S-matrix calculation and is
         required if not all ports are excited. Default is ``False``.
     s_param_def : SParamDef, optional
-        The definition of S-parameters to use depends whether "pseudo waves"
-        or "power waves" are calculated. Default is "pseudo".
+        Wave definition: "pseudo", "power", or "symmetric_pseudo". Default is "pseudo".
+        See :class:`.TerminalComponentModeler` for details.
 
     Returns
     -------
@@ -73,8 +73,15 @@ def terminal_construct_smatrix(
 
     if s_param_def == "pseudo":
         a_matrix, b_matrix = modeler_data.port_pseudo_wave_matrices
-    else:
+    elif s_param_def == "symmetric_pseudo":
+        a_matrix, b_matrix = modeler_data.port_symmetric_pseudo_wave_matrices
+    elif s_param_def == "power":
         a_matrix, b_matrix = modeler_data.port_power_wave_matrices
+    else:
+        raise ValueError(
+            f"Unsupported S-parameter definition '{s_param_def}'. "
+            "Supported values are 'pseudo', 'symmetric_pseudo', and 'power'."
+        )
 
     # If excitation is assumed ideal, a_matrix is assumed to be diagonal
     # and the explicit inverse can be avoided. When only a subset of excitations
@@ -225,10 +232,6 @@ def _compute_wave_amplitudes_from_VI(
     specified wave definition. The conversion handles impedance sign consistency and
     applies the appropriate normalization based on the chosen S-parameter definition.
 
-    The wave amplitudes are computed using:
-    - Pseudo waves: Equations 53-54 from Marks and Williams [1]
-    - Power waves: Equation 4.67 from Pozar [2]
-
     Parameters
     ----------
     port_reference_impedances : :class:`.PortDataArray`
@@ -238,8 +241,8 @@ def _compute_wave_amplitudes_from_VI(
     port_currents : :class:`.PortDataArray`
         Current values at each port with dimensions (f, port).
     s_param_def : SParamDef, optional
-        Wave definition type: "pseudo" for pseudo waves or "power" for power waves.
-        Defaults to "pseudo".
+        Wave definition: "pseudo", "power", or "symmetric_pseudo". Default is "pseudo".
+        See :class:`.TerminalComponentModeler` for details.
 
     Returns
     -------
@@ -295,8 +298,8 @@ def compute_wave_amplitudes_at_each_port(
     sim_data : :class:`.SimulationData`
         Results from a single simulation run.
     s_param_def : SParamDef
-        The type of waves computed, either pseudo waves defined by Equation 53 and
-        Equation 54 in [1], or power waves defined by Equation 4.67 in [2].
+        Wave definition: "pseudo", "power", or "symmetric_pseudo".
+        See :class:`.TerminalComponentModeler` for details.
 
     Returns
     -------

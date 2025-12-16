@@ -121,7 +121,7 @@ def make_t_network_impedance_matrix(
     return np.array([[z11, z12], [z21, z22]])
 
 
-def calc_transmission_line_S_matrix_pseudo(Z0, Zref1, Zref2, gamma, length):
+def calc_transmission_line_S_matrix_pseudo(Z0, Zref1, Zref2, gamma, length, symmetric=False):
     """
     Calculate complete 2x2 S-parameter matrix for a transmission line
     using pseudo wave definition
@@ -141,6 +141,9 @@ def calc_transmission_line_S_matrix_pseudo(Z0, Zref1, Zref2, gamma, length):
         Propagation constant (can be frequency-dependent)
     length : float
         Length (scalar only)
+    symmetric : bool, optional
+        If True, use symmetric_pseudo scaling (F = 1/(2*sqrt(Z))) which ensures
+        S12 = S21 for reciprocal networks. Default is False.
 
     Returns:
     --------
@@ -163,17 +166,31 @@ def calc_transmission_line_S_matrix_pseudo(Z0, Zref1, Zref2, gamma, length):
     numerator_S22 = (Z0**2 - Zref1 * Zref2) * tanh_gamma_ell + Z0 * (Zref1 - Zref2)
     S22 = numerator_S22 / denom
 
-    # Calculate S21 (transmission from port 1 to port 2)
-    numerator_S21 = (
-        np.sqrt(np.real(Zref1) / np.real(Zref2)) * (np.abs(Zref2) / np.abs(Zref1)) * 2 * Z0 * Zref1
-    )
-    S21 = numerator_S21 / (denom * cosh_gamma_ell)
+    # Calculate S12 and S21 (off-diagonal transmission terms)
+    if symmetric:
+        # For symmetric_pseudo: F = 1/(2*sqrt(Z)), so F1/F2 = sqrt(Z2/Z1)
+        # This gives S12 = S21 for reciprocal networks
+        numerator_S12 = 2 * Z0 * np.sqrt(Zref1 * Zref2)
+        numerator_S21 = numerator_S12
+    else:
+        # For pseudo: F = sqrt(Re(Z))/(2|Z|)
+        numerator_S12 = (
+            np.sqrt(np.real(Zref1) / np.real(Zref2))
+            * (np.abs(Zref2) / np.abs(Zref1))
+            * 2
+            * Z0
+            * Zref1
+        )
+        numerator_S21 = (
+            np.sqrt(np.real(Zref2) / np.real(Zref1))
+            * (np.abs(Zref1) / np.abs(Zref2))
+            * 2
+            * Z0
+            * Zref2
+        )
 
-    # Calculate S12 (transmission from port 2 to port 1)
-    numerator_S12 = (
-        np.sqrt(np.real(Zref2) / np.real(Zref1)) * (np.abs(Zref1) / np.abs(Zref2)) * 2 * Z0 * Zref2
-    )
     S12 = numerator_S12 / (denom * cosh_gamma_ell)
+    S21 = numerator_S21 / (denom * cosh_gamma_ell)
 
     # Construct the S-parameter matrix (nfreq, 2, 2)
     nfreq = len(np.atleast_1d(S11))
@@ -434,6 +451,7 @@ def test_complex_reference_s_to_z_component_modeler():
     skrf_S_50ohm = skrf.Network.from_z(z=Z, f=freqs)
     skrf_S_power = skrf.Network.from_z(z=Z, f=freqs, s_def="power", z0=z0)
     skrf_S_pseudo = skrf.Network.from_z(z=Z, f=freqs, s_def="pseudo", z0=z0)
+    skrf_S_traveling = skrf.Network.from_z(z=Z, f=freqs, s_def="traveling", z0=z0)
 
     ports = ["port1", "port2"]
     smatrix = TerminalPortDataArray(
@@ -454,6 +472,14 @@ def test_complex_reference_s_to_z_component_modeler():
     smatrix.values = skrf_S_pseudo.s
     z_tidy3d = s_to_z(smatrix, reference=z0_tidy3d, s_param_def="pseudo")
     assert np.all(np.isclose(z_tidy3d.values, Z))
+    # Our symmetric_pseudo name is equivalent to "traveling" definition in scikit-rf
+    smatrix.values = skrf_S_traveling.s
+    z_tidy3d = s_to_z(smatrix, reference=z0_tidy3d, s_param_def="symmetric_pseudo")
+    assert np.all(np.isclose(z_tidy3d.values, Z))
+
+    # Check that invalid s_param_def raises ValueError
+    with pytest.raises(ValueError, match="Unsupported S-parameter definition"):
+        s_to_z(smatrix, reference=z0_tidy3d, s_param_def="invalid")
 
 
 def test_data_s_to_z(monkeypatch):
@@ -1451,23 +1477,41 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     )
     Z0 = np.array(
         [
+            12.843105732941 + 15.394208173652j,
+            28.567192048123 + 9.1023847562915j,
+            31.209457618234 + 3.8475102934671j,
+        ]
+    )
+    Z01 = np.array(
+        [
             18.725191534567 + 12.672421364213j,
             34.038884625562 + 7.8654410284980j,
             35.725175635077 + 4.5490999181327j,
         ]
     )
+    Z02 = np.array(
+        [
+            24.156839210485 + 10.234195827361j,
+            41.892301567293 + 6.7812039451120j,
+            29.451276384019 + 5.1298475620183j,
+        ]
+    )
     # Break the reference impedance symmetry
-    Zref = np.column_stack((0.5 * Z0, 2 * Z0))
+    Zref = np.column_stack((Z01, Z02))
     # Calculate analytical S matrices for power and pseudo wave formulations
     S_pseudo = calc_transmission_line_S_matrix_pseudo(Z0, Zref[:, 0], Zref[:, 1], gamma, length)
+    S_symmetric_pseudo = calc_transmission_line_S_matrix_pseudo(
+        Z0, Zref[:, 0], Zref[:, 1], gamma, length, symmetric=True
+    )
     S_power = calc_transmission_line_S_matrix_power(Z0, Zref[:, 0], Zref[:, 1], gamma, length)
-
+    Zref3 = Zref[:, :, np.newaxis]
     # Calculate A and B matrices where A is diagonal and B = S @ A
+
     A = np.tile(np.eye(2), (len(freqs), 1, 1))  # Identity matrix for each frequency
     B = S_pseudo @ A
     # Now get Voltages and Currents at each port due to excitations from each port
-    Vscale = np.abs(Zref[:, :, np.newaxis]) / np.sqrt(np.real(Zref[:, :, np.newaxis]))
-    Iscale = Vscale / Zref[:, :, np.newaxis]
+    Vscale = np.abs(Zref3) / np.sqrt(np.real(Zref3))
+    Iscale = Vscale / Zref3
     voltages = Vscale * (A + B)  # (f x port_out x port_in)
     currents = Iscale * (A - B)  # (f x port_out x port_in)
 
@@ -1520,7 +1564,6 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     )
 
     # Test the _internal_construct_smatrix method
-    S_computed = modeler_data.smatrix().data.values
 
     def check_S_matrix(S_computed, S_expected, tol=1e-12):
         # Check that S-matrix has correct shape
@@ -1542,11 +1585,20 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
             )
 
     # Check pseudo wave S matrix
+    S_computed = modeler_data.smatrix().data.values
     check_S_matrix(S_computed, S_pseudo)
 
     # Check power wave S matrix
     S_computed = modeler_data.smatrix(s_param_def="power").data.values
     check_S_matrix(S_computed, S_power)
+
+    # Check symmetric_pseudo wave S matrix
+    S_computed = modeler_data.smatrix(s_param_def="symmetric_pseudo").data.values
+    check_S_matrix(S_computed, S_symmetric_pseudo)
+
+    # Check that invalid s_param_def raises ValueError
+    with pytest.raises(ValueError, match="Unsupported S-parameter definition"):
+        modeler_data.smatrix(s_param_def="invalid")
 
 
 def test_wave_port_to_absorber(tmp_path):

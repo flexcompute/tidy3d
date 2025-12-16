@@ -141,6 +141,25 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     Notes
     -----
 
+    **S-Parameter Definitions**
+
+    The ``s_param_def`` parameter controls which wave definition is used to compute scattering
+    parameters. Three definitions are supported:
+
+    - ``"pseudo"`` (default): Pseudo-waves as defined by Marks and Williams [1]. Uses scaling
+      factor :math:`F = \\sqrt{\\text{Re}(Z)} / (2|Z|)`. Wave amplitudes are :math:`a = F(V + ZI)`
+      and :math:`b = F(V - ZI)`.
+
+    - ``"power"``: Power waves as defined by Kurokawa [3] and described in Pozar [2]. Uses
+      scaling factor :math:`F = 1 / (2\\sqrt{\\text{Re}(Z)})`. Wave amplitudes are
+      :math:`a = F(V + ZI)` and :math:`b = F(V - Z^*I)` where :math:`Z^*` is the complex
+      conjugate. Ensures :math:`|a|^2 - |b|^2` represents actual power flow.
+
+    - ``"symmetric_pseudo"``: Equivalent to pseudo-waves except for the scaling factor. Uses
+      :math:`F = 1 / (2\\sqrt{Z})` where the square root is complex. This choice of scaling
+      factor ensures the S-matrix will be symmetric when the simulated device is reciprocal.
+
+
     **References**
 
     .. [1]  R. B. Marks and D. F. Williams, "A general waveguide circuit theory,"
@@ -148,6 +167,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     .. [2]  D. M. Pozar, Microwave Engineering, 4th ed. Hoboken, NJ, USA:
             John Wiley & Sons, 2012.
+
+    .. [3]  K. Kurokawa, "Power Waves and the Scattering Matrix," IEEE Trans.
+            Microwave Theory Tech., vol. 13, no. 2, pp. 194-202, March 1965.
     """
 
     ports: tuple[TerminalPortType, ...] = pd.Field(
@@ -200,7 +222,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     s_param_def: SParamDef = pd.Field(
         "pseudo",
         title="Scattering Parameter Definition",
-        description="Whether to compute scattering parameters using the 'pseudo' or 'power' wave definitions.",
+        description="Wave definition: 'pseudo', 'power', or 'symmetric_pseudo'. Default is 'pseudo'.",
     )
 
     low_freq_smoothing: Optional[ModelerLowFrequencySmoothingSpec] = pd.Field(
