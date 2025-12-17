@@ -87,7 +87,7 @@ MAX_NUM_MEDIUMS = 65530
 
 # warn and error out if the same medium is present in too many structures
 WARN_STRUCTURES_PER_MEDIUM = 200
-MAX_STRUCTURES_PER_MEDIUM = 1_000
+MAX_STRUCTURES_PER_MEDIUM = 1_000_000_000
 
 
 def _get_colormap(reverse: bool = False):
