@@ -81,16 +81,16 @@ if SHOW_PRINT_STATEMENTS:
     sys.stdout = sys.stderr
 
 
-def _triangles_from_params(params, box_center, xp):
-    params_arr = xp.array(params)
-    center_arr = xp.array(box_center)
+def _triangles_from_params(params, box_center):
+    params_arr = anp.array(params)
+    center_arr = anp.array(box_center)
     half_size = 0.5 * params_arr
-    vertices = center_arr + xp.array(VERTEX_SIGNS) * half_size
-    return vertices[xp.array(TRIANGLE_FACE_VERTEX_IDS)]
+    vertices = center_arr + anp.array(VERTEX_SIGNS) * half_size
+    return vertices[anp.array(TRIANGLE_FACE_VERTEX_IDS)]
 
 
 def make_trianglemesh_geometry(params, box_center):
-    triangles = _triangles_from_params(params, box_center, np)
+    triangles = _triangles_from_params(params, box_center)
     mesh = td.TriangleMesh.from_triangles(triangles)
     return mesh
 

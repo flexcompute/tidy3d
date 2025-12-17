@@ -198,6 +198,10 @@ class DataArray(xr.DataArray):
         """
         return self.data if isbox(self.data) else super().values
 
+    def to_numpy(self) -> np.ndarray:
+        """Return `.data` when traced to avoid `dtype=object` NumPy conversion."""
+        return self.data if isbox(self.data) else super().to_numpy()
+
     @values.setter
     def values(self, value: Any) -> None:
         self.variable.values = value
