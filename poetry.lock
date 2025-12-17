@@ -396,18 +396,18 @@ css = ["tinycss2 (>=1.1.0,<1.5)"]
 
 [[package]]
 name = "boto3"
-version = "1.42.10"
+version = "1.42.11"
 description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "boto3-1.42.10-py3-none-any.whl", hash = "sha256:70720926eab4306a724414286480ec4efa301f3e67e5a53ad4b62f6eb6dbd5b4"},
-    {file = "boto3-1.42.10.tar.gz", hash = "sha256:8b7a1eb83ab7f0c89bb449ccac400eeca6f4ba6e33ba312e2281c6d864602bc3"},
+    {file = "boto3-1.42.11-py3-none-any.whl", hash = "sha256:54939f7fc1b2777771c2a66ecc77025b2af86e567b5cf68d30dc3838205f0a4a"},
+    {file = "boto3-1.42.11.tar.gz", hash = "sha256:2537d9462b70f4432385202709d1c8aa2291f802cfd8588d33334112116c554a"},
 ]
 
 [package.dependencies]
-botocore = ">=1.42.10,<1.43.0"
+botocore = ">=1.42.11,<1.43.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.16.0,<0.17.0"
 
@@ -416,14 +416,14 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.42.10"
+version = "1.42.11"
 description = "Low-level, data-driven core of boto 3."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "botocore-1.42.10-py3-none-any.whl", hash = "sha256:41eaa73694c0f9e5e281d81f18325f1181d332dce21ea47f58426250b31889fe"},
-    {file = "botocore-1.42.10.tar.gz", hash = "sha256:84312c37ddc34cd0cce25436f26370af1edb9e1b1944359ee15350239537cdaa"},
+    {file = "botocore-1.42.11-py3-none-any.whl", hash = "sha256:73b0796870f16ccd44729c767ade20e8ed62b31b3aa2be07b35377338dcf6d7c"},
+    {file = "botocore-1.42.11.tar.gz", hash = "sha256:4c5278b9e0f6217f428aade811d409e321782bd14f0a202ff95a298d841be1f7"},
 ]
 
 [package.dependencies]
@@ -4658,15 +4658,15 @@ testing = ["coverage", "pytest", "pytest-benchmark"]
 
 [[package]]
 name = "pre-commit"
-version = "4.5.0"
+version = "4.5.1"
 description = "A framework for managing and maintaining multi-language pre-commit hooks."
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"dev\" or extra == \"tests\" or extra == \"scikit-rf\""
 files = [
-    {file = "pre_commit-4.5.0-py2.py3-none-any.whl", hash = "sha256:25e2ce09595174d9c97860a95609f9f852c0614ba602de3561e267547f2335e1"},
-    {file = "pre_commit-4.5.0.tar.gz", hash = "sha256:dc5a065e932b19fc1d4c653c6939068fe54325af8e741e74e88db4d28a4dd66b"},
+    {file = "pre_commit-4.5.1-py2.py3-none-any.whl", hash = "sha256:3b3afd891e97337708c1674210f8eba659b52a38ea5f822ff142d10786221f77"},
+    {file = "pre_commit-4.5.1.tar.gz", hash = "sha256:eb545fcff725875197837263e977ea257a402056661f09dae08e4b149b030a61"},
 ]
 
 [package.dependencies]
@@ -6219,7 +6219,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version >= \"3.12\" and sys_platform == \"darwin\" and (extra == \"dev\" or extra == \"pytorch\" or extra == \"docs\") or (extra == \"dev\" or extra == \"docs\") and (extra == \"dev\" or extra == \"docs\" or extra == \"pytorch\") or python_version >= \"3.12\" and (extra == \"dev\" or extra == \"docs\" or extra == \"pytorch\")"
+markers = "(extra == \"dev\" or extra == \"docs\") and (extra == \"dev\" or extra == \"pytorch\" or extra == \"docs\") or python_version >= \"3.12\" and (extra == \"dev\" or extra == \"docs\" or extra == \"pytorch\")"
 files = [
     {file = "setuptools-80.9.0-py3-none-any.whl", hash = "sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922"},
     {file = "setuptools-80.9.0.tar.gz", hash = "sha256:f36b47402ecde768dbfafc46e8e4207b4360c654f1f3bb84475f0a28628fb19c"},
@@ -7043,59 +7043,59 @@ python-versions = ">=3.9"
 groups = ["main"]
 markers = "extra == \"extras\""
 files = [
-    {file = "tidy3d_extras-2.10.0-cp310-cp310-macosx_15_0_arm64.whl", hash = "sha256:90ef271d7e74799230c89da091c783165a95bc3405a4292551e99cc59bc7c1b0"},
-    {file = "tidy3d_extras-2.10.0-cp310-cp310-macosx_15_0_x86_64.whl", hash = "sha256:03d4d223765146c767a63ca34baebbe676e1a400f9c5212ef5c5c35667d47dcc"},
-    {file = "tidy3d_extras-2.10.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b5f908903dc3ab35ae9aa5fc3eed7d28aa5b09c9bb64d7283724d06b69486925"},
-    {file = "tidy3d_extras-2.10.0-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:7992b2267a91439edbbd954c26153509d6362df35fee33455cf560e234f8d0cb"},
-    {file = "tidy3d_extras-2.10.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:060b4d36fe5f701b881a2c5ce02719de5c81ae591bc1579503abd9a203b789b4"},
-    {file = "tidy3d_extras-2.10.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:e99f2bf0982924359f5fb9433ba069bd43439a297ba5233ea370e23de5bdde30"},
-    {file = "tidy3d_extras-2.10.0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:d518bce03b4d0011a1deb95b7a0b9c53574a56c5adf3c6cdca7779f5b80737be"},
-    {file = "tidy3d_extras-2.10.0-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:f93a8f1a68f9e8a349a4a2fbbe8db2b8c40d9772aaf85dcdb82e4e2a99e19689"},
-    {file = "tidy3d_extras-2.10.0-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:03ad0b048cc80302ea44e81209ea6879739a8a6c8f13966af665662e7ab371a9"},
-    {file = "tidy3d_extras-2.10.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:8d8625f9883e87b036004a3cae09e4e494f18afd539c5de412670f0f18168dba"},
-    {file = "tidy3d_extras-2.10.0-cp310-cp310-win_amd64.whl", hash = "sha256:3c9717213cc48811f15676c5960f49c6f7678839c8f05a7c8ed46df09caa8890"},
-    {file = "tidy3d_extras-2.10.0-cp311-cp311-macosx_15_0_arm64.whl", hash = "sha256:463e2b3dbd9e95bcf6f46a09482fb28f7e792dca74449a3180b8f8944faffe16"},
-    {file = "tidy3d_extras-2.10.0-cp311-cp311-macosx_15_0_x86_64.whl", hash = "sha256:bf85ddc5bf09b20739e56416a2df102b7f29fd4168997938d9c88116a3801d4f"},
-    {file = "tidy3d_extras-2.10.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e695dd254f66b5f92a43b22d137f3512e925f798b81faaf65fd59228fdbbca9f"},
-    {file = "tidy3d_extras-2.10.0-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:4fdba8a5489a58f94ab36dbd218b84a47cc0202889a5a1127737312445720820"},
-    {file = "tidy3d_extras-2.10.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:15821a8706739d2f1bbf2015d916101854b694e0fcbd1057ea2e1ca1c39a4b8b"},
-    {file = "tidy3d_extras-2.10.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:9d6d989b3c1d89b64064bcaff019f272f5bc056aeb77d4f20ff9cfd8b8999eb4"},
-    {file = "tidy3d_extras-2.10.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:03fabbcce14dbd7a40c9ec3fe9cdb07d48ba40f55eaa1e7f289812c559392b08"},
-    {file = "tidy3d_extras-2.10.0-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:6d9c2530bd730c95fcef8ec9b53eaf6f673f6845dfcd76084cae00401d4fa03b"},
-    {file = "tidy3d_extras-2.10.0-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:422b2176399242ab9cf8cd4f584566b4fdf1a00e1336d92182aa617898beb109"},
-    {file = "tidy3d_extras-2.10.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:7b26bceea3a27bade1cb3659cacf759d734bf00b51402342b4cb5f142660da86"},
-    {file = "tidy3d_extras-2.10.0-cp311-cp311-win_amd64.whl", hash = "sha256:064740f80eecc688b7ef539ed76d62af9c1c468d534cde80ee0e6e2d223a9cd9"},
-    {file = "tidy3d_extras-2.10.0-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:2941f1b166e0395d904b30f163097d651895d6afaa43878d495555ebdef80cd5"},
-    {file = "tidy3d_extras-2.10.0-cp312-cp312-macosx_15_0_x86_64.whl", hash = "sha256:303e748e2f04cc4ed0fc27047ddaf92b357d0363fb08d0518d95b024085ce8bb"},
-    {file = "tidy3d_extras-2.10.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9bf3dc5d81f97726dd2847e6e58aa6d6395527dc0c2cf61cf71b9dbb2253aa07"},
-    {file = "tidy3d_extras-2.10.0-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:d46e28ef0cd61c52aab217558780892244fe8c523a4db2bcd180e70f233852b0"},
-    {file = "tidy3d_extras-2.10.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:097db73e7c3325b88c5bb0d10664139f8fd9e2936a31c06ab41f30c248feddf1"},
-    {file = "tidy3d_extras-2.10.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:e93d380ccb12df0384751550e24bd8099aac40e4b74458df7047bf3d02fe10c8"},
-    {file = "tidy3d_extras-2.10.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:95a5d371cb25275ac344a8e2d519ea58faef85d73ac2d6e00912ca533c0c52e7"},
-    {file = "tidy3d_extras-2.10.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:eb7c0a1c7f40dddffe814a36d8a5281a730ab04bd069736d7fae43775c76ab87"},
-    {file = "tidy3d_extras-2.10.0-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:34a94dd57abe69b2dae5a754061531287bfa164de2777a4c878c139fc5fea259"},
-    {file = "tidy3d_extras-2.10.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:be6c7814dbd8194ae9cad364cd3df7827364614779a39c069efda66ed0fb3d35"},
-    {file = "tidy3d_extras-2.10.0-cp312-cp312-win_amd64.whl", hash = "sha256:229f13697f7eb948e13d01b5febc664c1687d0af5fd20b14d7511c34c8951e64"},
-    {file = "tidy3d_extras-2.10.0-cp313-cp313-macosx_15_0_arm64.whl", hash = "sha256:aff761fc20c3e48468bf62577f887e2e08d1fb2f3e59d1cd6717eb231c0c0e83"},
-    {file = "tidy3d_extras-2.10.0-cp313-cp313-macosx_15_0_x86_64.whl", hash = "sha256:30aeca6465c87d8ee0db477b590827661958392602bcafb5d566c2106bbe79d0"},
-    {file = "tidy3d_extras-2.10.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e296a31b0db41bbaa5d0f56a021d1d7ccc495adb27654a88c573acad7bcf200f"},
-    {file = "tidy3d_extras-2.10.0-cp313-cp313-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:192258a8f4969bab6ab7b5199eb7052ff3efcea00692b9cbcf18a103b765ba45"},
-    {file = "tidy3d_extras-2.10.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b112ae8ff074688554ce5849218f082462d135e1143d366953c62f9a12bb4562"},
-    {file = "tidy3d_extras-2.10.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:4a35c93b70ded0044f4c69b14a10415e443ee404fe2a7644efa669e28ec64bc1"},
-    {file = "tidy3d_extras-2.10.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:8cb32210068aeaab30b36c18ee9367c796a9f2163a2bf1d08ef71541a2c09433"},
-    {file = "tidy3d_extras-2.10.0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:934124966acb988fbc8abee5bd796bec7526e2ee99425a75dcd352a39c753260"},
-    {file = "tidy3d_extras-2.10.0-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:9de21d81f39c5a05de2baabf69f9be57a827d7c4ba98a4c7328212cb7c5f8a58"},
-    {file = "tidy3d_extras-2.10.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:70424ffa14df2f1bbb3bb12cb9122d374baa6cc6f8e347f75d0cc9b5387a948c"},
-    {file = "tidy3d_extras-2.10.0-cp313-cp313-win_amd64.whl", hash = "sha256:ffd937839b1110c9e962168d3adcb8f3cc45a7bc7cf6067ba3783663c81d3770"},
-    {file = "tidy3d_extras-2.10.0-cp39-cp39-macosx_15_0_x86_64.whl", hash = "sha256:cc5a0f4bf93a0524d967353a6d0322f39a01e9bde67f0caaf2607ff48106ea8b"},
-    {file = "tidy3d_extras-2.10.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:62c061ed55ff4a0ce6f85f931793e510726a4367b0feefa23f0c371a822f36c9"},
-    {file = "tidy3d_extras-2.10.0-cp39-cp39-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:9d596542af3df173596896bcbf5117a48c2d51d889cc7b3bb8a0f15cb9170256"},
-    {file = "tidy3d_extras-2.10.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:959fa6909ac85535c6ff0ee0027b4cfaf4c0b19bd8fceddbc4234b21a58b3767"},
-    {file = "tidy3d_extras-2.10.0-cp39-cp39-manylinux_2_28_aarch64.whl", hash = "sha256:976a66a81028ab55130524cb96fc8fdea248dd4da0625f5f975a54a97ffafd60"},
-    {file = "tidy3d_extras-2.10.0-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:5cab410a22243aa0718c1b800d4c8808bd8a1f0dc9a9a57781b6c8839970465d"},
-    {file = "tidy3d_extras-2.10.0-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:323eff7dda62880fd0b37c880a352a9030810eab93116ab4688b244482117b3b"},
-    {file = "tidy3d_extras-2.10.0-cp39-cp39-musllinux_1_2_i686.whl", hash = "sha256:e1cee4390df0b2e8a43002e1fb736560e9543474f72a2a151af15b533b6fed61"},
-    {file = "tidy3d_extras-2.10.0-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:43715a5c0be7d96decb6cc6d228e7574dad3b3b897e1e40a45ce4c81726db833"},
+    {file = "tidy3d_extras-2.10.0-cp310-cp310-macosx_15_0_arm64.whl", hash = "sha256:cbfa3b554295f8bf9078038137af0f6b77523599631639f4fa28a1d1cd398b9c"},
+    {file = "tidy3d_extras-2.10.0-cp310-cp310-macosx_15_0_x86_64.whl", hash = "sha256:fa1bbbbc1c1b93dd3bfec9582b268aa3a305b36cfd6e02507be56acf7f476502"},
+    {file = "tidy3d_extras-2.10.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:fd1a37171efd3ca7b9c478e4470cc3d798b6c8f0a7bb7d59399fa237525d7b82"},
+    {file = "tidy3d_extras-2.10.0-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:fb856ff4212d8e0079ca9460c7b8869acb8bc2b1d98ee76d6f2c780e96f6421a"},
+    {file = "tidy3d_extras-2.10.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5a2355578ca35e29e82204e6f981036d9d5a94e0c42ccd32fb824ac3e9362918"},
+    {file = "tidy3d_extras-2.10.0-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:780ddf63ffb893d270abe633cef6c6ec7f97b5275d168dbf68b376a47c37936b"},
+    {file = "tidy3d_extras-2.10.0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:29751d56b4010bd990e4ca8e65763c9e72b14c607b988a2b53af7fb273f15f7c"},
+    {file = "tidy3d_extras-2.10.0-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:8140f5a96ee77438ac770ccec04e47e8dc91a68e74ed8c68be13dbda3ec372fc"},
+    {file = "tidy3d_extras-2.10.0-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:bcc5499232889f89968c95ef3516349e7187d0d0c08a8c7f13c78edb623980bb"},
+    {file = "tidy3d_extras-2.10.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:6a34270bd05743fbc5862edc8998611146671904e4816636c53a4aa344e7ed72"},
+    {file = "tidy3d_extras-2.10.0-cp310-cp310-win_amd64.whl", hash = "sha256:ced2d1e345bcbab52edfe712ac701d6cdfa106e6670d1808e10c885a662d3963"},
+    {file = "tidy3d_extras-2.10.0-cp311-cp311-macosx_15_0_arm64.whl", hash = "sha256:5283c38e5bc5a6d3784001e28f6a43c77fb324b7883f72ad0d99b0564c170f7b"},
+    {file = "tidy3d_extras-2.10.0-cp311-cp311-macosx_15_0_x86_64.whl", hash = "sha256:bb2ebb74d662c92b9eba7fa353934f8b227be8d80514dc4481d87ed4d5d55992"},
+    {file = "tidy3d_extras-2.10.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0171dbe8a72d0aa86867c6262b6bea2d6bee8c554bbef01fc5be8ac37d0dabce"},
+    {file = "tidy3d_extras-2.10.0-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:4dcc5c27b12fce715b63f77786cb5cffdb12a681ff5f240219891c04fb0009e4"},
+    {file = "tidy3d_extras-2.10.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1de13dba6de85b008a18cb0edb6cd905bd259d7e9f0bbba6db4a5d6ebbf698e0"},
+    {file = "tidy3d_extras-2.10.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:6c5b8510cff894d34c00079e479714004f93f36aa3e0c51ba675a0aa05e7b957"},
+    {file = "tidy3d_extras-2.10.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:9e8a4081daf9ac5f49bec79f6e14a842591fb2e3649a9afd794baf8ffcb01e71"},
+    {file = "tidy3d_extras-2.10.0-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:c37d3148bfbd7602c2886772e2b48f836a4fe7416fcf838bded1d6f7f37a2708"},
+    {file = "tidy3d_extras-2.10.0-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:de36873268bc5acc549530ad0079bc5f106635a8a731e18201e2c4581c0c85d2"},
+    {file = "tidy3d_extras-2.10.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:c0e42b4f671e4f2e58241df3c011f1033a8eada9ffc7852fe76055ac7a07145c"},
+    {file = "tidy3d_extras-2.10.0-cp311-cp311-win_amd64.whl", hash = "sha256:32d6ec4839f217eee94bf3fb3190f4aa4cff8e49ae38d74ffec7f2db00d74f05"},
+    {file = "tidy3d_extras-2.10.0-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:d1ed7d6df2171289509d4d67371acd72f88c05b0e90d83e3f5d38d39ae1626fa"},
+    {file = "tidy3d_extras-2.10.0-cp312-cp312-macosx_15_0_x86_64.whl", hash = "sha256:ba495039e2f54fd17b5826b2601657acb954b98cc84e0aa40bc86d9bb80a0f39"},
+    {file = "tidy3d_extras-2.10.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c80444fcec2f56fa7f17c17f86e2b0ac0180a01a695e35f100753e3b455ee758"},
+    {file = "tidy3d_extras-2.10.0-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:b7b3608bd645db25c205fbc4643ab945d691d7e5c3b483922c45bfbc028e9d8c"},
+    {file = "tidy3d_extras-2.10.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:38a170e20c040a42803894fc234d0333ce41f08381d8ce5fbebda4187d49b78f"},
+    {file = "tidy3d_extras-2.10.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:eea11e56bf8f9ac69f12707277adeed2d6397d132bc1fd7685c4726334666351"},
+    {file = "tidy3d_extras-2.10.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:25bfc100fa57fa1d49edd9a6afbb59f7fe0f98eed14dee125c7f1274f9d0f144"},
+    {file = "tidy3d_extras-2.10.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:21ebdfae5ac249d0531aa493d4a1d0d9ec7aeae8a59808893c4c3fd327ebdd41"},
+    {file = "tidy3d_extras-2.10.0-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:bed87d477d4b1f94e3f56d4492e4ae7bb03aa396950b958b4781a3de63712277"},
+    {file = "tidy3d_extras-2.10.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:40ed88383873a6362ce6c96d9399f6f273852e5a72b999a61762d4cda632c734"},
+    {file = "tidy3d_extras-2.10.0-cp312-cp312-win_amd64.whl", hash = "sha256:cc108725c40cfbb520a65ff0f649978c993c91c64c28c949f6969aa5ce5d4b2c"},
+    {file = "tidy3d_extras-2.10.0-cp313-cp313-macosx_15_0_arm64.whl", hash = "sha256:21306ace80d81658e9961e491b10e4fe51dcf14bf31f150eb92b3da5fdfd6a76"},
+    {file = "tidy3d_extras-2.10.0-cp313-cp313-macosx_15_0_x86_64.whl", hash = "sha256:d8b623221bd434acef8a9aacfe863b98f036c4fa22c15c390d898a8022e56b12"},
+    {file = "tidy3d_extras-2.10.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a9298decc2a2135ea3df2b5aff5e62b13716ac4442254df5fdfcb80b210ce8bc"},
+    {file = "tidy3d_extras-2.10.0-cp313-cp313-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:cb60c69a29fd58c8aebe6a0c440ad171a60a3b158ad5cf9db6ccf65b285837de"},
+    {file = "tidy3d_extras-2.10.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:40b9f17256ad8f610f6bb8ce30db3fc8abeb6d7e6c166e0dfa4c8211930310f0"},
+    {file = "tidy3d_extras-2.10.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:acbad21eff67b229b35366726502e991b9fbec4e40a910f3cdc04a38ddabe201"},
+    {file = "tidy3d_extras-2.10.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:788a2384e6f69482d0b1d16f546ff28c0a2dbe97ba224a92c889eadea1607596"},
+    {file = "tidy3d_extras-2.10.0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:291f798ebe4a27ed458f3e6c892c2af5f2e30838ac4b8f8c969a69aa60cd735d"},
+    {file = "tidy3d_extras-2.10.0-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:44cbce649627b0b65866f40c02957e4a1334fd9ab89e82284ecc30f6f6c5de5a"},
+    {file = "tidy3d_extras-2.10.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:861c03c351dd15b2abf8cb77e5fb14259b68777cd1f1056851c491769a18ce1c"},
+    {file = "tidy3d_extras-2.10.0-cp313-cp313-win_amd64.whl", hash = "sha256:393adab8b5fec08faf391331dbc457d850523534756223fd7be199d056a3a251"},
+    {file = "tidy3d_extras-2.10.0-cp39-cp39-macosx_15_0_x86_64.whl", hash = "sha256:e58afdc673df2036cc0df16af5d66bf1327c2c9a4f5129f61d945a08a7d5bdb5"},
+    {file = "tidy3d_extras-2.10.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:2ab90e76acd203a0c4d409942cef731913d1317a4c272e44b02b510dff0ca1de"},
+    {file = "tidy3d_extras-2.10.0-cp39-cp39-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:5023eb4b4839f695668d5500d4a97e1d6530cc8f0340cb16c5700eff5440f71a"},
+    {file = "tidy3d_extras-2.10.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e7991eaf0f03ab576296ae2c87ae0e110969e5f22fa0d1a9dc5264f074b10a80"},
+    {file = "tidy3d_extras-2.10.0-cp39-cp39-manylinux_2_28_aarch64.whl", hash = "sha256:0098b4fe46c95bc12b63a1a9b07c5951c13217e590e59f99e1c228f2806f9603"},
+    {file = "tidy3d_extras-2.10.0-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:5cc456593965054dda18e279896295e37d933aeb95047cf594187f94a150e048"},
+    {file = "tidy3d_extras-2.10.0-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:227e2e8353bb2f565fb8179575da28c9ac7ff0c71bc8aac8fbfc1e46eb0d0fb7"},
+    {file = "tidy3d_extras-2.10.0-cp39-cp39-musllinux_1_2_i686.whl", hash = "sha256:3e14de3c5b9c13573e3b29d21b8e4abc5f82bf426677de2ae9381b3bb7d5bf8e"},
+    {file = "tidy3d_extras-2.10.0-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:8669fab9852541e45348c651a2416bc6f055b4a0ad2f38b34e10ec8a8452a9d3"},
 ]
 
 [package.dependencies]
