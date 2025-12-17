@@ -282,7 +282,7 @@ class TriangleMesh(base.Geometry, ABC):
             The custom surface mesh geometry given by the triangles provided.
 
         """
-        triangles = get_static(anp.array(triangles))
+        triangles = anp.array(triangles)
         if len(triangles.shape) != 3 or triangles.shape[1] != 3 or triangles.shape[2] != 3:
             raise ValidationError(
                 f"Provided 'triangles' must be an N x 3 x 3 array, given {triangles.shape}."
@@ -539,7 +539,7 @@ class TriangleMesh(base.Geometry, ABC):
         """The triangles of the surface mesh as an ``np.ndarray``."""
         if self.mesh_dataset is None:
             raise DataError("Can't get triangles as 'mesh_dataset' is None.")
-        return self.mesh_dataset.surface_mesh.to_numpy()
+        return np.asarray(get_static(self.mesh_dataset.surface_mesh.data))
 
     def _surface_area(self, bounds: Bound) -> float:
         """Returns object's surface area within given bounds."""

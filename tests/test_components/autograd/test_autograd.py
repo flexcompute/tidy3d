@@ -25,7 +25,7 @@ import tidy3d.web as web
 from tidy3d import Box, Geometry, GeometryGroup
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.field_map import FieldMap
-from tidy3d.components.autograd.utils import is_tidy_box
+from tidy3d.components.autograd.utils import get_static, is_tidy_box
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.config import config
@@ -530,8 +530,9 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     )
     cylinder = td.Structure(geometry=cylinder_geo, medium=polyslab.medium)
 
-    # triangle mesh geometry with param-dependent medium response
-    base_vertices = np.array(
+    # triangle mesh geometry with param-dependent medium and vertex response
+    # use first parameter for eps, the rest for vertices
+    base_vertices = anp.array(
         [
             (0.0, 0.0, 0.0),
             (0.6, 0.0, 0.0),
@@ -539,7 +540,8 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
             (0.0, 0.0, 0.6),
         ],
     )
-    faces = np.array(
+    base_vertices = base_vertices + anp.mean(params[1:]) - get_static(anp.mean(params[1:]))
+    faces = anp.array(
         [
             (0, 2, 1),
             (0, 1, 3),
@@ -548,8 +550,9 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         ],
         dtype=int,
     )
-    triangle_mesh_geo = td.TriangleMesh.from_vertices_faces(base_vertices, faces)
-    mesh_eps = 1.8 + 0.2 * anp.abs(vector @ params)
+    triangles = base_vertices[faces]
+    triangle_mesh_geo = td.TriangleMesh.from_triangles(triangles)
+    mesh_eps = 1.8 + params[0]
     triangle_mesh = td.Structure(
         geometry=triangle_mesh_geo,
         medium=td.Medium(permittivity=mesh_eps),
