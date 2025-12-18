@@ -553,7 +553,7 @@ Enter the following when prompted:
     * - Prompt
       - Value
     * - SSO session name
-      - ``flexcompute-pypi``
+      - ``prod``
     * - SSO start URL
       - ``https://d-9067bfae6e.awsapps.com/start/#``
     * - SSO region
@@ -563,7 +563,7 @@ Enter the following when prompted:
     * - Role
       - ``codeartifact-readonly``
     * - Profile name
-      - ``flexcompute-pypi``
+      - ``prod``
 
 **Daily Authentication** (each development session)
 
@@ -572,10 +572,10 @@ Each day when you start development, run these two commands:
 .. code-block:: bash
 
     # Step 1: Login to AWS SSO (opens browser on host for authentication)
-    aws sso login --profile flexcompute-pypi
+    aws sso login --profile prod
 
     # Step 2: Configure Poetry with CodeArtifact
-    poetry aws-login codeartifact --profile flexcompute-pypi
+    poetry aws-login codeartifact --profile prod
 
     # That's it! Now you can install internal packages
     poetry install -E extras
@@ -673,8 +673,8 @@ Command Cheatsheet
     jupyter lab . --ip=0.0.0.0      # Start Jupyter Lab
 
     # CodeArtifact (internal developers only)
-    aws sso login --profile flexcompute-pypi                    # Daily: Login to AWS
-    poetry aws-login codeartifact --profile flexcompute-pypi    # Daily: Configure Poetry
+    aws sso login --profile prod                    # Daily: Login to AWS
+    poetry aws-login codeartifact --profile prod    # Daily: Configure Poetry
 
 Directory Structure
 ^^^^^^^^^^^^^^^^^^^
@@ -819,11 +819,11 @@ CodeArtifact Authentication Issues
 .. code-block:: bash
 
     # Check if SSO session is valid
-    aws sts get-caller-identity --profile flexcompute-pypi
+    aws sts get-caller-identity --profile prod
 
     # If expired or fails, re-authenticate (2-step process)
-    aws sso login --profile flexcompute-pypi
-    poetry aws-login codeartifact --profile flexcompute-pypi
+    aws sso login --profile prod
+    poetry aws-login codeartifact --profile prod
 
     # Retry installation
     poetry install -E extras
@@ -859,13 +859,13 @@ For pip/uv users, you must self-support using AWS documentation.
 
 .. code-block:: bash
 
-    aws sso login --profile flexcompute-pypi
+    aws sso login --profile prod
     aws codeartifact login --tool pip \
         --repository pypi-releases \
         --domain flexcompute \
         --domain-owner 625554095313 \
         --region us-east-1 \
-        --profile flexcompute-pypi
+        --profile prod
 
 **Option 2 (not recommended):**
 
@@ -876,7 +876,7 @@ For pip/uv users, you must self-support using AWS documentation.
         --domain-owner 625554095313 \
         --query authorizationToken \
         --output text \
-        --profile flexcompute-pypi`
+        --profile prod`
 
     pip config set site.extra-index-url \
         https://aws:$CODEARTIFACT_AUTH_TOKEN@flexcompute-625554095313.d.codeartifact.us-east-1.amazonaws.com/pypi/pypi-releases/simple/
