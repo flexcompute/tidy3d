@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added validation to `DCVoltageSource` that warns when duplicate voltage values are detected in the `voltage` array, including treating `0` and `-0` as the same value.
 
 ### Changed
+- For `HeatChargeSimulation` objects, the `plot` function now adds the simulation boundary conditions.
 
 ### Fixed
 - Fixed `AutoImpedanceSpec` validation to check path intersections against all conductors, not just filtered ones, as well as the mode plane bounds.
