@@ -156,6 +156,19 @@ def test_region_inf_size():
     _ = region.to_structure(params_0_inf)
 
 
+def test_region_priority():
+    region = make_design_region()
+
+    # Test default priority (None)
+    structure_default = region.to_structure(region.params_zeros)
+    assert structure_default.priority is None
+
+    # Test explicit priority value
+    region = region.updated_copy(priority=1)
+    structure = region.to_structure(region.params_zeros)
+    assert structure.priority == 1
+
+
 def post_process_fn(sim_data: td.SimulationData, **kwargs) -> float:
     """Define a post-processing function with extra kwargs (recommended)."""
     intensity = sim_data.get_intensity(MNT_NAME1)
