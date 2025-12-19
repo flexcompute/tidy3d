@@ -903,6 +903,25 @@ def test_heat_charge_bcs_validation(boundary_conditions):
         td.VoltageBC(source=td.SSACVoltageSource(voltage=np.array([td.inf, 0, 1]), amplitude=1e-2))
 
 
+def test_repeated_voltage_warning():
+    """Test that a warning is raised when repeated voltage values are present."""
+    # No warning for unique values
+    with AssertLogLevel(None):
+        td.DCVoltageSource(voltage=[0, 1, 2, 3])
+
+    # Warning for repeated values
+    with AssertLogLevel("WARNING"):
+        td.DCVoltageSource(voltage=[1, 2, 2, 3])
+
+    # Warning for 0 and -0 (treated as duplicates)
+    with AssertLogLevel("WARNING"):
+        td.DCVoltageSource(voltage=[0.0, -0.0, 1, 2])
+
+    # Warning for multiple repeated values
+    with AssertLogLevel("WARNING"):
+        td.DCVoltageSource(voltage=[1, 1, 2, 2, 3])
+
+
 def test_freqs_validation():
     """Test validation that freqs requires SSACVoltageSource."""
     solid_box_1 = td.Box(center=(0, 0, 0), size=(2, 2, 2))
