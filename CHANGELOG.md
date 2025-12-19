@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added priority attribute to `TopologyDesignRegion` to enable manual control of overlapping structures.
 
 ### Changed
 
