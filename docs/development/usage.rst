@@ -67,6 +67,9 @@ There are a range of handy development functions that you might want to use to s
     * - Running ``pytest`` commands inside the ``poetry`` environment.
       - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
       - ``poetry run pytest``
+    * - Analyze slow ``pytest`` runs with durations / cProfile / debug subset helpers.
+      - Use ``--debug`` to run only the first N collected tests or ``--profile`` to capture call stacks.
+      - ``python scripts/profile_pytest.py [options]``
     * - Run ``coverage`` testing from the ``poetry`` environment.
       -
       - ``poetry run coverage run -m pytest``
@@ -82,6 +85,5 @@ There are a range of handy development functions that you might want to use to s
     * - Update and replace all the docstrings in the codebase between versions
       -
       - ``poetry run tidy3d develop replace-in-files``
-
 
 

@@ -368,6 +368,7 @@ def test_continue_run_fns(use_emulated_run):  # noqa: F811
     )
 
 
+@pytest.mark.slow
 def test_continue_run_from_file(use_emulated_run):  # noqa: F811
     """Test continuing an already run inverse design from file."""
     result_orig = make_result(use_emulated_run)

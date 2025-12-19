@@ -176,16 +176,18 @@ def test_1a_simulation_load_export2(tmp_path):
     assert SIM2 == SIM3, "original and loaded simulations are not the same"
 
 
+@pytest.mark.perf
 def test_validation_speed(tmp_path):
     sizes_bytes = []
     times_sec = []
     path = str(tmp_path / "simulation.json")
 
     _ = SIM
-    N_tests = 10
+    N_tests = 2  # may be increased temporarily, makes it slow for routine tests
+    max_structures = np.log10(2)  # may be increased temporarily, makes it slow for routine tests
 
     # adjust as needed, keeping small to speed tests up
-    num_structures = np.logspace(0, 2, N_tests).astype(int)
+    num_structures = np.logspace(0, max_structures, N_tests).astype(int)
 
     for n in num_structures:
         new_structures = []

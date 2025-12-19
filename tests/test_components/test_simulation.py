@@ -12,8 +12,7 @@ import pytest
 from matplotlib.testing.compare import compare_images
 
 import tidy3d as td
-from tidy3d.components import simulation
-from tidy3d.components.scene import MAX_NUM_MEDIUMS
+from tidy3d.components import scene, simulation
 from tidy3d.components.simulation import MAX_NUM_SOURCES
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.mode import ModeSolver
@@ -29,6 +28,7 @@ from ..utils import (
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
 
 RTOL = 0.01
+TEST_MAX_NUM_MEDIUMS = 3
 
 
 def test_sim_init():
@@ -1694,12 +1694,10 @@ def test_sim_validate_structure_bounds_pml(box_length, absorb_type, log_level):
 
 def test_num_mediums(monkeypatch):
     """Make sure we error if too many mediums supplied."""
-
-    max_num_mediums = 10
-    monkeypatch.setattr(simulation, "MAX_NUM_MEDIUMS", max_num_mediums)
+    monkeypatch.setattr(simulation, "MAX_NUM_MEDIUMS", TEST_MAX_NUM_MEDIUMS)
     structures = []
     grid_spec = td.GridSpec.auto(wavelength=1.0)
-    for i in range(max_num_mediums):
+    for i in range(TEST_MAX_NUM_MEDIUMS):
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 1))
         )
@@ -3226,9 +3224,9 @@ def test_advanced_material_intersection():
         sim = sim.updated_copy(structures=[struct1, struct2])
 
 
-def test_num_lumped_elements():
+def test_num_lumped_elements(monkeypatch):
     """Make sure we error if too many lumped elements supplied."""
-
+    monkeypatch.setattr(simulation, "MAX_NUM_MEDIUMS", TEST_MAX_NUM_MEDIUMS)
     resistor = td.LumpedResistor(
         size=(0, 1, 2), center=(0, 0, 0), name="R1", voltage_axis=2, resistance=75
     )
@@ -3238,7 +3236,7 @@ def test_num_lumped_elements():
         size=(5, 5, 5),
         grid_spec=grid_spec,
         structures=[],
-        lumped_elements=[resistor] * MAX_NUM_MEDIUMS,
+        lumped_elements=[resistor] * TEST_MAX_NUM_MEDIUMS,
         run_time=1e-12,
     )
     with pytest.raises(pydantic.ValidationError):
@@ -3246,7 +3244,7 @@ def test_num_lumped_elements():
             size=(5, 5, 5),
             grid_spec=grid_spec,
             structures=[],
-            lumped_elements=[resistor] * (MAX_NUM_MEDIUMS + 1),
+            lumped_elements=[resistor] * (TEST_MAX_NUM_MEDIUMS + 1),
             run_time=1e-12,
         )
 
@@ -3748,7 +3746,6 @@ def test_messages_contain_object_names():
 
 def test_structures_per_medium(monkeypatch):
     """Test if structures that share the same medium warn or error appropriately."""
-    import tidy3d.components.scene as scene
 
     # Set low thresholds to keep the test fast; ensure len(structures) > MAX to avoid early return
     monkeypatch.setattr(scene, "WARN_STRUCTURES_PER_MEDIUM", 2)

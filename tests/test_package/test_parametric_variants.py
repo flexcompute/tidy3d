@@ -32,7 +32,8 @@ def test_graphene_defaults():
     _ = graphene.numerical_conductivity(freqs)
 
 
-@pytest.mark.parametrize("rng_seed", np.arange(0, 15))
+@pytest.mark.parametrize("rng_seed", np.arange(0, 8))
+@pytest.mark.slow
 def test_graphene(rng_seed):
     """test graphene for range of physical parameters"""
     rng = default_rng(rng_seed)

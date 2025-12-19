@@ -718,6 +718,7 @@ def verify_custom_dispersive_medium_methods(mat, reduced_fields):
 
 
 @pytest.mark.parametrize("unstructured", [False, True])
+@pytest.mark.slow
 def test_custom_pole_residue(unstructured):
     """Custom pole residue medium."""
     seed = 98345
@@ -776,6 +777,7 @@ def test_custom_pole_residue(unstructured):
 
 
 @pytest.mark.parametrize("unstructured", [False, True])
+@pytest.mark.slow
 def test_custom_sellmeier(unstructured):
     """Custom Sellmeier medium."""
     seed = 897245
@@ -838,6 +840,7 @@ def test_custom_sellmeier(unstructured):
 
 
 @pytest.mark.parametrize("unstructured", [False, True])
+@pytest.mark.slow
 def test_custom_lorentz(unstructured):
     """Custom Lorentz medium."""
     seed = 31342
@@ -991,6 +994,7 @@ def test_custom_debye(unstructured):
 
 
 @pytest.mark.parametrize("unstructured", [True])
+@pytest.mark.slow
 def test_custom_anisotropic_medium(unstructured):
     """Custom anisotropic medium."""
     seed = 43243

@@ -135,5 +135,6 @@ htmlcov/
 .idea
 .vscode
 
-# cProfile output
+# profile outputs
 *.prof
+pytest_profile_stats.txt
