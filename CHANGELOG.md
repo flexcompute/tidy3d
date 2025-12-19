@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `to_mat_file()` method is now available on `ModeSimulationData` and `HeatChargeSimulationData` for exporting results to MATLAB `.mat` files.
 - Added autograd support for diagonal `AnisotropicMedium` and `CustomAnisotropicMedium` with diagonal permittivity tensor.
 - Added support of numpy 2.4
+- Added validation to `DCVoltageSource` that warns when duplicate voltage values are detected in the `voltage` array, including treating `0` and `-0` as the same value.
 
 ### Changed
 

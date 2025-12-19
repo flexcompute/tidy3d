@@ -23,12 +23,14 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
+import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayFloat1D
 from tidy3d.constants import AMP, VOLT
 from tidy3d.constants import inf as td_inf
+from tidy3d.log import log
 
 
 class DCVoltageSource(Tidy3dBaseModel):
@@ -71,6 +73,41 @@ class DCVoltageSource(Tidy3dBaseModel):
         for v in val:
             if v == td_inf:
                 raise ValueError(f"Voltages must be finite. Currently  voltage={val}.")
+        return val
+
+    @staticmethod
+    def _count_unique_with_tolerance(arr, rtol=1e-9, atol=1e-12):
+        """Count unique values treating values within tolerance as duplicates.
+
+        Uses sorted comparison to group values that are practically equal
+        due to floating-point representation differences (e.g., single vs double precision).
+        """
+        if len(arr) == 0:
+            return 0
+        sorted_arr = np.sort(arr)
+        # Count values that are "different enough" from their predecessor
+        unique_count = 1
+        for i in range(1, len(sorted_arr)):
+            if not np.isclose(sorted_arr[i], sorted_arr[i - 1], rtol=rtol, atol=atol):
+                unique_count += 1
+        return unique_count
+
+    @pd.validator("voltage")
+    def check_repeated_voltage(cls, val):
+        """Warn if repeated voltage values are present, treating 0 and -0 as the same value.
+
+        Uses tolerance-based comparison to handle floating-point representation
+        differences (e.g., values from single vs double precision sources).
+        """
+        # Normalize all zero values (both 0.0 and -0.0) to 0.0 so they are treated as duplicates
+        normalized = np.where(np.isclose(val, 0, atol=1e-10), 0.0, val)
+        unique_count = cls._count_unique_with_tolerance(normalized)
+        if unique_count < len(val):
+            log.warning(
+                "Duplicate voltage values detected in 'voltage' array. "
+                f"Found {len(val)} values but only {unique_count} are unique. "
+                "Note: values within floating-point tolerance are considered duplicates."
+            )
         return val
 
 
