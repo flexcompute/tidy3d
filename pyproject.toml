@@ -65,6 +65,7 @@ pytest-timeout = { version = "*", optional = true }
 pytest-xdist = "^3.6.1"
 pytest-cov = "^6.0.0"
 pytest-env = "^1.1.5"
+pytest-order = { version = "^1.2.1", optional = true }
 tox = { version = "*", optional = true }
 diff-cover = { version = "*", optional = true }
 zizmor = { version = "*", optional = true }
@@ -153,6 +154,7 @@ dev = [
   'pytest-xdist',
   'pytest-env',
   'pytest-cov',
+  'pytest-order',
   'rtree',
   'ruff',
   'sax',
@@ -309,9 +311,11 @@ banned-module-level-imports = ["scipy", "matplotlib"]
 
 [tool.pytest.ini_options]
 # TODO: remove --assert=plain when https://github.com/scipy/scipy/issues/22236 is resolved
-addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical'"
+addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical and not perf'"
 markers = [
   "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
+  "perf: marks tests which test the runtime of operations (deselect with '-m \"not perf\"')",
+  "slow: marks tests as slow (deselect with -m 'not slow')",
 ]
 env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1", "TIDY3D_MICROWAVE__SUPPRESS_RF_LICENSE_WARNING=true"]
 doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"

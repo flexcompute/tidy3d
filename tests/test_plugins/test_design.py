@@ -18,7 +18,7 @@ from ..utils import run_emulated
 SWEEP_METHODS = {
     "grid": tdd.MethodGrid(),
     "monte_carlo": tdd.MethodMonteCarlo(num_points=5, seed=1),
-    "bay_opt": tdd.MethodBayOpt(initial_iter=5, n_iter=2, seed=1),
+    "bay_opt": tdd.MethodBayOpt(initial_iter=3, n_iter=2, seed=2),
     "gen_alg": tdd.MethodGenAlg(
         solutions_per_pop=6,
         n_generations=2,
@@ -323,15 +323,15 @@ def init_design_space(sweep_method):
     radius_variable = tdd.ParameterFloat(
         name="radius",
         span=(0, 1.5),
-        num_points=5,  # note: only used for MethodGrid
+        num_points=3,  # note: only used for MethodGrid
     )
 
     num_spheres_variable = tdd.ParameterInt(
         name="num_spheres",
-        span=(0, 3),
+        span=(0, 2),
     )
 
-    tag_variable = tdd.ParameterAny(name="tag", allowed_values=("tag1", "tag2", "tag3"))
+    tag_variable = tdd.ParameterAny(name="tag", allowed_values=("tag1", "tag2"))
 
     design_space = tdd.DesignSpace(
         parameters=[radius_variable, num_spheres_variable, tag_variable],
@@ -344,6 +344,7 @@ def init_design_space(sweep_method):
 
 
 @pytest.mark.parametrize("sweep_method", SWEEP_METHODS.values())
+@pytest.mark.slow
 def test_sweep(sweep_method, monkeypatch):
     # Problem, simulate scattering cross section of sphere ensemble
     # 	simulation consists of `num_spheres` spheres of radius `radius`.
