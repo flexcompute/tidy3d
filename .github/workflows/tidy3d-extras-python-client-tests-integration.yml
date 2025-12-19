@@ -164,7 +164,7 @@ jobs:
         export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_API_KEY }}
         poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_API_KEY }}
         poetry run pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
-        poetry run pytest --cov=tidy3d -rF --tb=short tests
+        poetry run pytest -n 1 --cov=tidy3d -rF --tb=short tests
         poetry run coverage report -m
         TOTAL_COVERAGE=$(poetry run coverage report --format=total)
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
