@@ -65,7 +65,6 @@ pytest-timeout = { version = "*", optional = true }
 pytest-xdist = "^3.6.1"
 pytest-cov = "^6.0.0"
 pytest-env = "^1.1.5"
-pytest-order = { version = "^1.2.1", optional = true }
 tox = { version = "*", optional = true }
 diff-cover = { version = "*", optional = true }
 zizmor = { version = "*", optional = true }
@@ -154,7 +153,6 @@ dev = [
   'pytest-xdist',
   'pytest-env',
   'pytest-cov',
-  'pytest-order',
   'rtree',
   'ruff',
   'sax',

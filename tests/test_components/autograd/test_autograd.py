@@ -44,7 +44,6 @@ from ...utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
     numerical: adjoint with an extra numerical derivative test after
     speed: pipeline with cProfile to analyze performance
 """
-pytestmark = pytest.mark.order(0)
 
 # make it faster to toggle this
 TEST_CUSTOM_MEDIUM_SPEED = False
