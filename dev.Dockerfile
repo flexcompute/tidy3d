@@ -43,6 +43,8 @@ RUN addgroup --gid 1000 flexdaemon && \
     && chmod a+rX /home \
     && chmod a+rwX /home/flexdaemon
 
+RUN apt-get update && apt-get install -y git-lfs && git lfs install 
+
 USER flexdaemon
 WORKDIR /home/flexdaemon
 CMD ["sleep", "infinity"]
