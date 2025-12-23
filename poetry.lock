@@ -396,18 +396,18 @@ css = ["tinycss2 (>=1.1.0,<1.5)"]
 
 [[package]]
 name = "boto3"
-version = "1.42.14"
+version = "1.42.15"
 description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "boto3-1.42.14-py3-none-any.whl", hash = "sha256:bfcc665227bb4432a235cb4adb47719438d6472e5ccbf7f09512046c3f749670"},
-    {file = "boto3-1.42.14.tar.gz", hash = "sha256:a5d005667b480c844ed3f814a59f199ce249d0f5669532a17d06200c0a93119c"},
+    {file = "boto3-1.42.15-py3-none-any.whl", hash = "sha256:94aabb83e3be3e2ea5ffa530cd5e221e8f4eb65f8d126d097e03d1ab80e5c5ce"},
+    {file = "boto3-1.42.15.tar.gz", hash = "sha256:d673c9b6bb9e293e028e354de6701351f1881e3fbeb25d739dd33c4940a30929"},
 ]
 
 [package.dependencies]
-botocore = ">=1.42.14,<1.43.0"
+botocore = ">=1.42.15,<1.43.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.16.0,<0.17.0"
 
@@ -416,14 +416,14 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.42.14"
+version = "1.42.15"
 description = "Low-level, data-driven core of boto 3."
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "botocore-1.42.14-py3-none-any.whl", hash = "sha256:efe89adfafa00101390ec2c371d453b3359d5f9690261bc3bd70131e0d453e8e"},
-    {file = "botocore-1.42.14.tar.gz", hash = "sha256:cf5bebb580803c6cfd9886902ca24834b42ecaa808da14fb8cd35ad523c9f621"},
+    {file = "botocore-1.42.15-py3-none-any.whl", hash = "sha256:888ec4a817cbc56a93d5945b458621d8a6f580694373f8e93f68984f27523913"},
+    {file = "botocore-1.42.15.tar.gz", hash = "sha256:504c548aa333728c99a692908d3e6acb718983585ad7a836d2fab9604518a636"},
 ]
 
 [package.dependencies]
@@ -3255,15 +3255,15 @@ psutil = "*"
 
 [[package]]
 name = "mistune"
-version = "3.1.4"
+version = "3.2.0"
 description = "A sane and fast Markdown parser with useful plugins and renderers"
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
 markers = "extra == \"dev\" or extra == \"docs\""
 files = [
-    {file = "mistune-3.1.4-py3-none-any.whl", hash = "sha256:93691da911e5d9d2e23bc54472892aff676df27a75274962ff9edc210364266d"},
-    {file = "mistune-3.1.4.tar.gz", hash = "sha256:b5a7f801d389f724ec702840c11d8fc48f2b33519102fc7ee739e8177b672164"},
+    {file = "mistune-3.2.0-py3-none-any.whl", hash = "sha256:febdc629a3c78616b94393c6580551e0e34cc289987ec6c35ed3f4be42d0eee1"},
+    {file = "mistune-3.2.0.tar.gz", hash = "sha256:708487c8a8cdd99c9d90eb3ed4c3ed961246ff78ac82f03418f5183ab70e398a"},
 ]
 
 [package.dependencies]
@@ -3535,15 +3535,15 @@ icu = ["PyICU (>=1.0.0)"]
 
 [[package]]
 name = "nbclient"
-version = "0.10.3"
+version = "0.10.4"
 description = "A client library for executing notebooks. Formerly nbconvert's ExecutePreprocessor."
 optional = true
 python-versions = ">=3.10.0"
 groups = ["main"]
 markers = "extra == \"dev\" or extra == \"docs\""
 files = [
-    {file = "nbclient-0.10.3-py3-none-any.whl", hash = "sha256:39e9bd403504dd2484dd0fd25235bb6a683ce8cd9873356e40d880696adc9e35"},
-    {file = "nbclient-0.10.3.tar.gz", hash = "sha256:0baf171ee246e3bb2391da0635e719f27dc77d99aef59e0b04dcb935ee04c575"},
+    {file = "nbclient-0.10.4-py3-none-any.whl", hash = "sha256:9162df5a7373d70d606527300a95a975a47c137776cd942e52d9c7e29ff83440"},
+    {file = "nbclient-0.10.4.tar.gz", hash = "sha256:1e54091b16e6da39e297b0ece3e10f6f29f4ac4e8ee515d29f8a7099bd6553c9"},
 ]
 
 [package.dependencies]
@@ -5073,14 +5073,14 @@ testutils = ["gitpython (>3)"]
 
 [[package]]
 name = "pyparsing"
-version = "3.2.5"
+version = "3.3.1"
 description = "pyparsing - Classes and methods to define and execute parsing grammars"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "pyparsing-3.2.5-py3-none-any.whl", hash = "sha256:e38a4f02064cf41fe6593d328d0512495ad1f3d8a91c4f73fc401b3079a59a5e"},
-    {file = "pyparsing-3.2.5.tar.gz", hash = "sha256:2df8d5b7b2802ef88e8d016a2eb9c7aeaa923529cd251ed0fe4608275d4105b6"},
+    {file = "pyparsing-3.3.1-py3-none-any.whl", hash = "sha256:023b5e7e5520ad96642e2c6db4cb683d3970bd640cdf7115049a6e9c3682df82"},
+    {file = "pyparsing-3.3.1.tar.gz", hash = "sha256:47fad0f17ac1e2cad3de3b458570fbc9b03560aa029ed5e16ee5554da9a2251c"},
 ]
 
 [package.extras]
@@ -6219,7 +6219,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "(extra == \"dev\" or extra == \"docs\") and (extra == \"dev\" or extra == \"pytorch\" or extra == \"docs\") or python_version >= \"3.12\" and (extra == \"dev\" or extra == \"docs\" or extra == \"pytorch\")"
+markers = "python_version >= \"3.12\" and sys_platform == \"darwin\" and (extra == \"dev\" or extra == \"pytorch\" or extra == \"docs\") or (extra == \"dev\" or extra == \"docs\") and (extra == \"dev\" or extra == \"docs\" or extra == \"pytorch\") or python_version >= \"3.12\" and (extra == \"dev\" or extra == \"docs\" or extra == \"pytorch\")"
 files = [
     {file = "setuptools-80.9.0-py3-none-any.whl", hash = "sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922"},
     {file = "setuptools-80.9.0.tar.gz", hash = "sha256:f36b47402ecde768dbfafc46e8e4207b4360c654f1f3bb84475f0a28628fb19c"},
@@ -7858,4 +7858,4 @@ vtk = ["vtk"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "be03db7155e8e244cf8f9b362e2cc25fb71a557bc7c4d1fe19a1ee21358868e7"
+content-hash = "3409fe27832dddd00984dcd5bf47d4fa395453caf7035a503023e93147c9bf6c"
