@@ -1467,10 +1467,16 @@ class ModeSolver(Tidy3dBaseModel):
 
         colocate_coords = self._get_colocation_coordinates()
 
+        min_bound, max_bound = self._sim_boundary_positions
+        _, plane_dims = self.plane.pop_axis("xyz", self.normal_axis)
+        slice_dict = {plane_dims[axis]: slice(min_bound[axis], max_bound[axis]) for axis in [0, 1]}
         # Colocate input data to new coordinates
         data_dict_colocated = {}
         for key, field in mode_solver_data.symmetry_expanded.field_components.items():
-            data_dict_colocated[key] = field.interp(**colocate_coords).astype(field.dtype)
+            field_sliced = field.sel(slice_dict)
+            data_dict_colocated[key] = field_sliced.interp(
+                **colocate_coords, kwargs={"fill_value": "extrapolate"}
+            ).astype(field.dtype)
 
         # Update data
         mode_solver_monitor = self.to_mode_solver_monitor(
