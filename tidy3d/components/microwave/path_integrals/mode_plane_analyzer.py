@@ -209,13 +209,15 @@ class ModePlaneAnalyzer(Box):
         min_b_3d, max_b_3d = self._get_mode_limits(grid, mode_symmetry_3d)
 
         intersection_plane = Box.from_bounds(min_b_3d, max_b_3d)
-        conductor_shapely = self._get_isolated_conductors_as_shapely(intersection_plane, structures)
-
-        conductor_shapely = self._filter_conductors_touching_sim_bounds(
-            (min_b_3d, max_b_3d), mode_symmetry_3d, conductor_shapely
+        isolated_conductor_shapely = self._get_isolated_conductors_as_shapely(
+            intersection_plane, structures
         )
 
-        if len(conductor_shapely) < 1:
+        filtered_conductor_shapely = self._filter_conductors_touching_sim_bounds(
+            (min_b_3d, max_b_3d), mode_symmetry_3d, isolated_conductor_shapely
+        )
+
+        if len(filtered_conductor_shapely) < 1:
             raise SetupError(
                 "No valid isolated conductors were found in the mode plane. Please ensure that a 'Structure' "
                 "with a medium of type 'PEC' or 'LossyMetalMedium' intersects the mode plane and is not touching "
@@ -228,15 +230,16 @@ class ModePlaneAnalyzer(Box):
         snap_spec = self._snap_spec
 
         bounding_boxes = []
-        for shape in conductor_shapely:
+        for shape in filtered_conductor_shapely:
             box = bounding_box_from_shapely(shape)
             boxes = self._apply_symmetries(symmetry, sim_box.center, box)
             for box in boxes:
                 box_snapped = snap_box_to_grid(grid, box, snap_spec)
                 bounding_boxes.append(box_snapped)
 
+        # TODO Improve these checks once FXC-4112-PEC-boundary-position-not-respected-by-ModeSolver is merged
         for bounding_box in bounding_boxes:
-            if self._check_box_intersects_with_conductors(conductor_shapely, bounding_box):
+            if self._check_box_intersects_with_conductors(isolated_conductor_shapely, bounding_box):
                 raise SetupError(
                     "Failed to automatically generate path specification because a generated path "
                     "specification was found to intersect with a conductor. There is currently limited "
@@ -244,7 +247,24 @@ class ModePlaneAnalyzer(Box):
                     "path specification through a 'CustomImpedanceSpec'. Alternatively, enforce a "
                     "smaller grid around the conductors in the mode plane, which may resolve the issue."
                 )
-        return bounding_boxes, conductor_shapely
+
+        # Check that bounding boxes don't extend outside the original mode plane bounds
+        mode_plane_min, mode_plane_max = self.bounds
+        for bounding_box in bounding_boxes:
+            box_min, box_max = bounding_box.bounds
+            if any(box_min[i] < mode_plane_min[i] for i in range(3)) or any(
+                box_max[i] > mode_plane_max[i] for i in range(3)
+            ):
+                raise SetupError(
+                    "Failed to automatically generate path specification because a generated path "
+                    "specification extends outside the mode solving plane bounds. This issue can be fixed "
+                    "by enlarging the mode solving plane and ensuring that there is a buffer of at "
+                    "least 2 grid cells between the mode solving plane bounds and the nearest conductors."
+                    "Alternatively, enforce a smaller grid around the conductors in the mode plane, "
+                    "which may resolve the issue."
+                )
+
+        return bounding_boxes, filtered_conductor_shapely
 
     def _check_box_intersects_with_conductors(
         self, shapely_list: list[Shapely], bounding_box: Box

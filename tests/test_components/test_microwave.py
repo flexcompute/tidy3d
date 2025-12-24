@@ -708,6 +708,87 @@ def test_mode_plane_analyzer_errors():
         )
 
 
+@pytest.mark.parametrize("include_ground_plane", [True, False])
+def test_mode_plane_analyzer_coarse_grid_errors(include_ground_plane):
+    """Test that coarse grids produce appropriate errors for auto path generation.
+
+    With a coarse grid the snapped bounding box around the signal trace can:
+    - intersect other conductors,
+    - extend outside the mode plane bounds which is beyond the domain of the monitor data.
+    """
+    width = 3 * mm
+    metal_thickness = 0.1 * mm
+    coarse_dl = 1.0 * mm
+
+    sim_size = (10 * mm, 10 * mm, 10 * mm)
+    sim_center = (0, 0, sim_size[2] / 2)
+
+    # Signal trace near bottom of mode plane
+    signal_trace = td.Structure(
+        geometry=td.Box(
+            center=(0, 0, 0.3 * mm),
+            size=(td.inf, width, metal_thickness),
+        ),
+        medium=td.PEC,
+    )
+
+    structures = [signal_trace]
+
+    if include_ground_plane:
+        # Ground plane at z=0, extending infinitely in y to touch mode plane y-boundaries
+        # This will be filtered out, but should still be checked for path intersections
+        ground_plane = td.Structure(
+            geometry=td.Box(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, metal_thickness),
+            ),
+            medium=td.PEC,
+        )
+        structures.append(ground_plane)
+        # Mode plane spans full simulation for ground plane case
+        mode_plane_size = (0, sim_size[1], sim_size[2])
+        mode_plane_center = (0, 0, sim_center[2])
+    else:
+        # Small mode plane that doesn't span full sim, so bounding box extends outside
+        mode_plane_size = (0, sim_size[1], 1.0 * mm)
+        mode_plane_center = (0, 0, 0.5 * mm)
+
+    sim = td.Simulation(
+        center=sim_center,
+        size=sim_size,
+        grid_spec=td.GridSpec.uniform(dl=coarse_dl),
+        structures=structures,
+        sources=[],
+        run_time=1e-12,
+    )
+
+    mode_plane = td.Box(center=mode_plane_center, size=mode_plane_size)
+    path_spec_gen = ModePlaneAnalyzer(
+        center=mode_plane.center,
+        size=mode_plane.size,
+        field_data_colocated=False,
+    )
+
+    if include_ground_plane:
+        # Should raise SetupError because auto-generated path intersects the ground plane
+        with pytest.raises(SetupError, match="intersect with a conductor"):
+            path_spec_gen.get_conductor_bounding_boxes(
+                sim.structures,
+                sim.grid,
+                sim.symmetry,
+                sim.bounding_box,
+            )
+    else:
+        # Should raise SetupError because bounding box extends outside mode plane
+        with pytest.raises(SetupError, match="extends outside the mode solving plane"):
+            path_spec_gen.get_conductor_bounding_boxes(
+                sim.structures,
+                sim.grid,
+                sim.symmetry,
+                sim.bounding_box,
+            )
+
+
 @pytest.mark.parametrize("colocate", [False, True])
 @pytest.mark.parametrize("tline_type", ["microstrip", "cpw", "coax"])
 def test_mode_plane_analyzer_canonical_shapes(colocate, tline_type):
