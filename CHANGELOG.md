@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - For `HeatChargeSimulation` objects, the `plot` function now adds the simulation boundary conditions.
+- Improved memory performance in `postprocess_adj` by using `isel` instead of `sel` for xarray slicing.
 
 ### Fixed
 - Fixed `AutoImpedanceSpec` validation to check path intersections against all conductors, not just filtered ones, as well as the mode plane bounds.
