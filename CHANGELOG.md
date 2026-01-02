@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Breaking**: Changed the interpretation of `waist_distance` and `waist_distances` for backward-propagating Gaussian beams (`GaussianBeam`, `AstigmaticGaussianBeam`, `GaussianBeamProfile`, `AstigmaticGaussianBeamProfile`). Previously, the waist position was interpreted relative to the directed propagation axis, meaning switching `direction` from `+` to `-` would also flip the waist position in the global reference frame. Now, the waist position is defined consistently for both directions: a positive `waist_distance` always places the beam waist behind the source/monitor plane (toward the negative normal axis), regardless of propagation direction. This ensures reciprocity between Gaussian sources and overlap monitors used in port-based S-matrix calculations. Users with existing simulations using backward-propagating Gaussian beams with non-zero waist distances may need to adjust their values.
 - For `HeatChargeSimulation` objects, the `plot` function now adds the simulation boundary conditions.
+- Improved memory performance in `postprocess_adj` by using `isel` instead of `sel` for xarray slicing.
 
 ### Fixed
 - Fixed `AutoImpedanceSpec` validation to check path intersections against all conductors, not just filtered ones, as well as the mode plane bounds.

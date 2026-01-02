@@ -309,9 +309,11 @@ banned-module-level-imports = ["scipy", "matplotlib"]
 
 [tool.pytest.ini_options]
 # TODO: remove --assert=plain when https://github.com/scipy/scipy/issues/22236 is resolved
-addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical and not perf'"
+addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical and not perf and not generate_profile and not performance_profile'"
 markers = [
   "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
+  "generate_profile: regenerate fixture data required by the performance tests (select with '-m \"generate_profile\"')",
+  "performance_profile: enable CPU and memory profiling based on data generated with generate_profile (select with '-m \"performance_profile\"')",
   "perf: marks tests which test the runtime of operations (deselect with '-m \"not perf\"')",
   "slow: marks tests as slow (deselect with -m 'not slow')",
 ]
