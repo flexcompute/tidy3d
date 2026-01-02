@@ -3238,22 +3238,15 @@ def test_frequency_coordinate_alignment():
     field_data = {"Ex": data, "Ey": data, "Ez": data}
 
     # Test 1: Exact match should work
-    freqs_exact = np.array([freq])
-    result = _slice_field_data(field_data, freqs_exact)
+    result = _slice_field_data(field_data, slice(0, 1))
     assert len(result) == 3
     assert all(k in result for k in ["Ex", "Ey", "Ez"])
 
-    # Test 2: Tiny FP drift (within typical precision) should fail with KeyError
-    # This demonstrates the original bug - even 0.1 Hz difference causes failure
-    freqs_drifted = np.array([freq + 0.1])  # 0.1 Hz drift at 2e14 Hz scale
-    with pytest.raises(KeyError):
-        _slice_field_data(field_data, freqs_drifted)
-
-    # Test 3: Component indicator filtering works
-    result_e_only = _slice_field_data(field_data, freqs_exact, component_indicator="E")
+    # Test 2: Component indicator filtering works
+    result_e_only = _slice_field_data(field_data, slice(0, 1), component_indicator="E")
     assert len(result_e_only) == 3
 
-    # Test 4: Multiple frequencies
+    # Test 3: Multiple frequencies
     freqs_multi = [1e14, 2e14, 3e14]
     data_multi = xr.DataArray(
         np.array([1.0, 2.0, 3.0]),
@@ -3263,12 +3256,17 @@ def test_frequency_coordinate_alignment():
     field_data_multi = {"Ex": data_multi}
 
     # Selecting subset should work
-    result_subset = _slice_field_data(field_data_multi, np.array([2e14]))
+    result_subset = _slice_field_data(
+        field_data_multi, slice(freqs_multi.index(2e14), 1 + freqs_multi.index(2e14))
+    )
     assert result_subset["Ex"].sizes["f"] == 1
 
     # Selecting non-existent frequency should fail
-    with pytest.raises(KeyError):
-        _slice_field_data(field_data_multi, np.array([1.5e14]))
+    with pytest.raises(IndexError):
+        _slice_field_data(field_data_multi, slice(len(freqs_multi), len(freqs_multi) + 1))
+
+    with pytest.raises(IndexError):
+        _slice_field_data(field_data_multi, slice(-1, len(freqs_multi)))
 
 
 def test_geometry_group_passes_intersected_bounds_to_children():
