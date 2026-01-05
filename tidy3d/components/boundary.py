@@ -3,30 +3,42 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveFloat,
+    field_validator,
+    model_validator,
+)
 
 from tidy3d.components.validators import _assert_min_freq, assert_plane
-from tidy3d.components.viz import (
-    ARROW_ALPHA,
-    ARROW_COLOR_ABSORBER,
-    PlotParams,
-    plot_params_absorber,
-)
+from tidy3d.components.viz import ARROW_ALPHA, ARROW_COLOR_ABSORBER, plot_params_absorber
 from tidy3d.constants import C_0, CONDUCTIVITY, EPSILON_0, HERTZ, MU_0, PML_SIGMA
 from tidy3d.exceptions import DataError, SetupError, ValidationError
 from tidy3d.log import log
 
-from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from .base import Tidy3dBaseModel, cached_property
 from .geometry.base import Box
 from .medium import Medium
 from .mode_spec import ModeSpec
-from .monitor import ModeMonitor, ModeSolverMonitor
 from .source.field import TFSF, GaussianBeam, ModeSource, PlaneWave
-from .types import TYPE_TAG_STR, Ax, Axis, Complex, Direction, FreqBound
+from .types import TYPE_TAG_STR, Direction, FreqBound
 from .types.mode_spec import ModeSpecType
+
+if TYPE_CHECKING:
+    from typing import Callable
+
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
+    from tidy3d.components.viz import PlotParams
+
+    from .monitor import ModeMonitor, ModeSolverMonitor
+    from .types import Ax, Axis, Complex
 
 MIN_NUM_PML_LAYERS = 6
 MIN_NUM_STABLE_PML_LAYERS = 6
@@ -37,13 +49,16 @@ MIN_NUM_ABSORBER_LAYERS = 6
 CLIPPING_MARGIN = 2
 
 
-def warn_num_layers_factory(min_num_layers: int, descr: str):
+def warn_num_layers_factory(
+    min_num_layers: int, descr: str
+) -> Callable[[type[AbsorberSpec], int], int]:
     """Several similar classes defined have a ``num_layers`` data member, and they generate
     similar warning messages when ``num_layers`` is too small.  This function creates a pydantic
     validator which can be shared with all of these classes to create these warning messages."""
 
-    @pd.validator("num_layers", allow_reuse=True, always=True)
-    def _warn_num_layers(cls, val):
+    @field_validator("num_layers")
+    @classmethod
+    def _warn_num_layers(cls: type[AbsorberSpec], val: int) -> int:
         if val < min_num_layers:
             cls_name = cls.__name__
             log.warning(
@@ -70,7 +85,11 @@ MAX_BROADBAND_MODE_ABC_NUM_FREQS = 101
 class BoundaryEdge(ABC, Tidy3dBaseModel):
     """Electromagnetic boundary condition at a domain edge."""
 
-    name: str = pd.Field(None, title="Name", description="Optional unique name for boundary.")
+    name: Optional[str] = Field(
+        None,
+        title="Name",
+        description="Optional unique name for boundary.",
+    )
 
 
 # PBC keyword
@@ -78,7 +97,7 @@ class Periodic(BoundaryEdge):
     """Periodic boundary condition class."""
 
     @property
-    def bloch_vec(self):
+    def bloch_vec(self) -> int:
         """Periodic boundaries are effectively Bloch boundaries with ``bloch_vec == 0``.
         In practice, periodic boundaries do not force the use of complex fields, while Bloch
         boundaries do, even with ``bloch_vec == 0``. Thus, it is more efficient to use periodic.
@@ -105,7 +124,7 @@ class ABCBoundary(AbstractABCBoundary):
     See, for example, John B. Schneider, Understanding the Finite-Difference Time-Domain Method, Chapter 6.
     """
 
-    permittivity: Optional[float] = pd.Field(
+    permittivity: Optional[float] = Field(
         None,
         title="Effective Permittivity",
         description="Effective permittivity for determining propagation constant. "
@@ -114,26 +133,24 @@ class ABCBoundary(AbstractABCBoundary):
         ge=1.0,
     )
 
-    conductivity: Optional[pd.NonNegativeFloat] = pd.Field(
+    conductivity: Optional[NonNegativeFloat] = Field(
         None,
         title="Effective Conductivity",
         description="Effective conductivity for determining propagation constant. "
         "If ``None``, this value will be automatically inferred from the medium at "
         "the domain boundary and the central frequency of the source.",
-        units=CONDUCTIVITY,
+        json_schema_extra={"units": CONDUCTIVITY},
     )
 
-    @pd.validator("conductivity", always=True)
-    @skip_if_fields_missing(["permittivity"])
-    def _conductivity_only_with_float_permittivity(cls, val, values):
+    @model_validator(mode="after")
+    def _conductivity_only_with_float_permittivity(self) -> Self:
         """Validate that conductivity can be provided only with float permittivity."""
-        perm = values["permittivity"]
-        if val is not None and perm is None:
+        if self.conductivity is not None and self.permittivity is None:
             raise ValidationError(
                 "Field 'conductivity' in 'ABCBoundary' can only be provided "
                 "simultaneously with 'permittivity'."
             )
-        return val
+        return self
 
 
 class BroadbandModeABCFitterParam(Tidy3dBaseModel):
@@ -148,7 +165,7 @@ class BroadbandModeABCFitterParam(Tidy3dBaseModel):
     >>> fitter_param = BroadbandModeABCFitterParam(max_num_poles=5, tolerance_rms=1e-4, frequency_sampling_points=10)
     """
 
-    max_num_poles: int = pd.Field(
+    max_num_poles: int = Field(
         DEFAULT_BROADBAND_MODE_ABC_NUM_POLES,
         title="Maximal Number Of Poles",
         description="Maximal number of poles in complex-conjugate pole residue model for "
@@ -157,13 +174,13 @@ class BroadbandModeABCFitterParam(Tidy3dBaseModel):
         le=MAX_BROADBAND_MODE_ABC_NUM_POLES,
     )
 
-    tolerance_rms: pd.NonNegativeFloat = pd.Field(
+    tolerance_rms: NonNegativeFloat = Field(
         DEFAULT_BROADBAND_MODE_ABC_FITTER_TOLERANCE,
         title="Fitting Tolerance",
         description="Tolerance in fitting the mode propagation index.",
     )
 
-    frequency_sampling_points: int = pd.Field(
+    frequency_sampling_points: int = Field(
         DEFAULT_BROADBAND_MODE_ABC_NUM_FREQS,
         title="Number Of Frequencies",
         description="Number of sampling frequencies used in fitting the mode propagation index.",
@@ -183,21 +200,21 @@ class BroadbandModeABCSpec(Tidy3dBaseModel):
     >>> broadband_mode_abc_spec = BroadbandModeABCSpec(frequency_range=(100e12, 120e12), fit_param=BroadbandModeABCFitterParam())
     """
 
-    frequency_range: FreqBound = pd.Field(
-        ...,
+    frequency_range: FreqBound = Field(
         title="Frequency Range",
         description="Frequency range for the broadband mode absorption boundary conditions.",
-        units=(HERTZ, HERTZ),
+        json_schema_extra={"units": (HERTZ, HERTZ)},
     )
 
-    fit_param: BroadbandModeABCFitterParam = pd.Field(
+    fit_param: BroadbandModeABCFitterParam = Field(
         DEFAULT_BROADBAND_MODE_ABC_FITTER_PARAMS,
         title="Fitting Parameters For Broadband Mode Absorption Boundary Conditions",
         description="Parameters for fitting the mode propagation index over the frequency range using pole-residue pair model.",
     )
 
-    @pd.validator("frequency_range", always=True)
-    def validate_frequency_range(cls, val, values):
+    @field_validator("frequency_range", mode="after")
+    @classmethod
+    def validate_frequency_range(cls, val: FreqBound) -> FreqBound:
         """Validate that max frequency is greater than min frequency."""
         _assert_min_freq(val[0], "min frequency")
         if val[1] <= val[0]:
@@ -237,7 +254,7 @@ class BroadbandModeABCSpec(Tidy3dBaseModel):
         )
 
     @property
-    def _frequency_grid(self) -> np.ndarray:
+    def _frequency_grid(self) -> NDArray:
         """Frequency grid for the broadband mode absorption boundary conditions.
         Propagation constant is sampled at these frequencies and fitted using pole-residue pair model.
         """
@@ -251,14 +268,14 @@ class BroadbandModeABCSpec(Tidy3dBaseModel):
 class ModeABCBoundary(AbstractABCBoundary):
     """One-way wave equation absorbing boundary conditions for absorbing a waveguide mode."""
 
-    mode_spec: ModeSpecType = pd.Field(
+    mode_spec: ModeSpecType = Field(
         DEFAULT_MODE_SPEC_MODE_ABC,
         title="Mode Specification",
         description="Parameters that determine the modes computed by the mode solver.",
         discriminator=TYPE_TAG_STR,
     )
 
-    mode_index: pd.NonNegativeInt = pd.Field(
+    mode_index: NonNegativeInt = Field(
         0,
         title="Mode Index",
         description="Index into the collection of modes returned by mode solver. "
@@ -267,20 +284,21 @@ class ModeABCBoundary(AbstractABCBoundary):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
-    freq_spec: Optional[Union[pd.PositiveFloat, BroadbandModeABCSpec]] = pd.Field(
+    freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = Field(
         None,
         title="Absorption Frequency Specification",
         description="Specifies the frequency at which field is absorbed. If ``None``, then the central frequency of the source is used. If ``BroadbandModeABCSpec``, then the field is absorbed over the specified frequency range.",
     )
 
-    plane: Box = pd.Field(
+    plane: Box = Field(
         ...,
         title="Plane",
         description="Cross-sectional plane in which the absorbed mode will be computed.",
     )
 
-    @pd.validator("plane", always=True)
-    def is_plane(cls, val):
+    @field_validator("plane")
+    @classmethod
+    def is_plane(cls, val: Box) -> Box:
         """Raise validation error if not planar."""
         if val.size.count(0.0) != 1:
             raise ValidationError(
@@ -292,15 +310,15 @@ class ModeABCBoundary(AbstractABCBoundary):
     def from_source(
         cls,
         source: ModeSource,
-        freq_spec: Optional[Union[pd.PositiveFloat, BroadbandModeABCSpec]] = None,
-    ) -> ModeABCBoundary:
+        freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
+    ) -> Self:
         """Instantiate from a ``ModeSource``.
 
         Parameters
         ----------
         source : :class:`ModeSource`
             Mode source.
-        freq_spec : Optional[Union[pd.PositiveFloat, BroadbandModeABCSpec]] = None
+        freq_spec : Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None
             Specifies the frequency at which field is absorbed. If ``None``, then the central frequency of the source is used. If ``BroadbandModeABCSpec``, then the field is absorbed over the specified frequency range.
 
         Returns
@@ -330,18 +348,18 @@ class ModeABCBoundary(AbstractABCBoundary):
     def from_monitor(
         cls,
         monitor: Union[ModeMonitor, ModeSolverMonitor],
-        mode_index: pd.NonNegativeInt = 0,
-        freq_spec: Optional[Union[pd.PositiveFloat, BroadbandModeABCSpec]] = None,
-    ) -> ModeABCBoundary:
+        mode_index: NonNegativeInt = 0,
+        freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
+    ) -> Self:
         """Instantiate from a ``ModeMonitor`` or ``ModeSolverMonitor``.
 
         Parameters
         ----------
         monitor : Union[:class:`ModeMonitor`, :class:`ModeSolverMonitor`]
             Mode monitor.
-        mode_index : pd.NonNegativeInt = 0
+        mode_index : NonNegativeInt = 0
             Mode index.
-        freq_spec : Optional[Union[pd.PositiveFloat, BroadbandModeABCSpec]] = None
+        freq_spec : Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None
             Specifies the frequency at which field is absorbed. If ``None``, then the central frequency of the source is used. If ``BroadbandModeABCSpec``, then the field is absorbed over the specified frequency range.
 
         Returns
@@ -369,13 +387,13 @@ class InternalAbsorber(Box):
     Note that internal absorbers are automatically wrapped in a PEC frame with a backing PEC plate on the non-absorbing side.
     """
 
-    direction: Direction = pd.Field(
+    direction: Direction = Field(
         ...,
         title="Absorption Direction",
         description="Indicates which direction of traveling waves are absorbed.",
     )
 
-    grid_shift: int = pd.Field(
+    grid_shift: int = Field(
         0,
         title="Absorber Shift",
         description="Displacement of absorber in the normal positive direction in number of cells. "
@@ -383,7 +401,7 @@ class InternalAbsorber(Box):
         "one can use the same `size` and `center` as for the source and simply set `shift` to 1.",
     )
 
-    boundary_spec: Union[ModeABCBoundary, ABCBoundary] = pd.Field(
+    boundary_spec: Union[ModeABCBoundary, ABCBoundary] = Field(
         ...,
         title="Boundary Specification",
         description="Boundary specification for defining effective propagation index in the one-way wave equation.",
@@ -392,8 +410,11 @@ class InternalAbsorber(Box):
 
     _plane_validator = assert_plane()
 
-    @pd.validator("boundary_spec", always=True)
-    def _must_provide_permittivity(cls, val):
+    @field_validator("boundary_spec")
+    @classmethod
+    def _must_provide_permittivity(
+        cls, val: Union[ModeABCBoundary, ABCBoundary]
+    ) -> Union[ModeABCBoundary, ABCBoundary]:
         """Validate that permittivity is provided for ABCBoundary."""
         if isinstance(val, ABCBoundary) and val.permittivity is None:
             raise ValidationError(
@@ -419,7 +440,7 @@ class InternalAbsorber(Box):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        ax: Ax = None,
+        ax: Optional[Ax] = None,
         **patch_kwargs: Any,
     ) -> Ax:
         """Plot this absorber."""
@@ -471,8 +492,7 @@ class BlochBoundary(BoundaryEdge):
         * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_
     """
 
-    bloch_vec: float = pd.Field(
-        ...,
+    bloch_vec: float = Field(
         title="Normalized Bloch vector component",
         description="Normalized component of the Bloch vector in units of "
         "2 * pi / (size along dimension) in the background medium, "
@@ -486,8 +506,12 @@ class BlochBoundary(BoundaryEdge):
 
     @classmethod
     def from_source(
-        cls, source: BlochSourceType, domain_size: float, axis: Axis, medium: Medium = None
-    ) -> BlochBoundary:
+        cls,
+        source: BlochSourceType,
+        domain_size: float,
+        axis: Axis,
+        medium: Optional[Medium] = None,
+    ) -> Self:
         """Set the Bloch vector component based on a given angled source and its center frequency.
            Note that if a broadband angled source is used, only the frequency components near the
            center frequency will exhibit angled incidence at the expect angle. In this case, a
@@ -575,24 +599,24 @@ class AbsorberParams(Tidy3dBaseModel):
     >>> params = AbsorberParams(sigma_order=3, sigma_min=0.0, sigma_max=1.5)
     """
 
-    sigma_order: pd.NonNegativeInt = pd.Field(
+    sigma_order: NonNegativeInt = Field(
         3,
         title="Sigma Order",
         description="Order of the polynomial describing the absorber profile (~dist^sigma_order).",
     )
 
-    sigma_min: pd.NonNegativeFloat = pd.Field(
+    sigma_min: NonNegativeFloat = Field(
         0.0,
         title="Sigma Minimum",
         description="Minimum value of the absorber conductivity.",
-        units=PML_SIGMA,
+        json_schema_extra={"units": PML_SIGMA},
     )
 
-    sigma_max: pd.NonNegativeFloat = pd.Field(
+    sigma_max: NonNegativeFloat = Field(
         1.5,
         title="Sigma Maximum",
         description="Maximum value of the absorber conductivity.",
-        units=PML_SIGMA,
+        json_schema_extra={"units": PML_SIGMA},
     )
 
 
@@ -604,30 +628,36 @@ class PMLParams(AbsorberParams):
     >>> params = PMLParams(sigma_order=3, sigma_min=0.0, sigma_max=1.5, kappa_min=0.0)
     """
 
-    kappa_order: pd.NonNegativeInt = pd.Field(
+    kappa_order: NonNegativeInt = Field(
         3,
         title="Kappa Order",
         description="Order of the polynomial describing the PML kappa profile "
         "(kappa~dist^kappa_order).",
     )
 
-    kappa_min: pd.NonNegativeFloat = pd.Field(0.0, title="Kappa Minimum", description="")
+    kappa_min: NonNegativeFloat = Field(0.0, title="Kappa Minimum")
 
-    kappa_max: pd.NonNegativeFloat = pd.Field(1.5, title="Kappa Maximum", description="")
+    kappa_max: NonNegativeFloat = Field(1.5, title="Kappa Maximum")
 
-    alpha_order: pd.NonNegativeInt = pd.Field(
+    alpha_order: NonNegativeInt = Field(
         3,
         title="Alpha Order",
         description="Order of the polynomial describing the PML alpha profile "
         "(alpha~dist^alpha_order).",
     )
 
-    alpha_min: pd.NonNegativeFloat = pd.Field(
-        0.0, title="Alpha Minimum", description="Minimum value of the PML alpha.", units=PML_SIGMA
+    alpha_min: NonNegativeFloat = Field(
+        0.0,
+        title="Alpha Minimum",
+        description="Minimum value of the PML alpha.",
+        json_schema_extra={"units": PML_SIGMA},
     )
 
-    alpha_max: pd.NonNegativeFloat = pd.Field(
-        1.5, title="Alpha Maximum", description="Maximum value of the PML alpha.", units=PML_SIGMA
+    alpha_max: NonNegativeFloat = Field(
+        1.5,
+        title="Alpha Maximum",
+        description="Maximum value of the PML alpha.",
+        json_schema_extra={"units": PML_SIGMA},
     )
 
 
@@ -664,19 +694,17 @@ DefaultStablePMLParameters = PMLParams(
 class AbsorberSpec(BoundaryEdge):
     """Specifies the generic absorber properties along a single dimension."""
 
-    num_layers: int = pd.Field(
-        ...,
+    num_layers: float = Field(
         title="Number of Layers",
         description="Number of layers of standard PML.",
         ge=1,
     )
-    parameters: AbsorberParams = pd.Field(
-        ...,
+    parameters: AbsorberParams = Field(
         title="Absorber Parameters",
         description="Parameters to fine tune the absorber profile and properties.",
     )
 
-    extrude_structures: bool = pd.Field(
+    extrude_structures: bool = Field(
         False,
         title="Enable structure extrusion to PML",
         description="Automatically extrude structures into the absorbing region (e.g., PML or adiabatic absorber). "
@@ -792,14 +820,14 @@ class PML(AbsorberSpec):
 
     """
 
-    num_layers: int = pd.Field(
+    num_layers: int = Field(
         12,
         title="Number of Layers",
         description="Number of layers of standard PML.",
         ge=1,
     )
 
-    parameters: PMLParams = pd.Field(
+    parameters: PMLParams = Field(
         DefaultPMLParameters,
         title="PML Parameters",
         description="Parameters of the complex frequency-shifted absorption poles.",
@@ -809,7 +837,7 @@ class PML(AbsorberSpec):
         min_num_layers=MIN_NUM_PML_LAYERS, descr="perfectly-matched layer"
     )
 
-    extrude_structures: bool = pd.Field(
+    extrude_structures: bool = Field(
         True,
         title="Enable structure extrusion to PML",
         description="Automatically extrude structures into the absorbing region (e.g., PML or adiabatic absorber). "
@@ -845,14 +873,14 @@ class StablePML(AbsorberSpec):
         * `Introduction to perfectly matched layer (PML) tutorial <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`__
     """
 
-    num_layers: int = pd.Field(
+    num_layers: int = Field(
         40,
         title="Number of Layers",
         description="Number of layers of 'stable' PML.",
         ge=1,
     )
 
-    parameters: PMLParams = pd.Field(
+    parameters: PMLParams = Field(
         DefaultStablePMLParameters,
         title="Stable PML Parameters",
         description="'Stable' parameters of the complex frequency-shifted absorption poles.",
@@ -862,7 +890,7 @@ class StablePML(AbsorberSpec):
         min_num_layers=MIN_NUM_STABLE_PML_LAYERS, descr="stable perfectly-matched layer"
     )
 
-    extrude_structures: bool = pd.Field(
+    extrude_structures: bool = Field(
         True,
         title="Enable structure extrusion to PML",
         description="Automatically extrude structures into the absorbing region (e.g., PML or adiabatic absorber). "
@@ -913,14 +941,14 @@ class Absorber(AbsorberSpec):
         * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
     """
 
-    num_layers: int = pd.Field(
+    num_layers: int = Field(
         40,
         title="Number of Layers",
         description="Number of layers of absorber to add to + and - boundaries.",
         ge=1,
     )
 
-    parameters: AbsorberParams = pd.Field(
+    parameters: AbsorberParams = Field(
         DefaultAbsorberParameters,
         title="Absorber Parameters",
         description="Adiabatic absorber parameters.",
@@ -980,70 +1008,68 @@ class Boundary(Tidy3dBaseModel):
         * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_
     """
 
-    plus: BoundaryEdgeType = pd.Field(
-        PML(),
+    plus: BoundaryEdgeType = Field(
+        default_factory=PML,
         title="Plus BC",
         description="Boundary condition on the plus side along a dimension.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    minus: BoundaryEdgeType = pd.Field(
-        PML(),
+    minus: BoundaryEdgeType = Field(
+        default_factory=PML,
         title="Minus BC",
         description="Boundary condition on the minus side along a dimension.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    @pd.root_validator(skip_on_failure=True)
-    def bloch_on_both_sides(cls, values):
+    @model_validator(mode="after")
+    def bloch_on_both_sides(self) -> Self:
         """Error if a Bloch boundary is applied on only one side."""
-        plus = values.get("plus")
-        minus = values.get("minus")
-        num_bloch = isinstance(plus, BlochBoundary) + isinstance(minus, BlochBoundary)
+        num_bloch = isinstance(self.plus, BlochBoundary) + isinstance(self.minus, BlochBoundary)
         if num_bloch == 1:
             raise SetupError(
                 "Bloch boundaries must be applied either on both sides or on neither side."
             )
-        return values
+        return self
 
-    @pd.root_validator(skip_on_failure=True)
-    def periodic_with_pml(cls, values):
+    @model_validator(mode="after")
+    def periodic_with_pml(self) -> Self:
         """Error if PBC is specified with a PML."""
-        plus = values.get("plus")
-        minus = values.get("minus")
-        num_pbc = isinstance(plus, Periodic) + isinstance(minus, Periodic)
+        num_pbc = isinstance(self.plus, Periodic) + isinstance(self.minus, Periodic)
         num_pml = isinstance(
-            plus, (PML, StablePML, Absorber, ABCBoundary, ModeABCBoundary)
-        ) + isinstance(minus, (PML, StablePML, Absorber, ABCBoundary, ModeABCBoundary))
+            self.plus, (PML, StablePML, Absorber, ABCBoundary, ModeABCBoundary)
+        ) + isinstance(self.minus, (PML, StablePML, Absorber, ABCBoundary, ModeABCBoundary))
         if num_pbc == 1 and num_pml == 1:
-            raise SetupError("Cannot have both PML and PBC along the same dimension.")
-        return values
+            raise SetupError("Cannot have both 'PML' and 'Periodic' along the same dimension.")
+        return self
 
-    @pd.root_validator(skip_on_failure=True)
-    def periodic_with_pec_pmc(cls, values):
-        """If a PBC is specified along with PEC or PMC on the other side, manually set the PBC
-        to PEC or PMC so that no special treatment of halos is required."""
-        plus = values.get("plus")
-        minus = values.get("minus")
-
+    @model_validator(mode="after")
+    def periodic_with_pec_pmc(self) -> Self:
+        """
+        If a PBC is specified along with PEC or PMC on the other side, manually set the PBC
+        to PEC or PMC so that no special treatment of halos is required.
+        """
+        plus, minus = self.plus, self.minus
         switched = False
+
         if isinstance(minus, (PECBoundary, PMCBoundary)) and isinstance(plus, Periodic):
             plus = minus
             switched = True
         elif isinstance(plus, (PECBoundary, PMCBoundary)) and isinstance(minus, Periodic):
             minus = plus
             switched = True
+
         if switched:
-            values.update({"plus": plus, "minus": minus})
+            object.__setattr__(self, "plus", plus)
+            object.__setattr__(self, "minus", minus)
             log.warning(
                 "A periodic boundary condition was specified on the opposite side of a perfect "
                 "electric or magnetic conductor boundary. This periodic boundary condition will "
                 "be replaced by the perfect electric or magnetic conductor across from it."
             )
-        return values
+
+        return self
 
     @classmethod
-    def periodic(cls):
+    def periodic(cls) -> Self:
         """Periodic boundary specification on both sides along a dimension.
 
         Example
@@ -1055,7 +1081,7 @@ class Boundary(Tidy3dBaseModel):
         return cls(plus=plus, minus=minus)
 
     @classmethod
-    def bloch(cls, bloch_vec: complex):
+    def bloch(cls, bloch_vec: complex) -> Self:
         """Bloch boundary specification on both sides along a dimension.
 
         Parameters
@@ -1074,8 +1100,12 @@ class Boundary(Tidy3dBaseModel):
 
     @classmethod
     def bloch_from_source(
-        cls, source: BlochSourceType, domain_size: float, axis: Axis, medium: Medium = None
-    ):
+        cls,
+        source: BlochSourceType,
+        domain_size: float,
+        axis: Axis,
+        medium: Optional[Medium] = None,
+    ) -> Self:
         """Bloch boundary specification on both sides along a dimension based on a given source.
 
         Parameters
@@ -1107,7 +1137,7 @@ class Boundary(Tidy3dBaseModel):
         return cls(plus=plus, minus=minus)
 
     @classmethod
-    def pec(cls):
+    def pec(cls) -> Self:
         """PEC boundary specification on both sides along a dimension.
 
         Example
@@ -1119,7 +1149,7 @@ class Boundary(Tidy3dBaseModel):
         return cls(plus=plus, minus=minus)
 
     @classmethod
-    def pmc(cls):
+    def pmc(cls) -> Self:
         """PMC boundary specification on both sides along a dimension.
 
         Example
@@ -1133,9 +1163,9 @@ class Boundary(Tidy3dBaseModel):
     @classmethod
     def abc(
         cls,
-        permittivity: Optional[pd.PositiveFloat] = None,
-        conductivity: Optional[pd.NonNegativeFloat] = None,
-    ):
+        permittivity: Optional[PositiveFloat] = None,
+        conductivity: Optional[NonNegativeFloat] = None,
+    ) -> Self:
         """ABC boundary specification on both sides along a dimension.
 
         Example
@@ -1157,9 +1187,9 @@ class Boundary(Tidy3dBaseModel):
         cls,
         plane: Box,
         mode_spec: ModeSpecType = DEFAULT_MODE_SPEC_MODE_ABC,
-        mode_index: pd.NonNegativeInt = 0,
-        freq_spec: Optional[Union[pd.PositiveFloat, BroadbandModeABCSpec]] = None,
-    ):
+        mode_index: NonNegativeInt = 0,
+        freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
+    ) -> Self:
         """One-way wave equation mode ABC boundary specification on both sides along a dimension.
 
         Parameters
@@ -1168,9 +1198,9 @@ class Boundary(Tidy3dBaseModel):
             Cross-sectional plane in which the absorbed mode will be computed.
         mode_spec: ModeSpecType = ModeSpec()
             Parameters that determine the modes computed by the mode solver.
-        mode_index : pd.NonNegativeInt = 0
+        mode_index : NonNegativeInt = 0
             Mode index.
-        freq_spec : Optional[Union[pd.PositiveFloat, BroadbandModeABCSpec]] = None
+        freq_spec : Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None
             Specifies the frequency at which field is absorbed. If ``None``, then the central frequency of the source is used. If ``BroadbandModeABCSpec``, then the field is absorbed over the specified frequency range.
 
         Example
@@ -1198,15 +1228,15 @@ class Boundary(Tidy3dBaseModel):
     def mode_abc_from_source(
         cls,
         source: ModeSource,
-        freq_spec: Optional[Union[pd.PositiveFloat, BroadbandModeABCSpec]] = None,
-    ):
+        freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
+    ) -> Self:
         """One-way wave equation mode ABC boundary specification on both sides along a dimension constructed from a mode source.
 
         Parameters
         ----------
         source : :class:`ModeSource`
             Mode source.
-        freq_spec : Optional[Union[pd.PositiveFloat, BroadbandModeABCSpec]] = None
+        freq_spec : Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None
             Specifies the frequency at which field is absorbed. If ``None``, then the central frequency of the source is used. If ``BroadbandModeABCSpec``, then the field is absorbed over the specified frequency range.
 
         Example
@@ -1224,9 +1254,9 @@ class Boundary(Tidy3dBaseModel):
     def mode_abc_from_monitor(
         cls,
         monitor: Union[ModeMonitor, ModeSolverMonitor],
-        mode_index: pd.NonNegativeInt = 0,
-        freq_spec: Optional[Union[pd.PositiveFloat, BroadbandModeABCSpec]] = None,
-    ):
+        mode_index: NonNegativeInt = 0,
+        freq_spec: Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None,
+    ) -> Self:
         """One-way wave equation mode ABC boundary specification on both sides along a dimension constructed from a mode monitor.
 
         Example
@@ -1248,7 +1278,9 @@ class Boundary(Tidy3dBaseModel):
         return cls(plus=plus, minus=minus)
 
     @classmethod
-    def pml(cls, num_layers: pd.NonNegativeInt = 12, parameters: PMLParams = DefaultPMLParameters):
+    def pml(
+        cls, num_layers: NonNegativeInt = 12, parameters: PMLParams = DefaultPMLParameters
+    ) -> Self:
         """PML boundary specification on both sides along a dimension.
 
         Parameters
@@ -1268,8 +1300,10 @@ class Boundary(Tidy3dBaseModel):
 
     @classmethod
     def stable_pml(
-        cls, num_layers: pd.NonNegativeInt = 40, parameters: PMLParams = DefaultStablePMLParameters
-    ):
+        cls,
+        num_layers: NonNegativeInt = 40,
+        parameters: PMLParams = DefaultStablePMLParameters,
+    ) -> Self:
         """Stable PML boundary specification on both sides along a dimension.
 
         Parameters
@@ -1289,8 +1323,10 @@ class Boundary(Tidy3dBaseModel):
 
     @classmethod
     def absorber(
-        cls, num_layers: pd.NonNegativeInt = 40, parameters: PMLParams = DefaultAbsorberParameters
-    ):
+        cls,
+        num_layers: NonNegativeInt = 40,
+        parameters: PMLParams = DefaultAbsorberParameters,
+    ) -> Self:
         """Adiabatic absorber boundary specification on both sides along a dimension.
 
         Parameters
@@ -1344,29 +1380,37 @@ class BoundarySpec(Tidy3dBaseModel):
         * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
     """
 
-    x: Boundary = pd.Field(
-        Boundary(),
+    x: Boundary = Field(
+        default_factory=Boundary,
         title="Boundary condition along x.",
         description="Boundary condition on the plus and minus sides along the x axis. "
         "If ``None``, periodic boundaries are applied. Default will change to PML in 2.0 "
         "so explicitly setting the boundaries is recommended.",
     )
 
-    y: Boundary = pd.Field(
-        Boundary(),
+    y: Boundary = Field(
+        default_factory=Boundary,
         title="Boundary condition along y.",
         description="Boundary condition on the plus and minus sides along the y axis. "
         "If ``None``, periodic boundaries are applied. Default will change to PML in 2.0 "
         "so explicitly setting the boundaries is recommended.",
     )
 
-    z: Boundary = pd.Field(
-        Boundary(),
+    z: Boundary = Field(
+        default_factory=Boundary,
         title="Boundary condition along z.",
         description="Boundary condition on the plus and minus sides along the z axis. "
         "If ``None``, periodic boundaries are applied. Default will change to PML in 2.0 "
         "so explicitly setting the boundaries is recommended.",
     )
+
+    @field_validator("x", "y", "z", mode="before")
+    @classmethod
+    def dict_to_boundary(cls, v: Any) -> Any:
+        """Convert dict representation to Boundary object if needed."""
+        if isinstance(v, dict) and "plus" in v and "minus" in v:
+            return Boundary(**v)
+        return v
 
     def __getitem__(self, field_name: str) -> Boundary:
         """Get the :class:`Boundary` field by name (``boundary_spec[field_name]``).
@@ -1390,7 +1434,7 @@ class BoundarySpec(Tidy3dBaseModel):
         raise DataError(f"field_name '{field_name}' not found")
 
     @classmethod
-    def pml(cls, x: bool = False, y: bool = False, z: bool = False):
+    def pml(cls, x: bool = False, y: bool = False, z: bool = False) -> Self:
         """PML along specified directions
 
         Parameters
@@ -1413,7 +1457,7 @@ class BoundarySpec(Tidy3dBaseModel):
         )
 
     @classmethod
-    def pec(cls, x: bool = False, y: bool = False, z: bool = False):
+    def pec(cls, x: bool = False, y: bool = False, z: bool = False) -> Self:
         """PEC along specified directions
 
         Parameters
@@ -1436,7 +1480,7 @@ class BoundarySpec(Tidy3dBaseModel):
         )
 
     @classmethod
-    def pmc(cls, x: bool = False, y: bool = False, z: bool = False):
+    def pmc(cls, x: bool = False, y: bool = False, z: bool = False) -> Self:
         """PMC along specified directions
 
         Parameters
@@ -1459,7 +1503,7 @@ class BoundarySpec(Tidy3dBaseModel):
         )
 
     @classmethod
-    def all_sides(cls, boundary: BoundaryEdge):
+    def all_sides(cls, boundary: BoundaryEdge) -> Self:
         """Set a given boundary condition on all six sides of the domain
 
         Parameters
@@ -1487,7 +1531,7 @@ class BoundarySpec(Tidy3dBaseModel):
         ]
 
     @cached_property
-    def flipped_bloch_vecs(self) -> BoundarySpec:
+    def flipped_bloch_vecs(self) -> Self:
         """Return a copy of the instance where all Bloch vectors are multiplied by -1."""
         bound_dims = {"x": self.x.copy(), "y": self.y.copy(), "z": self.z.copy()}
         for dim_key, bound_dim in bound_dims.items():

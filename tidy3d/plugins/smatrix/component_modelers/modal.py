@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import autograd.numpy as np
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.index import SimulationMap
-from tidy3d.components.monitor import AbstractOverlapMonitor
-from tidy3d.components.source.field import DirectionalSource
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Ax, Complex
+from tidy3d.components.types import Complex
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import GLANCING_CUTOFF
 from tidy3d.exceptions import SetupError
@@ -21,11 +18,18 @@ from tidy3d.plugins.smatrix.ports.modal import (
     AbstractGaussianPort,
     GaussianPort,
     ModalPortType,
-    Port,
 )
 from tidy3d.plugins.smatrix.types import Element, MatrixIndex
 
 from .base import FWIDTH_FRAC, AbstractComponentModeler
+
+if TYPE_CHECKING:
+    from tidy3d.components.data.sim_data import SimulationData
+    from tidy3d.components.monitor import AbstractOverlapMonitor
+    from tidy3d.components.simulation import Simulation
+    from tidy3d.components.source.field import DirectionalSource
+    from tidy3d.components.types import Ax
+    from tidy3d.plugins.smatrix.ports.modal import Port
 
 
 class ModalComponentModeler(AbstractComponentModeler):
@@ -43,14 +47,14 @@ class ModalComponentModeler(AbstractComponentModeler):
         * `Computing the scattering matrix of a device <../../notebooks/SMatrix.html>`_
     """
 
-    ports: tuple[ModalPortType, ...] = pd.Field(
+    ports: tuple[ModalPortType, ...] = Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
         "For each input mode, one simulation will be run with a modal source.",
     )
 
-    run_only: Optional[tuple[MatrixIndex, ...]] = pd.Field(
+    run_only: Optional[tuple[MatrixIndex, ...]] = Field(
         None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
@@ -58,7 +62,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         "If a tuple is given, simulations will be run only for the given matrix indices.",
     )
 
-    element_mappings: tuple[tuple[Element, Element, Complex], ...] = pd.Field(
+    element_mappings: tuple[tuple[Element, Element, Complex], ...] = Field(
         (),
         title="Element Mappings",
         description="Tuple of S matrix element mappings, each described by a tuple of "
@@ -69,7 +73,7 @@ class ModalComponentModeler(AbstractComponentModeler):
     )
 
     @property
-    def base_sim(self):
+    def base_sim(self) -> Simulation:
         """The base simulation."""
         return self.simulation
 
@@ -280,7 +284,7 @@ class ModalComponentModeler(AbstractComponentModeler):
             # for plotting, use mode_index=0 (gaussian ignores it)
             src0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(src0)
-        sim_plot = self.simulation.copy(update={"sources": plot_sources})
+        sim_plot = self.simulation.copy(update={"sources": tuple(plot_sources)})
         return sim_plot.plot(x=x, y=y, z=z, ax=ax)
 
     @equal_aspect
@@ -321,7 +325,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         for port_source in self.ports:
             src0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(src0)
-        sim_plot = self.simulation.copy(update={"sources": plot_sources})
+        sim_plot = self.simulation.copy(update={"sources": tuple(plot_sources)})
         return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
     def _normalization_factor(self, port_source: Port, sim_data: SimulationData) -> complex:

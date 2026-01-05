@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray
-from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
-from tidy3d.plugins.smatrix.types import NetworkIndex
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
+    from tidy3d.plugins.smatrix.types import NetworkIndex
 
 
 def get_antenna_metrics_data(
@@ -52,7 +56,7 @@ def get_antenna_metrics_data(
     # Use the first port as default if none specified
     if port_amplitudes is None:
         first_port_index = terminal_component_modeler_data.modeler.matrix_indices_source[0]
-        port_amplitudes = {first_port_index: None}
+        port_amplitudes = {first_port_index: None}  # type: ignore[dict-item]
     # Get the radiation monitor, use first as default
     # if none specified
     if monitor_name is None:

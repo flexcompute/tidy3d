@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from functools import wraps
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
 
 from requests import ReadTimeout
 from requests.exceptions import ConnectionError as ConnErr
@@ -15,6 +15,9 @@ from tidy3d.exceptions import WebError
 from tidy3d.log import log
 from tidy3d.web import common
 from tidy3d.web.common import REFRESH_TIME
+
+if TYPE_CHECKING:
+    from typing import Callable, Optional
 
 
 def wait_for_connection(

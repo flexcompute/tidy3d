@@ -5,13 +5,18 @@ a set of Tidy3D simulations, allowing them to be accessed by name.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
-from typing import Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types.simulation import SimulationType
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from tidy3d.compat import Self
 
 
 class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):
@@ -36,39 +41,34 @@ class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):
         same index. Should be overwritten by the subclass instantiation
     """
 
-    keys_tuple: tuple[str, ...] = pd.Field(
+    keys_tuple: tuple[str, ...] = Field(
         description="A tuple of unique string identifiers for each simulation.", alias="keys"
     )
-    values_tuple: tuple[Any, ...] = pd.Field(
+    values_tuple: tuple[Any, ...] = Field(
         description=(
             "A tuple of `Simulation` objects, each corresponding to a key at the same index."
         ),
         alias="values",
     )
 
-    @pd.root_validator(skip_on_failure=True)
-    def _validate_lengths_match(cls, data: dict) -> dict:
-        """Pydantic root validator to ensure 'keys' and 'values' have the same length.
-
-        Parameters
-        ----------
-        data : dict
-            The dictionary of field values for the model provided by Pydantic.
+    @model_validator(mode="after")
+    def _validate_lengths_match(self) -> Self:
+        """Ensure 'keys' and 'values' have the same length.
 
         Returns
         -------
-        dict
-            The validated dictionary of field values.
+        Self
+            The validated instance.
 
         Raises
         ------
         ValueError
             If the lengths of the 'keys' and 'values' tuples are not equal.
         """
-        keys, values = data.get("keys"), data.get("values")
-        if keys is not None and values is not None and len(keys) != len(values):
+        keys, values = self.keys_tuple, self.values_tuple
+        if len(keys) != len(values):
             raise ValueError("Length of 'keys' and 'values' must be the same.")
-        return data
+        return self
 
     def __getitem__(self, key: str) -> Any:
         """Retrieves a `Simulation` object by its corresponding key.
@@ -197,10 +197,10 @@ class SimulationMap(ValueMap, Mapping[str, SimulationType]):
     >>> # print(simulation_map["sim_1"])
     """
 
-    keys_tuple: tuple[str, ...] = pd.Field(
+    keys_tuple: tuple[str, ...] = Field(
         description="A tuple of unique string identifiers for each simulation.", alias="keys"
     )
-    values_tuple: tuple[SimulationType, ...] = pd.Field(
+    values_tuple: tuple[SimulationType, ...] = Field(
         description=(
             "A tuple of `Simulation` objects, each corresponding to a key at the same index."
         ),

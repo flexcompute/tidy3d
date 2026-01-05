@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 
-import pydantic.v1 as pd
+from pydantic import Field, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.spice.analysis.dc import (
@@ -35,16 +35,16 @@ class AbstractSSACAnalysis(Tidy3dBaseModel, ABC):
     >>> ssac_spec = td.SSACAnalysis(freqs=sweep_freqs)
     """
 
-    freqs: ArrayFloat1D = pd.Field(
-        ...,
+    freqs: ArrayFloat1D = Field(
         title="Small Signal AC Frequencies",
         description="List of frequencies for small signal AC analysis. "
         "At least one :class:`.SSACVoltageSource` must be present in the boundary conditions.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
 
-    @pd.validator("freqs")
-    def validate_freqs(cls, val):
+    @field_validator("freqs")
+    @classmethod
+    def validate_freqs(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         if len(val) == 0:
             raise ValueError("'freqs' cannot be empty (size 0).")
         else:

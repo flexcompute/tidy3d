@@ -4,19 +4,26 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 from tidy3d.constants import HERTZ, RADIAN
 from tidy3d.exceptions import ValidationError
 
-from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import SpatialDataArray
 from .data.validators import validate_no_nans
 from .time import AbstractTimeDependence
-from .types import Bound, InterpMethod
+from .types import InterpMethod
+
+if TYPE_CHECKING:
+    from pydantic import FieldValidationInfo
+
+    from tidy3d.compat import Self
+
+    from .types import Bound
 
 
 class AbstractTimeModulation(AbstractTimeDependence, ABC):
@@ -63,8 +70,10 @@ class ContinuousWaveTimeModulation(AbstractTimeDependence):
     >>> cw = ContinuousWaveTimeModulation(freq0=200e12, amplitude=1, phase=0)
     """
 
-    freq0: pd.PositiveFloat = pd.Field(
-        ..., title="Modulation Frequency", description="Modulation frequency.", units=HERTZ
+    freq0: PositiveFloat = Field(
+        title="Modulation Frequency",
+        description="Modulation frequency.",
+        json_schema_extra={"units": HERTZ},
     )
 
     def amp_time(self, time: float) -> complex:
@@ -128,41 +137,36 @@ class SpaceModulation(AbstractSpaceModulation):
     >>> space = SpaceModulation(amplitude=amp, phase=phase)
     """
 
-    amplitude: Union[float, SpatialDataArray] = pd.Field(
+    amplitude: Union[float, SpatialDataArray] = Field(
         1,
         title="Amplitude of modulation in space",
         description="Amplitude of modulation that can vary spatially. "
         "It takes the unit of whatever is being modulated.",
     )
 
-    phase: Union[float, SpatialDataArray] = pd.Field(
+    phase: Union[float, SpatialDataArray] = Field(
         0,
         title="Phase of modulation in space",
         description="Phase of modulation that can vary spatially.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
-    interp_method: InterpMethod = pd.Field(
+    interp_method: InterpMethod = Field(
         "nearest",
         title="Interpolation method",
         description="Method of interpolation to use to obtain values at spatial locations on the Yee grids.",
     )
 
-    _no_nans_amplitude = validate_no_nans("amplitude")
-    _no_nans_phase = validate_no_nans("phase")
+    _no_nans = validate_no_nans("amplitude", "phase")
 
-    @pd.validator("amplitude", always=True)
-    def _real_amplitude(cls, val):
+    @field_validator("amplitude", "phase")
+    @classmethod
+    def _validate_fields_real(
+        cls, val: Union[float, SpatialDataArray], info: FieldValidationInfo
+    ) -> Union[float, SpatialDataArray]:
         """Assert that the amplitude is real."""
         if np.iscomplexobj(val):
-            raise ValidationError("'amplitude' must be real.")
-        return val
-
-    @pd.validator("phase", always=True)
-    def _real_phase(cls, val):
-        """Assert that the phase is real."""
-        if np.iscomplexobj(val):
-            raise ValidationError("'phase' must be real.")
+            raise ValidationError(f"'{info.field_name}' must be real.")
         return val
 
     @cached_property
@@ -170,7 +174,7 @@ class SpaceModulation(AbstractSpaceModulation):
         """Estimated maximum modulation amplitude."""
         return np.max(abs(np.array(self.amplitude)))
 
-    def sel_inside(self, bounds: Bound) -> SpaceModulation:
+    def sel_inside(self, bounds: Bound) -> Self:
         """Return a new space modulation that contains the minimal amount data necessary to cover
         a spatial region defined by ``bounds``.
 
@@ -217,18 +221,15 @@ class SpaceTimeModulation(Tidy3dBaseModel):
         \\delta \\epsilon(r, t) = \\Re[amp\\_time(t) \\cdot amp\\_space(r)]
     """
 
-    space_modulation: SpaceModulationType = pd.Field(
-        SpaceModulation(),
+    space_modulation: SpaceModulationType = Field(
+        default_factory=SpaceModulation,
         title="Space modulation",
         description="Space modulation part from the separable SpaceTimeModulation.",
-        # discriminator=TYPE_TAG_STR,
     )
 
-    time_modulation: TimeModulationType = pd.Field(
-        ...,
+    time_modulation: TimeModulationType = Field(
         title="Time modulation",
         description="Time modulation part from the separable SpaceTimeModulation.",
-        # discriminator=TYPE_TAG_STR,
     )
 
     @cached_property
@@ -244,7 +245,7 @@ class SpaceTimeModulation(Tidy3dBaseModel):
             return True
         return False
 
-    def sel_inside(self, bounds: Bound) -> SpaceTimeModulation:
+    def sel_inside(self, bounds: Bound) -> Self:
         """Return a new space-time modulation that contains the minimal amount data necessary to cover
         a spatial region defined by ``bounds``.
 
@@ -268,38 +269,36 @@ class ModulationSpec(Tidy3dBaseModel):
     including relative permittivity at infinite frequency and electric conductivity.
     """
 
-    permittivity: SpaceTimeModulation = pd.Field(
+    permittivity: Optional[SpaceTimeModulation] = Field(
         None,
         title="Space-time modulation of relative permittivity",
         description="Space-time modulation of relative permittivity at infinite frequency "
         "applied on top of the base permittivity at infinite frequency.",
     )
 
-    conductivity: SpaceTimeModulation = pd.Field(
+    conductivity: Optional[SpaceTimeModulation] = Field(
         None,
         title="Space-time modulation of conductivity",
         description="Space-time modulation of electric conductivity "
         "applied on top of the base conductivity.",
     )
 
-    @pd.validator("conductivity", always=True)
-    @skip_if_fields_missing(["permittivity"])
-    def _same_modulation_frequency(cls, val, values):
+    @model_validator(mode="after")
+    def _check_same_modulation_frequency(self) -> Self:
         """Assert same time-modulation applied to permittivity and conductivity."""
-        permittivity = values.get("permittivity")
-        if val is not None and permittivity is not None:
-            if val.time_modulation != permittivity.time_modulation:
+        if self.conductivity is not None and self.permittivity is not None:
+            if self.conductivity.time_modulation != self.permittivity.time_modulation:
                 raise ValidationError(
                     "'permittivity' and 'conductivity' should have the same time modulation."
                 )
-        return val
+        return self
 
     @cached_property
     def applied_modulation(self) -> bool:
         """Check if any modulation has been applied to ``permittivity`` or ``conductivity``."""
         return self.permittivity is not None or self.conductivity is not None
 
-    def sel_inside(self, bounds: Bound) -> ModulationSpec:
+    def sel_inside(self, bounds: Bound) -> Self:
         """Return a new modulation specficiation that contains the minimal amount data necessary to cover
         a spatial region defined by ``bounds``.
 

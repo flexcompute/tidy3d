@@ -3,19 +3,41 @@ from __future__ import annotations
 from .base import Expression
 from .functions import Cos, Exp, Log, Log10, Sin, Sqrt, Tan
 from .metrics import ModeAmp, ModePower, generate_validation_data
+from .operators import (
+    Abs,
+    Add,
+    Divide,
+    FloorDivide,
+    MatMul,
+    Modulus,
+    Multiply,
+    Negate,
+    Power,
+    Subtract,
+)
 from .variables import Constant, Variable
 
 __all__ = [
+    "Abs",
+    "Add",
     "Constant",
     "Cos",
+    "Divide",
     "Exp",
     "Expression",
+    "FloorDivide",
     "Log",
     "Log10",
+    "MatMul",
     "ModeAmp",
     "ModePower",
+    "Modulus",
+    "Multiply",
+    "Negate",
+    "Power",
     "Sin",
     "Sqrt",
+    "Subtract",
     "Tan",
     "Variable",
     "generate_validation_data",
@@ -43,4 +65,4 @@ for module_name in _module_names:
             _local_vars[name] = obj
 
 for cls in _model_classes:
-    cls.update_forward_refs(**_local_vars)
+    cls.model_rebuild(force=True)

@@ -3,6 +3,14 @@ default_install_hook_types:
   - pre-commit
   - commit-msg
 repos:
+  - repo: local
+    hooks:
+      - id: move-type-imports
+        name: move type-only imports under TYPE_CHECKING
+        entry: poetry run python scripts/move_type_imports.py --mode fix --only-changed
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.11.11"
     hooks:

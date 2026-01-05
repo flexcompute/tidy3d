@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from typing import Literal, Union
+from typing import TYPE_CHECKING, Literal, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.constants import PERCMCUBE, SECOND
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 
 class FossumCarrierLifetime(Tidy3dBaseModel):
@@ -43,25 +46,42 @@ class FossumCarrierLifetime(Tidy3dBaseModel):
 
     """
 
-    tau_300: pd.PositiveFloat = pd.Field(
-        ..., title="Tau at 300K", description="Carrier lifetime at 300K", units=SECOND
+    tau_300: PositiveFloat = Field(
+        title="Tau at 300K",
+        description="Carrier lifetime at 300K",
+        json_schema_extra={"units": SECOND},
     )
 
-    alpha_T: float = pd.Field(
-        ..., title="Exponent for thermal dependence", description="Exponent for thermal dependence"
+    alpha_T: float = Field(
+        title="Exponent for thermal dependence",
+        description="Exponent for thermal dependence",
     )
 
-    N0: pd.PositiveFloat = pd.Field(
-        ..., title="Reference concentration", description="Reference concentration", units=PERCMCUBE
+    N0: PositiveFloat = Field(
+        title="Reference concentration",
+        description="Reference concentration",
+        json_schema_extra={"units": PERCMCUBE},
     )
 
-    A: float = pd.Field(..., title="Constant A", description="Constant A")
+    A: float = Field(
+        title="Constant A",
+        description="Constant A",
+    )
 
-    B: float = pd.Field(..., title="Constant B", description="Constant B")
+    B: float = Field(
+        title="Constant B",
+        description="Constant B",
+    )
 
-    C: float = pd.Field(..., title="Constant C", description="Constant C")
+    C: float = Field(
+        title="Constant C",
+        description="Constant C",
+    )
 
-    alpha: float = pd.Field(..., title="Exponent constant", description="Exponent constant")
+    alpha: float = Field(
+        title="Exponent constant",
+        description="Exponent constant",
+    )
 
 
 CarrierLifetimeType = Union[FossumCarrierLifetime]
@@ -90,18 +110,16 @@ class AugerRecombination(Tidy3dBaseModel):
         ... )
     """
 
-    c_n: pd.PositiveFloat = pd.Field(
-        ...,
+    c_n: PositiveFloat = Field(
         title="Constant for electrons",
         description="Constant for electrons.",
-        units="cm^6/s",
+        json_schema_extra={"units": "cm^6/s"},
     )
 
-    c_p: pd.PositiveFloat = pd.Field(
-        ...,
+    c_p: PositiveFloat = Field(
         title="Constant for holes",
         description="Constant for holes.",
-        units="cm^6/s",
+        json_schema_extra={"units": "cm^6/s"},
     )
 
 
@@ -126,11 +144,10 @@ class RadiativeRecombination(Tidy3dBaseModel):
         ... )
     """
 
-    r_const: float = pd.Field(
-        ...,
+    r_const: float = Field(
         title="Radiation constant",
         description="Radiation constant of the radiative recombination model.",
-        units="cm^3/s",
+        json_schema_extra={"units": "cm^3/s"},
     )
 
 
@@ -168,12 +185,16 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
     - This model represents mid-gap traps Shockley-Reed-Hall recombination.
     """
 
-    tau_n: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
-        ..., title="Electron lifetime", description="Electron lifetime", units=SECOND
+    tau_n: Union[PositiveFloat, CarrierLifetimeType] = Field(
+        title="Electron lifetime",
+        description="Electron lifetime",
+        json_schema_extra={"units": SECOND},
     )
 
-    tau_p: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
-        ..., title="Hole lifetime", description="Hole lifetime", units=SECOND
+    tau_p: Union[PositiveFloat, CarrierLifetimeType] = Field(
+        title="Hole lifetime",
+        description="Hole lifetime",
+        json_schema_extra={"units": SECOND},
     )
 
 
@@ -197,11 +218,10 @@ class DistributedGeneration(Tidy3dBaseModel):
     >>> dist_g = td.DistributedGeneration(rate=fd)
     """
 
-    rate: SpatialDataArray = pd.Field(
-        ...,
+    rate: SpatialDataArray = Field(
         title="Generation rate",
         description="Spatially varying generation rate.",
-        units="1/(cm^3 s^1)",
+        json_schema_extra={"units": "1/(cm^3 s^1)"},
     )
 
     @classmethod
@@ -211,18 +231,18 @@ class DistributedGeneration(Tidy3dBaseModel):
         new_gen = SpatialDataArray(gen_cm3, coords=gen_um3.coords)
         return cls(rate=new_gen)
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_spatialdataarray_dimensions(cls, values):
+    @model_validator(mode="after")
+    def check_spatialdataarray_dimensions(self) -> Self:
         """Check that the SpatialDataArray is at least 2D:"""
 
-        rate = values.get("rate")
+        rate = self.rate
 
         zero_dims = [d for d in ["x", "y", "z"] if len(rate.coords[d]) <= 1]
 
         if len(zero_dims) > 1:
             raise ValueError("SpatialDataArray must be at least 2D.")
 
-        return values
+        return self
 
 
 class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
@@ -259,25 +279,25 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
         .. [1] Palankovski, Vassil, and Rüdiger Quay. Analysis and simulation of heterostructure devices. Springer Science & Business Media, 2004.
     """
 
-    A: pd.PositiveFloat = pd.Field(
+    A: PositiveFloat = Field(
         4e14,
         title="Parameter :math:`A`",
         description="Parameter :math:`A` in the direct BTBT Hurkx model.",
-        units="1/(cm^3 s)",
+        json_schema_extra={"units": "1/(cm^3 s)"},
     )
-    B: float = pd.Field(
+    B: float = Field(
         1.9e6,
         title="Parameter :math:`B`",
         description="Parameter :math:`B` in the direct BTBT Hurkx model.",
-        units="V/cm",
+        json_schema_extra={"units": "V/cm"},
     )
-    E_0: pd.PositiveFloat = pd.Field(
+    E_0: PositiveFloat = Field(
         1,
         title="Reference electric field :math:`E_0`",
         description="Reference electric field :math:`E_0` in the direct BTBT Hurkx model.",
-        units="V/cm",
+        json_schema_extra={"units": "V/cm"},
     )
-    sigma: float = pd.Field(
+    sigma: float = Field(
         2.5,
         title="Exponent parameter",
         description="Exponent :math:`\\sigma` in the direct BTBT Hurkx model. For direct "
@@ -321,42 +341,37 @@ class SelberherrImpactIonization(Tidy3dBaseModel):
         .. [2] Vassil Palankovski and Rüdiger Quay. Analysis and simulation of heterostructure devices. Springer Science & Business Media, 2004.
     """
 
-    alpha_n_inf: pd.PositiveFloat = pd.Field(
-        ...,
+    alpha_n_inf: PositiveFloat = Field(
         title="Electron ionization coefficient at infinite field",
         description="Electron ionization coefficient at infinite field.",
-        units="1/cm",
+        json_schema_extra={"units": "1/cm"},
     )
-    alpha_p_inf: pd.PositiveFloat = pd.Field(
-        ...,
+    alpha_p_inf: PositiveFloat = Field(
         title="Hole ionization coefficient at infinite field",
         description="Hole ionization coefficient at infinite field.",
-        units="1/cm",
+        json_schema_extra={"units": "1/cm"},
     )
-    E_n_crit: pd.PositiveFloat = pd.Field(
-        ...,
+    E_n_crit: PositiveFloat = Field(
         title="Critical electric field for electrons",
         description="Critical electric field for electrons.",
-        units="V/cm",
+        json_schema_extra={"units": "V/cm"},
     )
-    E_p_crit: pd.PositiveFloat = pd.Field(
+    E_p_crit: PositiveFloat = Field(
         ...,
         title="Critical electric field for holes",
         description="Critical electric field for holes.",
-        units="V/cm",
+        json_schema_extra={"units": "V/cm"},
     )
-    beta_n: pd.PositiveFloat = pd.Field(
-        ...,
+    beta_n: PositiveFloat = Field(
         title="Exponent for electrons",
         description="Exponent for electrons.",
     )
-    beta_p: pd.PositiveFloat = pd.Field(
-        ...,
+    beta_p: PositiveFloat = Field(
         title="Exponent for holes",
         description="Exponent for holes.",
     )
 
-    formulation: Literal["Selberherr", "PQ"] = pd.Field(
+    formulation: Literal["Selberherr", "PQ"] = Field(
         "PQ",
         title="Formulation",
         description="Formulation used for impact ionization. Options are 'Selberherr' "

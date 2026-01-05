@@ -4,8 +4,8 @@ import autograd as ag
 import autograd.numpy as anp
 import gdstk
 import numpy as np
-import pydantic.v1 as pd
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 
@@ -119,23 +119,23 @@ def test_invalid_polyslab(axis):
     _ = td.Structure(geometry=geo1, medium=medium)
 
     geo2 = ps.rotated(np.pi / 4, i)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Structure(geometry=geo2, medium=medium)
 
     geo3 = ps.rotated(np.pi / 5, j)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Structure(geometry=geo3, medium=medium)
 
     geo4 = ps.rotated(np.pi / 6, (1, 1, 1))
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Structure(geometry=geo4, medium=medium)
 
     geo5 = td.GeometryGroup(geometries=[ps]).rotated(np.pi / 2, j)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Structure(geometry=geo5, medium=medium)
 
     geo6 = td.GeometryGroup(geometries=[ps - box]).rotated(np.pi / 2, i)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Structure(geometry=geo6, medium=medium)
 
     geo7 = td.GeometryGroup(geometries=[(ps - box).rotated(np.pi / 4, j)]).rotated(-np.pi / 4, j)
@@ -156,11 +156,11 @@ def test_invalid_polyslab(axis):
     _ = td.Structure(geometry=geo10, medium=medium)
 
     geo11 = ps.reflected(n2)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Structure(geometry=geo11, medium=medium)
 
     geo12 = td.GeometryGroup(geometries=[ps]).reflected(n2)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Structure(geometry=geo12, medium=medium)
 
     geo13 = td.GeometryGroup(geometries=[(ps - box).reflected(n2)]).reflected(n2)
@@ -239,7 +239,7 @@ def test_validation_of_structures_with_2d_materials():
     ]
 
     for geom in not_allowed_geometries:
-        with pytest.raises(pd.ValidationError):
+        with pytest.raises(ValidationError):
             _ = td.Structure(geometry=geom, medium=med2d)
 
 

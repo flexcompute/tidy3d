@@ -26,11 +26,11 @@ This makes things easy to reason about and keeps the client code simple.
 
 #### Pydantic
 
-We leverage the [`pydantic`](https://pydantic-docs.helpmanual.io) package to define these components, which has the following benefits:
+We leverage the [`pydantic`](https://docs.pydantic.dev/latest/) package to define these components, which has the following benefits:
 - Less boilerplate code, including pre-processing, writing `__init__` and other methods, the code is easier to read and edit.
 - `pydantic` provides methods for checking types validating arguments so we can catch incorrect .json files before trying to run them.
 - It is very simple to export json files and schema definitions, which makes life easy when we change anything in the code.
-- Many more advantages as described [here](https://pydantic-docs.helpmanual.io/#rationale).
+- Many more advantages as described [here](https://docs.pydantic.dev/latest/why/).
 
 
 ### Plugins

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.index import ValueMap
 from tidy3d.components.types.simulation import SimulationDataType
@@ -100,11 +100,11 @@ class SimulationDataMap(ValueMap, Mapping[str, SimulationDataType]):
     >>> # print(simulation_data_map["data_2"])
     """
 
-    keys_tuple: tuple[str, ...] = pd.Field(
+    keys_tuple: tuple[str, ...] = Field(
         description="A tuple of unique string identifiers for each simulation data object.",
         alias="keys",
     )
-    values_tuple: tuple[SimulationDataType, ...] = pd.Field(
+    values_tuple: tuple[SimulationDataType, ...] = Field(
         description=(
             "A tuple of `SimulationDataType` objects, each corresponding to a key at the "
             "same index."

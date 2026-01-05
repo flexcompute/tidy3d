@@ -137,7 +137,7 @@ def generate_schemas(output_dir: pathlib.Path = DEFAULT_SCHEMA_DIR):
             print(f"  -> Generating schema for '{name}'...")
 
             # Generate the schema dictionary from the class.
-            schema_dict = class_instance.schema()
+            schema_dict = class_instance.model_json_schema()
             schema_dict = _canonicalize(schema_dict)
 
             # Write the schema to a file with pretty printing.

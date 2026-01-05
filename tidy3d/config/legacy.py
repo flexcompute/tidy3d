@@ -8,17 +8,22 @@ from __future__ import annotations
 
 import os
 import warnings
-from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import toml
 
 from tidy3d._runtime import WASM_BUILD
-from tidy3d.log import LogLevel, log
+from tidy3d.log import log
 
 # TODO(FXC-3827): Remove LegacyConfigWrapper/Environment shims and related helpers in Tidy3D 2.12.
 from .manager import ConfigManager, normalize_profile_name
 from .profiles import BUILTIN_PROFILES
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Optional
+
+    from tidy3d.log import LogLevel
 
 
 def _warn_env_deprecated() -> None:

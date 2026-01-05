@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from functools import cache
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
 import numpy as np
 import scipy.ndimage
 from autograd.extend import defjvp, defvjp, primitive
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Callable
+
+    from numpy.typing import NDArray
 
 
 def _normalize_sequence(value: float | Sequence[float], ndim: int) -> tuple[float, ...]:
@@ -56,15 +63,15 @@ def _gaussian_weight_matrix(
 
 @primitive
 def gaussian_filter(
-    array,
-    sigma,
+    array: NDArray,
+    sigma: float | Sequence[float],
     *,
-    order=0,
-    mode="reflect",
-    cval=0.0,
-    truncate=4.0,
-    **kwargs,
-):
+    order: float | Sequence[float] = 0,
+    mode: str | Sequence[str] = "reflect",
+    cval: float = 0.0,
+    truncate: float = 4.0,
+    **kwargs: Any,
+) -> NDArray:
     return scipy.ndimage.gaussian_filter(
         array,
         sigma,
@@ -77,8 +84,16 @@ def gaussian_filter(
 
 
 def _gaussian_filter_vjp(
-    ans, array, sigma, *, order=0, mode="reflect", cval=0.0, truncate=4.0, **kwargs
-):
+    ans: NDArray,
+    array: NDArray,
+    sigma: float | Sequence[float],
+    *,
+    order: float | Sequence[float] = 0,
+    mode: str | Sequence[str] = "reflect",
+    cval: float | Sequence[float] = 0.0,
+    truncate: float | Sequence[float] = 4.0,
+    **kwargs: Any,
+) -> Callable[[NDArray], NDArray]:
     ndim = array.ndim
     sigma_seq = _normalize_sequence(sigma, ndim)
     order_seq = _normalize_sequence(order, ndim)
@@ -93,7 +108,7 @@ def _gaussian_filter_vjp(
             f"gaussian_filter VJP does not support additional keyword arguments: {tuple(kwargs)}"
         )
 
-    def vjp(g):
+    def vjp(g: NDArray) -> NDArray:
         grad = np.asarray(g)
         for axis in reversed(range(ndim)):
             sigma_axis = float(sigma_seq[axis])

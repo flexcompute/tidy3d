@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from abc import ABC
+from typing import TYPE_CHECKING, Any
 
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.base_sim.monitor import AbstractMonitor
-from tidy3d.components.types import ArrayFloat1D
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from tidy3d.components.types import ArrayFloat1D
 
 BYTES_REAL = 4
 
@@ -16,13 +19,13 @@ BYTES_REAL = 4
 class HeatChargeMonitor(AbstractMonitor, ABC):
     """Abstract base class for heat-charge monitors."""
 
-    unstructured: bool = pd.Field(
+    unstructured: bool = Field(
         False,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )
 
-    conformal: bool = pd.Field(
+    conformal: bool = Field(
         False,
         title="Conformal Monitor Meshing",
         description="If ``True`` the simulation mesh will conform to the monitor's geometry. "
@@ -35,8 +38,9 @@ class HeatChargeMonitor(AbstractMonitor, ABC):
         "Deprecated: this field will be removed in version 2.12.",
     )
 
-    @pd.root_validator(pre=True)
-    def _warn_conformal_deprecated(cls, values):
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_conformal_deprecated(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Warn if deprecated ``conformal`` field is provided."""
         # Note:  Only warn when the deprecated flag is actually enabled.
         if isinstance(values, dict) and values.get("conformal"):

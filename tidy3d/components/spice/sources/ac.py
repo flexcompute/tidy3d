@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-import pydantic.v1 as pd
+from pydantic import Field, FiniteFloat, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayFloat1D
@@ -33,36 +33,37 @@ class SSACVoltageSource(Tidy3dBaseModel):
     ... )
     """
 
-    name: Optional[str] = pd.Field(
+    name: Optional[str] = Field(
         None,
         title="Name",
         description="Unique name for the SSAC voltage source.",
         min_length=1,
     )
 
-    voltage: ArrayFloat1D = pd.Field(
-        ...,
+    voltage: ArrayFloat1D = Field(
         title="DC Bias Voltages",
         description="List of DC operating point voltages (above ground) used with :class:`VoltageBC`.",
-        units=VOLT,
+        json_schema_extra={"units": VOLT},
     )
 
-    amplitude: pd.FiniteFloat = pd.Field(
+    amplitude: FiniteFloat = Field(
         default=1.0,
         title="Small Signal Amplitude",
         description="Amplitude of the small-signal perturbation for SSAC analysis.",
-        units=VOLT,
+        json_schema_extra={"units": VOLT},
     )
 
-    @pd.validator("voltage")
-    def validate_voltage(cls, val):
+    @field_validator("voltage")
+    @classmethod
+    def validate_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         for v in val:
             if v == td_inf:
                 raise ValueError(f"Voltages must be finite. Current voltage={val}.")
         return val
 
-    @pd.validator("amplitude")
-    def validate_amplitude(cls, val):
+    @field_validator("amplitude")
+    @classmethod
+    def validate_amplitude(cls, val: FiniteFloat) -> FiniteFloat:
         if val == td_inf:
             raise ValueError(f"Signal amplitude must be finite. Current amplitude={val}.")
         return val

@@ -21,16 +21,18 @@ Examples:
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, FiniteFloat, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayFloat1D
-from tidy3d.constants import AMP, VOLT
-from tidy3d.constants import inf as td_inf
+from tidy3d.constants import AMP, VOLT, inf
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
 class DCVoltageSource(Tidy3dBaseModel):
@@ -50,33 +52,33 @@ class DCVoltageSource(Tidy3dBaseModel):
     >>> voltage_source = td.DCVoltageSource(voltage=voltages)
     """
 
-    name: Optional[str] = pd.Field(
+    name: Optional[str] = Field(
         None,
         title="Name",
         description="Unique name for the DC voltage source",
         min_length=1,
     )
 
-    voltage: ArrayFloat1D = pd.Field(
-        ...,
+    voltage: ArrayFloat1D = Field(
         title="Voltage",
         description="DC voltage usually used as source in :class:`VoltageBC` boundary conditions.",
-        units=VOLT,
+        json_schema_extra={"units": VOLT},
     )
 
     # TODO: This should have always been in the field above but was introduced wrongly as a
     # standalone field. Keeping for compatibility, remove in 3.0.
     units: Literal[VOLT] = VOLT
 
-    @pd.validator("voltage")
-    def check_voltage(cls, val):
+    @field_validator("voltage")
+    @classmethod
+    def check_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         for v in val:
-            if v == td_inf:
+            if v == inf:
                 raise ValueError(f"Voltages must be finite. Currently  voltage={val}.")
         return val
 
     @staticmethod
-    def _count_unique_with_tolerance(arr, rtol=1e-9, atol=1e-12):
+    def _count_unique_with_tolerance(arr: NDArray, rtol: float = 1e-9, atol: float = 1e-12) -> int:
         """Count unique values treating values within tolerance as duplicates.
 
         Uses sorted comparison to group values that are practically equal
@@ -92,8 +94,9 @@ class DCVoltageSource(Tidy3dBaseModel):
                 unique_count += 1
         return unique_count
 
-    @pd.validator("voltage")
-    def check_repeated_voltage(cls, val):
+    @field_validator("voltage")
+    @classmethod
+    def check_repeated_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         """Warn if repeated voltage values are present, treating 0 and -0 as the same value.
 
         Uses tolerance-based comparison to handle floating-point representation
@@ -145,17 +148,17 @@ class DCCurrentSource(Tidy3dBaseModel):
     >>> current_source = td.DCCurrentSource(current=0.4)
     """
 
-    name: Optional[str] = pd.Field(
+    name: Optional[str] = Field(
         None,
         title="Name",
         description="Unique name for the DC current source",
         min_length=1,
     )
 
-    current: pd.FiniteFloat = pd.Field(
+    current: FiniteFloat = Field(
         title="Current",
         description="DC current usually used as source in :class:`CurrentBC` boundary conditions.",
-        units=AMP,
+        json_schema_extra={"units": AMP},
     )
 
     # TODO: This should have always been in the field above but was introduced wrongly as a

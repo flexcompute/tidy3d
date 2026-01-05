@@ -7,7 +7,7 @@ This file explains the various `tidy3d` components that make up the core of the 
 ### Base
 
 All  `tidy3d` components are subclasses of the `Tidy3dBaseModel` defined in `base.py`. 
-This `Tidy3dBaseModel` itself is a subclass of [`pydantic.BaseModel`](https://pydantic-docs.helpmanual.io/usage/models/) which makes them `pydantic` models.
+This `Tidy3dBaseModel` itself is a subclass of [`pydantic.BaseModel`](https://docs.pydantic.dev/latest/concepts/models/) which makes them `pydantic` models.
 In `Tidy3dBaseModel`, we also specify some configuration options, such as whether we validate fields that change after initialization, among others.
 
 ### Types
@@ -21,7 +21,7 @@ Coordinate = Tuple[float, float, float]
 ```
 defines a coordinate in 3D and
 ```python
-Indices = Tuple[pydantic.nonNegativeInt, ...]
+Indices = Tuple[pydantic.NonNegativeInt, ...]
 ```
 defines a tuple of non-negative integers, for example, a tuple of indices.
 
@@ -134,8 +134,8 @@ Other checks may be added in future development.
 
 #### JSON Operations
 
-The `Simulation` can be exported as .json-like dictionary with `Simulation.json()`
-The schema corresponding to `Simulation` can be generated with `Simulation.schema()`
+The `Simulation` can be exported as .json-like dictionary with `Simulation.model_dump_json()`
+The schema corresponding to `Simulation` can be generated with `Simulation.model_json_schema()`
 
 ## Medium
 
