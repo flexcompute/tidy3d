@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Any, Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union, get_args
 
 import autograd.numpy as np
 
@@ -14,6 +14,7 @@ import numpy as npo
 import pydantic.v1 as pd
 import xarray as xr
 from autograd.differential_operators import tensor_jacobian_product
+from numpy.typing import NDArray
 
 from tidy3d.components.autograd.utils import pack_complex_vec
 from tidy3d.components.material.tcad.heat import ThermalSpecType
@@ -107,6 +108,8 @@ LOSSY_METAL_DEFAULT_SAMPLING_FREQUENCY = 20
 LOSSY_METAL_SCALED_REAL_PART = 10.0
 LOSSY_METAL_DEFAULT_MAX_POLES = 5
 LOSSY_METAL_DEFAULT_TOLERANCE_RMS = 1e-3
+
+ALLOWED_INTERP_METHODS = get_args(InterpMethod)
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
@@ -1912,6 +1915,29 @@ class CustomMedium(AbstractCustomMedium):
         return self._medium.is_spatially_uniform
 
     @cached_property
+    def _permittivity_sorted(self) -> SpatialDataArray | None:
+        """Cached copy of permittivity sorted along spatial axes."""
+        if self.permittivity is None:
+            return None
+        return self.permittivity._spatially_sorted
+
+    @cached_property
+    def _conductivity_sorted(self) -> SpatialDataArray | None:
+        """Cached copy of conductivity sorted along spatial axes."""
+        if self.conductivity is None:
+            return None
+        return self.conductivity._spatially_sorted
+
+    @cached_property
+    def _eps_components_sorted(self) -> dict[str, ScalarFieldDataArray]:
+        """Cached copies of dataset components sorted along spatial axes."""
+        if self.eps_dataset is None:
+            return {}
+        return {
+            key: comp._spatially_sorted for key, comp in self.eps_dataset.field_components.items()
+        }
+
+    @cached_property
     def freqs(self) -> np.ndarray:
         """float array of frequencies.
         This field is to be deprecated in v3.0.
@@ -2320,37 +2346,49 @@ class CustomMedium(AbstractCustomMedium):
 
         for field_path in derivative_info.paths:
             if field_path[0] == "permittivity":
+                spatial_data = self._permittivity_sorted
+                if spatial_data is None:
+                    continue
                 vjp_array = 0.0
                 for dim in "xyz":
-                    vjp_array += self._derivative_field_cmp(
+                    vjp_array += self._derivative_field_cmp_custom(
                         E_der_map=derivative_info.E_der_map,
-                        spatial_data=self.permittivity,
+                        spatial_data=spatial_data,
                         dim=dim,
                         freqs=derivative_info.frequencies,
+                        bounds=derivative_info.bounds_intersect,
                         component="real",
                     )
                 vjps[field_path] = vjp_array
 
             elif field_path[0] == "conductivity":
+                spatial_data = self._conductivity_sorted
+                if spatial_data is None:
+                    continue
                 vjp_array = 0.0
                 for dim in "xyz":
-                    vjp_array += self._derivative_field_cmp(
+                    vjp_array += self._derivative_field_cmp_custom(
                         E_der_map=derivative_info.E_der_map,
-                        spatial_data=self.conductivity,
+                        spatial_data=spatial_data,
                         dim=dim,
                         freqs=derivative_info.frequencies,
+                        bounds=derivative_info.bounds_intersect,
                         component="sigma",
                     )
                 vjps[field_path] = vjp_array
 
             elif field_path[0] == "eps_dataset":
                 key = field_path[1]
+                spatial_data = self._eps_components_sorted.get(key)
+                if spatial_data is None:
+                    continue
                 dim = key[-1]
-                vjps[field_path] = self._derivative_field_cmp(
+                vjps[field_path] = self._derivative_field_cmp_custom(
                     E_der_map=derivative_info.E_der_map,
-                    spatial_data=self.eps_dataset.field_components[key],
+                    spatial_data=spatial_data,
                     dim=dim,
                     freqs=derivative_info.frequencies,
+                    bounds=derivative_info.bounds_intersect,
                     component="complex",
                 )
             else:
@@ -2360,96 +2398,202 @@ class CustomMedium(AbstractCustomMedium):
 
         return vjps
 
-    def _derivative_field_cmp(
+    def _derivative_field_cmp_custom(
         self,
         E_der_map: ElectromagneticFieldDataset,
-        spatial_data: CustomSpatialDataTypeAnnotated,
+        spatial_data: SpatialDataArray,
         dim: str,
-        freqs: np.ndarray,
+        freqs: NDArray,
+        bounds: Optional[Bound] = None,
         component: str = "real",
-    ) -> np.ndarray:
+        interp_method: Optional[InterpMethod] = None,
+    ) -> NDArray:
         """Compute the derivative with respect to a material property component."""
-        coords_interp = {key: spatial_data.coords[key] for key in "xyz"}
-        coords_interp = {key: val for key, val in coords_interp.items() if len(val) > 1}
+        param_coords = {axis: np.asarray(spatial_data.coords[axis]) for axis in "xyz"}
+        eps_shape = [len(param_coords[axis]) for axis in "xyz"]
+        dtype_out = complex if component == "complex" else float
 
-        eps_coordinate_shape = [
-            len(spatial_data.coords[dim]) for dim in spatial_data.dims if dim in "xyz"
-        ]
+        E_der_dim = E_der_map.get(f"E{dim}")
+        if E_der_dim is None or np.all(E_der_dim.values == 0):
+            return np.zeros(eps_shape, dtype=dtype_out)
 
-        E_der_dim_interp = E_der_map[f"E{dim}"]
+        field_coords = {axis: np.asarray(E_der_dim.coords[axis]) for axis in "xyz"}
+        values = E_der_dim.values
 
-        for dim_ in "xyz":
-            if dim_ not in coords_interp:
-                bound_max = np.max(E_der_dim_interp.coords[dim_])
-                bound_min = np.min(E_der_dim_interp.coords[dim_])
-                dimension_size = bound_max - bound_min
+        def _bounds_slice(axis: NDArray, vmin: float, vmax: float, *, name: str) -> slice:
+            n = axis.size
+            i0 = int(np.searchsorted(axis, vmin, side="left"))
+            i1 = int(np.searchsorted(axis, vmax, side="right"))
+            if i1 <= i0 and n:
+                old = (i0, i1)
+                if i1 < n:
+                    i1 = i0 + 1  # expand right
+                elif i0 > 0:
+                    i0 = i1 - 1  # expand left
+                log.warning(
+                    f"Empty bounds crop on '{name}' while computing CustomMedium parameter gradients "
+                    f"(adjoint field grid -> medium grid): bounds=[{vmin!r}, {vmax!r}], "
+                    f"grid=[{axis[0]!r}, {axis[-1]!r}] -> indices {old}; using ({i0}, {i1}).",
+                    log_once=True,
+                )
+            return slice(i0, i1)
 
-                if dimension_size > 0.0:
-                    E_der_dim_interp = E_der_dim_interp.integrate(dim_)
+        # usage
+        if bounds is not None:
+            (xmin, ymin, zmin), (xmax, ymax, zmax) = bounds
 
-        # compute sizes along each of the interpolation dimensions
-        sizes_list = []
-        for _, coords in coords_interp.items():
-            num_coords = len(coords)
-            coords = np.array(coords)
+            sx = _bounds_slice(field_coords["x"], xmin, xmax, name="x")
+            sy = _bounds_slice(field_coords["y"], ymin, ymax, name="y")
+            sz = _bounds_slice(field_coords["z"], zmin, zmax, name="z")
 
-            # compute distances between midpoints for all internal coords
+            field_coords = {k: field_coords[k][s] for k, s in (("x", sx), ("y", sy), ("z", sz))}
+            values = values[sx, sy, sz, :]
+
+        def _axis_sizes(coords: NDArray) -> NDArray:
+            if coords.size <= 1:
+                return np.array([1.0])
             mid_points = (coords[1:] + coords[:-1]) / 2.0
             dists = np.diff(mid_points)
-            sizes = np.zeros(num_coords)
+            sizes = np.zeros(coords.size)
             sizes[1:-1] = dists
-
-            # estimate the sizes on the edges using 2 x the midpoint distance
             sizes[0] = 2 * abs(mid_points[0] - coords[0])
             sizes[-1] = 2 * abs(coords[-1] - mid_points[-1])
+            return sizes
 
-            sizes_list.append(sizes)
+        size_x = _axis_sizes(field_coords["x"])
+        size_y = _axis_sizes(field_coords["y"])
+        size_z = _axis_sizes(field_coords["z"])
+        scale = (
+            size_x[:, None, None, None] * size_y[None, :, None, None] * size_z[None, None, :, None]
+        )
+        np.multiply(values, scale, out=values)
 
-        # turn this into a volume element, should be re-sizeable to the gradient shape
-        if sizes_list:
-            d_vol = functools.reduce(np.outer, sizes_list)
-        else:
-            # if sizes_list is empty, then reduce() fails
-            d_vol = np.array(1.0)
+        method = interp_method if interp_method is not None else self.interp_method
 
-        E_der_dim_interp_complex = E_der_dim_interp.interp(
-            **coords_interp, assume_sorted=True
-        ).fillna(0.0)
+        def _transpose_interp_axis(
+            field_values: NDArray, field_coords_1d: NDArray, param_coords_1d: NDArray
+        ) -> NDArray:
+            """
+            Transpose (adjoint) of 1D interpolation along one axis.
 
-        if component == "sigma":
-            # compute conductivity gradient from imaginary-permittivity gradient
-            # apply per-frequency scaling before summing over frequencies
-            # d eps_imag / d sigma = 1 / (2 * pi * f * EPSILON_0)
-            E_der_dim_interp = E_der_dim_interp_complex.imag
-            freqs_da = E_der_dim_interp_complex.coords["f"]
-            scale = -1.0 / (2.0 * np.pi * freqs_da * EPSILON_0)
-            E_der_dim_interp *= scale
-        elif component == "complex":
-            # for complex permittivity in eps_dataset, return the full complex derivative
-            E_der_dim_interp = E_der_dim_interp_complex
-        elif component == "imag":
-            # pure imaginary component (no conductivity conversion)
-            E_der_dim_interp = E_der_dim_interp_complex.imag
-        else:
-            E_der_dim_interp = E_der_dim_interp_complex.real
+            Parameters
+            ----------
+            field_values : np.ndarray
+                Array of values sampled on the field grid along this axis.
+                Shape: (n_field, ...rest...).
+                Notes:
+                  - The first axis corresponds to `field_coords_1d`.
+                  - The remaining axes (...rest...) are treated as batch dimensions and are
+                    carried through unchanged.
 
-        E_der_dim_interp = E_der_dim_interp.sum("f")
+            field_coords_1d : np.ndarray
+                1D coordinates of the field grid along this axis.
+                Shape: (n_field,).
 
-        try:
-            E_der_dim_interp = E_der_dim_interp * d_vol.reshape(E_der_dim_interp.shape)
-        except ValueError:
-            log.warning(
-                "Skipping volume element normalization of 'CustomMedium' gradients. "
-                f"Could not reshape the volume elements of shape {d_vol.shape} "
-                f"to the shape of the fields {E_der_dim_interp.shape}. "
-                "If you encounter this warning, gradient direction will be accurate but the norm "
-                "will be inaccurate. Please raise an issue on the tidy3d front end with this "
-                "message and some information about your simulation setup and we will investigate. "
+            param_coords_1d : np.ndarray
+                1D coordinates of the parameter grid along this axis.
+                Shape: (n_param,). Must be sorted ascending for the searchsorted-based logic.
+
+            Returns
+            -------
+            param_values : np.ndarray
+                Field contributions accumulated onto the parameter grid along this axis.
+                Shape: (n_param, ...rest...).
+
+            Implementation note
+            -------------------
+            For efficient accumulation, we flatten the trailing dimensions (...rest...) into a single
+            dimension so we can run a vectorized `np.add.at` on a 2D buffer of shape (n_param, n_rest),
+            then reshape back to (n_param, ...rest...).
+            """
+            # Single-point parameter grid: every field sample maps to the only parameter entry,
+            if param_coords_1d.size == 1:
+                return field_values.sum(axis=0, keepdims=True)
+
+            # Ensure parameter coordinates are sorted for searchsorted-based binning.
+            if np.any(param_coords_1d[1:] < param_coords_1d[:-1]):
+                raise ValueError("Spatial coordinates must be sorted before computing derivatives.")
+            param_coords_sorted = param_coords_1d
+
+            n_param = param_coords_sorted.size
+            if method not in ALLOWED_INTERP_METHODS:
+                raise ValueError(
+                    f"Unsupported interpolation method: {method!r}. "
+                    f"Choose one of: {', '.join(ALLOWED_INTERP_METHODS)}."
+                )
+
+            # Flatten trailing dimensions into a single "rest" dimension for vectorized accumulation.
+            n_field = field_values.shape[0]
+            field_values_2d = field_values.reshape(n_field, -1)
+
+            if method == "nearest":
+                # Midpoints define bin edges between adjacent parameter coordinates.
+                param_midpoints = (param_coords_sorted[1:] + param_coords_sorted[:-1]) / 2.0
+                # Map each field coordinate to a nearest parameter-bin index.
+                param_index_nearest = np.searchsorted(param_midpoints, field_coords_1d)
+
+                # Accumulate all field samples into their assigned parameter bins.
+                param_values_2d = npo.zeros(
+                    (n_param, field_values_2d.shape[1]), dtype=field_values.dtype
+                )
+                npo.add.at(param_values_2d, param_index_nearest, field_values_2d)
+
+                param_values = param_values_2d.reshape((n_param,) + field_values.shape[1:])
+                return param_values
+
+            # linear
+            # Find bracketing parameter indices for each field coordinate.
+            param_index_upper = np.searchsorted(param_coords_sorted, field_coords_1d, side="right")
+            param_index_upper = np.clip(param_index_upper, 1, n_param - 1)
+            param_index_lower = param_index_upper - 1
+
+            # Compute interpolation fraction within the bracketing segment.
+            segment_width = (
+                param_coords_sorted[param_index_upper] - param_coords_sorted[param_index_lower]
             )
-        vjp_array = E_der_dim_interp.values
-        vjp_array = vjp_array.reshape(eps_coordinate_shape)
+            segment_width = np.where(segment_width == 0, 1.0, segment_width)
+            frac_upper = (field_coords_1d - param_coords_sorted[param_index_lower]) / segment_width
+            frac_upper = np.clip(frac_upper, 0.0, 1.0)
 
-        return vjp_array
+            # Weights per field sample (broadcast across the flattened trailing dimensions).
+            w_lower = (1.0 - frac_upper)[:, None]
+            w_upper = frac_upper[:, None]
+
+            # Accumulate contributions into both bracketing parameter indices.
+            param_values_2d = npo.zeros(
+                (n_param, field_values_2d.shape[1]), dtype=field_values.dtype
+            )
+            npo.add.at(param_values_2d, param_index_lower, field_values_2d * w_lower)
+            npo.add.at(param_values_2d, param_index_upper, field_values_2d * w_upper)
+
+            param_values = param_values_2d.reshape((n_param,) + field_values.shape[1:])
+            return param_values
+
+        def _interp_axis(
+            arr: NDArray, axis: int, field_axis: NDArray, param_axis: NDArray
+        ) -> NDArray:
+            """Accumulate values from the field grid onto the parameter grid along one axis.
+
+            Moves ``axis`` to the front, applies ``_transpose_interp_axis`` (adjoint of 1D interpolation)
+            to map from ``field_axis`` (n_field) to ``param_axis`` (n_param), then moves the axis back.
+            """
+            moved = np.moveaxis(arr, axis, 0)
+            moved = _transpose_interp_axis(moved, field_axis, param_axis)
+            return np.moveaxis(moved, 0, axis)
+
+        values = _interp_axis(values, 0, field_coords["x"], param_coords["x"])
+        values = _interp_axis(values, 1, field_coords["y"], param_coords["y"])
+        values = _interp_axis(values, 2, field_coords["z"], param_coords["z"])
+
+        freqs_da = np.asarray(E_der_dim.coords["f"])
+        if component == "sigma":
+            values = values.imag * (-1.0 / (2.0 * np.pi * freqs_da * EPSILON_0))
+        elif component == "imag":
+            values = values.imag
+        elif component == "real":
+            values = values.real
+
+        return values.sum(axis=-1).reshape(eps_shape)
 
 
 """ Dispersive Media """
