@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 import pandas
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from tidy3d.compat import Self
 
 # NOTE: Coords are args_dict from method and design. This may be changed in future to unify naming
 
@@ -30,39 +35,39 @@ class Result(Tidy3dBaseModel):
     >>> # df.head() # print out first 5 elements of data
     """
 
-    dims: tuple[str, ...] = pd.Field(
+    dims: tuple[str, ...] = Field(
         (),
         title="Dimensions",
         description="The dimensions of the design variables (indexed by 'name').",
     )
 
-    values: tuple[Any, ...] = pd.Field(
+    values: tuple[Any, ...] = Field(
         (),
         title="Values",
         description="The return values from the design problem function.",
     )
 
-    coords: tuple[tuple[Any, ...], ...] = pd.Field(
+    coords: tuple[tuple[Any, ...], ...] = Field(
         (),
         title="Coordinates",
         description="The values of the coordinates corresponding to each of the dims."
         "Note: shaped (D, N) where D is the ``len(dims)`` and N is the ``len(values)``",
     )
 
-    output_names: tuple[str, ...] = pd.Field(
+    output_names: Optional[tuple[str, ...]] = Field(
         None,
         title="Output Names",
         description="Names for each of the outputs stored in ``values``. If not specified, default "
         "values are assigned.",
     )
 
-    fn_source: str = pd.Field(
+    fn_source: Optional[str] = Field(
         None,
         title="Function Source Code",
         description="Source code for the function evaluated in the parameter sweep.",
     )
 
-    task_names: list = pd.Field(
+    task_names: Optional[list] = Field(
         None,
         title="Task Names",
         description="Task name of every simulation run during ``DesignSpace.run``. Only available if "
@@ -70,7 +75,7 @@ class Result(Tidy3dBaseModel):
         "Stored in the same format as the output of fn_pre i.e. if pre outputs a dict, this output is a dict with the keys preserved.",
     )
 
-    task_paths: list = pd.Field(
+    task_paths: Optional[list] = Field(
         None,
         title="Task Paths",
         description="Task paths of every simulation run during ``DesignSpace.run``. Useful for loading download ``SimulationData`` hdf5 files."
@@ -78,50 +83,48 @@ class Result(Tidy3dBaseModel):
         "Stored in the same format as the output of fn_pre i.e. if pre outputs a dict, this output is a dict with the keys preserved.",
     )
 
-    aux_values: tuple[Any, ...] = pd.Field(
+    aux_values: Optional[tuple[Any, ...]] = Field(
         None,
         title="Auxiliary values output from the user function",
         description="The auxiliary return values from the design problem function. This is the collection of objects returned "
         "alongside the float value used for the optimization. These weren't used to inform the optimizer, if one was used.",
     )
 
-    optimizer: Any = pd.Field(
+    optimizer: Any = Field(
         None,
         title="Optimizer object",
         description="The optimizer returned at the end of an optimizer run. Can be used to analyze and plot how the optimization progressed. "
         "Attributes depend on the optimizer used; a full explaination of the optimizer can be found on associated library doc pages. Will be ``None`` for sampling based methods.",
     )
 
-    @pd.validator("coords", always=True)
-    def _coords_and_dims_shape(cls, val, values):
+    @model_validator(mode="after")
+    def _coords_and_dims_shape(self) -> Self:
         """Make sure coords and dims have same size."""
 
-        dims = values.get("dims")
+        if self.coords is None or self.dims is None:
+            return self
 
-        if val is None or dims is None:
-            return None
-
-        num_dims = len(dims)
-        for i, _val in enumerate(val):
+        num_dims = len(self.dims)
+        for i, _val in enumerate(self.coords):
             if len(_val) != num_dims:
                 raise ValueError(
                     f"Number of 'coords' at index '{i}' ({len(_val)}) "
                     f"doesn't match the number of 'dims' ({num_dims})."
                 )
 
-        return val
+        return self
 
-    @pd.validator("coords", always=True)
-    def _coords_and_values_shape(cls, val, values):
+    @model_validator(mode="after")
+    def _coords_and_values_shape(self) -> Self:
         """Make sure coords and values have same length."""
 
-        _values = values.get("values")
+        _values = self.values
 
-        if val is None or _values is None:
-            return None
+        if self.coords is None or _values is None:
+            return self
 
         num_values = len(_values)
-        num_coords = len(val)
+        num_coords = len(self.coords)
 
         if num_values != num_coords:
             raise ValueError(
@@ -129,9 +132,9 @@ class Result(Tidy3dBaseModel):
                 f"Have {num_coords} and {num_values} elements, respectively."
             )
 
-        return val
+        return self
 
-    def value_as_dict(self, value) -> dict[str, Any]:
+    def value_as_dict(self, value: Any) -> dict[str, Any]:
         """How to convert an output function value as a dictionary."""
         if isinstance(value, dict):
             return value
@@ -141,7 +144,7 @@ class Result(Tidy3dBaseModel):
         return dict(zip(keys, value))
 
     @staticmethod
-    def default_value_keys(value) -> tuple[str, ...]:
+    def default_value_keys(value: Any) -> tuple[str, ...]:
         """The default keys for a given value."""
 
         # if a dict already, just use the existing keys as labels
@@ -155,7 +158,7 @@ class Result(Tidy3dBaseModel):
         # if simply single value (float, int, bool, etc) just label "output"
         return ("output",)
 
-    def items(self) -> tuple[dict, Any]:
+    def items(self) -> Iterator[tuple[dict[str, Any], Any]]:
         """Iterate through coordinates (args) and values (outputs) one by one."""
 
         for coord_tuple, val in zip(self.coords, self.values):
@@ -163,7 +166,7 @@ class Result(Tidy3dBaseModel):
             yield coord_dict, val
 
     @cached_property
-    def data(self) -> dict[tuple, Any]:
+    def data(self) -> dict[tuple[Any, ...], Any]:
         """Dict mapping tuple of fn args to their value."""
 
         result = {}
@@ -173,7 +176,7 @@ class Result(Tidy3dBaseModel):
 
         return result
 
-    def get_value(self, coords: tuple) -> Any:
+    def get_value(self, coords: tuple[Any, ...]) -> Any:
         """Get a data element indexing by function arg tuple."""
         return self.data[coords]
 
@@ -253,7 +256,7 @@ class Result(Tidy3dBaseModel):
         ----------
         df : ``pandas.DataFrame``
             ```DataFrame`` object to load into a :class:`.Result`.
-        dims : List[str] = None
+        dims : list[str] = None
             Set of dimensions corresponding to the function arguments.
             Not required if this dataframe was generated directly from a :class:`.Result`
             without modification. In that case, it contains the dims in its ``.attrs`` metadata.
@@ -321,7 +324,7 @@ class Result(Tidy3dBaseModel):
         if self.dims != other.dims:
             raise ValueError("Can't combine results, dimensions don't match.")
 
-        def combine_tuples(tuple1: tuple, tuple2: tuple):
+        def combine_tuples(tuple1: tuple[Any, ...], tuple2: tuple[Any, ...]) -> list[Any] | None:
             """Combine two tuples together if not None."""
             if tuple1 is None and tuple2 is None:
                 return None
@@ -342,7 +345,7 @@ class Result(Tidy3dBaseModel):
             task_names=task_names,
         )
 
-    def __add__(self, other):
+    def __add__(self, other: Result) -> Result:
         """Special syntax for design_result1 + design_result2."""
         return self.combine(other)
 
@@ -358,7 +361,7 @@ class Result(Tidy3dBaseModel):
 
         Parameters
         ----------
-        fn_args : Dict[str, float]
+        fn_args : dict[str, float]
             ``dict`` containing the function arguments one wishes to delete.
 
         Returns
@@ -397,7 +400,7 @@ class Result(Tidy3dBaseModel):
 
         Parameters
         ----------
-        fn_args : Dict[str, float]
+        fn_args : dict[str, float]
             ``dict`` containing the function arguments one wishes to add.
         value : Any
             Data point value corresponding to these arguments.
@@ -428,12 +431,12 @@ class Result(Tidy3dBaseModel):
 
         return self.updated_copy(values=new_values, coords=new_coords)
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Implement len function to return the number of items in the result."""
 
         return len(self.coords)
 
-    def __getitem__(self, data_index):
+    def __getitem__(self, data_index: int | slice) -> tuple[np.ndarray, np.ndarray]:
         """Implement the accessor function to index into the coordinates and values of the result."""
 
         features = self.coords[data_index]

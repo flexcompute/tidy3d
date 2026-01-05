@@ -4,9 +4,12 @@ import os
 import platform
 from pathlib import Path
 from shutil import which
-from typing import Union
+from typing import TYPE_CHECKING
 
 import tidy3d as td
+
+if TYPE_CHECKING:
+    from typing import Union
 
 
 def check_installation(raise_error: bool = False) -> Union[str, None]:

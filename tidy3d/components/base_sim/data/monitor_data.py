@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base_sim.monitor import AbstractMonitor
 from tidy3d.components.data.dataset import Dataset
@@ -15,8 +15,7 @@ class AbstractMonitorData(Dataset, ABC):
     :class:`AbstractMonitor`.
     """
 
-    monitor: AbstractMonitor = pd.Field(
-        ...,
+    monitor: AbstractMonitor = Field(
         title="Monitor",
         description="Monitor associated with the data.",
     )

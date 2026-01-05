@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
 from matplotlib import colors as mcolors
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
@@ -339,7 +339,7 @@ def test_field_decay_log_none():
 
 def test_to_dict():
     sim_data = make_sim_data()
-    j = sim_data.dict()
+    j = sim_data.model_dump()
     sim_data2 = SimulationData(**j)
     assert sim_data == sim_data2
 
@@ -350,7 +350,7 @@ def test_to_json(tmp_path):
     sim_data.to_file(fname=FNAME)
 
     # saving to json does not store data, so trying to load from file will trigger custom error.
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = SimulationData.from_file(fname=FNAME)
 
 
@@ -539,9 +539,9 @@ def test_plot_field_title():
 
 def test_missing_monitor():
     sim_data = make_sim_data()
-    new_monitors = list(sim_data.simulation.monitors)[:-1]
+    new_monitors = tuple(sim_data.simulation.monitors)[:-1]
     new_sim = sim_data.simulation.copy(update={"monitors": new_monitors})
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = sim_data.copy(update={"simulation": new_sim})
 
 
@@ -558,7 +558,7 @@ def test_replace_values_dict():
     """
     # Create data for test
     test_data = make_sim_data()
-    test_data_dict = test_data.dict()
+    test_data_dict = test_data.model_dump()
     test_data_dict["none_test"] = None  # Check that replace works at top level of nested dict
 
     # Get the original shape of nested dict

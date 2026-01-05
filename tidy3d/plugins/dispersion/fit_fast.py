@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
-from pydantic.v1 import NonNegativeFloat, PositiveInt
 
 from tidy3d.components.dispersion_fitter import (
     AdvancedFastFitterParam,
@@ -16,6 +15,11 @@ from tidy3d.components.medium import PoleResidue
 from tidy3d.constants import HBAR
 
 from .fit import DispersionFitter
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from pydantic import NonNegativeFloat, PositiveInt
 
 # numerical tolerance for pole relocation for fast fitter
 TOL = 1e-8
@@ -92,7 +96,7 @@ class FastDispersionFitter(DispersionFitter):
 
         Returns
         -------
-        Tuple[:class:`.PoleResidue`, float]
+        tuple[:class:`.PoleResidue`, float]
             Best fitting result: (dispersive medium, weighted RMS error).
         """
 
@@ -136,7 +140,7 @@ class FastDispersionFitter(DispersionFitter):
             Real part of permittivity
         loss_tangent : float
             Loss tangent.
-        frequency_range : Tuple[float, float]
+        frequency_range : tuple[float, float]
             Freqquency range for the material to exhibit constant loss tangent response.
         max_num_poles : PositiveInt, optional
             Maximum number of poles in the model.

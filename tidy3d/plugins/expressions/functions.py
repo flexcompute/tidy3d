@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
-import pydantic.v1 as pd
+from pydantic import Field, field_validator
 
 from .base import Expression
-from .types import NumberOrExpression, NumberType
+from .types import NumberOrExpression
+
+if TYPE_CHECKING:
+    from .types import ExpressionType, NumberType
 
 
 class Function(Expression):
@@ -14,16 +17,16 @@ class Function(Expression):
     Base class for mathematical functions in expressions.
     """
 
-    operand: NumberOrExpression = pd.Field(
-        ...,
+    operand: NumberOrExpression = Field(
         title="Operand",
         description="The operand for the function.",
     )
 
     _format: str = "{func}({operand})"
 
-    @pd.validator("operand", pre=True, always=True)
-    def validate_operand(cls, v):
+    @field_validator("operand")
+    @classmethod
+    def validate_operand(cls, v: NumberOrExpression) -> ExpressionType:
         """
         Validate and convert operand to an expression.
         """
@@ -42,7 +45,7 @@ class Function(Expression):
         """
         super().__init__(operand=operand, **kwargs)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """
         Return a string representation of the function.
         """

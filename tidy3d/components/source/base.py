@@ -3,31 +3,35 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
-import pydantic.v1 as pydantic
+from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.source import AbstractSource
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.types import TYPE_TAG_STR, Ax
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.validators import _assert_min_freq, _warn_unsupported_traced_argument
 from tidy3d.components.viz import (
     ARROW_ALPHA,
     ARROW_COLOR_POLARIZATION,
     ARROW_COLOR_SOURCE,
-    PlotParams,
     plot_params_source,
 )
 
 from .time import SourceTimeType
 
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from tidy3d.components.types import Ax
+    from tidy3d.components.viz import PlotParams
+
 
 class Source(Box, AbstractSource, ABC):
     """Abstract base class for all sources."""
 
-    source_time: SourceTimeType = pydantic.Field(
-        ...,
+    source_time: SourceTimeType = Field(
         title="Source Time",
         description="Specification of the source time-dependence.",
         discriminator=TYPE_TAG_STR,
@@ -50,20 +54,21 @@ class Source(Box, AbstractSource, ABC):
         return
 
     @cached_property
-    def _dir_vector(self) -> tuple[float, float, float]:
+    def _dir_vector(self) -> None:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         return None
 
     @cached_property
-    def _pol_vector(self) -> tuple[float, float, float]:
+    def _pol_vector(self) -> None:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
 
     _warn_traced_center = _warn_unsupported_traced_argument("center")
     _warn_traced_size = _warn_unsupported_traced_argument("size")
 
-    @pydantic.validator("source_time", always=True)
-    def _freqs_lower_bound(cls, val):
+    @field_validator("source_time")
+    @classmethod
+    def _freqs_lower_bound(cls, val: SourceTimeType) -> SourceTimeType:
         """Raise validation error if central frequency is too low."""
         _assert_min_freq(val._freq0_sigma_centroid, msg_start="'source_time.freq0'")
         return val

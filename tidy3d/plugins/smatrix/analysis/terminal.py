@@ -14,20 +14,25 @@ References
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
-from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
-from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
-from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
+from tidy3d.plugins.smatrix.data.data_array import PortDataArray
 from tidy3d.plugins.smatrix.ports.wave import WavePort
-from tidy3d.plugins.smatrix.types import SParamDef
 from tidy3d.plugins.smatrix.utils import (
     ab_to_s,
     check_port_impedance_sign,
     compute_F,
     compute_port_VI,
 )
+
+if TYPE_CHECKING:
+    from tidy3d.components.data.sim_data import SimulationData
+    from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
+    from tidy3d.plugins.smatrix.data.data_array import TerminalPortDataArray
+    from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
+    from tidy3d.plugins.smatrix.types import SParamDef
 
 
 def terminal_construct_smatrix(

@@ -1,14 +1,26 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Any, Optional
+from typing import TYPE_CHECKING
 
-from tidy3d.components.types import Ax, Axis, LengthUnit
+from tidy3d.components.types import LengthUnit
 from tidy3d.constants import UnitScaling
 from tidy3d.exceptions import Tidy3dKeyError
 
+if TYPE_CHECKING:
+    from typing import Callable, ParamSpec, TypeVar
 
-def _create_unit_aware_locator():
+    import matplotlib.ticker as ticker
+    from matplotlib.axes import Axes
+
+    P = ParamSpec("P")
+    T = TypeVar("T", bound=Callable[..., Axes])
+    from typing import Optional
+
+    from tidy3d.components.types import Ax, Axis
+
+
+def _create_unit_aware_locator() -> ticker.Locator:
     """Create UnitAwareLocator lazily due to matplotlib import restrictions."""
     import matplotlib.ticker as ticker
 
@@ -25,15 +37,15 @@ def _create_unit_aware_locator():
             super().__init__()
             self.scale_factor = scale_factor
 
-        def __call__(self):
+        def __call__(self) -> list[float]:
             vmin, vmax = self.axis.get_view_interval()
             return self.tick_values(vmin, vmax)
 
-        def view_limits(self, vmin, vmax):
+        def view_limits(self, vmin: float, vmax: float) -> tuple[float, float]:
             """Override to prevent matplotlib from adjusting our limits."""
             return vmin, vmax
 
-        def tick_values(self, vmin, vmax):
+        def tick_values(self, vmin: float, vmax: float) -> list[float]:
             # convert the view range to the target unit
             vmin_unit = vmin * self.scale_factor
             vmax_unit = vmax * self.scale_factor
@@ -105,13 +117,13 @@ def make_ax() -> Ax:
     return ax
 
 
-def add_ax_if_none(plot):
+def add_ax_if_none(plot: T) -> T:
     """Decorates ``plot(*args, **kwargs, ax=None)`` function.
     if ax=None in the function call, creates an ax and feeds it to rest of function.
     """
 
     @wraps(plot)
-    def _plot(*args: Any, **kwargs: Any) -> Ax:
+    def _plot(*args: P.args, **kwargs: P.kwargs) -> Axes:
         """New plot function using a generated ax if None."""
         if kwargs.get("ax") is None:
             ax = make_ax()
@@ -121,14 +133,14 @@ def add_ax_if_none(plot):
     return _plot
 
 
-def equal_aspect(plot):
+def equal_aspect(plot: T) -> T:
     """Decorates a plotting function returning a matplotlib axes.
     Ensures the aspect ratio of the returned axes is set to equal.
     Useful for 2D plots, like sim.plot() or sim_data.plot_fields()
     """
 
     @wraps(plot)
-    def _plot(*args: Any, **kwargs: Any) -> Ax:
+    def _plot(*args: P.args, **kwargs: P.kwargs) -> Axes:
         """New plot function with equal aspect ratio axes returned."""
         ax = plot(*args, **kwargs)
         ax.set_aspect("equal")

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import os
-from os import PathLike
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 from urllib.parse import urlparse
 
 import numpy as np
@@ -27,6 +26,9 @@ from tidy3d.log import DEFAULT_LEVEL, LogLevel, log, set_log_suppression, set_lo
 
 from .registry import get_manager as _get_attached_manager
 from .registry import register_handler, register_section
+
+if TYPE_CHECKING:
+    from os import PathLike
 
 TLS_VERSION_CHOICES = {"TLSv1", "TLSv1_1", "TLSv1_2", "TLSv1_3"}
 
@@ -468,6 +470,7 @@ class LocalCacheConfig(ConfigSection):
     )
 
     @field_validator("directory", mode="before")
+    @classmethod
     def _ensure_directory_exists(cls, v: PathLike) -> Path:
         """Expand ~, resolve path, and create directory if missing before DirectoryPath validation."""
         p = Path(v).expanduser().resolve()

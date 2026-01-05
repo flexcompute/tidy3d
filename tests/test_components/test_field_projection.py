@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import autograd.numpy as anp
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
 from autograd import make_vjp
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components.field_projection import FieldProjector, _far_field_integral
@@ -287,7 +287,7 @@ def test_proj_clientside():
     sim = td.Simulation(
         size=sim_size,
         grid_spec=td.GridSpec.auto(wavelength=td.C_0 / f0),
-        monitors=[monitor],
+        monitors=(monitor,),
         run_time=1e-12,
     )
 
@@ -622,7 +622,7 @@ def test_2d_sim_with_proj_monitors_near():
 
     # Modify only proj_distance and far_field_approx
     proj_monitors_near = [
-        monitor.__class__(
+        type(monitor)(
             proj_distance=R_FAR / 50,  # Adjust projection distance
             far_field_approx=False,  # Disable far-field approximation
             **{
@@ -635,7 +635,7 @@ def test_2d_sim_with_proj_monitors_near():
     ]
 
     with pytest.raises(
-        pydantic.ValidationError,
+        ValidationError,
         match="Exact far-field projection for 2D simulations is not yet available",
     ):
         _ = td.Simulation(

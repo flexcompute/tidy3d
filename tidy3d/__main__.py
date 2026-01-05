@@ -9,7 +9,7 @@ from tidy3d import Simulation
 from tidy3d.web import Job
 
 
-def main(args) -> None:
+def main(args: list[str]) -> None:
     """Parse args and run the corresponding tidy3d simulaton."""
 
     parser = argparse.ArgumentParser(description="Tidy3D")

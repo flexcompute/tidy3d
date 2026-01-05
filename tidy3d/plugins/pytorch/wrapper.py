@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from autograd import make_vjp
 
+if TYPE_CHECKING:
+    from typing import Callable
 
-def to_torch(fun):
+    from torch.autograd.function import FunctionCtx
+
+
+def to_torch(fun: Callable[..., Any]) -> Callable[..., torch.Tensor]:
     """
     Converts an autograd function to a PyTorch function.
 
@@ -49,7 +54,7 @@ def to_torch(fun):
         """
 
         @staticmethod
-        def forward(ctx, *args: Any):
+        def forward(ctx: FunctionCtx, *args: Any) -> torch.Tensor:
             numpy_args = []
             grad_argnums = []
 
@@ -78,7 +83,9 @@ def to_torch(fun):
             return torch.as_tensor(ans, device=device)
 
         @staticmethod
-        def backward(ctx, grad_output):
+        def backward(
+            ctx: FunctionCtx, grad_output: torch.Tensor
+        ) -> tuple[torch.Tensor | None, ...]:
             numpy_grad_output = grad_output.detach().cpu().numpy()
             _grads = ctx.vjp(numpy_grad_output)
             grads = [None] * ctx.num_args
@@ -86,7 +93,7 @@ def to_torch(fun):
                 grads[idx] = torch.as_tensor(grad, device=ctx.device)
             return tuple(grads)
 
-    def apply(*args: Any, **kwargs: Any):
+    def apply(*args: Any, **kwargs: Any) -> torch.Tensor:
         # we bind the full function signature including defaults so that we can pass
         # all values as positional since torch.autograd.Function.apply only accepts
         # positional arguments
