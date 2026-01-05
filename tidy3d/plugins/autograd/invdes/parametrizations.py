@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 from scipy.optimize import minimize
 
 import tidy3d as td
+from tidy3d.components.autograd.functions import _straight_through_clip
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.grid.grid import Coords
 from tidy3d.plugins.autograd.constants import BETA_DEFAULT, ETA_DEFAULT
@@ -74,7 +75,9 @@ class FilterAndProject(Tidy3dBaseModel):
         beta = beta if beta is not None else self.beta
         eta = eta if eta is not None else self.eta
         projected = tanh_projection(filtered, beta, eta)
-        return projected
+        clip_projected = _straight_through_clip(projected, a_min=0.0, a_max=1.0)
+
+        return clip_projected
 
 
 def make_filter_and_project(
