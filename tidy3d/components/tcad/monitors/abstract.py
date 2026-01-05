@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC
+from typing import TYPE_CHECKING
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base_sim.monitor import AbstractMonitor
-from tidy3d.components.types import ArrayFloat1D
+
+if TYPE_CHECKING:
+    from tidy3d.components.types import ArrayFloat1D
 
 BYTES_REAL = 4
 
@@ -15,13 +18,13 @@ BYTES_REAL = 4
 class HeatChargeMonitor(AbstractMonitor, ABC):
     """Abstract base class for heat-charge monitors."""
 
-    unstructured: bool = pd.Field(
+    unstructured: bool = Field(
         False,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )
 
-    conformal: bool = pd.Field(
+    conformal: bool = Field(
         False,
         title="Conformal Monitor Meshing",
         description="If ``True`` the simulation mesh will conform to the monitor's geometry. "

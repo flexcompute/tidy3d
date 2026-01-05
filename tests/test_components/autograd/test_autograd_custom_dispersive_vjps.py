@@ -80,7 +80,9 @@ def test_custom_sellmeier_vjp():
 
     freq = 2.5e14
     lam2 = (C_0 / freq) ** 2
-    eps_arr = 1.0 + B1.values * lam2 / (lam2 - C1.values) + B2.values * lam2 / (lam2 - C2.values)
+    eps_arr = (
+        1.0 + B1.values * lam2 / (lam2 - C1.values) + B2.values * lam2 / (lam2 - C2.values) + 0j
+    )
     dJ = np.conj(ag.holomorphic_grad(_J)(eps_arr))
 
     # Monkeypatch derivative provider
@@ -131,7 +133,7 @@ def test_custom_lorentz_vjp():
         eps_inf.values
         + (de1.values * (f01.values**2)) / den1
         + (de2.values * (f02.values**2)) / den2
-    )
+    ) + 0j
     dJ = np.conj(ag.holomorphic_grad(_J)(eps_arr))
 
     from tidy3d.components import medium as medium_mod
@@ -188,7 +190,7 @@ def test_custom_drude_vjp():
 
     den1 = Drude._den(freq, dl1.values)
     den2 = Drude._den(freq, dl2.values)
-    eps_arr = eps_inf.values - (fp1.values**2) / den1 - (fp2.values**2) / den2
+    eps_arr = eps_inf.values - (fp1.values**2) / den1 - (fp2.values**2) / den2 + 0j
     dJ = np.conj(ag.holomorphic_grad(_J)(eps_arr))
 
     from tidy3d.components import medium as medium_mod
@@ -239,7 +241,7 @@ def test_custom_debye_vjp():
 
     den1 = Debye._den(freq, tau1.values)
     den2 = Debye._den(freq, tau2.values)
-    eps_arr = eps_inf.values + de1.values / den1 + de2.values / den2
+    eps_arr = eps_inf.values + de1.values / den1 + de2.values / den2 + 0j
     dJ = np.conj(ag.holomorphic_grad(_J)(eps_arr))
 
     from tidy3d.components import medium as medium_mod

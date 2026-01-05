@@ -4,18 +4,28 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import (
+    Field,
+    NonNegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
 
 from tidy3d.components.geometry.base import Box
 from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
-from .base import Tidy3dBaseModel, skip_if_fields_missing
+from .base import Tidy3dBaseModel
 from .types import Axis2D, FreqArray, TrackFreq
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 GROUP_INDEX_STEP = 0.005
 MODE_DATA_KEYS = Literal[
@@ -87,22 +97,22 @@ class ModeSortSpec(Tidy3dBaseModel):
     """
 
     # Filtering stage
-    filter_key: Optional[MODE_DATA_KEYS] = pd.Field(
+    filter_key: Optional[MODE_DATA_KEYS] = Field(
         None,
         title="Filtering key",
         description="Quantity used to filter modes into two groups before sorting.",
     )
-    filter_reference: float = pd.Field(
+    filter_reference: float = Field(
         0.0,
         title="Filtering reference",
         description="Reference value used in the filtering stage.",
     )
-    filter_order: Literal["over", "under"] = pd.Field(
+    filter_order: Literal["over", "under"] = Field(
         "over",
         title="Filtering order",
         description="Select whether the first group contains values over or under the reference.",
     )
-    bounding_box: Optional[Box] = pd.Field(
+    bounding_box: Optional[Box] = Field(
         None,
         title="Bounding box",
         description=(
@@ -111,7 +121,7 @@ class ModeSortSpec(Tidy3dBaseModel):
             "still intersect the monitor plane. Required when filtering or sorting with that key."
         ),
     )
-    keep_modes: Union[Literal["all"], Literal["filtered"], pd.PositiveInt] = pd.Field(
+    keep_modes: Union[Literal["all"], Literal["filtered"], PositiveInt] = Field(
         "all",
         title="Keep Modes",
         description=(
@@ -123,40 +133,43 @@ class ModeSortSpec(Tidy3dBaseModel):
     )
 
     # Sorting stage
-    sort_key: MODE_DATA_KEYS = pd.Field(
+    sort_key: MODE_DATA_KEYS = Field(
         "n_eff",
         title="Sorting key",
         description="Quantity used to sort modes within each filtered group.",
     )
-    sort_reference: Optional[float] = pd.Field(
+    sort_reference: Optional[float] = Field(
         None,
         title="Sorting reference",
         description=(
             "If provided, sorting is based on the absolute difference to this reference value."
         ),
     )
-    sort_order: Optional[Literal["ascending", "descending"]] = pd.Field(
+    sort_order: Optional[Literal["ascending", "descending"]] = Field(
         None,
         title="Sorting direction",
         description=_build_sort_order_description(),
     )
 
-    @pd.validator("sort_order", always=True)
-    @skip_if_fields_missing(["sort_key", "sort_reference"])
-    def _set_default_sort_order(cls, val, values):
+    @model_validator(mode="before")
+    @classmethod
+    def _set_default_sort_order(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Set default sort order based on sort_key and sort_reference."""
+        val = data.get("sort_order")
         if val is not None:
-            return val
-        sort_reference = values.get("sort_reference")
+            return data
+        sort_reference = data.get("sort_reference")
         # When sorting by distance to a reference, ascending is natural (closest first)
         if sort_reference is not None:
-            return "ascending"
+            data["sort_order"] = "ascending"
+            return data
         # Otherwise, use the natural default for each key
-        sort_key = values.get("sort_key")
-        return MODE_DATA_KEY_SORT_ORDER.get(sort_key, "ascending")
+        sort_key = data.get("sort_key", "n_eff")
+        data["sort_order"] = MODE_DATA_KEY_SORT_ORDER.get(sort_key, "ascending")
+        return data
 
     # Frequency tracking - applied after sorting and filtering
-    track_freq: Optional[TrackFreq] = pd.Field(
+    track_freq: Optional[TrackFreq] = Field(
         "central",
         title="Tracking base frequency",
         description="If provided, enables cross-frequency mode tracking. Can be 'lowest', "
@@ -165,23 +178,25 @@ class ModeSortSpec(Tidy3dBaseModel):
         "while at other frequencies it can change depending on the mode tracking.",
     )
 
-    @pd.validator("keep_modes", always=True)
-    def _drop_requires_filter(cls, val, values):
-        if val == "filtered" and values.get("filter_key") is None:
+    @model_validator(mode="after")
+    def _drop_requires_filter(self: Self) -> Self:
+        val = self.keep_modes
+        if val == "filtered" and self.filter_key is None:
             raise ValidationError(
                 "ModeSortSpec.keep_modes 'filtered' requires 'filter_key' to be set."
             )
-        return val
+        return self
 
-    @pd.root_validator(skip_on_failure=True)
-    def _bounding_box_required_for_fill_fraction(cls, values):
-        bbox = values.get("bounding_box")
-        keys = (values.get("filter_key"), values.get("sort_key"))
+    @model_validator(mode="before")
+    @classmethod
+    def _bounding_box_required_for_fill_fraction(cls, data: dict[str, Any]) -> dict[str, Any]:
+        bbox = data.get("bounding_box")
+        keys = (data.get("filter_key"), data.get("sort_key"))
         if any(key == "fill_fraction_box" for key in keys) and bbox is None:
             raise ValidationError(
                 "ModeSortSpec.bounding_box must be set when using 'fill_fraction_box'."
             )
-        return values
+        return data
 
     @property
     def has_custom_sort_or_filter(self) -> bool:
@@ -200,7 +215,7 @@ class ModeSortSpec(Tidy3dBaseModel):
             self.filter_key is not None
             or self.sort_key != "n_eff"
             or self.sort_reference is not None
-            or self.sort_order != "descending"
+            or (self.sort_order is not None and self.sort_order != "descending")
             or self.keep_modes != "all"
         )
 
@@ -232,8 +247,7 @@ class FrequencySamplingSpec(Tidy3dBaseModel, ABC):
 class UniformSampling(FrequencySamplingSpec):
     """Uniform frequency sampling specification."""
 
-    num_points: int = pd.Field(
-        ...,
+    num_points: int = Field(
         title="Number of Points",
         description="Number of uniformly spaced frequency sampling points.",
         ge=2,
@@ -265,8 +279,7 @@ class UniformSampling(FrequencySamplingSpec):
 class ChebSampling(FrequencySamplingSpec):
     """Chebyshev node frequency sampling specification."""
 
-    num_points: int = pd.Field(
-        ...,
+    num_points: int = Field(
         title="Number of Points",
         description="Number of Chebyshev nodes for frequency sampling.",
         ge=3,
@@ -306,14 +319,14 @@ class ChebSampling(FrequencySamplingSpec):
 class CustomSampling(FrequencySamplingSpec):
     """Custom frequency sampling specification."""
 
-    freqs: FreqArray = pd.Field(
-        ...,
+    freqs: FreqArray = Field(
         title="Frequencies",
         description="Custom array of frequency sampling points.",
     )
 
-    @pd.validator("freqs", always=True)
-    def _validate_freqs(cls, val):
+    @field_validator("freqs")
+    @classmethod
+    def _validate_freqs(cls, val: FreqArray) -> FreqArray:
         """Validate custom frequencies."""
         freqs_array = np.asarray(val)
         if freqs_array.size < 2:
@@ -381,14 +394,13 @@ class ModeInterpSpec(Tidy3dBaseModel):
         Monitor that can use this specification to reduce mode computation cost.
     """
 
-    sampling_spec: Union[UniformSampling, ChebSampling, CustomSampling] = pd.Field(
-        ...,
+    sampling_spec: Union[UniformSampling, ChebSampling, CustomSampling] = Field(
         title="Sampling Specification",
         description="Specification for frequency sampling points.",
         discriminator="type",
     )
 
-    method: Literal["linear", "cubic", "poly"] = pd.Field(
+    method: Literal["linear", "cubic", "poly"] = Field(
         "linear",
         title="Interpolation Method",
         description="Method for interpolating mode data between computed frequencies. "
@@ -399,7 +411,7 @@ class ModeInterpSpec(Tidy3dBaseModel):
         "For complex-valued data, real and imaginary parts are interpolated independently.",
     )
 
-    reduce_data: bool = pd.Field(
+    reduce_data: bool = Field(
         False,
         title="Reduce Data",
         description="Applies only to :class:`ModeSolverData`. If ``True``, fields and quantities "
@@ -409,13 +421,13 @@ class ModeInterpSpec(Tidy3dBaseModel):
         "Does not apply if the number of sampling points is greater than the number of monitor frequencies.",
     )
 
-    @pd.validator("method", always=True)
-    @skip_if_fields_missing(["sampling_spec"])
-    def _validate_method_needs_points(cls, val, values):
+    @model_validator(mode="after")
+    def _validate_method_needs_points(self) -> Self:
         """Validate that the method has enough points."""
-        sampling_spec = values.get("sampling_spec")
+        val = self.method
+        sampling_spec = self.sampling_spec
         if sampling_spec is None:
-            return val
+            return self
 
         num_points = sampling_spec._num_points
         if val == "cubic" and num_points < 4:
@@ -430,7 +442,7 @@ class ModeInterpSpec(Tidy3dBaseModel):
                 f"Got {num_points} points. "
                 "Use method='linear' or increase num_points."
             )
-        return val
+        return self
 
     @classmethod
     def uniform(
@@ -563,21 +575,25 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     Abstract base for mode specification data.
     """
 
-    num_modes: pd.PositiveInt = pd.Field(
-        1, title="Number of modes", description="Number of modes returned by mode solver."
+    num_modes: PositiveInt = Field(
+        1,
+        title="Number of modes",
+        description="Number of modes returned by mode solver.",
     )
 
-    target_neff: pd.PositiveFloat = pd.Field(
-        None, title="Target effective index", description="Guess for effective index of the mode."
+    target_neff: Optional[PositiveFloat] = Field(
+        None,
+        title="Target effective index",
+        description="Guess for effective index of the mode.",
     )
 
-    num_pml: tuple[pd.NonNegativeInt, pd.NonNegativeInt] = pd.Field(
+    num_pml: tuple[NonNegativeInt, NonNegativeInt] = Field(
         (0, 0),
         title="Number of PML layers",
         description="Number of standard pml layers to add in the two tangential axes.",
     )
 
-    filter_pol: Literal["te", "tm"] = pd.Field(
+    filter_pol: Optional[Literal["te", "tm"]] = Field(
         None,
         title="Polarization filtering",
         description="The solver always computes the ``num_modes`` modes closest to the given "
@@ -593,22 +609,22 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "``tm``-fraction uses the E field component parallel to the second plane axis.",
     )
 
-    angle_theta: float = pd.Field(
+    angle_theta: float = Field(
         0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the injection axis.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
-    angle_phi: float = pd.Field(
+    angle_phi: float = Field(
         0.0,
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "
         "injection axis.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
-    precision: Literal["auto", "single", "double"] = pd.Field(
+    precision: Literal["auto", "single", "double"] = Field(
         "double",
         title="single, double, or automatic precision in mode solver",
         description="The solver will be faster and using less memory under "
@@ -617,16 +633,16 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "conductor, single precision otherwise.",
     )
 
-    bend_radius: float = pd.Field(
+    bend_radius: Optional[float] = Field(
         None,
         title="Bend radius",
         description="A curvature radius for simulation of waveguide bends. Can be negative, in "
         "which case the mode plane center has a smaller value than the curvature center along the "
         "tangential axis perpendicular to the bend axis.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    bend_axis: Axis2D = pd.Field(
+    bend_axis: Optional[Axis2D] = Field(
         None,
         title="Bend axis",
         description="Index into the two tangential axes defining the normal to the "
@@ -635,26 +651,26 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "yz plane, the ``bend_axis`` is always 1 (the global z axis).",
     )
 
-    angle_rotation: bool = pd.Field(
+    angle_rotation: bool = Field(
         False,
-        title="Use fields rotation when angle_theta is not zero",
-        description="Defines how modes are computed when angle_theta is not zero. "
-        "If 'False', a coordinate transformation is applied through the permittivity and permeability tensors."
-        "If 'True', the structures in the simulation are first rotated to compute a mode solution at "
+        title="Use fields rotation when ``angle_theta`` is not zero",
+        description="Defines how modes are computed when ``angle_theta`` is not zero. "
+        "If ``False``, a coordinate transformation is applied through the permittivity and permeability tensors."
+        "If ``True``, the structures in the simulation are first rotated to compute a mode solution at "
         "a reference plane normal to the structure's azimuthal direction. Then, the fields are rotated "
-        "to align with the mode plane, using the 'n_eff' calculated at the reference plane. The second option can "
+        "to align with the mode plane, using the ``n_eff`` calculated at the reference plane. The second option can "
         "produce more accurate results, but more care must be taken, for example, in ensuring that the "
         "original mode plane intersects the correct geometries in the simulation with rotated structures. "
-        "Note: currently only supported when 'angle_phi' is a multiple of 'np.pi'.",
+        "Note: currently only supported when ``angle_phi`` is a multiple of ``np.pi``.",
     )
 
-    track_freq: Optional[TrackFreq] = pd.Field(
+    track_freq: Optional[TrackFreq] = Field(
         None,
         title="Mode Tracking Frequency (deprecated)",
         description="Deprecated. Use 'sort_spec.track_freq' instead.",
     )
 
-    group_index_step: Union[pd.PositiveFloat, bool] = pd.Field(
+    group_index_step: Union[PositiveFloat, bool] = Field(
         False,
         title="Frequency step for group index computation",
         description="Control the computation of the group index alongside the effective index. If "
@@ -663,15 +679,15 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         f"default of {GROUP_INDEX_STEP} is used.",
     )
 
-    sort_spec: ModeSortSpec = pd.Field(
-        ModeSortSpec(),
+    sort_spec: ModeSortSpec = Field(
+        default_factory=ModeSortSpec,
         title="Mode filtering and sorting specification",
         description="Defines how to filter and sort modes within each frequency. If ``track_freq`` "
         "is not ``None``, the sorting is only exact at the specified frequency, while at other "
         "frequencies it can change depending on the mode tracking.",
     )
 
-    interp_spec: Optional[ModeInterpSpec] = pd.Field(
+    interp_spec: Optional[ModeInterpSpec] = Field(
         None,
         title="Mode frequency interpolation specification",
         description="Specification for computing modes at a reduced set of frequencies and "
@@ -681,11 +697,12 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "not be ``None``) to ensure consistent mode ordering across frequencies.",
     )
 
-    @pd.validator("sort_spec", always=True)
-    def _keep_modes_at_most_num_modes(cls, val, values):
+    @model_validator(mode="after")
+    def _keep_modes_at_most_num_modes(self: Self) -> Self:
+        val = self.sort_spec
         if val is not None:
             if isinstance(val.keep_modes, int):
-                num_modes = values.get("num_modes")
+                num_modes = self.num_modes
                 if val.keep_modes > num_modes:
                     raise ValidationError(
                         "ModeSortSpec.keep_modes cannot be larger than 'num_modes'. "
@@ -697,60 +714,70 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
                         "'keep_modes=\"filtered\"' to keep exactly those modes matching "
                         "the filter, or setting 'keep_modes=\"all\"' to keep all modes."
                     )
+        return self
+
+    @field_validator("group_index_step", mode="before")
+    @classmethod
+    def _validate_group_index_step_default(
+        cls, val: Union[bool, PositiveFloat]
+    ) -> Union[bool, PositiveFloat]:
+        """If ``True``, replace with default fractional step."""
+        if val is True:
+            return GROUP_INDEX_STEP
         return val
 
-    @pd.validator("bend_axis", always=True)
-    @skip_if_fields_missing(["bend_radius"])
-    def bend_axis_given(cls, val, values):
-        """Check that ``bend_axis`` is provided if ``bend_radius`` is not ``None``"""
-        if val is None and values.get("bend_radius") is not None:
-            raise SetupError("'bend_axis' must also be defined if 'bend_radius' is defined.")
+    @field_validator("group_index_step")
+    @classmethod
+    def _validate_group_index_step_size(
+        cls, val: Union[bool, PositiveFloat]
+    ) -> Union[bool, PositiveFloat]:
+        """Ensure group-index step is < 1."""
+        if val is not False and val >= 1:
+            raise ValidationError(
+                "Parameter 'group_index_step' must be a fractional value less than 1."
+            )
         return val
 
-    @pd.validator("bend_radius", always=True)
-    def bend_radius_not_zero(cls, val, values):
-        """Check that ``bend_raidus`` magnitude is not close to zero.`"""
-        if val is not None and isclose(val, 0):
+    @field_validator("bend_radius")
+    @classmethod
+    def _validate_bend_radius_not_zero(cls, v: Optional[float]) -> Optional[float]:
+        """`bend_radius` magnitude must be non-zero."""
+        if v is not None and isclose(v, 0):
             raise SetupError("The magnitude of 'bend_radius' must be larger than 0.")
-        return val
+        return v
 
-    @pd.validator("angle_theta", allow_reuse=True, always=True)
-    def glancing_incidence(cls, val):
-        """Warn if close to glancing incidence."""
-        if np.abs(np.pi / 2 - val) < GLANCING_CUTOFF:
+    @field_validator("angle_theta")
+    @classmethod
+    def _validate_angle_theta_glancing(cls, val: float) -> float:
+        """Disallow incidence too close to glancing."""
+        if abs(np.pi / 2 - val) < GLANCING_CUTOFF:
             raise SetupError(
                 "Mode propagation axis too close to glancing angle for accurate injection. "
                 "For best results, switch the injection axis."
             )
         return val
 
-    # Must be executed before type validation by pydantic, otherwise True is converted to 1.0
-    @pd.validator("group_index_step", pre=True)
-    def assign_default_on_true(cls, val):
-        """Assign the default fractional frequency step value if not provided."""
-        if val is True:
-            return GROUP_INDEX_STEP
-        return val
+    @model_validator(mode="after")
+    def _check_bend_axis_given(self) -> Self:
+        """``bend_axis`` must be provided when ``bend_radius`` is set."""
+        if self.bend_radius is not None and self.bend_axis is None:
+            raise SetupError("'bend_axis' must also be defined if 'bend_radius' is defined.")
+        return self
 
-    @pd.validator("group_index_step")
-    def check_group_step_size(cls, val):
-        """Ensure a reasonable group index step is used."""
-        if val >= 1:
+    @model_validator(mode="after")
+    def _check_angle_rotation_with_phi(self) -> Self:
+        """``angle_rotation`` requires ``angle_phi`` % (π/2) == 0."""
+        if self.angle_rotation and not isclose(self.angle_phi % (np.pi / 2), 0):
             raise ValidationError(
-                "Parameter 'group_index_step' is a fractional value. It must be less than 1."
+                "'angle_phi' must be a multiple of 'π/2' when 'angle_rotation' is enabled."
             )
-        return val
+        return self
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_precision(cls, values):
+    @model_validator(mode="after")
+    def check_precision(self) -> Self:
         """Verify critical ModeSpec settings for group index calculation."""
-        if values["group_index_step"] > 0:
-            # prefer explicit track_freq on ModeSpec, else fall back to sort_spec.track_freq
-            # TODO: can be replaced with self._track_freq in pydantic v2
-            tf = values.get("track_freq")
-            if tf is None:
-                sort_spec = values.get("sort_spec")
-                tf = None if sort_spec is None else sort_spec.track_freq
+        if self.group_index_step > 0:
+            tf = self._track_freq
             if tf is None:
                 log.warning(
                     "Group index calculation without mode tracking can lead to incorrect results "
@@ -758,7 +785,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
                 )
 
             # multiply by 5 to be safe
-            if values["group_index_step"] < 5 * fp_eps and values["precision"] != "double":
+            if self.group_index_step < 5 * fp_eps and self.precision != "double":
                 log.warning(
                     "Group index step is too small! "
                     "The results might be fully corrupted by numerical errors. "
@@ -766,31 +793,22 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
                     "or increasing the value of 'group_index_step'."
                 )
 
-        return values
+        return self
 
-    @pd.validator("angle_rotation")
-    def angle_rotation_with_phi(cls, val, values):
-        """Currently ``angle_rotation`` is only supported with ``angle_phi % (np.pi / 2) == 0``."""
-        if val and not isclose(values["angle_phi"] % (np.pi / 2), 0):
-            raise ValidationError(
-                "Parameter 'angle_phi' must be a multiple of 'np.pi / 2' when 'angle_rotation' is "
-                "enabled."
-            )
-        return val
-
-    @pd.root_validator(skip_on_failure=True)
-    def _filter_pol_and_sort_spec_exclusive(cls, values):
+    @model_validator(mode="after")
+    def _filter_pol_and_sort_spec_exclusive(self) -> Self:
         """Ensure that 'filter_pol' and 'sort_spec' are not used together."""
-        sort_spec = values.get("sort_spec")
-        if values.get("filter_pol") is not None and sort_spec.has_custom_sort_or_filter:
+        sort_spec = self.sort_spec
+        if self.filter_pol is not None and sort_spec.has_custom_sort_or_filter:
             raise SetupError(
                 "'filter_pol' cannot be used simultaneously with sorting or filtering "
                 "defined in 'sort_spec'. Define the filtering in 'sort_spec' exclusively."
             )
-        return values
+        return self
 
-    @pd.validator("filter_pol", always=True)
-    def _filter_pol_deprecated(cls, val):
+    @field_validator("filter_pol")
+    @classmethod
+    def _filter_pol_deprecated(cls, val: Optional[str]) -> Optional[str]:
         """Warn that 'filter_pol' is deprecated in favor of 'sort_spec'."""
         if val is not None:
             log.warning(
@@ -799,8 +817,9 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
             )
         return val
 
-    @pd.validator("track_freq", always=True)
-    def _track_freq_deprecated(cls, val):
+    @field_validator("track_freq")
+    @classmethod
+    def _track_freq_deprecated(cls, val: Optional[TrackFreq]) -> Optional[TrackFreq]:
         """Warn that 'track_freq' on ModeSpec is deprecated in favor of 'sort_spec.track_freq'."""
         if val is not None:
             log.warning(
@@ -821,23 +840,23 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
             return sort_spec.track_freq
         return None
 
-    @pd.validator("interp_spec", always=True)
-    @skip_if_fields_missing(["sort_spec", "track_freq"])
-    def _interp_spec_needs_tracking(cls, val, values):
+    @model_validator(mode="after")
+    def _interp_spec_needs_tracking(self) -> Self:
         """Ensure frequency tracking is enabled when using interpolation."""
+        val = self.interp_spec
         if val is None:
-            return val
+            return self
 
         # Check if track_freq is enabled (prefer ModeSpec.track_freq, else sort_spec.track_freq)
-        track_freq = values.get("track_freq")
-        sort_spec = values.get("sort_spec")
-        if cls._track_freq_from_specs(track_freq, sort_spec) is None:
+        track_freq = self.track_freq
+        sort_spec = self.sort_spec
+        if self.__class__._track_freq_from_specs(track_freq, sort_spec) is None:
             raise ValidationError(
                 "Mode frequency interpolation requires frequency tracking to be enabled. "
                 "Please set 'sort_spec.track_freq' to 'central', 'lowest', or 'highest'."
             )
 
-        return val
+        return self
 
     @property
     def _track_freq(self) -> Optional[TrackFreq]:

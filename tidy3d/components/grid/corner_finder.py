@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat, PositiveInt
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.base import Box, ClipOperation
 from tidy3d.components.geometry.utils import merging_geometries_on_plane
 from tidy3d.components.medium import PEC, LossyMetalMedium
-from tidy3d.components.structure import Structure
-from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
 from tidy3d.constants import inf
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from tidy3d.components.structure import Structure
+    from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
 
 CORNER_ANGLE_THRESOLD = 0.25 * np.pi
 # For shapely circular shapes discretization.
@@ -25,7 +29,7 @@ SHAPELY_CLEANUP = False
 class CornerFinderSpec(Tidy3dBaseModel):
     """Specification for corner detection on a 2D plane."""
 
-    medium: Literal["metal", "dielectric", "all"] = pd.Field(
+    medium: Literal["metal", "dielectric", "all"] = Field(
         "metal",
         title="Material Type For Corner Identification",
         description="Find corners of structures made of :class:`.Medium`, "
@@ -33,7 +37,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         "for non-metallic materials, and ``all`` for all materials.",
     )
 
-    angle_threshold: float = pd.Field(
+    angle_threshold: float = Field(
         CORNER_ANGLE_THRESOLD,
         title="Angle Threshold In Corner Identification",
         description="A vertex is qualified as a corner if the angle spanned by its two edges "
@@ -43,28 +47,28 @@ class CornerFinderSpec(Tidy3dBaseModel):
         lt=np.pi,
     )
 
-    distance_threshold: Optional[pd.PositiveFloat] = pd.Field(
+    distance_threshold: Optional[PositiveFloat] = Field(
         None,
         title="Distance Threshold In Corner Identification",
         description="If not ``None`` and the distance of the vertex to its neighboring vertices "
         "is below the threshold value based on Douglas-Peucker algorithm, the vertex is disqualified as a corner.",
     )
 
-    concave_resolution: Optional[pd.PositiveInt] = pd.Field(
+    concave_resolution: Optional[PositiveInt] = Field(
         None,
         title="Concave Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on concave featues."
         "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",
     )
 
-    convex_resolution: Optional[pd.PositiveInt] = pd.Field(
+    convex_resolution: Optional[PositiveInt] = Field(
         None,
         title="Convex Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on convex featues."
         "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",
     )
 
-    mixed_resolution: Optional[pd.PositiveInt] = pd.Field(
+    mixed_resolution: Optional[PositiveInt] = Field(
         None,
         title="Mixed Region Resolution.",
         description="Specifies number of steps to use for determining `dl_min` based on mixed featues."
@@ -72,7 +76,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
     )
 
     @cached_property
-    def _no_min_dl_override(self):
+    def _no_min_dl_override(self) -> bool:
         return all(
             (
                 self.concave_resolution is None,
@@ -193,7 +197,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         return self._ravel_corners_and_convexity(ravel, corner_list, convexity_list)
 
     def _ravel_corners_and_convexity(
-        self, ravel: bool, corner_list, convexity_list
+        self, ravel: bool, corner_list: list[ArrayFloat2D], convexity_list: list[ArrayFloat1D]
     ) -> tuple[ArrayFloat2D, ArrayFloat1D]:
         """Whether to put the resulting corners in a single list or per polygon."""
         if ravel and len(corner_list) > 0:
@@ -269,7 +273,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
             Convexity of corners: True for outer corners, False for inner corners.
         """
 
-        def normalize(v):
+        def normalize(v: NDArray) -> NDArray:
             return v / np.linalg.norm(v, axis=-1)[:, np.newaxis]
 
         # drop the last vertex, which is identical to the 1st one.

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import autograd.numpy as np
-import pydantic.v1 as pd
 from autograd import value_and_grad
-from numpy.typing import NDArray
+from pydantic import Field, NonNegativeFloat
 from scipy.optimize import minimize
 
 import tidy3d as td
+from tidy3d import log
 from tidy3d.components.autograd.functions import _straight_through_clip
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.grid.grid import Coords
@@ -19,30 +19,47 @@ from tidy3d.plugins.autograd.types import KernelType, PaddingType
 from .filters import make_filter
 from .projections import tanh_projection
 
+if TYPE_CHECKING:
+    from typing import Callable, Literal
+
+    from numpy.typing import NDArray
+
 
 class FilterAndProject(Tidy3dBaseModel):
     """A class that combines filtering and projection operations."""
 
-    radius: Union[float, tuple[float, ...]] = pd.Field(
-        ..., title="Radius", description="The radius of the kernel."
+    radius: Union[float, tuple[float, ...]] = Field(
+        title="Radius",
+        description="The radius of the kernel.",
     )
-    dl: Union[float, tuple[float, ...]] = pd.Field(
-        ..., title="Grid Spacing", description="The grid spacing."
+    dl: Union[float, tuple[float, ...]] = Field(
+        title="Grid Spacing",
+        description="The grid spacing.",
     )
-    size_px: Union[int, tuple[int, ...]] = pd.Field(
-        None, title="Size in Pixels", description="The size of the kernel in pixels."
+    size_px: Optional[Union[int, tuple[int, ...]]] = Field(
+        None,
+        title="Size in Pixels",
+        description="The size of the kernel in pixels.",
     )
-    beta: pd.NonNegativeFloat = pd.Field(
-        BETA_DEFAULT, title="Beta", description="The beta parameter for the tanh projection."
+    beta: NonNegativeFloat = Field(
+        BETA_DEFAULT,
+        title="Beta",
+        description="The beta parameter for the tanh projection.",
     )
-    eta: pd.NonNegativeFloat = pd.Field(
-        ETA_DEFAULT, title="Eta", description="The eta parameter for the tanh projection."
+    eta: NonNegativeFloat = Field(
+        ETA_DEFAULT,
+        title="Eta",
+        description="The eta parameter for the tanh projection.",
     )
-    filter_type: KernelType = pd.Field(
-        "conic", title="Filter Type", description="The type of filter to create."
+    filter_type: KernelType = Field(
+        "conic",
+        title="Filter Type",
+        description="The type of filter to create.",
     )
-    padding: PaddingType = pd.Field(
-        "reflect", title="Padding", description="The padding mode to use."
+    padding: PaddingType = Field(
+        "reflect",
+        title="Padding",
+        description="The padding mode to use.",
     )
 
     def __call__(
@@ -297,6 +314,8 @@ def initialize_params_from_simulation(
 
     bounds_list = [bounds] * params0.size
     try:
+        if verbose:
+            log.warning("SciPy's L-BFGS-B optimizer no longer supports verbose output. ")
         res = minimize(
             fun=val_and_grad,
             x0=params0.ravel(),
@@ -304,7 +323,7 @@ def initialize_params_from_simulation(
             jac=True,
             bounds=bounds_list,
             callback=callback,
-            options={"maxiter": maxiter, "disp": verbose},
+            options={"maxiter": maxiter},
         )
         x_final = res.x
     except StopIteration:

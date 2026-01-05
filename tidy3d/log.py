@@ -5,13 +5,21 @@ from __future__ import annotations
 import inspect
 from contextlib import contextmanager
 from datetime import datetime
-from os import PathLike
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 from rich.console import Console
 from rich.text import Text
-from typing_extensions import Literal
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from os import PathLike
+    from types import TracebackType
+    from typing import Callable, Optional
+
+    from pydantic import BaseModel
+    from rich.progress import Progress as RichProgress
+
+    from tidy3d.compat import Self
 # Note: "SUPPORT" and "USER" levels are meant for backend runs only.
 # Logging in frontend code should just use the standard debug/info/warning/error/critical.
 LogLevel = Literal["DEBUG", "SUPPORT", "USER", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -80,7 +88,7 @@ class LogHandler:
         self.log_level_format = log_level_format
         self.prefix_every_line = prefix_every_line
 
-    def handle(self, level, level_name, message) -> None:
+    def handle(self, level: int, level_name: str, message: str) -> None:
         """Output log messages depending on log level"""
         if level >= self.level:
             stack = inspect.stack()
@@ -115,9 +123,10 @@ class Logger:
         the context is exited, the number of discarded messages of each level is displayed with the
         highest level of the captures messages.
 
-        Messages can also be captured for post-processing. That can be enabled through 'set_capture' to
-        record all warnings emitted during model validation. A structured copy of all validation
-        messages can then be recovered through 'captured_warnings'.
+    Messages can also be captured for post-processing. That can be enabled through 'set_capture' to
+    record warnings emitted during model validation (and other explicit begin/end capture regions,
+    e.g. validation routines like ``validate_pre_upload``). A structured copy of captured warnings
+    can then be recovered through 'captured_warnings'.
     """
 
     _static_cache = set()
@@ -135,20 +144,25 @@ class Logger:
         """Turn on/off tree-like capturing of log messages."""
         self._capture = capture
 
-    def captured_warnings(self):
+    def captured_warnings(self) -> list[dict[str, Any]]:
         """Get the formatted list of captured log messages."""
         captured_warnings = self._captured_warnings
         self._captured_warnings = []
         return captured_warnings
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         """If suppression is enabled, enter a consolidation context (only a single message is
         emitted)."""
         if self.suppression and self._counts is None:
             self._counts = {}
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> Literal[False]:
         """Exist a consolidation context (report the number of messages discarded)."""
         if self._counts is not None:
             total = sum(v for v in self._counts.values())
@@ -168,8 +182,8 @@ class Logger:
     def begin_capture(self) -> None:
         """Start capturing log stack for consolidated validation log.
 
-        This method is used before any model validation starts and is included in the initialization
-        of 'BaseModel'. It must be followed by a corresponding 'end_capture'.
+        This method should be called before a validation routine starts. It must be followed by a
+        corresponding 'end_capture'.
         """
         if not self._capture:
             return
@@ -180,11 +194,23 @@ class Logger:
         else:
             self._stack = [stack_item]
 
-    def end_capture(self, model) -> None:
+    def abort_capture(self) -> None:
+        """Undo the last ``begin_capture()`` call.
+
+        This is used when validation fails before reaching the corresponding ``end_capture()``.
+        """
+        if not self._stack:
+            return
+
+        self._stack.pop()
+        if len(self._stack) == 0:
+            self._stack = None
+
+    def end_capture(self, model: BaseModel) -> None:
         """End capturing log stack for consolidated validation log.
 
-        This method is used after all model validations and is included in the initialization of
-        'BaseModel'. It must follow a corresponding 'begin_capture'.
+        This method should be called after a validation routine ends. It must follow a
+        corresponding 'begin_capture'.
         """
         if not self._stack:
             return
@@ -211,7 +237,7 @@ class Logger:
                 hash_ = hash(model)
                 self._stack[-1]["children"][hash_] = stack_item
 
-    def _parse_warning_capture(self, current_loc, stack_item) -> None:
+    def _parse_warning_capture(self, current_loc: list[Any], stack_item: dict[str, Any]) -> None:
         """Process capture tree to compile formatted captured warnings."""
 
         if "parent_fields" in stack_item:
@@ -467,7 +493,7 @@ def get_logging_console() -> Console:
 class NoOpProgress:
     """Dummy progress manager that doesn't show any output."""
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *args: Any, **kwargs: Any) -> None:
@@ -481,7 +507,7 @@ class NoOpProgress:
 
 
 @contextmanager
-def Progress(console, show_progress):
+def Progress(console: Console, show_progress: bool) -> Iterator[Union[RichProgress, NoOpProgress]]:
     """Progress manager that wraps ``rich.Progress`` if ``show_progress`` is ``True``,
     and ``NoOpProgress`` otherwise."""
     if show_progress:

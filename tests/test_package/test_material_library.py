@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
@@ -55,7 +55,7 @@ def test_MaterialItem():
     )
     assert material["v1"] == material.medium
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         material = MaterialItem(
             name="material", variants={"v1": variant1, "v2": variant2}, default="v3"
         )

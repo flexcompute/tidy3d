@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import TYPE_CHECKING, Optional, Union
 
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeFloat, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.tcad.heat import FluidMedium
@@ -18,6 +18,9 @@ from tidy3d.constants import (
     MICROMETER,
 )
 
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+
 
 class TemperatureBC(HeatChargeBC):
     """Constant temperature thermal boundary conditions.
@@ -28,10 +31,10 @@ class TemperatureBC(HeatChargeBC):
     >>> bc = td.TemperatureBC(temperature=300)
     """
 
-    temperature: pd.PositiveFloat = pd.Field(
+    temperature: PositiveFloat = Field(
         title="Temperature",
         description="Temperature value.",
-        units=KELVIN,
+        json_schema_extra={"units": KELVIN},
     )
 
 
@@ -44,10 +47,10 @@ class HeatFluxBC(HeatChargeBC):
     >>> bc = td.HeatFluxBC(flux=1)
     """
 
-    flux: float = pd.Field(
+    flux: float = Field(
         title="Heat Flux",
         description="Heat flux value.",
-        units=HEAT_FLUX,
+        json_schema_extra={"units": HEAT_FLUX},
     )
 
 
@@ -68,7 +71,7 @@ class VerticalNaturalConvectionCoeffModel(Tidy3dBaseModel):
 
     """
 
-    medium: FluidMedium = pd.Field(
+    medium: Optional[FluidMedium] = Field(
         default=None,
         title="Interface medium",
         description=(
@@ -78,24 +81,26 @@ class VerticalNaturalConvectionCoeffModel(Tidy3dBaseModel):
         ),
     )
 
-    plate_length: pd.NonNegativeFloat = pd.Field(
+    plate_length: NonNegativeFloat = Field(
         title="Plate Characteristic Length",
         description="Characteristic length (L), defined as the height of the vertical plate.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    gravity: pd.NonNegativeFloat = pd.Field(
+    gravity: NonNegativeFloat = Field(
         default=GRAV_ACC,
         title="Gravitational Acceleration",
         description="Gravitational acceleration (g).",
-        units=ACCELERATION,
+        json_schema_extra={"units": ACCELERATION},
     )
 
+    @classmethod
     def from_si_units(
-        plate_length: pd.NonNegativeFloat,
+        cls,
+        plate_length: NonNegativeFloat,
         medium: FluidMedium = None,
-        gravity: pd.NonNegativeFloat = GRAV_ACC * 1e-6,
-    ):
+        gravity: NonNegativeFloat = GRAV_ACC * 1e-6,
+    ) -> Self:
         """
         Create an instance from standard SI units.
 
@@ -113,7 +118,7 @@ class VerticalNaturalConvectionCoeffModel(Tidy3dBaseModel):
         plate_length_tidy = plate_length * 1e6  # m -> um
         g_tidy = gravity * 1e6  # m/s**2 -> um/s**2
 
-        return VerticalNaturalConvectionCoeffModel(
+        return cls(
             medium=medium,
             plate_length=plate_length_tidy,
             gravity=g_tidy,
@@ -156,14 +161,14 @@ class ConvectionBC(HeatChargeBC):
     ... )
     """
 
-    ambient_temperature: pd.PositiveFloat = pd.Field(
+    ambient_temperature: PositiveFloat = Field(
         title="Ambient Temperature",
         description="Ambient temperature.",
-        units=KELVIN,
+        json_schema_extra={"units": KELVIN},
     )
 
-    transfer_coeff: Union[pd.NonNegativeFloat, VerticalNaturalConvectionCoeffModel] = pd.Field(
+    transfer_coeff: Union[NonNegativeFloat, VerticalNaturalConvectionCoeffModel] = Field(
         title="Heat Transfer Coefficient",
         description="Heat transfer coefficient value.",
-        units=HEAT_TRANSFER_COEFF,
+        json_schema_extra={"units": HEAT_TRANSFER_COEFF},
     )

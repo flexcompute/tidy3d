@@ -7,7 +7,7 @@ import os
 import ssl
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Optional, TypeAlias
+from typing import TYPE_CHECKING, Any
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -29,6 +29,9 @@ from .constants import (
 )
 from .core_config import get_logger
 from .exceptions import WebError, WebNotFoundError
+
+if TYPE_CHECKING:
+    from typing import Callable, Optional, TypeAlias
 
 JSONType: TypeAlias = dict[str, Any] | list[Any] | str | int
 
@@ -52,7 +55,7 @@ def get_user_agent() -> str:
     return os.environ.get("TIDY3D_AGENT", f"Python-Client/{get_version()}")
 
 
-def api_key() -> None:
+def api_key() -> Optional[str]:
     """Get the api key for the current environment."""
 
     if os.environ.get(SIMCLOUD_APIKEY):
@@ -105,12 +108,12 @@ def api_key_auth(request: requests.request) -> requests.request:
     return request
 
 
-def get_headers() -> dict[str, str]:
+def get_headers() -> dict[str, Optional[str]]:
     """get headers for http request.
 
     Returns
     -------
-    Dict[str, str]
+    dict[str, str]
         dictionary with "Authorization" and "Application" keys.
     """
     return {

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 from shapely import Point, Polygon
 
 import tidy3d as td
@@ -132,17 +132,17 @@ def test_valid_polygon():
 
     # area = 0
     vertices = ((0, 0), (1, 0), (2, 0))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = setup_polyslab(vertices, dilation, angle, bounds)
 
     # only two points
     vertices = ((0, 0), (1, 0), (1, 0))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = setup_polyslab(vertices, dilation, angle, bounds)
 
     # intersecting edges
     vertices = ((0, 0), (1, 0), (1, 1), (0, 1), (0.5, -1))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = setup_polyslab(vertices, dilation, angle, bounds)
 
 
@@ -161,13 +161,13 @@ def test_crossing_square_poly():
     dilation = -1.1
     angle = 0
     for ref_plane in ["bottom", "middle", "top"]:
-        with pytest.raises(pydantic.ValidationError):
+        with pytest.raises(ValidationError):
             _ = setup_polyslab(vertices, dilation, angle, bounds, reference_plane=ref_plane)
 
     # angle too large, self-intersecting
     dilation = 0
     angle = np.pi / 3
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = setup_polyslab(vertices, dilation, angle, bounds)
         _ = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="top")
     # middle plane
@@ -176,13 +176,13 @@ def test_crossing_square_poly():
 
     # angle too large for middle reference plane
     angle = np.arctan(2.001)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")
 
     # combines both
     dilation = -0.1
     angle = np.pi / 4
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = setup_polyslab(vertices, dilation, angle, bounds)
 
 
@@ -196,26 +196,26 @@ def test_crossing_concave_poly():
     vertices = ((-0.5, 1), (-0.5, -1), (1, -1), (0, -0.1), (0, 0.1), (1, 1))
     dilation = 0.5
     angle = 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = setup_polyslab(vertices, dilation, angle, bounds)
 
     # polygon splitting
     dilation = -0.3
     angle = 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = setup_polyslab(vertices, dilation, angle, bounds)
 
     # polygon fully eroded
     dilation = -0.5
     angle = 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = setup_polyslab(vertices, dilation, angle, bounds)
 
     # # or, effectively
     dilation = 0
     angle = -np.pi / 4
     for bounds in [(0, 0.3), (0, 0.5)]:
-        with pytest.raises(pydantic.ValidationError):
+        with pytest.raises(ValidationError):
             _ = setup_polyslab(vertices, dilation, angle, bounds)
             _ = setup_polyslab(vertices, dilation, -angle, bounds, reference_plane="top")
 
@@ -224,7 +224,7 @@ def test_crossing_concave_poly():
     bounds = (0, 0.44)
     _ = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")
     _ = setup_polyslab(vertices, dilation, -angle, bounds, reference_plane="middle")
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         # vertices degenerate
         bounds = (0, 0.45)
         _ = setup_polyslab(vertices, dilation, angle, bounds, reference_plane="middle")

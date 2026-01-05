@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from itertools import chain
 from math import isclose
+from typing import TYPE_CHECKING
 
-import pydantic.v1 as pd
 import shapely
+from pydantic import Field
 from shapely.geometry import LineString, Polygon
 
 from tidy3d.components.base import cached_property
@@ -19,12 +20,15 @@ from tidy3d.components.geometry.utils import (
     merging_geometries_on_plane,
     snap_box_to_grid,
 )
-from tidy3d.components.grid.grid import Grid
-from tidy3d.components.medium import LossyMetalMedium, Medium
-from tidy3d.components.structure import Structure
-from tidy3d.components.types import Axis, Bound, Coordinate, Shapely, Symmetry
+from tidy3d.components.medium import LossyMetalMedium
 from tidy3d.components.validators import assert_plane
 from tidy3d.exceptions import SetupError
+
+if TYPE_CHECKING:
+    from tidy3d.components.grid.grid import Grid
+    from tidy3d.components.medium import Medium
+    from tidy3d.components.structure import Structure
+    from tidy3d.components.types import Axis, Bound, Coordinate, Shapely, Symmetry
 
 
 class ModePlaneAnalyzer(Box):
@@ -37,7 +41,7 @@ class ModePlaneAnalyzer(Box):
 
     _plane_validator = assert_plane()
 
-    field_data_colocated: bool = pd.Field(
+    field_data_colocated: bool = Field(
         False,
         title="Field Data Colocated",
         description="Whether field data is colocated with grid points. When 'True', bounding boxes "

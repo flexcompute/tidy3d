@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any, get_args, get_origin
+from typing import TYPE_CHECKING, Any, get_args, get_origin
 
 import tomlkit
 from pydantic import BaseModel
-from pydantic.fields import FieldInfo
 from tomlkit.items import Item, Table
 
 from .registry import get_sections
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from pydantic.fields import FieldInfo
 
 Path = tuple[str, ...]
 

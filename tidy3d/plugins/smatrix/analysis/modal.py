@@ -4,10 +4,14 @@ Tool for generating an S matrix automatically from a Tidy3d simulation and lumpe
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from tidy3d.plugins.smatrix.data.data_array import ModalPortDataArray
-from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
+
+if TYPE_CHECKING:
+    from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 
 
 def modal_construct_smatrix(modeler_data: ModalComponentModelerData) -> ModalPortDataArray:

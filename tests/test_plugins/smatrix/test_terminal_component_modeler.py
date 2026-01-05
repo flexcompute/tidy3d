@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pd
 import pytest
 import skrf
 import xarray as xr
+from pydantic import ValidationError
 
 import tidy3d as td
 import tidy3d.plugins.smatrix.analysis.terminal
@@ -14,7 +14,7 @@ import tidy3d.plugins.smatrix.utils
 from tidy3d import SimulationDataMap
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError, ValidationError
+from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.smatrix import (
     CoaxialLumpedPort,
     LumpedPort,
@@ -271,7 +271,7 @@ def test_validate_no_sources(tmp_path):
         source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14), polarization="Ex"
     )
     sim_w_source = modeler.simulation.copy(update={"sources": (source,)})
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = modeler.copy(update={"simulation": sim_w_source})
 
 
@@ -284,14 +284,21 @@ def test_validate_freqs():
     _ = modeler._source_time
     # Negative frequencies are not allowed
     freqs = np.array([-1.0, 5]) * 1e9
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = modeler.updated_copy(freqs=freqs)
+    freqs = np.array([-1.0, 5])
+    with pytest.raises(ValidationError):
+        _ = modeler.updated_copy(freqs=freqs)
+    freqs = np.array([1, 2, 1.9])
+    with pytest.raises(ValidationError):
+        _ = modeler.updated_copy(freqs=freqs)
+
     # Test case with non-unique value
     f_min, f_max = (0.5e9, 1.5e9)
     f0 = (f_min + f_max) / 2
     f_target = 1.35e9
     freqs = np.sort(np.append(np.linspace(f_min, f_max, 21), f_target))
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = modeler.updated_copy(freqs=freqs)
 
 
@@ -309,7 +316,7 @@ def test_validate_3D_sim(tmp_path):
         ),
         run_time=1e-10,
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = modeler.updated_copy(simulation=sim)
 
 
@@ -584,7 +591,7 @@ def test_coarse_grid_at_port(monkeypatch):
 
 
 def test_validate_port_voltage_axis():
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=0, impedance=50)
 
 
@@ -595,13 +602,13 @@ def test_validate_port_must_be_planar():
     injection axis can be properly determined for the underlying lumped element.
     """
     # 1D port (two zeros) should fail validation
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         LumpedPort(center=(0, 0, 0), size=(1, 0, 0), voltage_axis=0, impedance=50, name="1D_port")
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         LumpedPort(center=(0, 0, 0), size=(0, 1, 0), voltage_axis=1, impedance=50, name="1D_port")
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         LumpedPort(center=(0, 0, 0), size=(0, 0, 1), voltage_axis=2, impedance=50, name="1D_port")
 
     # Planar port (one zero) should work fine
@@ -674,11 +681,11 @@ def test_lumped_port_from_structures():
 
     # test port width with lateral coords
     lp_options["lateral_coord"] = None
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         LP5 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP5", **lp_options)
 
     lp_options["lateral_coord"] = 10 * WL
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         LP6 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP6", **lp_options)
 
     # ensure that validation error is raised when specified port width exceeds terminal overlap in lateral direction.
@@ -691,7 +698,7 @@ def test_lumped_port_from_structures():
     str_gnd_new = str_gnd.updated_copy(medium=td.Medium(conductivity=1e2))
     lp_options["lateral_coord"] = -2 * LL2 - WL / 2
     lp_options["ground_terminal"] = str_gnd_new
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         LP7 = LumpedPort.from_structures(x=-WL / 2 - LL1, name="LP7", **lp_options)
 
 
@@ -753,7 +760,7 @@ def test_coarse_grid_at_coaxial_port(monkeypatch, tmp_path, grid_spec):
 
 
 def test_validate_coaxial_center_not_inf():
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         CoaxialLumpedPort(
             center=(td.inf, 0, 0),
             outer_diameter=8,
@@ -767,7 +774,7 @@ def test_validate_coaxial_center_not_inf():
 
 
 def test_validate_coaxial_port_diameters():
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         CoaxialLumpedPort(
             center=(0, 0, 0),
             outer_diameter=1,
@@ -888,7 +895,7 @@ def test_run_coaxial_component_modeler_with_wave_ports(
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
     if not (voltage_enabled or current_enabled):
-        with pytest.raises(pd.ValidationError):
+        with pytest.raises(ValidationError):
             modeler = make_coaxial_component_modeler(
                 port_types=(WavePort, WavePort),
                 grid_spec=grid_spec,
@@ -1015,7 +1022,7 @@ def test_wave_port_path_integral_validation():
         direction="+",
     )
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         mw_mode_spec = td.MicrowaveModeSpec(
             num_modes=1,
             target_neff=1.8,
@@ -1030,7 +1037,7 @@ def test_wave_port_path_integral_validation():
         )
 
     voltage_path = voltage_path.updated_copy(size=(4, 0, 0))
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         mode_spec = td.MicrowaveModeSpec(
             num_modes=1,
             target_neff=1.8,
@@ -1048,7 +1055,7 @@ def test_wave_port_path_integral_validation():
         center=center_port, radius=3, num_points=21, normal_axis=2, clockwise=False
     )
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         mode_spec = td.MicrowaveModeSpec(
             num_modes=1,
             target_neff=1.8,
@@ -1129,7 +1136,7 @@ def test_wave_port_grid_validation(tmp_path):
         num_grid_cells=None,
     )
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = WavePort(
             center=center_port,
             size=size_port,
@@ -1183,7 +1190,7 @@ def test_port_source_snapped_to_PML(tmp_path):
         mode_spec=mw_mode_spec,
         direction="-",
     )
-    modeler = modeler.updated_copy(ports=[port])
+    modeler = modeler.updated_copy(ports=(port,))
 
     # Error because port is snapped to PML layers; but the error message might not
     # be very informative, e.g. "simulation.sources[0]' is outside of the simulation domain".
@@ -1207,7 +1214,7 @@ def test_port_source_snapped_to_PML(tmp_path):
         mode_spec=mw_mode_spec,
         direction="+",
     )
-    modeler = modeler.updated_copy(ports=[port])
+    modeler = modeler.updated_copy(ports=(port,))
     with pytest.raises(SetupError):
         modeler.sim_dict
 
@@ -1244,7 +1251,9 @@ def test_antenna_helpers(monkeypatch, tmp_path):
         theta=theta,
         phi=phi,
     )
-    modeler: TerminalComponentModeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+    modeler: TerminalComponentModeler = modeler.updated_copy(
+        radiation_monitors=(radiation_monitor,)
+    )
 
     # Run simulation to get data
     modeler_data = run_component_modeler(monkeypatch, modeler)
@@ -1307,11 +1316,11 @@ def test_antenna_parameters(monkeypatch, port_type):
         theta=theta,
         phi=phi,
     )
-    with pytest.raises(pd.ValidationError):
-        modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+    with pytest.raises(ValidationError):
+        modeler = modeler.updated_copy(radiation_monitors=(radiation_monitor,))
 
     radiation_monitor = radiation_monitor.updated_copy(freqs=modeler.freqs)
-    modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+    modeler = modeler.updated_copy(radiation_monitors=(radiation_monitor,))
 
     # Run simulation and get antenna parameters
     modeler_data = run_component_modeler(monkeypatch, modeler)
@@ -1373,7 +1382,7 @@ def test_get_combined_antenna_parameters_data(monkeypatch, tmp_path):
         theta=theta,
         phi=phi,
     )
-    modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+    modeler = modeler.updated_copy(radiation_monitors=(radiation_monitor,))
     modeler_data = run_component_modeler(monkeypatch=monkeypatch, modeler=modeler)
 
     # Define port amplitudes
@@ -1437,12 +1446,12 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     S21 = (port1_idx, port0_idx)
     S12 = (port0_idx, port1_idx)
     S22 = (port1_idx, port1_idx)
-    element_mappings = ((S11, S22, 1),)
+    element_mappings = ((S11, S22, 1 + 0j),)
     modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
     assert len(modeler_with_mappings.sim_dict) == 2
 
     # Column 1 is mapped to column 2, resulting in one simulation
-    element_mappings = ((S11, S22, 1), (S21, S12, 1))
+    element_mappings = ((S11, S22, 1 + 0j), (S21, S12, 1 + 0j))
     modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
     tcm_data = run_component_modeler(monkeypatch, modeler_with_mappings)
     s_matrix = tcm_data.smatrix().data
@@ -1451,7 +1460,7 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     assert len(modeler_with_mappings.sim_dict) == 1
 
     # Mapping is incomplete, so two simulations are run
-    element_mappings = ((S11, S22, 1), (S12, S21, 1))
+    element_mappings = ((S11, S22, 1 + 0j), (S12, S21, 1 + 0j))
     modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
     assert len(modeler_with_mappings.sim_dict) == 2
 
@@ -1711,10 +1720,10 @@ def test_low_freq_smoothing_spec_validation_order_bounds():
     ModelerLowFrequencySmoothingSpec(order=3)
 
     # Test invalid orders
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         ModelerLowFrequencySmoothingSpec(order=-1)
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         ModelerLowFrequencySmoothingSpec(order=4)
 
 
@@ -1727,7 +1736,7 @@ def test_low_freq_smoothing_spec_validation_max_deviation_bounds():
     ModelerLowFrequencySmoothingSpec(max_deviation=1.0)
 
     # Test invalid max_deviation
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         ModelerLowFrequencySmoothingSpec(max_deviation=-0.1)
 
 
@@ -1850,7 +1859,7 @@ def test_wave_port_extrusion_coaxial():
     port_1 = port_1.updated_copy(center=(0, 0, -50000), extrude_structures=True)
 
     # test that structure extrusion requires an internal absorber (should raise ValidationError)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = port_2.updated_copy(center=(0, 0, 50000), extrude_structures=True, absorber=False)
 
     # define a valid waveport
@@ -1928,7 +1937,7 @@ def test_wave_port_extrusion_differential_stripline():
     port_1 = port_1.updated_copy(extrude_structures=True)
 
     # test that structure extrusion requires an internal absorber (should raise ValidationError)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = port_2.updated_copy(extrude_structures=True, absorber=False)
 
     # define a valid waveport
@@ -2040,7 +2049,7 @@ def test_validate_run_only_uniqueness():
     port1_idx = modeler.network_index(modeler.ports[1])
 
     # Test with duplicate entries - should raise ValidationError
-    with pytest.raises(pd.ValidationError, match="duplicate entries"):
+    with pytest.raises(ValidationError, match="duplicate entries"):
         modeler.updated_copy(run_only=(port0_idx, port0_idx, port1_idx))
 
 
@@ -2049,12 +2058,12 @@ def test_validate_run_only_membership():
     modeler = make_component_modeler(planar_pec=True)
 
     # Test with invalid index - should raise ValidationError
-    with pytest.raises(pd.ValidationError, match="not present in"):
+    with pytest.raises(ValidationError, match="not present in"):
         modeler.updated_copy(run_only=("invalid_port_name",))
 
     # Test with partially invalid indices
     port0_idx = modeler.network_index(modeler.ports[0])
-    with pytest.raises(pd.ValidationError, match="not present in"):
+    with pytest.raises(ValidationError, match="not present in"):
         modeler.updated_copy(run_only=(port0_idx, "invalid_port"))
 
 
@@ -2077,7 +2086,7 @@ def test_validate_run_only_with_wave_ports():
     assert modeler_updated.run_only == (port0_idx,)
 
     # Invalid case
-    with pytest.raises(pd.ValidationError, match="not present in"):
+    with pytest.raises(ValidationError, match="not present in"):
         modeler.updated_copy(run_only=("nonexistent_wave_port",))
 
 
@@ -2219,7 +2228,7 @@ def test_wave_port_mode_index_validation():
     assert port._mode_indices == (0,)
 
     # Invalid: index greater than number of modes
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         WavePort(
             center=(0, 0, -10),
             size=(0, 2, 2),
@@ -2252,7 +2261,7 @@ def test_wave_port_mode_index_validation():
     assert port._mode_indices == (0, 1, 2)
 
     # Invalid: negative index
-    with pytest.raises(pd.ValidationError, match="non-negative"):
+    with pytest.raises(ValidationError, match="non-negative"):
         WavePort(
             center=(0, 0, -10),
             size=(0, 2, 2),
@@ -2263,7 +2272,7 @@ def test_wave_port_mode_index_validation():
         )
 
     # Invalid: index >= num_modes
-    with pytest.raises(pd.ValidationError, match="mode_spec.num_modes"):
+    with pytest.raises(ValidationError, match="mode_spec.num_modes"):
         WavePort(
             center=(0, 0, -10),
             size=(0, 2, 2),
@@ -2274,7 +2283,7 @@ def test_wave_port_mode_index_validation():
         )
 
     # Invalid: duplicate indices
-    with pytest.raises(pd.ValidationError, match="duplicate"):
+    with pytest.raises(ValidationError, match="duplicate"):
         WavePort(
             center=(0, 0, -10),
             size=(0, 2, 2),
@@ -2347,7 +2356,7 @@ def test_get_task_name():
     """Test get_task_name with RF ports."""
 
     # First make sure ports cannot have @ in their name
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         lumped_port = LumpedPort(
             center=(0, 0, 0),
             size=(1, 0, 0.5),

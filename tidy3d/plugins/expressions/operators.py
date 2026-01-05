@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import pydantic.v1 as pd
+from pydantic import Field, field_validator
 
 from .base import Expression
-from .types import NumberOrExpression, NumberType
+from .types import NumberOrExpression
+
+if TYPE_CHECKING:
+    from .types import ExpressionType, NumberType
 
 
 class UnaryOperator(Expression):
@@ -17,8 +20,7 @@ class UnaryOperator(Expression):
         Subclasses should implement the evaluate method to define the specific operation.
     """
 
-    operand: NumberOrExpression = pd.Field(
-        ...,
+    operand: NumberOrExpression = Field(
         title="Operand",
         description="The operand for the unary operator.",
     )
@@ -26,8 +28,9 @@ class UnaryOperator(Expression):
     _symbol: str
     _format: str = "({symbol}{operand})"
 
-    @pd.validator("operand", pre=True, always=True)
-    def validate_operand(cls, v):
+    @field_validator("operand")
+    @classmethod
+    def validate_operand(cls, v: NumberOrExpression) -> ExpressionType:
         return cls._to_expression(v)
 
     def __repr__(self) -> str:
@@ -43,13 +46,11 @@ class BinaryOperator(Expression):
         Subclasses should implement the evaluate method to define the specific operation.
     """
 
-    left: NumberOrExpression = pd.Field(
-        ...,
+    left: NumberOrExpression = Field(
         title="Left",
         description="The left operand for the binary operator.",
     )
-    right: NumberOrExpression = pd.Field(
-        ...,
+    right: NumberOrExpression = Field(
         title="Right",
         description="The right operand for the binary operator.",
     )
@@ -57,8 +58,9 @@ class BinaryOperator(Expression):
     _symbol: str
     _format: str = "({left} {symbol} {right})"
 
-    @pd.validator("left", "right", pre=True, always=True)
-    def validate_operands(cls, v):
+    @field_validator("left", "right")
+    @classmethod
+    def validate_operands(cls, v: NumberOrExpression) -> ExpressionType:
         return cls._to_expression(v)
 
     def __repr__(self) -> str:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.bc_placement import BCPlacementType
@@ -22,13 +22,13 @@ class HeatChargeBoundarySpec(Tidy3dBaseModel):
     ... )
     """
 
-    placement: BCPlacementType = pd.Field(
+    placement: BCPlacementType = Field(
         title="Boundary Conditions Placement",
         description="Location to apply boundary conditions.",
         discriminator=TYPE_TAG_STR,
     )
 
-    condition: HeatChargeBCType = pd.Field(
+    condition: HeatChargeBCType = Field(
         title="Boundary Conditions",
         description="Boundary conditions to apply at the selected location.",
         discriminator=TYPE_TAG_STR,

@@ -101,6 +101,9 @@ on:
 permissions:
   contents: read
 
+env:
+  VERIFICATIONS_PY_VERSION: '3.11'
+
 jobs:
   determine-test-scope:
     runs-on: ubuntu-latest
@@ -223,6 +226,39 @@ jobs:
           echo "version_match_tests=$version_match_tests"
           echo "extras_integration_tests=$extras_integration_tests"
           echo "test_type=$test_type"
+      
+
+  move-type-imports:
+    name: move-type-imports
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout-branch
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: setup-python
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
+        with:
+          python-version: ${{ env.VERIFICATIONS_PY_VERSION }}
+
+      - name: install-dependencies
+        run: |
+          set -euo pipefail
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install libcst
+
+      - name: verify-type-import-guards
+        run: |
+          set -euo pipefail
+          source .venv/bin/activate
+          python scripts/move_type_imports.py --mode check_on_change
 
   lint:
     needs: determine-test-scope
@@ -256,10 +292,10 @@ jobs:
           submodules: false
           persist-credentials: false
 
-      - name: set-python-3.10
+      - name: setup-python-${{ env.VERIFICATIONS_PY_VERSION }}
         uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
         with:
-          python-version: '3.10'
+          python-version: ${{ env.VERIFICATIONS_PY_VERSION }}
 
       - name: Install mypy
         run: |
@@ -442,7 +478,7 @@ jobs:
       
       - name: install-depedencies
         run: |
-          uv venv $GITHUB_WORKSPACE/.venv -p 3.11
+          uv venv $GITHUB_WORKSPACE/.venv -p "$VERIFICATIONS_PY_VERSION"
           source $GITHUB_WORKSPACE/.venv/bin/activate
           uv pip install -e "$GITHUB_WORKSPACE"
       
@@ -1025,6 +1061,7 @@ jobs:
       - determine-test-scope
       - local-tests
       - remote-tests
+      - move-type-imports
       - lint
       - mypy
       - verify-schema-change
@@ -1037,6 +1074,12 @@ jobs:
       - extras-integration-tests
     runs-on: ubuntu-latest
     steps:
+      - name: move-type-imports
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.move-type-imports.result != 'success' && needs.move-type-imports.result != 'skipped' }}
+        run: |
+          echo "❌ Found imports used only for typing that are not guarded by if TYPE_CHECKING."
+          exit 1
+
       - name: check-linting-result
         if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.lint.result != 'success' && needs.lint.result != 'skipped' }}
         run: |

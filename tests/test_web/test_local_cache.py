@@ -11,7 +11,6 @@ from types import SimpleNamespace
 
 import autograd as ag
 import pytest
-import xarray as xr
 from autograd.core import defvjp
 from click.testing import CliRunner
 from rich.console import Console
@@ -19,6 +18,7 @@ from rich.console import Console
 import tidy3d as td
 from tests.test_components.autograd.test_autograd import ALL_KEY, get_functions, params0
 from tests.test_web.test_webapi_mode import make_mode_sim
+from tests.utils import run_emulated
 from tidy3d import config
 from tidy3d.components.autograd.field_map import FieldMap
 from tidy3d.config import get_manager
@@ -96,24 +96,20 @@ def _reset_fake_maps():
 class _FakeStubData:
     def __init__(self, simulation: td.Simulation):
         self.simulation = simulation
+        self.sim_data = run_emulated(self.simulation)
 
     def __getitem__(self, key):
-        if key == "mode":
-            params = self.simulation.attrs["params_autograd"]
-            return SimpleNamespace(
-                amps=xr.DataArray(params, dims=["x"], coords={"x": list(range(len(params)))})
-            )
+        return self.sim_data[key]
 
     def _strip_traced_fields(self, *args, **kwargs):
         """Fake _strip_traced_fields: return minimal valid autograd-style mapping."""
-        return {"params": self.simulation.attrs["params"]}
+        return self.sim_data._strip_traced_fields(*args, **kwargs)
 
     def _insert_traced_fields(self, field_mapping, *args, **kwargs):
-        self.simulation.attrs["params_autograd"] = field_mapping["params"]
-        return self
+        return self.sim_data._insert_traced_fields(field_mapping, *args, **kwargs)
 
     def _make_adjoint_sims(self, **kwargs):
-        return [self.simulation.updated_copy(run_time=self.simulation.run_time * 2)]
+        return self.sim_data._make_adjoint_sims(**kwargs)
 
 
 @pytest.fixture
@@ -124,7 +120,7 @@ def basic_simulation():
         size=(1, 1, 1),
         grid_spec=td.GridSpec.auto(wavelength=1.0),
         run_time=1e-12,
-        sources=[pt_dipole],
+        sources=(pt_dipole,),
     )
 
 
@@ -560,7 +556,6 @@ def test_autograd_cache(monkeypatch, request, tmp_path):
 
     def objective(params):
         sim = make_sim(params)
-        sim.attrs["params"] = params
         sim_data = run_autograd(sim, path=tmp_path / "tmp.hdf5")
         value = postprocess(sim_data)
         return value

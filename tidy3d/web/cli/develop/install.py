@@ -9,12 +9,15 @@ from __future__ import annotations
 import platform
 import re
 import subprocess
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import click
 
 from .index import develop
 from .utils import echo_and_check_subprocess, echo_and_run_subprocess, get_install_directory
+
+if TYPE_CHECKING:
+    from typing import Optional
 
 __all__ = [
     "activate_correct_poetry_python",
@@ -113,25 +116,23 @@ def verify_pipx_is_installed() -> Optional[bool]:
         result = echo_and_run_subprocess(
             ["pipx", "--version"], capture_output=True, text=True, check=True
         )
-
         # If the command was successful, it means pipx is installed
-        if result.returncode == 0:
-            print("pipx is installed: " + result.stdout)
-            return True
+        print("pipx is installed: " + result.stdout)
+        return True
     except subprocess.CalledProcessError:
         # This exception is raised if the command returned a non-zero exit status
         print("pipx is not installed or not found in the system PATH.")
         return False
 
 
-def verify_poetry_is_installed() -> Optional[bool]:
+def verify_poetry_is_installed() -> bool:
     """
     Check if Poetry is installed on the system.
 
     Returns
     -------
     bool
-        True if Poetry is installed, False otherwise.
+        True if Poetry is installed, raises `OSError` otherwise.
 
     Raises
     ------
@@ -144,9 +145,8 @@ def verify_poetry_is_installed() -> Optional[bool]:
             ["poetry", "--version"], capture_output=True, text=True, check=True
         )
         # If the command was successful, we'll get the version info
-        if result.returncode == 0:
-            print("Poetry is installed: " + result.stdout)
-            return True
+        print("Poetry is installed: " + result.stdout)
+        return True
     except subprocess.CalledProcessError as exc:
         # This exception is raised if the command returned a non-zero exit status
         raise OSError("Poetry is not installed or not found in the system PATH.") from exc

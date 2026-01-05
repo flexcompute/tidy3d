@@ -5,10 +5,11 @@ import responses
 from responses import matchers
 
 import tidy3d as td
+from tidy3d import config
 from tidy3d.web.core.environment import Env
 from tidy3d.web.core.task_core import Folder
 
-Env.dev.active()
+config.switch_profile("dev")
 
 
 @pytest.fixture

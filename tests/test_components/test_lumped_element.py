@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components.geometry.utils import SnapBehavior, SnapLocation
@@ -37,7 +37,7 @@ def test_lumped_resistor():
     assert monitor.name == resistor.monitor_name
 
     # error if voltage axis is not in plane with the resistor
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.LumpedResistor(
             resistance=50.0,
             center=[0, 0, 0],
@@ -47,7 +47,7 @@ def test_lumped_resistor():
         )
 
     # error if not planar
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.LumpedResistor(
             resistance=50.0,
             center=[0, 0, 0],
@@ -55,7 +55,7 @@ def test_lumped_resistor():
             voltage_axis=2,
             name="R",
         )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.LumpedResistor(
             resistance=50.0,
             center=[0, 0, 0],
@@ -90,7 +90,7 @@ def test_lumped_resistor_snapping():
 
     # snapped version
     resistor_snapped = resistor.updated_copy(enable_snapping_points=True)
-    sim_snapped = sim.updated_copy(lumped_elements=[resistor_snapped])
+    sim_snapped = sim.updated_copy(lumped_elements=(resistor_snapped,))
     # whether lumped element is snapped along normal axis
     assert not any(np.isclose(sim.grid.boundaries.z, 0.1))
     assert any(np.isclose(sim_snapped.grid.boundaries.z, 0.1))
@@ -128,7 +128,7 @@ def test_coaxial_lumped_resistor_snapping():
 
     # snapped version
     resistor_snapped = resistor.updated_copy(enable_snapping_points=True)
-    sim_snapped = sim.updated_copy(lumped_elements=[resistor_snapped])
+    sim_snapped = sim.updated_copy(lumped_elements=(resistor_snapped,))
     # whether lumped element is snapped along normal axis
     assert not any(np.isclose(sim.grid.boundaries.z, 0.1))
     assert any(np.isclose(sim_snapped.grid.boundaries.z, 0.1))
@@ -157,7 +157,7 @@ def test_coaxial_lumped_resistor():
     _ = resistor.to_snapping_points()
 
     # error if inner diameter is larger
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.CoaxialLumpedResistor(
             resistance=50.0,
             center=[0, 0, 0],
@@ -167,7 +167,7 @@ def test_coaxial_lumped_resistor():
             name="R",
         )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.CoaxialLumpedResistor(
             resistance=50.0,
             center=[0, 0, np.inf],
@@ -181,11 +181,11 @@ def test_coaxial_lumped_resistor():
 def test_validators_RLC_network():
     """Test that ``RLCNetwork`` is validated correctly."""
     # Must have a defined value for R,L,or C
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.RLCNetwork()
 
     # Must have a valid topology
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.RLCNetwork(
             capacitance=0.2e-12,
             network_topology="left",
@@ -194,13 +194,13 @@ def test_validators_RLC_network():
 
 def test_validators_admittance_network():
     """Test that ``AdmittanceNetwork`` is validated correctly."""
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.AdmittanceNetwork()
 
     a = (0, -1, 2)
     b = (1, 1, 2)
     # non negative a and b
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.AdmittanceNetwork(
             a=a,
             b=b,
@@ -209,7 +209,7 @@ def test_validators_admittance_network():
     a = (0, complex(1, 2), 2)
     b = (1, 1, 2)
     # real a and b
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.AdmittanceNetwork(
             a=a,
             b=b,
@@ -269,17 +269,12 @@ def test_RLC_and_lumped_network_agreement(Rval, Lval, Cval, topology):
     if configuration_includes_parallel_inductor:
         return
 
-    network = td.AdmittanceNetwork(
-        a=a,
-        b=b,
-    )
+    network = td.AdmittanceNetwork(a=a, b=b)
 
     (a, b) = network._as_admittance_function
     med_network = network._to_medium(sf)
     # Check conversion to geometry and to structure
-    linear_element = linear_element.updated_copy(
-        network=network,
-    )
+    linear_element = linear_element.updated_copy(network=network)
     _ = linear_element.to_geometry()
     assert np.allclose(med_RLC.eps_model(freqs), med_network.eps_model(freqs), rtol=rtol)
 
@@ -346,7 +341,7 @@ def test_1d_lumped_element_not_allowed():
     RLC = td.RLCNetwork(resistance=50)
 
     # Attempting to create a 1D lumped element should raise a validation error
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.LinearLumpedElement(
             center=[0, 0, 0],
             size=[1, 0, 0],  # 1D element: only x has non-zero size (invalid)
@@ -356,7 +351,7 @@ def test_1d_lumped_element_not_allowed():
         )
 
     # Other 1D configurations should also fail
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.LinearLumpedElement(
             center=[0, 0, 0],
             size=[0, 1, 0],  # 1D element: only y has non-zero size (invalid)
@@ -365,7 +360,7 @@ def test_1d_lumped_element_not_allowed():
             name="1D_RLC",
         )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.LinearLumpedElement(
             center=[0, 0, 0],
             size=[0, 0, 1],  # 1D element: only z has non-zero size (invalid)

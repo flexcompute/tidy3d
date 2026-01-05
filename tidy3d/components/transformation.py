@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, field_validator
 
 from tidy3d.constants import RADIAN
 from tidy3d.exceptions import ValidationError
 
 from .autograd import TracedFloat
 from .base import Tidy3dBaseModel, cached_property
-from .types import ArrayFloat2D, Axis, Coordinate, TensorReal
+from .types import Axis, Coordinate
+
+if TYPE_CHECKING:
+    from .types import ArrayFloat2D, TensorReal
 
 
 class AbstractRotation(ABC, Tidy3dBaseModel):
@@ -74,30 +77,32 @@ class AbstractRotation(ABC, Tidy3dBaseModel):
 class RotationAroundAxis(AbstractRotation):
     """Rotation of vectors and tensors around a given vector."""
 
-    axis: Union[Axis, Coordinate] = pd.Field(
+    axis: Union[Axis, Coordinate] = Field(
         0,
         title="Axis of Rotation",
         description="A vector that specifies the axis of rotation, or a single int: 0, 1, or 2, "
         "indicating x, y, or z.",
     )
 
-    angle: TracedFloat = pd.Field(
+    angle: TracedFloat = Field(
         0.0,
         title="Angle of Rotation",
         description="Angle of rotation in radians.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
-    @pd.validator("axis", always=True)
-    def _convert_axis_index_to_vector(cls, val):
+    @field_validator("axis")
+    @classmethod
+    def _validate_axis_vector(cls, val: Union[Axis, Coordinate]) -> Coordinate:
         if not isinstance(val, tuple):
             axis = [0.0, 0.0, 0.0]
             axis[val] = 1.0
             val = tuple(axis)
         return val
 
-    @pd.validator("axis")
-    def _guarantee_nonzero_axis(cls, val):
+    @field_validator("axis")
+    @classmethod
+    def _validate_axis_nonzero_norm(cls, val: Coordinate) -> Coordinate:
         norm = np.linalg.norm(val)
         if np.isclose(norm, 0):
             raise ValidationError(
@@ -175,14 +180,15 @@ class AbstractReflection(ABC, Tidy3dBaseModel):
 class ReflectionFromPlane(AbstractReflection):
     """Reflection of vectors and tensors around a given vector."""
 
-    normal: Coordinate = pd.Field(
+    normal: Coordinate = Field(
         (1, 0, 0),
         title="Normal of the reflecting plane",
         description="A vector that specifies the normal of the plane of reflection",
     )
 
-    @pd.validator("normal")
-    def _guarantee_nonzero_normal(cls, val):
+    @field_validator("normal")
+    @classmethod
+    def _validate_normal_nonzero_norm(cls, val: Coordinate) -> Coordinate:
         norm = np.linalg.norm(val)
         if np.isclose(norm, 0):
             raise ValidationError(

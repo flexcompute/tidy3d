@@ -4,11 +4,12 @@ import pytest
 import responses
 
 import tidy3d as td
+from tidy3d import config
 from tidy3d.plugins.dispersion import DispersionFitter
 from tidy3d.web.api.material_fitter import FitterOptions, MaterialFitterTask
 from tidy3d.web.core.environment import Env
 
-Env.dev.active()
+config.switch_profile("dev")
 
 
 @pytest.fixture

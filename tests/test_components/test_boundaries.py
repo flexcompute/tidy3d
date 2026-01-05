@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components.boundary import (
@@ -84,11 +84,11 @@ def test_boundary_validators():
     periodic = Periodic()
 
     # test `bloch_on_both_sides`
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = Boundary(plus=bloch, minus=pec)
 
     # test `periodic_with_pml`
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = Boundary(plus=periodic, minus=pml)
 
 
@@ -223,7 +223,7 @@ def test_extrude_structures_to_pml():
 @pytest.mark.parametrize("absorber_type", [PML, StablePML, Absorber])
 def test_num_layers_validator(absorber_type):
     """Test the Field validators that enforce ``num_layers>0``."""
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = absorber_type(num_layers=0)
 
 
