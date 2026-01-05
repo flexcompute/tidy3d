@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from io import StringIO
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.panel import Panel
@@ -9,12 +9,14 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from tidy3d import Medium2D, MultiPhysicsMedium, PoleResidue
 from tidy3d.components.viz import FLEXCOMPUTE_COLORS
 
 if TYPE_CHECKING:
+    from typing import Union
+
     from IPython.lib.pretty import RepresentationPrinter
 
+    from tidy3d import Medium2D, MultiPhysicsMedium, PoleResidue
     from tidy3d.material_library.material_library import (
         AbstractVariantItem,
         MaterialItem,

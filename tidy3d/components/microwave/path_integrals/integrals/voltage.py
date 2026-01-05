@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-from tidy3d.components.data.data_array import (
-    VoltageIntegralResultType,
-    _make_voltage_data_array,
-)
+from typing import TYPE_CHECKING
+
+from tidy3d.components.data.data_array import _make_voltage_data_array
 from tidy3d.components.microwave.path_integrals.integrals.base import (
     AxisAlignedPathIntegral,
     Custom2DPathIntegral,
-    IntegrableMonitorDataType,
 )
 from tidy3d.components.microwave.path_integrals.specs.voltage import (
     AxisAlignedVoltageIntegralSpec,
     Custom2DVoltageIntegralSpec,
 )
+
+if TYPE_CHECKING:
+    from tidy3d.components.data.data_array import VoltageIntegralResultType
+    from tidy3d.components.microwave.path_integrals.integrals.base import IntegrableMonitorDataType
 
 
 class AxisAlignedVoltageIntegral(AxisAlignedPathIntegral, AxisAlignedVoltageIntegralSpec):
@@ -38,7 +40,7 @@ class AxisAlignedVoltageIntegral(AxisAlignedPathIntegral, AxisAlignedVoltageInte
         e_component = "xyz"[self.main_axis]
         field_name = f"E{e_component}"
         # Validate that fields are present
-        em_field._check_fields_stored([field_name])
+        em_field._check_fields_stored([field_name])  # type: ignore[list-item]
         e_field = em_field.field_components[field_name]
 
         voltage = self.compute_integral(e_field)

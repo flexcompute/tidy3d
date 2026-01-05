@@ -7,28 +7,31 @@ simulations.
 
 from __future__ import annotations
 
-from typing import Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from tidy3d.components.data.data_array import (
-    DataArray,
-    FreqDataArray,
-)
-from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.types import ArrayFloat1D
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
-from tidy3d.plugins.smatrix.ports.types import (
-    LumpedPortType,
-    PortCurrentType,
-    PortVoltageType,
-    TerminalPortType,
-)
-from tidy3d.plugins.smatrix.types import SParamDef
+
+if TYPE_CHECKING:
+    from typing import Union
+
+    from numpy.typing import NDArray
+
+    from tidy3d.components.data.data_array import DataArray, FreqDataArray
+    from tidy3d.components.data.sim_data import SimulationData
+    from tidy3d.components.types import ArrayFloat1D
+    from tidy3d.plugins.smatrix.ports.types import (
+        LumpedPortType,
+        PortCurrentType,
+        PortVoltageType,
+        TerminalPortType,
+    )
+    from tidy3d.plugins.smatrix.types import SParamDef
 
 
-def port_array_inv(matrix: DataArray):
+def port_array_inv(matrix: DataArray) -> NDArray:
     """Helper to invert a port matrix.
 
     Parameters
@@ -105,7 +108,7 @@ def check_port_impedance_sign(Z_numpy: np.ndarray) -> None:
             )
 
 
-def compute_F(Z_numpy: ArrayFloat1D, s_param_def: SParamDef = "pseudo"):
+def compute_F(Z_numpy: ArrayFloat1D, s_param_def: SParamDef = "pseudo") -> float:
     r"""Helper to convert port impedance matrix to F, which is used for
     computing scattering parameters
 

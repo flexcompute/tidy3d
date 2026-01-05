@@ -13,11 +13,15 @@ References
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from tidy3d.components.geometry.base import Geometry
-from tidy3d.components.types import Axis
 from tidy3d.constants import EPSILON_0
+
+if TYPE_CHECKING:
+    from tidy3d.components.types import Axis
 
 
 def inductance_straight_rectangular_wire(

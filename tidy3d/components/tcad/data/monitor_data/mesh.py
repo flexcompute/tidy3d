@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Union
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
@@ -43,12 +43,12 @@ class VolumeMeshData(HeatChargeMonitorData):
     >>> mesh_mnt_data = td.VolumeMeshData(monitor=mesh_mnt, mesh=tet_grid) # doctest: +SKIP
     """
 
-    monitor: VolumeMeshMonitor = pd.Field(
-        ..., title="Monitor", description="Mesh monitor associated with the data."
+    monitor: VolumeMeshMonitor = Field(
+        title="Monitor",
+        description="Mesh monitor associated with the data.",
     )
 
-    mesh: UnstructuredFieldType = pd.Field(
-        ...,
+    mesh: UnstructuredFieldType = Field(
         title="Mesh",
         description="Dataset storing the mesh.",
     )

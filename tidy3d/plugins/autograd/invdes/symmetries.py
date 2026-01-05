@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
-from numpy.typing import NDArray
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
 def symmetrize_mirror(array: NDArray, axis: int | tuple[int, int]) -> NDArray:
@@ -52,7 +54,7 @@ def symmetrize_mirror(array: NDArray, axis: int | tuple[int, int]) -> NDArray:
 
     # Helper function to flip along a specific axis using slicing
     # Autograd supports slicing (e.g. ::-1) but lacks VJP for np.flip
-    def flip_axis(arr, ax):
+    def flip_axis(arr: NDArray, ax: int) -> NDArray:
         if ax == 0:
             return arr[::-1, :]
         elif ax == 1:

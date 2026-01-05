@@ -1,6 +1,7 @@
 # Batch JSON files
 batch*.json
 *.vtu
+simulation.json
 
 # Byte-compiled / optimized / DLL files
 *$py.class

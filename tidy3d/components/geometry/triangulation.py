@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 import shapely
 
-from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D
+from tidy3d.components.types import ArrayFloat1D
 from tidy3d.exceptions import Tidy3dError
+
+if TYPE_CHECKING:
+    from tidy3d.components.types import ArrayFloat2D
 
 
 @dataclass
@@ -39,7 +43,7 @@ def update_convexity(vertices: list[Vertex], i: int) -> int:
 
     Parameters
     ----------
-    vertices : List[Vertex]
+    vertices : list[Vertex]
         Vertices of the polygon.
     i : int
         Index of the vertex to be updated.
@@ -80,7 +84,7 @@ def is_inside(
     ----------
     vertex : ArrayFloat1D
         Vertex coordinates.
-    triangle : Tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]
+    triangle : tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]
         Vertices of the triangle in CCW order.
 
     Returns
@@ -99,7 +103,7 @@ def update_ear_flag(vertices: list[Vertex], i: int) -> None:
 
     Parameters
     ----------
-    vertices : List[Vertex]
+    vertices : list[Vertex]
         Vertices of the polygon.
     i : int
         Index of the vertex to be updated.
@@ -126,7 +130,7 @@ def triangulate(vertices: ArrayFloat2D) -> list[tuple[int, int, int]]:
 
     Returns
     -------
-    List[Tuple[int, int, int]]
+    list[tuple[int, int, int]]
        List of indices of the vertices of the triangles.
     """
     is_ccw = shapely.LinearRing(vertices).is_ccw

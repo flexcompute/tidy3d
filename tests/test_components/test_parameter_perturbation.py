@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 
@@ -45,14 +45,14 @@ def test_heat_perturbation():
     # test complex type detection
     assert not perturb.is_complex
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         perturb = td.LinearHeatPerturbation(
             coeff=0.01,
             temperature_ref=-300,
             temperature_range=(200, 400),
         )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         perturb = td.LinearHeatPerturbation(
             coeff=0.01,
             temperature_ref=300,
@@ -141,7 +141,7 @@ def test_heat_perturbation():
         assert test_value_out == perturb_data.data[2]
 
     # test not allowed interpolation method
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         perturb = td.CustomHeatPerturbation(
             perturbation_values=perturb_data,
             interp_method="quadratic",
@@ -166,7 +166,7 @@ def test_charge_perturbation():
     # test complex type detection
     assert not perturb.is_complex
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         perturb = td.LinearChargePerturbation(
             electron_coeff=1e-21,
             electron_ref=0,
@@ -176,7 +176,7 @@ def test_charge_perturbation():
             hole_range=(0, 0.5e20),
         )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         perturb = td.LinearChargePerturbation(
             electron_coeff=1e-21,
             electron_ref=0,
@@ -348,7 +348,7 @@ def test_charge_perturbation():
         assert test_value_out == perturb_data[-1, -1].item()
 
     # test not allowed interpolation method
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         perturb = td.CustomChargePerturbation(
             perturbation_values=perturb_data,
             interp_method="quadratic",
@@ -671,7 +671,7 @@ def test_delta_model():
     delta_model = td.NedeljkovicSorefMashanovich(ref_freq=freq)
 
     # make sure it serializes
-    delta_model.json()
+    delta_model.model_dump_json()
 
     # make sure it's interpolating correctly
     coeffs_3_5 = np.array([3.10e-21, 1.210, 6.05e-20, 1.145, 6.95e-21, 0.986, 9.28e-18, 0.834])

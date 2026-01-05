@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from math import isclose
+from typing import TYPE_CHECKING
 
-from tidy3d.components.types import Bound
 from tidy3d.constants import fp_eps
+
+if TYPE_CHECKING:
+    from tidy3d.components.types import Bound
 
 
 def bounds_intersection(bounds1: Bound, bounds2: Bound) -> Bound:

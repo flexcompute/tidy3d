@@ -5,12 +5,11 @@ from __future__ import annotations
 import os
 import shutil
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from enum import Enum
 from io import StringIO
 from pathlib import Path
-from typing import Any, Optional, get_args, get_origin
+from typing import TYPE_CHECKING, Any, get_args, get_origin
 
 from pydantic import BaseModel
 from rich.console import Console
@@ -24,6 +23,10 @@ from tidy3d.log import log
 from .loader import ConfigLoader, deep_diff, deep_merge, load_environment_overrides
 from .profiles import BUILTIN_PROFILES
 from .registry import attach_manager, get_handlers, get_sections
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+    from typing import Optional
 
 
 def normalize_profile_name(name: str) -> str:

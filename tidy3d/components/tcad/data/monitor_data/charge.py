@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.data.data_array import (
-    DataArray,
     IndexedFieldVoltageDataArray,
     IndexedVoltageDataArray,
     PointDataArray,
@@ -25,34 +24,39 @@ from tidy3d.components.tcad.monitors.charge import (
     SteadyFreeCarrierMonitor,
     SteadyPotentialMonitor,
 )
-from tidy3d.components.types import TYPE_TAG_STR, Ax, annotate_type
+from tidy3d.components.types import TYPE_TAG_STR
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.exceptions import DataError
 
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+    from tidy3d.components.types import Ax
+
 FieldDataset = Union[
-    SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
+    discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset]),
+    SpatialDataArray,
 ]
 
-UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
+UnstructuredFieldType = discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset])
 
 
 class SteadyPotentialData(HeatChargeMonitorData):
     """Stores electric potential :math:`\\psi` from a charge simulation."""
 
-    monitor: SteadyPotentialMonitor = pd.Field(
-        ...,
+    monitor: SteadyPotentialMonitor = Field(
         title="Electric potential monitor",
         description="Electric potential monitor associated with a `charge` simulation.",
     )
 
-    potential: FieldDataset = pd.Field(
+    potential: Optional[FieldDataset] = Field(
         None,
         title="Electric potential series",
         description="Contains the electric potential series.",
     )
 
     @property
-    def field_components(self) -> dict[str, DataArray]:
+    def field_components(self) -> dict[str, Optional[FieldDataset]]:
         """Maps the field components to their associated data."""
         return {"potential": self.potential}
 
@@ -68,49 +72,42 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
         ``monitor``.
     """
 
-    monitor: SteadyFreeCarrierMonitor = pd.Field(
-        ...,
+    monitor: SteadyFreeCarrierMonitor = Field(
         title="Free carrier monitor",
         description="Free carrier data associated with a Charge simulation.",
     )
 
-    electrons: UnstructuredFieldType = pd.Field(
+    electrons: Optional[UnstructuredFieldType] = Field(
         None,
         title="Electrons series",
         description=r"Contains the computed electrons concentration :math:`n`.",
-        discriminator=TYPE_TAG_STR,
     )
     # n = electrons
 
-    holes: UnstructuredFieldType = pd.Field(
+    holes: Optional[UnstructuredFieldType] = Field(
         None,
         title="Holes series",
         description=r"Contains the computed holes concentration :math:`p`.",
-        discriminator=TYPE_TAG_STR,
     )
     # p = holes
 
     @property
-    def field_components(self) -> dict[str, DataArray]:
+    def field_components(self) -> dict[str, Optional[UnstructuredFieldType]]:
         """Maps the field components to their associated data."""
         return {"electrons": self.electrons, "holes": self.holes}
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_correct_data_type(cls, values):
+    @model_validator(mode="after")
+    def check_correct_data_type(self) -> Self:
         """Issue error if incorrect data type is used"""
-
-        mnt = values.get("monitor")
-        field_data = {field: values.get(field) for field in ["electrons", "holes"]}
-
+        field_data = {field: getattr(self, field) for field in ["electrons", "holes"]}
         for field, data in field_data.items():
             if isinstance(data, TetrahedralGridDataset) or isinstance(data, TriangularGridDataset):
                 if not isinstance(data.values, IndexedVoltageDataArray):
                     raise ValueError(
-                        f"In the data associated with monitor {mnt}, the field {field} does not contain "
-                        "data associated to any voltage value."
+                        f"In the data associated with monitor {self.monitor}, the "
+                        f"field {field} does not contain data associated to any voltage value."
                     )
-
-        return values
+        return self
 
 
 class SteadyEnergyBandData(HeatChargeMonitorData):
@@ -148,68 +145,61 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
     as defined in the  ``monitor``.
     """
 
-    monitor: SteadyEnergyBandMonitor = pd.Field(
-        ...,
+    monitor: SteadyEnergyBandMonitor = Field(
         title="Energy band monitor",
         description="Energy bands data associated with a Charge simulation.",
     )
 
-    Ec: UnstructuredFieldType = pd.Field(
+    Ec: Optional[UnstructuredFieldType] = Field(
         None,
         title="Conduction band series",
         description="Contains the computed energy of the bottom of the conduction band :math:`E_c`.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    Ev: UnstructuredFieldType = pd.Field(
+    Ev: Optional[UnstructuredFieldType] = Field(
         None,
         title="Valence band series",
         description="Contains the computed energy of the top of the valence band :math:`E_v`.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    Ei: UnstructuredFieldType = pd.Field(
+    Ei: Optional[UnstructuredFieldType] = Field(
         None,
         title="Intrinsic Fermi level series",
         description="Contains the computed intrinsic Fermi level for the material :math:`E_i`.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    Efn: UnstructuredFieldType = pd.Field(
+    Efn: Optional[UnstructuredFieldType] = Field(
         None,
         title="Electron's quasi-Fermi level series",
         description="Contains the computed quasi-Fermi level for electrons :math:`E_{fn}`.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    Efp: UnstructuredFieldType = pd.Field(
+    Efp: Optional[UnstructuredFieldType] = Field(
         None,
         title="Hole's quasi-Fermi level series",
         description="Contains the computed quasi-Fermi level for holes :math:`E_{fp}`.",
-        discriminator=TYPE_TAG_STR,
     )
 
     @property
-    def field_components(self) -> dict[str, DataArray]:
+    def field_components(self) -> dict[str, Optional[UnstructuredFieldType]]:
         """Maps the field components to their associated data."""
         return {"Ec": self.Ec, "Ev": self.Ev, "Ei": self.Ei, "Efn": self.Efn, "Efp": self.Efp}
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_correct_data_type(cls, values):
+    @model_validator(mode="after")
+    def check_correct_data_type(self) -> Self:
         """Issue error if incorrect data type is used"""
 
-        mnt = values.get("monitor")
-        field_data = {field: values.get(field) for field in ["Ec", "Ev", "Ei", "Efn", "Efp"]}
+        field_data = {field: getattr(self, field) for field in ["Ec", "Ev", "Ei", "Efn", "Efp"]}
 
         for field, data in field_data.items():
             if isinstance(data, TetrahedralGridDataset) or isinstance(data, TriangularGridDataset):
                 if not isinstance(data.values, IndexedVoltageDataArray):
                     raise ValueError(
-                        f"In the data associated with monitor {mnt}, the field {field} does not contain "
-                        "data associated to any voltage value."
+                        f"In the data associated with monitor {self.monitor}, the "
+                        f"field {field} does not contain data associated to any voltage value."
                     )
 
-        return values
+        return self
 
     @add_ax_if_none
     def plot(self, ax: Ax = None, **sel_kwargs: Any) -> Ax:
@@ -307,20 +297,19 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     This is only computed when a voltage source with more than two sources is included within the simulation and determines the :math:`\\Delta V`.
     """
 
-    monitor: SteadyCapacitanceMonitor = pd.Field(
-        ...,
+    monitor: SteadyCapacitanceMonitor = Field(
         title="Capacitance monitor",
         description="Capacitance data associated with a Charge simulation.",
     )
 
-    hole_capacitance: SteadyVoltageDataArray = pd.Field(
+    hole_capacitance: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Hole capacitance",
         description="Small signal capacitance :math:`(\\frac{dQ_p}{dV})` associated to the monitor.",
     )
     # C_p = hole_capacitance
 
-    electron_capacitance: SteadyVoltageDataArray = pd.Field(
+    electron_capacitance: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Electron capacitance",
         description="Small signal capacitance :math:`(\\frac{dQn}{dV})` associated to the monitor.",
@@ -371,17 +360,15 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
         It is given in units of :math:`V/\\mu m` (Volts per micrometer).
     """
 
-    monitor: SteadyElectricFieldMonitor = pd.Field(
-        ...,
+    monitor: SteadyElectricFieldMonitor = Field(
         title="Electric field monitor",
         description="Electric field data associated with a Charge/Conduction simulation.",
     )
 
-    E: UnstructuredFieldType = pd.Field(
+    E: Optional[UnstructuredFieldType] = Field(
         None,
         title="Electric field",
         description="Contains the computed electric field.",
-        discriminator=TYPE_TAG_STR,
         units=":math:`V/\\mu m`",
     )
 
@@ -390,22 +377,18 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
         """Maps the field components to their associated data."""
         return {"E": self.E}
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_correct_data_type(cls, values):
+    @model_validator(mode="after")
+    def check_correct_data_type(self) -> Self:
         """Issue error if incorrect data type is used"""
 
-        mnt = values.get("monitor")
-        E = values.get("E")
-
-        if isinstance(E, TetrahedralGridDataset) or isinstance(E, TriangularGridDataset):
-            AcceptedTypes = (IndexedFieldVoltageDataArray, PointDataArray)
-            if not isinstance(E.values, AcceptedTypes):
+        if isinstance(self.E, TetrahedralGridDataset) or isinstance(self.E, TriangularGridDataset):
+            if not isinstance(self.E.values, (IndexedFieldVoltageDataArray, PointDataArray)):
                 raise ValueError(
-                    f"In the data associated with monitor {mnt}, must contain a field. This can be "
-                    "defined with IndexedFieldVoltageDataArray or PointDataArray."
+                    f"The data associated with monitor {self.monitor.name} must contain a field. This can be "
+                    "defined with 'IndexedFieldVoltageDataArray' or 'PointDataArray'."
                 )
 
-        return values
+        return self
 
 
 class SteadyCurrentDensityData(HeatChargeMonitorData):
@@ -414,13 +397,12 @@ class SteadyCurrentDensityData(HeatChargeMonitorData):
     units of :math:`A/\\mu m^2`
     """
 
-    monitor: SteadyCurrentDensityMonitor = pd.Field(
-        ...,
+    monitor: SteadyCurrentDensityMonitor = Field(
         title="Current density monitor",
         description="Current density data associated with a Charge/Conduction simulation.",
     )
 
-    J: UnstructuredFieldType = pd.Field(
+    J: Optional[UnstructuredFieldType] = Field(
         None,
         title="Current density",
         description="Contains the computed current density.",
@@ -433,12 +415,12 @@ class SteadyCurrentDensityData(HeatChargeMonitorData):
         """Maps the field components to their associated data."""
         return {"J": self.J}
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_correct_data_type(cls, values):
+    @model_validator(mode="after")
+    def check_correct_data_type(self) -> Self:
         """Issue error if incorrect data type is used"""
 
-        mnt = values.get("monitor")
-        J = values.get("J")
+        mnt = self.monitor
+        J = self.J
 
         if isinstance(J, TetrahedralGridDataset) or isinstance(J, TriangularGridDataset):
             AcceptedTypes = (IndexedFieldVoltageDataArray, PointDataArray)
@@ -448,4 +430,4 @@ class SteadyCurrentDensityData(HeatChargeMonitorData):
                     "defined with IndexedFieldVoltageDataArray or PointDataArray."
                 )
 
-        return values
+        return self
