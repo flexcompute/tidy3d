@@ -27,10 +27,14 @@ def setup_adj(
 
     td.log.info("Running custom vjp (adjoint) pipeline.")
 
-    # filter out any data_fields_vjp with all 0's
-    data_fields_vjp = {
-        k: get_static(v) for k, v in data_fields_vjp.items() if not np.allclose(v, 0)
-    }
+    # filter out any data_fields_vjp with exact all 0's
+    data_fields_vjp_static = {}
+    for k, v in data_fields_vjp.items():
+        v_static = get_static(v)
+        if np.count_nonzero(v_static) == 0:
+            continue
+        data_fields_vjp_static[k] = v_static
+    data_fields_vjp = data_fields_vjp_static
 
     for k, v in data_fields_vjp.items():
         if np.any(np.isnan(v)):

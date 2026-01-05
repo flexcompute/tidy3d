@@ -8,6 +8,7 @@ import pytest
 
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
+from tidy3d.exceptions import SetupError
 from tidy3d.plugins.expressions import ModeAmp, ModePower
 from tidy3d.plugins.invdes.initialization import (
     CustomInitializationSpec,
@@ -316,8 +317,32 @@ def test_warn_zero_grad(use_emulated_run):  # noqa: F811
     """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
-    with AssertLogLevel("WARNING", contains_str="All elements of the gradient are almost zero"):
+    design_region = optimizer.design.design_region.updated_copy(penalties=())
+    design = optimizer.design.updated_copy(design_region=design_region)
+    optimizer = optimizer.updated_copy(design=design)
+
+    with pytest.raises(SetupError, match="All elements of the gradient are exactly zero"):
         optimizer.run(post_process_fn=post_process_fn_untraced)
+
+
+def test_scaled_objective_grad_not_filtered(use_emulated_run):  # noqa: F811
+    """Test that scaled objectives do not result in an all-zero gradient."""
+
+    optimizer = make_optimizer()
+    design_region = optimizer.design.design_region.updated_copy(penalties=())
+    design = optimizer.design.updated_copy(design_region=design_region)
+    optimizer = optimizer.updated_copy(design=design)
+
+    scale = 1e-10
+
+    def post_process_fn_scaled(sim_data: td.SimulationData, **kwargs) -> float:
+        intensity = sim_data.get_intensity(MNT_NAME1)
+        return scale * anp.sum(intensity.values)
+
+    result = optimizer.run(post_process_fn=post_process_fn_scaled)
+
+    grad = result.grad[-1]
+    assert np.count_nonzero(grad) > 0
 
 
 def make_result_multi(use_emulated_run):  # noqa: F811

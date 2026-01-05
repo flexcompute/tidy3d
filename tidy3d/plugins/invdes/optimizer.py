@@ -12,6 +12,7 @@ import pydantic.v1 as pd
 
 import tidy3d as td
 from tidy3d.components.types import TYPE_TAG_STR
+from tidy3d.exceptions import SetupError
 
 from .base import InvdesBaseModel
 from .design import InverseDesignType
@@ -180,9 +181,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             aux_data = {}
             val, grad = val_and_grad_fn(params, aux_data=aux_data)
 
-            if anp.allclose(grad, 0.0):
-                td.log.warning(
-                    "All elements of the gradient are almost zero. This likely indicates "
+            if np.count_nonzero(grad) == 0:
+                raise SetupError(
+                    "All elements of the gradient are exactly zero. This likely indicates "
                     "a problem with the optimization set up. This can occur if the symmetry of the "
                     "simulation and design region are preventing any data to be recorded in the "
                     "'output_monitors'. In this case, we recommend initializing with a "
