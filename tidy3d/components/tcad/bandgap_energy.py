@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import ELECTRON_VOLT
@@ -9,7 +9,7 @@ from tidy3d.constants import ELECTRON_VOLT
 class ConstantEnergyBandGap(Tidy3dBaseModel):
     """Constant Energy band gap"""
 
-    eg: pd.PositiveFloat = pd.Field(
+    eg: PositiveFloat = Field(
         title="Band Gap",
         description="Energy band gap",
         units=ELECTRON_VOLT,
@@ -45,22 +45,19 @@ class VarshniEnergyBandGap(Tidy3dBaseModel):
 
     """
 
-    eg_0: pd.PositiveFloat = pd.Field(
-        ...,
+    eg_0: PositiveFloat = Field(
         title="Band Gap at 0 K",
         description="Energy band gap at absolute zero (0 Kelvin).",
         units=ELECTRON_VOLT,
     )
 
-    alpha: pd.PositiveFloat = pd.Field(
-        ...,
+    alpha: PositiveFloat = Field(
         title="Varshni Alpha Coefficient",
         description="Empirical Varshni coefficient (α).",
         units="eV/K",
     )
 
-    beta: pd.PositiveFloat = pd.Field(
-        ...,
+    beta: PositiveFloat = Field(
         title="Varshni Beta Coefficient",
         description="Empirical Varshni coefficient (β), related to the Debye temperature.",
         units="K",

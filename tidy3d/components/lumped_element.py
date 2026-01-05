@@ -4,20 +4,23 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Annotated, Literal, Optional, Union
+from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    PositiveFloat,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
 
-from tidy3d.components.grid.grid import Grid
-from tidy3d.components.medium import PEC2D, Debye, Drude, Lorentz, Medium, Medium2D, PoleResidue
-from tidy3d.components.monitor import FieldMonitor
-from tidy3d.components.structure import MeshOverrideStructure, Structure
-from tidy3d.components.validators import assert_line_or_plane, assert_plane, validate_name_str
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
 from tidy3d.exceptions import ValidationError
 
-from .base import cached_property, skip_if_fields_missing
+from .base import cached_property
 from .geometry.base import Box, ClipOperation, Geometry, GeometryGroup
 from .geometry.primitives import Cylinder
 from .geometry.utils import (
@@ -28,6 +31,7 @@ from .geometry.utils import (
     snap_point_to_grid,
 )
 from .geometry.utils_2d import increment_float
+from .medium import PEC2D, Debye, Drude, Lorentz, Medium, Medium2D, PoleResidue
 from .microwave.base import MicrowaveBaseModel
 from .microwave.formulas.circuit_parameters import (
     capacitance_colinear_cylindrical_wire_segments,
@@ -35,16 +39,18 @@ from .microwave.formulas.circuit_parameters import (
     inductance_straight_rectangular_wire,
     total_inductance_colinear_rectangular_wire_segments,
 )
-from .types import (
-    TYPE_TAG_STR,
-    Axis,
-    Axis2D,
-    Coordinate,
-    CoordinateOptional,
-    FreqArray,
-    LumpDistType,
-)
-from .viz import PlotParams, plot_params_lumped_element
+from .monitor import FieldMonitor
+from .structure import MeshOverrideStructure, Structure
+from .types import Axis, Coordinate, LumpDistType
+from .validators import assert_line_or_plane, assert_plane, validate_name_str
+from .viz import plot_params_lumped_element
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+
+    from .grid.grid import Grid
+    from .types import Axis2D, CoordinateOptional, FreqArray
+    from .viz import PlotParams
 
 DEFAULT_LUMPED_ELEMENT_NUM_CELLS = 1
 LOSS_FACTOR_INDUCTOR = 1e6
@@ -53,14 +59,13 @@ LOSS_FACTOR_INDUCTOR = 1e6
 class LumpedElement(MicrowaveBaseModel, ABC):
     """Base class describing the interface all lumped elements obey."""
 
-    name: str = pd.Field(
-        ...,
+    name: str = Field(
         title="Name",
         description="Unique name for the lumped element.",
         min_length=1,
     )
 
-    num_grid_cells: Optional[pd.PositiveInt] = pd.Field(
+    num_grid_cells: Optional[PositiveInt] = Field(
         DEFAULT_LUMPED_ELEMENT_NUM_CELLS,
         title="Lumped element grid cells",
         description="Number of mesh grid cells associated with the lumped element along each direction. "
@@ -68,7 +73,7 @@ class LumpedElement(MicrowaveBaseModel, ABC):
         "A value of ``None`` will turn off mesh refinement suggestions.",
     )
 
-    enable_snapping_points: bool = pd.Field(
+    enable_snapping_points: bool = Field(
         True,
         title="Snap Grid To Lumped Element",
         description="When enabled, snapping points are automatically generated to snap grids to key "
@@ -95,11 +100,11 @@ class LumpedElement(MicrowaveBaseModel, ABC):
         """Converts the :class:`.LumpedElement` object to a :class:`.Geometry`."""
 
     @abstractmethod
-    def to_structure(self, grid: Grid = None) -> Structure:
+    def to_structure(self, grid: Optional[Grid] = None) -> Structure:
         """Converts the network portion of the :class:`.LumpedElement` object to a
         :class:`.Structure`."""
 
-    def to_structures(self, grid: Grid = None) -> list[Structure]:
+    def to_structures(self, grid: Optional[Grid] = None) -> list[Structure]:
         """Converts the :class:`.LumpedElement` object to a list of :class:`.Structure`
         which are ready to be added to the :class:`.Simulation`"""
         return [self.to_structure(grid)]
@@ -110,14 +115,13 @@ class RectangularLumpedElement(LumpedElement, Box):
     is appended to the list of structures in the simulation as a :class:`.Medium2D` with the appropriate
     material properties given their size, voltage axis, and the network they represent."""
 
-    voltage_axis: Axis = pd.Field(
-        ...,
+    voltage_axis: Axis = Field(
         title="Voltage Drop Axis",
         description="Specifies the axis along which the component is oriented and along which the "
         "associated voltage drop will occur. Must be in the plane of the element.",
     )
 
-    snap_perimeter_to_grid: bool = pd.Field(
+    snap_perimeter_to_grid: bool = Field(
         True,
         title="Snap Perimeter to Grid",
         description="When enabled, the perimeter of the lumped element is snapped to the simulation grid, "
@@ -130,12 +134,12 @@ class RectangularLumpedElement(LumpedElement, Box):
     _line_plane_validator = assert_line_or_plane()
 
     @cached_property
-    def normal_axis(self):
+    def normal_axis(self) -> Axis:
         """Normal axis of the lumped element, which is the axis where the element has zero size."""
         return self.size.index(0.0)
 
     @cached_property
-    def lateral_axis(self):
+    def lateral_axis(self) -> Axis:
         """Lateral axis of the lumped element."""
         return 3 - self.voltage_axis - self.normal_axis
 
@@ -167,7 +171,7 @@ class RectangularLumpedElement(LumpedElement, Box):
         snap_behavior = [SnapBehavior.Closest] * 3
         snap_location[self.lateral_axis] = SnapLocation.Center
         snap_behavior[self.lateral_axis] = SnapBehavior.Expand
-        return SnappingSpec(location=snap_location, behavior=snap_behavior)
+        return SnappingSpec(location=tuple(snap_location), behavior=tuple(snap_behavior))
 
     def to_mesh_overrides(self) -> list[MeshOverrideStructure]:
         """Creates a suggested :class:`.MeshOverrideStructure` list for mesh refinement both on the
@@ -210,14 +214,14 @@ class RectangularLumpedElement(LumpedElement, Box):
             )
         return snapping_points
 
-    def to_geometry(self, grid: Grid = None) -> Box:
+    def to_geometry(self, grid: Optional[Grid] = None) -> Box:
         """Converts the :class:`RectangularLumpedElement` object to a :class:`.Box`."""
         box = Box(size=self.size, center=self.center)
         if grid and self.snap_perimeter_to_grid:
             return snap_box_to_grid(grid, box, self._snapping_spec)
         return box
 
-    def _admittance_transfer_function_scaling(self, box: Box = None) -> float:
+    def _admittance_transfer_function_scaling(self, box: Optional[Box] = None) -> float:
         """The admittance transfer function of the network needs to be scaled depending on the dimensions
         of the lumped element. The scaling emulates adding networks with equal admittances in series and
         parallel, and is needed when distributing the network over a finite volume.
@@ -269,21 +273,21 @@ class RectangularLumpedElement(LumpedElement, Box):
         )
 
     @cached_property
-    def monitor_name(self):
+    def monitor_name(self) -> str:
         return f"{self.name}_monitor"
 
-    @pd.validator("voltage_axis", always=True)
-    @skip_if_fields_missing(["name", "size"])
-    def _voltage_axis_in_plane(cls, val, values):
+    @model_validator(mode="after")
+    def _voltage_axis_in_plane(self) -> Self:
         """Ensure voltage drop axis is in the plane of the lumped element."""
-        name = values.get("name")
-        size = values.get("size")
+        val = self.voltage_axis
+        name = self.name
+        size = self.size
         if size.count(0.0) == 1 and size.index(0.0) == val:
             # if not planar, then a separate validator should be triggered, not this one
             raise ValidationError(
                 f"'voltage_axis' must be in the plane of lumped element '{name}'."
             )
-        return val
+        return self
 
 
 class LumpedResistor(RectangularLumpedElement):
@@ -291,18 +295,17 @@ class LumpedResistor(RectangularLumpedElement):
     of structures in the simulation as :class:`Medium2D` with the appropriate conductivity given
     their size and voltage axis."""
 
-    resistance: pd.PositiveFloat = pd.Field(
-        ...,
+    resistance: PositiveFloat = Field(
         title="Resistance",
         description="Resistance value in ohms.",
         unit=OHM,
     )
 
-    def _sheet_conductance(self, box: Box = None):
+    def _sheet_conductance(self, box: Optional[Box] = None) -> float:
         """Effective sheet conductance."""
         return self._admittance_transfer_function_scaling(box) / self.resistance
 
-    def to_structure(self, grid: Grid = None) -> Structure:
+    def to_structure(self, grid: Optional[Grid] = None) -> Structure:
         """Converts the :class:`LumpedResistor` object to a :class:`.Structure`
         ready to be added to the :class:`.Simulation`"""
         box = self.to_geometry(grid=grid)
@@ -327,36 +330,32 @@ class CoaxialLumpedResistor(LumpedElement):
     structures in the simulation as :class:`Medium2D` with the appropriate conductivity given their
     size and geometry."""
 
-    resistance: pd.PositiveFloat = pd.Field(
-        ...,
+    resistance: PositiveFloat = Field(
         title="Resistance",
         description="Resistance value in ohms.",
         unit=OHM,
     )
 
-    center: Coordinate = pd.Field(
+    center: Coordinate = Field(
         (0.0, 0.0, 0.0),
         title="Center",
         description="Center of object in x, y, and z.",
         units=MICROMETER,
     )
 
-    outer_diameter: pd.PositiveFloat = pd.Field(
-        ...,
+    outer_diameter: PositiveFloat = Field(
         title="Outer Diameter",
         description="Diameter of the outer concentric circle.",
         units=MICROMETER,
     )
 
-    inner_diameter: pd.PositiveFloat = pd.Field(
-        ...,
+    inner_diameter: PositiveFloat = Field(
         title="Inner Diameter",
         description="Diameter of the inner concentric circle.",
         units=MICROMETER,
     )
 
-    normal_axis: Axis = pd.Field(
-        ...,
+    normal_axis: Axis = Field(
         title="Normal Axis",
         description="Specifies the normal axis, which defines "
         "the orientation of the circles making up the coaxial lumped element.",
@@ -396,32 +395,33 @@ class CoaxialLumpedResistor(LumpedElement):
             )
         ]
 
-    @pd.validator("center", always=True)
-    def _center_not_inf(cls, val):
+    @field_validator("center")
+    @classmethod
+    def _center_not_inf(cls, val: Coordinate) -> Coordinate:
         """Make sure center is not infinitiy."""
         if any(np.isinf(v) for v in val):
             raise ValidationError("'center' can not contain 'td.inf' terms.")
         return val
 
-    @pd.validator("inner_diameter", always=True)
-    @skip_if_fields_missing(["outer_diameter"])
-    def _ensure_inner_diameter_is_smaller(cls, val, values):
+    @model_validator(mode="after")
+    def _ensure_inner_diameter_is_smaller(self) -> Self:
         """Ensures that the inner diameter is smaller than the outer diameter, so that the final shape is an annulus."""
-        outer_diameter = values.get("outer_diameter")
+        val = self.inner_diameter
+        outer_diameter = self.outer_diameter
         if val >= outer_diameter:
             raise ValidationError(
                 f"The 'inner_diameter' {val} of a coaxial lumped element must be less than its 'outer_diameter' {outer_diameter}."
             )
-        return val
+        return self
 
     @cached_property
-    def _sheet_conductance(self):
+    def _sheet_conductance(self) -> float:
         """Effective sheet conductance for a coaxial resistor."""
         rout = self.outer_diameter / 2
         rin = self.inner_diameter / 2
         return 1 / (2 * np.pi * self.resistance) * (np.log(rout / rin))
 
-    def to_structure(self, grid: Grid = None) -> Structure:
+    def to_structure(self, grid: Optional[Grid] = None) -> Structure:
         """Converts the :class:`CoaxialLumpedResistor` object to a :class:`.Structure`
         ready to be added to the :class:`.Simulation`"""
         conductivity = self._sheet_conductance
@@ -434,7 +434,7 @@ class CoaxialLumpedResistor(LumpedElement):
             medium=Medium2D(**medium_dict),
         )
 
-    def to_geometry(self, grid: Grid = None) -> ClipOperation:
+    def to_geometry(self, grid: Optional[Grid] = None) -> ClipOperation:
         """Converts the :class:`CoaxialLumpedResistor` object to a :class:`Geometry`."""
         rout = self.outer_diameter / 2
         rin = self.inner_diameter / 2
@@ -573,35 +573,35 @@ class RLCNetwork(MicrowaveBaseModel):
 
     """
 
-    resistance: Optional[pd.PositiveFloat] = pd.Field(
+    resistance: Optional[PositiveFloat] = Field(
         None,
         title="Resistance",
         description="Resistance value in ohms.",
         unit=OHM,
     )
 
-    capacitance: Optional[pd.PositiveFloat] = pd.Field(
+    capacitance: Optional[PositiveFloat] = Field(
         None,
         title="Capacitance",
         description="Capacitance value in farads.",
         unit=FARAD,
     )
 
-    inductance: Optional[pd.PositiveFloat] = pd.Field(
+    inductance: Optional[PositiveFloat] = Field(
         None,
         title="Inductance",
         description="Inductance value in henrys.",
         unit=HENRY,
     )
 
-    network_topology: Literal["series", "parallel"] = pd.Field(
+    network_topology: Literal["series", "parallel"] = Field(
         "series",
         title="Network Topology",
         description="Describes whether network elements are connected in ``series`` or ``parallel``.",
     )
 
     @cached_property
-    def _number_network_elements(self) -> pd.PositiveInt:
+    def _number_network_elements(self) -> PositiveInt:
         num_elements = 0
         if self.resistance:
             num_elements += 1
@@ -711,11 +711,8 @@ class RLCNetwork(MicrowaveBaseModel):
         elif self.network_topology == "series":
             result_medium = RLCNetwork._series_network_to_equivalent_medium(scaling_factor, R, L, C)
             return result_medium
-        else:
-            result_medium = RLCNetwork._parallel_network_to_equivalent_medium(
-                scaling_factor, R, L, C
-            )
-            return result_medium
+        result_medium = RLCNetwork._parallel_network_to_equivalent_medium(scaling_factor, R, L, C)
+        return result_medium
 
     @staticmethod
     def _series_network_to_equivalent_medium(
@@ -754,7 +751,9 @@ class RLCNetwork(MicrowaveBaseModel):
     ) -> PoleResidue:
         """Converts the RLC parallel network directly to an equivalent medium."""
 
-        def combine_equivalent_medium_in_parallel(first: PoleResidue, second: PoleResidue):
+        def combine_equivalent_medium_in_parallel(
+            first: PoleResidue, second: PoleResidue
+        ) -> PoleResidue:
             """Helper for combining equivalent media when the network elements are in the 'parallel'
             configuration. A similar operation cannot be done for the 'series' topology."""
             eps_inf = 1.0 + (first.eps_inf - 1) + (second.eps_inf - 1)
@@ -787,16 +786,16 @@ class RLCNetwork(MicrowaveBaseModel):
             result_medium = combine_equivalent_medium_in_parallel(med, result_medium)
         return result_medium
 
-    @pd.validator("inductance", always=True)
-    @skip_if_fields_missing(["resistance", "capacitance"])
-    def _validate_single_element(cls, val, values):
+    @model_validator(mode="after")
+    def _validate_single_element(self) -> Self:
         """At least one element should be defined."""
-        resistance = values.get("resistance")
-        capacitance = values.get("capacitance")
+        val = self.inductance
+        resistance = self.resistance
+        capacitance = self.capacitance
         all_items_are_none = all(item is None for item in [resistance, capacitance, val])
         if all_items_are_none:
             raise ValueError("At least one element must be defined in the 'RLCNetwork'.")
-        return val
+        return self
 
 
 class AdmittanceNetwork(MicrowaveBaseModel):
@@ -847,15 +846,13 @@ class AdmittanceNetwork(MicrowaveBaseModel):
 
     """
 
-    a: tuple[pd.NonNegativeFloat, ...] = pd.Field(
-        ...,
+    a: tuple[NonNegativeFloat, ...] = Field(
         title="Numerator Coefficients",
         description="A ``tuple`` of floats describing the coefficients of the numerator polynomial. "
         "The length of the ``tuple`` is equal to the order of the network.",
     )
 
-    b: tuple[pd.NonNegativeFloat, ...] = pd.Field(
-        ...,
+    b: tuple[NonNegativeFloat, ...] = Field(
         title="Denominator Coefficients",
         description="A ``tuple`` of floats describing the coefficients of the denomiator polynomial. "
         "The length of the ``tuple`` is equal to the order of the network.",
@@ -874,6 +871,9 @@ class AdmittanceNetwork(MicrowaveBaseModel):
         admittance of the network in the Laplace domain.
         """
         return (self.a, self.b)
+
+
+NetworkType = discriminated_union(Union[RLCNetwork, AdmittanceNetwork])
 
 
 class LinearLumpedElement(RectangularLumpedElement):
@@ -914,15 +914,13 @@ class LinearLumpedElement(RectangularLumpedElement):
         * `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
     """
 
-    network: Union[RLCNetwork, AdmittanceNetwork] = pd.Field(
-        ...,
+    network: NetworkType = Field(
         title="Network",
         description="The linear element produces an equivalent medium that emulates the "
         "voltage-current relationship described by the ``network`` field.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    dist_type: LumpDistType = pd.Field(
+    dist_type: LumpDistType = Field(
         "on",
         title="Distribute Type",
         description="Switches between the different methods for distributing the lumped element over "
@@ -975,7 +973,7 @@ class LinearLumpedElement(RectangularLumpedElement):
         if size[self.voltage_axis] == 0:
             behavior = list(snap_spec.behavior)
             behavior[self.voltage_axis] = SnapBehavior.Expand
-            snap_spec = snap_spec.updated_copy(behavior=behavior)
+            snap_spec = snap_spec.updated_copy(behavior=tuple(behavior))
 
         return snap_box_to_grid(grid, cell_box, snap_spec=snap_spec)
 
@@ -1012,7 +1010,7 @@ class LinearLumpedElement(RectangularLumpedElement):
             bottom_box = None
         return (bottom_box, top_box)
 
-    def to_structure(self, grid) -> Structure:
+    def to_structure(self, grid: Grid) -> Structure:
         """Converts the :class:`LinearLumpedElement` object to a :class:`.Structure`,
         which enforces the desired voltage-current relationship across one or more grid cells."""
 
@@ -1031,7 +1029,7 @@ class LinearLumpedElement(RectangularLumpedElement):
             medium=Medium2D(**medium_dict),
         )
 
-    def to_PEC_connection(self, grid) -> Optional[Structure]:
+    def to_PEC_connection(self, grid: Grid) -> Optional[Structure]:
         """Converts the :class:`LinearLumpedElement` object to a :class:`.Structure`,
         representing any PEC connections.
         """
@@ -1063,7 +1061,7 @@ class LinearLumpedElement(RectangularLumpedElement):
         structures.append(self.to_structure(grid))
         return structures
 
-    def estimate_parasitic_elements(self, grid: Grid) -> tuple[float, float]:
+    def estimate_parasitic_elements(self, grid: Grid) -> Optional[tuple[float, float]]:
         """Provides an estimate for the parasitic inductance and capacitance associated with the
         connections. These wire or sheet connections are used when the lumped element is not
         distributed over the voltage axis.
@@ -1140,6 +1138,7 @@ class LinearLumpedElement(RectangularLumpedElement):
             # but there will be a contribution to inductance from the single connection
             L = inductance_straight_rectangular_wire(common_size, v_axis)
             return (L, 0)
+        return None
 
     def admittance(self, freqs: np.ndarray) -> np.ndarray:
         """Returns the admittance of this lumped element at the frequencies specified by ``freqs``.
@@ -1168,11 +1167,10 @@ class LinearLumpedElement(RectangularLumpedElement):
 
 
 # lumped elements allowed in Simulation.lumped_elements
-LumpedElementType = Annotated[
+LumpedElementType = discriminated_union(
     Union[
         LumpedResistor,
         CoaxialLumpedResistor,
         LinearLumpedElement,
-    ],
-    pd.Field(discriminator=TYPE_TAG_STR),
-]
+    ]
+)

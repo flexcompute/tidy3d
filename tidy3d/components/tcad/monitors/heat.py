@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic.v1 import Field, PositiveInt
+from pydantic import Field, PositiveInt
 
 from tidy3d.components.tcad.monitors.abstract import HeatChargeMonitor
 

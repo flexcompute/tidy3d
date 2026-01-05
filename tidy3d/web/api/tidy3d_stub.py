@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from os import PathLike
-from typing import Callable, Optional
+from typing import TYPE_CHECKING
 
-import pydantic.v1 as pd
-from pydantic.v1 import BaseModel
+from pydantic import BaseModel, Field
 
 from tidy3d import log
 from tidy3d.components.base import Tidy3dBaseModel
@@ -38,6 +36,10 @@ from tidy3d.plugins.smatrix.data.terminal import (
 from tidy3d.web.core.stub import TaskStub, TaskStubData
 from tidy3d.web.core.types import TaskType
 
+if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Callable, Optional
+
 TYPE_MAP: dict[type, TaskType] = {
     Simulation: TaskType.FDTD,
     ModeSolver: TaskType.MODE_SOLVER,
@@ -59,7 +61,7 @@ def task_type_name_of(simulation: WorkflowType) -> str:
 
 
 class Tidy3dStub(BaseModel, TaskStub):
-    simulation: WorkflowType = pd.Field(discriminator="type")
+    simulation: WorkflowType = Field(discriminator="type")
 
     @classmethod
     def from_file(cls, file_path: PathLike) -> WorkflowType:

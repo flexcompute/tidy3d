@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-import xarray as xr
+from numpy.typing import NDArray
 
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
 from tidy3d.components.data.utils import _zeros_like
-from tidy3d.components.types import ArrayLike, Bound, tidycomplex, xyz
+from tidy3d.components.types import ArrayLike, Bound, Complex, xyz
 from tidy3d.config import config
 from tidy3d.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
 from tidy3d.log import log
@@ -18,20 +18,29 @@ from tidy3d.log import log
 from .types import PathType
 from .utils import get_static
 
+if TYPE_CHECKING:
+    from typing import Callable
+
+    import xarray as xr
+
+    from tidy3d.compat import Self
+
 FieldData = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
-EpsType = Union[tidycomplex, FreqDataArray]
+EpsType = Union[Complex, FreqDataArray]
+ArrayFloat = NDArray[np.floating]
+ArrayComplex = NDArray[np.complexfloating]
 
 
 class LazyInterpolator:
     """Lazy wrapper for interpolators that creates them on first access."""
 
-    def __init__(self, creator_func: Callable) -> None:
+    def __init__(self, creator_func: Callable[[], Callable[[ArrayFloat], ArrayComplex]]) -> None:
         """Initialize with a function that creates the interpolator when called."""
         self.creator_func = creator_func
-        self._interpolator = None
+        self._interpolator: Optional[Callable[[ArrayFloat], ArrayComplex]] = None
 
-    def __call__(self, *args: Any, **kwargs: Any):
+    def __call__(self, *args: Any, **kwargs: Any) -> ArrayComplex:
         """Create interpolator on first call and delegate to it."""
         if self._interpolator is None:
             self._interpolator = self.creator_func()
@@ -173,14 +182,16 @@ class DerivativeInfo:
     # private cache for interpolators
     _interpolators_cache: dict = field(default_factory=dict, init=False, repr=False)
 
-    def updated_copy(self, **kwargs: Any):
+    def updated_copy(self, **kwargs: Any) -> Self:
         """Create a copy with updated fields."""
         kwargs.pop("deep", None)
         kwargs.pop("validate", None)
         return replace(self, **kwargs)
 
     @staticmethod
-    def _nan_to_num_if_needed(coords: np.ndarray) -> np.ndarray:
+    def _nan_to_num_if_needed(
+        coords: Union[ArrayFloat, ArrayComplex],
+    ) -> Union[ArrayFloat, ArrayComplex]:
         """Convert NaN and infinite values to finite numbers, optimized for finite inputs."""
         # skip check for small arrays
         if coords.size < 1000:
@@ -192,8 +203,9 @@ class DerivativeInfo:
 
     @staticmethod
     def _evaluate_with_interpolators(
-        interpolators: dict, coords: np.ndarray
-    ) -> dict[str, np.ndarray]:
+        interpolators: dict[str, Callable[[ArrayFloat], ArrayComplex]],
+        coords: ArrayFloat,
+    ) -> dict[str, ArrayComplex]:
         """Evaluate field components at coordinates using cached interpolators.
 
         Parameters
@@ -217,7 +229,7 @@ class DerivativeInfo:
             coords = coords.astype(float_dtype, copy=False)
         return {name: interp(coords) for name, interp in interpolators.items()}
 
-    def create_interpolators(self, dtype: Optional[np.dtype] = None) -> dict:
+    def create_interpolators(self, dtype: Optional[np.dtype[Any]] = None) -> dict[str, Any]:
         """Create interpolators for field components and permittivity data.
 
         Creates and caches ``RegularGridInterpolator`` objects for all field components
@@ -227,7 +239,7 @@ class DerivativeInfo:
 
         Parameters
         ----------
-        dtype : np.dtype, optional
+        dtype : np.dtype[Any], optional = None
             Data type for interpolation coordinates and values. Defaults to the
             current ``config.adjoint.gradient_dtype_float``.
 
@@ -252,8 +264,14 @@ class DerivativeInfo:
         interpolators = {}
         coord_cache = {}
 
-        def _make_lazy_interpolator_group(field_data_dict, group_key, is_field_group=True) -> None:
+        def _make_lazy_interpolator_group(
+            field_data_dict: Optional[FieldData],
+            group_key: Optional[str],
+            is_field_group: bool = True,
+        ) -> None:
             """Helper to create a group of lazy interpolators."""
+            if not field_data_dict:
+                return
             if is_field_group:
                 interpolators[group_key] = {}
 
@@ -265,7 +283,10 @@ class DerivativeInfo:
                     coord_cache[arr_id] = points
                 points = coord_cache[arr_id]
 
-                def creator_func(arr=arr, points=points):
+                def creator_func(
+                    arr: ScalarFieldDataArray = arr,
+                    points: tuple[np.ndarray, ...] = points,
+                ) -> Callable[[ArrayFloat], ArrayComplex]:
                     data = arr.data.astype(
                         complex_dtype if np.iscomplexobj(arr.data) else dtype, copy=False
                     )
@@ -293,7 +314,7 @@ class DerivativeInfo:
                         points_with_freq, data, method=method, bounds_error=False, fill_value=None
                     )
 
-                    def interpolator(coords):
+                    def interpolator(coords: ArrayFloat) -> ArrayComplex:
                         # coords: (N, 3) spatial points
                         n_points = coords.shape[0]
                         n_freqs = len(freq_coords)
@@ -321,7 +342,7 @@ class DerivativeInfo:
             ("D_adj", self.D_adj),
         ]
         if self.is_medium_pec:
-            interpolator_groups += [("H_fwd", self.H_fwd), ("H_adj", self.H_adj)]
+            interpolator_groups += [("H_fwd", self.H_fwd), ("H_adj", self.H_adj)]  # type: ignore[list-item]
         for group_key, data_dict in interpolator_groups:
             _make_lazy_interpolator_group(data_dict, group_key, is_field_group=True)
 
@@ -400,14 +421,13 @@ class DerivativeInfo:
 
     def _evaluate_dielectric_gradient_at_points(
         self,
-        spatial_coords: np.ndarray,
-        normals: np.ndarray,
-        perps1: np.ndarray,
-        perps2: np.ndarray,
-        interpolators: dict,
-        # todo: type
-        eps_out,
-    ) -> np.ndarray:
+        spatial_coords: ArrayFloat,
+        normals: ArrayFloat,
+        perps1: ArrayFloat,
+        perps2: ArrayFloat,
+        interpolators: dict[str, dict[str, Callable[[ArrayFloat], ArrayComplex]]],
+        eps_out: ArrayComplex,
+    ) -> ArrayComplex:
         # evaluate all field components at surface points
         E_fwd_at_coords = {
             name: interp(spatial_coords) for name, interp in interpolators["E_fwd"].items()
@@ -450,15 +470,16 @@ class DerivativeInfo:
 
     def _evaluate_pec_gradient_at_points(
         self,
-        spatial_coords: np.ndarray,
-        normals: np.ndarray,
-        perps1: np.ndarray,
-        perps2: np.ndarray,
-        interpolators: dict,
-        # todo: type
-        eps_out,
-    ) -> np.ndarray:
-        def _adjust_spatial_coords_pec(grid_centers: dict[str, np.ndarray]):
+        spatial_coords: ArrayFloat,
+        normals: ArrayFloat,
+        perps1: ArrayFloat,
+        perps2: ArrayFloat,
+        interpolators: dict[str, dict[str, Callable[[ArrayFloat], ArrayComplex]]],
+        eps_out: ArrayComplex,
+    ) -> ArrayComplex:
+        def _adjust_spatial_coords_pec(
+            grid_centers: dict[str, ArrayFloat],
+        ) -> tuple[ArrayFloat, ArrayFloat]:
             """Assuming a nearest interpolation, adjust the interpolation points given the grid
             defined by `grid_centers` and using `spatial_coords` as a starting point such that we
             select a point outside of the PEC boundary.
@@ -535,7 +556,9 @@ class DerivativeInfo:
 
             return adjust_spatial_coords, edge_distance
 
-        def _snap_coordinate_outside(field_components: FieldData):
+        def _snap_coordinate_outside(
+            field_components: FieldData,
+        ) -> dict[str, dict[str, ArrayFloat]]:
             """Helper function to perform coordinate adjustment and compute edge distance for each
             component in `field_components`.
 
@@ -566,7 +589,9 @@ class DerivativeInfo:
 
             return adjustment
 
-        def _interpolate_field_components(interp_coords, field_name):
+        def _interpolate_field_components(
+            interp_coords: dict[str, dict[str, ArrayFloat]], field_name: str
+        ) -> dict[str, ArrayComplex]:
             return {
                 name: interp(interp_coords[name]["coords"])
                 for name, interp in interpolators[field_name].items()
@@ -597,7 +622,9 @@ class DerivativeInfo:
         # on of the H field integration components and apply singularity correction
         pec_line_integration = is_flat_perp_dim1 or is_flat_perp_dim2
 
-        def _compute_singularity_correction(adjustment_: dict[str, dict[str, np.ndarray]]):
+        def _compute_singularity_correction(
+            adjustment_: dict[str, dict[str, ArrayFloat]],
+        ) -> ArrayFloat:
             """
             Given the `adjustment_` which contains the distance from the PEC edge each field
             component is nearest interpolated at, computes the singularity correction when

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 
@@ -19,7 +19,7 @@ def test_low_freq_smoothing_spec_initialization_default_values():
 
 def test_empty_monitors():
     """Test that LowFrequencySmoothingSpec raises an error if monitors are not provided."""
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.LowFrequencySmoothingSpec(monitors=[])
 
 
@@ -40,7 +40,7 @@ def test_monitors_exist():
         low_freq_smoothing=td.LowFrequencySmoothingSpec(monitors=["monitor1"]),
     )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         sim = td.Simulation(
             size=(1, 1, 1),
             monitors=[],

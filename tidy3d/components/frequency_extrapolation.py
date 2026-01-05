@@ -2,31 +2,34 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-import pydantic.v1 as pydantic
+from pydantic import Field, NonNegativeFloat, field_validator, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 
 class AbstractLowFrequencySmoothingSpec(Tidy3dBaseModel):
     """Abstract base class for low frequency smoothing specifications."""
 
-    min_sampling_time: pydantic.NonNegativeFloat = pydantic.Field(
+    min_sampling_time: NonNegativeFloat = Field(
         1.0,
         title="Minimum Sampling Time (periods)",
         description="The minimum simulation time in periods of the corresponding frequency for which frequency domain results will be used to fit the polynomial for the low frequency extrapolation. "
         "Results below this threshold will be completely discarded.",
     )
 
-    max_sampling_time: pydantic.NonNegativeFloat = pydantic.Field(
+    max_sampling_time: NonNegativeFloat = Field(
         5.0,
         title="Maximum Sampling Time (periods)",
         description="The maximum simulation time in periods of the corresponding frequency for which frequency domain results will be used to fit the polynomial for the low frequency extrapolation. "
         "Results above this threshold will be not be modified.",
     )
 
-    order: int = pydantic.Field(
+    order: int = Field(
         1,
         title="Extrapolation Order",
         description="The order of the polynomial to use for the low frequency extrapolation.",
@@ -34,22 +37,22 @@ class AbstractLowFrequencySmoothingSpec(Tidy3dBaseModel):
         le=3,
     )
 
-    max_deviation: Optional[float] = pydantic.Field(
+    max_deviation: Optional[float] = Field(
         0.5,
         title="Maximum Deviation",
         description="The maximum deviation (in fraction of the trusted values) to allow for the low frequency smoothing.",
         ge=0,
     )
 
-    @pydantic.root_validator(skip_on_failure=True)
-    def _validate_sampling_times(cls, values):
-        min_sampling_time = values.get("min_sampling_time")
-        max_sampling_time = values.get("max_sampling_time")
+    @model_validator(mode="after")
+    def _validate_sampling_times(self) -> Self:
+        min_sampling_time = self.min_sampling_time
+        max_sampling_time = self.max_sampling_time
         if min_sampling_time >= max_sampling_time:
             raise ValueError(
                 "The minimum sampling time must be less than the maximum sampling time."
             )
-        return values
+        return self
 
 
 class LowFrequencySmoothingSpec(AbstractLowFrequencySmoothingSpec):
@@ -69,14 +72,14 @@ class LowFrequencySmoothingSpec(AbstractLowFrequencySmoothingSpec):
     ... )
     """
 
-    monitors: tuple[str, ...] = pydantic.Field(
-        ...,
+    monitors: tuple[str, ...] = Field(
         title="Monitors",
         description="The names of monitors to which low frequency smoothing will be applied.",
     )
 
-    @pydantic.validator("monitors", always=True)
-    def _validate_monitors(cls, val, values):
+    @field_validator("monitors")
+    @classmethod
+    def _validate_monitors(cls, val: tuple[str, ...]) -> tuple[str, ...]:
         """Validate the monitors list is not empty."""
         if not val:
             raise ValueError("The monitors list must not be empty.")

@@ -10,10 +10,24 @@ Currently, the half-step offset in w is ignored, which should be a pretty good a
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
+from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+ArrayFloat = NDArray[np.floating]
+CoordsTuple = tuple[ArrayFloat, ArrayFloat]
 
 
-def radial_transform(coords, radius, bend_axis, plane_center):
+def radial_transform(
+    coords: CoordsTuple,
+    radius: float,
+    bend_axis: int,
+    plane_center: Sequence[float],
+) -> tuple[CoordsTuple, ArrayFloat, ArrayFloat]:
     """Compute the new coordinates and the Jacobian of a polar coordinate transformation. After
     offsetting the plane such that its center is a distance of ``radius`` away from the center of
     curvature, we have, e.g. for ``bend_axis=='y'``:
@@ -73,7 +87,11 @@ def radial_transform(coords, radius, bend_axis, plane_center):
     return new_coords, jac_e, jac_h
 
 
-def angled_transform(coords, angle_theta, angle_phi):
+def angled_transform(
+    coords: CoordsTuple,
+    angle_theta: float,
+    angle_phi: float,
+) -> tuple[CoordsTuple, ArrayFloat, ArrayFloat]:
     """Compute the new coordinates and the Jacobian for a transformation that "straightens"
     an angled waveguide such that it is translationally invariant in w. The transformation is
     u = x - tan(angle) * z
@@ -100,7 +118,7 @@ def angled_transform(coords, angle_theta, angle_phi):
     Nx, Ny = coords[0].size - 1, coords[1].size - 1
 
     # The new coordinates are exactly the same at z = 0
-    new_coords = [np.copy(c) for c in coords]
+    new_coords = tuple(np.copy(c) for c in coords)
 
     # The only nontrivial derivatives are dudz, dvdz and they are constant everywhere
     jac = np.zeros((3, 3, Nx * Ny))

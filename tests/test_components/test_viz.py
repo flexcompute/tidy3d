@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import pydantic.v1 as pd
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d import Box, Medium, Simulation, Structure
@@ -29,7 +29,7 @@ def test_0d_plot(center_z, len_collections):
 
     sim = td.Simulation(
         size=(1, 1, 1),
-        sources=[
+        sources=(
             td.PointDipole(
                 center=(0, 0, center_z),
                 source_time=td.GaussianPulse(
@@ -37,8 +37,8 @@ def test_0d_plot(center_z, len_collections):
                     fwidth=td.C_0 / 5.0,
                 ),
                 polarization="Ez",
-            )
-        ],
+            ),
+        ),
         run_time=1e-13,
     )
 
@@ -122,9 +122,9 @@ def test_unallowed_colors():
     """
     Tests validator for visualization spec for colors not recognized by matplotlib.
     """
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.VisualizationSpec(facecolor="rr", edgecolor="green", alpha=0.5)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.VisualizationSpec(facecolor="red", edgecolor="gg", alpha=0.5)
 
 
@@ -132,9 +132,9 @@ def test_unallowed_alpha():
     """
     Tests validator for disallowed alpha values.
     """
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.VisualizationSpec(facecolor="red", edgecolor="green", alpha=-0.5)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.VisualizationSpec(facecolor="red", edgecolor="green", alpha=2.5)
 
 
@@ -247,13 +247,13 @@ def test_plot_from_structure_local():
     plot_with_viz_spec(alpha=0.75, facecolor="red", edgecolor="blue")
     plot_with_viz_spec(alpha=0.75, facecolor="red", edgecolor="blue", use_viz_spec=False)
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         plot_with_viz_spec(alpha=0.5, facecolor="dark green", edgecolor="blue")
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         plot_with_viz_spec(alpha=0.5, facecolor="red", edgecolor="ble")
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         plot_with_viz_spec(alpha=1.5, facecolor="red", edgecolor="blue")
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         plot_with_viz_spec(alpha=-0.5, facecolor="red", edgecolor="blue")
 
 

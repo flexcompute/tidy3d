@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import typing
-from os import PathLike
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.config import config
@@ -11,6 +11,9 @@ from tidy3d.web.api.autograd.autograd import run as run_autograd
 from tidy3d.web.api.autograd.autograd import run_async
 from tidy3d.web.api.container import DEFAULT_DATA_DIR, DEFAULT_DATA_PATH
 from tidy3d.web.core.types import PayType
+
+if TYPE_CHECKING:
+    from os import PathLike
 
 RunInput: typing.TypeAlias = typing.Union[
     WorkflowType,

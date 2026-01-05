@@ -60,6 +60,13 @@ def make_mode_sim():
 
 
 @pytest.fixture
+def unique_project_name(tmp_path):
+    """Generate unique project name using tmp_path's unique directory."""
+    # tmp_path.name gives us something like 'test_upload0'
+    return f"default_{tmp_path.name}"
+
+
+@pytest.fixture
 def set_api_key(monkeypatch):
     """Set the api key."""
     import tidy3d.web.core.http_util as http_module
@@ -69,13 +76,13 @@ def set_api_key(monkeypatch):
 
 
 @pytest.fixture
-def mock_upload(monkeypatch, set_api_key):
+def mock_upload(monkeypatch, set_api_key, unique_project_name):
     """Mocks webapi.upload."""
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
-        match=[matchers.query_param_matcher({"projectName": PROJECT_NAME})],
-        json={"data": {"projectId": FOLDER_ID, "projectName": PROJECT_NAME}},
+        match=[matchers.query_param_matcher({"projectName": unique_project_name})],
+        json={"data": {"projectId": FOLDER_ID, "projectName": unique_project_name}},
         status=200,
     )
 
@@ -270,21 +277,21 @@ def mock_webapi(
 
 
 @responses.activate
-def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata):
+def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata, unique_project_name):
     sim = make_mode_sim()
     assert sim != get_reduced_simulation(sim, reduce_simulation=True)
-    assert upload(sim, TASK_NAME, PROJECT_NAME, reduce_simulation=True)
+    assert upload(sim, TASK_NAME, unique_project_name, reduce_simulation=True)
 
 
 @pytest.mark.parametrize("reduce_simulation", [True, False])
 @responses.activate
 def test_upload_with_reduction_parameter(
-    monkeypatch, mock_upload, mock_get_info, mock_metadata, reduce_simulation
+    monkeypatch, mock_upload, mock_get_info, mock_metadata, reduce_simulation, unique_project_name
 ):
     """Test that simulation reduction is properly applied before upload based on reduce_simulation parameter."""
     sim = make_mode_sim()
 
-    upload(sim, TASK_NAME, PROJECT_NAME, reduce_simulation=reduce_simulation)
+    upload(sim, TASK_NAME, unique_project_name, reduce_simulation=reduce_simulation)
 
     if reduce_simulation:
         expected_sim = get_reduced_simulation(sim, reduce_simulation=True)
@@ -320,7 +327,7 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
         pass
 
     def get_str(*args, **kwargs):
-        return sim.json().encode("utf-8")
+        return sim.model_dump_json().encode("utf-8")
 
     monkeypatch.setattr(f"{task_core_path}.download_gz_file", mock_download)
     monkeypatch.setattr(f"{task_core_path}.read_simulation_from_hdf5", get_str)
@@ -341,13 +348,13 @@ def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
 
 
 @responses.activate
-def test_run(mock_webapi, monkeypatch, tmp_path):
+def test_run(mock_webapi, monkeypatch, tmp_path, unique_project_name):
     sim = make_mode_sim()
     monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
     assert run(
         sim,
         task_name=TASK_NAME,
-        folder_name=PROJECT_NAME,
+        folder_name=unique_project_name,
         path=str(tmp_path / "web_test_tmp.json"),
     )
 
@@ -375,10 +382,10 @@ def test_abort_task(set_api_key, mock_get_info):
 
 
 @responses.activate
-def test_job(mock_webapi, monkeypatch, tmp_path):
+def test_job(mock_webapi, monkeypatch, tmp_path, unique_project_name):
     monkeypatch.setattr("tidy3d.web.api.container.Job.load", lambda *args, **kwargs: True)
     sim = make_mode_sim()
-    j = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
+    j = Job(simulation=sim, task_name=TASK_NAME, folder_name=unique_project_name)
 
     _ = j.run(path=str(tmp_path / "web_test_tmp.json"))
     _ = j.status
@@ -395,12 +402,12 @@ def mock_job_status(monkeypatch):
 
 
 @responses.activate
-def test_batch(mock_webapi, mock_job_status, tmp_path):
+def test_batch(mock_webapi, mock_job_status, tmp_path, unique_project_name):
     # monkeypatch.setattr("tidy3d.web.api.container.Batch.monitor", lambda self: time.sleep(0.1))
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
 
     sims = {TASK_NAME: make_mode_sim()}
-    b = Batch(simulations=sims, folder_name=PROJECT_NAME)
+    b = Batch(simulations=sims, folder_name=unique_project_name)
     b.estimate_cost()
     _ = b.run(path_dir=str(tmp_path))
     assert b.real_cost() == FLEX_UNIT * len(sims)

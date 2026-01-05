@@ -66,6 +66,7 @@ def test_logging_warning_capture():
     # create sim with warnings
     domain_size = 12
 
+    td.log.set_capture(True)
     wavelength = 1
     f0 = td.C_0 / wavelength
     fwidth = f0 / 10.0
@@ -204,16 +205,15 @@ def test_logging_warning_capture():
     )
 
     # parse the entire simulation at once to capture warnings hierarchically
-    sim_dict = sim.dict()
+    sim_dict = sim.model_dump()
 
     # re-add projection monitors because it has been overwritten in validators (far_field_approx=False -> True)
     monitors = list(sim_dict["monitors"])
-    monitors[2] = proj_mnt.dict()
+    monitors[2] = proj_mnt.model_dump()
 
     sim_dict["monitors"] = monitors
 
-    td.log.set_capture(True)
-    sim = td.Simulation.parse_obj(sim_dict)
+    sim = td.Simulation.model_validate(sim_dict)
     print(sim.monitors_data_size)
     sim.validate_pre_upload()
     warning_list = td.log.captured_warnings()
@@ -224,18 +224,18 @@ def test_logging_warning_capture():
 
     # check that capture doesn't change validation errors
 
-    # validation error during parse_obj()
-    sim_dict_no_source = sim.dict()
+    # validation error during model_validate()
+    sim_dict_no_source = sim.model_dump()
     sim_dict_no_source.update({"sources": []})
 
     # validation error during validate_pre_upload()
-    sim_dict_large_mnt = sim.dict()
+    sim_dict_large_mnt = sim.model_dump()
     sim_dict_large_mnt.update({"monitors": [monitor_time.updated_copy(size=(10, 10, 10))]})
 
     # for sim_dict in [sim_dict_no_source, sim_dict_large_mnt]:
     for sim_dict in [sim_dict_no_source]:
         try:
-            sim = td.Simulation.parse_obj(sim_dict)
+            sim = td.Simulation.model_validate(sim_dict)
             sim.validate_pre_upload()
         except ValidationError as e:
             error_without = e.errors()
@@ -244,7 +244,7 @@ def test_logging_warning_capture():
 
         td.log.set_capture(True)
         try:
-            sim = td.Simulation.parse_obj(sim_dict)
+            sim = td.Simulation.model_validate(sim_dict)
             sim.validate_pre_upload()
         except ValidationError as e:
             error_with = e.errors()
@@ -252,10 +252,7 @@ def test_logging_warning_capture():
             error_with = str(e)
         td.log.set_capture(False)
 
-        print(error_without)
-        print(error_with)
-
-        assert error_without == error_with
+        assert str(error_without) == str(error_with)
 
 
 def test_log_suppression():

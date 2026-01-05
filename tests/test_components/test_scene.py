@@ -5,8 +5,8 @@ from __future__ import annotations
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pd
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 import tidy3d.components.scene as scene_mod
@@ -51,7 +51,7 @@ def test_scene_init():
 
 
 def test_validate_components_none():
-    assert SCENE._validate_mediums(val=None) is None
+    assert type(SCENE)._validate_mediums(val=None) is None
 
 
 def test_plot_eps():
@@ -120,7 +120,7 @@ def test_structure_alpha():
     new_structs = [
         td.Structure(geometry=s.geometry, medium=SCENE_FULL.medium) for s in SCENE_FULL.structures
     ]
-    S2 = SCENE_FULL.copy(update={"structures": new_structs})
+    S2 = SCENE_FULL.copy(update={"structures": tuple(new_structs)})
     _ = S2.plot_structures_eps(x=0, alpha=0.5)
     plt.close()
 
@@ -252,7 +252,7 @@ def test_num_mediums():
         structures=structures,
     )
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 2))
         )
@@ -288,7 +288,7 @@ def _test_names_default():
 
 
 def test_names_unique():
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Scene(
             structures=[
                 td.Structure(
@@ -402,7 +402,7 @@ def test_perturbed_mediums_copy(unstructured, z):
 #             medium=td.Medium(permittivity=2.0),
 #         ),
 #     ]
-#     with pytest.raises(pd.ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
+#     with pytest.raises(ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
 #         _ = td.Scene(structures=not_fine)
 
 

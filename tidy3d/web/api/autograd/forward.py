@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-import tidy3d as td
-from tidy3d.components.autograd import AutogradFieldMap
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import tidy3d as td
+    from tidy3d.components.autograd import AutogradFieldMap
 
 
 def setup_fwd(

@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Optional, Union
+from typing import TYPE_CHECKING
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.grid.grid import Grid
 from tidy3d.components.microwave.base import MicrowaveBaseModel
-from tidy3d.components.monitor import FieldMonitor, ModeMonitor
-from tidy3d.components.source.base import Source
-from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import FreqArray
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.ports.base import AbstractBasePort
+
+if TYPE_CHECKING:
+    from typing import Optional, Union
+
+    from tidy3d.components.data.data_array import FreqDataArray
+    from tidy3d.components.data.sim_data import SimulationData
+    from tidy3d.components.grid.grid import Grid
+    from tidy3d.components.monitor import FieldMonitor, ModeMonitor
+    from tidy3d.components.source.base import Source
+    from tidy3d.components.source.time import GaussianPulse
+    from tidy3d.components.types import FreqArray
 
 
 class AbstractTerminalPort(AbstractBasePort, MicrowaveBaseModel):
