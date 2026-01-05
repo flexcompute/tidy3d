@@ -45,5 +45,6 @@
 - Follow Conventional Commits per `.commitlintrc.json`.
 - Branch names must use an allowed prefix (`chore`, `hotfix`, `daily-chore`) or include a Jira key to satisfy CI.
 - PRs should link issues, summarize behavior changes, list the `poetry run …` checks you executed, and call out docs/schema updates.
+- Add a changelog entry under `## [Unreleased]` in `CHANGELOG.md` for user-facing changes (new features, bug fixes, breaking changes).
 
 _Reminder: update this AGENTS.md whenever workflow, tooling, or review expectations change so agents stay in sync with the repo._
