@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import os
 import tempfile
+from typing import TYPE_CHECKING
 
 import tidy3d as td
-from tidy3d.components.autograd import AutogradFieldMap
 from tidy3d.components.autograd.field_map import FieldMap, TracerKeys
 from tidy3d.web.api.webapi import get_info, load_simulation
 from tidy3d.web.cache import resolve_local_cache
 from tidy3d.web.core.s3utils import download_file, upload_file  # type: ignore
 
 from .constants import SIM_FIELDS_KEYS_FILE, SIM_VJP_FILE
+
+if TYPE_CHECKING:
+    from tidy3d.components.autograd import AutogradFieldMap
 
 
 def upload_sim_fields_keys(

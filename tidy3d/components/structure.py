@@ -5,23 +5,20 @@ from __future__ import annotations
 import pathlib
 from collections import defaultdict
 from functools import cmp_to_key
-from os import PathLike
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
-import pydantic.v1 as pydantic
+from autograd.extend import Box as AutogradBox
+from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 from tidy3d.config import config
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, Tidy3dImportError
 from tidy3d.log import log
 
-from .autograd.derivative_utils import DerivativeInfo
-from .autograd.types import AutogradFieldMap
-from .autograd.types import Box as AutogradBox
 from .autograd.utils import contains, get_static
-from .base import Tidy3dBaseModel, skip_if_fields_missing
+from .base import Tidy3dBaseModel
 from .data.data_array import ScalarFieldDataArray
 from .geometry.base import Box, Geometry
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
@@ -30,9 +27,22 @@ from .material.multi_physics import MultiPhysicsMedium
 from .material.types import StructureMediumType
 from .medium import AbstractCustomMedium, CustomMedium, LossyMetalMedium, Medium, Medium2D
 from .monitor import FieldMonitor, PermittivityMonitor
-from .types import TYPE_TAG_STR, Ax, Axis, PriorityMode
+from .types import TYPE_TAG_STR
 from .validators import validate_name_str
 from .viz import add_ax_if_none, equal_aspect
+
+if TYPE_CHECKING:
+    from os import PathLike
+
+    import gdstk
+    from pydantic import NonNegativeFloat, NonNegativeInt
+
+    from tidy3d import VisualizationSpec
+    from tidy3d.compat import Self
+
+    from .autograd.derivative_utils import DerivativeInfo
+    from .autograd.types import AutogradFieldMap
+    from .types import Ax, Axis, PriorityMode
 
 try:
     gdstk_available = True
@@ -46,16 +56,15 @@ class AbstractStructure(Tidy3dBaseModel):
     A basic structure object.
     """
 
-    geometry: GeometryType = pydantic.Field(
-        ...,
+    geometry: GeometryType = Field(
         title="Geometry",
         description="Defines geometric properties of the structure.",
         discriminator=TYPE_TAG_STR,
     )
 
-    name: str = pydantic.Field(None, title="Name", description="Optional name for the structure.")
+    name: Optional[str] = Field(None, title="Name", description="Optional name for the structure.")
 
-    background_permittivity: float = pydantic.Field(
+    background_permittivity: Optional[float] = Field(
         None,
         ge=1.0,
         title="Background Permittivity",
@@ -64,7 +73,7 @@ class AbstractStructure(Tidy3dBaseModel):
         "when performing shape optimization with autograd.",
     )
 
-    background_medium: StructureMediumType = pydantic.Field(
+    background_medium: Optional[StructureMediumType] = Field(
         None,
         title="Background Medium",
         description="Medium used for the background of this structure "
@@ -73,7 +82,7 @@ class AbstractStructure(Tidy3dBaseModel):
         "``Simulation`` by default to compute the shape derivatives.",
     )
 
-    priority: int = pydantic.Field(
+    priority: Optional[int] = Field(
         None,
         title="Priority",
         description="Priority of the structure applied in structure overlapping region. "
@@ -83,12 +92,12 @@ class AbstractStructure(Tidy3dBaseModel):
         "the value is automatically assigned based on `structure_priority_mode` in the `Simulation`.",
     )
 
-    @pydantic.root_validator(skip_on_failure=True)
-    def _handle_background_mediums(cls, values):
+    @model_validator(mode="after")
+    def _handle_background_mediums(self) -> Self:
         """Handle background medium combinations, including deprecation."""
 
-        background_permittivity = values.get("background_permittivity")
-        background_medium = values.get("background_medium")
+        background_permittivity = self.background_permittivity
+        background_medium = self.background_medium
 
         # old case, only permittivity supplied, warn and set the Medium automatically
         if background_medium is None and background_permittivity is not None:
@@ -97,7 +106,9 @@ class AbstractStructure(Tidy3dBaseModel):
                 "set the 'Structure.background_medium' directly using a 'Medium'. "
                 "Handling automatically using the supplied relative permittivity."
             )
-            values["background_medium"] = Medium(permittivity=background_permittivity)
+            object.__setattr__(
+                self, "background_medium", Medium(permittivity=background_permittivity)
+            )
 
         # both present, just make sure they are consistent, error if not
         if background_medium is not None and background_permittivity is not None:
@@ -108,12 +119,13 @@ class AbstractStructure(Tidy3dBaseModel):
                     "Use 'background_medium' only as 'background_permittivity' is deprecated."
                 )
 
-        return values
+        return self
 
     _name_validator = validate_name_str()
 
-    @pydantic.validator("geometry")
-    def _transformed_slanted_polyslabs_not_allowed(cls, val):
+    @field_validator("geometry")
+    @classmethod
+    def _transformed_slanted_polyslabs_not_allowed(cls, val: GeometryType) -> GeometryType:
         """Prevents the creation of slanted polyslabs rotated out of plane."""
         validate_no_transformed_polyslabs(val)
         return val
@@ -132,7 +144,7 @@ class AbstractStructure(Tidy3dBaseModel):
     ) -> list[StructureType]:
         """Sort structure lists based on their priority values in ascending order."""
 
-        def structure_comparator(struct1, struct2):
+        def structure_comparator(struct1: StructureType, struct2: StructureType) -> int:
             return struct1._priority(structure_priority_mode) - struct2._priority(
                 structure_priority_mode
             )
@@ -216,8 +228,7 @@ class Structure(AbstractStructure):
     * `Structures <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-3-Structures/#presentation-slides>`_
     """
 
-    medium: StructureMediumType = pydantic.Field(
-        ...,
+    medium: StructureMediumType = Field(
         title="Medium",
         description="Defines the electromagnetic properties of the structure's medium.",
         discriminator=TYPE_TAG_STR,
@@ -238,7 +249,7 @@ class Structure(AbstractStructure):
         return 0
 
     @property
-    def viz_spec(self):
+    def viz_spec(self) -> Optional[VisualizationSpec]:
         return self.medium.viz_spec
 
     def eps_diagonal(self, frequency: float, coords: Coords) -> tuple[complex, complex, complex]:
@@ -259,7 +270,7 @@ class Structure(AbstractStructure):
         return self.medium.eps_diagonal(frequency=frequency)
 
     @staticmethod
-    def _get_optical_medium(medium):
+    def _get_optical_medium(medium: MultiPhysicsMedium) -> Optional[StructureMediumType]:
         """Get optical medium."""
         return medium.optical if isinstance(medium, MultiPhysicsMedium) else medium
 
@@ -268,11 +279,11 @@ class Structure(AbstractStructure):
         """Optical medium of the structure."""
         return self._get_optical_medium(self.medium)
 
-    @pydantic.validator("medium", always=True)
-    @skip_if_fields_missing(["geometry"])
-    def _check_2d_geometry(cls, val, values):
+    @model_validator(mode="after")
+    def _check_2d_geometry(self) -> Self:
         """Medium2D is only consistent with certain geometry types"""
-        geom = values.get("geometry")
+        val = self.medium
+        geom = self.geometry
 
         if isinstance(val, Medium2D):
             # the geometry needs to be supported by 2d materials
@@ -286,7 +297,7 @@ class Structure(AbstractStructure):
             # if the geometry is not supported / not 2d
             _ = geom._normal_2dmaterial
 
-        return val
+        return self
 
     def _compatible_with(self, other: Structure) -> bool:
         """Whether these two structures are compatible."""
@@ -460,12 +471,12 @@ class Structure(AbstractStructure):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        permittivity_threshold: pydantic.NonNegativeFloat = 1,
-        frequency: pydantic.PositiveFloat = 0,
-        gds_layer: pydantic.NonNegativeInt = 0,
-        gds_dtype: pydantic.NonNegativeInt = 0,
+        permittivity_threshold: NonNegativeFloat = 1,
+        frequency: PositiveFloat = 0,
+        gds_layer: NonNegativeInt = 0,
+        gds_dtype: NonNegativeInt = 0,
         pixel_exact: bool = False,
-    ) -> None:
+    ) -> list[Any]:
         """Convert a structure's planar slice to a .gds type polygon.
 
         Parameters
@@ -572,14 +583,14 @@ class Structure(AbstractStructure):
 
     def to_gds(
         self,
-        cell,
+        cell: gdstk.Cell,
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        permittivity_threshold: pydantic.NonNegativeFloat = 1,
-        frequency: pydantic.PositiveFloat = 0,
-        gds_layer: pydantic.NonNegativeInt = 0,
-        gds_dtype: pydantic.NonNegativeInt = 0,
+        permittivity_threshold: NonNegativeFloat = 1,
+        frequency: PositiveFloat = 0,
+        gds_layer: NonNegativeInt = 0,
+        gds_dtype: NonNegativeInt = 0,
         pixel_exact: bool = False,
     ) -> None:
         """Append a structure's planar slice to a .gds cell.
@@ -632,10 +643,10 @@ class Structure(AbstractStructure):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        permittivity_threshold: pydantic.NonNegativeFloat = 1,
-        frequency: pydantic.PositiveFloat = 0,
-        gds_layer: pydantic.NonNegativeInt = 0,
-        gds_dtype: pydantic.NonNegativeInt = 0,
+        permittivity_threshold: NonNegativeFloat = 1,
+        frequency: PositiveFloat = 0,
+        gds_layer: NonNegativeInt = 0,
+        gds_dtype: NonNegativeInt = 0,
         gds_cell_name: str = "MAIN",
         pixel_exact: bool = False,
     ) -> None:
@@ -769,24 +780,23 @@ class MeshOverrideStructure(AbstractStructure):
     """
 
     dl: tuple[
-        Optional[pydantic.PositiveFloat],
-        Optional[pydantic.PositiveFloat],
-        Optional[pydantic.PositiveFloat],
-    ] = pydantic.Field(
-        ...,
+        Optional[PositiveFloat],
+        Optional[PositiveFloat],
+        Optional[PositiveFloat],
+    ] = Field(
         title="Grid Size",
         description="Grid size along x, y, z directions.",
         units=MICROMETER,
     )
 
-    priority: int = pydantic.Field(
+    priority: int = Field(
         0,
         title="Priority",
         description="Priority of the structure applied in mesh override structure overlapping region. "
         "The priority of internal override structures is ``-1``.",
     )
 
-    enforce: bool = pydantic.Field(
+    enforce: bool = Field(
         False,
         title="Enforce Grid Size",
         description="If ``True``, enforce the grid size setup inside the structure "
@@ -795,7 +805,7 @@ class MeshOverrideStructure(AbstractStructure):
         "the last added structure of ``enforce=True``.",
     )
 
-    shadow: bool = pydantic.Field(
+    shadow: bool = Field(
         True,
         title="Grid Size Choice In Structure Overlapping Region",
         description="In structure intersection region, grid size is decided by the latter added "
@@ -804,7 +814,7 @@ class MeshOverrideStructure(AbstractStructure):
         "the bounding box of the structure is disabled.",
     )
 
-    drop_outside_sim: bool = pydantic.Field(
+    drop_outside_sim: bool = Field(
         True,
         title="Drop Structure Outside Simulation Domain",
         description="If ``True``, structure outside the simulation domain is dropped; if ``False``, "
@@ -812,8 +822,9 @@ class MeshOverrideStructure(AbstractStructure):
         "and that of the simulation domain overlap.",
     )
 
-    @pydantic.validator("geometry")
-    def _box_only(cls, val):
+    @field_validator("geometry")
+    @classmethod
+    def _box_only(cls, val: GeometryType) -> GeometryType:
         """Ensure this is a box."""
         if isinstance(val, Geometry):
             if not isinstance(val, Box):
@@ -824,12 +835,12 @@ class MeshOverrideStructure(AbstractStructure):
                 return val.bounding_box
         return val
 
-    @pydantic.validator("shadow")
-    def _unshadowed_cannot_be_enforced(cls, val, values):
+    @model_validator(mode="after")
+    def _unshadowed_cannot_be_enforced(self) -> Self:
         """Unshadowed structure cannot be enforced."""
-        if not val and values["enforce"]:
+        if not self.shadow and self.enforce:
             raise SetupError("A structure cannot be simultaneously enforced and unshadowed.")
-        return val
+        return self
 
 
 StructureType = Union[Structure, MeshOverrideStructure]

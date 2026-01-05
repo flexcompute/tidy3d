@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
@@ -30,13 +30,19 @@ from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-from tidy3d.components.types import Ax, RealFieldVal, annotate_type
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError, Tidy3dKeyError
 from tidy3d.log import log
 
 if TYPE_CHECKING:
+    from typing import Literal, Union
+
     from matplotlib.colors import Colormap
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import DataArray
+    from tidy3d.components.types import Ax, RealFieldVal
 
 
 class DeviceCharacteristics(Tidy3dBaseModel):
@@ -60,27 +66,27 @@ class DeviceCharacteristics(Tidy3dBaseModel):
 
     """
 
-    steady_dc_hole_capacitance: Optional[SteadyVoltageDataArray] = pd.Field(
+    steady_dc_hole_capacitance: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Steady DC hole capacitance",
         description="Device steady DC capacitance data based on holes. If the simulation "
         "has converged, these result should be close to that of electrons.",
     )
 
-    steady_dc_electron_capacitance: Optional[SteadyVoltageDataArray] = pd.Field(
+    steady_dc_electron_capacitance: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Steady DC electron capacitance",
         description="Device steady DC capacitance data based on electrons. If the simulation "
         "has converged, these result should be close to that of holes.",
     )
 
-    steady_dc_current_voltage: Optional[SteadyVoltageDataArray] = pd.Field(
+    steady_dc_current_voltage: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Steady DC current-voltage",
         description="Device steady DC current-voltage relation for the device.",
     )
 
-    steady_dc_resistance_voltage: Optional[SteadyVoltageDataArray] = pd.Field(
+    steady_dc_resistance_voltage: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Small signal resistance",
         description="Steady DC computation of the small signal resistance. This is computed "
@@ -88,7 +94,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         "is given in Ohms. Note that in 2D the resistance is given in :math:`\\Omega \\mu`.",
     )
 
-    ac_current_voltage: Optional[FreqVoltageDataArray] = pd.Field(
+    ac_current_voltage: Optional[FreqVoltageDataArray] = Field(
         None,
         title="Small-signal AC current-voltage",
         description="Small-signal AC current as a function of DC bias voltage and frequency. "
@@ -101,13 +107,15 @@ class DeviceCharacteristics(Tidy3dBaseModel):
 class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
     """Abstract class for HeatChargeSimulation results, or VolumeMesher results."""
 
-    simulation: HeatChargeSimulation = pd.Field(
+    simulation: HeatChargeSimulation = Field(
         title="Heat-Charge Simulation",
         description="Original :class:`.HeatChargeSimulation` associated with the data.",
     )
 
     @staticmethod
-    def _get_field_by_name(monitor_data: TCADMonitorDataType, field_name: Optional[str] = None):
+    def _get_field_by_name(
+        monitor_data: TCADMonitorDataType, field_name: Optional[str] = None
+    ) -> DataArray:
         """Return a field data based on a monitor dataset and a specified field name."""
         if field_name is None:
             if len(monitor_data.field_components) > 1:
@@ -258,14 +266,13 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
     ... )
     """
 
-    data: tuple[annotate_type(TCADMonitorDataType), ...] = pd.Field(
-        ...,
+    data: tuple[discriminated_union(TCADMonitorDataType), ...] = Field(
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
         "associated with the monitors of the original :class:`.Simulation`.",
     )
 
-    device_characteristics: Optional[DeviceCharacteristics] = pd.Field(
+    device_characteristics: Optional[DeviceCharacteristics] = Field(
         None,
         title="Device characteristics",
         description="Data characterizing the device :class:`DeviceCharacteristics`.",
@@ -483,19 +490,20 @@ class HeatSimulationData(HeatChargeSimulationData):
         Consider using :class:`HeatChargeSimulationData` instead.
     """
 
-    simulation: HeatSimulation = pd.Field(
+    simulation: HeatSimulation = Field(
         title="Heat Simulation",
         description="Original :class:`HeatSimulation` associated with the data.",
     )
 
-    @pd.root_validator(skip_on_failure=True)
-    def issue_warning_deprecated(cls, values):
+    @model_validator(mode="before")
+    @classmethod
+    def issue_warning_deprecated(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Issue warning for 'HeatSimulations'."""
         log.warning(
-            "'HeatSimulationData' is deprecated and will be discontinued. You can use "
+            "'HeatSimulationData' is deprecated and will be discontinued. Use "
             "'HeatChargeSimulationData' instead"
         )
-        return values
+        return data
 
 
 class VolumeMesherData(AbstractHeatChargeSimulationData):
@@ -554,14 +562,12 @@ class VolumeMesherData(AbstractHeatChargeSimulationData):
     >>> mesh_data = td.VolumeMesherData(simulation=heat_sim, data=[mesh_mnt_data], monitors=[mesh_mnt]) # doctest: +SKIP
     """
 
-    monitors: tuple[VolumeMeshMonitor, ...] = pd.Field(
-        ...,
+    monitors: tuple[VolumeMeshMonitor, ...] = Field(
         title="Monitors",
         description="List of monitors to be used for the mesher.",
     )
 
-    data: tuple[VolumeMeshData, ...] = pd.Field(
-        ...,
+    data: tuple[VolumeMeshData, ...] = Field(
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
         "associated with the monitors of the original :class:`.VolumeMesher`.",
@@ -575,23 +581,21 @@ class VolumeMesherData(AbstractHeatChargeSimulationData):
             monitors=self.monitors,
         )
 
-    @pd.root_validator(skip_on_failure=True)
-    def data_monitors_match_sim(cls, values):
+    @model_validator(mode="after")
+    def data_monitors_match_sim(self) -> Self:
         """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
         ``.simulation``.
         """
-        monitors = values.get("monitors")
-        data = values.get("data")
-        mnt_names = {mnt.name for mnt in monitors}
+        mnt_names = {mnt.name for mnt in self.monitors}
 
-        for mnt_data in data:
+        for mnt_data in self.data:
             monitor_name = mnt_data.monitor.name
             if monitor_name not in mnt_names:
                 raise DataError(
                     f"Data with monitor name '{monitor_name}' supplied "
                     f"but not found in the list of monitors."
                 )
-        return values
+        return self
 
     def get_monitor_by_name(self, name: str) -> VolumeMeshMonitor:
         """Return monitor named 'name'."""

@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
 import numpy as np
 from autograd.extend import defjvp, defvjp, primitive
 from autograd.numpy.numpy_jvps import broadcast
 from autograd.numpy.numpy_vjps import unbroadcast_f
-from numpy.typing import NDArray
 
-from .types import InterpolationType
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from .types import InterpolationType
 
 
 def _evaluate_nearest(

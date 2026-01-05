@@ -4,22 +4,24 @@ from __future__ import annotations
 
 import functools
 import json
-from os import PathLike
 from pathlib import Path
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
-import pydantic.v1 as pd
 import yaml
+from pydantic import BaseModel
 
 from .components.base import Tidy3dBaseModel
 from .exceptions import FileError, SetupError
 from .log import log
 from .version import __version__
 
+if TYPE_CHECKING:
+    from os import PathLike
+
 """Storing version numbers."""
 
 
-class Version(pd.BaseModel):
+class Version(BaseModel):
     """Stores a version number (excluding patch)."""
 
     major: int
@@ -39,23 +41,25 @@ class Version(pd.BaseModel):
         return version
 
     @property
-    def as_tuple(self):
+    def as_tuple(self) -> tuple[int, int]:
         """version as a tuple, leave out patch for now."""
         return (self.major, self.minor)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         """define a hash."""
         return hash(self.as_tuple)
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Convert back to string."""
         return f"{self.major}.{self.minor}"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         """versions equal."""
+        if not isinstance(other, Version):
+            return False
         return (self.major == other.major) and (self.minor == other.minor)
 
-    def __lt__(self, other):
+    def __lt__(self, other: Version) -> bool:
         """self < other."""
         if self.major < other.major:
             return True
@@ -63,7 +67,7 @@ class Version(pd.BaseModel):
             return self.minor < other.minor
         return False
 
-    def __gt__(self, other):
+    def __gt__(self, other: Version) -> bool:
         """self > other."""
         if self.major > other.major:
             return True
@@ -71,11 +75,11 @@ class Version(pd.BaseModel):
             return self.minor > other.minor
         return False
 
-    def __le__(self, other):
+    def __le__(self, other: Version) -> bool:
         """self <= other."""
         return (self < other) or (self == other)
 
-    def __ge__(self, other):
+    def __ge__(self, other: Version) -> bool:
         """self >= other."""
         return (self > other) or (self == other)
 
@@ -85,10 +89,10 @@ CurrentVersion = Version.from_string(__version__)
 """Class for updating simulation objects."""
 
 
-class Updater(pd.BaseModel):
+class Updater(BaseModel):
     """Converts a tidy3d simulation.json file to an up-to-date Simulation instance."""
 
-    sim_dict: dict
+    sim_dict: dict[str, Any]
 
     @classmethod
     def from_file(cls, fname: PathLike) -> Updater:
@@ -96,7 +100,7 @@ class Updater(pd.BaseModel):
         path = Path(fname)
         # TODO: fix this, it broke
         if path.suffix in {".hdf5", ".gz"}:
-            sim_dict = Tidy3dBaseModel.from_file(fname=str(path)).dict()
+            sim_dict = Tidy3dBaseModel.from_file(fname=str(path)).model_dump()
         else:
             with path.open(encoding="utf-8") as f:
                 if path.suffix == ".json":
@@ -121,7 +125,7 @@ class Updater(pd.BaseModel):
             raise SetupError("Could not find a version in the supplied json.")
         return Version.from_string(version_string)
 
-    def get_update_function(self):
+    def get_update_function(self) -> Callable[[dict[str, Any]], dict[str, Any]]:
         """Get the highest update version <= self.version."""
         leq_versions = [v for v in UPDATE_MAP if v <= self.version]
         if not leq_versions:
@@ -134,9 +138,9 @@ class Updater(pd.BaseModel):
         gt_versions = [v for v in UPDATE_MAP if v > self.version]
         if not gt_versions:
             return CurrentVersion
-        return str(min(gt_versions))
+        return min(gt_versions)
 
-    def update_to_current(self) -> dict:
+    def update_to_current(self) -> dict[str, Any]:
         """Update supplied simulation dictionary to current version."""
         if self.version == CurrentVersion:
             self.sim_dict["version"] = __version__
@@ -149,28 +153,33 @@ class Updater(pd.BaseModel):
         self.sim_dict["version"] = __version__
         return self.sim_dict
 
-    def __eq__(self, other: Updater) -> bool:
+    def __eq__(self, other: object) -> bool:
         """Is Updater equal to another one?"""
+        if not isinstance(other, Updater):
+            return False
         return self.sim_dict == other.sim_dict
 
 
 """Update conversion functions."""
 
 # versions will be dynamically mapped in this table when the update functions are initialized.
-UPDATE_MAP = {}
+UpdateFn = Callable[[dict[str, Any]], dict[str, Any]]
+TransformFn = Callable[[dict[str, Any]], Optional[dict[str, Any]]]
+
+UPDATE_MAP: dict[Version, UpdateFn] = {}
 
 
-def updates_from_version(version_from_string: str):
+def updates_from_version(version_from_string: str) -> Callable[[UpdateFn], UpdateFn]:
     """Decorates a sim_dict update function to change the version."""
 
     # make sure the version strings are legit
     from_version = Version.from_string(version_from_string)
 
-    def decorator(update_fn):
+    def decorator(update_fn: UpdateFn) -> UpdateFn:
         """The actual decorator that gets returned by `updates_to_version('x.y.z')`"""
 
         @functools.wraps(update_fn)
-        def new_update_function(sim_dict: dict) -> dict:
+        def new_update_function(sim_dict: dict[str, Any]) -> dict[str, Any]:
             """Update function that automatically adds version string."""
 
             return update_fn(sim_dict)
@@ -182,7 +191,7 @@ def updates_from_version(version_from_string: str):
     return decorator
 
 
-def iterate_update_dict(update_dict: dict, update_types: dict[str, Callable]) -> None:
+def iterate_update_dict(update_dict: Any, update_types: dict[str, TransformFn]) -> None:
     """Recursively iterate nested ``update_dict``. For any nested ``nested_dict`` found,
     apply an update function if its ``nested_dict["type"]`` is in the keys of the ``update_types``
     dictionary. Also iterates lists and tuples.
@@ -201,10 +210,10 @@ def iterate_update_dict(update_dict: dict, update_types: dict[str, Callable]) ->
 
 
 @updates_from_version("1.8")
-def update_1_8(sim_dict: dict) -> dict:
+def update_1_8(sim_dict: dict[str, Any]) -> dict[str, Any]:
     """Updates version 1.8."""
 
-    def fix_missing_scalar_field(mnt_dict: dict) -> dict:
+    def fix_missing_scalar_field(mnt_dict: dict[str, Any]) -> dict[str, Any]:
         for key, val in mnt_dict["field_dataset"].items():
             if isinstance(val, str) and val == "XR.DATAARRAY":
                 mnt_dict["field_dataset"][key] = "ScalarFieldDataArray"
@@ -220,17 +229,17 @@ def update_1_8(sim_dict: dict) -> dict:
 
 
 @updates_from_version("1.7")
-def update_1_7(sim_dict: dict) -> dict:
+def update_1_7(sim_dict: dict[str, Any]) -> dict[str, Any]:
     """Updates version 1.7."""
 
-    def fix_angle_info(mnt_dict: dict) -> dict:
+    def fix_angle_info(mnt_dict: dict[str, Any]) -> dict[str, Any]:
         mnt_dict["type"] = "FieldProjectionAngleMonitor"
         mnt_dict.pop("fields")
         mnt_dict.pop("medium")
         mnt_dict["proj_distance"] = 1e6
         return mnt_dict
 
-    def fix_cartesian_info(mnt_dict: dict) -> dict:
+    def fix_cartesian_info(mnt_dict: dict[str, Any]) -> dict[str, Any]:
         mnt_dict["type"] = "FieldProjectionCartesianMonitor"
         mnt_dict.pop("fields")
         mnt_dict.pop("medium")
@@ -240,7 +249,7 @@ def update_1_7(sim_dict: dict) -> dict:
         mnt_dict["proj_axis"] = axis
         return mnt_dict
 
-    def fix_kspace_info(mnt_dict: dict) -> dict:
+    def fix_kspace_info(mnt_dict: dict[str, Any]) -> dict[str, Any]:
         mnt_dict["type"] = "FieldProjectionKSpaceMonitor"
         mnt_dict.pop("fields")
         mnt_dict.pop("medium")
@@ -249,13 +258,13 @@ def update_1_7(sim_dict: dict) -> dict:
         mnt_dict["proj_axis"] = axis
         return mnt_dict
 
-    def fix_diffraction_info(mnt_dict: dict) -> dict:
+    def fix_diffraction_info(mnt_dict: dict[str, Any]) -> dict[str, Any]:
         mnt_dict.pop("medium", None)
         mnt_dict.pop("orders_x", None)
         mnt_dict.pop("orders_y", None)
         return mnt_dict
 
-    def fix_bloch_vec(mnt_dict: dict) -> dict:
+    def fix_bloch_vec(mnt_dict: dict[str, Any]) -> dict[str, Any]:
         mnt_dict["bloch_vec"] = mnt_dict["bloch_vec"]["real"]
         return mnt_dict
 
@@ -273,7 +282,7 @@ def update_1_7(sim_dict: dict) -> dict:
 
 
 @updates_from_version("1.6")
-def update_1_6(sim_dict: dict) -> dict:
+def update_1_6(sim_dict: dict[str, Any]) -> dict[str, Any]:
     """Updates version 1.6."""
     if "grid_size" in sim_dict:
         sim_dict.pop("grid_size")
@@ -281,10 +290,10 @@ def update_1_6(sim_dict: dict) -> dict:
 
 
 @updates_from_version("1.5")
-def update_1_5(sim_dict: dict) -> dict:
+def update_1_5(sim_dict: dict[str, Any]) -> dict[str, Any]:
     """Updates version 1.5."""
 
-    def fix_mode_field_mnt(mnt_dict: dict) -> dict:
+    def fix_mode_field_mnt(mnt_dict: dict[str, Any]) -> dict[str, Any]:
         mnt_dict["type"] = "ModeSolverMonitor"
         return mnt_dict
 
@@ -293,15 +302,15 @@ def update_1_5(sim_dict: dict) -> dict:
 
 
 @updates_from_version("1.4")
-def update_1_4(sim_dict: dict) -> dict:
+def update_1_4(sim_dict: dict[str, Any]) -> dict[str, Any]:
     """Updates version 1.4."""
 
-    def fix_polyslab(geo_dict) -> None:
+    def fix_polyslab(geo_dict: dict[str, Any]) -> None:
         """Fix a PolySlab dictionary."""
         geo_dict.pop("length", None)
         geo_dict.pop("center", None)
 
-    def fix_modespec(ms_dict) -> None:
+    def fix_modespec(ms_dict: dict[str, Any]) -> None:
         """Fix a ModeSpec dictionary."""
         sort_by = ms_dict.pop("sort_by", None)
         if sort_by and sort_by != "largest_neff":
@@ -310,7 +319,7 @@ def update_1_4(sim_dict: dict) -> dict:
                 "largest effective index. Use ModeSpec.filter_pol to select polarization instead."
             )
 
-    def fix_geometry_group(geo_dict) -> None:
+    def fix_geometry_group(geo_dict: dict[str, Any]) -> None:
         """Fix a GeometryGroup dictionary."""
         geo_dict.pop("center", None)
 
@@ -326,7 +335,7 @@ def update_1_4(sim_dict: dict) -> dict:
 
 
 @updates_from_version("1.3")
-def update_1_3(sim_dict: dict) -> dict:
+def update_1_3(sim_dict: dict[str, Any]) -> dict[str, Any]:
     """Updates version 1.3."""
 
     sim_dict["boundary_spec"] = {"x": {}, "y": {}, "z": {}}

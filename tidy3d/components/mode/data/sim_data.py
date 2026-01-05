@@ -2,39 +2,43 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Union
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.monitor_data import MediumData, PermittivityData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.mode.simulation import ModeSimulation
-from tidy3d.components.mode_spec import ModeSortSpec
-from tidy3d.components.types import TYPE_TAG_STR, Ax, PlotScale
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.monitor_data import ModeSolverDataType
 
 ModeSimulationMonitorDataType = Union[PermittivityData, MediumData]
 
 if TYPE_CHECKING:
+    from typing import Literal, Optional
+
     from matplotlib.colors import Colormap
+
+    from tidy3d.components.mode_spec import ModeSortSpec
+    from tidy3d.components.types import Ax, PlotScale
 
 
 class ModeSimulationData(AbstractYeeGridSimulationData):
     """Data associated with a mode solver simulation."""
 
-    simulation: ModeSimulation = pd.Field(
-        ..., title="Mode simulation", description="Mode simulation associated with this data."
+    simulation: ModeSimulation = Field(
+        title="Mode simulation",
+        description="Mode simulation associated with this data.",
     )
 
-    modes_raw: ModeSolverDataType = pd.Field(
-        ...,
+    modes_raw: ModeSolverDataType = Field(
         title="Raw Modes",
         description=":class:`.ModeSolverDataType` containing the field and effective index on unexpanded grid.",
         discriminator=TYPE_TAG_STR,
     )
 
-    data: tuple[ModeSimulationMonitorDataType, ...] = pd.Field(
+    data: tuple[ModeSimulationMonitorDataType, ...] = Field(
         (),
         title="Monitor Data",
         description="List of monitor data "

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from itertools import product
-from typing import Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
-import pydantic.v1 as pydantic
 import xarray as xr
+from pydantic import Field, model_validator
 from rich.progress import track
 
 from tidy3d.constants import C_0, EPSILON_0, ETA_0, MICROMETER, MU_0
@@ -17,7 +17,7 @@ from tidy3d.exceptions import SetupError
 from tidy3d.log import get_logging_console
 
 from .autograd.functions import add_at, trapz
-from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import (
     FieldProjectionAngleDataArray,
     FieldProjectionCartesianDataArray,
@@ -31,16 +31,21 @@ from .data.monitor_data import (
     FieldProjectionKSpaceData,
 )
 from .data.sim_data import SimulationData
-from .medium import MediumType
 from .monitor import (
-    AbstractFieldProjectionMonitor,
-    FieldMonitor,
     FieldProjectionAngleMonitor,
     FieldProjectionCartesianMonitor,
-    FieldProjectionKSpaceMonitor,
     FieldProjectionSurface,
 )
-from .types import ArrayComplex4D, Coordinate, Direction
+from .types import ArrayComplex4D, Coordinate
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
+
+    from .medium import MediumType
+    from .monitor import AbstractFieldProjectionMonitor, FieldMonitor, FieldProjectionKSpaceMonitor
+    from .types import Direction
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10
@@ -194,20 +199,18 @@ class FieldProjector(Tidy3dBaseModel):
         * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
     """
 
-    sim_data: SimulationData = pydantic.Field(
-        ...,
+    sim_data: SimulationData = Field(
         title="Simulation data",
         description="Container for simulation data containing the near field monitors.",
     )
 
-    surfaces: tuple[FieldProjectionSurface, ...] = pydantic.Field(
-        ...,
+    surfaces: tuple[FieldProjectionSurface, ...] = Field(
         title="Surface monitor with direction",
-        description="Tuple of each :class:`.FieldProjectionSurface` to use as source of "
+        description="tuple of each :class:`.FieldProjectionSurface` to use as source of "
         "near field.",
     )
 
-    pts_per_wavelength: Union[int, type(None)] = pydantic.Field(
+    pts_per_wavelength: Optional[int] = Field(
         PTS_PER_WVL,
         title="Points per wavelength",
         description="Number of points per wavelength in the background medium with which "
@@ -215,7 +218,7 @@ class FieldProjector(Tidy3dBaseModel):
         "will not resampled, but will still be colocated.",
     )
 
-    origin: Coordinate = pydantic.Field(
+    origin: Optional[Coordinate] = Field(
         None,
         title="Local origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
@@ -223,20 +226,18 @@ class FieldProjector(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
+    @model_validator(mode="after")
+    def _check_origin_set(self) -> Self:
+        """Sets ``.origin`` as the average of centers of all surface monitors if not provided."""
+        if self.origin is None:
+            centers = np.array([surface.monitor.center for surface in self.surfaces])
+            object.__setattr__(self, "origin", tuple(np.mean(centers, axis=0)))
+        return self
+
     @cached_property
     def is_2d_simulation(self) -> bool:
         non_zero_dims = sum(1 for size in self.sim_data.simulation.size if size != 0)
         return non_zero_dims == 2
-
-    @pydantic.validator("origin", always=True)
-    @skip_if_fields_missing(["surfaces"])
-    def set_origin(cls, val, values):
-        """Sets .origin as the average of centers of all surface monitors if not provided."""
-        if val is None:
-            surfaces = values.get("surfaces")
-            val = np.array([surface.monitor.center for surface in surfaces])
-            return tuple(np.mean(val, axis=0))
-        return val
 
     @cached_property
     def medium(self) -> MediumType:
@@ -258,17 +259,17 @@ class FieldProjector(Tidy3dBaseModel):
         normal_dirs: list[Direction],
         pts_per_wavelength: int = PTS_PER_WVL,
         origin: Coordinate = None,
-    ):
+    ) -> Self:
         """Constructs :class:`FieldProjection` from a list of surface monitors and their directions.
 
         Parameters
         ----------
         sim_data : :class:`.SimulationData`
             Container for simulation data containing the near field monitors.
-        near_monitors : List[:class:`.FieldMonitor`]
-            Tuple of :class:`.FieldMonitor` objects on which near fields will be sampled.
-        normal_dirs : List[:class:`.Direction`]
-            Tuple containing the :class:`.Direction` of the normal to each surface monitor
+        near_monitors : list[:class:`.FieldMonitor`]
+            tuple of :class:`.FieldMonitor` objects on which near fields will be sampled.
+        normal_dirs : list[:class:`.Direction`]
+            tuple containing the :class:`.Direction` of the normal to each surface monitor
             w.r.t. to the positive x, y or z unit vectors. Must have the same length as monitors.
         pts_per_wavelength : int = 10
             Number of points per wavelength with which to discretize the
@@ -297,7 +298,7 @@ class FieldProjector(Tidy3dBaseModel):
         )
 
     @cached_property
-    def currents(self):
+    def currents(self) -> dict[str, xr.Dataset]:
         """Sets the surface currents."""
         sim_data = self.sim_data
         surfaces = self.surfaces
@@ -398,7 +399,7 @@ class FieldProjector(Tidy3dBaseModel):
         surface_currents[H2] = field_data.field_components[E1] * signs[0]
         surface_currents[H1] = field_data.field_components[E2] * signs[1]
 
-        new_monitor = surface.monitor.copy(update={"fields": [E1, E2, H1, H2]})
+        new_monitor = surface.monitor.copy(update={"fields": (E1, E2, H1, H2)})
 
         return FieldData(
             monitor=new_monitor,
@@ -463,7 +464,7 @@ class FieldProjector(Tidy3dBaseModel):
                 coord_list[idx][-1],
             )
             if pts_per_wavelength is None:
-                points = sim_data.simulation.grid.boundaries.to_list[idx]
+                points = sim_data.simulation.grid.boundaries.to_list[idx].copy()
                 points[np.argwhere(points < start)] = start
                 points[np.argwhere(points > stop)] = stop
                 colocation_points[idx] = np.unique(points)
@@ -482,10 +483,10 @@ class FieldProjector(Tidy3dBaseModel):
 
     @staticmethod
     def trapezoid(
-        ary: np.ndarray,
-        pts: Union[Iterable[np.ndarray], np.ndarray],
+        ary: NDArray,
+        pts: Union[Iterable[NDArray], NDArray],
         axes: Union[Iterable[int], int] = 0,
-    ):
+    ) -> NDArray:
         """Trapezoidal integration in n dimensions.
 
         Parameters
@@ -521,7 +522,7 @@ class FieldProjector(Tidy3dBaseModel):
         surface: FieldProjectionSurface,
         currents: xr.Dataset,
         medium: MediumType,
-    ) -> np.ndarray:
+    ) -> NDArray:
         """Compute far fields at an angle in spherical coordinates
         for a given set of surface currents and observation angles.
 
@@ -530,9 +531,9 @@ class FieldProjector(Tidy3dBaseModel):
         frequency : float
             Frequency to select from each :class:`.FieldMonitor` to use for projection.
             Must be a frequency stored in each :class:`FieldMonitor`.
-        theta : Union[float, Tuple[float, ...], np.ndarray]
+        theta : Union[float, tuple[float, ...], np.ndarray]
             Polar angles (rad) downward from x=y=0 line relative to the local origin.
-        phi : Union[float, Tuple[float, ...], np.ndarray]
+        phi : Union[float, tuple[float, ...], np.ndarray]
             Azimuthal (rad) angles from y=z=0 line relative to the local origin.
         surface: :class:`FieldProjectionSurface`
             :class:`FieldProjectionSurface` object to use as source of near field.
@@ -995,7 +996,7 @@ class FieldProjector(Tidy3dBaseModel):
         surface: FieldProjectionSurface,
         currents: xr.Dataset,
         medium: MediumType,
-    ) -> np.ndarray:
+    ) -> NDArray:
         """Compute projected fields in spherical coordinates at a given projection point on a
         Cartesian grid for a given set of surface currents using the exact homogeneous medium
         Green's function without geometric approximations.
@@ -1071,7 +1072,7 @@ class FieldProjector(Tidy3dBaseModel):
         d2G_dr2 = dG_dr * (ikr - 1.0) / r + G / (r**2)
 
         # operations between unit vectors and currents
-        def r_x_current(current: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        def r_x_current(current: tuple[NDArray, ...]) -> tuple[NDArray, ...]:
             """Cross product between the r unit vector and the current."""
             return [
                 sin_theta * sin_phi * current[2] - cos_theta * current[1],
@@ -1079,7 +1080,7 @@ class FieldProjector(Tidy3dBaseModel):
                 sin_theta * cos_phi * current[1] - sin_theta * sin_phi * current[0],
             ]
 
-        def r_dot_current(current: tuple[np.ndarray, ...]) -> np.ndarray:
+        def r_dot_current(current: tuple[NDArray, ...]) -> NDArray:
             """Dot product between the r unit vector and the current."""
             return (
                 sin_theta * cos_phi * current[0]
@@ -1087,7 +1088,7 @@ class FieldProjector(Tidy3dBaseModel):
                 + cos_theta * current[2]
             )
 
-        def r_dot_current_dtheta(current: tuple[np.ndarray, ...]) -> np.ndarray:
+        def r_dot_current_dtheta(current: tuple[NDArray, ...]) -> NDArray:
             """Theta derivative of the dot product between the r unit vector and the current."""
             return (
                 cos_theta * cos_phi * current[0]
@@ -1095,12 +1096,12 @@ class FieldProjector(Tidy3dBaseModel):
                 - sin_theta * current[2]
             )
 
-        def r_dot_current_dphi_div_sin_theta(current: tuple[np.ndarray, ...]) -> np.ndarray:
+        def r_dot_current_dphi_div_sin_theta(current: tuple[NDArray, ...]) -> NDArray:
             """Phi derivative of the dot product between the r unit vector and the current,
             analytically divided by sin theta."""
             return -sin_phi * current[0] + cos_phi * current[1]
 
-        def grad_Gr_r_dot_current(current: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
+        def grad_Gr_r_dot_current(current: tuple[NDArray, ...]) -> tuple[NDArray, ...]:
             """Gradient of the product of the gradient of the Green's function and the dot product
             between the r unit vector and the current."""
             temp = [
@@ -1111,7 +1112,9 @@ class FieldProjector(Tidy3dBaseModel):
             # convert to Cartesian coordinates
             return surface.monitor.sph_2_car_field(temp[0], temp[1], temp[2], theta_obs, phi_obs)
 
-        def potential_terms(current: tuple[np.ndarray, ...], const: complex):
+        def potential_terms(
+            current: tuple[NDArray, ...], const: complex
+        ) -> tuple[list[complex], list[complex], list[complex]]:
             """Assemble vector potential and its derivatives."""
             r_x_c = r_x_current(current)
             pot = [const * item * G for item in current]

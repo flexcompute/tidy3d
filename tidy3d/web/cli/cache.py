@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import click
 
 from tidy3d import config
-from tidy3d.web.cache import LocalCache, resolve_local_cache
 from tidy3d.web.cache import clear as clear_cache
+from tidy3d.web.cache import resolve_local_cache
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from tidy3d.web.cache import LocalCache
 
 
 def _fmt_size(num_bytes: int) -> str:

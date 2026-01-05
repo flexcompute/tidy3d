@@ -2,24 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import (
-    CurrentIntegralResultType,
-    FreqDataArray,
-    FreqModeDataArray,
-    IntegralResultType,
-    _make_current_data_array,
-)
+from tidy3d.components.data.data_array import FreqModeDataArray, _make_current_data_array
 from tidy3d.components.data.monitor_data import FieldTimeData
 from tidy3d.components.microwave.path_integrals.integrals.base import (
     AxisAlignedPathIntegral,
     Custom2DPathIntegral,
-    IntegrableMonitorDataType,
 )
 from tidy3d.components.microwave.path_integrals.specs.current import (
     AxisAlignedCurrentIntegralSpec,
@@ -28,6 +21,17 @@ from tidy3d.components.microwave.path_integrals.specs.current import (
 )
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from typing import Optional, Union
+
+    from tidy3d.components.data.data_array import (
+        CurrentIntegralResultType,
+        DataArray,
+        FreqDataArray,
+        IntegralResultType,
+    )
+    from tidy3d.components.microwave.path_integrals.integrals.base import IntegrableMonitorDataType
 
 
 class AxisAlignedCurrentIntegral(AxisAlignedCurrentIntegralSpec):
@@ -55,7 +59,7 @@ class AxisAlignedCurrentIntegral(AxisAlignedCurrentIntegralSpec):
         h_field_name = f"H{h_component}"
         v_field_name = f"H{v_component}"
         # Validate that fields are present
-        em_field._check_fields_stored([h_field_name, v_field_name])
+        em_field._check_fields_stored([h_field_name, v_field_name])  # type: ignore[list-item]
         h_horizontal = em_field.field_components[h_field_name]
         h_vertical = em_field.field_components[v_field_name]
 
@@ -74,7 +78,9 @@ class AxisAlignedCurrentIntegral(AxisAlignedCurrentIntegralSpec):
         return _make_current_data_array(current)
 
     def _to_path_integrals(
-        self, h_horizontal=None, h_vertical=None
+        self,
+        h_horizontal: Optional[DataArray] = None,
+        h_vertical: Optional[DataArray] = None,
     ) -> tuple[AxisAlignedPathIntegral, ...]:
         """Returns four ``AxisAlignedPathIntegral`` instances, which represent a contour
         integral around the surface defined by ``self.size``."""

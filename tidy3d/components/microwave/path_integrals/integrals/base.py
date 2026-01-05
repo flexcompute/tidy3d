@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Literal, Union
+from typing import TYPE_CHECKING, Literal, Union
 
 import numpy as np
 import xarray as xr
 
 from tidy3d.components.data.data_array import (
-    IntegralResultType,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
     ScalarModeFieldDataArray,
@@ -21,6 +20,9 @@ from tidy3d.components.microwave.path_integrals.specs.base import (
 )
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import DataError
+
+if TYPE_CHECKING:
+    from tidy3d.components.data.data_array import IntegralResultType
 
 IntegrableMonitorDataType = Union[FieldData, FieldTimeData, ModeData, ModeSolverData]
 EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
@@ -175,7 +177,7 @@ class Custom2DPathIntegral(Custom2DPathIntegralSpec):
         v_field_name = f"{field}{dim2}"
 
         # Validate that fields are present
-        em_field._check_fields_stored([h_field_name, v_field_name])
+        em_field._check_fields_stored([h_field_name, v_field_name])  # type: ignore[list-item]
 
         # Select fields lying on the plane
         plane_indexer = {dim3: self.position}

@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Literal, Optional, Union
 
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeInt, PositiveInt
 
 from tidy3d.components.base_sim.monitor import AbstractMonitor
 from tidy3d.components.monitor import (
@@ -22,7 +22,7 @@ BYTES_COMPLEX = 8
 class EMEMonitor(AbstractMonitor, ABC):
     """Abstract EME monitor."""
 
-    freqs: Optional[FreqArray] = pd.Field(
+    freqs: Optional[FreqArray] = Field(
         None,
         title="Monitor Frequencies",
         description="Frequencies at which the monitor will record. "
@@ -30,7 +30,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         "A value of 'None' will record at all simulation 'freqs'.",
     )
 
-    num_modes: Optional[pd.NonNegativeInt] = pd.Field(
+    num_modes: Optional[NonNegativeInt] = Field(
         None,
         title="Number of Modes",
         description="Maximum number of modes for the monitor to record. "
@@ -38,7 +38,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         "A value of 'None' will record all modes.",
     )
 
-    num_sweep: Optional[pd.NonNegativeInt] = pd.Field(
+    num_sweep: Optional[NonNegativeInt] = Field(
         1,
         title="Number of Sweep Indices",
         description="Number of sweep indices for the monitor to record. "
@@ -47,7 +47,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         "will be omitted. A value of 'None' will record all sweep indices.",
     )
 
-    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
         (1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
@@ -56,7 +56,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         "Not all monitors support values different from 1.",
     )
 
-    eme_cell_interval_space: Literal[1] = pd.Field(
+    eme_cell_interval_space: Literal[1] = Field(
         1,
         title="EME Cell Interval",
         description="Number of EME cells between monitor recordings. If equal to 1, "
@@ -65,7 +65,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         "Not all monitors support values different from 1.",
     )
 
-    colocate: Literal[True] = pd.Field(
+    colocate: Literal[True] = Field(
         True,
         title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
@@ -129,7 +129,7 @@ class EMEModeSolverMonitor(EMEMonitor):
     ... )
     """
 
-    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
         (1, 1, 1),
         title="Spatial Interval",
         description="Note: not yet supported. Number of grid step intervals between monitor recordings. If equal to 1, "
@@ -138,7 +138,7 @@ class EMEModeSolverMonitor(EMEMonitor):
         "in the propagation direction is not used. Note: this is not yet supported.",
     )
 
-    eme_cell_interval_space: pd.PositiveInt = pd.Field(
+    eme_cell_interval_space: PositiveInt = Field(
         1,
         title="EME Cell Interval",
         description="Number of EME cells between monitor recordings. If equal to 1, "
@@ -147,20 +147,20 @@ class EMEModeSolverMonitor(EMEMonitor):
         "Not all monitors support values different from 1.",
     )
 
-    colocate: bool = pd.Field(
+    colocate: bool = Field(
         True,
         title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default (False) is used internally in EME propagation.",
     )
 
-    normalize: bool = pd.Field(
+    normalize: bool = Field(
         True,
         title="Normalize Modes",
         description="Whether to normalize the EME modes to unity flux.",
     )
 
-    keep_invalid_modes: bool = pd.Field(
+    keep_invalid_modes: bool = Field(
         False,
         title="Keep Invalid Modes",
         description="Whether to store modes containing nan values and modes which are "
@@ -203,7 +203,7 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
     ... )
     """
 
-    interval_space: tuple[pd.PositiveInt, pd.PositiveInt, pd.PositiveInt] = pd.Field(
+    interval_space: tuple[PositiveInt, PositiveInt, PositiveInt] = Field(
         (1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
@@ -211,7 +211,7 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
         "first and last point of the monitor grid are always included.",
     )
 
-    eme_cell_interval_space: Literal[1] = pd.Field(
+    eme_cell_interval_space: Literal[1] = Field(
         1,
         title="EME Cell Interval",
         description="Number of EME cells between monitor recordings. If equal to 1, "
@@ -221,14 +221,14 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
         "EME field monitor.",
     )
 
-    colocate: bool = pd.Field(
+    colocate: bool = Field(
         True,
         title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default (False) is used internally in EME propagation.",
     )
 
-    num_modes: Optional[pd.NonNegativeInt] = pd.Field(
+    num_modes: Optional[NonNegativeInt] = Field(
         None,
         title="Number of Modes",
         description="Maximum number of modes for the monitor to record. "
@@ -267,7 +267,7 @@ class EMECoefficientMonitor(EMEMonitor):
     ... )
     """
 
-    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
         (1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
@@ -277,7 +277,7 @@ class EMECoefficientMonitor(EMEMonitor):
         "for 'EMECoefficientMonitor'.",
     )
 
-    eme_cell_interval_space: pd.PositiveInt = pd.Field(
+    eme_cell_interval_space: PositiveInt = Field(
         1,
         title="EME Cell Interval",
         description="Number of EME cells between monitor recordings. If equal to 1, "

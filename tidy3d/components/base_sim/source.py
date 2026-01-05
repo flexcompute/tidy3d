@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Optional
 
-import pydantic.v1 as pydantic
+from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.validators import validate_name_str
-from tidy3d.components.viz import PlotParams
+
+if TYPE_CHECKING:
+    from tidy3d.components.viz import PlotParams
 
 
 class AbstractSource(Tidy3dBaseModel, ABC):
     """Abstract base class for all sources."""
 
-    name: str = pydantic.Field(None, title="Name", description="Optional name for the source.")
+    name: Optional[str] = Field(
+        None,
+        title="Name",
+        description="Optional name for the source.",
+    )
 
     @abstractmethod
     def plot_params(self) -> PlotParams:

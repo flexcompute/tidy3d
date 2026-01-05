@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
-from tidy3d.components.base import skip_if_fields_missing
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.path_integrals.types import (
     CurrentPathSpecType,
     VoltagePathSpecType,
 )
 from tidy3d.exceptions import SetupError
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 
 class AutoImpedanceSpec(MicrowaveBaseModel):
@@ -54,33 +56,32 @@ class CustomImpedanceSpec(MicrowaveBaseModel):
     ... )
     """
 
-    voltage_spec: Optional[VoltagePathSpecType] = pd.Field(
+    voltage_spec: Optional[VoltagePathSpecType] = Field(
         None,
         title="Voltage Integration Path",
         description="Path specification for computing the voltage associated with a mode profile.",
     )
 
-    current_spec: Optional[CurrentPathSpecType] = pd.Field(
+    current_spec: Optional[CurrentPathSpecType] = Field(
         None,
         title="Current Integration Path",
         description="Path specification for computing the current associated with a mode profile.",
     )
 
-    @pd.validator("current_spec", always=True)
-    @skip_if_fields_missing(["voltage_spec"])
-    def check_path_spec_combinations(cls, val, values):
+    @model_validator(mode="after")
+    def check_path_spec_combinations(self) -> Self:
         """Validate that at least one of voltage_spec or current_spec is provided.
 
         In order to define voltage/current/impedance, either a voltage or current path specification
         must be provided. Both cannot be ``None`` simultaneously.
         """
-
-        voltage_spec = values["voltage_spec"]
+        val = self.current_spec
+        voltage_spec = self.voltage_spec
         if val is None and voltage_spec is None:
             raise SetupError(
                 "Not a valid 'CustomImpedanceSpec', the 'voltage_spec' and 'current_spec' cannot both be 'None'."
             )
-        return val
+        return self
 
 
 ImpedanceSpecType = Union[AutoImpedanceSpec, CustomImpedanceSpec]

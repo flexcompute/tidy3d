@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from typing import Callable, Optional
 
 T = TypeVar("T", bound=BaseModel)
 

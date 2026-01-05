@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components.grid.corner_finder import CornerFinderSpec
@@ -94,7 +94,7 @@ def test_layerrefinement():
     """Test LayerRefinementSpec is working as expected."""
 
     # size along axis must be inf
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = LayerRefinementSpec(axis=0, size=(td.inf, 0, 0))
 
     # classmethod
@@ -119,19 +119,19 @@ def test_layerrefinement():
     assert layer._is_inplane_bounded(layer)
     assert layer.axis == 1
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         structures = [
             td.Structure(geometry=td.Box(size=(td.inf, td.inf, td.inf)), medium=td.Medium())
         ]
         layer = LayerRefinementSpec.from_structures(structures)
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = LayerRefinementSpec.from_layer_bounds(axis=axis, bounds=(0, td.inf))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = LayerRefinementSpec.from_layer_bounds(axis=axis, bounds=(td.inf, 0))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = LayerRefinementSpec.from_layer_bounds(axis=axis, bounds=(-td.inf, 0))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = LayerRefinementSpec.from_layer_bounds(axis=axis, bounds=(1, -1))
 
 
@@ -573,7 +573,9 @@ def test_gap_meshing():
 
     reentry_gap = td.Structure(
         geometry=td.PolySlab(
-            slab_bounds=[-0.2, 0.2], axis=1, vertices=[(-0.3, 0.52), (-0.05, 0.3), (0.2, 0.52)]
+            slab_bounds=(-0.2, 0.2),
+            axis=1,
+            vertices=[(-0.3, 0.52), (-0.05, 0.3), (0.2, 0.52)],
         ),
         medium=td.Medium(),
     )
