@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Union
 
-import pydantic.v1 as pd
+from pydantic import Field, PositiveInt, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayFloat1D, ArrayInt1D, ArrayLike
@@ -19,7 +19,7 @@ class EMESweepSpec(Tidy3dBaseModel, ABC):
 
     @property
     @abstractmethod
-    def num_sweep(self) -> pd.PositiveInt:
+    def num_sweep(self) -> PositiveInt:
         """Number of sweep indices."""
 
     @property
@@ -41,8 +41,7 @@ class EMESweepSpec(Tidy3dBaseModel, ABC):
 class EMELengthSweep(EMESweepSpec):
     """Spec for sweeping EME cell lengths."""
 
-    scale_factors: ArrayLike = pd.Field(
-        ...,
+    scale_factors: ArrayLike = Field(
         title="Length Scale Factor",
         description="Length scale factors to be used in the EME propagation step. "
         "The EME propagation step is repeated after scaling every cell length by this amount. "
@@ -52,7 +51,7 @@ class EMELengthSweep(EMESweepSpec):
     )
 
     @property
-    def num_sweep(self) -> pd.PositiveInt:
+    def num_sweep(self) -> PositiveInt:
         """Number of sweep indices."""
         return len(self.scale_factors)
 
@@ -66,8 +65,7 @@ class EMEModeSweep(EMESweepSpec):
     """Spec for sweeping number of modes in EME propagation step.
     Used for convergence testing."""
 
-    num_modes: ArrayInt1D = pd.Field(
-        ...,
+    num_modes: ArrayInt1D = Field(
         title="Number of Modes",
         description="Max number of modes to use in the EME propagation step. "
         "The EME propagation step is repeated after dropping modes with mode_index "
@@ -77,7 +75,7 @@ class EMEModeSweep(EMESweepSpec):
     )
 
     @property
-    def num_sweep(self) -> pd.PositiveInt:
+    def num_sweep(self) -> PositiveInt:
         """Number of sweep indices."""
         return len(self.num_modes)
 
@@ -98,8 +96,7 @@ class EMEFreqSweep(EMESweepSpec):
     perturbative mode solver relative to the simulation EME modes.
     This can be a faster way to solve at a larger number of frequencies."""
 
-    freq_scale_factors: ArrayFloat1D = pd.Field(
-        ...,
+    freq_scale_factors: ArrayFloat1D = Field(
         title="Frequency Scale Factors",
         description="Scale factors "
         "applied to every frequency in 'EMESimulation.freqs'. After applying the scale factors, "
@@ -109,7 +106,7 @@ class EMEFreqSweep(EMESweepSpec):
     )
 
     @property
-    def num_sweep(self) -> pd.PositiveInt:
+    def num_sweep(self) -> PositiveInt:
         """Number of sweep indices."""
         return len(self.freq_scale_factors)
 
@@ -148,16 +145,16 @@ class EMEPeriodicitySweep(EMESweepSpec):
     >>> sweep_spec = EMEPeriodicitySweep(num_reps=[{"unit_cell": n} for n in n_list])
     """
 
-    num_reps: list[dict[str, pd.PositiveInt]] = pd.Field(
-        ...,
+    num_reps: list[dict[str, PositiveInt]] = Field(
         title="Number of Repetitions",
         description="Number of periodic repetitions of named subgrids in this EME grid. "
         "At each sweep index, contains a dict mapping the name of a subgrid to the "
         "number of repetitions of that subgrid at that sweep index.",
     )
 
-    @pd.validator("num_reps", always=True)
-    def _validate_num_reps(cls, val):
+    @field_validator("num_reps")
+    @classmethod
+    def _validate_num_reps(cls, val: list[dict[str, PositiveInt]]) -> list[dict[str, PositiveInt]]:
         """Check num_reps is not too large."""
         for num_reps_dict in val:
             for value in num_reps_dict.values():
@@ -169,7 +166,7 @@ class EMEPeriodicitySweep(EMESweepSpec):
         return val
 
     @property
-    def num_sweep(self) -> pd.PositiveInt:
+    def num_sweep(self) -> PositiveInt:
         """Number of sweep indices."""
         return len(self.num_reps)
 

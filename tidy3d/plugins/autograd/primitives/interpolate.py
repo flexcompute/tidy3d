@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 from autograd.extend import defvjp, primitive
-from numpy.typing import NDArray
 
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from typing import Callable, Optional
+
+    from numpy.typing import NDArray
 
 
 def _assert_strictly_monotonic(x: NDArray) -> None:
@@ -586,7 +590,7 @@ def compute_spline_coeffs(
     y_points: NDArray,
     endpoint_derivatives: tuple[Optional[float], Optional[float]] = (None, None),
     order: int = 3,
-) -> tuple:
+) -> tuple[NDArray, ...]:
     """Compute spline coefficients for the given order.
 
     Parameters
@@ -617,7 +621,7 @@ def compute_spline_coeffs(
     raise NotImplementedError(f"Spline order '{order}' not implemented.")
 
 
-def evaluate_spline(x_points: NDArray, coeffs: tuple, x_eval: NDArray) -> NDArray:
+def evaluate_spline(x_points: NDArray, coeffs: tuple[NDArray, ...], x_eval: NDArray) -> NDArray:
     """Evaluate a spline at the specified points.
 
     Parameters
@@ -650,7 +654,7 @@ def get_spline_derivatives_wrt_y(
     x_points: NDArray,
     y_points: NDArray,
     endpoint_derivatives: tuple[Optional[float], Optional[float]] = (None, None),
-):
+) -> tuple[NDArray, ...]:
     """Returns a tuple of derivative arrays for the given spline order.
 
     Parameters
@@ -731,10 +735,17 @@ def _interpolate_spline(
     return x_eval, y_eval
 
 
-def interpolate_spline_y_vjp(ans, x_points, y_points, num_points, order, endpoint_derivatives):
+def interpolate_spline_y_vjp(
+    ans: tuple[NDArray, NDArray],
+    x_points: NDArray,
+    y_points: NDArray,
+    num_points: int,
+    order: int,
+    endpoint_derivatives: tuple[Optional[float], Optional[float]],
+) -> Callable[[tuple[NDArray, NDArray] | NDArray], NDArray]:
     """VJP for interpolate_spline wrt y_points."""
 
-    def vjp(g):
+    def vjp(g: tuple[NDArray, NDArray] | NDArray) -> NDArray:
         reversed_order = x_points[0] > x_points[-1]
         if reversed_order:
             x_proc = x_points[::-1]

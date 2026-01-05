@@ -2,17 +2,18 @@
 from __future__ import annotations
 
 import abc
-import typing
-from typing import Any
+from typing import TYPE_CHECKING, Any, Union
 
-import autograd.numpy as anp
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat
 
 import tidy3d as td
 from tidy3d.plugins.autograd.functions import threshold
 from tidy3d.plugins.autograd.invdes import make_filter_and_project
 
 from .base import InvdesBaseModel
+
+if TYPE_CHECKING:
+    import autograd.numpy as anp
 
 
 class AbstractTransformation(InvdesBaseModel, abc.ABC):
@@ -36,8 +37,7 @@ class FilterProject(InvdesBaseModel):
 
     """
 
-    radius: pd.PositiveFloat = pd.Field(
-        ...,
+    radius: PositiveFloat = Field(
         title="Filter Radius",
         description="Radius of the filter to convolve with supplied spatial data. "
         "Note: the corresponding feature size expressed in the device is typically "
@@ -47,10 +47,10 @@ class FilterProject(InvdesBaseModel):
         "It is useful to apply a ``FilterProject`` transformation to 'encourage' larger "
         "feature sizes, but we ultimately recommend creating a ``ErosionDilationPenalty`` to the "
         "``DesignRegion.penalties`` if you have strict fabrication constraints.",
-        units=td.constants.MICROMETER,
+        json_schema_extra={"units": td.constants.MICROMETER},
     )
 
-    beta: float = pd.Field(
+    beta: float = Field(
         1.0,
         ge=1.0,
         title="Beta",
@@ -59,11 +59,15 @@ class FilterProject(InvdesBaseModel):
         "at the expense of gradient accuracy and ease of optimization. ",
     )
 
-    eta: float = pd.Field(
-        0.5, ge=0.0, le=1.0, title="Eta", description="Halfway point in projection function."
+    eta: float = Field(
+        0.5,
+        ge=0.0,
+        le=1.0,
+        title="Eta",
+        description="Halfway point in projection function.",
     )
 
-    strict_binarize: bool = pd.Field(
+    strict_binarize: bool = Field(
         False,
         title="Binarize strictly",
         description="If ``False``, the binarization is still continuous between min and max. "
@@ -83,4 +87,4 @@ class FilterProject(InvdesBaseModel):
         return data_projected
 
 
-TransformationType = typing.Union[FilterProject]
+TransformationType = Union[FilterProject]

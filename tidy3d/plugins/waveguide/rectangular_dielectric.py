@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Annotated, Any, Optional, Union
 
 import numpy
-import pydantic.v1 as pydantic
 from matplotlib import pyplot
+from pydantic import Field, field_validator, model_validator
 
-from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.boundary import BoundarySpec, Periodic
-from tidy3d.components.data.data_array import FreqModeDataArray, ModeIndexDataArray
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.components.grid.grid_spec import GridSpec
@@ -20,7 +19,7 @@ from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.structure import Structure
-from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Size1D
+from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D, Axis, Coordinate, Size1D
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import C_0, MICROMETER, RADIAN, inf
 from tidy3d.exceptions import Tidy3dError, ValidationError
@@ -28,9 +27,16 @@ from tidy3d.log import log
 from tidy3d.plugins.mode.mode_solver import ModeSolver
 
 if TYPE_CHECKING:
-    from matplotlib.colors import Colormap
+    from typing import Literal
 
-AnnotatedMedium = Annotated[MediumType, pydantic.Field(discriminator=TYPE_TAG_STR)]
+    from matplotlib.colors import Colormap
+    from pydantic import ValidationInfo
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import FreqModeDataArray, ModeIndexDataArray
+    from tidy3d.components.types import Ax
+
+AnnotatedMedium = Annotated[MediumType, Field(discriminator=TYPE_TAG_STR)]
 
 
 EVANESCENT_TAIL = 1.5
@@ -50,185 +56,189 @@ class RectangularDielectric(Tidy3dBaseModel):
         - Coupled waveguides
     """
 
-    wavelength: Union[float, ArrayFloat1D] = pydantic.Field(
-        ...,
+    wavelength: Union[float, ArrayFloat1D] = Field(
         title="Wavelength",
         description="Wavelength(s) at which to calculate modes (in μm).",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    core_width: Union[Size1D, ArrayFloat1D] = pydantic.Field(
-        ...,
+    core_width: Union[Size1D, ArrayFloat1D] = Field(
         title="Core width",
         description="Core width at the top of the waveguide. If set to an array, defines "
         "the widths of adjacent waveguides.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    core_thickness: Size1D = pydantic.Field(
-        ...,
+    core_thickness: Size1D = Field(
         title="Core Thickness",
         description="Thickness of the core layer.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    core_medium: MediumType = pydantic.Field(
-        ...,
+    core_medium: MediumType = Field(
         title="Core Medium",
         description="Medium associated with the core layer.",
         discriminator=TYPE_TAG_STR,
     )
 
-    clad_medium: Union[AnnotatedMedium, tuple[AnnotatedMedium, ...]] = pydantic.Field(
-        ...,
+    clad_medium: Union[AnnotatedMedium, tuple[AnnotatedMedium, ...]] = Field(
         title="Clad Medium",
         description="Medium associated with the upper cladding layer. A sequence of mediums can "
         "be used to create a layered clad.",
     )
 
-    box_medium: Union[AnnotatedMedium, tuple[AnnotatedMedium, ...]] = pydantic.Field(
+    box_medium: Optional[Union[AnnotatedMedium, tuple[AnnotatedMedium, ...]]] = Field(
         None,
         title="Box Medium",
         description="Medium associated with the lower cladding layer. A sequence of mediums can "
         "be used to create a layered substrate. If not set, the first clad medium is used.",
     )
 
-    slab_thickness: Size1D = pydantic.Field(
+    slab_thickness: Size1D = Field(
         0.0,
         title="Slab Thickness",
         description="Thickness of the slab for rib geometry.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    clad_thickness: Union[Size1D, ArrayFloat1D] = pydantic.Field(
+    clad_thickness: Optional[Union[Size1D, ArrayFloat1D]] = Field(
         None,
         title="Clad Thickness",
         description="Domain size above the core layer. An array can be used to define a layered "
         "clad. The last layer is extended into the PML as an infinitely thick layer.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    box_thickness: Union[Size1D, ArrayFloat1D] = pydantic.Field(
+    box_thickness: Optional[Union[Size1D, ArrayFloat1D]] = Field(
         None,
         title="Box Thickness",
         description="Domain size below the core layer. An array can be used to define a layered "
         "substrate. The last layer is extended into the PML as an infinitely thick layer.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    side_margin: Size1D = pydantic.Field(
+    side_margin: Optional[Size1D] = Field(
         None,
         title="Side Margin",
         description="Domain size to the sides of the waveguide core.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    sidewall_angle: float = pydantic.Field(
+    sidewall_angle: float = Field(
         0.0,
         title="Sidewall Angle",
         description="Angle of the core sidewalls measured from the vertical direction (in "
         "radians).  Positive (negative) values create waveguides with bases wider (narrower) "
         "than their tops.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
-    gap: Union[float, ArrayFloat1D] = pydantic.Field(
+    gap: Union[float, ArrayFloat1D] = Field(
         0.0,
         title="Gap",
         description="Distance between adjacent waveguides, measured at the top core edges.  "
         "An array can be used to define one gap per pair of adjacent waveguides.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    sidewall_thickness: Size1D = pydantic.Field(
+    sidewall_thickness: Size1D = Field(
         0.0,
         title="Sidewall Thickness",
         description="Sidewall layer thickness (within core).",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    sidewall_medium: MediumType = pydantic.Field(
+    sidewall_medium: Optional[MediumType] = Field(
         None,
         title="Sidewall medium",
         description="Medium associated with the sidewall layer to model sidewall losses.",
         discriminator=TYPE_TAG_STR,
     )
 
-    surface_thickness: Size1D = pydantic.Field(
+    surface_thickness: Size1D = Field(
         0.0,
         title="Surface Thickness",
         description="Thickness of the surface layers defined on the top of the waveguide and  "
         "slab regions (if any).",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    surface_medium: MediumType = pydantic.Field(
+    surface_medium: Optional[MediumType] = Field(
         None,
         title="Surface Medium",
         description="Medium associated with the surface layer to model surface losses.",
         discriminator=TYPE_TAG_STR,
     )
 
-    origin: Coordinate = pydantic.Field(
+    origin: Coordinate = Field(
         (0, 0, 0),
         title="Origin",
         description="Center of the waveguide geometry.  This coordinate represents the base "
         "of the waveguides (substrate surface) in the normal axis, and center of the geometry "
         "in the remaining axes.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    length: Size1D = pydantic.Field(
+    length: Size1D = Field(
         1e30,
         title="Length",
         description="Length of the waveguides in the propagation direction",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    propagation_axis: Axis = pydantic.Field(
+    propagation_axis: Axis = Field(
         0,
         title="Propagation Axis",
         description="Axis of propagation of the waveguide",
     )
 
-    normal_axis: Axis = pydantic.Field(
+    normal_axis: Axis = Field(
         2,
         title="Normal Axis",
         description="Axis normal to the substrate surface",
     )
 
-    mode_spec: ModeSpec = pydantic.Field(
-        ModeSpec(num_modes=2),
+    mode_spec: ModeSpec = Field(
+        default_factory=lambda: ModeSpec(num_modes=2),
         title="Mode Specification",
         description=":class:`ModeSpec` defining waveguide mode properties.",
     )
 
-    grid_resolution: int = pydantic.Field(
+    grid_resolution: int = Field(
         15,
         title="Grid Resolution",
         description="Solver grid resolution per wavelength.",
     )
 
-    max_grid_scaling: float = pydantic.Field(
+    max_grid_scaling: float = Field(
         1.2,
         title="Maximal Grid Scaling",
         description="Maximal size increase between adjacent grid boundaries.",
     )
 
-    @pydantic.validator("wavelength", "core_width", "gap", always=True)
-    def _set_non_negative_array(cls, val):
+    @field_validator("wavelength", "core_width", "gap")
+    @classmethod
+    def _set_non_negative_array(cls, val: Union[float, ArrayFloat1D]) -> Union[float, ArrayFloat1D]:
         """Ensure values are not negative and convert to numpy arrays."""
         val = numpy.array(val, ndmin=1)
         if any(val < 0):
             raise ValidationError("Values may not be negative.")
         return val
 
-    @pydantic.validator("core_medium", "clad_medium", "box_medium")
-    def _check_non_metallic(cls, val, values):
+    @field_validator("core_medium", "clad_medium", "box_medium")
+    @classmethod
+    def _check_non_metallic(
+        cls, val: Union[MediumType, tuple[MediumType, ...]], info: ValidationInfo
+    ) -> Union[MediumType, tuple[MediumType, ...]]:
         if val is None:
             return val
         media = val if isinstance(val, tuple) else (val,)
-        freqs = C_0 / values["wavelength"]
+        if "wavelength" not in info.data:
+            return val
+        wavelength = info.data["wavelength"]
+        if wavelength is None:
+            return val
+        freqs = C_0 / wavelength
         if any(medium.eps_model(f).real < 1 for medium in media for f in freqs):
             raise ValidationError(
                 "'RectangularDielectric' can only be used with dielectric media. "
@@ -236,60 +246,60 @@ class RectangularDielectric(Tidy3dBaseModel):
             )
         return val
 
-    @pydantic.validator("gap", always=True)
-    @skip_if_fields_missing(["core_width"])
-    def _validate_gaps(cls, val, values):
+    @model_validator(mode="after")
+    def _validate_gaps(self) -> Self:
         """Ensure the number of gaps is compatible with the number of cores supplied."""
-        if val.size == 1 and values["core_width"].size != 2:
+        if self.gap.size == 1 and self.core_width.size != 2:
             # If a single value is defined, use it for all gaps
-            return numpy.array([val[0]] * (values["core_width"].size - 1))
-        if val.size != values["core_width"].size - 1:
+            object.__setattr__(self, "gap", numpy.array([self.gap[0]] * (self.core_width.size - 1)))
+            return self
+        if self.gap.size != self.core_width.size - 1:
             raise ValidationError("Number of gaps must be 1 less than number of core widths.")
-        return val
+        return self
 
-    @pydantic.root_validator
-    def _set_box_medium(cls, values):
+    @model_validator(mode="after")
+    def _set_box_medium(self) -> Self:
         """Set BOX medium same as cladding as default value."""
-        box_medium = values.get("box_medium")
-        if box_medium is None:
-            clad_medium = values.get("clad_medium")
-            if clad_medium is None:
-                return values
-            if isinstance(clad_medium, tuple):
-                clad_medium = clad_medium[0]
-            values["box_medium"] = clad_medium
-        return values
+        if self.box_medium is None:
+            if self.clad_medium is None:
+                return self
+            if isinstance(self.clad_medium, tuple):
+                object.__setattr__(self, "box_medium", self.clad_medium[0])
+            else:
+                object.__setattr__(self, "box_medium", self.clad_medium)
+        return self
 
-    @pydantic.root_validator
-    def _set_clad_thickness(cls, values):
+    @model_validator(mode="after")
+    def _set_clad_thickness(self) -> Self:
         """Set default clad/BOX thickness based on the max wavelength in the medium."""
         for side in ("clad", "box"):
-            val = values.get(side + "_thickness")
+            val = getattr(self, side + "_thickness")
             if val is None:
-                wavelength = values.get("wavelength")
-                medium = values.get(side + "_medium")
-                if wavelength is None or medium is None:
-                    return values
+                medium = getattr(self, side + "_medium")
+                if self.wavelength is None or medium is None:
+                    return self
                 if isinstance(medium, tuple):
                     medium = medium[0]
-                n = numpy.array([medium.nk_model(f)[0] for f in C_0 / wavelength])
-                lda = wavelength / n
-                values[side + "_thickness"] = EVANESCENT_TAIL * lda.max()
+                n = numpy.array([medium.nk_model(f)[0] for f in C_0 / self.wavelength])
+                lda = self.wavelength / n
+                object.__setattr__(self, side + "_thickness", EVANESCENT_TAIL * lda.max())
             elif isinstance(val, float):
                 if val < 0:
                     raise ValidationError("Thickness may not be negative.")
             else:
-                values[side + "_thickness"] = cls._set_non_negative_array(val)
-        return values
+                object.__setattr__(
+                    self, side + "_thickness", type(self)._set_non_negative_array(val)
+                )
+        return self
 
-    @pydantic.root_validator
-    def _validate_layers(cls, values):
+    @model_validator(mode="after")
+    def _validate_layers(self) -> Self:
         """Ensure the number of clad media is compatible with the number of layers supplied."""
         for side in ("clad", "box"):
-            thickness = values.get(side + "_thickness")
-            medium = values.get(side + "_medium")
+            thickness = getattr(self, side + "_thickness")
+            medium = getattr(self, side + "_medium")
             if thickness is None or medium is None:
-                return values
+                return self
             num_layers = 1 if isinstance(thickness, float) else thickness.size
             num_media = 1 if not isinstance(medium, tuple) else len(medium)
             if num_layers != num_media:
@@ -297,53 +307,46 @@ class RectangularDielectric(Tidy3dBaseModel):
                     f"Number of '{side}_thickness' values ({num_layers}) must be equal to that of "
                     f"'{side}_medium' ({num_media})."
                 )
-        return values
+        return self
 
-    @pydantic.root_validator
-    def _set_side_margin(cls, values):
+    @model_validator(mode="after")
+    def _set_side_margin(self) -> Self:
         """Set default side margin based on BOX and cladding thicknesses."""
-        clad_thickness = values.get("clad_thickness")
-        box_thickness = values.get("box_thickness")
+        clad_thickness = self.clad_thickness
+        box_thickness = self.box_thickness
         if clad_thickness is None or box_thickness is None:
-            return values
-        if values["side_margin"] is None:
+            return self
+        if self.side_margin is None:
             if not isinstance(clad_thickness, float):
                 clad_thickness = clad_thickness.sum()
             if not isinstance(box_thickness, float):
                 box_thickness = box_thickness.sum()
-            values["side_margin"] = max(clad_thickness, box_thickness)
-        return values
+            object.__setattr__(self, "side_margin", max(clad_thickness, box_thickness))
+        return self
 
-    @pydantic.root_validator
-    def _ensure_consistency(cls, values):
+    @model_validator(mode="after")
+    def _ensure_consistency(self) -> Self:
         """Ensure consistency in setting surface/sidewall models and propagation/normal axes."""
-        sidewall_thickness = values["sidewall_thickness"]
-        sidewall_medium = values["sidewall_medium"]
-        surface_thickness = values["surface_thickness"]
-        surface_medium = values["surface_medium"]
-        propagation_axis = values["propagation_axis"]
-        normal_axis = values["normal_axis"]
-
-        if sidewall_thickness > 0 and sidewall_medium is None:
+        if self.sidewall_thickness > 0 and self.sidewall_medium is None:
             raise ValidationError(
                 "Sidewall medium must be provided when sidewall thickness is greater than 0."
             )
 
-        if sidewall_thickness == 0 and sidewall_medium is not None:
+        if self.sidewall_thickness == 0 and self.sidewall_medium is not None:
             log.warning("Sidewall medium not used because sidewall thickness is zero.")
 
-        if surface_thickness > 0 and surface_medium is None:
+        if self.surface_thickness > 0 and self.surface_medium is None:
             raise ValidationError(
                 "Surface medium must be provided when surface thickness is greater than 0."
             )
 
-        if surface_thickness == 0 and surface_medium is not None:
+        if self.surface_thickness == 0 and self.surface_medium is not None:
             log.warning("Surface medium not used because surface thickness is zero.")
 
-        if propagation_axis == normal_axis:
+        if self.propagation_axis == self.normal_axis:
             raise ValidationError("Propagation and normal axes must be different.")
 
-        return values
+        return self
 
     @property
     def _clad_medium(self) -> tuple[MediumType, ...]:
@@ -607,7 +610,9 @@ class RectangularDielectric(Tidy3dBaseModel):
         if self.mode_spec.bend_radius is None or self.mode_spec.bend_radius == 0.0:
             half_length = 0.5 * self.length
 
-            def polyslab_vertices(x, w):
+            def polyslab_vertices(
+                x: float, w: float
+            ) -> tuple[list[float], list[float], list[float], list[float]]:
                 return (
                     self._transform_in_plane(x, -half_length),
                     self._transform_in_plane(x + w, -half_length),
@@ -633,7 +638,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             sin = numpy.sin(angles)
             cos = numpy.cos(angles)
 
-            def polyslab_vertices(x, w):
+            def polyslab_vertices(x: float, w: float) -> list[list[float]]:
                 r_in = bend_radius + x
                 v_in = numpy.vstack((-bend_radius + r_in * cos, r_in * sin)).T
                 r_out = r_in + w
@@ -1098,7 +1103,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     def plot_field(
         self,
         field_name: str,
-        val: Literal["real", "imag", "abs"] = "real",
+        val: Literal["real", "imag", abs] = "real",
         eps_alpha: float = 0.2,
         robust: bool = True,
         vmin: Optional[float] = None,

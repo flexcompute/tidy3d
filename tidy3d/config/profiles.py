@@ -52,6 +52,13 @@ BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
             },
         }
     },
+    "test": {
+        "web": {
+            "s3_region": "test",
+            "api_endpoint": "https://test",
+            "website_endpoint": "https://test",
+        }
+    },
 }
 
 __all__ = ["BUILTIN_PROFILES"]

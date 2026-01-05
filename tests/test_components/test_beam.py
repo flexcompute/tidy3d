@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pd
 import pytest
+from pydantic import ValidationError
 
 from tidy3d.components.beam import (
     AstigmaticGaussianBeamProfile,
@@ -156,7 +156,7 @@ def test_invalid_beam_size():
     center = (0, 0, 0)
     size = (10, 10, 10)
     resolution = 100
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         GaussianBeamProfile(center=center, size=size, resolution=resolution, freqs=FREQS)
 
 

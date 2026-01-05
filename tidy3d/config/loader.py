@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import toml
 import tomlkit
@@ -16,6 +16,9 @@ from tidy3d.log import log
 
 from .profiles import BUILTIN_PROFILES
 from .serializer import build_document, collect_descriptions
+
+if TYPE_CHECKING:
+    from typing import Optional
 
 
 class ConfigLoader:

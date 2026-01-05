@@ -50,16 +50,27 @@ class _FitterRequest(BaseModel):
 class MaterialFitterTask(Submittable):
     """Material Fitter Task."""
 
-    id: str = Field(title="Task ID", description="Task ID")
-    dispersion_fitter: DispersionFitter = Field(
-        title="Dispersion Fitter", description="Dispersion Fitter data"
+    id: str = Field(
+        title="Task ID",
+        description="Task ID",
     )
-    status: str = Field(title="Task Status", description="Task Status")
+    dispersion_fitter: DispersionFitter = Field(
+        title="Dispersion Fitter",
+        description="Dispersion Fitter data",
+    )
+    status: str = Field(
+        title="Task Status",
+        description="Task Status",
+    )
     file_name: str = Field(
-        ..., title="file name", description="fitter data file name", alias="fileName"
+        title="file name",
+        description="fitter data file name",
+        alias="fileName",
     )
     resource_path: str = Field(
-        ..., title="resource path", description="resource path", alias="resourcePath"
+        title="resource path",
+        description="resource path",
+        alias="resourcePath",
     )
 
     @classmethod

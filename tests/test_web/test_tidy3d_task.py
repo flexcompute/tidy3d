@@ -7,19 +7,13 @@ import responses
 from responses import matchers
 
 import tidy3d as td
+from tidy3d import config
 from tidy3d.web.core import http_util
-from tidy3d.web.core.environment import Env, EnvironmentConfig
+from tidy3d.web.core.environment import Env
 from tidy3d.web.core.task_core import Folder, SimulationTask
 from tidy3d.web.core.types import PayType, TaskType
 
-test_env = EnvironmentConfig(
-    name="test",
-    s3_region="test",
-    web_api_endpoint="https://test",
-    website_endpoint="https://test",
-)
-
-Env.set_current(test_env)
+config.switch_profile("test")
 
 
 def make_sim():

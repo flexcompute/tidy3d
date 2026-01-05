@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging as log
+from typing import TYPE_CHECKING
 
-from rich.console import Console
+if TYPE_CHECKING:
+    from rich.console import Console
 
-from tidy3d.log import Logger
+    from tidy3d.log import Logger
 
 # default setting
 config_setting = {

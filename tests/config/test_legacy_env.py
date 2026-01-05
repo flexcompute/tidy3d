@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import importlib
 import os
 import ssl
 import warnings
 
+import pytest
+
 from tidy3d.config import Env, get_manager, reload_config
 from tidy3d.config import config as config_wrapper
+
+
+@pytest.fixture
+def suppress_legacy_env_deprecated_warning(monkeypatch):
+    """Patch Env deprecation helper to a no-op for tests that don't want the warning."""
+    legacy_module = importlib.import_module("tidy3d.config.legacy")
+    monkeypatch.setattr(legacy_module, "_warn_env_deprecated", lambda: None)
 
 
 def test_env_tracks_profile_switch(config_manager):
@@ -21,7 +31,11 @@ def test_env_tracks_profile_switch(config_manager):
         reload_config(profile="default")
 
 
-def test_env_pending_overrides_apply_on_activation(mock_config_dir, config_manager):
+def test_env_pending_overrides_apply_on_activation(
+    mock_config_dir,
+    config_manager,
+    suppress_legacy_env_deprecated_warning,
+):
     """Queued overrides should land once the corresponding profile is activated."""
 
     del mock_config_dir
@@ -50,7 +64,12 @@ def test_env_pending_overrides_apply_on_activation(mock_config_dir, config_manag
         reload_config(profile="default")
 
 
-def test_env_vars_follow_profile_switch(mock_config_dir, monkeypatch, config_manager):
+def test_env_vars_follow_profile_switch(
+    mock_config_dir,
+    monkeypatch,
+    config_manager,
+    suppress_legacy_env_deprecated_warning,
+):
     """Environment variables applied via Env should restore previous values on switch."""
 
     del mock_config_dir

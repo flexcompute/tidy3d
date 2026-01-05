@@ -2,27 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.components.data.monitor_data import MonitorData
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.microwave.base import MicrowaveBaseModel
-from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
 from tidy3d.constants import C_0
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.data.base import AbstractComponentModelerData
-from tidy3d.plugins.smatrix.data.data_array import (
-    PortDataArray,
-    PortNameDataArray,
-    TerminalPortDataArray,
-)
+from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
 from tidy3d.plugins.smatrix.ports.types import LumpedPortType
-from tidy3d.plugins.smatrix.types import NetworkIndex, SParamDef
+from tidy3d.plugins.smatrix.types import SParamDef
 from tidy3d.plugins.smatrix.utils import (
     ab_to_s,
     check_port_impedance_sign,
@@ -33,23 +26,31 @@ from tidy3d.plugins.smatrix.utils import (
     s_to_z,
 )
 
+if TYPE_CHECKING:
+    from typing import Union
+
+    from tidy3d.components.data.monitor_data import MonitorData
+    from tidy3d.components.data.sim_data import SimulationData
+    from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
+    from tidy3d.plugins.smatrix.data.data_array import PortNameDataArray
+    from tidy3d.plugins.smatrix.types import NetworkIndex
+
 
 class MicrowaveSMatrixData(MicrowaveBaseModel):
     """Stores the computed S-matrix and reference impedances for the terminal ports."""
 
-    port_reference_impedances: Optional[PortDataArray] = pd.Field(
+    port_reference_impedances: Optional[PortDataArray] = Field(
         None,
         title="Port Reference Impedances",
         description="Reference impedance for each port used in the S-parameter calculation. This is optional and may not be present if not specified or computed.",
     )
 
-    data: TerminalPortDataArray = pd.Field(
-        ...,
+    data: TerminalPortDataArray = Field(
         title="S-Matrix Data",
         description="An array containing the computed S-matrix of the device. The data is organized by terminal ports, representing the scattering parameters between them.",
     )
 
-    s_param_def: SParamDef = pd.Field(
+    s_param_def: SParamDef = Field(
         "pseudo",
         title="Scattering Parameter Definition",
         description="Wave definition: 'pseudo', 'power', or 'symmetric_pseudo'.",
@@ -99,7 +100,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
             Microwave Theory Tech., vol. 13, no. 2, pp. 194-202, March 1965.
     """
 
-    modeler: TerminalComponentModeler = pd.Field(
+    modeler: TerminalComponentModeler = Field(
         ...,
         title="TerminalComponentModeler",
         description="The original :class:`.TerminalComponentModeler` object that defines the simulation setup "

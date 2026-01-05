@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 from html import escape
+from typing import TYPE_CHECKING
 
 from tidy3d.exceptions import SetupError
 
+if TYPE_CHECKING:
+    from typing import Union
 
-def plot_scene_3d(scene, width=800, height=800) -> None:
+    from IPython.core.display_functions import DisplayHandle
+
+    from tidy3d import Scene, Simulation
+
+
+def plot_scene_3d(scene: Scene, width: int = 800, height: int = 800) -> None:
     import gzip
     import json
     from base64 import b64encode
@@ -23,7 +31,7 @@ def plot_scene_3d(scene, width=800, height=800) -> None:
         buffer2 = BytesIO()
         with h5py.File(buffer2, "w") as dst:
 
-            def copy_item(name, obj) -> None:
+            def copy_item(name: str, obj: h5py.Group | h5py.Dataset) -> None:
                 if isinstance(obj, h5py.Group):
                     dst.create_group(name)
                     for k, v in obj.attrs.items():
@@ -60,7 +68,9 @@ def plot_scene_3d(scene, width=800, height=800) -> None:
     plot_sim_3d(sim_base64, width=width, height=height, is_gz_base64=True)
 
 
-def plot_sim_3d(sim, width=800, height=800, is_gz_base64=False) -> None:
+def plot_sim_3d(
+    sim: Union[Simulation, str], width: int = 800, height: int = 800, is_gz_base64: bool = False
+) -> DisplayHandle:
     """Make 3D display of simulation in ipython notebook."""
 
     try:

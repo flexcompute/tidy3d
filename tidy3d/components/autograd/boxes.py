@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import importlib
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
 from autograd.extend import VJPNode, defjvp, register_notrace
 from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.numpy.numpy_wrapper import _astype
+
+if TYPE_CHECKING:
+    from typing import Callable
 
 TidyArrayBox = ArrayBox  # NOT a subclass
 
@@ -26,7 +29,7 @@ anp.permute_dims = anp.transpose
 
 
 @classmethod
-def from_arraybox(cls, box: ArrayBox) -> TidyArrayBox:
+def from_arraybox(cls: Any, box: ArrayBox) -> TidyArrayBox:
     """Construct a TidyArrayBox from an ArrayBox."""
     return cls(box._value, box._trace, box._node)
 
@@ -47,11 +50,11 @@ def __array_function__(
         The instance of the class.
     func : Callable
         The NumPy function being called.
-    types : List[Any]
+    types : list[Any]
         The types of the arguments that implement __array_function__.
-    args : Tuple[Any, ...]
+    args : tuple[Any, ...]
         The positional arguments to the function.
-    kwargs : Dict[str, Any]
+    kwargs : dict[str, Any]
         The keyword arguments to the function.
 
     Returns
@@ -118,7 +121,7 @@ def __array_ufunc__(
         The method of the ufunc being called.
     inputs : Any
         The input arguments to the ufunc.
-    kwargs : Dict[str, Any]
+    kwargs : dict[str, Any]
         The keyword arguments to the ufunc.
 
     Returns
@@ -142,7 +145,7 @@ def __array_ufunc__(
     return NotImplemented
 
 
-def item(self):
+def item(self: Any) -> Any:
     if self.size != 1:
         raise ValueError("Can only convert an array of size 1 to a scalar")
     return anp.ravel(self)[0]
@@ -153,7 +156,6 @@ TidyArrayBox.from_arraybox = from_arraybox
 TidyArrayBox.__array_namespace__ = lambda self, *, api_version=None: anp
 TidyArrayBox.__array_ufunc__ = __array_ufunc__
 TidyArrayBox.__array_function__ = __array_function__
-TidyArrayBox.__repr__ = str
 TidyArrayBox.real = property(anp.real)
 TidyArrayBox.imag = property(anp.imag)
 TidyArrayBox.conj = anp.conj

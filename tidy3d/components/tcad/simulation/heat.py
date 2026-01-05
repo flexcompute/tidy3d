@@ -3,14 +3,18 @@ NOTE: Keeping this class for backward compatibility only"""
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Any
 
-import pydantic.v1 as pd
+from pydantic import model_validator
 
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-from tidy3d.components.types import Ax
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from tidy3d.components.types import Ax
 
 
 class HeatSimulation(HeatChargeSimulation):
@@ -47,14 +51,15 @@ class HeatSimulation(HeatChargeSimulation):
     ... )
     """
 
-    @pd.root_validator(skip_on_failure=True)
-    def issue_warning_deprecated(cls, values):
+    @model_validator(mode="before")
+    @classmethod
+    def issue_warning_deprecated(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Issue warning for 'HeatSimulations'."""
         log.warning(
             "Setting up deprecated 'HeatSimulation'. "
             "Consider defining 'HeatChargeSimulation' instead."
         )
-        return values
+        return data
 
     @equal_aspect
     @add_ax_if_none

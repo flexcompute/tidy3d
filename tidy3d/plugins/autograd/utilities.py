@@ -2,16 +2,23 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from functools import reduce, wraps
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, overload
 
 import autograd.numpy as anp
 import numpy as np
 import xarray as xr
-from numpy.typing import NDArray
 
 from tidy3d.exceptions import Tidy3dError
 
-from .types import KernelType
+if TYPE_CHECKING:
+    from typing import Callable, Optional, Union
+
+    from numpy.typing import NDArray
+
+    from .types import KernelType
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 def _kernel_circular(size: Iterable[int]) -> NDArray:
@@ -100,7 +107,7 @@ def get_kernel_size_px(
 
     Returns
     -------
-    Union[int, List[int]]
+    Union[int, list[int]]
         The size of the kernel in pixels for each dimension. Returns an integer if the radius is scalar, otherwise a list of integers.
 
     Raises
@@ -112,9 +119,9 @@ def get_kernel_size_px(
         raise ValueError("Either 'size_px' or both 'radius' and 'dl' must be provided.")
 
     if np.isscalar(radius):
-        radius = [radius] * len(dl) if isinstance(dl, Iterable) else [radius]
+        radius = [radius] * len(dl) if isinstance(dl, Iterable) else [radius]  # type: ignore[list-item]
     if np.isscalar(dl):
-        dl = [dl] * len(radius)
+        dl = [dl] * len(radius)  # type: ignore[list-item]
 
     radius_px = [np.ceil(r / g) for r, g in zip(radius, dl)]
     return (
@@ -124,7 +131,7 @@ def get_kernel_size_px(
     )
 
 
-def chain(*funcs: Union[Callable, Iterable[Callable]]):
+def chain(*funcs: Union[Callable, Iterable[Callable]]) -> Callable[[NDArray], NDArray]:
     """Chain multiple functions together to apply them sequentially to an array.
 
     Parameters
@@ -162,13 +169,25 @@ def chain(*funcs: Union[Callable, Iterable[Callable]]):
     if not all(callable(f) for f in funcs):
         raise TypeError("All elements in funcs must be callable.")
 
-    def chained(array: NDArray):
+    def chained(array: NDArray) -> NDArray:
         return reduce(lambda x, y: y(x), funcs, array)
 
     return chained
 
 
-def scalar_objective(func: Optional[Callable] = None, *, has_aux: bool = False) -> Callable:
+@overload
+def scalar_objective(
+    func: None = None, *, has_aux: bool = False
+) -> Callable[[Callable[P, Any]], Callable[P, Any]]: ...
+
+
+@overload
+def scalar_objective(func: Callable[P, Any], *, has_aux: bool = False) -> Callable[P, Any]: ...
+
+
+def scalar_objective(
+    func: Optional[Callable[P, Any]] = None, *, has_aux: bool = False
+) -> Callable[..., Any]:
     """Decorator to ensure the objective function returns a real scalar value.
 
     This decorator wraps an objective function to ensure that its return value is a real scalar.
@@ -194,51 +213,45 @@ def scalar_objective(func: Optional[Callable] = None, *, has_aux: bool = False) 
     Tidy3dError
         If the return value is not a real scalar, or if `has_aux` is True and the function does not return a tuple of length 2.
     """
-    if func is None:
-        return lambda f: scalar_objective(f, has_aux=has_aux)
 
-    @wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        result = func(*args, **kwargs)
-        aux_data = None
+    def decorator(f: Callable[P, Any]) -> Callable[P, Any]:
+        @wraps(f)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
+            result = f(*args, **kwargs)
+            aux_data = None
 
-        # Unpack auxiliary data if present
-        if has_aux:
-            if not isinstance(result, tuple) or len(result) != 2:
+            if has_aux:
+                if not isinstance(result, tuple) or len(result) != 2:
+                    raise Tidy3dError(
+                        "If 'has_aux' is True, the objective function must return a tuple of length 2."
+                    )
+                result, aux_data = result
+
+            if isinstance(result, xr.DataArray):
+                result = result.data
+
+            result = anp.squeeze(result)
+
+            try:
+                result = result.item()
+            except AttributeError:
+                if not isinstance(result, (float, int)):
+                    raise Tidy3dError(
+                        "An objective function's return value must be a scalar, "
+                        "a Python float/int, or an array containing a single element."
+                    ) from None
+            except ValueError as e:
                 raise Tidy3dError(
-                    "If 'has_aux' is True, the objective function must return a tuple of length 2."
-                )
-            result, aux_data = result
+                    "An objective function's return value must be a scalar "
+                    "but got an array with shape "
+                    f"{getattr(result, 'shape', 'N/A')}."
+                ) from e
 
-        # Extract data from xarray.DataArray
-        if isinstance(result, xr.DataArray):
-            result = result.data
+            if not anp.isreal(result):
+                raise Tidy3dError("An objective function's return value must be real.")
 
-        # Squeeze to remove singleton dimensions
-        result = anp.squeeze(result)
+            return (result, aux_data) if aux_data is not None else result
 
-        # Attempt to extract scalar value
-        try:
-            result = result.item()
-        except AttributeError:
-            # If result is already a scalar, pass
-            if not isinstance(result, (float, int)):
-                raise Tidy3dError(
-                    "An objective function's return value must be a scalar, "
-                    "a Python float/int, or an array containing a single element."
-                ) from None
-        except ValueError as e:
-            # Result contains more than one element
-            raise Tidy3dError(
-                "An objective function's return value must be a scalar "
-                "but got an array with shape "
-                f"{getattr(result, 'shape', 'N/A')}."
-            ) from e
+        return wrapper
 
-        # Ensure the result is real
-        if not anp.isreal(result):
-            raise Tidy3dError("An objective function's return value must be real.")
-
-        return (result, aux_data) if aux_data is not None else result
-
-    return wrapper
+    return decorator(func) if func is not None else decorator

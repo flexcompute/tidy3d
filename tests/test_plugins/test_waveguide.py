@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from pydantic.v1 import ValidationError
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.plugins import waveguide
@@ -81,6 +81,22 @@ def test_non_metallic_validator():
             clad_medium=[td.Medium(permittivity=1.45**2)] * 2,
             box_medium=[td.Medium(permittivity=1.45**2), td.material_library["Ag"].medium],
         )
+
+
+def test_non_metallic_validator_skips_on_invalid_wavelength():
+    """Avoid `KeyError` in validators that depend on `wavelength` when `wavelength` fails validation."""
+    with pytest.raises(ValidationError) as excinfo:
+        waveguide.RectangularDielectric(
+            wavelength="not-a-number",
+            core_width=0.3,
+            core_thickness=0.22,
+            core_medium=td.Medium(permittivity=3.48**2),
+            clad_medium=td.Medium(permittivity=1.45**2),
+        )
+
+    errors = excinfo.value.errors()
+    assert any(err["loc"][0] == "wavelength" for err in errors)
+    assert not any(err["loc"][0] in {"core_medium", "clad_medium", "box_medium"} for err in errors)
 
 
 def test_layer_validators():

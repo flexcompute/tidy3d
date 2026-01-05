@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from tidy3d.components.geometry.polyslab import ComplexPolySlabBase
-from tidy3d.components.medium import MediumType
 from tidy3d.components.structure import Structure
+
+if TYPE_CHECKING:
+    from tidy3d.components.medium import MediumType
 
 
 class ComplexPolySlab(ComplexPolySlabBase):

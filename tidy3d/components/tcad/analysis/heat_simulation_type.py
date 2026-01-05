@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat, PositiveInt
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import KELVIN, SECOND
@@ -20,14 +20,14 @@ class UnsteadySpec(Tidy3dBaseModel):
     ... )
     """
 
-    time_step: pd.PositiveFloat = pd.Field(
+    time_step: PositiveFloat = Field(
         ...,
         title="Time-step",
         description="Time step taken for each iteration of the time integration loop.",
-        units=SECOND,
+        json_schema_extra={"units": SECOND},
     )
 
-    total_time_steps: pd.PositiveInt = pd.Field(
+    total_time_steps: PositiveInt = Field(
         ...,
         title="Total time steps",
         description="Specifies the total number of time steps run during the simulation.",
@@ -50,14 +50,14 @@ class UnsteadyHeatAnalysis(Tidy3dBaseModel):
     ... )
     """
 
-    initial_temperature: pd.PositiveFloat = pd.Field(
+    initial_temperature: PositiveFloat = Field(
         ...,
         title="Initial temperature.",
         description="Initial value for the temperature field.",
-        units=KELVIN,
+        json_schema_extra={"units": KELVIN},
     )
 
-    unsteady_spec: UnsteadySpec = pd.Field(
+    unsteady_spec: UnsteadySpec = Field(
         ...,
         title="Unsteady specification",
         description="Time step and total time steps for the unsteady simulation.",

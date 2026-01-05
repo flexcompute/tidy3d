@@ -17,13 +17,13 @@ def test_logging_level():
 
     # check setting all levels
     for key, val in _level_value.items():
-        td.config.logging_level = key
+        td.config.logging.level = key
         assert td.log.handlers["console"].level == val
 
 
 def test_log_level_not_found():
     with pytest.raises(ValidationError):
-        td.config.logging_level = "NOT_A_LEVEL"
+        td.config.logging.level = "NOT_A_LEVEL"
 
 
 def _test_frozen():

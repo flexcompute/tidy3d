@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
+import pydantic as pd
 import pytest
 
 import tidy3d as td
@@ -56,18 +56,18 @@ def test_from_n_less_than_1():
 
 def test_medium():
     # mediums error with unacceptable values
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Medium(permittivity=0.0)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Medium(conductivity=-1.0)
 
 
 def test_validate_largest_pole_parameters():
     # error for large pole parameters
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.PoleResidue(poles=[((-1e50 + 2j), (1 + 3j))])
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.PoleResidue(poles=[((-1 + 2j), (1e50 + 3j))])
 
 
@@ -158,30 +158,30 @@ def test_PMC():
 
 def test_lossy_metal():
     # frequency_range shouldn't be None
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.LossyMetalMedium(conductivity=1)
-    # frequency_range shouldn't contain non-postive values
-    with pytest.raises(pydantic.ValidationError):
+    # frequency_range shouldn't contain non-positive values
+    with pytest.raises(pd.ValidationError):
         _ = td.LossyMetalMedium(conductivity=1, frequency_range=(0, 10))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.LossyMetalMedium(conductivity=1, frequency_range=(-10, 10))
 
     # frequency_range should be finite
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.LossyMetalMedium(conductivity=1, frequency_range=(10, np.inf))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.LossyMetalMedium(conductivity=1, frequency_range=(-np.inf, 10))
 
     # allow_gain cannot be true
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.LossyMetalMedium(allow_gain=True, conductivity=1, frequency_range=(10, 20))
 
     # conductivity cannot be negative
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.LossyMetalMedium(conductivity=-1, frequency_range=(10, 20))
 
     # conductivity cannot be 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.LossyMetalMedium(conductivity=0, frequency_range=(10, 20))
 
     # default fitting
@@ -232,13 +232,13 @@ def test_medium_dispersion():
     m_DR = td.Drude(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
     m_DB = td.Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Sellmeier(coeffs=[(2, 0), (2, 4)])
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Drude(eps_inf=1.0, coeffs=[(1, 0), (2, 4)])
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Debye(eps_inf=1.0, coeffs=[(1, 0), (2, 4)])
 
     freqs = np.linspace(0.01, 1, 1001)
@@ -442,27 +442,27 @@ def test_n_cfl():
 def test_gain_medium():
     """Test passive and gain medium validations."""
     # non-dispersive
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Medium(conductivity=-0.1)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Medium(conductivity=-1.0, allow_gain=False)
     _ = td.Medium(conductivity=-1.0, allow_gain=True)
 
     # pole residue, causality
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.PoleResidue(eps_inf=0.16, poles=[(1 + 1j, 2 + 2j)])
 
     # Sellmeier
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Sellmeier(coeffs=((-1, 1),))
     mS = td.Sellmeier(coeffs=((-1, 1),), allow_gain=True)
 
     # Lorentz
     # causality, negative gamma
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Lorentz(eps_inf=0.04, coeffs=[(1, 2, -3)])
     # gain, negative Delta epsilon
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)])
     mL = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)], allow_gain=True)
     assert mL.pole_residue.allow_gain
@@ -471,7 +471,7 @@ def test_gain_medium():
     _ = td.Lorentz(eps_inf=0.04, coeffs=[(1, -2, 3)])
 
     # Drude, only causality constraint
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Drude(eps_inf=0.04, coeffs=[(1, -2)])
 
     # anisotropic medium, warn allow_gain is ignored
@@ -516,7 +516,7 @@ def test_medium2d():
         _ = medium.plot(freqs=[2e14, 3e14], ax=AX)
     plt.close()
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Medium2D(ss=td.PECMedium(), tt=td.Medium())
 
 
@@ -559,24 +559,24 @@ def test_fully_anisotropic_media():
     _ = td.FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
 
     # check that tensors are provided
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         td.FullyAnisotropicMedium(permittivity=2)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         td.FullyAnisotropicMedium(permittivity=[3, 4, 2])
 
     # check that permittivity >= 1 and conductivity >= 0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         td.FullyAnisotropicMedium(permittivity=[[3, 0, 0], [0, 0.5, 0], [0, 0, 1]])
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         td.FullyAnisotropicMedium(conductivity=[[-3, 0, 0], [0, 0.5, 0], [0, 0, 1]])
     td.FullyAnisotropicMedium(conductivity=[[-3, 0, 0], [0, 0.5, 0], [0, 0, 1]], allow_gain=True)
 
     # check that permittivity needs to be symmetric
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         td.FullyAnisotropicMedium(permittivity=[[3, 0.1, 0], [0.2, 2, 0], [0, 0, 1]])
 
     # check that differently oriented permittivity and conductivity are not accepted
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         td.FullyAnisotropicMedium(permittivity=perm, conductivity=cond2)
 
     # check creation from diagonal medium
@@ -660,7 +660,7 @@ def test_nonlinear_medium():
         med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
 
     # don't use deprecated numiters
-    with pytest.raises(ValidationError):
+    with pytest.raises(pd.ValidationError):
         med = td.Medium(
             nonlinear_spec=td.NonlinearSpec(models=[td.NonlinearSusceptibility(chi3=1, numiters=2)])
         )
@@ -669,15 +669,15 @@ def test_nonlinear_medium():
     med = td.PoleResidue(poles=[(-1, 1)], nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
 
     # unsupported material types
-    with pytest.raises(ValidationError):
+    with pytest.raises(pd.ValidationError):
         med = td.AnisotropicMedium(
             xx=med, yy=med, zz=med, nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5)
         )
 
     # numiters too large
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=200))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         med = td.Medium(
             nonlinear_spec=td.NonlinearSpec(
                 num_iters=200, models=[td.NonlinearSusceptibility(chi3=1.5)]
@@ -685,7 +685,7 @@ def test_nonlinear_medium():
         )
 
     # duplicate models
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         med = td.Medium(
             nonlinear_spec=td.NonlinearSpec(
                 models=[
@@ -696,7 +696,7 @@ def test_nonlinear_medium():
         )
 
     # active materials
-    with pytest.raises(ValidationError):
+    with pytest.raises(pd.ValidationError):
         med = td.Medium(
             nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1, freq0=1)])
         )
@@ -724,28 +724,28 @@ def test_nonlinear_medium():
     # subsection with nonlinear materials preserves sources
     sim2 = sim.updated_copy(center=(-4, -4, -4), path="sources/0")
     sim2 = sim2.updated_copy(
-        models=[td.TwoPhotonAbsorption(beta=1)], path="structures/0/medium/nonlinear_spec"
+        models=(td.TwoPhotonAbsorption(beta=1),), path="structures/0/medium/nonlinear_spec"
     )
     sim2 = sim2.subsection(region=td.Box(center=(0, 0, 0), size=(1, 1, 0)))
 
     nonlinear_spec = td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1, n0=1)])
     structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
-    sim = sim.updated_copy(structures=[structure])
+    sim = sim.updated_copy(structures=(structure,))
 
     nonlinear_spec = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, n0=1)])
     structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
     sim = sim.updated_copy(structures=[structure])
     nonlinear_spec = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, n0=1, freq0=1)])
     structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
-    sim = sim.updated_copy(structures=[structure])
+    sim = sim.updated_copy(structures=(structure,))
 
     # active materials with automatic detection of n0
     nonlinear_spec_active = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1)])
-    with pytest.raises(ValidationError):
+    with pytest.raises(pd.ValidationError):
         medium_active = medium.updated_copy(nonlinear_spec=nonlinear_spec_active)
 
     # inconsistent n0
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.NonlinearSpec(
             models=[td.KerrNonlinearity(n0=1, n2=1), td.TwoPhotonAbsorption(beta=1, n0=2)]
         )
@@ -762,9 +762,9 @@ def test_nonlinear_medium():
     MODULATION_SPEC = td.ModulationSpec()
     modulation_spec = MODULATION_SPEC.updated_copy(permittivity=ST)
     modulated = td.Medium(permittivity=2, modulation_spec=modulation_spec)
-    with pytest.raises(ValidationError):
+    with pytest.raises(pd.ValidationError):
         td.Medium2D(ss=medium, tt=medium)
-    with pytest.raises(ValidationError):
+    with pytest.raises(pd.ValidationError):
         td.Medium2D(ss=modulated, tt=modulated)
 
     grid_spec = td.GridSpec.auto(min_steps_per_wvl=10, wavelength=1)
@@ -778,7 +778,7 @@ def test_nonlinear_medium():
             interval=1, size=(0, 0, 0), name="aux_field_time", fields=aux_fields
         )
         sim = sim.updated_copy(medium=med, path="structures/0")
-        sim = sim.updated_copy(monitors=[monitor])
+        sim = sim.updated_copy(monitors=(monitor,))
 
     with AssertLogLevel("WARNING", contains_str="stores field"):
         med = td.Medium(
@@ -821,7 +821,7 @@ def test_custom_medium():
     with AssertLogLevel(None):
         create_mediums(n_dataset=n_dataset)
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         # repeat some entries so data cannot be interpolated
         X2 = [X[0], *list(X)]
         n_data2 = np.vstack((n_data[0, :, :, :].reshape(1, Ny, Nz, Nf), n_data))

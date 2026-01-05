@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Union
 
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat
 
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.geometry.base import Box
@@ -16,10 +16,15 @@ from tidy3d.components.monitor import (
     ModeMonitor,
 )
 from tidy3d.components.source.field import AstigmaticGaussianBeam, GaussianBeam, ModeSource
-from tidy3d.components.source.time import GaussianPulse, SourceTimeType
+from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Direction
 from tidy3d.constants import MICROMETER, RADIAN
 from tidy3d.plugins.smatrix.ports.base import AbstractBasePort
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from tidy3d.components.source.time import SourceTimeType
 
 
 class ModalPortDataArray(DataArray):
@@ -57,8 +62,7 @@ class AbstractPort(AbstractBasePort, Box, ABC):
         is calculated.
     """
 
-    direction: Direction = pd.Field(
-        ...,
+    direction: Direction = Field(
         title="Direction",
         description="'+' or '-', defining which direction is considered 'input'.",
     )
@@ -72,8 +76,8 @@ class AbstractPort(AbstractBasePort, Box, ABC):
 class Port(AbstractPort):
     """Specifies a modal port for S-matrix calculation."""
 
-    mode_spec: ModeSpec = pd.Field(
-        ModeSpec(),
+    mode_spec: ModeSpec = Field(
+        default_factory=ModeSpec,
         title="Mode Specification",
         description="Specifies how the mode solver will solve for the modes of the port.",
     )
@@ -121,44 +125,44 @@ class Port(AbstractPort):
 class AbstractGaussianPort(AbstractPort, ABC):
     """Abstract base for Gaussian-like ports (Gaussian and AstigmaticGaussian)."""
 
-    angle_theta: float = pd.Field(
+    angle_theta: float = Field(
         0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the injection axis.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
-    angle_phi: float = pd.Field(
+    angle_phi: float = Field(
         0.0,
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
-    pol_angle: float = pd.Field(
+    pol_angle: float = Field(
         0.0,
         title="Polarization Angle",
         description="Angle between E-field polarization and the plane defined by the injection axis and propagation axis. "
         "0 => P polarization, pi/2 => S polarization.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
 
 class GaussianPort(AbstractGaussianPort):
     """Specifies a Gaussian port for S-matrix calculation."""
 
-    waist_radius: pd.PositiveFloat = pd.Field(
+    waist_radius: PositiveFloat = Field(
         1.0,
         title="Waist Radius",
         description="Radius of the beam at the waist.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
-    waist_distance: float = pd.Field(
+    waist_distance: float = Field(
         0.0,
         title="Waist Distance",
         description="Distance from the beam waist along the propagation direction. "
         "A positive value places the waist behind the port plane (toward the negative normal axis). "
         "A negative value places the waist in front of the port plane. "
         "This definition is independent of the ``direction`` parameter.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     def to_monitor(self, freqs: tuple[float, ...]) -> GaussianOverlapMonitor:
@@ -206,13 +210,13 @@ class GaussianPort(AbstractGaussianPort):
 class AstigmaticGaussianPort(AbstractGaussianPort):
     """Specifies an astigmatic Gaussian port for S-matrix calculation."""
 
-    waist_sizes: tuple[pd.PositiveFloat, pd.PositiveFloat] = pd.Field(
+    waist_sizes: tuple[PositiveFloat, PositiveFloat] = Field(
         (1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
-    waist_distances: tuple[float, float] = pd.Field(
+    waist_distances: tuple[float, float] = Field(
         (0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
@@ -220,7 +224,7 @@ class AstigmaticGaussianPort(AbstractGaussianPort):
         "Positive values place the waist behind the port plane (toward the negative normal axis); "
         "negative values place the waist in front of the port plane. "
         "This definition is independent of the ``direction`` parameter.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     def to_monitor(self, freqs: tuple[float, ...]) -> AstigmaticGaussianOverlapMonitor:

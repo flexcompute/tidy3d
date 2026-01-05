@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.tcad.monitors.abstract import HeatChargeMonitor
 from tidy3d.log import log
@@ -22,8 +22,9 @@ class SteadyPotentialMonitor(HeatChargeMonitor):
     ... )
     """
 
-    @pd.root_validator(pre=True)
-    def _warn_unstructured_default_change(cls, values):
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_unstructured_default_change(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Warn users that the default value of 'unstructured' will change to True after the 2.11 release."""
         # Only warn if 'unstructured' is not explicitly set (using default False)
         if "unstructured" not in values:
@@ -49,7 +50,7 @@ class SteadyFreeCarrierMonitor(HeatChargeMonitor):
     """
 
     # NOTE: for the time being supporting unstructured
-    unstructured: Literal[True] = pd.Field(
+    unstructured: Literal[True] = Field(
         True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
@@ -69,7 +70,7 @@ class SteadyEnergyBandMonitor(HeatChargeMonitor):
     """
 
     # NOTE: for the time being supporting unstructured
-    unstructured: Literal[True] = pd.Field(
+    unstructured: Literal[True] = Field(
         True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
@@ -89,7 +90,7 @@ class SteadyCapacitanceMonitor(HeatChargeMonitor):
     """
 
     # NOTE: for the time being supporting unstructured
-    unstructured: Literal[True] = pd.Field(
+    unstructured: Literal[True] = Field(
         True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
@@ -108,7 +109,7 @@ class SteadyElectricFieldMonitor(HeatChargeMonitor):
     ... )
     """
 
-    unstructured: Literal[True] = pd.Field(
+    unstructured: Literal[True] = Field(
         True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
@@ -127,7 +128,7 @@ class SteadyCurrentDensityMonitor(HeatChargeMonitor):
     ... )
     """
 
-    unstructured: Literal[True] = pd.Field(
+    unstructured: Literal[True] = Field(
         True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",

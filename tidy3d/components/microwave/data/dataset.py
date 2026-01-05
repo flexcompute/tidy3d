@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.data.data_array import (
     CurrentFreqModeDataArray,
@@ -23,22 +23,19 @@ class TransmissionLineDataset(ModeFreqDataset):
         or :class:`ModeSimulation`.
     """
 
-    Z0: ImpedanceFreqModeDataArray = pd.Field(
-        ...,
+    Z0: ImpedanceFreqModeDataArray = Field(
         title="Characteristic Impedance",
         description="The characteristic impedance of the transmission line.",
     )
 
-    voltage_coeffs: VoltageFreqModeDataArray = pd.Field(
-        ...,
+    voltage_coeffs: VoltageFreqModeDataArray = Field(
         title="Mode Voltage Coefficients",
         description="Quantity calculated for transmission lines, which associates "
         "a voltage-like quantity with each mode profile that scales linearly with the "
         "complex-valued mode amplitude.",
     )
 
-    current_coeffs: CurrentFreqModeDataArray = pd.Field(
-        ...,
+    current_coeffs: CurrentFreqModeDataArray = Field(
         title="Mode Current Coefficients",
         description="Quantity calculated for transmission lines, which associates "
         "a current-like quantity with each mode profile that scales linearly with the "

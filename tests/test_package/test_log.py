@@ -6,7 +6,7 @@ import json
 
 import numpy as np
 import pytest
-from pydantic import ValidationError
+from pydantic import ValidationError, model_validator
 
 import tidy3d as td
 from tidy3d.exceptions import Tidy3dError
@@ -25,7 +25,7 @@ def test_log():
 
 
 def test_log_config(tmp_path):
-    td.config.logging_level = "DEBUG"
+    td.config.logging.level = "DEBUG"
     td.set_logging_file(str(tmp_path / "test.log"))
     assert len(td.log.handlers) == 2
     assert td.log.handlers["console"].level == _get_level_int("DEBUG")
@@ -51,21 +51,22 @@ def test_exception_message():
 
 def test_logging_upper():
     """Make sure we get an error if lowercase."""
-    td.config.logging_level = "WARNING"
+    td.config.logging.level = "WARNING"
     with pytest.raises(ValidationError):
-        td.config.logging_level = "warning"
+        td.config.logging.level = "warning"
 
 
 def test_logging_unrecognized():
     """If unrecognized option, raise validation error."""
     with pytest.raises(ValidationError):
-        td.config.logging_level = "blah"
+        td.config.logging.level = "blah"
 
 
 def test_logging_warning_capture():
     # create sim with warnings
     domain_size = 12
 
+    td.log.set_capture(True)
     wavelength = 1
     f0 = td.C_0 / wavelength
     fwidth = f0 / 10.0
@@ -204,16 +205,15 @@ def test_logging_warning_capture():
     )
 
     # parse the entire simulation at once to capture warnings hierarchically
-    sim_dict = sim.dict()
+    sim_dict = sim.model_dump()
 
     # re-add projection monitors because it has been overwritten in validators (far_field_approx=False -> True)
     monitors = list(sim_dict["monitors"])
-    monitors[2] = proj_mnt.dict()
+    monitors[2] = proj_mnt.model_dump()
 
     sim_dict["monitors"] = monitors
 
-    td.log.set_capture(True)
-    sim = td.Simulation.parse_obj(sim_dict)
+    sim = td.Simulation.model_validate(sim_dict)
     print(sim.monitors_data_size)
     sim.validate_pre_upload()
     warning_list = td.log.captured_warnings()
@@ -224,18 +224,18 @@ def test_logging_warning_capture():
 
     # check that capture doesn't change validation errors
 
-    # validation error during parse_obj()
-    sim_dict_no_source = sim.dict()
+    # validation error during model_validate()
+    sim_dict_no_source = sim.model_dump()
     sim_dict_no_source.update({"sources": []})
 
     # validation error during validate_pre_upload()
-    sim_dict_large_mnt = sim.dict()
+    sim_dict_large_mnt = sim.model_dump()
     sim_dict_large_mnt.update({"monitors": [monitor_time.updated_copy(size=(10, 10, 10))]})
 
     # for sim_dict in [sim_dict_no_source, sim_dict_large_mnt]:
     for sim_dict in [sim_dict_no_source]:
         try:
-            sim = td.Simulation.parse_obj(sim_dict)
+            sim = td.Simulation.model_validate(sim_dict)
             sim.validate_pre_upload()
         except ValidationError as e:
             error_without = e.errors()
@@ -244,7 +244,7 @@ def test_logging_warning_capture():
 
         td.log.set_capture(True)
         try:
-            sim = td.Simulation.parse_obj(sim_dict)
+            sim = td.Simulation.model_validate(sim_dict)
             sim.validate_pre_upload()
         except ValidationError as e:
             error_with = e.errors()
@@ -252,10 +252,36 @@ def test_logging_warning_capture():
             error_with = str(e)
         td.log.set_capture(False)
 
-        print(error_without)
-        print(error_with)
+        assert str(error_without) == str(error_with)
 
-        assert error_without == error_with
+
+def test_warning_capture_during_model_validation():
+    from tidy3d.components.base import Tidy3dBaseModel
+    from tidy3d.log import log
+
+    class _CaptureChild(Tidy3dBaseModel):
+        x: int
+
+        @model_validator(mode="after")
+        def _warn_child(self):
+            log.warning("child warning")
+            return self
+
+    class _CaptureParent(Tidy3dBaseModel):
+        child: _CaptureChild
+
+        @model_validator(mode="after")
+        def _warn_parent(self):
+            log.warning("parent warning")
+            return self
+
+    td.log.set_capture(True)
+    _CaptureParent(child={"x": 1})
+    warning_list = td.log.captured_warnings()
+    td.log.set_capture(False)
+
+    assert {"loc": [], "msg": "parent warning"} in warning_list
+    assert {"loc": ["child"], "msg": "child warning"} in warning_list
 
 
 def test_log_suppression():
@@ -265,14 +291,14 @@ def test_log_suppression():
             suppressed_log.warning("Warning message")
         assert td.log._counts[30] == 3
 
-    td.config.log_suppression = False
+    td.config.logging.suppression = False
     with td.log as suppressed_log:
         assert td.log._counts is None
         for _ in range(4):
             suppressed_log.warning("Warning message")
         assert td.log._counts is None
 
-    td.config.log_suppression = True
+    td.config.logging.suppression = True
 
 
 def test_warn_once():
