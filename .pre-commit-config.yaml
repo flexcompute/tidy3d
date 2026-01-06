@@ -20,7 +20,7 @@ repos:
         entry: bash -c 'commitlint --edit || exit 0'
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
     # Zizmor version.
-    rev: v1.15.2
+    rev: v1.19.0
     hooks:
       - id: zizmor
         stages: [pre-commit]

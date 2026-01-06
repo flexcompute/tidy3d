@@ -287,7 +287,7 @@ jobs:
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
 
       - name: Run zizmor 🌈
-        run: uvx zizmor .github/workflows/*.y* --format=sarif . > results.sarif 
+        run: uvx zizmor==1.19.0 .github/workflows/*.y* --format=sarif . > results.sarif
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
 
@@ -298,7 +298,7 @@ jobs:
           category: zizmor
       
       - name: run zizmor directly  # this gets a success or fail result
-        run: uvx zizmor  .github/workflows/*.y*
+        run: uvx zizmor==1.19.0  .github/workflows/*.y*
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
   
