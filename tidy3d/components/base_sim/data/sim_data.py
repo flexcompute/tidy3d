@@ -5,7 +5,7 @@ from __future__ import annotations
 import pathlib
 from abc import ABC
 from os import PathLike
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -131,6 +131,40 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
             )
 
         return field_value
+
+    @staticmethod
+    def _apply_log_scale(
+        field_data: xr.DataArray,
+        vmin: Optional[float] = None,
+        db_factor: float = 1.0,
+    ) -> xr.DataArray:
+        """Prepare field data for log-scale plotting by handling zeros.
+
+        Takes absolute value of the data, replaces zeros with a fill value
+        (to prevent log10(0) warnings), and applies log10 scaling.
+
+        Parameters
+        ----------
+        field_data : xr.DataArray
+            The field data to prepare.
+        vmin : float, optional
+            The minimum value for the color scale. If provided, zeros are replaced
+            with ``10 ** (vmin / db_factor)`` instead of NaN.
+        db_factor : float
+            Factor to multiply the log10 result by (e.g., 20 for dB scale of field,
+            10 for dB scale of power). Default is 1 (pure log10 scale).
+
+        Returns
+        -------
+        xr.DataArray
+            The log-scaled field data.
+        """
+        fill_val = np.nan
+        if vmin is not None:
+            fill_val = 10 ** (vmin / db_factor)
+        field_data = np.abs(field_data)
+        field_data = field_data.where((field_data > 0) | np.isnan(field_data), fill_val)
+        return db_factor * np.log10(field_data)
 
     def get_monitor_by_name(self, name: str) -> AbstractMonitor:
         """Return monitor named 'name'."""

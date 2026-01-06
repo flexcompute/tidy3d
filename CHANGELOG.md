@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed output range of `tidy3d.plugins.invdes.FilterAndProject` to be between 0 and 1.
 - Cropped adjoint monitor sizes in 2D simulations to planar geometry intersection.
 - Fixed `Batch.download()` silently succeeding when background downloads fail (e.g., gzip extraction errors).
+- Handling of zero values when using `sim_data.plot_field` with `scale=dB`.
 
 ## [2.10.0] - 2025-12-18
 
