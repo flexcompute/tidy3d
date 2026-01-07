@@ -201,12 +201,6 @@ class Tidy3dBaseModel(BaseModel):
                 )
         return name
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Init method, includes post-init validators."""
-        log.begin_capture()
-        super().__init__(**kwargs)
-        log.end_capture(self)
-
     def __init_subclass__(cls: type[T], **kwargs: Any) -> None:
         """Injects a constant discriminator field before Pydantic builds the model.
 
@@ -235,10 +229,33 @@ class Tidy3dBaseModel(BaseModel):
 
     def __hash__(self) -> int:
         """Hash method."""
-        try:
-            return super().__hash__(self)
-        except TypeError:
-            return hash(self.model_dump_json())
+        # This function needs to take special care because of mutable attributes inside of frozen pydantic models
+        to_hash_list = []
+        for k, v in dict(self).items():
+            if k == "attrs":
+                continue
+            if isinstance(v, np.ndarray):
+                # numpy arrays are not hashable by default, use byte representation
+                v_hash = hashlib.md5(v.tobytes()).hexdigest()
+            elif isinstance(v, (xr.DataArray, xr.Dataset)):
+                # we choose to not hash data arrays as this would require a lot of careful handling of units, metadata.
+                # technically this is incorrect, but should never lead to bugs in current implementation
+                v_hash = str(v.__class__.__name__)
+            elif isinstance(v, list):
+                # this assumes all objects in lists are hashable by default and do not require special handling
+                v_hash = tuple([hash(vi) for vi in v])
+            else:
+                v_hash = hash(v)
+            to_hash_list.append((k, v_hash))
+
+        # attrs is mutable, use serialized output as safe hashing option
+        if self.attrs:
+            attrs_json = self.model_dump_json(include={"attrs"})
+            attrs_hash = hash(attrs_json)
+            to_hash_list.append(("attrs", attrs_hash))
+
+        result_hash = hash(tuple(to_hash_list))
+        return result_hash
 
     def _hash_self(self) -> str:
         """Hash this component with ``hashlib`` in a way that is the same every session."""
