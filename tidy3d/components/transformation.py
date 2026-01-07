@@ -13,10 +13,10 @@ from tidy3d.exceptions import ValidationError
 
 from .autograd import TracedFloat
 from .base import Tidy3dBaseModel, cached_property
-from .types import Axis, Coordinate
+from .types.base import Axis, Coordinate
 
 if TYPE_CHECKING:
-    from .types import ArrayFloat2D, TensorReal
+    from .types.base import ArrayFloat2D, TensorReal
 
 
 class AbstractRotation(ABC, Tidy3dBaseModel):

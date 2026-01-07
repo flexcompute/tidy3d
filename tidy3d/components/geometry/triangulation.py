@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import shapely
 
-from tidy3d.components.types import ArrayFloat1D
+from tidy3d.components.types.base import ArrayFloat1D
 from tidy3d.exceptions import Tidy3dError
 
 if TYPE_CHECKING:

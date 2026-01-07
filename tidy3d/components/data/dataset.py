@@ -10,7 +10,7 @@ import xarray as xr
 from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import xyz
+from tidy3d.components.types.base import xyz
 from tidy3d.constants import C_0, PICOSECOND_PER_NANOMETER_PER_KILOMETER, UnitScaling
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from numpy.typing import ArrayLike
 
     from tidy3d.compat import Self
-    from tidy3d.components.types import Axis, FreqArray
+    from tidy3d.components.types.base import Axis, FreqArray
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000

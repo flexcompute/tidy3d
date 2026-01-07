@@ -21,7 +21,7 @@ from tidy3d.components.data.data_array import (
     PointDataArray,
     SpatialDataArray,
 )
-from tidy3d.components.types import Axis
+from tidy3d.components.types.base import Axis
 from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_grid
 from tidy3d.constants import inf
 from tidy3d.exceptions import DataError
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from xarray import DataArray
 
     from tidy3d.compat import Self
-    from tidy3d.components.types import ArrayLike, Ax, Bound
+    from tidy3d.components.types.base import ArrayLike, Ax, Bound
 
 
 class TriangularGridDataset(UnstructuredGridDataset):

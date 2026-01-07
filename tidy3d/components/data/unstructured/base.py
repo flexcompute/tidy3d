@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.data.data_array import DataArray
-    from tidy3d.components.types import ArrayLike, Axis, Bound
+    from tidy3d.components.types.base import ArrayLike, Axis, Bound
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000

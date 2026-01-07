@@ -15,7 +15,7 @@ from .unstructured.tetrahedral import TetrahedralGridDataset
 from .unstructured.triangular import TriangularGridDataset
 
 if TYPE_CHECKING:
-    from tidy3d.components.types import ArrayLike
+    from tidy3d.components.types.base import ArrayLike
 
     from .data_array import DataArray
 

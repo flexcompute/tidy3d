@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from xarray import DataArray
     from xarray import DataArray as XrDataArray
 
-    from tidy3d.components.types import ArrayLike, Axis, Bound, Coordinate
+    from tidy3d.components.types.base import ArrayLike, Axis, Bound, Coordinate
 
 
 class TetrahedralGridDataset(UnstructuredGridDataset):
