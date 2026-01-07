@@ -64,7 +64,7 @@ FILE_SIZE_GB = 4.0
 common.CONNECTION_RETRY_TIME = 0.1
 INVALID_TASK_ID = "INVALID_TASK_ID"
 
-task_core_path = "tidy3d.web.core.task_core"
+task_core_path = "tidy3d._common.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
 
 Env.dev.active()
@@ -204,7 +204,7 @@ def mock_upload(monkeypatch, set_api_key):
     def mock_upload_file(*args, **kwargs):
         pass
 
-    monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_upload_file)
+    monkeypatch.setattr(f"{task_core_path}.upload_file", mock_upload_file)
 
 
 @pytest.fixture

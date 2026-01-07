@@ -5,15 +5,14 @@ from datetime import datetime
 import pytest
 import responses
 
+from tests.test_web.test_webapi import task_core_path
 from tidy3d.web.api.webapi import delete, get_info, get_tasks, real_cost, start
 
 
 @responses.activate
 def test_get_info_not_found(monkeypatch):
     """Tests that get_info raises a ValueError when the task is not found."""
-    monkeypatch.setattr(
-        "tidy3d.web.core.task_core.SimulationTask.get", lambda *args, **kwargs: None
-    )
+    monkeypatch.setattr(f"{task_core_path}.SimulationTask.get", lambda *args, **kwargs: None)
     with pytest.raises(ValueError, match="Task not found."):
         get_info("non_existent_task_id")
 
@@ -21,9 +20,7 @@ def test_get_info_not_found(monkeypatch):
 @responses.activate
 def test_start_not_found(monkeypatch):
     """Tests that start raises a ValueError when the task is not found."""
-    monkeypatch.setattr(
-        "tidy3d.web.core.task_core.SimulationTask.get", lambda *args, **kwargs: None
-    )
+    monkeypatch.setattr(f"{task_core_path}.SimulationTask.get", lambda *args, **kwargs: None)
     with pytest.raises(ValueError, match="Task not found."):
         start("non_existent_task_id")
 
@@ -42,9 +39,7 @@ def test_get_tasks_empty(monkeypatch):
         def list_tasks(self):
             return []
 
-    monkeypatch.setattr(
-        "tidy3d.web.core.task_core.Folder.get", lambda *args, **kwargs: MockFolder()
-    )
+    monkeypatch.setattr(f"{task_core_path}.Folder.get", lambda *args, **kwargs: MockFolder())
     assert get_tasks() == []
 
 
@@ -71,9 +66,7 @@ def test_get_tasks_order_old(monkeypatch):
                 MockTask(datetime(2023, 1, 3), "3"),
             ]
 
-    monkeypatch.setattr(
-        "tidy3d.web.core.task_core.Folder.get", lambda *args, **kwargs: MockFolder()
-    )
+    monkeypatch.setattr(f"{task_core_path}.Folder.get", lambda *args, **kwargs: MockFolder())
     tasks = get_tasks(order="old")
     assert [t["task_id"] for t in tasks] == ["1", "2", "3"]
 

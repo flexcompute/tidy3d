@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 from responses import matchers
 
 import tidy3d as td
+from tests.test_web.test_webapi import task_core_path
 from tidy3d.components.data.dataset import ModeIndexDataArray
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.web.api.asynchronous import run_async
@@ -35,7 +36,6 @@ FLEX_UNIT = 1.0
 EST_FLEX_UNIT = 11.11
 FILE_SIZE_GB = 4.0
 
-task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
 
 f, AX = plt.subplots()
@@ -125,9 +125,9 @@ def mock_upload(monkeypatch, set_api_key, unique_project_name):
         pass
 
     monkeypatch.setattr(
-        "tidy3d.web.core.task_core.SimulationTask.upload_simulation", mock_upload_simulation
+        f"{task_core_path}.SimulationTask.upload_simulation", mock_upload_simulation
     )
-    monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_upload_file)
+    monkeypatch.setattr(f"{task_core_path}.upload_file", mock_upload_file)
 
     return uploaded_stub
 

@@ -1,8 +1,10 @@
-"""Tidy3d core package imports"""
+"""Compatibility shim for :mod:`tidy3d._common.web.core`."""
 
+# ruff: noqa: F401 - ignore unused imports, imports ensure compatibility
+
+# marked as migrated to _common
 from __future__ import annotations
 
-# TODO(FXC-3827): Drop this import once the legacy shim is removed in Tidy3D 2.12.
-from . import environment
-
-__all__ = ["environment"]
+from tidy3d._common.web.core import (
+    environment,
+)

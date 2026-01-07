@@ -7,6 +7,7 @@ import responses
 from responses import matchers
 
 import tidy3d as td
+from tests.test_web.test_webapi import task_core_path
 from tidy3d.web.core import http_util
 from tidy3d.web.core.environment import Env, EnvironmentConfig
 from tidy3d.web.core.task_core import Folder, SimulationTask
@@ -37,7 +38,7 @@ def make_sim():
 @pytest.fixture
 def set_api_key(monkeypatch):
     """Set the api key."""
-    import tidy3d.web.core.http_util as httputil
+    import tidy3d._common.web.core.http_util as httputil
 
     monkeypatch.setattr(httputil, "api_key", lambda: "apikey")
     monkeypatch.setattr(httputil, "get_version", lambda: td.version.__version__)
@@ -91,7 +92,7 @@ def test_get_simulation_json(monkeypatch, set_api_key, tmp_path):
         to_file = kwargs["to_file"]
         sim.to_file(to_file)
 
-    monkeypatch.setattr("tidy3d.web.core.task_core.download_gz_file", mock_download)
+    monkeypatch.setattr(f"{task_core_path}.download_gz_file", mock_download)
 
     responses.add(
         responses.GET,
@@ -127,7 +128,7 @@ def test_upload(monkeypatch, set_api_key):
     def mock_download(*args, **kwargs):
         pass
 
-    monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_download)
+    monkeypatch.setattr(f"{task_core_path}.upload_file", mock_download)
     task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
     with tempfile.NamedTemporaryFile() as temp:
         task.upload_file(temp.name, "temp.json")
@@ -359,7 +360,7 @@ def test_get_log(monkeypatch, set_api_key, tmp_path):
         with open(file_path, "w") as f:
             f.write("0.3,5.7")
 
-    monkeypatch.setattr("tidy3d.web.core.task_core.download_file", mock)
+    monkeypatch.setattr(f"{task_core_path}.download_file", mock)
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",

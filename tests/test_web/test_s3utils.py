@@ -4,8 +4,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import tidy3d
+from tidy3d._common.web.core import s3utils as s3utils_common
 from tidy3d.web.core import s3utils
+
+s3_utils_path = "tidy3d._common.web.core.s3utils"
 
 
 @pytest.fixture
@@ -16,9 +18,9 @@ def mock_S3STSToken(monkeypatch):
     mock_token.get_bucket = lambda: ""
     mock_token.get_s3_key = lambda: ""
     mock_token.is_expired = lambda: False
-    mock_token.get_client = lambda: tidy3d.web.core.s3utils.boto3.client()
+    mock_token.get_client = lambda: s3utils_common.boto3.client()
     monkeypatch.setattr(
-        target=tidy3d.web.core.s3utils, name="_S3STSToken", value=MagicMock(return_value=mock_token)
+        target=s3utils_common, name="_S3STSToken", value=MagicMock(return_value=mock_token)
     )
     return mock_token
 
@@ -26,10 +28,10 @@ def mock_S3STSToken(monkeypatch):
 @pytest.fixture
 def mock_get_s3_sts_token(monkeypatch):
     def _mock_get_s3_sts_token(resource_id, remote_filename):
-        return s3utils._S3STSToken(resource_id, remote_filename)
+        return s3utils_common._S3STSToken(resource_id, remote_filename)
 
     monkeypatch.setattr(
-        target=tidy3d.web.core.s3utils, name="get_s3_sts_token", value=_mock_get_s3_sts_token
+        target=s3utils_common, name="get_s3_sts_token", value=_mock_get_s3_sts_token
     )
     return _mock_get_s3_sts_token
 
@@ -44,7 +46,7 @@ def mock_s3_client(monkeypatch):
     # Patch the `client` as it is imported within `tidy3d.web.core.s3utils.boto3` so that
     # whenever it's invoked (for example with "s3"), it returns our `mock_client`.
     monkeypatch.setattr(
-        target=tidy3d.web.core.s3utils.boto3,
+        target=s3utils_common.boto3,
         name="client",
         value=MagicMock(return_value=mock_client),
     )
@@ -148,11 +150,11 @@ def test_s3_token_get_client_with_custom_endpoint(tmp_path, monkeypatch):
 
     # Mock boto3.client
     mock_boto_client = MagicMock()
-    monkeypatch.setattr("tidy3d.web.core.s3utils.boto3.client", mock_boto_client)
+    monkeypatch.setattr(f"{s3_utils_path}.boto3.client", mock_boto_client)
 
     # Test 1: Without custom endpoint - use fresh config
     test_config = ConfigManager(config_dir=tmp_path)
-    monkeypatch.setattr("tidy3d.web.core.s3utils.config", test_config)
+    monkeypatch.setattr(f"{s3_utils_path}.config", test_config)
     token.get_client()
 
     # Verify boto3.client was called without endpoint_url
@@ -195,12 +197,12 @@ def test_s3_token_get_client_respects_ssl_verify(tmp_path, monkeypatch):
     token = _S3STSToken(**token_data)
 
     mock_boto_client = MagicMock()
-    monkeypatch.setattr("tidy3d.web.core.s3utils.boto3.client", mock_boto_client)
+    monkeypatch.setattr(f"{s3_utils_path}.boto3.client", mock_boto_client)
 
     # Use fresh config with ssl_verify=False
     test_config = ConfigManager(config_dir=tmp_path)
     test_config.update_section("web", ssl_verify=False)
-    monkeypatch.setattr("tidy3d.web.core.s3utils.config", test_config)
+    monkeypatch.setattr(f"{s3_utils_path}.config", test_config)
 
     token.get_client()
 

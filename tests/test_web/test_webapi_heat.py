@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 from responses import matchers
 
 import tidy3d as td
+from tests.test_web.test_webapi import task_core_path
 from tidy3d import HeatSimulation
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job
@@ -34,7 +35,6 @@ FLEX_UNIT = 1.0
 EST_FLEX_UNIT = 11.11
 FILE_SIZE_GB = 4.0
 
-task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
 
 
@@ -86,7 +86,7 @@ def mock_upload(monkeypatch, set_api_key):
     def mock_upload_file(*args, **kwargs):
         pass
 
-    monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_upload_file)
+    monkeypatch.setattr(f"{task_core_path}.upload_file", mock_upload_file)
 
 
 @pytest.fixture
