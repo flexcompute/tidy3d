@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
     from rich.progress import Progress as RichProgress
 
-    from tidy3d.compat import Self
+    from tidy3d._common.compat import Self
 # Note: "SUPPORT" and "USER" levels are meant for backend runs only.
 # Logging in frontend code should just use the standard debug/info/warning/error/critical.
 LogLevel = Literal["DEBUG", "SUPPORT", "USER", "INFO", "WARNING", "ERROR", "CRITICAL"]
