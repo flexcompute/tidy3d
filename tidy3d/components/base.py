@@ -22,17 +22,17 @@ import numpy as np
 import rich
 import xarray as xr
 import yaml
+from autograd.builtins import dict as TracedDict
 from autograd.tracer import isbox
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 
 from tidy3d.exceptions import FileError
 from tidy3d.log import log
 
-from .autograd.types import TracedDict
 from .autograd.utils import get_static
 from .data.data_array import DATA_ARRAY_MAP
 from .file_util import compress_file_to_gzip, extract_gzip_file
-from .types import TYPE_TAG_STR, Undefined
+from .types.base import TYPE_TAG_STR, Undefined
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

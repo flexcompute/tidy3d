@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from xarray.core.types import InterpOptions, Self
 
     from tidy3d.components.autograd import InterpolationType
-    from tidy3d.components.types import Axis, Bound
+    from tidy3d.components.types.base import Axis, Bound
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
