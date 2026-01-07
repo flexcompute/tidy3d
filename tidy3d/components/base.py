@@ -262,28 +262,33 @@ class Tidy3dBaseModel(BaseModel):
         for k, v in dict(self).items():
             if k == "attrs":
                 continue
-            if isinstance(v, np.ndarray):
-                # numpy arrays are not hashable by default, use byte representation
-                v_hash = hashlib.md5(v.tobytes()).hexdigest()
-            elif isinstance(v, (xr.DataArray, xr.Dataset)):
-                # we choose to not hash data arrays as this would require a lot of careful handling of units, metadata.
-                # technically this is incorrect, but should never lead to bugs in current implementation
-                v_hash = str(v.__class__.__name__)
-            elif isinstance(v, list):
-                # this assumes all objects in lists are hashable by default and do not require special handling
-                v_hash = tuple([hash(vi) for vi in v])
-            else:
-                v_hash = hash(v)
+            v_hash = self._recursive_hash(v)
             to_hash_list.append((k, v_hash))
 
         # attrs is mutable, use serialized output as safe hashing option
         if self.attrs:
-            attrs_json = self.model_dump_json(include={"attrs"})
-            attrs_hash = hash(attrs_json)
+            attrs_str = self._attrs_digest()
+            attrs_hash = hash(attrs_str)
             to_hash_list.append(("attrs", attrs_hash))
 
         result_hash = hash(tuple(to_hash_list))
         return result_hash
+
+    @staticmethod
+    def _recursive_hash(value: Any) -> int:
+        if isinstance(value, np.ndarray):
+            # numpy arrays are not hashable by default, use byte representation
+            v_hash = hashlib.md5(value.tobytes()).hexdigest()
+            return hash(v_hash)
+        if isinstance(value, (xr.DataArray, xr.Dataset)):
+            # we choose to not hash data arrays as this would require a lot of careful handling of units, metadata.
+            # technically this is incorrect, but should never lead to bugs in current implementation
+            return hash(str(value.__class__.__name__))
+        if isinstance(value, list):
+            # this assumes all objects in lists are hashable by default and do not require special handling
+            v_hash = tuple([Tidy3dBaseModel._recursive_hash(vi) for vi in value])
+            return hash(v_hash)
+        return hash(value)
 
     def _hash_self(self) -> str:
         """Hash this component with ``hashlib`` in a way that is the same every session."""
