@@ -214,7 +214,48 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         interp_spec1 = mode_spec1.interp_spec if mode_spec1 is not None else None
         interp_spec2 = mode_spec2.interp_spec if mode_spec2 is not None else None
 
-        modes1, modes2 = modes1._interpolated_copies_if_needed(other=modes2)
+        # EME uses unnormalized modes internally, and normalizes at the end if requested.
+        # Port modes are stored with normalize=sim.normalize, so they match the S-matrix normalization.
+        # When interpolating modes for smatrix_in_basis, we need to preserve the normalization state
+        # to match port_modes. If port_modes are unnormalized (sim.normalize=False), interpolated
+        # modes should also be unnormalized.
+        port_modes_normalized = self.simulation.normalize
+        
+        # Handle interpolation with correct normalization state to match port_modes
+        if isinstance(modes1, ModeSolverData) and isinstance(modes2, ModeSolverData):
+            # Check if interpolation is needed (same logic as _interpolated_copies_if_needed)
+            if (
+                interp_spec1 is not None
+                and interp_spec2 is not None
+                and modes1.monitor.mode_spec._same_nontrivial_interp_spec(other=modes2.monitor.mode_spec)
+            ):
+                # Same interp_spec, no interpolation needed
+                pass
+            else:
+                # Interpolation needed - use custom logic to preserve normalization state
+                # Interpolate modes1 if it has interp_spec and reduced data
+                if isinstance(modes1, ModeSolverData) and interp_spec1 is not None and modes1._reduced_data:
+                    freqs_sorted = np.sort(modes1.monitor.freqs)
+                    modes1 = modes1.interp_in_freq(
+                        freqs=freqs_sorted,
+                        method=interp_spec1.method,
+                        renormalize=port_modes_normalized,  # Match port_modes normalization
+                        recalculate_grid_correction=True,
+                        assume_sorted=True,
+                    )
+                # Interpolate modes2 if it has interp_spec and reduced data
+                if isinstance(modes2, ModeSolverData) and interp_spec2 is not None and modes2._reduced_data:
+                    freqs_sorted = np.sort(modes2.monitor.freqs)
+                    modes2 = modes2.interp_in_freq(
+                        freqs=freqs_sorted,
+                        method=interp_spec2.method,
+                        renormalize=port_modes_normalized,  # Match port_modes normalization
+                        recalculate_grid_correction=True,
+                        assume_sorted=True,
+                    )
+        else:
+            # At least one is not ModeSolverData, use default interpolation
+            modes1, modes2 = modes1._interpolated_copies_if_needed(other=modes2)
 
         modes_in_1 = "mode_index" in list(modes1.field_components.values())[0].coords
         modes_in_2 = "mode_index" in list(modes2.field_components.values())[0].coords

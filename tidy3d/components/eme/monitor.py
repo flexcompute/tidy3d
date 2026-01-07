@@ -263,9 +263,20 @@ class EMECoefficientMonitor(EMEMonitor):
     ...     size=(2,2,2),
     ...     freqs=[300e12],
     ...     num_modes=2,
+    ...     fields=['A', 'B'],
     ...     name="eme_coeffs"
     ... )
     """
+
+    fields: tuple[Literal["A", "B", "n_complex", "flux", "interface_smatrices", "overlaps"], ...] = pd.Field(
+        ("A", "B", "n_complex", "flux", "interface_smatrices", "overlaps"),
+        title="Coefficient Fields",
+        description="Collection of coefficient fields to store in the monitor. "
+        "Available fields: 'A' (forward mode coefficients), 'B' (backward mode coefficients), "
+        "'n_complex' (propagation indices), 'flux' (power flux), "
+        "'interface_smatrices' (S matrices at cell interfaces), "
+        "'overlaps' (mode overlaps).",
+    )
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
         (1, 1, 1),
@@ -296,10 +307,33 @@ class EMECoefficientMonitor(EMEMonitor):
         num_sweep: int,
     ) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        bytes_single = (
-            4 * BYTES_COMPLEX * num_freqs * num_modes * num_modes * num_eme_cells * num_sweep
-        )
-        return bytes_single
+        bytes_total = 0
+        
+        # A and B: each is (f, sweep, 2 ports, cells, modes_out, modes_in)
+        # Each field has 2 ports, so: 2 ports * cells * modes * modes
+        if "A" in self.fields:
+            bytes_total += 2 * BYTES_COMPLEX * num_freqs * num_sweep * num_eme_cells * num_modes * num_modes
+        if "B" in self.fields:
+            bytes_total += 2 * BYTES_COMPLEX * num_freqs * num_sweep * num_eme_cells * num_modes * num_modes
+        
+        # n_complex and flux: (f, sweep, cells, modes)
+        if "n_complex" in self.fields:
+            bytes_total += BYTES_COMPLEX * num_freqs * num_sweep * num_eme_cells * num_modes
+        if "flux" in self.fields:
+            bytes_total += BYTES_COMPLEX * num_freqs * num_sweep * num_eme_cells * num_modes
+        
+        # interface_smatrices: 4 S matrices (S11, S12, S21, S22), each (f, sweep, cells-1, modes, modes)
+        if "interface_smatrices" in self.fields:
+            num_interfaces = max(1, num_eme_cells - 1)
+            bytes_total += 4 * BYTES_COMPLEX * num_freqs * num_sweep * num_interfaces * num_modes * num_modes
+        
+        # overlaps: O11 (f, sweep, cells, modes, modes) + O12, O21 (f, sweep, cells-1, modes, modes)
+        if "overlaps" in self.fields:
+            bytes_total += BYTES_COMPLEX * num_freqs * num_sweep * num_eme_cells * num_modes * num_modes  # O11
+            num_interfaces = max(1, num_eme_cells - 1)
+            bytes_total += 2 * BYTES_COMPLEX * num_freqs * num_sweep * num_interfaces * num_modes * num_modes  # O12, O21
+        
+        return bytes_total
 
 
 EMEMonitorType = Union[

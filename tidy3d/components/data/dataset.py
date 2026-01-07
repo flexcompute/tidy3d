@@ -109,7 +109,9 @@ class FreqDataset(Dataset, ABC):
 
         modify_data = {}
         for key, data in self.data_arrs.items():
-            modify_data[key] = self._interp_dataarray_in_freq(data, freqs, method, assume_sorted)
+            # Sort data by frequency to ensure proper interpolation
+            data_sorted = data.sortby("f")
+            modify_data[key] = self._interp_dataarray_in_freq(data_sorted, freqs, method, assume_sorted)
 
         return modify_data
 
