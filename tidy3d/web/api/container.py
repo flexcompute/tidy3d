@@ -624,7 +624,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
         return web.load(
             task_id=None if from_cache else task_id,
             path=task_data_path,
-            verbose=self.verbose,
+            verbose=False,
             replace_existing=not (from_cache or self.is_downloaded),
             lazy=self.lazy,
         )
