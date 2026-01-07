@@ -736,7 +736,7 @@ def _shift_value_signed(
 
     # get the index of the grid cell where the obj lies
     obj_position = obj.center[normal_axis]
-    obj_pos_gt_grid_bounds = np.argwhere(obj_position > grid_boundaries)
+    obj_pos_gt_grid_bounds = np.flatnonzero(obj_position > grid_boundaries)
 
     # no obj index can be determined
     if len(obj_pos_gt_grid_bounds) == 0 or obj_position > grid_boundaries[-1]:

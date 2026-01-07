@@ -12,7 +12,8 @@ from functools import wraps
 from math import ceil
 from os import PathLike
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional, Union
+from types import UnionType
+from typing import Any, Callable, Literal, Optional, Union, get_args, get_origin
 
 import h5py
 import numpy as np
@@ -160,6 +161,21 @@ def skip_if_fields_missing(fields: list[str], root=False):
     return actual_decorator
 
 
+def field_allows_scalar(field: ModelField) -> bool:
+    annotation = field.outer_type_
+
+    def allows_scalar(a: Any) -> bool:
+        origin = get_origin(a)
+        if origin in (Union, UnionType):
+            args = (arg for arg in get_args(a) if arg is not type(None))
+            return any(allows_scalar(arg) for arg in args)
+        if origin is not None:
+            return False
+        return isinstance(a, type) and issubclass(a, (float, int, np.generic))
+
+    return allows_scalar(annotation)
+
+
 class Tidy3dBaseModel(pydantic.BaseModel):
     """Base pydantic model that all Tidy3d components inherit from.
     Defines configuration for handling data structures
@@ -187,6 +203,20 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         super().__init__(**kwargs)
         self._post_init_validators()
         log.end_capture(self)
+
+    @pydantic.validator("*", pre=True, allow_reuse=True)
+    def coerce_numpy_scalars_for_model(cls, v: Any, field: ModelField) -> Any:
+        """
+        Wildcard field validator: coerce numpy scalars / size-1 arrays to native Python
+        scalars, but only for fields whose annotations allow scalars.
+        """
+        if not field_allows_scalar(field):
+            return v
+
+        if isinstance(v, np.generic) or (isinstance(v, np.ndarray) and v.size == 1):
+            return v.item()
+
+        return v
 
     def _post_init_validators(self) -> None:
         """Call validators taking ``self`` that get run after init, implement in subclasses."""
