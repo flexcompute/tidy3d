@@ -27,7 +27,7 @@ from .result import Result
 if TYPE_CHECKING:
     from typing import Callable, Union
 
-    from tidy3d.log import Console
+    from rich.console import Console
 
 
 class DesignSpace(Tidy3dBaseModel):

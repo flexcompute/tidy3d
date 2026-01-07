@@ -5,8 +5,8 @@ from pathlib import Path
 from click.testing import CliRunner
 from pydantic import Field
 
+from tidy3d._common.config import loader as config_loader  # import from common as it is patched
 from tidy3d.config import get_manager, reload_config
-from tidy3d.config import loader as config_loader
 from tidy3d.config import registry as config_registry
 from tidy3d.config.legacy import finalize_legacy_migration
 from tidy3d.config.loader import migrate_legacy_config
