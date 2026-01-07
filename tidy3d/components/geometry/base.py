@@ -3544,13 +3544,11 @@ class GeometryGroup(Geometry):
 
     def _volume(self, bounds: Bound) -> float:
         """Returns object's volume within given bounds."""
-        individual_volumes = (geometry.volume(bounds) for geometry in self.geometries)
-        return np.sum(individual_volumes)
+        return sum(geometry.volume(bounds) for geometry in self.geometries)
 
     def _surface_area(self, bounds: Bound) -> float:
         """Returns object's surface area within given bounds."""
-        individual_areas = (geometry.surface_area(bounds) for geometry in self.geometries)
-        return np.sum(individual_areas)
+        return sum(geometry.surface_area(bounds) for geometry in self.geometries)
 
     @cached_property
     def _normal_2dmaterial(self) -> Axis:

@@ -3236,7 +3236,7 @@ class PoleResidue(DispersiveMedium):
         for freq in freqs:
             dJ_deps_complex_f = dJ_deps_complex.sel(f=freq)
             vjps_f = self._get_vjps_from_params(
-                dJ_deps_complex=complex(dJ_deps_complex_f),
+                dJ_deps_complex=complex(dJ_deps_complex_f.item()),
                 poles_vals=poles_vals,
                 omega=2 * np.pi * freq,
                 requested_paths=derivative_info.paths,

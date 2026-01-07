@@ -620,12 +620,10 @@ def test_mode_solver_data_interp_single_frequency():
         field_data = getattr(data_interp, field_name)
         assert field_data is not None
         assert field_data.coords["f"].size == 1
-        assert float(field_data.coords["f"]) == 1.5e14
+        assert float(field_data.coords["f"].item()) == 1.5e14
 
     # Check n_group_raw and dispersion_raw if present
     if data_interp.n_group_raw is not None:
-        print(data_interp.n_group_raw.shape)
-        print((1, original_num_modes))
         assert data_interp.n_group_raw.shape == (1, original_num_modes)
     if data_interp.dispersion_raw is not None:
         assert data_interp.dispersion_raw.shape == (1, original_num_modes)
