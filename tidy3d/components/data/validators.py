@@ -8,8 +8,8 @@ from pydantic import field_validator
 
 from tidy3d.exceptions import ValidationError
 
-from .data_array import DataArray
-from .dataset import AbstractFieldDataset, ScalarFieldDataArray
+from .data_array import DataArray, ScalarFieldDataArray
+from .dataset import AbstractFieldDataset
 
 if TYPE_CHECKING:
     from typing import Callable, Optional

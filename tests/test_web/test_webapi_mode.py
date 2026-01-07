@@ -9,7 +9,7 @@ from responses import matchers
 
 import tidy3d as td
 from tests.test_web.test_webapi import task_core_path
-from tidy3d.components.data.dataset import ModeIndexDataArray
+from tidy3d.components.data.data_array import ModeIndexDataArray
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job
