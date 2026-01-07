@@ -821,10 +821,10 @@ def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
 
 @responses.activate
 @pytest.mark.parametrize("task_name", [TASK_NAME, None])
-def test_async(mock_webapi, mock_job_status, task_name):
+def test_async(mock_webapi, mock_job_status, tmp_path, task_name):
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
     sims = {TASK_NAME: make_sim()} if task_name else [make_sim()]
-    _ = run_async(sims, folder_name=PROJECT_NAME)
+    _ = run_async(sims, folder_name=PROJECT_NAME, path_dir=str(tmp_path))
 
 
 """ Main """
