@@ -11,8 +11,7 @@ from autograd.extend import Box, defvjp, primitive
 from autograd.numpy.numpy_boxes import ArrayBox
 from pydantic import BeforeValidator, PlainSerializer, PositiveFloat, TypeAdapter
 
-from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, Size1D
-from tidy3d.components.types.base import _auto_serializer
+from tidy3d.components.types.base import ArrayFloat2D, ArrayLike, Complex, Size1D, _auto_serializer
 from tidy3d.components.types.utils import _add_schema
 
 from .utils import get_static, hasbox
