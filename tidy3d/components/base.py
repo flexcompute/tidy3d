@@ -23,7 +23,8 @@ import rich
 import xarray as xr
 import yaml
 from autograd.tracer import isbox
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
+from pydantic.functional_validators import ModelWrapValidatorHandler
 
 from tidy3d.exceptions import FileError
 from tidy3d.log import log
@@ -218,6 +219,16 @@ class Tidy3dBaseModel(BaseModel):
         setattr(cls, TYPE_TAG_STR, tag)
         TYPE_TO_CLASS_MAP[tag] = cls
 
+        if "__tidy3d_end_capture__" not in cls.__dict__:
+
+            @model_validator(mode="after")
+            def __tidy3d_end_capture__(self: T) -> T:
+                if log._capture:
+                    log.end_capture(self)
+                return self
+
+            cls.__tidy3d_end_capture__ = __tidy3d_end_capture__
+
         super().__init_subclass__(**kwargs)
 
     @classmethod
@@ -226,6 +237,23 @@ class Tidy3dBaseModel(BaseModel):
 
         # add docstring once pydantic is done constructing the class
         cls.__doc__ = cls.generate_docstring()
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _capture_validation_warnings(
+        cls: type[T],
+        data: Any,
+        handler: ModelWrapValidatorHandler[T],
+    ) -> T:
+        if not log._capture:
+            return handler(data)
+
+        log.begin_capture()
+        try:
+            return handler(data)
+        except Exception:
+            log.abort_capture()
+            raise
 
     def __hash__(self) -> int:
         """Hash method."""
