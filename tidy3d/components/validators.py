@@ -9,11 +9,11 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import field_validator, model_validator
 
+from tidy3d._common.components.data.data_array import DATA_ARRAY_MAP
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 from .autograd.utils import get_static, hasbox
-from .base import DATA_ARRAY_MAP
 from .geometry.base import Box
 
 if TYPE_CHECKING:
