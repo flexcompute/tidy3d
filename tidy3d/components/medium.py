@@ -11,6 +11,15 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeVar, Uni
 import autograd.numpy as np
 import numpy as npo
 from autograd.differential_operators import tensor_jacobian_product
+from numpy.typing import NDArray
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    PositiveFloat,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
 
 from tidy3d.components.autograd.utils import pack_complex_vec
 from tidy3d.constants import (
@@ -2419,11 +2428,11 @@ class CustomMedium(AbstractCustomMedium):
         E_der_map: ElectromagneticFieldDataset,
         spatial_data: SpatialDataArray,
         dim: str,
-        freqs: NDArray,
+        freqs: ArrayFloat,
         bounds: Optional[Bound] = None,
         component: str = "real",
         interp_method: Optional[InterpMethod] = None,
-    ) -> NDArray:
+    ) -> ArrayGeneric:
         """Compute the derivative with respect to a material property component."""
         param_coords = {axis: np.asarray(spatial_data.coords[axis]) for axis in "xyz"}
         eps_shape = [len(param_coords[axis]) for axis in "xyz"]
@@ -2609,7 +2618,18 @@ class CustomMedium(AbstractCustomMedium):
         elif component == "real":
             values = values.real
 
-        return values.sum(axis=-1).reshape(eps_shape)
+        vjp_array = values.sum(axis=-1).reshape(eps_shape)
+
+        # match derivative dtype to the underlying dataset
+        target_array = getattr(spatial_data, "values", None)
+        if target_array is None and hasattr(spatial_data, "data"):
+            target_array = spatial_data.data
+        if target_array is not None:
+            target_dtype = np.asarray(target_array).dtype
+            if not np.issubdtype(target_dtype, np.complexfloating):
+                vjp_array = np.real(vjp_array).astype(target_dtype, copy=False)
+
+        return vjp_array
 
 
 """ Dispersive Media """

@@ -181,7 +181,7 @@ class TopologyDesignRegion(DesignRegion):
         "Supplying ``False`` will completely leave out the override structure.",
     )
 
-    priority: int = pd.Field(
+    priority: Optional[int] = Field(
         None,
         title="Priority",
         description="Priority of the structure applied in structure overlapping region. "
