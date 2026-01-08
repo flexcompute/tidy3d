@@ -9,7 +9,8 @@ import numpy as np
 import xarray as xr
 
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
-from tidy3d.components.types import ArrayLike, Bound, tidycomplex
+from tidy3d.components.data.utils import _zeros_like
+from tidy3d.components.types import ArrayLike, Bound, tidycomplex, xyz
 from tidy3d.config import config
 from tidy3d.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
 from tidy3d.log import log
@@ -713,6 +714,42 @@ class DerivativeInfo:
         # always expect (3, N, F) shape, transpose to (N, 3, F)
         field_matrix = np.transpose(field_matrix, (1, 0, 2))
         return np.einsum("ij...,ij->i...", field_matrix, basis_vector)
+
+    def project_der_map_to_axis(
+        self, axis: xyz, field_type: str = "E"
+    ) -> dict[str, ScalarFieldDataArray] | None:
+        """Return a copy of the selected derivative map with only one axis kept.
+
+        Parameters
+        ----------
+        axis:
+            Axis to keep (``"x"``, ``"y"``, ``"z"``, case-insensitive).
+        field_type:
+            Map selector: ``"E"`` (``self.E_der_map``) or ``"D"`` (``self.D_der_map``).
+
+        Returns
+        -------
+        dict[str, ScalarFieldDataArray] | None
+            Copied map where non-selected components are replaced by zeros, or ``None``
+            if the requested map is unavailable.
+        """
+        field_map = {"E": self.E_der_map, "D": self.D_der_map}.get(field_type)
+        if field_map is None:
+            raise ValueError("field type must be 'D' or 'E'.")
+
+        axis = axis.lower()
+        projected = dict(field_map)
+        if not field_map:
+            return projected
+        for dim in "xyz":
+            key = f"E{dim}"
+            if key not in field_map:
+                continue
+            if dim != axis:
+                projected[key] = _zeros_like(field_map[key])
+            else:
+                projected[key] = field_map[key]
+        return projected
 
     def adaptive_vjp_spacing(
         self,
