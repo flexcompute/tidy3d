@@ -1156,7 +1156,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
     ) -> td.components.data.data_array.DataArray:
         """make a random DataArray out of supplied coordinates and data_type."""
         data_shape = [len(coords[k]) for k in data_array_type._dims]
-        np.random.seed(1)
+        np.random.seed(0)
         data = DATA_GEN_FN(data_shape)
 
         data = (1 + 0.5j) * data if is_complex else data
