@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed interpolation handling for permittivity and conductivity gradients in CustomMedium.
 - Restored original batch-load logging by suppressing per-task “Loading simulation…” messages. 
 - Fixed output range of `tidy3d.plugins.invdes.FilterAndProject` to be between 0 and 1.
+- Cropped adjoint monitor sizes in 2D simulations to planar geometry intersection.
 
 ## [2.10.0] - 2025-12-18
 
