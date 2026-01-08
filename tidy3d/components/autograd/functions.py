@@ -264,7 +264,7 @@ def add_at(x: NDArray, indices_x: tuple, y: NDArray) -> NDArray:
 
 
 @primitive
-def _straight_through_clip(x, a_min, a_max):
+def _straight_through_clip(x: NDArray, a_min: Any, a_max: Any) -> NDArray:
     """Passthrough clip can be used to preserve gradients at the endpoints of the clip range where
     there is a discontinuity in the derivative. This is useful when values are at the endpoints but may
     have a gradient away from the boundary or in cases where numerical precision causes a function that is
@@ -273,7 +273,7 @@ def _straight_through_clip(x, a_min, a_max):
     return anp.clip(x, a_min=a_min, a_max=a_max)
 
 
-def _straight_through_clip_vjp(ans, x, a_min, a_max):
+def _straight_through_clip_vjp(ans: Any, x: NDArray, a_min: Any, a_max: Any) -> NDArray:
     """Preserve original gradient information in the backward pass up until a tolerance beyond the clip bounds."""
     tolerance = 1e-5
     mask = (x >= a_min - tolerance) & (x <= a_max + tolerance)

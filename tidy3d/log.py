@@ -123,9 +123,10 @@ class Logger:
         the context is exited, the number of discarded messages of each level is displayed with the
         highest level of the captures messages.
 
-        Messages can also be captured for post-processing. That can be enabled through 'set_capture' to
-        record all warnings emitted during model validation. A structured copy of all validation
-        messages can then be recovered through 'captured_warnings'.
+    Messages can also be captured for post-processing. That can be enabled through 'set_capture' to
+    record warnings emitted during model validation (and other explicit begin/end capture regions,
+    e.g. validation routines like ``validate_pre_upload``). A structured copy of captured warnings
+    can then be recovered through 'captured_warnings'.
     """
 
     _static_cache = set()
@@ -181,8 +182,8 @@ class Logger:
     def begin_capture(self) -> None:
         """Start capturing log stack for consolidated validation log.
 
-        This method is used before any model validation starts and is included in the initialization
-        of 'BaseModel'. It must be followed by a corresponding 'end_capture'.
+        This method should be called before a validation routine starts. It must be followed by a
+        corresponding 'end_capture'.
         """
         if not self._capture:
             return
@@ -193,11 +194,23 @@ class Logger:
         else:
             self._stack = [stack_item]
 
+    def abort_capture(self) -> None:
+        """Undo the last ``begin_capture()`` call.
+
+        This is used when validation fails before reaching the corresponding ``end_capture()``.
+        """
+        if not self._stack:
+            return
+
+        self._stack.pop()
+        if len(self._stack) == 0:
+            self._stack = None
+
     def end_capture(self, model: BaseModel) -> None:
         """End capturing log stack for consolidated validation log.
 
-        This method is used after all model validations and is included in the initialization of
-        'BaseModel'. It must follow a corresponding 'begin_capture'.
+        This method should be called after a validation routine ends. It must follow a
+        corresponding 'begin_capture'.
         """
         if not self._stack:
             return

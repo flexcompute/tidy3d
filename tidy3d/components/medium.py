@@ -11,6 +11,15 @@ from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeVar, Uni
 import autograd.numpy as np
 import numpy as npo
 from autograd.differential_operators import tensor_jacobian_product
+from numpy.typing import NDArray
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    PositiveFloat,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
 
 from tidy3d.components.autograd.utils import pack_complex_vec
 from tidy3d.constants import (

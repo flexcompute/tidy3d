@@ -32,7 +32,7 @@ def generate_validation_data(expr: Expression) -> dict[str, xr.Dataset]:
     dict[str, xr.Dataset]
         The combined validation data.
     """
-    metrics = set(expr.filter(target_type=Metric))
+    metrics = set(expr.filter(target_type=Metric))  # type: ignore[type-abstract]
     combined_data = {k: v for metric in metrics for k, v in metric._validation_data.items()}
     return combined_data
 
