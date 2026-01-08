@@ -4259,19 +4259,6 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     @model_validator(mode="after")
-    def _validate_scene(self) -> Self:
-        _ = self.scene
-        self._validate_no_structures_pml()
-        self._validate_tfsf_nonuniform_grid()
-        self._validate_tfsf_aux_sources()
-        self._validate_nonlinear_specs()
-        self._validate_custom_source_time()
-        self._validate_mode_objects()
-        self._warn_rf_license()
-        self._validate_internal_abc_no_fully_anisotropic()
-        return self
-
-    @model_validator(mode="after")
     def _warn_rf_license(self) -> Self:
         """
         Warn about new licensing requirements for RF simulations. This function details all the conditions in which a
@@ -4545,16 +4532,18 @@ class Simulation(AbstractYeeGridSimulation):
                 fields += medium.nonlinear_spec.aux_fields
         return fields
 
-    def _validate_internal_abc_no_fully_anisotropic(self) -> None:
+    @model_validator(mode="after")
+    def _validate_internal_abc_no_fully_anisotropic(self) -> Self:
         """Error if internal absorber intersect fully anisotropic mediums."""
 
         total_structures = [self.scene.background_structure, *list(self.structures)]
 
         for abc in self._shifted_internal_absorbers:
-            mediums = Scene.intersecting_media(abc, total_structures)
+            mediums = Scene.intersecting_media(abc, tuple(total_structures))
 
             if any(isinstance(med, FullyAnisotropicMedium) for med in mediums):
                 raise SetupError("A 'InternalAbsorber' cannot cross a 'FullyAnisotropicMedium'.")
+        return self
 
     """ Pre submit validation (before web.upload()) """
 

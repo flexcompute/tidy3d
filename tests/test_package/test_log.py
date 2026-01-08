@@ -6,7 +6,7 @@ import json
 
 import numpy as np
 import pytest
-from pydantic import ValidationError
+from pydantic import ValidationError, model_validator
 
 import tidy3d as td
 from tidy3d.exceptions import Tidy3dError
@@ -253,6 +253,35 @@ def test_logging_warning_capture():
         td.log.set_capture(False)
 
         assert str(error_without) == str(error_with)
+
+
+def test_warning_capture_during_model_validation():
+    from tidy3d.components.base import Tidy3dBaseModel
+    from tidy3d.log import log
+
+    class _CaptureChild(Tidy3dBaseModel):
+        x: int
+
+        @model_validator(mode="after")
+        def _warn_child(self):
+            log.warning("child warning")
+            return self
+
+    class _CaptureParent(Tidy3dBaseModel):
+        child: _CaptureChild
+
+        @model_validator(mode="after")
+        def _warn_parent(self):
+            log.warning("parent warning")
+            return self
+
+    td.log.set_capture(True)
+    _CaptureParent(child={"x": 1})
+    warning_list = td.log.captured_warnings()
+    td.log.set_capture(False)
+
+    assert {"loc": [], "msg": "parent warning"} in warning_list
+    assert {"loc": ["child"], "msg": "child warning"} in warning_list
 
 
 def test_log_suppression():
