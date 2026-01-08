@@ -58,6 +58,60 @@ TEST_CASES = [
         "polarization": np.pi / 3,
         "medium_type": "custom",
     },
+    {
+        "name": "opt_flux_aniso",
+        "wavelength": 1.0,
+        "permittivities": (2.1, 2.4, 2.7),
+        "objective_kind": "flux",
+        "monitor_size": (np.inf, np.inf, 0.0),
+        "polarization": 0.0,
+        "medium_type": "anisotropic",
+    },
+    {
+        "name": "opt_int_point_aniso",
+        "wavelength": 1.55,
+        "permittivities": (1.6, 2.0, 2.5),
+        "objective_kind": "intensity",
+        "monitor_size": (0.0, 0.0, 0.0),
+        "polarization": np.pi / 2,
+        "medium_type": "anisotropic",
+    },
+    {
+        "name": "mw_flux_aniso",
+        "wavelength": 0.8,
+        "permittivities": (2.2, 2.4, 1.5),
+        "objective_kind": "flux",
+        "monitor_size": (np.inf, np.inf, 0.0),
+        "polarization": np.pi / 8,
+        "medium_type": "anisotropic",
+    },
+    {
+        "name": "mw_int_plane_aniso",
+        "wavelength": 2.1,
+        "permittivities": (2.6, 2.0, 3.1),
+        "objective_kind": "intensity",
+        "monitor_size": (0.2, 0.2, 0.0),
+        "polarization": np.pi / 4,
+        "medium_type": "anisotropic",
+    },
+    {
+        "name": "opt_flux_custom_aniso",
+        "wavelength": 1.2,
+        "permittivities": (1.8, 2.3, 2.9),
+        "objective_kind": "flux",
+        "monitor_size": (np.inf, np.inf, 0.0),
+        "polarization": 0.0,
+        "medium_type": "custom_anisotropic",
+    },
+    {
+        "name": "mw_int_custom_aniso",
+        "wavelength": 1.9,
+        "permittivities": (1.4, 2.0, 1.7),
+        "objective_kind": "intensity",
+        "monitor_size": (0.5, 0.5, 0.0),
+        "polarization": np.pi / 6,
+        "medium_type": "custom_anisotropic",
+    },
 ]
 
 
@@ -163,7 +217,7 @@ def _add_medium(case, base_sim: td.Simulation, box_geom: td.Box, eps_vals) -> td
 
 def _metric_value(case, dataset, freq0):
     if case["objective_kind"] == "flux":
-        return dataset.flux.values
+        return dataset.flux.values.item()
     ex_vals = dataset.Ex.values
     ey_vals = dataset.Ey.values
     ez_vals = dataset.Ez.values
