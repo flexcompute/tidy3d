@@ -852,6 +852,8 @@ def test_main(mock_webapi, monkeypatch, mock_job_status, tmp_path):
             PROJECT_NAME,
             "--inspect_credits",
             "--inspect_sim",
+            "-o",
+            str(tmp_path / "tmp.hdf5"),
         ]
     )
 
@@ -865,6 +867,8 @@ def test_main(mock_webapi, monkeypatch, mock_job_status, tmp_path):
                 "--folder_name",
                 PROJECT_NAME,
                 "--inspect_credits",
+                "-o",
+                str(tmp_path / "tmp.hdf5"),
             ]
         )
 
@@ -877,6 +881,8 @@ def test_main(mock_webapi, monkeypatch, mock_job_status, tmp_path):
                 "--folder_name",
                 PROJECT_NAME,
                 "--inspect_sim",
+                "-o",
+                str(tmp_path / "tmp.hdf5"),
             ]
         )
 
