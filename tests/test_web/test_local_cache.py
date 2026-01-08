@@ -285,7 +285,7 @@ def _test_load_simulation_if_cached(monkeypatch, tmp_path, basic_simulation):
     assert counters == {"upload": 1, "start": 1, "monitor": 1, "download": 1}
     assert len(cache) == 1
 
-    sim_data_from_cache = load_simulation_if_cached(basic_simulation)
+    sim_data_from_cache = load_simulation_if_cached(basic_simulation, path=tmp_path / "tmp.hdf5")
     assert sim_data_from_cache is not None
     assert sim_data_from_cache.simulation == basic_simulation
 
@@ -296,20 +296,20 @@ def _test_load_simulation_if_cached(monkeypatch, tmp_path, basic_simulation):
 
 def _test_mode_solver_caching(monkeypatch, tmp_path):
     counters = _patch_run_pipeline(monkeypatch)
-
+    tmp_file = tmp_path / "tmp.hdf5"
     # store in cache
     mode_sim = make_mode_sim()
-    mode_sim_data = web.run(mode_sim)
+    mode_sim_data = web.run(mode_sim, path=tmp_file)
 
     # test basic loading from cache
-    from_cache_data = load_simulation_if_cached(mode_sim)
+    from_cache_data = load_simulation_if_cached(mode_sim, path=tmp_file)
     assert from_cache_data is not None
     assert isinstance(from_cache_data, _FakeStubData)
     assert mode_sim_data.simulation == from_cache_data.simulation
 
     # test loading from run
     _reset_counters(counters)
-    mode_sim_data_run = web.run(mode_sim)
+    mode_sim_data_run = web.run(mode_sim, path=tmp_file)
     assert counters["download"] == 0
     assert isinstance(mode_sim_data_run, _FakeStubData)
     assert mode_sim_data.simulation == mode_sim_data_run.simulation
@@ -317,7 +317,7 @@ def _test_mode_solver_caching(monkeypatch, tmp_path):
     # test loading from job
     _reset_counters(counters)
     job = Job(simulation=mode_sim, task_name="test")
-    job_data = job.run()
+    job_data = job.run(path=tmp_file)
     assert counters["download"] == 0
     assert isinstance(job_data, _FakeStubData)
     assert mode_sim_data.simulation == job_data.simulation
@@ -334,14 +334,14 @@ def _test_mode_solver_caching(monkeypatch, tmp_path):
     cache = resolve_local_cache(True)
     # test storing via job
     cache.clear()
-    Job(simulation=mode_sim, task_name="test").run()
-    assert load_simulation_if_cached(mode_sim) is not None
+    Job(simulation=mode_sim, task_name="test").run(path=tmp_file)
+    assert load_simulation_if_cached(mode_sim, path=tmp_file) is not None
 
     # test storing via batch
     cache.clear()
     batch_mode_data = Batch(simulations={"sim1": mode_sim}).run(path_dir=tmp_path)
     _ = batch_mode_data["sim1"]  # access to store
-    assert load_simulation_if_cached(mode_sim) is not None
+    assert load_simulation_if_cached(mode_sim, path=tmp_file) is not None
 
 
 def _test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path):
@@ -382,7 +382,7 @@ def _test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path):
     assert len(cache) == 3
 
 
-def _test_verbosity(monkeypatch, basic_simulation):
+def _test_verbosity(monkeypatch, basic_simulation, tmp_path):
     _CSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")  # ANSI CSI
     _OSC8_RE = re.compile(r"\x1b\]8;.*?(?:\x1b\\|\x07)", re.DOTALL)  # OSC-8 hyperlinks
 
@@ -403,8 +403,8 @@ def _test_verbosity(monkeypatch, basic_simulation):
     _reset_counters(counters)
     sim2 = basic_simulation.updated_copy(shutoff=1e-4)
     sim3 = basic_simulation.updated_copy(shutoff=1e-3)
-
-    run(basic_simulation, verbose=True)  # seed cache
+    tmp_file = tmp_path / "tmp.hdf5"
+    run(basic_simulation, verbose=True, path=tmp_file)  # seed cache
 
     log_mod = importlib.import_module("tidy3d.log")
 
@@ -424,7 +424,7 @@ def _test_verbosity(monkeypatch, basic_simulation):
         buf.seek(0)
 
         # test for load_simulation_if_cached
-        sim_data = load_simulation_if_cached(basic_simulation, verbose=True)
+        sim_data = load_simulation_if_cached(basic_simulation, verbose=True, path=tmp_file)
         assert sim_data is not None
         assert "Loading simulation from" in buf.getvalue(), (
             f"Expected 'Loading simulation from' in log, got '{buf.getvalue()}'"
@@ -432,14 +432,14 @@ def _test_verbosity(monkeypatch, basic_simulation):
 
         buf.truncate(0)
         buf.seek(0)
-        load_simulation_if_cached(basic_simulation, verbose=False)
+        load_simulation_if_cached(basic_simulation, verbose=False, path=tmp_file)
         assert sim_data is not None
         assert buf.getvalue().strip() == "", f"Expected empty log, got '{buf.getvalue()}'"
 
         # test for batched runs
         buf.truncate(0)
         buf.seek(0)
-        run([basic_simulation, sim3], verbose=True)
+        run([basic_simulation, sim3], verbose=True, path=tmp_path)
         txt = _normalize_console_text(buf.getvalue())
         assert "Got 1 simulation from cache" in txt, (
             f"Expected 'Got 1 simulation from cache' in log, got '{buf.getvalue()}'"
@@ -448,13 +448,13 @@ def _test_verbosity(monkeypatch, basic_simulation):
         # if some found
         buf.truncate(0)
         buf.seek(0)
-        run([basic_simulation, sim2], verbose=False)
+        run([basic_simulation, sim2], verbose=False, path=tmp_path)
         assert buf.getvalue().strip() == "", f"Expected empty log, got '{buf.getvalue()}'"
 
         # if all found
         buf.truncate(0)
         buf.seek(0)
-        run([basic_simulation, sim2], verbose=False)
+        run([basic_simulation, sim2], verbose=False, path=tmp_path)
         assert buf.getvalue().strip() == "", f"Expected empty log, got '{buf.getvalue()}'"
 
     finally:
@@ -467,7 +467,7 @@ def _test_job_run_cache(monkeypatch, basic_simulation, tmp_path):
     cache = resolve_local_cache(use_cache=True)
     cache.clear()
     job = Job(simulation=basic_simulation, task_name="test")
-    job.run()
+    job.run(path=tmp_path / "tmp.hdf5")
 
     assert len(cache) == 1
 
@@ -485,7 +485,7 @@ def _test_job_run_cache(monkeypatch, basic_simulation, tmp_path):
     assert os.path.exists(out2_path)
 
 
-def _test_autograd_cache(monkeypatch, request):
+def _test_autograd_cache(monkeypatch, request, tmp_path):
     counters = _patch_run_pipeline(monkeypatch)
 
     # "Original" rule: the one autograd uses by default
@@ -526,7 +526,7 @@ def _test_autograd_cache(monkeypatch, request):
     def objective(params):
         sim = make_sim(params)
         sim.attrs["params"] = params
-        sim_data = run_autograd(sim)
+        sim_data = run_autograd(sim, path=tmp_path / "tmp.hdf5")
         value = postprocess(sim_data)
         return value
 
@@ -823,9 +823,9 @@ def test_cache_sequential(
     _test_cache_stats_sync(monkeypatch, tmp_path_factory, basic_simulation)
     _test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path)
     _test_job_run_cache(monkeypatch, basic_simulation, tmp_path)
-    _test_autograd_cache(monkeypatch, request)
+    _test_autograd_cache(monkeypatch, request, tmp_path)
     _test_configure_cache_roundtrip(monkeypatch, tmp_path)
     _test_store_and_fetch_do_not_iterate(monkeypatch, tmp_path, basic_simulation)
     _test_mode_solver_caching(monkeypatch, tmp_path)
-    _test_verbosity(monkeypatch, basic_simulation)
+    _test_verbosity(monkeypatch, basic_simulation, tmp_path)
     _test_cache_cli_commands(monkeypatch, tmp_path_factory, basic_simulation)
