@@ -23,8 +23,10 @@ import rich
 import xarray as xr
 import yaml
 from autograd.builtins import dict as TracedDict
+from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import isbox
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
+from pydantic.functional_validators import ModelWrapValidatorHandler
 
 from tidy3d._common.components.autograd.utils import get_static
 from tidy3d._common.components.data.data_array import DATA_ARRAY_MAP
@@ -199,12 +201,6 @@ class Tidy3dBaseModel(BaseModel):
                 )
         return name
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Init method, includes post-init validators."""
-        log.begin_capture()
-        super().__init__(**kwargs)
-        log.end_capture(self)
-
     def __init_subclass__(cls: type[T], **kwargs: Any) -> None:
         """Injects a constant discriminator field before Pydantic builds the model.
 
@@ -222,6 +218,16 @@ class Tidy3dBaseModel(BaseModel):
         setattr(cls, TYPE_TAG_STR, tag)
         TYPE_TO_CLASS_MAP[tag] = cls
 
+        if "__tidy3d_end_capture__" not in cls.__dict__:
+
+            @model_validator(mode="after")
+            def __tidy3d_end_capture__(self: T) -> T:
+                if log._capture:
+                    log.end_capture(self)
+                return self
+
+            cls.__tidy3d_end_capture__ = __tidy3d_end_capture__
+
         super().__init_subclass__(**kwargs)
 
     @classmethod
@@ -231,12 +237,69 @@ class Tidy3dBaseModel(BaseModel):
         # add docstring once pydantic is done constructing the class
         cls.__doc__ = cls.generate_docstring()
 
+    @model_validator(mode="wrap")
+    @classmethod
+    def _capture_validation_warnings(
+        cls: type[T],
+        data: Any,
+        handler: ModelWrapValidatorHandler[T],
+    ) -> T:
+        if not log._capture:
+            return handler(data)
+
+        log.begin_capture()
+        try:
+            return handler(data)
+        except Exception:
+            log.abort_capture()
+            raise
+
     def __hash__(self) -> int:
         """Hash method."""
-        try:
-            return super().__hash__(self)
-        except TypeError:
-            return hash(self.model_dump_json())
+        return self._recursive_hash(self)
+
+    @staticmethod
+    def _recursive_hash(value: Any) -> int:
+        # Handle Autograd ArrayBoxes
+        if isinstance(value, ArrayBox):
+            # Unwrap the underlying numpy array and recurse
+            return Tidy3dBaseModel._recursive_hash(value._value)
+        if isinstance(value, np.ndarray):
+            # numpy arrays are not hashable by default, use byte representation
+            v_hash = hashlib.md5(value.tobytes()).hexdigest()
+            return hash(v_hash)
+        if isinstance(value, (xr.DataArray, xr.Dataset)):
+            # we choose to not hash data arrays as this would require a lot of careful handling of units, metadata.
+            # technically this is incorrect, but should never lead to bugs in current implementation
+            return hash(str(value.__class__.__name__))
+        if isinstance(value, str):
+            # this if-case is necessary because length-1 string would lead to infinite recursion in sequence case below
+            return hash(value)
+        if isinstance(value, Sequence):
+            # this assumes all objects in lists are hashable by default and do not require special handling
+            v_hash = tuple([Tidy3dBaseModel._recursive_hash(vi) for vi in value])
+            return hash(v_hash)
+        if isinstance(value, dict):
+            to_hash_list = []
+            for k, v in value.items():
+                v_hash = Tidy3dBaseModel._recursive_hash(v)
+                to_hash_list.append((k, v_hash))
+            return hash(tuple(to_hash_list))
+        if isinstance(value, Tidy3dBaseModel):
+            # This function needs to take special care because of mutable attributes inside of frozen pydantic models
+            to_hash_list = []
+            for k, v in dict(value).items():
+                if k == "attrs":
+                    continue
+                v_hash = Tidy3dBaseModel._recursive_hash(v)
+                to_hash_list.append((k, v_hash))
+            # attrs is mutable, use serialized output as safe hashing option
+            if value.attrs:
+                attrs_str = value._attrs_digest()
+                attrs_hash = hash(attrs_str)
+                to_hash_list.append(("attrs", attrs_hash))
+            return hash(tuple(to_hash_list))
+        return hash(value)
 
     def _hash_self(self) -> str:
         """Hash this component with ``hashlib`` in a way that is the same every session."""

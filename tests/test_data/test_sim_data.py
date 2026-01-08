@@ -16,6 +16,7 @@ from tidy3d.components.file_util import replace_values
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeMonitor
 from tidy3d.exceptions import DataError, SetupError, Tidy3dKeyError
 
+from ..test_components.test_mode import get_mode_sim_data
 from ..utils import get_nested_shape
 from .test_data_arrays import FIELD_MONITOR, SIM, SIM_SYM
 from .test_monitor_data import (
@@ -94,6 +95,59 @@ def make_sim_data(symmetry: bool = True):
         data=data,
         log="- Time step    827 / time 4.13e-14s (  4 % done), field decay: 0.110e+00",
     )
+
+
+def make_heat_charge_sim_data():
+    """Create a simple HeatChargeSimulationData for testing."""
+    temp_mnt = td.TemperatureMonitor(size=(1, 2, 3), name="temperature")
+
+    tet_grid_points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        dims=("index", "axis"),
+    )
+    tet_grid_cells = td.CellDataArray(
+        [[0, 1, 2, 4], [1, 2, 3, 4]],
+        dims=("cell_index", "vertex_index"),
+    )
+    tet_grid_values = td.IndexedDataArray(
+        np.linspace(300, 350, tet_grid_points.shape[0]),
+        dims=("index",),
+        name="T",
+    )
+
+    tet_grid = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values,
+    )
+
+    temp_data = td.TemperatureData(monitor=temp_mnt, temperature=tet_grid)
+
+    heat_sim = td.HeatChargeSimulation(
+        size=(3.0, 3.0, 3.0),
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+                medium=td.Medium(
+                    permittivity=2.0,
+                    heat_spec=td.SolidSpec(conductivity=1, capacity=1),
+                ),
+                name="box",
+            ),
+        ],
+        medium=td.Medium(permittivity=3.0, heat_spec=td.FluidSpec()),
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        sources=[td.HeatSource(rate=1, structures=["box"])],
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureBoundary(structure="box"),
+                condition=td.TemperatureBC(temperature=500),
+            )
+        ],
+        monitors=[temp_mnt],
+    )
+
+    return td.HeatChargeSimulationData(simulation=heat_sim, data=(temp_data,))
 
 
 def test_sim_data():
@@ -542,11 +596,16 @@ def test_replace_values_list():
     assert original_shape == new_shape and new_list[3] == [] and new_list[2][5][0] == []
 
 
-def test_to_mat_file(tmp_path):
+@pytest.mark.parametrize(
+    "make_sim_data_fn",
+    [make_sim_data, get_mode_sim_data, make_heat_charge_sim_data],
+    ids=["SimulationData", "ModeSimulationData", "HeatChargeSimulationData"],
+)
+def test_to_mat_file(tmp_path, make_sim_data_fn):
     """
-    Test output of ``.mat`` file completes without error.
+    Test output of ``.mat`` file completes without error for all simulation data types.
     """
-    sim_data = make_sim_data()
+    sim_data = make_sim_data_fn()
     path = str(tmp_path / "test.mat")
     sim_data.to_mat_file(path)
 

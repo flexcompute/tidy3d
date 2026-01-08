@@ -17,7 +17,6 @@ from pydantic import Field
 from tidy3d.components.autograd.utils import split_list
 from tidy3d.components.base import JSON_TAG, Tidy3dBaseModel, cached_property
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
-from tidy3d.components.file_util import replace_values
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
@@ -26,7 +25,7 @@ from tidy3d.components.structure import Structure
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.monitor_data import MonitorDataType, MonitorDataTypes
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.exceptions import DataError, FileError, SetupError, Tidy3dKeyError
+from tidy3d.exceptions import DataError, SetupError, Tidy3dKeyError
 from tidy3d.log import log
 
 from .data_array import FreqDataArray, TimeDataArray
@@ -1340,50 +1339,3 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         monitor_name = Structure._get_monitor_name(index=structure_index, data_type=data_type)
         return self[monitor_name]
-
-    def to_mat_file(self, fname: PathLike, **kwargs: Any) -> None:
-        """Output the ``SimulationData`` object as ``.mat`` MATLAB file.
-
-        Parameters
-        ----------
-        fname : PathLike
-            Full path to the output file. Should include ``.mat`` file extension.
-        **kwargs : dict, optional
-            Extra arguments to ``scipy.io.savemat``: see ``scipy`` documentation for more detail.
-
-        Example
-        -------
-        >>> simData.to_mat_file('/path/to/file/data.mat') # doctest: +SKIP
-        """
-        # Check .mat file extension is given
-        extension = pathlib.Path(fname).suffixes[0].lower()
-        if len(extension) == 0:
-            raise FileError(f"File '{fname}' missing extension.")
-        if extension != ".mat":
-            raise FileError(f"File '{fname}' should have a .mat extension.")
-
-        # Handle m_dict in kwargs
-        if "m_dict" in kwargs:
-            raise ValueError(
-                "'m_dict' is automatically determined by 'to_mat_file', can't pass to 'savemat'."
-            )
-
-        # Get SimData object as dictionary
-        sim_dict = self.model_dump()
-
-        # set long field names true by default, otherwise it wont save fields with > 31 characters
-        if "long_field_names" not in kwargs:
-            kwargs["long_field_names"] = True
-
-        # Remove NoneType values from dict
-        # Built from theory discussed in https://github.com/scipy/scipy/issues/3488
-        modified_sim_dict = replace_values(sim_dict, None, [])
-
-        try:
-            from scipy.io import savemat
-
-            savemat(fname, modified_sim_dict, **kwargs)
-        except Exception as e:
-            raise ValueError(
-                "Could not save supplied 'SimulationData' to file. As this is an experimental feature, we may not be able to support the contents of your dataset. If you receive this error, please feel free to raise an issue on our front end repository so we can investigate."
-            ) from e

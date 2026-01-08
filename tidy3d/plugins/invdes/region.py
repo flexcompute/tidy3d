@@ -181,6 +181,16 @@ class TopologyDesignRegion(DesignRegion):
         "Supplying ``False`` will completely leave out the override structure.",
     )
 
+    priority: Optional[int] = Field(
+        None,
+        title="Priority",
+        description="Priority of the structure applied in structure overlapping region. "
+        "The material property in the overlapping region is dictated by the structure "
+        "of higher priority. For structures of equal priority, "
+        "the structure added later to the structure list takes precedence. When `priority` is None, "
+        "the value is automatically assigned based on `structure_priority_mode` in the `Simulation`.",
+    )
+
     def _validate_eps_values(self) -> None:
         """Validate the epsilon values by evaluating the transformations."""
         try:
@@ -331,7 +341,7 @@ class TopologyDesignRegion(DesignRegion):
         eps_values = self.eps_values(params)
         eps_data_array = td.SpatialDataArray(eps_values, coords=coords)
         medium = td.CustomMedium(permittivity=eps_data_array)
-        return td.Structure(geometry=self.geometry, medium=medium)
+        return td.Structure(geometry=self.geometry, medium=medium, priority=self.priority)
 
     @property
     def _override_structure_dl(self) -> float:
