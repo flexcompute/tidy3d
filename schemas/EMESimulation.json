@@ -5423,8 +5423,8 @@
             "filter_order": "over",
             "filter_reference": 0.0,
             "keep_modes": "all",
-            "sort_key": null,
-            "sort_order": "ascending",
+            "sort_key": "n_eff",
+            "sort_order": "descending",
             "sort_reference": null,
             "track_freq": "central",
             "type": "ModeSortSpec"
@@ -8173,8 +8173,8 @@
             "filter_order": "over",
             "filter_reference": 0.0,
             "keep_modes": "all",
-            "sort_key": null,
-            "sort_order": "ascending",
+            "sort_key": "n_eff",
+            "sort_order": "descending",
             "sort_reference": null,
             "track_freq": "central",
             "type": "ModeSortSpec"
@@ -8255,8 +8255,8 @@
               "filter_order": "over",
               "filter_reference": 0.0,
               "keep_modes": "all",
-              "sort_key": null,
-              "sort_order": "ascending",
+              "sort_key": "n_eff",
+              "sort_order": "descending",
               "sort_reference": null,
               "track_freq": "central",
               "type": "ModeSortSpec"
@@ -8538,8 +8538,8 @@
               "filter_order": "over",
               "filter_reference": 0.0,
               "keep_modes": "all",
-              "sort_key": null,
-              "sort_order": "ascending",
+              "sort_key": "n_eff",
+              "sort_order": "descending",
               "sort_reference": null,
               "track_freq": "central",
               "type": "ModeSortSpec"
@@ -8683,6 +8683,7 @@
           "default": "all"
         },
         "sort_key": {
+          "default": "n_eff",
           "enum": [
             "TE_fraction",
             "TM_fraction",
@@ -8696,7 +8697,6 @@
           "type": "string"
         },
         "sort_order": {
-          "default": "ascending",
           "enum": [
             "ascending",
             "descending"
@@ -8826,8 +8826,8 @@
             "filter_order": "over",
             "filter_reference": 0.0,
             "keep_modes": "all",
-            "sort_key": null,
-            "sort_order": "ascending",
+            "sort_key": "n_eff",
+            "sort_order": "descending",
             "sort_reference": null,
             "track_freq": "central",
             "type": "ModeSortSpec"

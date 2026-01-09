@@ -29,6 +29,47 @@ MODE_DATA_KEYS = Literal[
     "fill_fraction_box",
 ]
 
+# Default sort order for each mode data key when no sort_reference is provided.
+# "descending" for quantities where higher values are typically preferred.
+# "ascending" for quantities where lower values are typically preferred.
+# NOTE: When adding a new key to MODE_DATA_KEYS, you must also add it here.
+MODE_DATA_KEY_SORT_ORDER: dict[str, Literal["ascending", "descending"]] = {
+    "n_eff": "descending",  # higher n_eff = more confined
+    "k_eff": "ascending",  # lower k_eff = less loss
+    "TE_fraction": "descending",  # higher = more TE-like
+    "TM_fraction": "descending",  # higher = more TM-like
+    "wg_TE_fraction": "descending",  # higher = more TE-like
+    "wg_TM_fraction": "descending",  # higher = more TM-like
+    "mode_area": "ascending",  # smaller = more confined
+    "fill_fraction_box": "descending",  # higher = more overlap with box
+}
+
+# Validate that all MODE_DATA_KEYS are present in MODE_DATA_KEY_SORT_ORDER
+_MODE_DATA_KEYS_SET = set(MODE_DATA_KEYS.__args__)
+_missing_keys = _MODE_DATA_KEYS_SET - set(MODE_DATA_KEY_SORT_ORDER.keys())
+if _missing_keys:
+    raise RuntimeError(
+        f"MODE_DATA_KEY_SORT_ORDER is missing entries for: {_missing_keys}. "
+        "Please add default sort orders for all MODE_DATA_KEYS."
+    )
+
+
+def _build_sort_order_description() -> str:
+    """Build the sort_order field description dynamically from MODE_DATA_KEY_SORT_ORDER."""
+    descending_keys = [k for k, v in MODE_DATA_KEY_SORT_ORDER.items() if v == "descending"]
+    ascending_keys = [k for k, v in MODE_DATA_KEY_SORT_ORDER.items() if v == "ascending"]
+
+    desc_str = ", ".join(f"``{k}``" for k in descending_keys)
+    asc_str = ", ".join(f"``{k}``" for k in ascending_keys)
+
+    return (
+        "Sort order for the selected key or difference to reference value. "
+        "If ``None``, the default depends on ``sort_key`` and ``sort_reference``. "
+        "When ``sort_reference`` is provided, defaults to ``'ascending'`` (closest to reference first). "
+        f"Otherwise, defaults to the natural order for each key: ``'descending'`` for {desc_str} "
+        f"(higher values first); ``'ascending'`` for {asc_str} (lower values first)."
+    )
+
 
 class ModeSortSpec(Tidy3dBaseModel):
     """Specification for filtering and sorting modes within each frequency.
@@ -82,11 +123,10 @@ class ModeSortSpec(Tidy3dBaseModel):
     )
 
     # Sorting stage
-    sort_key: Optional[MODE_DATA_KEYS] = pd.Field(
-        None,
+    sort_key: MODE_DATA_KEYS = pd.Field(
+        "n_eff",
         title="Sorting key",
-        description="Quantity used to sort modes within each filtered group. If ``None``, "
-        "sorting is by descending effective index.",
+        description="Quantity used to sort modes within each filtered group.",
     )
     sort_reference: Optional[float] = pd.Field(
         None,
@@ -95,11 +135,25 @@ class ModeSortSpec(Tidy3dBaseModel):
             "If provided, sorting is based on the absolute difference to this reference value."
         ),
     )
-    sort_order: Literal["ascending", "descending"] = pd.Field(
-        "ascending",
+    sort_order: Optional[Literal["ascending", "descending"]] = pd.Field(
+        None,
         title="Sorting direction",
-        description="Sort order for the selected key or difference to reference value.",
+        description=_build_sort_order_description(),
     )
+
+    @pd.validator("sort_order", always=True)
+    @skip_if_fields_missing(["sort_key", "sort_reference"])
+    def _set_default_sort_order(cls, val, values):
+        """Set default sort order based on sort_key and sort_reference."""
+        if val is not None:
+            return val
+        sort_reference = values.get("sort_reference")
+        # When sorting by distance to a reference, ascending is natural (closest first)
+        if sort_reference is not None:
+            return "ascending"
+        # Otherwise, use the natural default for each key
+        sort_key = values.get("sort_key")
+        return MODE_DATA_KEY_SORT_ORDER.get(sort_key, "ascending")
 
     # Frequency tracking - applied after sorting and filtering
     track_freq: Optional[TrackFreq] = pd.Field(
@@ -128,6 +182,27 @@ class ModeSortSpec(Tidy3dBaseModel):
                 "ModeSortSpec.bounding_box must be set when using 'fill_fraction_box'."
             )
         return values
+
+    @property
+    def has_custom_sort_or_filter(self) -> bool:
+        """Whether this sort spec has custom sorting/filtering beyond the default.
+
+        Returns ``True`` if any of the following differ from defaults:
+        - ``filter_key`` is not ``None``
+        - ``sort_key`` is not ``'n_eff'``
+        - ``sort_reference`` is not ``None``
+        - ``sort_order`` is not ``'descending'``
+        - ``keep_modes`` is not ``'all'``
+
+        This is used to check compatibility with the deprecated ``filter_pol`` field.
+        """
+        return (
+            self.filter_key is not None
+            or self.sort_key != "n_eff"
+            or self.sort_reference is not None
+            or self.sort_order != "descending"
+            or self.keep_modes != "all"
+        )
 
 
 class FrequencySamplingSpec(Tidy3dBaseModel, ABC):
@@ -707,8 +782,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
     def _filter_pol_and_sort_spec_exclusive(cls, values):
         """Ensure that 'filter_pol' and 'sort_spec' are not used together."""
         sort_spec = values.get("sort_spec")
-        sort_or_filter = sort_spec.filter_key is not None or sort_spec.sort_key is not None
-        if values.get("filter_pol") is not None and sort_or_filter:
+        if values.get("filter_pol") is not None and sort_spec.has_custom_sort_or_filter:
             raise SetupError(
                 "'filter_pol' cannot be used simultaneously with sorting or filtering "
                 "defined in 'sort_spec'. Define the filtering in 'sort_spec' exclusively."

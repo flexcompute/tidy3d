@@ -2515,6 +2515,20 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         if track_freq is None and sort_spec is None:
             return self
 
+        # If filter_pol is set, preserve its ordering and only allow tracking
+        if self.monitor.mode_spec.filter_pol is not None:
+            # Check if sort_spec has non-default values
+            if sort_spec is not None and sort_spec.has_custom_sort_or_filter:
+                raise DataError(
+                    "Cannot apply custom 'sort_spec' when 'filter_pol' is set. "
+                    "The deprecated 'filter_pol' field is mutually exclusive with 'sort_spec'. "
+                    "Please use 'sort_spec' with appropriate filtering instead of 'filter_pol'."
+                )
+            track_freq = track_freq or (sort_spec.track_freq if sort_spec is not None else None)
+            if track_freq and self.n_eff["f"].size > 1:
+                return self.overlap_sort(track_freq)
+            return self
+
         data = self
         if sort_spec is not None and sort_spec != self.monitor.mode_spec.sort_spec:
             # replace the monitor sort_spec with the provided sort_spec
@@ -2524,6 +2538,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         num_freqs = data.n_eff["f"].size
         num_modes = data.n_eff["mode_index"].size
+
         all_inds = np.arange(num_modes)
 
         # Helper to compute ordered indices within a subset
@@ -2536,25 +2551,12 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 order = order[::-1]
             return indices[order]
 
-        # Precompute metrics if provided
-        fill_fraction_metric = None
-
-        def _metric_for_key(key: Optional[str]):
-            nonlocal fill_fraction_metric
-            if key is None:
-                return None
-            if key == "fill_fraction_box":
-                if sort_spec is None or sort_spec.bounding_box is None:
-                    raise ValidationError(
-                        "ModeSortSpec.bounding_box must be defined when using 'fill_fraction_box'."
-                    )
-                if fill_fraction_metric is None:
-                    fill_fraction_metric = data.fill_fraction_box
-                return fill_fraction_metric
-            return getattr(data, key)
-
-        filter_metric = _metric_for_key(sort_spec.filter_key) if sort_spec else None
-        sort_metric = _metric_for_key(sort_spec.sort_key) if sort_spec else None
+        # Precompute metrics
+        filter_metric = None
+        if sort_spec is not None and sort_spec.filter_key is not None:
+            filter_metric = getattr(data, sort_spec.filter_key)
+        # sort_key is always set (defaults to "n_eff")
+        sort_metric = getattr(data, sort_spec.sort_key) if sort_spec is not None else None
         identity = np.arange(num_modes)
         sort_inds_2d = np.tile(identity, (num_freqs, 1))
 
@@ -2572,7 +2574,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 group1 = all_inds
                 group2 = np.array([], dtype=int)
 
-            # Sorting within each group if requested
+            # Sort within each group
             if sort_metric is not None:
                 vals_sort = sort_metric.isel(f=ifreq)
                 if sort_spec.sort_reference is not None:
