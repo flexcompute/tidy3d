@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.types import (
+    from tidy3d.components.types.base import (
         ArrayFloat1D,
         ArrayFloat2D,
         ArrayLike,

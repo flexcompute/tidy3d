@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
+    from tidy3d.components.types.base import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 
 AREA_SIZE_THRESHOLD = 1e-36
 

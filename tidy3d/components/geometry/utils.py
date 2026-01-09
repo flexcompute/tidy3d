@@ -20,7 +20,7 @@ from shapely.geometry.base import (
 from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.types import Shapely
+from tidy3d.components.types.base import Shapely
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dError
 
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from numpy.typing import ArrayLike
 
     from tidy3d.components.grid.grid import Grid
-    from tidy3d.components.types import (
+    from tidy3d.components.types.base import (
         ArrayFloat2D,
         Axis,
         Bound,
