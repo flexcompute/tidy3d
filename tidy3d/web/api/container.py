@@ -1290,13 +1290,14 @@ class Batch(WebContainer):
                     pbar_message = f"Downloading data for {len(fns)} tasks"
                     pbar = progress.add_task(pbar_message, total=len(fns))
                     completed = 0
-                    for _ in concurrent.futures.as_completed(futures):
+                    for fut in concurrent.futures.as_completed(futures):
+                        fut.result()
                         completed += 1
                         progress.update(pbar, completed=completed)
             else:
                 # Still ensure completion if verbose is off
-                for _ in concurrent.futures.as_completed(futures):
-                    pass
+                for fut in concurrent.futures.as_completed(futures):
+                    fut.result()
 
     def load(
         self,

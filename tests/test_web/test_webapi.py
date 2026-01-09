@@ -816,6 +816,23 @@ def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
     assert downloads == [("task_b_id", "download", os.path.join(str(tmp_path), "task_b_id.hdf5"))]
 
 
+def test_batch_download_surfaces_download_errors(monkeypatch, tmp_path):
+    monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
+    monkeypatch.setattr("tidy3d.web.api.container.Job.load_if_cached", property(lambda self: False))
+    monkeypatch.setattr("tidy3d.web.api.container.Job.task_id", property(lambda self: "task_a_id"))
+
+    def _raise_download(self, path):
+        raise RuntimeError("gzip extraction failed")
+
+    monkeypatch.setattr("tidy3d.web.api.container.Job.download", _raise_download)
+
+    sims = {"task_a": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+
+    with pytest.raises(RuntimeError, match="gzip extraction failed"):
+        batch.download(path_dir=str(tmp_path))
+
+
 """ Async """
 
 
