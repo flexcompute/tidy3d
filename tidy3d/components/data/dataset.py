@@ -51,7 +51,7 @@ class Dataset(Tidy3dBaseModel, ABC):
     def data_arrs(self) -> dict:
         """Returns a dictionary of all `:class:`.DataArray`s in the dataset."""
         data_arrs = {}
-        for key in self.__fields__.keys():
+        for key in self.__class__.model_fields.keys():
             data = getattr(self, key)
             if isinstance(data, DataArray):
                 data_arrs[key] = data

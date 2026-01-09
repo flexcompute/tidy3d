@@ -7236,7 +7236,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 
         if all(x is None for x in [temperature, electron_density, hole_density]):
             new_dict.pop("subpixel")
-            return PoleResidue.parse_obj(new_dict)
+            return PoleResidue.model_validate(new_dict)
 
         zeros = ParameterPerturbation._zeros_like(temperature, electron_density, hole_density)
 
@@ -7308,7 +7308,7 @@ def _get_all_subclasses(cls: T) -> list[type[T]]:
 
 
 for _custom_medium_cls in _get_all_subclasses(AbstractCustomMedium):
-    _custom_medium_cls.update_forward_refs()
+    _custom_medium_cls.model_rebuild()
 
 MediumType3D = Union[
     Medium,

@@ -21,7 +21,7 @@ Examples:
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 
 import numpy as np
 from pydantic import Field, FiniteFloat, field_validator
@@ -30,6 +30,9 @@ from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayFloat1D
 from tidy3d.constants import AMP, VOLT, inf
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
 class DCVoltageSource(Tidy3dBaseModel):
@@ -75,7 +78,7 @@ class DCVoltageSource(Tidy3dBaseModel):
         return val
 
     @staticmethod
-    def _count_unique_with_tolerance(arr, rtol=1e-9, atol=1e-12):
+    def _count_unique_with_tolerance(arr: NDArray, rtol: float = 1e-9, atol: float = 1e-12) -> int:
         """Count unique values treating values within tolerance as duplicates.
 
         Uses sorted comparison to group values that are practically equal
@@ -91,8 +94,9 @@ class DCVoltageSource(Tidy3dBaseModel):
                 unique_count += 1
         return unique_count
 
-    @pd.validator("voltage")
-    def check_repeated_voltage(cls, val):
+    @field_validator("voltage")
+    @classmethod
+    def check_repeated_voltage(cls, val: ArrayFloat1D) -> ArrayFloat1D:
         """Warn if repeated voltage values are present, treating 0 and -0 as the same value.
 
         Uses tolerance-based comparison to handle floating-point representation
