@@ -17,8 +17,13 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
 from tidy3d.components.geometry.float_utils import increment_float
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
-from tidy3d.components.types import Axis, ClipOperationType, MatrixReal4x4, PlanePosition
-from tidy3d.components.types.base import discriminated_union
+from tidy3d.components.types.base import (
+    Axis,
+    ClipOperationType,
+    MatrixReal4x4,
+    PlanePosition,
+    discriminated_union,
+)
 from tidy3d.components.viz import (
     ARROW_LENGTH,
     PLOT_BUFFER,
