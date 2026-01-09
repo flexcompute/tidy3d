@@ -14,6 +14,7 @@ from tidy3d._common.components.autograd import get_static
 from tidy3d._common.components.base import cached_property
 from tidy3d._common.components.data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
 from tidy3d._common.components.data.dataset import TriangleMeshDataset
+from tidy3d._common.components.data.validators import validate_no_nans
 from tidy3d._common.components.geometry import base
 from tidy3d._common.components.viz import add_ax_if_none, equal_aspect
 from tidy3d._common.config import config
@@ -21,7 +22,6 @@ from tidy3d._common.constants import fp_eps, inf
 from tidy3d._common.exceptions import DataError, ValidationError
 from tidy3d._common.log import log
 from tidy3d._common.packaging import verify_packages_import
-from tidy3d.components.data.validators import validate_no_nans
 
 if TYPE_CHECKING:
     from os import PathLike

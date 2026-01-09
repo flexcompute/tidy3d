@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+# ruff: noqa: I001 - ensure config is imported first
+from .config import config
+
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.boundary import BroadbandModeABCFitterParam, BroadbandModeABCSpec
 from tidy3d.components.data.index import SimulationDataMap
@@ -455,8 +458,6 @@ from .components.time_modulation import (
 from .components.transformation import RotationAroundAxis
 from .components.viz import VisualizationSpec, restore_matplotlib_rcparams
 
-# config
-from .config import config
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
 from .constants import C_0, EPSILON_0, ETA_0, HBAR, K_B, MU_0, Q_e, inf
