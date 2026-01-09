@@ -1,0 +1,20 @@
+version: 2
+
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"   # folder containing pyproject.toml + poetry.lock
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-patch-days: 7
+      semver-minor-days: 7
+      semver-major-days: 30
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    groups:
+      python:
+        patterns:
+          - "*"
