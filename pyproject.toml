@@ -176,6 +176,7 @@ dev = [
   'diff-cover',
   'openpyxl',
   'zizmor',
+  'libcst',
 ]
 tests = [
   'psutil',

@@ -362,7 +362,7 @@ class WebTask(ResourceLifecycle, Submittable, extra="allow"):
         if not self.task_id:
             raise ValueError("Task id not found.")
 
-        task_details = self.detail().dict()
+        task_details = self.detail().model_dump()
 
         if task_details and "groupId" in task_details:
             group_id = task_details["groupId"]

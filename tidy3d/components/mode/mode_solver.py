@@ -553,7 +553,9 @@ class ModeSolver(Tidy3dBaseModel):
         # Compute data on the Yee grid
         mode_solver_data = self._data_on_yee_grid()
         if self._has_microwave_mode_spec:
-            mode_solver_data = MicrowaveModeSolverData(**mode_solver_data.dict(exclude={"type"}))
+            mode_solver_data = MicrowaveModeSolverData(
+                **mode_solver_data.model_dump(exclude={"type"})
+            )
 
         # Colocate to grid boundaries if requested
         if self.colocate:

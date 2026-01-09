@@ -134,7 +134,7 @@ Other checks may be added in future development.
 
 #### JSON Operations
 
-The `Simulation` can be exported as .json-like dictionary with `Simulation.json()`
+The `Simulation` can be exported as .json-like dictionary with `Simulation.model_dump_json()`
 The schema corresponding to `Simulation` can be generated with `Simulation.schema()`
 
 ## Medium

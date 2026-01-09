@@ -86,7 +86,8 @@ class AxisAlignedCurrentIntegral(AxisAlignedCurrentIntegralSpec):
         integral around the surface defined by ``self.size``."""
         path_specs = self._to_path_integral_specs(h_horizontal=h_horizontal, h_vertical=h_vertical)
         path_integrals = tuple(
-            AxisAlignedPathIntegral(**path_spec.dict(exclude={"type"})) for path_spec in path_specs
+            AxisAlignedPathIntegral(**path_spec.model_dump(exclude={"type"}))
+            for path_spec in path_specs
         )
         return path_integrals
 
