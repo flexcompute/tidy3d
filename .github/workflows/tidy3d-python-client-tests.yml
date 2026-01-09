@@ -370,6 +370,8 @@ jobs:
     runs-on: ubuntu-latest
     if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
     name: lint-commit-messages
+    # Soft-fail on PRs (early feedback), hard-fail in merge queue (enforced)
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Check out source code
         uses: actions/checkout@v4
@@ -391,7 +393,18 @@ jobs:
           node --version
           npm --version
           npx commitlint --version
-        
+
+      - name: Check commit messages (pull_request)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          npx commitlint --from $BASE_SHA --to $HEAD_SHA --verbose || {
+            echo "::warning::Commit messages don't follow conventional commits format. Fix before merge queue."
+            exit 1
+          }
+
       - name: Check commit messages (merge_group)
         if: github.event_name == 'merge_group'
         env:
