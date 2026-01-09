@@ -737,3 +737,11 @@ class ScalarFieldDataArray(AbstractSpatialDataArray):
 
     __slots__ = ()
     _dims = ("x", "y", "z", "f")
+
+
+class TriangleMeshDataArray(DataArray):
+    """Data of the triangles of a surface mesh as in the STL file format."""
+
+    __slots__ = ()
+    _dims = ("face_index", "vertex_index", "axis")
+    _data_attrs = {"long_name": "surface mesh triangles"}

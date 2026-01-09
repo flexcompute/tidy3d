@@ -1,4 +1,8 @@
-"""Collections of DataArrays."""
+"""Compatibility shim for :mod:`tidy3d._common.components.data.dataset`."""
+
+# ruff: noqa: F401 - ignore unused imports, imports ensure compatibility
+
+# marked as migrated to _common
 
 from __future__ import annotations
 
@@ -9,7 +13,13 @@ import numpy as np
 import xarray as xr
 from pydantic import Field
 
-from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d._common.components.data.dataset import (
+    DEFAULT_MAX_CELLS_PER_STEP,
+    DEFAULT_MAX_SAMPLES_PER_STEP,
+    DEFAULT_TOLERANCE_CELL_FINDING,
+    Dataset,
+    TriangleMeshDataset,
+)
 from tidy3d.components.data.data_array import (
     DataArray,
     EMEScalarFieldDataArray,
@@ -22,7 +32,6 @@ from tidy3d.components.data.data_array import (
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
     TimeDataArray,
-    TriangleMeshDataArray,
 )
 from tidy3d.components.data.zbf import ZBFData
 from tidy3d.components.types.base import xyz
@@ -37,24 +46,6 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
     from tidy3d.components.types.base import Axis, FreqArray
-
-DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
-DEFAULT_MAX_CELLS_PER_STEP = 10_000
-DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
-
-
-class Dataset(Tidy3dBaseModel, ABC):
-    """Abstract base class for objects that store collections of `:class:`.DataArray`s."""
-
-    @property
-    def data_arrs(self) -> dict:
-        """Returns a dictionary of all `:class:`.DataArray`s in the dataset."""
-        data_arrs = {}
-        for key in self.__fields__.keys():
-            data = getattr(self, key)
-            if isinstance(data, DataArray):
-                data_arrs[key] = data
-        return data_arrs
 
 
 class FreqDataset(Dataset, ABC):
@@ -880,16 +871,6 @@ class MediumDataset(AbstractMediumPropertyDataset):
             "mu_yy": None,
             "mu_zz": None,
         }
-
-
-class TriangleMeshDataset(Dataset):
-    """Dataset for storing triangular surface data."""
-
-    surface_mesh: TriangleMeshDataArray = Field(
-        title="Surface mesh data",
-        description="Dataset containing the surface triangles and corresponding face indices "
-        "for a surface mesh.",
-    )
 
 
 class TimeDataset(Dataset):

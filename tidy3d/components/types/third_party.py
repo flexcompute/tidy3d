@@ -1,14 +1,8 @@
+"""Compatibility shim for :mod:`tidy3d._common.components.types.third_party`."""
+
+# ruff: noqa: F401 - ignore unused imports, imports ensure compatibility
+
+# marked as migrated to _common
 from __future__ import annotations
 
-from typing import Any
-
-from tidy3d.packaging import check_import
-
-# TODO Complicated as trimesh should be a core package unless decoupled implementation types in functional location.
-#  We need to restructure.
-if check_import("trimesh"):
-    import trimesh  # Won't add much overhead if already imported
-
-    TrimeshType = trimesh.Trimesh
-else:
-    TrimeshType = Any
+from tidy3d._common.components.types.third_party import TrimeshType
