@@ -295,8 +295,8 @@ class WavePort(AbstractTerminalPort, Box):
             ) from e
         return val
 
-    @skip_if_fields_missing(["mode_spec"])
     @pd.validator("mode_selection", always=True)
+    @skip_if_fields_missing(["mode_spec"])
     def _validate_mode_selection(cls, val, values):
         """Validate that mode_selection contains valid, unique indices within range."""
         if val is None:
@@ -352,8 +352,8 @@ class WavePort(AbstractTerminalPort, Box):
             )
         return val
 
-    @skip_if_fields_missing(["mode_spec"])
     @pd.validator("mode_index", always=True)
+    @skip_if_fields_missing(["mode_spec"])
     def _validate_mode_index(cls, val, values):
         """Validate that mode_selection contains valid, unique indices within range."""
         if val is None:
