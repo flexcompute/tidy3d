@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import wraps
 from typing import TYPE_CHECKING
 
-from tidy3d.components.types import LengthUnit
+from tidy3d.components.types.base import LengthUnit
 from tidy3d.constants import UnitScaling
 from tidy3d.exceptions import Tidy3dKeyError
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     T = TypeVar("T", bound=Callable[..., Axes])
     from typing import Optional
 
-    from tidy3d.components.types import Ax, Axis
+    from tidy3d.components.types.base import Ax, Axis
 
 
 def _create_unit_aware_locator() -> ticker.Locator:

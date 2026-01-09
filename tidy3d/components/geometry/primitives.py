@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
+    from tidy3d.components.types.base import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
