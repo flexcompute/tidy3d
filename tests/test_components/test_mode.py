@@ -413,3 +413,100 @@ def test_track_freq_deprecation():
     # Tracking can be turned off in ModeSortSpec
     ms = td.ModeSpec(num_modes=3, sort_spec=td.ModeSortSpec(track_freq=None))
     assert ms._track_freq is None
+
+
+def test_mode_sort_spec_default_sort_order():
+    """Test that sort_order defaults correctly based on sort_key and sort_reference."""
+    from tidy3d.components.mode_spec import MODE_DATA_KEY_SORT_ORDER
+
+    # Test 1: Default behavior (n_eff, no reference) -> descending
+    sort_spec = td.ModeSortSpec()
+    assert sort_spec.sort_key == "n_eff"
+    assert sort_spec.sort_order == "descending"
+
+    # Test 2: n_eff with reference -> ascending (closest to reference first)
+    sort_spec = td.ModeSortSpec(sort_key="n_eff", sort_reference=1.5)
+    assert sort_spec.sort_order == "ascending"
+
+    # Test 3: k_eff without reference -> ascending (lowest loss first)
+    sort_spec = td.ModeSortSpec(sort_key="k_eff")
+    assert sort_spec.sort_order == "ascending"
+
+    # Test 4: mode_area without reference -> ascending (smallest first)
+    sort_spec = td.ModeSortSpec(sort_key="mode_area")
+    assert sort_spec.sort_order == "ascending"
+
+    # Test 5: TE_fraction without reference -> descending (highest first)
+    sort_spec = td.ModeSortSpec(sort_key="TE_fraction")
+    assert sort_spec.sort_order == "descending"
+
+    # Test 6: TM_fraction without reference -> descending (highest first)
+    sort_spec = td.ModeSortSpec(sort_key="TM_fraction")
+    assert sort_spec.sort_order == "descending"
+
+    # Test 7: Any key with reference -> ascending
+    for key in MODE_DATA_KEY_SORT_ORDER:
+        if key == "fill_fraction_box":
+            # fill_fraction_box requires bounding_box to be set
+            sort_spec = td.ModeSortSpec(
+                sort_key=key, sort_reference=0.5, bounding_box=td.Box(size=(1, 1, 1))
+            )
+        else:
+            sort_spec = td.ModeSortSpec(sort_key=key, sort_reference=0.5)
+        assert sort_spec.sort_order == "ascending", f"Expected ascending for {key} with reference"
+
+    # Test 8: Explicit sort_order is respected for all key types
+    # Override descending default to ascending
+    sort_spec = td.ModeSortSpec(sort_key="n_eff", sort_order="ascending")
+    assert sort_spec.sort_order == "ascending"
+
+    sort_spec = td.ModeSortSpec(sort_key="TE_fraction", sort_order="ascending")
+    assert sort_spec.sort_order == "ascending"
+
+    # Override ascending default to descending
+    sort_spec = td.ModeSortSpec(sort_key="k_eff", sort_order="descending")
+    assert sort_spec.sort_order == "descending"
+
+    sort_spec = td.ModeSortSpec(sort_key="mode_area", sort_order="descending")
+    assert sort_spec.sort_order == "descending"
+
+    # Test 9: Verify all keys have expected defaults (from dictionary)
+    for key, expected_order in MODE_DATA_KEY_SORT_ORDER.items():
+        if key == "fill_fraction_box":
+            # fill_fraction_box requires bounding_box to be set
+            sort_spec = td.ModeSortSpec(sort_key=key, bounding_box=td.Box(size=(1, 1, 1)))
+        else:
+            sort_spec = td.ModeSortSpec(sort_key=key)
+        assert sort_spec.sort_order == expected_order, f"Expected {expected_order} for {key}"
+
+
+def test_filter_pol_with_default_sort_spec():
+    """Test that deprecated filter_pol still works with default ModeSortSpec."""
+    from ..utils import AssertLogLevel
+
+    # filter_pol should work with default sort_spec (no custom sorting/filtering)
+    with AssertLogLevel("WARNING", contains_str="deprecated"):
+        ms = td.ModeSpec(num_modes=3, filter_pol="te")
+    assert ms.filter_pol == "te"
+
+    # filter_pol should fail with custom sort_spec
+    with pytest.raises(pydantic.ValidationError):
+        td.ModeSpec(
+            num_modes=3,
+            filter_pol="te",
+            sort_spec=td.ModeSortSpec(sort_key="k_eff"),
+        )
+
+    with pytest.raises(pydantic.ValidationError):
+        td.ModeSpec(
+            num_modes=3,
+            filter_pol="te",
+            sort_spec=td.ModeSortSpec(filter_key="TE_fraction"),
+        )
+
+    with pytest.raises(pydantic.ValidationError):
+        td.ModeSpec(
+            num_modes=3,
+            filter_pol="te",
+            sort_spec=td.ModeSortSpec(sort_reference=1.5),
+        )

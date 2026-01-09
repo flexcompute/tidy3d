@@ -2082,9 +2082,11 @@
                     "filter_key": null,
                     "filter_reference": 0.0,
                     "filter_order": "over",
-                    "sort_key": null,
+                    "bounding_box": null,
+                    "keep_modes": "all",
+                    "sort_key": "n_eff",
                     "sort_reference": null,
-                    "sort_order": "ascending",
+                    "sort_order": "descending",
                     "track_freq": "central",
                     "type": "ModeSortSpec"
                 },
@@ -2674,9 +2676,11 @@
                     "filter_key": null,
                     "filter_reference": 0.0,
                     "filter_order": "over",
-                    "sort_key": null,
+                    "bounding_box": null,
+                    "keep_modes": "all",
+                    "sort_key": "n_eff",
                     "sort_reference": null,
-                    "sort_order": "ascending",
+                    "sort_order": "descending",
                     "track_freq": "central",
                     "type": "ModeSortSpec"
                 },
@@ -3459,7 +3463,7 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.10.0",
+    "version": "2.11.0.dev0",
     "plot_length_units": "\u03bcm",
     "structure_priority_mode": "equal",
     "lumped_elements": [

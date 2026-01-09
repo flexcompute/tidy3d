@@ -1386,8 +1386,17 @@ def test_translated_dot():
 
 def test_mode_spec_filter_pol_sort_spec_exclusive():
     """Ensure ModeSpec errors when both filter_pol and sort_spec are set."""
+    # Using a non-default sort_key triggers the exclusivity check
     with pytest.raises(pydantic.ValidationError, match="simultaneously"):
-        _ = td.ModeSpec(num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(sort_key="n_eff"))
+        _ = td.ModeSpec(num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(sort_key="k_eff"))
+    # Using a sort_reference also triggers the exclusivity check
+    with pytest.raises(pydantic.ValidationError, match="simultaneously"):
+        _ = td.ModeSpec(num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(sort_reference=1.5))
+    # Using a filter_key also triggers the exclusivity check
+    with pytest.raises(pydantic.ValidationError, match="simultaneously"):
+        _ = td.ModeSpec(
+            num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(filter_key="TE_fraction")
+        )
 
 
 def test_modes_filter_sort():
