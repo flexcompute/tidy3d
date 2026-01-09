@@ -3712,7 +3712,7 @@ def cleanup_shapely_object(obj: Shapely, tolerance_ratio: float = POLY_TOLERANCE
     return rescaled_clean_obj
 
 
-from tidy3d.components.geometry.utils import (  # noqa: E402
+from tidy3d._common.components.geometry.utils import (  # noqa: E402
     GeometryType,
     from_shapely,
     vertices_from_shapely,

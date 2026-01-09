@@ -2,7 +2,7 @@
 
 # ruff: noqa: F401 - ignore unused imports, imports ensure compatibility
 
-# marked as migrated to _common
+# marked as partially migrated to _common
 
 from __future__ import annotations
 

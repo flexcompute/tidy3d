@@ -1,19 +1,51 @@
 from __future__ import annotations
 
+import io
 from html import escape
-from typing import TYPE_CHECKING
+from typing import (
+    TYPE_CHECKING,
+    Protocol,
+    runtime_checkable,
+)
 
 from tidy3d._common.exceptions import SetupError
 
 if TYPE_CHECKING:
-    from typing import Union
+    from collections.abc import Sequence
+    from os import PathLike
+    from typing import (
+        Callable,
+        Optional,
+        Union,
+        runtime_checkable,
+    )
 
     from IPython.core.display_functions import DisplayHandle
 
-    from tidy3d import Scene, Simulation
+
+@runtime_checkable
+class PlotSim3DProtocol(Protocol):
+    def to_hdf5_gz(
+        self,
+        fname: Union[PathLike[str], io.BytesIO],
+        custom_encoders: Optional[Sequence[Callable[..., object]]] = None,
+    ) -> None: ...
 
 
-def plot_scene_3d(scene: Scene, width: int = 800, height: int = 800) -> None:
+@runtime_checkable
+class PlotScene3DProtocol(Protocol):
+    # Used by plot_scene_3d to patch JSON_STRING
+    size: Sequence[float]
+    center: Sequence[float]
+
+    def to_hdf5(
+        self,
+        fname: Union[PathLike[str], io.BytesIO],
+        custom_encoders: Optional[Sequence[Callable[..., object]]] = None,
+    ) -> None: ...
+
+
+def plot_scene_3d(scene: PlotScene3DProtocol, width: int = 800, height: int = 800) -> None:
     import gzip
     import json
     from base64 import b64encode
@@ -69,7 +101,10 @@ def plot_scene_3d(scene: Scene, width: int = 800, height: int = 800) -> None:
 
 
 def plot_sim_3d(
-    sim: Union[Simulation, str], width: int = 800, height: int = 800, is_gz_base64: bool = False
+    sim: Union[PlotSim3DProtocol, str],
+    width: int = 800,
+    height: int = 800,
+    is_gz_base64: bool = False,
 ) -> DisplayHandle:
     """Make 3D display of simulation in ipython notebook."""
 
