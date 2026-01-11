@@ -15,12 +15,11 @@ from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
+from tidy3d.web.api import asynchronous as asynchronous_webapi
+from tidy3d.web.api import webapi
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
-from tidy3d.web.api.asynchronous import run_async as run_async_webapi
 from tidy3d.web.api.container import BatchData
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
-from tidy3d.web.api.webapi import load, restore_simulation_if_cached
-from tidy3d.web.api.webapi import run as run_webapi
 from tidy3d.web.core.types import PayType
 
 from .backward import postprocess_adj as _postprocess_adj_impl
@@ -268,7 +267,7 @@ def run(
             lazy=lazy,
         )
 
-    return run_webapi(
+    return webapi.run(
         simulation=simulation,
         task_name=task_name,
         folder_name=folder_name,
@@ -398,7 +397,7 @@ def run_async(
             lazy=lazy,
         )
 
-    return run_async_webapi(
+    return asynchronous_webapi.run_async(
         simulations=simulations,
         folder_name=folder_name,
         path_dir=path_dir,
@@ -563,7 +562,7 @@ def _run_primitive(
         )
     else:
         sim_original = sim_original.updated_copy(simulation_type="autograd_fwd", deep=False)
-        restored_path, task_id_fwd = restore_simulation_if_cached(
+        restored_path, task_id_fwd = webapi.restore_simulation_if_cached(
             simulation=sim_original,
             path=run_kwargs.get("path", None),
             reduce_simulation=run_kwargs.get("reduce_simulation", "auto"),
@@ -580,7 +579,7 @@ def _run_primitive(
                 **run_kwargs,
             )
         else:
-            sim_data_orig = load(
+            sim_data_orig = webapi.load(
                 task_id=None,
                 path=run_kwargs.get("path", None),
                 verbose=run_kwargs.get("verbose", None),

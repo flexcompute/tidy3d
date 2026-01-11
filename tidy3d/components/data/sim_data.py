@@ -1098,6 +1098,9 @@ class SimulationData(AbstractYeeGridSimulationData):
         for src_list in sources_adj_dict.values():
             adj_srcs += list(src_list)
 
+        if not adj_srcs:
+            return []
+
         adjoint_source_infos = self._process_adjoint_sources(adj_srcs=adj_srcs)
 
         if not adjoint_source_infos:
@@ -1143,7 +1146,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return adj_sims
 
-    def _make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, SourceType]:
+    def _make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, list[SourceType]]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
 
         # map of index into 'self.data' to the list of datasets we need adjoint sources for
@@ -1158,10 +1161,11 @@ class SimulationData(AbstractYeeGridSimulationData):
             sources_adj = mnt_data._make_adjoint_sources(
                 dataset_names=dataset_names, fwidth=self._fwidth_adj
             )
-            sources_adj_all[mnt_data.monitor.name] = sources_adj
             log.info(
                 f"Created {len(sources_adj)} adjoint sources for monitor '{mnt_data.monitor.name}'."
             )
+            if sources_adj:
+                sources_adj_all[mnt_data.monitor.name] = sources_adj
 
         return sources_adj_all
 
