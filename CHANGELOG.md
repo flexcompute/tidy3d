@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `AutoImpedanceSpec` validation to check path intersections against all conductors, not just filtered ones, as well as the mode plane bounds.
 - Fixed `WavePort` validation so invalid `mode_spec` errors are no longer masked by a `KeyError`.
 - Fixed adjoint gradients being treated as zero due to scale-dependent `np.allclose(..., atol=1e-8)` checks, which could skip adjoint simulations and return zero gradients.
+- Fixed adjoint setup crashing when traced monitor outputs produce no adjoint sources, returning no adjoint simulations instead.
 - Fixed interpolation handling for permittivity and conductivity gradients in CustomMedium.
 - Restored original batch-load logging by suppressing per-task “Loading simulation…” messages. 
 - Fixed output range of `tidy3d.plugins.invdes.FilterAndProject` to be between 0 and 1.
