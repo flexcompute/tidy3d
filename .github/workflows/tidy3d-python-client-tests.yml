@@ -575,8 +575,9 @@ jobs:
     # Run on open PRs OR when manually triggered with local_tests=true
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.local_tests == 'true'
-    name: python-${{ matrix.python-version }}-self-hosted-runner 
-    runs-on: [ slurm-runner, 4xcpu, container=ghcr.io/astral-sh/uv:debian ]
+    name: python-${{ matrix.python-version }}-ubuntu-latest
+    runs-on: ubuntu-latest
+    container: ghcr.io/astral-sh/uv:debian
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name }}-${{ matrix.python-version }}-local
       cancel-in-progress: true
