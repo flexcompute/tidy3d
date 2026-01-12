@@ -139,12 +139,14 @@ def interpn(
     else:
         raise ValueError(f"Unsupported interpolation method: {method}")
 
+    # Avoid SciPy coercing autograd ArrayBox values during _check_values.
+    dummy_values = np.zeros(np.shape(values), dtype=float)
     if kwargs.get("fill_value") == "extrapolate":
         itrp = RegularGridInterpolator(
-            points, values, method=method, fill_value=None, bounds_error=False
+            points, dummy_values, method=method, fill_value=None, bounds_error=False
         )
     else:
-        itrp = RegularGridInterpolator(points, values, method=method)
+        itrp = RegularGridInterpolator(points, dummy_values, method=method)
 
     # Prepare the grid for interpolation
     # This step reshapes the grid, checks for NaNs and out-of-bounds values
