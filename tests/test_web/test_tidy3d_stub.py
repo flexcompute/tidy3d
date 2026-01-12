@@ -118,20 +118,22 @@ def test_stub_data_to_file(tmp_path):
 def test_stub_data_postprocess_logs(tmp_path):
     """Tests the postprocess method of Tidy3dStubData when simulation diverged."""
     td.log.set_capture(True)
+    try:
+        # test diverged
+        sim_data = make_sim_data()
+        sim_data = sim_data.updated_copy(diverged=True, log="The simulation has diverged!")
+        file_path = os.path.join(tmp_path, "test_diverged.hdf5")
+        sim_data.to_file(file_path)
+        Tidy3dStubData.postprocess(file_path)
 
-    # test diverged
-    sim_data = make_sim_data()
-    sim_data = sim_data.updated_copy(diverged=True, log="The simulation has diverged!")
-    file_path = os.path.join(tmp_path, "test_diverged.hdf5")
-    sim_data.to_file(file_path)
-    Tidy3dStubData.postprocess(file_path)
-
-    # test warnings
-    sim_data = make_sim_data()
-    sim_data = sim_data.updated_copy(log="WARNING: messages were found in the solver log.")
-    file_path = os.path.join(tmp_path, "test_warnings.hdf5")
-    sim_data.to_file(file_path)
-    Tidy3dStubData.postprocess(file_path)
+        # test warnings
+        sim_data = make_sim_data()
+        sim_data = sim_data.updated_copy(log="WARNING: messages were found in the solver log.")
+        file_path = os.path.join(tmp_path, "test_warnings.hdf5")
+        sim_data.to_file(file_path)
+        Tidy3dStubData.postprocess(file_path)
+    finally:
+        td.log.set_capture(False)
 
 
 @responses.activate
@@ -139,32 +141,34 @@ def test_stub_data_lazy_loading(tmp_path):
     """Tests the postprocess method with lazy loading of Tidy3dStubData when simulation diverged."""
     td.log.set_capture(True)
     sim_diverged_log = "The simulation has diverged!"
+    try:
+        # make sim data where test diverged
+        sim_data = make_sim_data()
+        sim_data = sim_data.updated_copy(diverged=True, log=sim_diverged_log)
+        file_path = os.path.join(tmp_path, "test_diverged.hdf5")
+        sim_data.to_file(file_path)
 
-    # make sim data where test diverged
-    sim_data = make_sim_data()
-    sim_data = sim_data.updated_copy(diverged=True, log=sim_diverged_log)
-    file_path = os.path.join(tmp_path, "test_diverged.hdf5")
-    sim_data.to_file(file_path)
+        # default case with lazy=False should output a warning
+        with AssertLogLevel("WARNING", contains_str=sim_diverged_log):
+            Tidy3dStubData.postprocess(file_path, lazy=False)
 
-    # default case with lazy=False should output a warning
-    with AssertLogLevel("WARNING", contains_str=sim_diverged_log):
-        Tidy3dStubData.postprocess(file_path, lazy=False)
+        # we expect no warning in lazy mode as object should not be loaded
+        with AssertLogLevel(None):
+            sim_data = Tidy3dStubData.postprocess(file_path, lazy=True)
 
-    # we expect no warning in lazy mode as object should not be loaded
-    with AssertLogLevel(None):
-        sim_data = Tidy3dStubData.postprocess(file_path, lazy=True)
+        sim_data_copy = sim_data.copy()
 
-    sim_data_copy = sim_data.copy()
+        # variable dict should only contain metadata to load the data, not the data itself
+        assert is_lazy_object(sim_data)
 
-    # variable dict should only contain metadata to load the data, not the data itself
-    assert is_lazy_object(sim_data)
+        # the type should be still SimulationData despite being lazy
+        assert isinstance(sim_data, SimulationData)
 
-    # the type should be still SimulationData despite being lazy
-    assert isinstance(sim_data, SimulationData)
-
-    # we expect a warning from the lazy object if some field is accessed
-    with AssertLogLevel("WARNING", contains_str=sim_diverged_log):
-        _ = sim_data_copy.monitor_data
+        # we expect a warning from the lazy object if some field is accessed
+        with AssertLogLevel("WARNING", contains_str=sim_diverged_log):
+            _ = sim_data_copy.monitor_data
+    finally:
+        td.log.set_capture(False)
 
 
 @pytest.mark.parametrize(

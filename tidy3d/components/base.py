@@ -26,7 +26,6 @@ import yaml
 from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import isbox
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
-from pydantic.functional_validators import ModelWrapValidatorHandler
 
 from tidy3d.exceptions import FileError
 from tidy3d.log import log
@@ -42,6 +41,7 @@ if TYPE_CHECKING:
     from typing import Callable
 
     from pydantic.fields import FieldInfo
+    from pydantic.functional_validators import ModelWrapValidatorHandler
 
     from tidy3d.compat import Self
 
@@ -306,11 +306,16 @@ class Tidy3dBaseModel(BaseModel):
         if isinstance(value, Tidy3dBaseModel):
             # This function needs to take special care because of mutable attributes inside of frozen pydantic models
             to_hash_list = []
-            for k, v in dict(value).items():
+            for k in type(value).model_fields:
                 if k == "attrs":
                     continue
-                v_hash = Tidy3dBaseModel._recursive_hash(v)
+                v_hash = Tidy3dBaseModel._recursive_hash(getattr(value, k))
                 to_hash_list.append((k, v_hash))
+            extra = getattr(value, "__pydantic_extra__", None)
+            if extra:
+                for k, v in extra.items():
+                    v_hash = Tidy3dBaseModel._recursive_hash(v)
+                    to_hash_list.append((k, v_hash))
             # attrs is mutable, use serialized output as safe hashing option
             if value.attrs:
                 attrs_str = value._attrs_digest()
