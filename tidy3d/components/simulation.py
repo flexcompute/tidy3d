@@ -171,8 +171,8 @@ MAX_NUM_SOURCES = 1000
 # restrictions on simulation number of cells and number of time steps
 MAX_TIME_STEPS = 1e8
 WARN_TIME_STEPS = 1e6
-MAX_GRID_CELLS = 20e9
-MAX_CELLS_TIMES_STEPS = 1e20
+MAX_GRID_CELLS = 20e10
+MAX_CELLS_TIMES_STEPS = 1e25
 
 # monitor warnings and restrictions
 MAX_TIME_MONITOR_STEPS = 5000  # does not apply to 0D monitors
