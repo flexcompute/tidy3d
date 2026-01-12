@@ -259,7 +259,7 @@ class BatchDetail(TaskBase):
     message: str = None
     tasks: list[BatchMember] = []
     validateErrors: dict = None
-    taskType: str = "RF"
+    taskType: str = None
     version: str = None
 
 

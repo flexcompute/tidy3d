@@ -830,6 +830,10 @@ class SimulationTask(WebTask):
 class BatchTask(WebTask):
     """Interface for managing a batch task on the server."""
 
+    task_type: Optional[str] = Field(
+        None, title="task_type", description="The type of task.", alias="taskType"
+    )
+
     @classmethod
     def get(cls, task_id: str, verbose: bool = True) -> BatchTask:
         """Get batch task by id.
@@ -851,8 +855,11 @@ class BatchTask(WebTask):
         except WebNotFoundError as e:
             td.log.error(f"The requested batch ID '{task_id}' does not exist.")
             raise e
-        # We only need to validate existence; store id on the instance.
-        return BatchTask(taskId=task_id) if resp else None
+        # Extract taskType from response if available
+        if resp:
+            task_type = resp.get("taskType") if isinstance(resp, dict) else None
+            return BatchTask(taskId=task_id, taskType=task_type)
+        return None
 
     def detail(self) -> BatchDetail:
         """Fetches the detailed information and status of the batch.
