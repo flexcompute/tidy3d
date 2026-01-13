@@ -1182,6 +1182,8 @@ def load(
                 except Exception as e:
                     log.info(f"Failed to load simulation for storing results: {e}.")
                     return stub_data
+            else:
+                simulation = stub_data.simulation
             simulation_cache.store_result(
                 task_id=task_id,
                 path=path,

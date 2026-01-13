@@ -15,6 +15,7 @@ from tidy3d._common.components.geometry.utils import (
     GeometryType,
     SnapBehavior,
     SnapLocation,
+    SnappingSpec,  # noqa: TC
     flatten_groups,
     flatten_shapely_geometries,
     from_shapely,
@@ -34,7 +35,6 @@ if TYPE_CHECKING:
     from numpy.typing import ArrayLike
     from pydantic import NonNegativeInt
 
-    from tidy3d._common.components.geometry.utils import SnappingSpec
     from tidy3d.components.grid.grid import Grid
     from tidy3d.components.types.base import (
         Bound,
