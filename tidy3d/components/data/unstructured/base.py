@@ -729,7 +729,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     f" of grid points ({num_points})."
                 )
 
-            values_numpy = vtk["vtk_to_numpy"](array_vtk)
+            values_numpy = np.array(vtk["vtk_to_numpy"](array_vtk), copy=True)
             values_name = array_vtk.GetName()
 
             # vtk doesn't support complex numbers
@@ -1260,12 +1260,17 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         array_id = 0 if self.values.name is None else self.values.name
 
         # TODO: generalize this
-        values_numpy = vtk["vtk_to_numpy"](interpolated.GetPointData().GetAbstractArray(array_id))
+        values_numpy = np.array(
+            vtk["vtk_to_numpy"](interpolated.GetPointData().GetAbstractArray(array_id)), copy=True
+        )
 
         # fill points without interpolated values
         if fill_value != 0:
-            mask = vtk["vtk_to_numpy"](
-                interpolated.GetPointData().GetAbstractArray("vtkValidPointMask")
+            mask = np.array(
+                vtk["vtk_to_numpy"](
+                    interpolated.GetPointData().GetAbstractArray("vtkValidPointMask")
+                ),
+                copy=True,
             )
             values_numpy[mask != 1] = fill_value
 
