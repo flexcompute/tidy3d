@@ -957,7 +957,7 @@ def abort(task_id: TaskId) -> Optional[TaskInfo]:
         f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
     )
     return TaskInfo(
-        **{"taskId": task_id, "taskType": getattr(task, "task_type", None), **task.dict()}
+        **{"taskId": task_id, "taskType": getattr(task, "task_type", None), **task.model_dump()}
     )
 
 

@@ -450,10 +450,22 @@ def download_gz_file(
             verbose=verbose,
             progress_callback=progress_callback,
         )
-        if os.path.exists(tmp_file_path_str):
-            extract_gzip_file(Path(tmp_file_path_str), to_path)
-        else:
+        if not Path(tmp_file_path_str).exists():
             raise WebError(f"Failed to download and extract '{remote_filename}'.")
+
+        tmp_out_fd, tmp_out_path_str = tempfile.mkstemp(
+            suffix=IN_TRANSIT_SUFFIX, dir=to_path.parent
+        )
+        os.close(tmp_out_fd)
+        tmp_out_path = Path(tmp_out_path_str)
+        try:
+            extract_gzip_file(Path(tmp_file_path_str), tmp_out_path)
+            tmp_out_path.replace(to_path)
+        except Exception as e:
+            tmp_out_path.unlink(missing_ok=True)
+            raise WebError(
+                f"Failed to extract '{remote_filename}' from '{tmp_file_path_str}' to '{to_path}'."
+            ) from e
     finally:
-        os.unlink(tmp_file_path_str)
+        Path(tmp_file_path_str).unlink(missing_ok=True)
     return to_path

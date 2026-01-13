@@ -1111,6 +1111,76 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @equal_aspect
     @add_ax_if_none
+    def plot(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        source_alpha: Optional[float] = None,
+        monitor_alpha: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+        fill_structures: bool = True,
+        **patch_kwargs: Any,
+    ) -> Ax:
+        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        source_alpha : float = None
+            Opacity of the sources. If ``None``, uses Tidy3d default.
+        monitor_alpha : float = None
+            Opacity of the monitors. If ``None``, uses Tidy3d default.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        fill_structures : bool = True
+            Whether to fill structures with color or just draw outlines.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        # Call the parent's plot method
+        ax = super().plot(
+            x=x,
+            y=y,
+            z=z,
+            ax=ax,
+            source_alpha=source_alpha,
+            monitor_alpha=monitor_alpha,
+            hlim=hlim,
+            vlim=vlim,
+            fill_structures=fill_structures,
+            **patch_kwargs,
+        )
+
+        # Add boundaries based on simulation type
+        # NOTE: there's no need to add heat boundaries since
+        # they are already added in the parent 'plot' method.
+        simulation_types = self._get_simulation_types()
+        if (
+            TCADAnalysisTypes.CHARGE in simulation_types
+            or TCADAnalysisTypes.CONDUCTION in simulation_types
+        ):
+            ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, property="electric_conductivity")
+
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
     def plot_property(
         self,
         x: Optional[float] = None,
@@ -1120,7 +1190,9 @@ class HeatChargeSimulation(AbstractSimulation):
         alpha: Optional[float] = None,
         source_alpha: Optional[float] = None,
         monitor_alpha: Optional[float] = None,
-        property: str = "heat_conductivity",
+        property: Literal[
+            "heat_conductivity", "electric_conductivity", "source"
+        ] = "heat_conductivity",
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
     ) -> Ax:

@@ -550,7 +550,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
                 ("E", "abs^2"): 10,
                 ("H", "abs^2"): 10,
             }.get((field_name[0], val), 20)
-            field_data = db_factor * np.log10(np.abs(field_data))
+            field_data = self._apply_log_scale(field_data, vmin=vmin, db_factor=db_factor)
             field_data.name += " (dB)"
             cmap_type = "sequential"
         elif scale == "lin":

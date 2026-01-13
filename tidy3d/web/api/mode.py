@@ -265,21 +265,21 @@ def run_batch(
 class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
     """Interface for managing the running of a :class:`.ModeSolver` task on server."""
 
-    task_id: str = Field(
+    task_id: Optional[str] = Field(
         None,
         title="task_id",
         description="Task ID number, set when the task is created, leave as None.",
         alias="refId",
     )
 
-    solver_id: str = Field(
+    solver_id: Optional[str] = Field(
         None,
         title="solver",
         description="Solver ID number, set when the task is created, leave as None.",
         alias="id",
     )
 
-    real_flex_unit: float = Field(
+    real_flex_unit: Optional[float] = Field(
         None, title="real FlexCredits", description="Billed FlexCredits.", alias="charge"
     )
 
@@ -287,20 +287,20 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra="allow"):
         title="created_at", description="Time at which this task was created.", alias="createdAt"
     )
 
-    status: str = Field(
+    status: Optional[str] = Field(
         None,
         title="status",
         description="Mode solver task status.",
     )
 
-    file_type: str = Field(
+    file_type: Optional[str] = Field(
         None,
         title="file_type",
         description="File type used to upload the mode solver.",
         alias="fileType",
     )
 
-    mode_solver: ModeSolver = Field(
+    mode_solver: Optional[ModeSolver] = Field(
         None,
         title="mode_solver",
         description="Mode solver being run by this task.",

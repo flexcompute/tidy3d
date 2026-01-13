@@ -15,6 +15,7 @@ from functools import total_ordering, wraps
 from math import ceil
 from os import PathLike
 from pathlib import Path
+from types import UnionType
 from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar, Union, get_args, get_origin
 
 import h5py
@@ -26,7 +27,6 @@ from autograd.builtins import dict as TracedDict
 from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import isbox
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
-from pydantic.functional_validators import ModelWrapValidatorHandler
 
 from tidy3d._common.components.autograd.utils import get_static
 from tidy3d._common.components.data.data_array import DATA_ARRAY_MAP
@@ -40,9 +40,11 @@ if TYPE_CHECKING:
     from typing import Callable
 
     from pydantic.fields import FieldInfo
+    from pydantic.functional_validators import ModelWrapValidatorHandler
 
     from tidy3d._common.compat import Self
     from tidy3d._common.components.autograd.types import AutogradFieldMap
+
 
 INDENT_JSON_FILE = 4  # default indentation of json string in json files
 INDENT = None  # default indentation of json string used internally
@@ -152,6 +154,21 @@ def _fmt_ann_literal(ann: Any) -> str:
 
 
 T = TypeVar("T", bound="Tidy3dBaseModel")
+
+
+def field_allows_scalar(field: FieldInfo) -> bool:
+    annotation = field.annotation
+
+    def allows_scalar(a: Any) -> bool:
+        origin = get_origin(a)
+        if origin in (Union, UnionType):
+            args = (arg for arg in get_args(a) if arg is not type(None))
+            return any(allows_scalar(arg) for arg in args)
+        if origin is not None:
+            return False
+        return isinstance(a, type) and issubclass(a, (float, int, np.generic))
+
+    return allows_scalar(annotation)
 
 
 @total_ordering
@@ -288,11 +305,16 @@ class Tidy3dBaseModel(BaseModel):
         if isinstance(value, Tidy3dBaseModel):
             # This function needs to take special care because of mutable attributes inside of frozen pydantic models
             to_hash_list = []
-            for k, v in dict(value).items():
+            for k in type(value).model_fields:
                 if k == "attrs":
                     continue
-                v_hash = Tidy3dBaseModel._recursive_hash(v)
+                v_hash = Tidy3dBaseModel._recursive_hash(getattr(value, k))
                 to_hash_list.append((k, v_hash))
+            extra = getattr(value, "__pydantic_extra__", None)
+            if extra:
+                for k, v in extra.items():
+                    v_hash = Tidy3dBaseModel._recursive_hash(v)
+                    to_hash_list.append((k, v_hash))
             # attrs is mutable, use serialized output as safe hashing option
             if value.attrs:
                 attrs_str = value._attrs_digest()
@@ -306,6 +328,26 @@ class Tidy3dBaseModel(BaseModel):
         bf = io.BytesIO()
         self.to_hdf5(bf)
         return hashlib.md5(bf.getvalue()).hexdigest()
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_numpy_scalars_for_model(cls, data: Any) -> Any:
+        """
+        coerce numpy scalars / size-1 arrays to native Python
+        scalars, but only for fields whose annotations allow scalars.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        for name, field in cls.model_fields.items():
+            if name not in data or not field_allows_scalar(field):
+                continue
+
+            v = data[name]
+            if isinstance(v, np.generic) or (isinstance(v, np.ndarray) and v.size == 1):
+                data[name] = v.item()
+
+        return data
 
     @classmethod
     def _get_type_value(cls, obj: dict[str, Any]) -> str:
@@ -501,8 +543,8 @@ class Tidy3dBaseModel(BaseModel):
 
     def copy(
         self,
-        *,
         deep: bool = True,
+        *,
         validate: bool = True,
         update: Optional[Mapping[str, Any]] = None,
     ) -> Self:

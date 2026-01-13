@@ -715,3 +715,26 @@ def test_result_params_out_of_bounds():
 
     # get_sim should work without issues
     sim = result.get_sim(index=0)
+
+
+@pytest.mark.parametrize("check_low", [False, True])
+def test_transformation_clipping(check_low):
+    """Test the output of `FilterProject` is between 0 and 1."""
+
+    filter_project = tdi.FilterProject(radius=0.5, beta=1.0)
+    design_region_dl = 0.02
+
+    if check_low:
+        test_region = np.zeros((100, 100))
+        test_region[40:60, 40:60] = 1.0
+
+        output_region = filter_project.evaluate(test_region, design_region_dl)
+
+        assert np.min(output_region) >= 0.0, "Output region minimum below 0.0"
+    else:
+        test_region = np.ones((100, 100))
+        test_region[40:60, 40:60] = 0.0
+
+        output_region = filter_project.evaluate(test_region, design_region_dl)
+
+        assert np.max(output_region) <= 1.0, "Output region maximum above 1.0"

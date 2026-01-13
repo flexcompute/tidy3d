@@ -857,23 +857,22 @@ class PolySlab(base.Planar):
         x_vertices_f, _ = vertices_f.T
         x_vertices_axis, _ = vertices_axis.T
 
-        # find which segments intersect
-        f_left_to_intersect = x_vertices_f <= position
-        orig_right_to_intersect = x_vertices_axis > position
-        intersects_b = np.logical_and(f_left_to_intersect, orig_right_to_intersect)
+        # Find which segments intersect:
+        # 1. Strictly crossing: one endpoint strictly left, one strictly right
+        # 2. Touching: exactly one endpoint on the plane (xor), which excludes
+        #    edges lying entirely on the plane (both endpoints at position).
+        orig_on_plane = np.isclose(x_vertices_axis, position, rtol=_IS_CLOSE_RTOL)
+        f_on_plane = np.roll(orig_on_plane, shift=-1)
+        crosses_b = (x_vertices_axis > position) & (x_vertices_f < position)
+        crosses_f = (x_vertices_axis < position) & (x_vertices_f > position)
 
-        f_right_to_intersect = x_vertices_f > position
-        orig_left_to_intersect = x_vertices_axis <= position
-        intersects_f = np.logical_and(f_right_to_intersect, orig_left_to_intersect)
-
-        # exclude vertices at the position if exclude_on_vertices is True
         if exclude_on_vertices:
-            intersects_on = np.isclose(x_vertices_axis, position, rtol=_IS_CLOSE_RTOL)
-            intersects_f_on = np.isclose(x_vertices_f, position, rtol=_IS_CLOSE_RTOL)
-            intersects_both_off = np.logical_not(np.logical_or(intersects_on, intersects_f_on))
-            intersects_f &= intersects_both_off
-            intersects_b &= intersects_both_off
-        intersects_segment = np.logical_or(intersects_b, intersects_f)
+            # exclude vertices at the position
+            not_touching = np.logical_not(orig_on_plane | f_on_plane)
+            intersects_segment = (crosses_b | crosses_f) & not_touching
+        else:
+            single_touch = np.logical_xor(orig_on_plane, f_on_plane)
+            intersects_segment = crosses_b | crosses_f | single_touch
 
         iverts_b = vertices_axis[intersects_segment]
         iverts_f = vertices_f[intersects_segment]
@@ -892,10 +891,27 @@ class PolySlab(base.Planar):
         ints_y = np.array(ints_y)
         ints_angle = np.array(ints_angle)
 
-        sort_index = np.argsort(ints_y)
-        ints_y_sort = ints_y[sort_index]
+        # Get rid of duplicate intersection points (vertices counted twice if directly on position)
+        ints_y_sort, sort_index = np.unique(ints_y, return_index=True)
         ints_angle_sort = ints_angle[sort_index]
 
+        # For tangent touches (vertex on plane, both neighbors on same side),
+        # add y-value back to form a degenerate pair
+        if not exclude_on_vertices:
+            n = len(vertices_axis)
+            for idx in np.where(orig_on_plane)[0]:
+                prev_on = orig_on_plane[(idx - 1) % n]
+                next_on = orig_on_plane[(idx + 1) % n]
+                if not prev_on and not next_on:
+                    prev_side = x_vertices_axis[(idx - 1) % n] > position
+                    next_side = x_vertices_axis[(idx + 1) % n] > position
+                    if prev_side == next_side:
+                        ints_y_sort = np.append(ints_y_sort, vertices_axis[idx, 1])
+                        ints_angle_sort = np.append(ints_angle_sort, 0)
+
+            sort_index = np.argsort(ints_y_sort)
+            ints_y_sort = ints_y_sort[sort_index]
+            ints_angle_sort = ints_angle_sort[sort_index]
         return ints_y_sort, ints_angle_sort
 
     def _find_intersecting_ys_angle_slant(

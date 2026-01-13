@@ -304,6 +304,8 @@ class WavePort(AbstractTerminalPort, Box):
     @model_validator(mode="after")
     def _validate_mode_selection(self) -> Self:
         """Validate that mode_selection contains valid, unique indices within range."""
+        if self.mode_spec is None:
+            return self
         val = self.mode_selection
         if val is None:
             return self
@@ -364,6 +366,8 @@ class WavePort(AbstractTerminalPort, Box):
         """Validate that mode_selection contains valid, unique indices within range."""
         val = self.mode_index
         if val is None:
+            return self
+        if self.mode_spec is None:
             return self
         num_modes = self.mode_spec.num_modes
         if val >= num_modes:

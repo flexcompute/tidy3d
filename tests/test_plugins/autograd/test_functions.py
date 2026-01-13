@@ -9,6 +9,7 @@ from autograd import grad
 from autograd.test_util import check_grads
 from scipy.signal import convolve as convolve_sp
 
+from tidy3d.compat import np_trapezoid
 from tidy3d.plugins.autograd import (
     add_at,
     convolve,
@@ -552,7 +553,7 @@ class TestTrapz:
         """Test trapz values against NumPy for different array dimensions and integration axes."""
         y, x, dx = self.generate_y_x_dx(rng, shape, use_x)
         result_custom = trapz(y, x=x, dx=dx, axis=axis)
-        result_numpy = np.trapz(y, x=x, dx=dx, axis=axis)
+        result_numpy = np_trapezoid(y, x=x, dx=dx, axis=axis)
         npt.assert_allclose(result_custom, result_numpy)
 
     def test_trapz_grad(self, rng, shape, axis, use_x):

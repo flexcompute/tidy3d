@@ -941,6 +941,75 @@ def test_polyslab_intersection_inf_bounds():
     assert poly.intersections_plane(x=0)[0] == shapely.box(-1, -LARGE_NUMBER, 1, 0)
 
 
+def test_polyslab_intersection_with_coincident_plane():
+    """Test if intersection returns the correct shape when the plane is coincident with the side face."""
+    poly = td.PolySlab(
+        vertices=[[500.0, -7500.0], [500.0, 7500.0], [-500.0, 7500.0], [-500.0, -7500.0]],
+        slab_bounds=[0, 50],
+        axis=2,
+    )
+    # Each case should give one side face of the polyslab
+    expected_x_face = shapely.box(-7500, 0, 7500, 50)  # y-extent × z-extent
+    expected_y_face = shapely.box(-500, 0, 500, 50)  # x-extent × z-extent
+
+    assert poly.intersections_plane(x=-500) == [expected_x_face]
+    assert poly.intersections_plane(x=500) == [expected_x_face]
+    assert poly.intersections_plane(y=-7500) == [expected_y_face]
+    assert poly.intersections_plane(y=7500) == [expected_y_face]
+
+
+def test_polyslab_intersection_rotated_square():
+    """Test PolySlab plane intersection with a rotated square (diamond shape)."""
+    # Create a diamond by rotating a square 45 degrees
+    size = 2.0
+    angle = np.pi / 4
+    base_vertices = np.array(
+        [[-size / 2, -size / 2], [size / 2, -size / 2], [size / 2, size / 2], [-size / 2, size / 2]]
+    )
+    cos_a, sin_a = np.cos(angle), np.sin(angle)
+    rotation = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+    rotated = base_vertices @ rotation.T
+    rotated = rotated - rotated.min(axis=0) + 0.5  # shift to positive quadrant
+    vertices = [tuple(v) for v in rotated]
+
+    polyslab = td.PolySlab(vertices=vertices, slab_bounds=(0, 3), axis=2)
+
+    all_verts = np.array(vertices)
+    left_tip_x = all_verts[:, 0].min()
+    bottom_tip_y = all_verts[:, 1].min()
+    x_center = (all_verts[:, 0].min() + all_verts[:, 0].max()) / 2
+
+    # Test 1: Cut at z=1.5 (middle of slab) - should give full diamond
+    cross_section = polyslab.intersections_plane(z=1.5)
+    assert len(cross_section) == 1
+    assert np.isclose(cross_section[0].area, 4.0)
+
+    # Test 2: Cut through center at x=x_center - should give rectangle
+    cross_section = polyslab.intersections_plane(x=x_center)
+    assert len(cross_section) == 1
+    assert cross_section[0].area > 0
+
+    # Test 3: Cut at left corner tip (tangent touch) - should give degenerate shape
+    cross_section = polyslab.intersections_plane(x=left_tip_x)
+    assert len(cross_section) == 1
+    assert np.isclose(cross_section[0].area, 0.0)
+
+    # Test 4: Cut near left corner (slightly inside) - should give small shape
+    cross_section = polyslab.intersections_plane(x=left_tip_x + 0.3)
+    assert len(cross_section) == 1
+    assert cross_section[0].area > 0
+
+    # Test 5: Cut at bottom corner (tangent touch) - should give degenerate shape
+    cross_section = polyslab.intersections_plane(y=bottom_tip_y)
+    assert len(cross_section) == 1
+    assert np.isclose(cross_section[0].area, 0.0)
+
+    # Test 6: Cut at z=0 (bottom boundary) - should give full diamond
+    cross_section = polyslab.intersections_plane(z=0)
+    assert len(cross_section) == 1
+    assert np.isclose(cross_section[0].area, 4.0)
+
+
 def test_from_shapely():
     ring = shapely.LinearRing([(-16, 9), (-8, 9), (-12, 2)])
     poly = shapely.Polygon([(-2, 0), (-10, 0), (-6, 7)])

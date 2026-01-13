@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pathlib
 from abc import ABC
-from os import PathLike
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
@@ -13,13 +12,11 @@ from pydantic import Field, field_validator, model_validator
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.base_sim.simulation import AbstractSimulation
-from tidy3d.components.data.utils import UnstructuredGridDatasetType
 from tidy3d.components.file_util import replace_values
-from tidy3d.components.monitor import AbstractMonitor
-from tidy3d.components.types import FieldVal
 from tidy3d.exceptions import DataError, FileError, Tidy3dKeyError, ValidationError
 
 if TYPE_CHECKING:
+    from os import PathLike
     from typing import Union
 
     import xarray as xr
@@ -140,6 +137,40 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
 
         return field_value
 
+    @staticmethod
+    def _apply_log_scale(
+        field_data: xr.DataArray,
+        vmin: Optional[float] = None,
+        db_factor: float = 1.0,
+    ) -> xr.DataArray:
+        """Prepare field data for log-scale plotting by handling zeros.
+
+        Takes absolute value of the data, replaces zeros with a fill value
+        (to prevent log10(0) warnings), and applies log10 scaling.
+
+        Parameters
+        ----------
+        field_data : xr.DataArray
+            The field data to prepare.
+        vmin : float, optional
+            The minimum value for the color scale. If provided, zeros are replaced
+            with ``10 ** (vmin / db_factor)`` instead of NaN.
+        db_factor : float
+            Factor to multiply the log10 result by (e.g., 20 for dB scale of field,
+            10 for dB scale of power). Default is 1 (pure log10 scale).
+
+        Returns
+        -------
+        xr.DataArray
+            The log-scaled field data.
+        """
+        fill_val = np.nan
+        if vmin is not None:
+            fill_val = 10 ** (vmin / db_factor)
+        field_data = np.abs(field_data)
+        field_data = field_data.where((field_data > 0) | np.isnan(field_data), fill_val)
+        return db_factor * np.log10(field_data)
+
     def get_monitor_by_name(self, name: str) -> AbstractMonitor:
         """Return monitor named 'name'."""
         return self.simulation.get_monitor_by_name(name)
@@ -172,7 +203,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
             )
 
         # Get SimData object as dictionary
-        sim_dict = self.dict()
+        sim_dict = self.model_dump()
 
         # set long field names true by default, otherwise it wont save fields with > 31 characters
         if "long_field_names" not in kwargs:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -624,3 +626,49 @@ def test_plot_field_monitor_data_unsupported_scale():
             val="real",
             scale="invalid",
         )
+
+
+def test_plot_field_with_zeros_db_scale():
+    """Test that plotting field data with zeros using dB scale doesn't produce warnings."""
+    sim_data = make_sim_data()
+
+    # Get the existing field data and modify it to include zeros
+    field_monitor_data = sim_data["field"]
+    ex_data = field_monitor_data.Ex
+
+    # Create modified data with some zeros
+    values = ex_data.values.copy()
+    values[np.abs(values) < np.abs(values).max() * 0.3] = 0  # Set small values to zero
+    ex_with_zeros = ex_data.copy(data=values)
+
+    # Create new field data with zeros
+    field_data_with_zeros = field_monitor_data.updated_copy(Ex=ex_with_zeros)
+    f_sel = ex_data.f.values[0]
+    x_sel = ex_data.x.values[0]
+
+    # Plot with dB scale - this should not produce divide by zero warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("error", message="divide by zero")
+        sim_data.plot_field_monitor_data(
+            field_monitor_data=field_data_with_zeros,
+            field_name="Ex",
+            val="abs",
+            scale="dB",
+            f=f_sel,
+            x=x_sel,
+        )
+        plt.close()
+
+    # Also test with vmin specified (zeros replaced with floor value)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("error", message="divide by zero")
+        sim_data.plot_field_monitor_data(
+            field_monitor_data=field_data_with_zeros,
+            field_name="Ex",
+            val="abs",
+            scale="dB",
+            f=f_sel,
+            x=x_sel,
+            vmin=-50,
+        )
+        plt.close()

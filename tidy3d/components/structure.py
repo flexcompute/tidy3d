@@ -325,12 +325,47 @@ class Structure(AbstractStructure):
         return monitor_name_map[data_type]
 
     def _make_adjoint_monitors(
-        self, freqs: list[float], index: int, field_keys: list[str]
+        self,
+        freqs: list[float],
+        index: int,
+        field_keys: list[str],
+        plane: Optional[Box] = None,
     ) -> tuple[FieldMonitor, PermittivityMonitor]:
         """Generate the field and permittivity monitor for this structure."""
 
         geometry = self.geometry
-        box = geometry.bounding_box
+        geom_box = geometry.bounding_box
+
+        def _box_from_plane_intersection() -> Box:
+            plane_axis = plane._normal_axis
+            plane_position = plane.center[plane_axis]
+            axis_char = "xyz"[plane_axis]
+
+            intersections = geometry.intersections_plane(**{axis_char: plane_position})
+            bounds = [shape.bounds for shape in intersections if not shape.is_empty]
+            if len(bounds) == 0:
+                intersections = geom_box.intersections_plane(**{axis_char: plane_position})
+                bounds = [shape.bounds for shape in intersections if not shape.is_empty]
+            if len(bounds) == 0:  # fallback
+                return geom_box
+
+            min_plane = (min(b[0] for b in bounds), min(b[1] for b in bounds))
+            max_plane = (max(b[2] for b in bounds), max(b[3] for b in bounds))
+
+            rmin = [plane_position, plane_position, plane_position]
+            rmax = [plane_position, plane_position, plane_position]
+
+            _, plane_axes = Geometry.pop_axis((0, 1, 2), axis=plane_axis)
+            for ind, ax in enumerate(plane_axes):
+                rmin[ax] = min_plane[ind]
+                rmax[ax] = max_plane[ind]
+
+            return Box.from_bounds(tuple(rmin), tuple(rmax))
+
+        if plane is not None:
+            box = _box_from_plane_intersection()
+        else:
+            box = geom_box
 
         # we dont want these fields getting traced by autograd, otherwise it messes stuff up
         size = [get_static(x) for x in box.size]

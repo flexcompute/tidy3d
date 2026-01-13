@@ -10,13 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added priority attribute to `TopologyDesignRegion` to enable manual control of overlapping structures.
 - `to_mat_file()` method is now available on `ModeSimulationData` and `HeatChargeSimulationData` for exporting results to MATLAB `.mat` files.
+- Added autograd support for diagonal `AnisotropicMedium` and `CustomAnisotropicMedium` with diagonal permittivity tensor.
+- Added support of numpy 2.4
+- Added validation to `DCVoltageSource` that warns when duplicate voltage values are detected in the `voltage` array, including treating `0` and `-0` as the same value.
 
 ### Changed
+- For `HeatChargeSimulation` objects, the `plot` function now adds the simulation boundary conditions.
 
 ### Fixed
 - Fixed `AutoImpedanceSpec` validation to check path intersections against all conductors, not just filtered ones, as well as the mode plane bounds.
+- Fixed `WavePort` validation so invalid `mode_spec` errors are no longer masked by a `KeyError`.
 - Fixed adjoint gradients being treated as zero due to scale-dependent `np.allclose(..., atol=1e-8)` checks, which could skip adjoint simulations and return zero gradients.
 - Fixed interpolation handling for permittivity and conductivity gradients in CustomMedium.
+- Restored original batch-load logging by suppressing per-task “Loading simulation…” messages. 
+- Fixed output range of `tidy3d.plugins.invdes.FilterAndProject` to be between 0 and 1.
+- Cropped adjoint monitor sizes in 2D simulations to planar geometry intersection.
+- Fixed `Batch.download()` silently succeeding when background downloads fail (e.g., gzip extraction errors).
+- Handling of zero values when using `sim_data.plot_field` with `scale=dB`.
+- Fixed `intersections_plane` method in `PolySlab`, which sometimes missed vertices for planes coincident with `PolySlab` side faces.
 
 ## [2.10.0] - 2025-12-18
 

@@ -903,6 +903,25 @@ def test_heat_charge_bcs_validation(boundary_conditions):
         td.VoltageBC(source=td.SSACVoltageSource(voltage=np.array([td.inf, 0, 1]), amplitude=1e-2))
 
 
+def test_repeated_voltage_warning():
+    """Test that a warning is raised when repeated voltage values are present."""
+    # No warning for unique values
+    with AssertLogLevel(None):
+        td.DCVoltageSource(voltage=[0, 1, 2, 3])
+
+    # Warning for repeated values
+    with AssertLogLevel("WARNING"):
+        td.DCVoltageSource(voltage=[1, 2, 2, 3])
+
+    # Warning for 0 and -0 (treated as duplicates)
+    with AssertLogLevel("WARNING"):
+        td.DCVoltageSource(voltage=[0.0, -0.0, 1, 2])
+
+    # Warning for multiple repeated values
+    with AssertLogLevel("WARNING"):
+        td.DCVoltageSource(voltage=[1, 1, 2, 2, 3])
+
+
 def test_freqs_validation():
     """Test validation that freqs requires SSACVoltageSource."""
     solid_box_1 = td.Box(center=(0, 0, 0), size=(2, 2, 2))
@@ -2594,4 +2613,134 @@ def test_heat_only_simulation_with_semiconductor():
     )
     assert TCADAnalysisTypes.CONDUCTION not in simulation_types, (
         "Conduction simulation should NOT be triggered when no electric BCs are present."
+    )
+
+
+def test_heat_charge_simulation_plot():
+    """Test the HeatChargeSimulation.plot() method adds BCs based on simulation type."""
+
+    # Create mediums
+    solid_medium = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1),
+        name="solid",
+    )
+    fluid_medium = td.MultiPhysicsMedium(
+        heat=td.FluidMedium(),
+        name="fluid",
+    )
+
+    # Create structures
+    solid_structure = td.Structure(
+        geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+        medium=solid_medium,
+        name="solid_structure",
+    )
+
+    # Create boundary conditions for heat simulation
+    bc_temp = td.HeatChargeBoundarySpec(
+        condition=td.TemperatureBC(temperature=300),
+        placement=td.StructureBoundary(structure="solid_structure"),
+    )
+
+    # Create heat source
+    heat_source = td.UniformHeatSource(rate=1e3, structures=["solid_structure"])
+
+    # Create monitor
+    temp_monitor = td.TemperatureMonitor(
+        center=(0, 0, 0),
+        size=(1, 1, 0),
+        name="temp_mnt",
+    )
+
+    # Create a HEAT simulation
+    heat_sim = td.HeatChargeSimulation(
+        medium=fluid_medium,
+        structures=[solid_structure],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        boundary_spec=[bc_temp],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        sources=[heat_source],
+        monitors=[temp_monitor],
+    )
+
+    # Test plot for HEAT simulation - should add heat BCs
+    _, ax_scene_only = plt.subplots()
+    heat_sim.scene.plot(z=0, ax=ax_scene_only)
+    num_children_scene_only = len(ax_scene_only.get_children())
+    plt.close()
+
+    _, ax_with_bc = plt.subplots()
+    heat_sim.plot(z=0, ax=ax_with_bc)
+    num_children_with_bc = len(ax_with_bc.get_children())
+    plt.close()
+
+    # heat_sim.plot() should have more visual elements than scene.plot()
+    # because it adds monitors and heat boundaries for HEAT simulations
+    assert num_children_with_bc - num_children_scene_only >= 2, (
+        "heat_sim.plot() should add at least monitors and heat boundaries "
+        "for HEAT simulations, resulting in at least 2 more visual elements "
+        "than heat_sim.scene.plot()"
+    )
+
+    # Now test with a CHARGE simulation
+    semicon = td.material_library["cSi"].variants["Si_MultiPhysics"].medium.charge
+    Si_n = semicon.updated_copy(N_d=[td.ConstantDoping(concentration=1e16)], name="Si_n")
+    Si_p = semicon.updated_copy(N_a=[td.ConstantDoping(concentration=1e16)], name="Si_p")
+
+    n_side = td.Structure(
+        geometry=td.Box(center=(-0.25, 0, 0), size=(0.5, 1, 1)),
+        medium=Si_n,
+        name="n_side",
+    )
+    p_side = td.Structure(
+        geometry=td.Box(center=(0.25, 0, 0), size=(0.5, 1, 1)),
+        medium=Si_p,
+        name="p_side",
+    )
+
+    bc_v1 = td.HeatChargeBoundarySpec(
+        condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0)),
+        placement=td.MediumMediumInterface(mediums=[fluid_medium.name, Si_n.name]),
+    )
+    bc_v2 = td.HeatChargeBoundarySpec(
+        condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0.5)),
+        placement=td.MediumMediumInterface(mediums=[fluid_medium.name, Si_p.name]),
+    )
+
+    volt_monitor = td.SteadyPotentialMonitor(
+        center=(0, 0, 0),
+        size=(1, 1, 0),
+        name="volt_mnt",
+        unstructured=True,
+    )
+
+    charge_sim = td.HeatChargeSimulation(
+        structures=[n_side, p_side],
+        medium=fluid_medium,
+        monitors=[volt_monitor],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        grid_spec=td.UniformUnstructuredGrid(dl=0.05),
+        boundary_spec=[bc_v1, bc_v2],
+        analysis_spec=td.IsothermalSteadyChargeDCAnalysis(temperature=300),
+    )
+
+    # Test plot for CHARGE simulation - should add electric BCs
+    _, ax_scene_only = plt.subplots()
+    charge_sim.scene.plot(z=0, ax=ax_scene_only)
+    num_children_scene_only = len(ax_scene_only.get_children())
+    plt.close()
+
+    _, ax_with_bc = plt.subplots()
+    charge_sim.plot(z=0, ax=ax_with_bc)
+    num_children_with_bc = len(ax_with_bc.get_children())
+    plt.close()
+
+    # charge_sim.plot() should have more visual elements than scene.plot()
+    # because it adds monitors and electric boundaries for CHARGE simulations
+    assert num_children_with_bc - num_children_scene_only >= 2, (
+        "charge_sim.plot() should add at least monitors and electric boundaries "
+        "for CHARGE simulations, resulting in at least 2 more visual elements "
+        "than charge_sim.scene.plot()"
     )

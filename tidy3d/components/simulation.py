@@ -4911,6 +4911,7 @@ class Simulation(AbstractYeeGridSimulation):
             index_to_keys[index].append(fields)
 
         freqs = self._freqs_adjoint
+        sim_plane = self if self.size.count(0.0) == 1 else None
 
         adjoint_monitors_fld = []
         adjoint_monitors_eps = []
@@ -4920,7 +4921,7 @@ class Simulation(AbstractYeeGridSimulation):
             structure = self.structures[i]
 
             mnt_fld, mnt_eps = structure._make_adjoint_monitors(
-                freqs=freqs, index=i, field_keys=field_keys
+                freqs=freqs, index=i, field_keys=field_keys, plane=sim_plane
             )
 
             adjoint_monitors_fld.append(mnt_fld)

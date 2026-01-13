@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.10.0"
+version = "2.10.1"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -29,7 +29,7 @@ importlib-metadata = ">=6.0.0"
 h5netcdf = "1.0.2"
 h5py = ">=3.0.0,<3.15"
 rich = "^13.0"
-numpy = "<2.4.0"
+numpy = "*"
 matplotlib = "*"
 shapely = "^2.0"
 pandas = "*"
@@ -120,7 +120,7 @@ vtk = { version = ">=9.2.6", optional = true }
 sphinxemoji = { version = "*", optional = true }
 cma = { version = "*", optional = true }
 openpyxl = { version = "*", optional = true }
-tidy3d-extras = { version = "2.10.0", optional = true }
+tidy3d-extras = { version = "2.10.1", optional = true }
 
 [tool.poetry.extras]
 dev = [
@@ -176,6 +176,7 @@ dev = [
   'diff-cover',
   'openpyxl',
   'zizmor',
+  'libcst',
 ]
 tests = [
   'psutil',

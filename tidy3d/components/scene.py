@@ -2181,7 +2181,11 @@ class Scene(Tidy3dBaseModel):
                 if not data_is_2d:
                     selector = {"xyz"[normal_axis_ind]: normal_position}
                     data_2D = doping.sel(**selector)
-                contrib = data_2D.interp(**struct_coords, method="nearest")
+                contrib = data_2D.interp(
+                    **struct_coords,
+                    method="nearest",
+                    kwargs={"bounds_error": False, "fill_value": 0},
+                )
                 struct_doping[n] = struct_doping[n] + contrib
             # Handle doping boxes
             if isinstance(doping, tuple):

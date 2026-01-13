@@ -3282,7 +3282,7 @@ class PoleResidue(DispersiveMedium):
         for freq in freqs:
             dJ_deps_complex_f = dJ_deps_complex.sel(f=freq)
             vjps_f = self._get_vjps_from_params(
-                dJ_deps_complex=complex(dJ_deps_complex_f),
+                dJ_deps_complex=complex(dJ_deps_complex_f.item()),
                 poles_vals=poles_vals,
                 omega=2 * np.pi * freq,
                 requested_paths=derivative_info.paths,
@@ -6226,6 +6226,49 @@ class AnisotropicMedium(AbstractMedium):
 
         return self.updated_copy(**dict(zip(["xx", "yy", "zz"], new_comps)))
 
+    # --- shared autograd helpers ---
+    @staticmethod
+    def _component_derivative_info(
+        derivative_info: DerivativeInfo, component: str
+    ) -> DerivativeInfo | None:
+        """Build ``DerivativeInfo`` filtered to a single anisotropic component."""
+
+        component_paths = [
+            tuple(path[1:]) for path in derivative_info.paths if path and path[0] == component
+        ]
+        if not component_paths:
+            return None
+
+        axis = component[0]  # f.e. xx -> x
+        projected_E = derivative_info.project_der_map_to_axis(axis, "E")
+        projected_D = derivative_info.project_der_map_to_axis(axis, "D")
+        return derivative_info.updated_copy(
+            paths=component_paths, E_der_map=projected_E, D_der_map=projected_D
+        )
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Delegate derivatives for each diagonal component of an anisotropic medium."""
+
+        components = self.components
+        for field_path in derivative_info.paths:
+            if len(field_path) < 2 or field_path[0] not in components:
+                raise NotImplementedError(
+                    f"No derivative defined for '{type(self).__name__}' field: {field_path}."
+                )
+
+        vjps: AutogradFieldMap = {}
+        for comp_name, component in components.items():
+            comp_info = self._component_derivative_info(
+                derivative_info=derivative_info, component=comp_name
+            )
+            if comp_info is None:
+                continue
+            comp_vjps = component._compute_derivatives(comp_info)
+            for sub_path, value in comp_vjps.items():
+                vjps[(comp_name, *sub_path)] = value
+
+        return vjps
+
 
 class AnisotropicMediumFromMedium2D(AnisotropicMedium):
     """The same as ``AnisotropicMedium``, but converted from Medium2D.
@@ -7169,7 +7212,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 
         if all(x is None for x in [temperature, electron_density, hole_density]):
             new_dict.pop("subpixel")
-            return PoleResidue.parse_obj(new_dict)
+            return PoleResidue.model_validate(new_dict)
 
         zeros = ParameterPerturbation._zeros_like(temperature, electron_density, hole_density)
 
@@ -7241,7 +7284,7 @@ def _get_all_subclasses(cls: T) -> list[type[T]]:
 
 
 for _custom_medium_cls in _get_all_subclasses(AbstractCustomMedium):
-    _custom_medium_cls.update_forward_refs()
+    _custom_medium_cls.model_rebuild()
 
 MediumType3D = Union[
     Medium,

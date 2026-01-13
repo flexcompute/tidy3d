@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import xarray as xr
@@ -14,12 +14,14 @@ from tidy3d._common.components.data.data_array import (
     DataArray,
     TriangleMeshDataArray,
 )
-from tidy3d._common.components.types.base import ArrayLike, Axis
 from tidy3d._common.exceptions import DataError
 from tidy3d._common.log import log
 
 if TYPE_CHECKING:
+    from typing import Callable
+
     from tidy3d._common.components.data.data_array import ScalarFieldDataArray
+    from tidy3d._common.components.types.base import ArrayLike, Axis
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000
@@ -33,7 +35,7 @@ class Dataset(Tidy3dBaseModel, ABC):
     def data_arrs(self) -> dict:
         """Returns a dictionary of all `:class:`.DataArray`s in the dataset."""
         data_arrs = {}
-        for key in self.__fields__.keys():
+        for key in self.__class__.model_fields.keys():
             data = getattr(self, key)
             if isinstance(data, DataArray):
                 data_arrs[key] = data

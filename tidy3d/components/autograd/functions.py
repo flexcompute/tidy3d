@@ -9,6 +9,7 @@ from tidy3d._common.components.autograd.functions import (
     _add_at,
     _evaluate_linear,
     _evaluate_nearest,
+    _straight_through_clip,
     add_at,
     interpn,
     trapz,

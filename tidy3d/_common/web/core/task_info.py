@@ -158,11 +158,11 @@ class BatchTaskBlockInfo(TaskBlockInfo):
         taskStatus: The status of the task when it was blocked.
     """
 
-    accountLimit: float = None
-    taskBlockMsg: str = None
-    taskBlockType: str = None
-    blockStatus: str = None
-    taskStatus: str = None
+    accountLimit: Optional[float] = None
+    taskBlockMsg: Optional[str] = None
+    taskBlockType: Optional[str] = None
+    blockStatus: Optional[str] = None
+    taskStatus: Optional[str] = None
 
 
 class BatchMember(TaskBase):
@@ -189,23 +189,23 @@ class BatchMember(TaskBase):
         summary: A dictionary containing summary information for the task.
     """
 
-    refId: str = None
-    folderId: str = None
-    sweepId: str = None
-    taskId: str = None
-    linkedTaskId: str = None
-    groupId: str = None
-    taskName: str = None
-    status: str = None
-    sweepData: str = None
-    validateInfo: str = None
-    replaceData: str = None
-    protocolVersion: str = None
-    variable: str = None
+    refId: Optional[str] = None
+    folderId: Optional[str] = None
+    sweepId: Optional[str] = None
+    taskId: Optional[str] = None
+    linkedTaskId: Optional[str] = None
+    groupId: Optional[str] = None
+    taskName: Optional[str] = None
+    status: Optional[str] = None
+    sweepData: Optional[str] = None
+    validateInfo: Optional[str] = None
+    replaceData: Optional[str] = None
+    protocolVersion: Optional[str] = None
+    variable: Optional[str] = None
     createdAt: Optional[datetime] = None
     updatedAt: Optional[datetime] = None
-    denormalizeStatus: str = None
-    summary: dict = None
+    denormalizeStatus: Optional[str] = None
+    summary: Optional[dict] = None
 
 
 class BatchDetail(TaskBase):
@@ -236,27 +236,27 @@ class BatchDetail(TaskBase):
         taskType: The type of tasks contained in the batch.
     """
 
-    refId: str = None
-    optimizationId: str = None
-    groupId: str = None
-    name: str = None
-    status: str = None
+    refId: Optional[str] = None
+    optimizationId: Optional[str] = None
+    groupId: Optional[str] = None
+    name: Optional[str] = None
+    status: Optional[str] = None
     totalTask: int = 0
     preprocessSuccess: int = 0
-    postprocessStatus: str = None
+    postprocessStatus: Optional[str] = None
     validateSuccess: int = 0
     runSuccess: int = 0
     postprocessSuccess: int = 0
-    taskBlockInfo: BatchTaskBlockInfo = None
-    estFlexUnit: float = None
-    realFlexUnit: float = None
-    totalSeconds: int = None
-    totalCheckMillis: int = None
-    message: str = None
+    taskBlockInfo: Optional[BatchTaskBlockInfo] = None
+    estFlexUnit: Optional[float] = None
+    realFlexUnit: Optional[float] = None
+    totalSeconds: Optional[int] = None
+    totalCheckMillis: Optional[int] = None
+    message: Optional[str] = None
     tasks: list[BatchMember] = []
-    validateErrors: dict = None
+    validateErrors: Optional[dict] = None
     taskType: str = "RF"
-    version: str = None
+    version: Optional[str] = None
 
 
 class AsyncJobDetail(TaskBase):
@@ -292,4 +292,4 @@ class AsyncJobDetail(TaskBase):
     message: Optional[str] = None
 
 
-AsyncJobDetail.update_forward_refs()
+AsyncJobDetail.model_rebuild()

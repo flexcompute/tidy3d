@@ -382,7 +382,7 @@ def test_mode_solver_fields():
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
-def test_mode_solver_simple(mock_remote_api, local):
+def test_mode_solver_simple(mock_remote_api, local, tmp_path):
     """Simple mode solver run (with symmetry)"""
 
     simulation = td.Simulation(
@@ -421,7 +421,7 @@ def test_mode_solver_simple(mock_remote_api, local):
         check_ms_reduction(ms)
 
     else:
-        _ = msweb.run(ms)
+        _ = msweb.run(ms, results_file=tmp_path / "tmp.hdf5")
 
     # Testing issue 807 functions
     freq0 = td.C_0 / 1.55
@@ -886,7 +886,7 @@ def test_group_index(mock_remote_api, local, tmp_path):
         mode_spec=mode_spec.copy(update={"group_index_step": True}),
         freqs=freqs,
     )
-    modes = ms.solve() if local else msweb.run(ms)
+    modes = ms.solve() if local else msweb.run(ms, results_file=tmp_path / "tmp.hdf5")
     if local:
         assert (modes.n_group.sel(mode_index=0).values > 3.9).all()
         assert (modes.n_group.sel(mode_index=0).values < 4.2).all()
@@ -1028,7 +1028,7 @@ def test_mode_solver_method_defaults():
 
 
 @responses.activate
-def test_mode_solver_web_run_batch(mock_remote_api):
+def test_mode_solver_web_run_batch(mock_remote_api, tmp_path):
     """Testing run_batch function for the web mode solver."""
 
     wav = 1.5
@@ -1063,7 +1063,13 @@ def test_mode_solver_web_run_batch(mock_remote_api):
         )
 
     # Run mode solver one at a time
-    results = msweb.run_batch(mode_solver_list, verbose=False, folder_name="Mode Solver")
+    results_files = [tmp_path / f"ms_batch_{i}.hdf5" for i in range(num_of_sims)]
+    results = msweb.run_batch(
+        mode_solver_list,
+        verbose=False,
+        folder_name="Mode Solver",
+        results_files=results_files,
+    )
     print(*results, sep="\n")
     assert all(isinstance(x, ModeSolverData) for x in results)
     assert (results[i].n_eff.shape == (num_freqs, i + 1) for i in range(num_of_sims))
@@ -1142,7 +1148,7 @@ def test_mode_solver_plot():
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
-def test_modes_eme_sim(mock_remote_api, local):
+def test_modes_eme_sim(mock_remote_api, local, tmp_path):
     lambda0 = 1
     freq0 = td.C_0 / lambda0
     sim_size = (1, 1, 1)
@@ -1159,8 +1165,10 @@ def test_modes_eme_sim(mock_remote_api, local):
         _ = solver.data
     else:
         with pytest.raises(SetupError):
-            _ = msweb.run(solver)
-        _ = msweb.run(solver.to_fdtd_mode_solver())
+            _ = msweb.run(solver, results_file=tmp_path / "eme_solver_remote.hdf5")
+        _ = msweb.run(
+            solver.to_fdtd_mode_solver(), results_file=tmp_path / "eme_solver_fdtd_remote.hdf5"
+        )
 
     _ = solver.reduced_simulation_copy
 

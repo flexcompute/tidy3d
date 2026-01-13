@@ -7,16 +7,14 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
-from pydantic import NonNegativeInt
 
 from tidy3d._common.components.geometry.utils import (
     GeometryType,
     SnapBehavior,
     SnapLocation,
-    SnappingSpec,
     flatten_groups,
     flatten_shapely_geometries,
     from_shapely,
@@ -31,8 +29,12 @@ from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
-    from numpy.typing import ArrayLike
+    from typing import Optional
 
+    from numpy.typing import ArrayLike
+    from pydantic import NonNegativeInt
+
+    from tidy3d._common.components.geometry.utils import SnappingSpec
     from tidy3d.components.grid.grid import Grid
     from tidy3d.components.types.base import (
         Bound,
@@ -291,7 +293,7 @@ def _shift_value_signed(
 
     # get the index of the grid cell where the obj lies
     obj_position = obj.center[normal_axis]
-    obj_pos_gt_grid_bounds = np.argwhere(obj_position > grid_boundaries)
+    obj_pos_gt_grid_bounds = np.flatnonzero(obj_position > grid_boundaries)
 
     # no obj index can be determined
     if len(obj_pos_gt_grid_bounds) == 0 or obj_position > grid_boundaries[-1]:

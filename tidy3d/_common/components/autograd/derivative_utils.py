@@ -6,22 +6,24 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
+import xarray as xr
 from numpy.typing import NDArray
 
-from tidy3d._common.components.autograd.types import PathType
-from tidy3d._common.components.autograd.utils import get_static
 from tidy3d._common.components.data.data_array import FreqDataArray, ScalarFieldDataArray
 from tidy3d._common.components.types.base import ArrayLike, Bound, Complex
 from tidy3d._common.config import config
 from tidy3d._common.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
 from tidy3d._common.log import log
 
+from .types import PathType
+from .utils import get_static
+
 if TYPE_CHECKING:
     from typing import Callable
 
-    import xarray as xr
-
     from tidy3d._common.compat import Self
+    from tidy3d._common.components.types.base import xyz
+
 
 FieldData = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
@@ -739,6 +741,42 @@ class DerivativeInfo:
         # always expect (3, N, F) shape, transpose to (N, 3, F)
         field_matrix = np.transpose(field_matrix, (1, 0, 2))
         return np.einsum("ij...,ij->i...", field_matrix, basis_vector)
+
+    def project_der_map_to_axis(
+        self, axis: xyz, field_type: str = "E"
+    ) -> dict[str, ScalarFieldDataArray] | None:
+        """Return a copy of the selected derivative map with only one axis kept.
+
+        Parameters
+        ----------
+        axis:
+            Axis to keep (``"x"``, ``"y"``, ``"z"``, case-insensitive).
+        field_type:
+            Map selector: ``"E"`` (``self.E_der_map``) or ``"D"`` (``self.D_der_map``).
+
+        Returns
+        -------
+        dict[str, ScalarFieldDataArray] | None
+            Copied map where non-selected components are replaced by zeros, or ``None``
+            if the requested map is unavailable.
+        """
+        field_map = {"E": self.E_der_map, "D": self.D_der_map}.get(field_type)
+        if field_map is None:
+            raise ValueError("field type must be 'D' or 'E'.")
+
+        axis = axis.lower()
+        projected = dict(field_map)
+        if not field_map:
+            return projected
+        for dim in "xyz":
+            key = f"E{dim}"
+            if key not in field_map:
+                continue
+            if dim != axis:
+                projected[key] = xr.zeros_like(field_map[key])
+            else:
+                projected[key] = field_map[key]
+        return projected
 
     def adaptive_vjp_spacing(
         self,

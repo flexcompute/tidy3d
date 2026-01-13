@@ -816,15 +816,32 @@ def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
     assert downloads == [("task_b_id", "download", os.path.join(str(tmp_path), "task_b_id.hdf5"))]
 
 
+def test_batch_download_surfaces_download_errors(monkeypatch, tmp_path):
+    monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
+    monkeypatch.setattr("tidy3d.web.api.container.Job.load_if_cached", property(lambda self: False))
+    monkeypatch.setattr("tidy3d.web.api.container.Job.task_id", property(lambda self: "task_a_id"))
+
+    def _raise_download(self, path):
+        raise RuntimeError("gzip extraction failed")
+
+    monkeypatch.setattr("tidy3d.web.api.container.Job.download", _raise_download)
+
+    sims = {"task_a": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+
+    with pytest.raises(RuntimeError, match="gzip extraction failed"):
+        batch.download(path_dir=str(tmp_path))
+
+
 """ Async """
 
 
 @responses.activate
 @pytest.mark.parametrize("task_name", [TASK_NAME, None])
-def test_async(mock_webapi, mock_job_status, task_name):
+def test_async(mock_webapi, mock_job_status, tmp_path, task_name):
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
     sims = {TASK_NAME: make_sim()} if task_name else [make_sim()]
-    _ = run_async(sims, folder_name=PROJECT_NAME)
+    _ = run_async(sims, folder_name=PROJECT_NAME, path_dir=str(tmp_path))
 
 
 """ Main """
@@ -852,6 +869,8 @@ def test_main(mock_webapi, monkeypatch, mock_job_status, tmp_path):
             PROJECT_NAME,
             "--inspect_credits",
             "--inspect_sim",
+            "-o",
+            str(tmp_path / "tmp.hdf5"),
         ]
     )
 
@@ -865,6 +884,8 @@ def test_main(mock_webapi, monkeypatch, mock_job_status, tmp_path):
                 "--folder_name",
                 PROJECT_NAME,
                 "--inspect_credits",
+                "-o",
+                str(tmp_path / "tmp.hdf5"),
             ]
         )
 
@@ -877,6 +898,8 @@ def test_main(mock_webapi, monkeypatch, mock_job_status, tmp_path):
                 "--folder_name",
                 PROJECT_NAME,
                 "--inspect_sim",
+                "-o",
+                str(tmp_path / "tmp.hdf5"),
             ]
         )
 
