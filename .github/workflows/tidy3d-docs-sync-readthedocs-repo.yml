@@ -67,7 +67,7 @@ jobs:
       synced_ref: ${{ steps.sync-result.outputs.synced_ref }}
     steps:
       - name: full-checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           submodules: true
           token: ${{ secrets.GH_PAT }}
