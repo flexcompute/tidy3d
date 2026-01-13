@@ -1453,6 +1453,7 @@ def estimate_cost(
     detail = task.detail()
     if isinstance(task, BatchTask):
         check_task_type = "FDTD" if detail.taskType == "MODAL_CM" else "RF_FDTD"
+        print(detail.taskType, check_task_type)
         task.check(solver_version=solver_version, check_task_type=check_task_type)
         detail = task.detail()
         status = detail.status.lower()
