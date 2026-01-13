@@ -19,10 +19,10 @@ from tidy3d._common.components.data.dataset import (
     DEFAULT_TOLERANCE_CELL_FINDING,
     AbstractFieldDataset,
     Dataset,
+    TimeDataset,
     TriangleMeshDataset,
 )
 from tidy3d.components.data.data_array import (
-    DataArray,
     EMEScalarFieldDataArray,
     EMEScalarModeFieldDataArray,
     GroupIndexDataArray,
@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from numpy.typing import ArrayLike
 
     from tidy3d.compat import Self
+    from tidy3d.components.data.data_array import DataArray
     from tidy3d.components.types.base import Axis, FreqArray
 
 
@@ -774,12 +775,3 @@ class MediumDataset(AbstractMediumPropertyDataset):
             "mu_yy": None,
             "mu_zz": None,
         }
-
-
-class TimeDataset(Dataset):
-    """Dataset for storing a function of time."""
-
-    values: TimeDataArray = Field(
-        title="Values",
-        description="Values as a function of time.",
-    )

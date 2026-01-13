@@ -12,6 +12,7 @@ from pydantic import Field
 from tidy3d._common.components.base import Tidy3dBaseModel
 from tidy3d._common.components.data.data_array import (
     DataArray,
+    TimeDataArray,
     TriangleMeshDataArray,
 )
 from tidy3d._common.exceptions import DataError
@@ -148,3 +149,12 @@ class AbstractFieldDataset(Dataset, ABC):
 
         # combine all centered fields in a dataset
         return self.package_colocate_results(centered_fields)
+
+
+class TimeDataset(Dataset):
+    """Dataset for storing a function of time."""
+
+    values: TimeDataArray = Field(
+        title="Values",
+        description="Values as a function of time.",
+    )

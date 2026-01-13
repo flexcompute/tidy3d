@@ -1,30 +1,10 @@
-"""Abstract base for classes that define simulation sources."""
+"""Compatibility shim for :mod:`tidy3d._common.components.base_sim.source`."""
 
+# ruff: noqa: F401 - ignore unused imports, imports ensure compatibility
+
+# marked as migrated to _common
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
-
-from pydantic import Field
-
-from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.validators import validate_name_str
-
-if TYPE_CHECKING:
-    from tidy3d.components.viz import PlotParams
-
-
-class AbstractSource(Tidy3dBaseModel, ABC):
-    """Abstract base class for all sources."""
-
-    name: Optional[str] = Field(
-        None,
-        title="Name",
-        description="Optional name for the source.",
-    )
-
-    @abstractmethod
-    def plot_params(self) -> PlotParams:
-        """Default parameters for plotting a Source object."""
-
-    _name_validator = validate_name_str()
+from tidy3d._common.components.base_sim.source import (
+    AbstractSource,
+)

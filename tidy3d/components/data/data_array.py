@@ -16,6 +16,7 @@ from tidy3d._common.components.data.data_array import (
     DataArray,
     FreqDataArray,
     ScalarFieldDataArray,
+    TimeDataArray,
     TriangleMeshDataArray,
 )
 from tidy3d._common.constants import (
@@ -64,19 +65,6 @@ class FreqModeDataArray(DataArray):
 
     __slots__ = ()
     _dims = ("f", "mode_index")
-
-
-class TimeDataArray(DataArray):
-    """Time-domain array.
-
-    Example
-    -------
-    >>> t = [0, 1e-12, 2e-12]
-    >>> td = TimeDataArray((1+1j) * np.random.random((3,)), coords=dict(t=t))
-    """
-
-    __slots__ = ()
-    _dims = ("t",)
 
 
 class MixedModeDataArray(DataArray):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
 import h5py
@@ -32,7 +32,7 @@ from tidy3d._common.exceptions import DataError, FileError
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from os import PathLike
-    from typing import Optional
+    from typing import Optional, Union
 
     from numpy.typing import NDArray
     from pydantic.annotated_handlers import GetCoreSchemaHandler
@@ -745,3 +745,16 @@ class TriangleMeshDataArray(DataArray):
     __slots__ = ()
     _dims = ("face_index", "vertex_index", "axis")
     _data_attrs = {"long_name": "surface mesh triangles"}
+
+
+class TimeDataArray(DataArray):
+    """Time-domain array.
+
+    Example
+    -------
+    >>> t = [0, 1e-12, 2e-12]
+    >>> td = TimeDataArray((1+1j) * np.random.random((3,)), coords=dict(t=t))
+    """
+
+    __slots__ = ()
+    _dims = ("t",)
