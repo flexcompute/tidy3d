@@ -419,7 +419,7 @@ def run(
 
     if isinstance(simulation, ModeSolver):
         if task_id is not None:
-            _store_mode_solver_in_cache(task_id, simulation, data, path)
+            _store_mode_solver_in_cache(task_id, simulation, path)
         simulation._patch_data(data=data)
 
     return data
@@ -1183,7 +1183,6 @@ def load(
                     log.info(f"Failed to load simulation for storing results: {e}.")
                     return stub_data
             simulation_cache.store_result(
-                stub_data=stub_data,
                 task_id=task_id,
                 path=path,
                 workflow_type=workflow_type,

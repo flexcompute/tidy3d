@@ -489,7 +489,6 @@ class Job(WebContainer):
                 _store_mode_solver_in_cache(
                     self.task_id,
                     self.simulation,
-                    data,
                     path,
                 )
             self.simulation._patch_data(data=data)
@@ -1373,7 +1372,7 @@ class Batch(WebContainer):
                 job_data = data[task_name]
                 if not loaded_from_cache[task_name]:
                     _store_mode_solver_in_cache(
-                        task_ids[task_name], job.simulation, job_data, task_paths[task_name]
+                        task_ids[task_name], job.simulation, task_paths[task_name]
                     )
                 job.simulation._patch_data(data=job_data)
 
