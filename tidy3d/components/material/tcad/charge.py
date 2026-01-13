@@ -303,21 +303,31 @@ class SemiconductorMedium(AbstractChargeMedium):
         units=ELECTRON_VOLT,
     )
 
-    N_a: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = Field(
+    N_a: Union[
+        tuple[DopingBoxType, ...],
+        list[DopingBoxType],
+        SpatialDataArray,
+        NonNegativeFloat,
+    ] = Field(
         (),
         title="Doping: Acceptor concentration",
         description="Concentration of acceptor impurities, which create mobile holes, resulting in p-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
-        "or a tuple of geometric shapes to define specific doped regions.",
+        "or a tuple/list of geometric shapes to define specific doped regions.",
         units=PERCMCUBE,
     )
 
-    N_d: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = Field(
+    N_d: Union[
+        tuple[DopingBoxType, ...],
+        list[DopingBoxType],
+        SpatialDataArray,
+        NonNegativeFloat,
+    ] = Field(
         (),
         title="Doping: Donor concentration",
         description="Concentration of donor impurities, which create mobile electrons, resulting in n-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
-        "or a tuple of geometric shapes to define specific doped regions.",
+        "or a tuple/list of geometric shapes to define specific doped regions.",
         units=PERCMCUBE,
     )
 
@@ -363,9 +373,14 @@ class SemiconductorMedium(AbstractChargeMedium):
     @field_validator("N_d")
     @classmethod
     def check_nd_uses_model(
-        cls, val: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]]
+        cls,
+        val: Union[
+            NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...], list[DopingBoxType]
+        ],
     ) -> Union[SpatialDataArray, tuple[DopingBoxType, ...]]:
         """Issue deprecation warning if float is provided"""
+        if isinstance(val, list):
+            return tuple(val)
         if isinstance(val, (float, int)):
             log.warning(
                 "Passing a float to 'N_d' is deprecated and will be removed in future versions. "
@@ -377,9 +392,14 @@ class SemiconductorMedium(AbstractChargeMedium):
     @field_validator("N_a")
     @classmethod
     def check_na_uses_model(
-        cls, val: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]]
+        cls,
+        val: Union[
+            NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...], list[DopingBoxType]
+        ],
     ) -> Union[SpatialDataArray, tuple[DopingBoxType, ...]]:
         """Issue deprecation warning if float is provided"""
+        if isinstance(val, list):
+            return tuple(val)
         if isinstance(val, (float, int)):
             log.warning(
                 "Passing a float to 'N_a' is deprecated and will be removed in future versions. "
