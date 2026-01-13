@@ -544,8 +544,8 @@ class Tidy3dBaseModel(BaseModel):
 
     def copy(
         self,
-        *,
         deep: bool = True,
+        *,
         validate: bool = True,
         update: Optional[Mapping[str, Any]] = None,
     ) -> Self:
