@@ -105,18 +105,24 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         """Initialize from a vtkUnstructuredGrid instance."""
 
         # read point, cells, and values info from a vtk instance
-        cells_numpy = vtk["vtk_to_numpy"](vtk_obj.GetCells().GetConnectivityArray())
-        points_numpy = vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData())
+        cells_numpy = np.array(
+            vtk["vtk_to_numpy"](vtk_obj.GetCells().GetConnectivityArray()),
+            copy=True,
+        )
+        points_numpy = np.array(vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData()), copy=True)
         values = cls._get_values_from_vtk(
             vtk_obj, len(points_numpy), field, values_type, expect_complex
         )
 
         # verify cell_types
-        cells_types = vtk["vtk_to_numpy"](vtk_obj.GetCellTypesArray())
+        cells_types = np.array(vtk["vtk_to_numpy"](vtk_obj.GetCellTypesArray()), copy=True)
         invalid_cells = cells_types != cls._vtk_cell_type()
         if any(invalid_cells):
             if ignore_invalid_cells:
-                cell_offsets = vtk["vtk_to_numpy"](vtk_obj.GetCells().GetOffsetsArray())
+                cell_offsets = np.array(
+                    vtk["vtk_to_numpy"](vtk_obj.GetCells().GetOffsetsArray()),
+                    copy=True,
+                )
                 valid_cell_offsets = cell_offsets[:-1][invalid_cells == 0]
                 cells_numpy = cells_numpy[
                     np.ravel(

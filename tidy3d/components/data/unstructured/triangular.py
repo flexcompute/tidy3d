@@ -149,10 +149,13 @@ class TriangularGridDataset(UnstructuredGridDataset):
         elif isinstance(vtk_obj, vtk["mod"].vtkUnstructuredGrid):
             cells_vtk = vtk_obj.GetCells()
 
-        cells_numpy = vtk["vtk_to_numpy"](cells_vtk.GetConnectivityArray())
+        cells_numpy = np.array(
+            vtk["vtk_to_numpy"](cells_vtk.GetConnectivityArray()),
+            copy=True,
+        )
 
         # verify cell_types
-        cell_offsets = vtk["vtk_to_numpy"](cells_vtk.GetOffsetsArray())
+        cell_offsets = np.array(vtk["vtk_to_numpy"](cells_vtk.GetOffsetsArray()), copy=True)
         invalid_cells = np.diff(cell_offsets) != cls._cell_num_vertices()
         if np.any(invalid_cells):
             if ignore_invalid_cells:
@@ -166,7 +169,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
                     "'TriangularGridDataset'."
                 )
 
-        points_numpy = vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData())
+        points_numpy = np.array(vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData()), copy=True)
 
         # data values are read directly into Tidy3D array
         values = cls._get_values_from_vtk(
@@ -250,7 +253,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         # perform slicing in vtk and get unprocessed points and values
         slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
-        points_numpy = vtk["vtk_to_numpy"](slice_vtk.GetPoints().GetData())
+        points_numpy = np.array(vtk["vtk_to_numpy"](slice_vtk.GetPoints().GetData()), copy=True)
         values = self._get_values_from_vtk(
             slice_vtk,
             len(points_numpy),
