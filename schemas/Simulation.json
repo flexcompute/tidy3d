@@ -8715,6 +8715,14 @@
         },
         "source": {
           "default": "xmin",
+          "enum": [
+            "xmax",
+            "xmin",
+            "ymax",
+            "ymin",
+            "zmax",
+            "zmin"
+          ],
           "type": "string"
         },
         "type": {

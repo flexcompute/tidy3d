@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Literal, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -14,6 +14,7 @@ from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.geometry.base import Box
 from tidy3d.constants import MICROMETER, PERCMCUBE, inf
 from tidy3d.exceptions import SetupError
+from tidy3d.log import log
 
 
 class AbstractDopingBox(Box):
@@ -171,7 +172,7 @@ class GaussianDoping(AbstractDopingBox):
         units=MICROMETER,
     )
 
-    source: str = pd.Field(
+    source: Literal["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"] = pd.Field(
         "xmin",
         title="Source face",
         description="Specifies the side of the box acting as the source, i.e., "
@@ -179,6 +180,33 @@ class GaussianDoping(AbstractDopingBox):
         "the concentration is constant from this face. Accepted values for ``source`` "
         "are [``xmin``, ``xmax``, ``ymin``, ``ymax``, ``zmin``, ``zmax``]",
     )
+
+    @pd.validator("concentration")
+    def _validate_ref_con_less_than_concentration(cls, val, values):
+        """Ensure ref_con < concentration to avoid negative sqrt in sigma calculation."""
+        if "ref_con" in values:
+            if values["ref_con"] >= val:
+                raise ValueError(
+                    f"'ref_con' ({values['ref_con']}) must be less than 'concentration' ({val}) "
+                    "for GaussianDoping. The reference concentration at the edges must be lower "
+                    "than the peak concentration at the center."
+                )
+        return val
+
+    @pd.validator("width")
+    def _validate_width_vs_size(cls, val, values):
+        """Warn if box size may be too small for the specified transition width."""
+        if "size" in values:
+            size = values["size"]
+            for i, s in enumerate(size):
+                if not np.isinf(s) and s < 2 * val:
+                    dim_name = ["x", "y", "z"][i]
+                    log.warning(
+                        f"Box size in '{dim_name}' direction ({s} μm) is less than "
+                        f"'2*width' ({2 * val} μm) for 'GaussianDoping'. "
+                        "This may result in unexpected behavior in the transition region."
+                    )
+        return val
 
     @cached_property
     def sigma(self):
