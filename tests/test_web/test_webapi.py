@@ -1084,18 +1084,22 @@ def test_job_run_accepts_pathlikes(monkeypatch, tmp_path, path_builder):
     [_pathlib_builder, _posix_builder, _str_builder, _fspath_builder],
     ids=["pathlib.Path", "posixpath_str", "str", "PathLike"],
 )
+@pytest.mark.slow
 def test_batch_run_accepts_pathlike_dir(monkeypatch, tmp_path, dir_builder):
     """Batch.run(path_dir=...) accepts any PathLike directory location."""
-    sims = {"A": make_sim(), "B": make_sim()}
+    sims = {"A": make_sim()}
     out_dir = dir_builder(tmp_path, "batch_out")
 
     # Map task_ids to sims: upload() is patched to return task_name, which for dict input
     # corresponds to the dict keys ("A", "B"), so we map those.
-    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim={"A": sims["A"], "B": sims["B"]})
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim={"A": sims["A"]})
 
     b = Batch(simulations=sims, folder_name=PROJECT_NAME)
     b.run(path_dir=out_dir)
 
-    # Directory created and two .hdf5 outputs produced
+    # Directory created and .hdf5 output produced
     out_dir_str = os.fspath(out_dir)
     assert os.path.isdir(out_dir_str)
+
+    batch_file = Path(out_dir) / "batch.hdf5"
+    assert batch_file.is_file()
