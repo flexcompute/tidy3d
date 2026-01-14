@@ -154,6 +154,19 @@ class DataArraySpec:
         data = np.asarray(inline.get("data"))
         return xr.DataArray(data, coords=coords, dims=dims)
 
+    def from_hdf5(self, fname: PathLike, group_path: str) -> xr.DataArray:
+        """Load a DataArray from an hdf5 file using this spec's dimensions."""
+        path = pathlib.Path(fname)
+        with h5py.File(path, "r") as f:
+            sub_group = f[group_path]
+            values = np.array(sub_group[DATA_ARRAY_VALUE_NAME])
+            coords = {dim: np.array(sub_group[dim]) for dim in self.dims if dim in sub_group}
+            for key, val in coords.items():
+                if val.dtype == "O":
+                    coords[key] = [byte_string.decode() for byte_string in val.tolist()]
+            data_array = xr.DataArray(values, coords=coords, dims=self.dims)
+            return self.validate_data_array(data_array)
+
     def validate_data_array(self, data_array: xr.DataArray) -> xr.DataArray:
         expected = tuple(self.dims)
         given = tuple(str(d) for d in data_array.dims)

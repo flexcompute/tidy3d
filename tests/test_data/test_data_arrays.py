@@ -419,6 +419,7 @@ def test_annotated_dataset_hdf5_roundtrip(tmp_path):
     dataset.to_hdf5(path)
     loaded = TimeDataset.from_hdf5(path)
 
+    assert type(loaded.values) is xr.DataArray
     assert loaded.values.dims == data.dims
     assert loaded.values.coords["t"].equals(data.coords["t"])
 
