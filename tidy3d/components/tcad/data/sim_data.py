@@ -14,6 +14,7 @@ from tidy3d.components.data.data_array import (
     FreqVoltageDataArray,
     SpatialDataArray,
     SteadyVoltageDataArray,
+    _isinstance,
     data_array_annotated_type,
 )
 from tidy3d.components.data.utils import (
@@ -397,7 +398,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             min_bounds.pop(axis)
             max_bounds.pop(axis)
 
-        if isinstance(field_data, SpatialDataArray):
+        if _isinstance(field_data, SpatialDataArray):
             # interp out any monitor.size==0 dimensions
             monitor = self.simulation.get_monitor_by_name(monitor_name)
             thin_dims = {

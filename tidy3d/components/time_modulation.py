@@ -14,7 +14,7 @@ from tidy3d.constants import HERTZ, RADIAN
 from tidy3d.exceptions import ValidationError
 
 from .base import Tidy3dBaseModel, cached_property
-from .data.data_array import SpatialDataArray
+from .data.data_array import SpatialDataArray, _isinstance
 from .data.validators import validate_no_nans
 from .time import AbstractTimeDependence
 from .types import InterpMethod
@@ -189,12 +189,12 @@ class SpaceModulation(AbstractSpaceModulation):
             SpaceModulation with reduced data.
         """
 
-        if isinstance(self.amplitude, SpatialDataArray):
+        if _isinstance(self.amplitude, SpatialDataArray):
             amp_reduced = self.amplitude.sel_inside(bounds)
         else:
             amp_reduced = self.amplitude
 
-        if isinstance(self.phase, SpatialDataArray):
+        if _isinstance(self.phase, SpatialDataArray):
             phase_reduced = self.phase.sel_inside(bounds)
         else:
             phase_reduced = self.phase

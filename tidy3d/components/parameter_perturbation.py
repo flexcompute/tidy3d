@@ -22,6 +22,7 @@ from .data.data_array import (
     IndexedDataArray,
     PerturbationCoefficientDataArray,
     SpatialDataArray,
+    _isinstance,
 )
 from .data.unstructured.base import UnstructuredGridDataset
 from .data.utils import (
@@ -408,7 +409,7 @@ class CustomHeatPerturbation(HeatPerturbation):
         sampled = np.reshape(sampled, np.shape(temp_clip))
 
         # preserve input type
-        if isinstance(temperature, SpatialDataArray):
+        if _isinstance(temperature, SpatialDataArray):
             return SpatialDataArray(sampled, coords=temperature.coords)
         if isinstance(temperature, UnstructuredGridDataset):
             return temperature.updated_copy(
@@ -957,7 +958,7 @@ class CustomChargePerturbation(ChargePerturbation):
 
         # preserve input type
         for arr in inputs:
-            if isinstance(arr, SpatialDataArray):
+            if _isinstance(arr, SpatialDataArray):
                 return SpatialDataArray(sampled, coords=arr.coords)
 
             if isinstance(arr, UnstructuredGridDataset):

@@ -13,7 +13,7 @@ import tidy3d.plugins.smatrix.data.terminal
 import tidy3d.plugins.smatrix.utils
 from tidy3d import SimulationDataMap
 from tidy3d.components.boundary import BroadbandModeABCSpec
-from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.data.data_array import FreqDataArray, _isinstance
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.smatrix import (
     CoaxialLumpedPort,
@@ -1236,8 +1236,8 @@ def test_antenna_helpers(monkeypatch, tmp_path):
 
     # Test power wave amplitude computation
     a, b = modeler_data.compute_power_wave_amplitudes_at_each_port(sim_data=sim_data)
-    assert isinstance(a, PortDataArray)
-    assert isinstance(b, PortDataArray)
+    assert _isinstance(a, PortDataArray)
+    assert _isinstance(b, PortDataArray)
 
 
 @pytest.mark.parametrize("port_type", ["lumped", "wave"])
@@ -1288,8 +1288,8 @@ def test_antenna_parameters(monkeypatch, port_type):
     antenna_params = modeler_data.get_antenna_metrics_data()
 
     # Test that all essential parameters exist and are correct type
-    assert isinstance(antenna_params.radiation_efficiency, FreqDataArray)
-    assert isinstance(antenna_params.reflection_efficiency, FreqDataArray)
+    assert _isinstance(antenna_params.radiation_efficiency, FreqDataArray)
+    assert _isinstance(antenna_params.reflection_efficiency, FreqDataArray)
     assert isinstance(antenna_params.gain, xr.DataArray)
     assert isinstance(antenna_params.realized_gain, xr.DataArray)
 
@@ -1345,8 +1345,8 @@ def test_get_combined_antenna_parameters_data(monkeypatch, tmp_path):
     )
 
     # Check that essential properties exist and are correct type
-    assert isinstance(antenna_params.radiation_efficiency, FreqDataArray)
-    assert isinstance(antenna_params.reflection_efficiency, FreqDataArray)
+    assert _isinstance(antenna_params.radiation_efficiency, FreqDataArray)
+    assert _isinstance(antenna_params.reflection_efficiency, FreqDataArray)
     assert isinstance(antenna_params.partial_gain(), xr.Dataset)
     assert isinstance(antenna_params.gain, xr.DataArray)
     assert isinstance(antenna_params.partial_realized_gain(), xr.Dataset)

@@ -30,9 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator,
 
 from tidy3d._common.components.autograd.utils import get_static
 from tidy3d._common.components.data.data_array import (
-    DATA_ARRAY_MAP,
     data_array_spec_from_name,
-    data_array_type_from_name,
     is_data_array_name,
     iter_data_array_names,
     write_data_array_to_hdf5,
@@ -1185,18 +1183,10 @@ class Tidy3dBaseModel(BaseModel):
 
                 # write the path to the element of the json dict where the data_array should be
                 if is_data_array(value):
-                    if value in DATA_ARRAY_MAP:
-                        data_array_type = data_array_type_from_name(value)
-                        if data_array_type is None:
-                            raise FileError(f"Unrecognized DataArray schema '{value}'.")
-                        model_dict[key] = data_array_type.from_hdf5(
-                            fname=fname_path, group_path=subpath
-                        )
-                    else:
-                        spec = data_array_spec_from_name(value)
-                        if spec is None:
-                            raise FileError(f"Unrecognized DataArray schema '{value}'.")
-                        model_dict[key] = spec.from_hdf5(fname=fname_path, group_path=subpath)
+                    spec = data_array_spec_from_name(value)
+                    if spec is None:
+                        raise FileError(f"Unrecognized DataArray schema '{value}'.")
+                    model_dict[key] = spec.from_hdf5(fname=fname_path, group_path=subpath)
                     continue
 
                 # if a list, assign each element a unique key, recurse
@@ -1459,7 +1449,11 @@ class Tidy3dBaseModel(BaseModel):
             if a is b:
                 return True
             if type(a) is not type(b):
-                if not (isinstance(a, (list, tuple)) and isinstance(b, (list, tuple))):
+                if isinstance(a, (xr.DataArray, xr.Dataset)) and isinstance(
+                    b, (xr.DataArray, xr.Dataset)
+                ):
+                    pass
+                elif not (isinstance(a, (list, tuple)) and isinstance(b, (list, tuple))):
                     return False
             if isinstance(a, np.ndarray):
                 return np.array_equal(a, b)

@@ -14,9 +14,9 @@ from autograd.test_util import check_grads
 from pydantic import BaseModel, ValidationError
 
 import tidy3d as td
+from tidy3d._common.components.data.data_array import DataArray
 from tidy3d.components.data.data_array import (
     data_array_annotated_type,
-    install_legacy_shims,
 )
 from tidy3d.components.data.dataset import TimeDataset
 from tidy3d.exceptions import DataError
@@ -391,7 +391,6 @@ def test_annotated_accepts_legacy_class():
 
 
 def test_legacy_data_array_shims():
-    install_legacy_shims()
     arr = xr.DataArray(
         np.random.random((3, 4, 5)),
         coords={
@@ -409,8 +408,7 @@ def test_legacy_data_array_shims():
     assert updated.dims == arr.dims
 
 
-# TODO remove _ prefix
-def _test_annotated_dataset_hdf5_roundtrip(tmp_path):
+def test_annotated_dataset_hdf5_roundtrip(tmp_path):
     times = np.linspace(0, 1e-12, 4)
     values = np.random.random(len(times))
     data = xr.DataArray(values, coords={"t": times}, dims=("t",))
@@ -420,7 +418,7 @@ def _test_annotated_dataset_hdf5_roundtrip(tmp_path):
     dataset.to_hdf5(path)
     loaded = TimeDataset.from_hdf5(path)
 
-    assert type(loaded.values) is xr.DataArray
+    assert type(loaded.values) is DataArray
     assert loaded.values.dims == data.dims
     assert loaded.values.coords["t"].equals(data.coords["t"])
 

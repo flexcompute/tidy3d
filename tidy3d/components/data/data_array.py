@@ -10,10 +10,8 @@ from typing import TYPE_CHECKING, Union
 import numpy as np
 
 from tidy3d._common.components.data.data_array import (
-    DATA_ARRAY_MAP,
     DATA_ARRAY_SCHEMA_MAP,
     DATA_ARRAY_SPEC_MAP,
-    DATA_ARRAY_TYPES,
     LEGACY_SHIM_WARNINGS,
     AbstractSpatialDataArray,
     DataArray,
@@ -22,6 +20,7 @@ from tidy3d._common.components.data.data_array import (
     ScalarFieldDataArray,
     TimeDataArray,
     TriangleMeshDataArray,
+    _isinstance,
     _reflect_data_array,
     data_array_annotated_type,
     data_array_spec_for_type,

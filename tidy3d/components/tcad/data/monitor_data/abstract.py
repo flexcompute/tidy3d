@@ -10,7 +10,7 @@ import numpy as np
 from pydantic import Field
 
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
-from tidy3d.components.data.data_array import SpatialDataArray
+from tidy3d.components.data.data_array import SpatialDataArray, _isinstance
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.types import HeatChargeMonitorType
 from tidy3d.components.types import Coordinate, ScalarSymmetry
@@ -81,7 +81,7 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
 
         mnt_bounds = np.array(self.monitor.bounds)
 
-        if isinstance(new_property, SpatialDataArray):
+        if _isinstance(new_property, SpatialDataArray):
             data_bounds = [
                 [np.min(new_property.x), np.min(new_property.y), np.min(new_property.z)],
                 [np.max(new_property.x), np.max(new_property.y), np.max(new_property.z)],
@@ -127,7 +127,7 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
             for dim in dims_need_clipping_right:
                 clip_bounds[1][dim] = mnt_bounds[1][dim]
 
-            if isinstance(new_property, SpatialDataArray):
+            if _isinstance(new_property, SpatialDataArray):
                 new_property = new_property.sel_inside(clip_bounds)
             else:
                 new_property = new_property.box_clip(bounds=clip_bounds)

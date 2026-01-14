@@ -44,11 +44,10 @@ from tidy3d.log import log
 from .autograd.derivative_utils import integrate_within_bounds
 from .autograd.types import TracedFloat, TracedPolesAndResidues, TracedPositiveFloat
 from .base import Tidy3dBaseModel, cached_property
-from .data.data_array import ScalarFieldDataArray, SpatialDataArray, is_data_array_name
+from .data.data_array import ScalarFieldDataArray, SpatialDataArray, _isinstance, is_data_array_name
 from .data.dataset import PermittivityDataset
 from .data.unstructured.base import UnstructuredGridDataset
 from .data.utils import (
-    CustomSpatialDataType,
     CustomSpatialDataTypeAnnotated,
     _check_same_coordinates,
     _get_numpy_array,
@@ -94,6 +93,7 @@ if TYPE_CHECKING:
     from .autograd.derivative_utils import DerivativeInfo
     from .autograd.types import AutogradFieldMap
     from .data.dataset import ElectromagneticFieldDataset
+    from .data.utils import CustomSpatialDataType
     from .transformation import RotationType
     from .types import (
         ArrayComplex1D,
@@ -1920,7 +1920,7 @@ class CustomMedium(AbstractCustomMedium):
     ) -> Optional[CustomSpatialDataType]:
         """Check that the custom medium 'SpatialDataArrays' can be interpolated."""
 
-        if isinstance(val, SpatialDataArray):
+        if _isinstance(val, SpatialDataArray):
             val._interp_validator(info.field_name)
 
         return val
@@ -2149,7 +2149,7 @@ class CustomMedium(AbstractCustomMedium):
         :class:`.CustomMedium`
             Medium containing the spatially varying permittivity data.
         """
-        if isinstance(eps, CustomSpatialDataType.__args__):
+        if _isinstance(eps, SpatialDataArray) or isinstance(eps, UnstructuredGridDataset):
             # purely real, not need to know `freq`
             if CustomMedium._validate_isreal_dataarray(eps):
                 return cls(permittivity=eps, interp_method=interp_method, **kwargs)
@@ -2229,7 +2229,7 @@ class CustomMedium(AbstractCustomMedium):
         """
         # lossless
         if k is None:
-            if isinstance(n, ScalarFieldDataArray):
+            if _isinstance(n, ScalarFieldDataArray):
                 n = SpatialDataArray(n.squeeze(dim="f", drop=True))
             freq = 0  # dummy value
             eps_real, _ = CustomMedium.nk_to_eps_sigma(n, 0 * n, freq)
@@ -2240,7 +2240,7 @@ class CustomMedium(AbstractCustomMedium):
             raise SetupError("'n' and 'k' must be of the same type and must have same coordinates.")
 
         # k is a SpatialDataArray
-        if isinstance(k, CustomSpatialDataType.__args__):
+        if _isinstance(k, SpatialDataArray) or isinstance(k, UnstructuredGridDataset):
             if freq is None:
                 raise SetupError(
                     "For a lossy medium, must supply 'freq' at which to convert 'n' "
@@ -4400,7 +4400,7 @@ class Lorentz(DispersiveMedium):
         coeff_b: tuple[tuple[CustomSpatialDataType, CustomSpatialDataType], ...],
     ) -> bool:
         """``coeff_a`` and ``coeff_b`` can be either float or SpatialDataArray."""
-        if isinstance(coeff_a, CustomSpatialDataType.__args__):
+        if _isinstance(coeff_a, SpatialDataArray) or isinstance(coeff_a, UnstructuredGridDataset):
             return np.all(_get_numpy_array(coeff_a) > _get_numpy_array(coeff_b))
         return coeff_a > coeff_b
 

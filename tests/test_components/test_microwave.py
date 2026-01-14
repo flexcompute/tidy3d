@@ -13,7 +13,7 @@ import xarray as xr
 from shapely import LineString
 
 import tidy3d as td
-from tidy3d.components.data.data_array import FreqModeDataArray
+from tidy3d.components.data.data_array import FreqModeDataArray, _isinstance
 from tidy3d.components.data.monitor_data import FreqDataArray
 from tidy3d.components.microwave.formulas.circuit_parameters import (
     capacitance_colinear_cylindrical_wire_segments,
@@ -440,8 +440,8 @@ def test_antenna_parameters():
     )
 
     # Test that all essential parameters exist and are correct type
-    assert isinstance(antenna_params.radiation_efficiency, FreqDataArray)
-    assert isinstance(antenna_params.reflection_efficiency, FreqDataArray)
+    assert _isinstance(antenna_params.radiation_efficiency, FreqDataArray)
+    assert _isinstance(antenna_params.reflection_efficiency, FreqDataArray)
     assert np.allclose(antenna_params.reflection_efficiency, 0.75)
     assert isinstance(antenna_params.gain, xr.DataArray)
     assert isinstance(antenna_params.realized_gain, xr.DataArray)

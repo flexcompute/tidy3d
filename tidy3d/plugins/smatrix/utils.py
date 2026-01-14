@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from tidy3d.components.data.data_array import _isinstance
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
 
@@ -261,7 +262,7 @@ def s_to_z(
     shape_left = (len(s_matrix.f), len(s_matrix.port_out), 1)
     shape_right = (len(s_matrix.f), 1, len(s_matrix.port_in))
     # Setup the port reference impedance array (scalar)
-    if isinstance(reference, PortDataArray):
+    if _isinstance(reference, PortDataArray):
         Zport = reference.values.reshape(shape_right)
         F = compute_F(Zport, s_param_def).reshape(shape_right)
         Finv = (1.0 / F).reshape(shape_left)

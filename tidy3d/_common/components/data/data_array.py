@@ -124,8 +124,17 @@ class DataArraySpec:
         return self.id
 
     def _coerce_to_dataarray(self, value: Any, info: core_schema.ValidationInfo) -> xr.DataArray:
-        if isinstance(value, xr.DataArray):
+        if isinstance(value, DataArray):
             return value
+
+        if isinstance(value, xr.DataArray):
+            return DataArray(
+                value.data,
+                coords=value.coords,
+                dims=value.dims,
+                name=value.name,
+                attrs=dict(value.attrs),
+            )
 
         if isinstance(value, str) and is_data_array_name(value):
             raise DataError(
@@ -154,7 +163,7 @@ class DataArraySpec:
         dims = tuple(dims)
         coords = dict(inline.get("coords", {}))
         data = np.asarray(inline.get("data"))
-        return xr.DataArray(data, coords=coords, dims=dims)
+        return DataArray(data, coords=coords, dims=dims)
 
     def from_hdf5(self, fname: PathLike, group_path: str) -> xr.DataArray:
         """Load a DataArray from an hdf5 file using this spec's dimensions."""
@@ -166,7 +175,7 @@ class DataArraySpec:
             for key, val in coords.items():
                 if val.dtype == "O":
                     coords[key] = [byte_string.decode() for byte_string in val.tolist()]
-            data_array = xr.DataArray(values, coords=coords, dims=self.dims)
+            data_array = DataArray(values, coords=coords, dims=self.dims)
             return self.validate_data_array(data_array)
 
     def validate_data_array(self, data_array: xr.DataArray) -> xr.DataArray:
@@ -191,16 +200,6 @@ class DataArraySpec:
                 if data_array.coords[dim].to_index().duplicated().any():
                     raise ValueError(f"duplicate coordinates in dimension {dim!r}")
 
-        target_type = DATA_ARRAY_SCHEMA_MAP.get(self.id)
-        if target_type and not isinstance(data_array, target_type):
-            data_array = target_type(
-                data_array.data,
-                coords=data_array.coords,
-                dims=data_array.dims,
-                name=data_array.name,
-                attrs=dict(data_array.attrs),
-            )
-
         return data_array
 
     def matches(self, data_array: xr.DataArray) -> bool:
@@ -211,8 +210,6 @@ class DataArraySpec:
         return True
 
 
-DATA_ARRAY_MAP: dict[str, type[DataArray]] = {}
-DATA_ARRAY_TYPES: list[type[DataArray]] = []
 DATA_ARRAY_SPEC_MAP: dict[str, DataArraySpec] = {}
 DATA_ARRAY_SCHEMA_MAP: dict[str, type[DataArray]] = {}
 
@@ -251,8 +248,16 @@ def data_array_spec_for_type(data_array_type: type[DataArray]) -> DataArraySpec:
 
 
 def data_array_annotated_type(data_array_type: type[DataArray]) -> Any:
-    """Return an ``Annotated[xr.DataArray, DataArraySpec]`` alias for a DataArray class."""
-    return Annotated[xr.DataArray, data_array_spec_for_type(data_array_type)]
+    """Return an ``Annotated[DataArray, DataArraySpec]`` alias for a DataArray class."""
+    return Annotated[DataArray, data_array_spec_for_type(data_array_type)]
+
+
+def _isinstance(value: Any, data_array_type: type[DataArray]) -> bool:
+    """Spec-based check that replaces subclass ``isinstance`` usage."""
+    if not isinstance(value, xr.DataArray):
+        return False
+    spec = data_array_spec_for_type(data_array_type)
+    return spec.matches(value)
 
 
 def register_data_array_spec(spec: DataArraySpec, data_array_type: type[DataArray]) -> None:
@@ -262,23 +267,32 @@ def register_data_array_spec(spec: DataArraySpec, data_array_type: type[DataArra
 
 
 def data_array_spec_from_name(name: str) -> DataArraySpec | None:
-    return DATA_ARRAY_SPEC_MAP.get(name)
+    spec = DATA_ARRAY_SPEC_MAP.get(name)
+    if spec is not None:
+        return spec
+    if name.endswith("DataArray"):
+        base = name[: -len("DataArray")]
+        if base:
+            legacy_id = f"tidy3d.data.{_camel_to_snake(base)}"
+            return DATA_ARRAY_SPEC_MAP.get(legacy_id)
+    return None
 
 
 def data_array_type_from_name(name: str) -> type[DataArray] | None:
-    if name in DATA_ARRAY_MAP:
-        return DATA_ARRAY_MAP[name]
-    return DATA_ARRAY_SCHEMA_MAP.get(name)
+    spec = data_array_spec_from_name(name)
+    if spec is None:
+        return None
+    return DataArray
 
 
 def iter_data_array_names() -> tuple[str, ...]:
-    names = list(DATA_ARRAY_MAP.keys())
-    names.extend(DATA_ARRAY_SPEC_MAP.keys())
+    names = list(DATA_ARRAY_SPEC_MAP.keys())
+    names.extend(da_type.__name__ for da_type in DATA_ARRAY_SCHEMA_MAP.values())
     return tuple(dict.fromkeys(names))
 
 
 def is_data_array_name(value: Any) -> bool:
-    return isinstance(value, str) and data_array_type_from_name(value) is not None
+    return isinstance(value, str) and data_array_spec_from_name(value) is not None
 
 
 class DataArray(xr.DataArray):
@@ -299,8 +313,6 @@ class DataArray(xr.DataArray):
         super().__init_subclass__(**kwargs)
         if cls is DataArray:
             return
-        DATA_ARRAY_MAP[cls.__name__] = cls
-        DATA_ARRAY_TYPES.append(cls)
         spec = cls.__dict__.get("__spec__")
         if not isinstance(spec, DataArraySpec):
             spec = _default_spec_for_type(cls)

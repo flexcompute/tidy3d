@@ -20,7 +20,6 @@ from tidy3d._common.components.validators import (
     validate_name_str,
     warn_if_dataset_none,
 )
-from tidy3d.components.data.data_array import DATA_ARRAY_MAP
 from tidy3d.components.geometry.base import Box
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log

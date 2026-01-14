@@ -9,6 +9,7 @@ import xarray as xr
 from pydantic import ValidationError
 
 import tidy3d as td
+from tidy3d.components.data.data_array import _isinstance
 from tidy3d.components.data.dataset import PermittivityDataset
 from tidy3d.components.data.utils import UnstructuredGridDataset, _get_numpy_array
 from tidy3d.components.medium import (
@@ -554,7 +555,9 @@ def verify_custom_medium_methods(mat, reduced_fields):
 
         # data fields in medium classes could be SpatialArrays or 2d tuples of spatial arrays
         # lets convert everything into 2d tuples of spatial arrays for uniform handling
-        if isinstance(original, (td.SpatialDataArray, UnstructuredGridDataset)):
+        if _isinstance(original, td.SpatialDataArray) or isinstance(
+            original, UnstructuredGridDataset
+        ):
             original = [[original]]
             reduced = [[reduced]]
 
@@ -562,7 +565,7 @@ def verify_custom_medium_methods(mat, reduced_fields):
             assert len(or_set) == len(re_set)
 
             for ind in range(len(or_set)):
-                if isinstance(or_set[ind], td.SpatialDataArray):
+                if _isinstance(or_set[ind], td.SpatialDataArray):
                     diff = (or_set[ind] - re_set[ind]).abs
                     assert diff.does_cover(subsection.bounds)
                     assert np.allclose(diff, 0)

@@ -8,7 +8,7 @@ import numpy as np
 from pydantic import Field
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import FreqDataArray, data_array_annotated_type
+from tidy3d.components.data.data_array import FreqDataArray, _isinstance, data_array_annotated_type
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.constants import C_0
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
@@ -261,7 +261,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         port, mode_index = self.modeler.network_dict[port_index]
         sim_data_port = self.data[self.modeler.get_task_name(port, mode_index)]
         monitor_data = sim_data_port[monitor_name]
-        if not isinstance(a_port, FreqDataArray):
+        if not _isinstance(a_port, FreqDataArray):
             freqs = list(monitor_data.monitor.freqs)
             array_vals = a_port * np.ones(len(freqs))
             a_port = FreqDataArray(array_vals, coords={"f": freqs})

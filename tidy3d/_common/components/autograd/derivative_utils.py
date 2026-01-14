@@ -9,7 +9,11 @@ import numpy as np
 import xarray as xr
 from numpy.typing import NDArray
 
-from tidy3d._common.components.data.data_array import FreqDataArray, ScalarFieldDataArray
+from tidy3d._common.components.data.data_array import (
+    FreqDataArray,
+    ScalarFieldDataArray,
+    _isinstance,
+)
 from tidy3d._common.components.types.base import ArrayLike, Bound, Complex
 from tidy3d._common.config import config
 from tidy3d._common.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
@@ -706,7 +710,7 @@ class DerivativeInfo:
         For FreqDataArray, extracts values and broadcasts to shape (1, n_freqs).
         For scalar values, broadcasts to shape (1, 1) for consistency with multi-frequency.
         """
-        if isinstance(eps, FreqDataArray):
+        if _isinstance(eps, FreqDataArray):
             # data is already sliced, just extract values
             eps_values = eps.values
             # shape: (n_freqs,) - need to broadcast to (1, n_freqs)
@@ -812,7 +816,7 @@ class DerivativeInfo:
                 min_allowed_spacing_fraction = config.adjoint.minimum_spacing_fraction
 
         # handle FreqDataArray or scalar eps_in
-        if isinstance(self.eps_in, FreqDataArray):
+        if _isinstance(self.eps_in, FreqDataArray):
             eps_real = np.asarray(self.eps_in.values, dtype=np.complex128).real
         else:
             eps_real = np.asarray(self.eps_in, dtype=np.complex128).real

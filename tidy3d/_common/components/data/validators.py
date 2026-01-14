@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from pydantic import field_validator
 
-from tidy3d._common.components.data.data_array import DataArray, ScalarFieldDataArray
+from tidy3d._common.components.data.data_array import DataArray, ScalarFieldDataArray, _isinstance
 from tidy3d._common.components.data.dataset import AbstractFieldDataset
 from tidy3d._common.exceptions import ValidationError
 
@@ -78,7 +78,7 @@ def validate_can_interpolate(
     def check_fields_interpolate(val: AbstractFieldDataset) -> AbstractFieldDataset:
         if isinstance(val, AbstractFieldDataset):
             for name, data in val.field_components.items():
-                if isinstance(data, ScalarFieldDataArray):
+                if _isinstance(data, ScalarFieldDataArray):
                     data._interp_validator(name)
         return val
 

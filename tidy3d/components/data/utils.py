@@ -9,7 +9,7 @@ import xarray as xr
 
 from tidy3d.components.types.base import discriminated_union
 
-from .data_array import SpatialDataArray
+from .data_array import SpatialDataArray, data_array_annotated_type
 from .unstructured.base import UnstructuredGridDataset
 from .unstructured.tetrahedral import TetrahedralGridDataset
 from .unstructured.triangular import TriangularGridDataset
@@ -24,7 +24,7 @@ UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDatase
 CustomSpatialDataType = Union[SpatialDataArray, UnstructuredGridDatasetType]
 CustomSpatialDataTypeAnnotated = Union[
     discriminated_union(UnstructuredGridDatasetType),
-    SpatialDataArray,
+    data_array_annotated_type(SpatialDataArray),
 ]
 
 

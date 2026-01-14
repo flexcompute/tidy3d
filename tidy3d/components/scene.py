@@ -54,6 +54,7 @@ from tidy3d.exceptions import SetupError, Tidy3dError
 from tidy3d.log import log
 
 from .base import Tidy3dBaseModel, cached_property
+from .data.data_array import _isinstance
 from .data.utils import (
     SpatialDataArray,
     TetrahedralGridDataset,
@@ -2025,7 +2026,7 @@ class Scene(Tidy3dBaseModel):
                         if doping > limits[1]:
                             limits[1] = doping
                     # NOTE: This will be deprecated.
-                    if isinstance(doping, SpatialDataArray):
+                    if _isinstance(doping, SpatialDataArray):
                         min_value = np.min(doping.data.flatten())
                         max_value = np.max(doping.data.flatten())
                         if min_value < limits[0]:
@@ -2109,7 +2110,7 @@ class Scene(Tidy3dBaseModel):
             return np.abs(doping)
 
         # NOTE: This will be deprecated.
-        if isinstance(doping, SpatialDataArray):
+        if _isinstance(doping, SpatialDataArray):
             return np.min(np.abs(doping.data.flatten()))
 
         if isinstance(doping, tuple):
@@ -2173,7 +2174,7 @@ class Scene(Tidy3dBaseModel):
             if isinstance(doping, float):
                 struct_doping[n] = struct_doping[n] + doping
             # NOTE: This will be deprecated.
-            if isinstance(doping, SpatialDataArray):
+            if _isinstance(doping, SpatialDataArray):
                 struct_coords = {"xyz"[d]: coords_2D[i] for i, d in enumerate(plane_axes_inds)}
                 data_2D = doping
                 # check whether the provided doping data is 2 or 3D

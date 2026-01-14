@@ -8,7 +8,11 @@ import numpy as np
 import xarray as xr
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import FreqModeDataArray, _make_current_data_array
+from tidy3d.components.data.data_array import (
+    FreqModeDataArray,
+    _isinstance,
+    _make_current_data_array,
+)
 from tidy3d.components.data.monitor_data import FieldTimeData
 from tidy3d.components.microwave.path_integrals.integrals.base import (
     AxisAlignedPathIntegral,
@@ -253,7 +257,7 @@ class CompositeCurrentIntegral(CompositeCurrentIntegralSpec):
                 "Please provide the current path specifications manually."
             )
 
-            if isinstance(phase_difference, FreqModeDataArray):
+            if _isinstance(phase_difference, FreqModeDataArray):
                 inconsistent_modes = []
                 mode_indices = phase_difference.mode_index.values
                 for mode_idx in range(len(mode_indices)):
@@ -294,7 +298,7 @@ class CompositeCurrentIntegral(CompositeCurrentIntegralSpec):
                 "specifications manually."
             )
 
-            if isinstance(current_in_phase, FreqModeDataArray):
+            if _isinstance(current_in_phase, FreqModeDataArray):
                 inconsistent_modes = []
                 mode_indices = current_in_phase.mode_index.values
                 for mode_idx in range(len(mode_indices)):

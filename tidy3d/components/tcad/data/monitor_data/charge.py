@@ -13,6 +13,7 @@ from tidy3d.components.data.data_array import (
     PointDataArray,
     SpatialDataArray,
     SteadyVoltageDataArray,
+    _isinstance,
     data_array_annotated_type,
 )
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
@@ -103,7 +104,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
         field_data = {field: getattr(self, field) for field in ["electrons", "holes"]}
         for field, data in field_data.items():
             if isinstance(data, TetrahedralGridDataset) or isinstance(data, TriangularGridDataset):
-                if not isinstance(data.values, IndexedVoltageDataArray):
+                if not _isinstance(data.values, IndexedVoltageDataArray):
                     raise ValueError(
                         f"In the data associated with monitor {self.monitor}, the "
                         f"field {field} does not contain data associated to any voltage value."
@@ -194,7 +195,7 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
 
         for field, data in field_data.items():
             if isinstance(data, TetrahedralGridDataset) or isinstance(data, TriangularGridDataset):
-                if not isinstance(data.values, IndexedVoltageDataArray):
+                if not _isinstance(data.values, IndexedVoltageDataArray):
                     raise ValueError(
                         f"In the data associated with monitor {self.monitor}, the "
                         f"field {field} does not contain data associated to any voltage value."
@@ -383,7 +384,10 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
         """Issue error if incorrect data type is used"""
 
         if isinstance(self.E, TetrahedralGridDataset) or isinstance(self.E, TriangularGridDataset):
-            if not isinstance(self.E.values, (IndexedFieldVoltageDataArray, PointDataArray)):
+            if not (
+                _isinstance(self.E.values, IndexedFieldVoltageDataArray)
+                or _isinstance(self.E.values, PointDataArray)
+            ):
                 raise ValueError(
                     f"The data associated with monitor {self.monitor.name} must contain a field. This can be "
                     "defined with 'IndexedFieldVoltageDataArray' or 'PointDataArray'."
@@ -424,8 +428,10 @@ class SteadyCurrentDensityData(HeatChargeMonitorData):
         J = self.J
 
         if isinstance(J, TetrahedralGridDataset) or isinstance(J, TriangularGridDataset):
-            AcceptedTypes = (IndexedFieldVoltageDataArray, PointDataArray)
-            if not isinstance(J.values, AcceptedTypes):
+            if not (
+                _isinstance(J.values, IndexedFieldVoltageDataArray)
+                or _isinstance(J.values, PointDataArray)
+            ):
                 raise ValueError(
                     f"In the data associated with monitor {mnt}, must contain a field. This can be "
                     "defined with IndexedFieldVoltageDataArray or PointDataArray."

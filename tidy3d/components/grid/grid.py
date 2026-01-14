@@ -8,7 +8,12 @@ import numpy as np
 from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
-from tidy3d.components.data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
+from tidy3d.components.data.data_array import (
+    DataArray,
+    ScalarFieldDataArray,
+    SpatialDataArray,
+    _isinstance,
+)
 from tidy3d.components.data.utils import UnstructuredGridDataset
 from tidy3d.components.types import ArrayFloat1D
 from tidy3d.exceptions import SetupError
@@ -261,7 +266,7 @@ class Coords(Tidy3dBaseModel):
         # Check for empty dimensions
         result_coords = dict(self.to_dict)
         if any(len(v) == 0 for v in result_coords.values()):
-            if isinstance(array, (SpatialDataArray, ScalarFieldDataArray)):
+            if _isinstance(array, SpatialDataArray) or _isinstance(array, ScalarFieldDataArray):
                 for c in array.coords:
                     if c not in result_coords:
                         result_coords[c] = array.coords[c].values
