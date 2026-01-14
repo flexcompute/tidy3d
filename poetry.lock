@@ -6194,7 +6194,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "(extra == \"dev\" or extra == \"docs\" or python_version >= \"3.12\") and (sys_platform == \"darwin\" or extra == \"dev\" or extra == \"docs\" or extra == \"pytorch\") and (python_version >= \"3.12\" or extra == \"dev\" or extra == \"docs\" or extra == \"pytorch\") and (extra == \"dev\" or extra == \"pytorch\" or extra == \"docs\")"
+markers = "(extra == \"dev\" or extra == \"docs\") and (extra == \"dev\" or extra == \"pytorch\" or extra == \"docs\") or python_version >= \"3.12\" and (extra == \"dev\" or extra == \"docs\" or extra == \"pytorch\")"
 files = [
     {file = "setuptools-80.9.0-py3-none-any.whl", hash = "sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922"},
     {file = "setuptools-80.9.0.tar.gz", hash = "sha256:f36b47402ecde768dbfafc46e8e4207b4360c654f1f3bb84475f0a28628fb19c"},
@@ -7843,4 +7843,4 @@ vtk = ["vtk"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "15cd18571e3fce157d96da3db5fc4a1585618f6ab179844805e279e1fe0999ba"
+content-hash = "6bd6af9b1dd48bcf2f9db29837e027c06f39ae8a4bed3c8a404d120842a42be3"
