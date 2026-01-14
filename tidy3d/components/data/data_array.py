@@ -11,13 +11,22 @@ import numpy as np
 
 from tidy3d._common.components.data.data_array import (
     DATA_ARRAY_MAP,
+    DATA_ARRAY_SCHEMA_MAP,
+    DATA_ARRAY_SPEC_MAP,
     DATA_ARRAY_TYPES,
     AbstractSpatialDataArray,
     DataArray,
+    DataArraySpec,
     FreqDataArray,
     ScalarFieldDataArray,
     TimeDataArray,
     TriangleMeshDataArray,
+    data_array_annotated_type,
+    data_array_spec_for_type,
+    data_array_spec_from_name,
+    data_array_type_from_name,
+    is_data_array_name,
+    iter_data_array_names,
 )
 from tidy3d._common.constants import (
     AMP,

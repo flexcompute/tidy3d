@@ -29,7 +29,11 @@ from autograd.tracer import isbox
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from tidy3d._common.components.autograd.utils import get_static
-from tidy3d._common.components.data.data_array import DATA_ARRAY_MAP
+from tidy3d._common.components.data.data_array import (
+    data_array_type_from_name,
+    is_data_array_name,
+    iter_data_array_names,
+)
 from tidy3d._common.components.file_util import compress_file_to_gzip, extract_gzip_file
 from tidy3d._common.components.types.base import TYPE_TAG_STR, Undefined
 from tidy3d._common.exceptions import FileError
@@ -1053,7 +1057,7 @@ class Tidy3dBaseModel(BaseModel):
     @staticmethod
     def _warn_if_contains_data(json_str: str) -> None:
         """Log a warning if the json string contains data, used in '.json' and '.yaml' file."""
-        if any((key in json_str for key, _ in DATA_ARRAY_MAP.items())):
+        if any(name in json_str for name in iter_data_array_names()):
             log.warning(
                 "Data contents found in the model to be written to file. "
                 "Note that this data will not be included in '.json' or '.yaml' formats. "
@@ -1155,7 +1159,7 @@ class Tidy3dBaseModel(BaseModel):
 
         def is_data_array(value: Any) -> bool:
             """Whether a value is supposed to be a data array based on the contents."""
-            return isinstance(value, str) and value in DATA_ARRAY_MAP
+            return is_data_array_name(value)
 
         fname_path = Path(fname)
 
@@ -1178,7 +1182,9 @@ class Tidy3dBaseModel(BaseModel):
 
                 # write the path to the element of the json dict where the data_array should be
                 if is_data_array(value):
-                    data_array_type = DATA_ARRAY_MAP[value]
+                    data_array_type = data_array_type_from_name(value)
+                    if data_array_type is None:
+                        raise FileError(f"Unrecognized DataArray schema '{value}'.")
                     model_dict[key] = data_array_type.from_hdf5(
                         fname=fname_path, group_path=subpath
                     )

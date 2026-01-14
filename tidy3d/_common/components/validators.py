@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 from pydantic import field_validator
 
 from tidy3d._common.components.autograd.utils import get_static, hasbox
-from tidy3d._common.components.data.data_array import DATA_ARRAY_MAP
+from tidy3d._common.components.data.data_array import is_data_array_name
 from tidy3d._common.exceptions import ValidationError
 from tidy3d._common.log import log
 
@@ -99,7 +99,7 @@ def warn_if_dataset_none(
     def _warn_if_none(cls: type, val: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
         """Warn if the DataArrays fail to load."""
         if isinstance(val, dict):
-            if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
+            if any(is_data_array_name(v) for _, v in val.items() if isinstance(v, str)):
                 log.warning(f"Loading {field_name} without data.", custom_loc=[field_name])
                 return None
         return val

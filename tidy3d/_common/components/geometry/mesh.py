@@ -12,7 +12,7 @@ from pydantic import Field, PrivateAttr, field_validator, model_validator
 
 from tidy3d._common.components.autograd import get_static
 from tidy3d._common.components.base import cached_property
-from tidy3d._common.components.data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
+from tidy3d._common.components.data.data_array import TriangleMeshDataArray, is_data_array_name
 from tidy3d._common.components.data.dataset import TriangleMeshDataset
 from tidy3d._common.components.data.validators import validate_no_nans
 from tidy3d._common.components.geometry import base
@@ -67,7 +67,7 @@ class TriangleMesh(base.Geometry, ABC):
     def _warn_if_none(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
         """Warn if the Dataset fails to load."""
         if isinstance(val, dict):
-            if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
+            if any(is_data_array_name(v) for _, v in val.items() if isinstance(v, str)):
                 log.warning("Loading 'mesh_dataset' without data.")
                 return None
         return val

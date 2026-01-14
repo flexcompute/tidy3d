@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import pathlib
+import re
 from abc import ABC
-from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Annotated, Any
 
 import autograd.numpy as anp
 import h5py
@@ -30,7 +33,6 @@ from tidy3d._common.constants import (
 from tidy3d._common.exceptions import DataError, FileError
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
     from os import PathLike
     from typing import Optional, Union
 
@@ -71,8 +73,174 @@ DIM_ATTRS = {
 # name of the DataArray.values in the hdf5 file (xarray's default name too)
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
+
+@dataclass(frozen=True)
+class DataArraySpec:
+    """Declarative schema for an ``xarray.DataArray`` field."""
+
+    id: str
+    dims: tuple[str, ...]
+    data_attrs: Mapping[str, Any] = field(default_factory=dict)
+    coord_attrs: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    require_unique_coords: bool = False
+
+    def __get_pydantic_core_schema__(
+        self, source_type: Any, handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        return core_schema.with_info_after_validator_function(
+            self._validate,
+            core_schema.any_schema(),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                self._serialize, info_arg=True, when_used="json"
+            ),
+        )
+
+    def __get_pydantic_json_schema__(
+        self, schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        json_schema = handler(schema)
+        json_schema.update(
+            {
+                "title": "xarray.DataArray",
+                "type": "object",
+                "td_schema": self.id,
+                "td_dims": list(self.dims),
+            }
+        )
+        return json_schema
+
+    def _validate(self, value: Any, info: core_schema.ValidationInfo) -> xr.DataArray:
+        data_array = self._coerce_to_dataarray(value, info)
+
+        expected = tuple(self.dims)
+        given = tuple(str(d) for d in data_array.dims)
+        if set(given) != set(expected):
+            raise ValueError(f"wrong dims: expected {expected}, got {given}")
+
+        if given != expected:
+            data_array = data_array.transpose(*expected)
+
+        data_array = data_array.copy(deep=False)
+
+        if self.data_attrs:
+            data_array.attrs.update(self.data_attrs)
+        for dim, attrs in self.coord_attrs.items():
+            if dim in data_array.coords:
+                data_array.coords[dim].attrs.update(attrs)
+
+        if self.require_unique_coords:
+            for dim in expected:
+                if data_array.coords[dim].to_index().duplicated().any():
+                    raise ValueError(f"duplicate coordinates in dimension {dim!r}")
+
+        return data_array
+
+    def _serialize(self, value: xr.DataArray, info: core_schema.SerializationInfo) -> str:
+        # Preserve existing JSON placeholder behavior by default.
+        return self.id
+
+    def _coerce_to_dataarray(self, value: Any, info: core_schema.ValidationInfo) -> xr.DataArray:
+        if isinstance(value, xr.DataArray):
+            return value
+
+        if isinstance(value, str) and is_data_array_name(value):
+            raise DataError(
+                "Trying to load a DataArray from a string placeholder but the data is missing. "
+                "DataArrays are not typically stored in JSON. Load from HDF5 or ensure the "
+                "DataArray object is provided."
+            )
+
+        if isinstance(value, Mapping) and "__td_dataarray__" in value:
+            payload = value.get("__td_dataarray__", {})
+            schema = payload.get("schema")
+            if schema != self.id:
+                raise ValueError(f"schema mismatch: expected {self.id!r}, got {schema!r}")
+            inline = payload.get("inline")
+            if isinstance(inline, Mapping):
+                return self._from_inline(inline)
+
+            raise ValueError("unsupported DataArray payload; missing inline data")
+
+        raise TypeError("expected an xarray.DataArray or serialized DataArray payload")
+
+    def _from_inline(self, inline: Mapping[str, Any]) -> xr.DataArray:
+        dims = inline.get("dims", self.dims)
+        if isinstance(dims, str):
+            dims = (dims,)
+        dims = tuple(dims)
+        coords = dict(inline.get("coords", {}))
+        data = np.asarray(inline.get("data"))
+        return xr.DataArray(data, coords=coords, dims=dims)
+
+
 DATA_ARRAY_MAP: dict[str, type[DataArray]] = {}
 DATA_ARRAY_TYPES: list[type[DataArray]] = []
+DATA_ARRAY_SPEC_MAP: dict[str, DataArraySpec] = {}
+DATA_ARRAY_SCHEMA_MAP: dict[str, type[DataArray]] = {}
+
+
+def _camel_to_snake(name: str) -> str:
+    step1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+    step2 = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", step1)
+    return step2.lower()
+
+
+def _default_schema_id(data_array_type: type[DataArray]) -> str:
+    override = getattr(data_array_type, "_schema_id", None)
+    if override:
+        return override
+    base = data_array_type.__name__
+    if base.endswith("DataArray"):
+        base = base[: -len("DataArray")]
+    return f"tidy3d.data.{_camel_to_snake(base)}"
+
+
+def _default_spec_for_type(data_array_type: type[DataArray]) -> DataArraySpec:
+    dims = tuple(getattr(data_array_type, "_dims", ()))
+    data_attrs = dict(getattr(data_array_type, "_data_attrs", {}))
+    coord_attrs = {dim: DIM_ATTRS[dim] for dim in dims if dim in DIM_ATTRS}
+    return DataArraySpec(
+        id=_default_schema_id(data_array_type),
+        dims=dims,
+        data_attrs=data_attrs,
+        coord_attrs=coord_attrs,
+    )
+
+
+def data_array_spec_for_type(data_array_type: type[DataArray]) -> DataArraySpec:
+    spec = data_array_type.__spec__ if isinstance(data_array_type.__spec__, DataArraySpec) else None
+    return spec or _default_spec_for_type(data_array_type)
+
+
+def data_array_annotated_type(data_array_type: type[DataArray]) -> Any:
+    """Return an ``Annotated[xr.DataArray, DataArraySpec]`` alias for a DataArray class."""
+    return Annotated[xr.DataArray, data_array_spec_for_type(data_array_type)]
+
+
+def register_data_array_spec(spec: DataArraySpec, data_array_type: type[DataArray]) -> None:
+    """Register a DataArraySpec for schema lookup and legacy compatibility."""
+    DATA_ARRAY_SPEC_MAP[spec.id] = spec
+    DATA_ARRAY_SCHEMA_MAP[spec.id] = data_array_type
+
+
+def data_array_spec_from_name(name: str) -> DataArraySpec | None:
+    return DATA_ARRAY_SPEC_MAP.get(name)
+
+
+def data_array_type_from_name(name: str) -> type[DataArray] | None:
+    if name in DATA_ARRAY_MAP:
+        return DATA_ARRAY_MAP[name]
+    return DATA_ARRAY_SCHEMA_MAP.get(name)
+
+
+def iter_data_array_names() -> tuple[str, ...]:
+    names = list(DATA_ARRAY_MAP.keys())
+    names.extend(DATA_ARRAY_SPEC_MAP.keys())
+    return tuple(dict.fromkeys(names))
+
+
+def is_data_array_name(value: Any) -> bool:
+    return isinstance(value, str) and data_array_type_from_name(value) is not None
 
 
 class DataArray(xr.DataArray):
@@ -84,6 +252,10 @@ class DataArray(xr.DataArray):
     _dims = ()
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: dict[str, str] = {}
+    # optional stable schema id (defaults to class name if not set)
+    _schema_id: str | None = None
+    # schema metadata for spec-based validation
+    __spec__: DataArraySpec | None = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -91,6 +263,11 @@ class DataArray(xr.DataArray):
             return
         DATA_ARRAY_MAP[cls.__name__] = cls
         DATA_ARRAY_TYPES.append(cls)
+        spec = cls.__spec__ if isinstance(cls.__spec__, DataArraySpec) else None
+        if spec is None:
+            spec = _default_spec_for_type(cls)
+            cls.__spec__ = spec
+        register_data_array_spec(spec, cls)
 
     def __init__(self, data: Any, *args: Any, **kwargs: Any) -> None:
         # if data is a vanilla autograd box, convert to our box
@@ -112,7 +289,7 @@ class DataArray(xr.DataArray):
             if isinstance(value, cls):
                 return value
 
-            if isinstance(value, str) and value == cls.__name__:
+            if isinstance(value, str) and value in {cls.__name__, cls.schema_id()}:
                 raise DataError(
                     f"Trying to load '{cls.__name__}' from string placeholder '{value}' "
                     "but the actual data is missing. DataArrays are not typically stored "
@@ -144,7 +321,7 @@ class DataArray(xr.DataArray):
         )
 
         def _serialize_to_name(instance: Self) -> str:
-            return type(instance).__name__
+            return type(instance).schema_id()
 
         # serialization behavior:
         # - for JSON ('json' mode), use the _serialize_to_name function.
@@ -173,7 +350,15 @@ class DataArray(xr.DataArray):
                 f"Placeholder for a '{cls.__name__}' object. Actual data is typically "
                 "serialized separately (e.g., via HDF5) and not embedded in JSON."
             ),
+            "td_schema": cls.schema_id(),
         }
+
+    @classmethod
+    def schema_id(cls) -> str:
+        spec = cls.__spec__ if isinstance(cls.__spec__, DataArraySpec) else None
+        if spec is not None:
+            return spec.id
+        return cls.__name__
 
     @classmethod
     def _validate_dims(cls, val: Self) -> Self:

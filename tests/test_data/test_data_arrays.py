@@ -8,6 +8,7 @@ import autograd as ag
 import autograd.numpy as np
 import numpy
 import pytest
+import xarray as xr
 import xarray.testing as xrt
 from autograd.test_util import check_grads
 
@@ -343,13 +344,17 @@ def test_abs():
 
 
 def test_angle():
-    # Make sure works on real data and the type is correct
+    # Make sure works on real data and preserves DataArray structure
     data = make_scalar_field_time_data_array("Ex")
     angle_data = data.angle
-    assert type(data) is type(angle_data)
+    assert isinstance(angle_data, xr.DataArray)
+    assert angle_data.dims == data.dims
+    assert angle_data.coords.equals(data.coords)
     data = make_mode_amps_data_array()
     angle_data = data.angle
-    assert type(data) is type(angle_data)
+    assert isinstance(angle_data, xr.DataArray)
+    assert angle_data.dims == data.dims
+    assert angle_data.coords.equals(data.coords)
 
 
 def test_heat_data_array():

@@ -13,12 +13,12 @@ from xarray import DataArray as XrDataArray
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
-    DATA_ARRAY_MAP,
     CellDataArray,
     IndexedDataArray,
     IndexedDataArrayTypes,
     PointDataArray,
     SpatialDataArray,
+    is_data_array_name,
 )
 from tidy3d.components.data.dataset import Dataset
 from tidy3d.constants import inf
@@ -219,7 +219,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         no_data_fields = []
         for field_name in ["points", "cells", "values"]:
             field = data.get(field_name)
-            if isinstance(field, str) and field in DATA_ARRAY_MAP.keys():
+            if isinstance(field, str) and is_data_array_name(field):
                 no_data_fields.append(field_name)
 
         if len(no_data_fields) > 0:

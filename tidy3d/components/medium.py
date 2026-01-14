@@ -44,7 +44,7 @@ from tidy3d.log import log
 from .autograd.derivative_utils import integrate_within_bounds
 from .autograd.types import TracedFloat, TracedPolesAndResidues, TracedPositiveFloat
 from .base import Tidy3dBaseModel, cached_property
-from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
+from .data.data_array import ScalarFieldDataArray, SpatialDataArray, is_data_array_name
 from .data.dataset import PermittivityDataset
 from .data.unstructured.base import UnstructuredGridDataset
 from .data.utils import (
@@ -1103,7 +1103,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     @staticmethod
     def _not_loaded(field: Any) -> bool:
         """Check whether data was not loaded."""
-        if isinstance(field, str) and field in DATA_ARRAY_MAP:
+        if isinstance(field, str) and is_data_array_name(field):
             return True
         # attempting to construct an UnstructuredGridDataset from a dict
         if isinstance(field, dict) and field.get("type") in (
@@ -1111,7 +1111,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             "TetrahedralGridDataset",
         ):
             return any(
-                isinstance(subfield, str) and subfield in DATA_ARRAY_MAP
+                isinstance(subfield, str) and is_data_array_name(subfield)
                 for subfield in [field["points"], field["cells"], field["values"]]
             )
         # attempting to pass an UnstructuredGridDataset with zero points
@@ -1713,7 +1713,7 @@ class CustomMedium(AbstractCustomMedium):
             fail_load = True
         eps_ds = data.get("eps_dataset")
         if isinstance(eps_ds, dict):
-            if any(isinstance(v, str) and v in DATA_ARRAY_MAP for v in eps_ds.values()):
+            if any(isinstance(v, str) and is_data_array_name(v) for v in eps_ds.values()):
                 log.warning(
                     "Loading 'eps_dataset' without data; constructing a vacuum medium instead."
                 )
