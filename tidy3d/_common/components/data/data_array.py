@@ -344,24 +344,6 @@ class DataArray(xr.DataArray):
         elif isinstance(data, (xr.Variable, xr.DataArray)):
             if isbox(data.data) and not is_tidy_box(data.data):
                 data.data = TidyArrayBox.from_arraybox(data.data)
-        if type(self) is not DataArray:
-            spec = data_array_spec_for_type(type(self))
-            coords = kwargs.get("coords", args[0] if len(args) > 0 else None)
-            dims = kwargs.get("dims", args[1] if len(args) > 1 else None)
-            if coords is None and dims is None:
-                kwargs = dict(kwargs)
-                kwargs["dims"] = spec.dims
-                args = ()
-            temp = xr.DataArray(data, *args, **kwargs)
-            temp = spec.validate_data_array(temp)
-            data = temp.data
-            args = ()
-            kwargs = {
-                "coords": temp.coords,
-                "dims": temp.dims,
-                "name": temp.name,
-                "attrs": dict(temp.attrs),
-            }
         super().__init__(data, *args, **kwargs)
 
     @classmethod
