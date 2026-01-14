@@ -120,6 +120,10 @@ class DataArraySpec:
         return self.validate_data_array(data_array)
 
     def _serialize(self, value: xr.DataArray, info: core_schema.SerializationInfo) -> str:
+        if isinstance(value, xr.DataArray):
+            schema = value.attrs.get("_td_schema")
+            if isinstance(schema, str):
+                return schema
         # Preserve existing JSON placeholder behavior by default.
         return self.id
 
@@ -194,6 +198,8 @@ class DataArraySpec:
         for dim, attrs in self.coord_attrs.items():
             if dim in data_array.coords:
                 data_array.coords[dim].attrs.update(attrs)
+
+        data_array.attrs["_td_schema"] = self.id
 
         if self.require_unique_coords:
             for dim in expected:
