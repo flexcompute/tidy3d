@@ -191,6 +191,16 @@ class DataArraySpec:
                 if data_array.coords[dim].to_index().duplicated().any():
                     raise ValueError(f"duplicate coordinates in dimension {dim!r}")
 
+        target_type = DATA_ARRAY_SCHEMA_MAP.get(self.id)
+        if target_type and not isinstance(data_array, target_type):
+            data_array = target_type(
+                data_array.data,
+                coords=data_array.coords,
+                dims=data_array.dims,
+                name=data_array.name,
+                attrs=dict(data_array.attrs),
+            )
+
         return data_array
 
     def matches(self, data_array: xr.DataArray) -> bool:
@@ -992,7 +1002,13 @@ def _cast_data_array(result: xr.DataArray, reference: xr.DataArray) -> xr.DataAr
     ref_type = type(reference)
     if ref_type is xr.DataArray or isinstance(result, ref_type):
         return result
-    return ref_type(result.data, coords=result.coords, dims=result.dims)
+    return ref_type(
+        result.data,
+        coords=result.coords,
+        dims=result.dims,
+        name=result.name,
+        attrs=dict(result.attrs),
+    )
 
 
 @xr.register_dataarray_accessor("td")
@@ -1096,7 +1112,7 @@ def install_legacy_shims() -> None:
                     DeprecationWarning,
                     stacklevel=2,
                 )
-            return self.td.sel_inside(bounds)
+            return _sel_inside_data_array(self, bounds)
 
         xr.DataArray.sel_inside = _sel_inside
 
@@ -1111,7 +1127,7 @@ def install_legacy_shims() -> None:
                     DeprecationWarning,
                     stacklevel=2,
                 )
-            return self.td.does_cover(bounds, rtol=rtol, atol=atol)
+            return _does_cover_data_array(self, bounds, rtol=rtol, atol=atol)
 
         xr.DataArray.does_cover = _does_cover
 
@@ -1125,7 +1141,7 @@ def install_legacy_shims() -> None:
                     DeprecationWarning,
                     stacklevel=2,
                 )
-            return self.td.is_uniform
+            return _is_uniform_data_array(self)
 
         xr.DataArray.is_uniform = _is_uniform
 
@@ -1139,7 +1155,7 @@ def install_legacy_shims() -> None:
                     DeprecationWarning,
                     stacklevel=2,
                 )
-            return self.td.angle
+            return _angle_data_array(self)
 
         xr.DataArray.angle = _angle
 
@@ -1153,7 +1169,7 @@ def install_legacy_shims() -> None:
                     DeprecationWarning,
                     stacklevel=2,
                 )
-            return self.td.abs
+            return abs(self)
 
         xr.DataArray.abs = _abs
 
@@ -1168,7 +1184,7 @@ def install_legacy_shims() -> None:
                     DeprecationWarning,
                     stacklevel=2,
                 )
-            return self.td.reflect(axis, center, reflection_only=reflection_only)
+            return _reflect_data_array(self, axis, center, reflection_only=reflection_only)
 
         xr.DataArray.reflect = _reflect
 
@@ -1183,7 +1199,7 @@ def install_legacy_shims() -> None:
                     DeprecationWarning,
                     stacklevel=2,
                 )
-            return self.td.with_updated_data(data=data, coords=coords)
+            return _with_updated_data_array(self, data=data, coords=coords)
 
         xr.DataArray._with_updated_data = _with_updated_data
 
