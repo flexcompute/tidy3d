@@ -5,7 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] - Dates
+
+### Added
+
+### Changed
+
+### Fixed
+
+## [2.10.1] - 2026-01-14
 
 ### Added
 - Added priority attribute to `TopologyDesignRegion` to enable manual control of overlapping structures.
@@ -1925,7 +1933,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.10.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.10.1...develop
+[2.10.1]: https://github.com/flexcompute/tidy3d/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/flexcompute/tidy3d/compare/v2.9.3...v2.10.0
 [2.9.3]: https://github.com/flexcompute/tidy3d/compare/v2.9.2...v2.9.3
 [2.9.2]: https://github.com/flexcompute/tidy3d/compare/v2.9.1...v2.9.2
