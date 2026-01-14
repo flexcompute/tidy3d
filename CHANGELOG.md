@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `symmetric_pseudo` option for `s_param_def` in `TerminalComponentModeler` which applies a scaling factor that ensures the S-matrix is symmetric in reciprocal systems.
 - Added deprecation warning for `TemperatureMonitor` and `SteadyPotentialMonitor` when `unstructured` parameter is not explicitly set. The default value of `unstructured` will change from `False` to `True` in the next release.
 - Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
+- Added validation to `GaussianDoping` to ensure `ref_con < concentration`, validate `source` face identifier, and warn the user when the box size is not sufficient for the specified transition width.
 
 ### Fixed
 - Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.
