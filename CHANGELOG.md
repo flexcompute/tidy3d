@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [2.10.1] - 2026-01-14
+
+### Added
 - Added priority attribute to `TopologyDesignRegion` to enable manual control of overlapping structures.
 - `to_mat_file()` method is now available on `ModeSimulationData` and `HeatChargeSimulationData` for exporting results to MATLAB `.mat` files.
 - Added autograd support for diagonal `AnisotropicMedium` and `CustomAnisotropicMedium` with diagonal permittivity tensor.
@@ -1925,7 +1933,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.10.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.10.1...develop
+[2.10.1]: https://github.com/flexcompute/tidy3d/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/flexcompute/tidy3d/compare/v2.9.3...v2.10.0
 [2.9.3]: https://github.com/flexcompute/tidy3d/compare/v2.9.2...v2.9.3
 [2.9.2]: https://github.com/flexcompute/tidy3d/compare/v2.9.1...v2.9.2
