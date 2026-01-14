@@ -18,6 +18,7 @@ from tidy3d.components.data.data_array import (
     IndexedDataArrayTypes,
     PointDataArray,
     SpatialDataArray,
+    data_array_annotated_type,
     is_data_array_name,
 )
 from tidy3d.components.data.dataset import Dataset
@@ -53,7 +54,7 @@ DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
 class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC):
     """Abstract base for datasets that store unstructured grid data."""
 
-    points: PointDataArray = Field(
+    points: data_array_annotated_type(PointDataArray) = Field(
         title="Grid Points",
         description="Coordinates of points composing the unstructured grid.",
     )
@@ -63,7 +64,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         description="Values stored at the grid points.",
     )
 
-    cells: CellDataArray = Field(
+    cells: data_array_annotated_type(CellDataArray) = Field(
         title="Grid Cells",
         description="Cells composing the unstructured grid specified as connections between grid "
         "points.",

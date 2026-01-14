@@ -8,6 +8,7 @@ from tidy3d.components.data.data_array import (
     CurrentFreqModeDataArray,
     ImpedanceFreqModeDataArray,
     VoltageFreqModeDataArray,
+    data_array_annotated_type,
 )
 from tidy3d.components.data.dataset import ModeFreqDataset
 
@@ -23,19 +24,19 @@ class TransmissionLineDataset(ModeFreqDataset):
         or :class:`ModeSimulation`.
     """
 
-    Z0: ImpedanceFreqModeDataArray = Field(
+    Z0: data_array_annotated_type(ImpedanceFreqModeDataArray) = Field(
         title="Characteristic Impedance",
         description="The characteristic impedance of the transmission line.",
     )
 
-    voltage_coeffs: VoltageFreqModeDataArray = Field(
+    voltage_coeffs: data_array_annotated_type(VoltageFreqModeDataArray) = Field(
         title="Mode Voltage Coefficients",
         description="Quantity calculated for transmission lines, which associates "
         "a voltage-like quantity with each mode profile that scales linearly with the "
         "complex-valued mode amplitude.",
     )
 
-    current_coeffs: CurrentFreqModeDataArray = Field(
+    current_coeffs: data_array_annotated_type(CurrentFreqModeDataArray) = Field(
         title="Mode Current Coefficients",
         description="Quantity calculated for transmission lines, which associates "
         "a current-like quantity with each mode profile that scales linearly with the "

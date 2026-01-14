@@ -17,6 +17,7 @@ from pydantic import Field
 from tidy3d.components.autograd.utils import split_list
 from tidy3d.components.base import JSON_TAG, Tidy3dBaseModel, cached_property
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
+from tidy3d.components.data.data_array import data_array_annotated_type
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
@@ -68,7 +69,7 @@ class AdjointSourceInfo(Tidy3dBaseModel):
         description="Set of processed sources to include in the adjoint simulation.",
     )
 
-    post_norm: Union[float, FreqDataArray] = Field(
+    post_norm: Union[float, data_array_annotated_type(FreqDataArray)] = Field(
         title="Post Normalization Values",
         description="Factor to multiply the adjoint fields by after running "
         "given the adjoint source pipeline used.",

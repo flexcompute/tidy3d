@@ -33,6 +33,7 @@ from tidy3d.components.data.data_array import (
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
     TimeDataArray,
+    data_array_annotated_type,
 )
 from tidy3d.components.data.zbf import ZBFData
 from tidy3d.components.types.base import xyz
@@ -277,32 +278,32 @@ class FieldDataset(ElectromagneticFieldDataset):
     >>> data = FieldDataset(Ex=scalar_field, Hz=scalar_field)
     """
 
-    Ex: Optional[ScalarFieldDataArray] = Field(
+    Ex: Optional[data_array_annotated_type(ScalarFieldDataArray)] = Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
     )
-    Ey: Optional[ScalarFieldDataArray] = Field(
+    Ey: Optional[data_array_annotated_type(ScalarFieldDataArray)] = Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
     )
-    Ez: Optional[ScalarFieldDataArray] = Field(
+    Ez: Optional[data_array_annotated_type(ScalarFieldDataArray)] = Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
     )
-    Hx: Optional[ScalarFieldDataArray] = Field(
+    Hx: Optional[data_array_annotated_type(ScalarFieldDataArray)] = Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
     )
-    Hy: Optional[ScalarFieldDataArray] = Field(
+    Hy: Optional[data_array_annotated_type(ScalarFieldDataArray)] = Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
     )
-    Hz: Optional[ScalarFieldDataArray] = Field(
+    Hz: Optional[data_array_annotated_type(ScalarFieldDataArray)] = Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
@@ -409,32 +410,32 @@ class FieldTimeDataset(ElectromagneticFieldDataset):
     >>> data = FieldTimeDataset(Ex=scalar_field, Hz=scalar_field)
     """
 
-    Ex: Optional[ScalarFieldTimeDataArray] = Field(
+    Ex: Optional[data_array_annotated_type(ScalarFieldTimeDataArray)] = Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
     )
-    Ey: Optional[ScalarFieldTimeDataArray] = Field(
+    Ey: Optional[data_array_annotated_type(ScalarFieldTimeDataArray)] = Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
     )
-    Ez: Optional[ScalarFieldTimeDataArray] = Field(
+    Ez: Optional[data_array_annotated_type(ScalarFieldTimeDataArray)] = Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
     )
-    Hx: Optional[ScalarFieldTimeDataArray] = Field(
+    Hx: Optional[data_array_annotated_type(ScalarFieldTimeDataArray)] = Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
     )
-    Hy: Optional[ScalarFieldTimeDataArray] = Field(
+    Hy: Optional[data_array_annotated_type(ScalarFieldTimeDataArray)] = Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
     )
-    Hz: Optional[ScalarFieldTimeDataArray] = Field(
+    Hz: Optional[data_array_annotated_type(ScalarFieldTimeDataArray)] = Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
@@ -511,19 +512,19 @@ class AuxFieldTimeDataset(AuxFieldDataset):
     >>> data = AuxFieldTimeDataset(Nfx=scalar_field)
     """
 
-    Nfx: Optional[ScalarFieldTimeDataArray] = Field(
+    Nfx: Optional[data_array_annotated_type(ScalarFieldTimeDataArray)] = Field(
         None,
         title="Nfx",
         description="Spatial distribution of the free carrier density for polarization "
         "in the x-direction.",
     )
-    Nfy: Optional[ScalarFieldTimeDataArray] = Field(
+    Nfy: Optional[data_array_annotated_type(ScalarFieldTimeDataArray)] = Field(
         None,
         title="Nfy",
         description="Spatial distribution of the free carrier density for polarization "
         "in the y-direction.",
     )
-    Nfz: Optional[ScalarFieldTimeDataArray] = Field(
+    Nfz: Optional[data_array_annotated_type(ScalarFieldTimeDataArray)] = Field(
         None,
         title="Nfz",
         description="Spatial distribution of the free carrier density for polarization "
@@ -557,50 +558,50 @@ class ModeSolverDataset(ElectromagneticFieldDataset, ModeFreqDataset):
     ... )
     """
 
-    Ex: Optional[ScalarModeFieldDataArray] = Field(
+    Ex: Optional[data_array_annotated_type(ScalarModeFieldDataArray)] = Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
-    Ey: Optional[ScalarModeFieldDataArray] = Field(
+    Ey: Optional[data_array_annotated_type(ScalarModeFieldDataArray)] = Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
-    Ez: Optional[ScalarModeFieldDataArray] = Field(
+    Ez: Optional[data_array_annotated_type(ScalarModeFieldDataArray)] = Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
-    Hx: Optional[ScalarModeFieldDataArray] = Field(
+    Hx: Optional[data_array_annotated_type(ScalarModeFieldDataArray)] = Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
-    Hy: Optional[ScalarModeFieldDataArray] = Field(
+    Hy: Optional[data_array_annotated_type(ScalarModeFieldDataArray)] = Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
-    Hz: Optional[ScalarModeFieldDataArray] = Field(
+    Hz: Optional[data_array_annotated_type(ScalarModeFieldDataArray)] = Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
     )
 
-    n_complex: ModeIndexDataArray = Field(
+    n_complex: data_array_annotated_type(ModeIndexDataArray) = Field(
         title="Propagation Index",
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    n_group_raw: Optional[GroupIndexDataArray] = Field(
+    n_group_raw: Optional[data_array_annotated_type(GroupIndexDataArray)] = Field(
         None,
         alias="n_group",  # This is for backwards compatibility only when loading old data
         title="Group Index",
         description="Index associated with group velocity of the mode.",
     )
 
-    dispersion_raw: Optional[ModeDispersionDataArray] = Field(
+    dispersion_raw: Optional[data_array_annotated_type(ModeDispersionDataArray)] = Field(
         None,
         title="Dispersion",
         description="Dispersion parameter for the mode.",
@@ -669,15 +670,15 @@ class ModeSolverDataset(ElectromagneticFieldDataset, ModeFreqDataset):
 class AbstractMediumPropertyDataset(AbstractFieldDataset, ABC):
     """Dataset storing medium property."""
 
-    eps_xx: ScalarFieldDataArray = Field(
+    eps_xx: data_array_annotated_type(ScalarFieldDataArray) = Field(
         title="Epsilon xx",
         description="Spatial distribution of the xx-component of the relative permittivity.",
     )
-    eps_yy: ScalarFieldDataArray = Field(
+    eps_yy: data_array_annotated_type(ScalarFieldDataArray) = Field(
         title="Epsilon yy",
         description="Spatial distribution of the yy-component of the relative permittivity.",
     )
-    eps_zz: ScalarFieldDataArray = Field(
+    eps_zz: data_array_annotated_type(ScalarFieldDataArray) = Field(
         title="Epsilon zz",
         description="Spatial distribution of the zz-component of the relative permittivity.",
     )
@@ -727,15 +728,15 @@ class MediumDataset(AbstractMediumPropertyDataset):
     >>> data = MediumDataset(eps_xx=sclr_fld, eps_yy=sclr_fld, eps_zz=sclr_fld, mu_xx=sclr_fld, mu_yy=sclr_fld, mu_zz=sclr_fld)
     """
 
-    mu_xx: ScalarFieldDataArray = Field(
+    mu_xx: data_array_annotated_type(ScalarFieldDataArray) = Field(
         title="Mu xx",
         description="Spatial distribution of the xx-component of the relative permeability.",
     )
-    mu_yy: ScalarFieldDataArray = Field(
+    mu_yy: data_array_annotated_type(ScalarFieldDataArray) = Field(
         title="Mu yy",
         description="Spatial distribution of the yy-component of the relative permeability.",
     )
-    mu_zz: ScalarFieldDataArray = Field(
+    mu_zz: data_array_annotated_type(ScalarFieldDataArray) = Field(
         title="Mu zz",
         description="Spatial distribution of the zz-component of the relative permeability.",
     )

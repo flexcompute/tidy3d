@@ -16,6 +16,7 @@ from tidy3d.components.data.data_array import (
     EMEScalarFieldDataArray,
     EMEScalarModeFieldDataArray,
     EMESMatrixDataArray,
+    data_array_annotated_type,
 )
 from tidy3d.components.data.dataset import Dataset, ElectromagneticFieldDataset
 from tidy3d.exceptions import ValidationError
@@ -24,19 +25,19 @@ from tidy3d.exceptions import ValidationError
 class EMESMatrixDataset(Dataset):
     """Dataset storing S matrix."""
 
-    S11: EMESMatrixDataArray = Field(
+    S11: data_array_annotated_type(EMESMatrixDataArray) = Field(
         title="S11 matrix",
         description="S matrix relating output modes at port 1 to input modes at port 1.",
     )
-    S12: EMESMatrixDataArray = Field(
+    S12: data_array_annotated_type(EMESMatrixDataArray) = Field(
         title="S12 matrix",
         description="S matrix relating output modes at port 1 to input modes at port 2.",
     )
-    S21: EMESMatrixDataArray = Field(
+    S21: data_array_annotated_type(EMESMatrixDataArray) = Field(
         title="S21 matrix",
         description="S matrix relating output modes at port 2 to input modes at port 1.",
     )
-    S22: EMESMatrixDataArray = Field(
+    S22: data_array_annotated_type(EMESMatrixDataArray) = Field(
         title="S22 matrix",
         description="S matrix relating output modes at port 2 to input modes at port 2.",
     )
@@ -45,19 +46,19 @@ class EMESMatrixDataset(Dataset):
 class EMEInterfaceSMatrixDataset(Dataset):
     """Dataset storing S matrices associated with EME cell interfaces."""
 
-    S11: EMEInterfaceSMatrixDataArray = Field(
+    S11: data_array_annotated_type(EMEInterfaceSMatrixDataArray) = Field(
         title="S11 matrix",
         description="S matrix relating output modes at port 1 to input modes at port 1.",
     )
-    S12: EMEInterfaceSMatrixDataArray = Field(
+    S12: data_array_annotated_type(EMEInterfaceSMatrixDataArray) = Field(
         title="S12 matrix",
         description="S matrix relating output modes at port 1 to input modes at port 2.",
     )
-    S21: EMEInterfaceSMatrixDataArray = Field(
+    S21: data_array_annotated_type(EMEInterfaceSMatrixDataArray) = Field(
         title="S21 matrix",
         description="S matrix relating output modes at port 2 to input modes at port 1.",
     )
-    S22: EMEInterfaceSMatrixDataArray = Field(
+    S22: data_array_annotated_type(EMEInterfaceSMatrixDataArray) = Field(
         title="S22 matrix",
         description="S matrix relating output modes at port 2 to input modes at port 2.",
     )
@@ -73,15 +74,15 @@ class EMEOverlapDataset(Dataset):
     in cell ``i``, and ``mode_index_in`` refers to the mode index in cell ``j``.
     """
 
-    O11: EMEInterfaceSMatrixDataArray = Field(
+    O11: data_array_annotated_type(EMEInterfaceSMatrixDataArray) = Field(
         title="O11 matrix",
         description="Overlap integral between E field and H field in the same cell.",
     )
-    O12: EMEInterfaceSMatrixDataArray = Field(
+    O12: data_array_annotated_type(EMEInterfaceSMatrixDataArray) = Field(
         title="O12 matrix",
         description="Overlap integral between E field on side 1 and H field on side 2.",
     )
-    O21: EMEInterfaceSMatrixDataArray = Field(
+    O21: data_array_annotated_type(EMEInterfaceSMatrixDataArray) = Field(
         title="O21 matrix",
         description="Overlap integral between E field on side 2 and H field on side 1.",
     )
@@ -102,25 +103,25 @@ class EMECoefficientDataset(Dataset):
     between EME cells.
     """
 
-    A: Optional[EMECoefficientDataArray] = Field(
+    A: Optional[data_array_annotated_type(EMECoefficientDataArray)] = Field(
         None,
         title="A coefficient",
         description="Coefficient for forward mode in this cell.",
     )
 
-    B: Optional[EMECoefficientDataArray] = Field(
+    B: Optional[data_array_annotated_type(EMECoefficientDataArray)] = Field(
         None,
         title="B coefficient",
         description="Coefficient for backward mode in this cell.",
     )
 
-    n_complex: Optional[EMEModeIndexDataArray] = Field(
+    n_complex: Optional[data_array_annotated_type(EMEModeIndexDataArray)] = Field(
         None,
         title="Propagation Index",
         description="Complex-valued effective propagation indices associated with the EME modes.",
     )
 
-    flux: Optional[EMEFluxDataArray] = Field(
+    flux: Optional[data_array_annotated_type(EMEFluxDataArray)] = Field(
         None,
         title="Flux",
         description="Power flux of the EME modes.",
@@ -176,32 +177,32 @@ class EMECoefficientDataset(Dataset):
 class EMEFieldDataset(ElectromagneticFieldDataset):
     """Dataset storing scalar components of E and H fields as a function of freq, mode_index, and port_index."""
 
-    Ex: Optional[EMEScalarFieldDataArray] = Field(
+    Ex: Optional[data_array_annotated_type(EMEScalarFieldDataArray)] = Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
-    Ey: Optional[EMEScalarFieldDataArray] = Field(
+    Ey: Optional[data_array_annotated_type(EMEScalarFieldDataArray)] = Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
-    Ez: Optional[EMEScalarFieldDataArray] = Field(
+    Ez: Optional[data_array_annotated_type(EMEScalarFieldDataArray)] = Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
-    Hx: Optional[EMEScalarFieldDataArray] = Field(
+    Hx: Optional[data_array_annotated_type(EMEScalarFieldDataArray)] = Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
-    Hy: Optional[EMEScalarFieldDataArray] = Field(
+    Hy: Optional[data_array_annotated_type(EMEScalarFieldDataArray)] = Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
-    Hz: Optional[EMEScalarFieldDataArray] = Field(
+    Hz: Optional[data_array_annotated_type(EMEScalarFieldDataArray)] = Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
@@ -211,32 +212,32 @@ class EMEFieldDataset(ElectromagneticFieldDataset):
 class EMEModeSolverDataset(ElectromagneticFieldDataset):
     """Dataset storing EME modes as a function of freq, mode_index, and cell_index."""
 
-    n_complex: EMEModeIndexDataArray = Field(
+    n_complex: data_array_annotated_type(EMEModeIndexDataArray) = Field(
         title="Propagation Index",
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    Ex: EMEScalarModeFieldDataArray = Field(
+    Ex: data_array_annotated_type(EMEScalarModeFieldDataArray) = Field(
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
-    Ey: EMEScalarModeFieldDataArray = Field(
+    Ey: data_array_annotated_type(EMEScalarModeFieldDataArray) = Field(
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
-    Ez: EMEScalarModeFieldDataArray = Field(
+    Ez: data_array_annotated_type(EMEScalarModeFieldDataArray) = Field(
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
-    Hx: EMEScalarModeFieldDataArray = Field(
+    Hx: data_array_annotated_type(EMEScalarModeFieldDataArray) = Field(
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
-    Hy: EMEScalarModeFieldDataArray = Field(
+    Hy: data_array_annotated_type(EMEScalarModeFieldDataArray) = Field(
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
-    Hz: EMEScalarModeFieldDataArray = Field(
+    Hz: data_array_annotated_type(EMEScalarModeFieldDataArray) = Field(
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
     )

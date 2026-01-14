@@ -14,6 +14,7 @@ from tidy3d.components.data.data_array import (
     FreqVoltageDataArray,
     SpatialDataArray,
     SteadyVoltageDataArray,
+    data_array_annotated_type,
 )
 from tidy3d.components.data.utils import (
     TetrahedralGridDataset,
@@ -66,35 +67,39 @@ class DeviceCharacteristics(Tidy3dBaseModel):
 
     """
 
-    steady_dc_hole_capacitance: Optional[SteadyVoltageDataArray] = Field(
+    steady_dc_hole_capacitance: Optional[data_array_annotated_type(SteadyVoltageDataArray)] = Field(
         None,
         title="Steady DC hole capacitance",
         description="Device steady DC capacitance data based on holes. If the simulation "
         "has converged, these result should be close to that of electrons.",
     )
 
-    steady_dc_electron_capacitance: Optional[SteadyVoltageDataArray] = Field(
-        None,
-        title="Steady DC electron capacitance",
-        description="Device steady DC capacitance data based on electrons. If the simulation "
-        "has converged, these result should be close to that of holes.",
+    steady_dc_electron_capacitance: Optional[data_array_annotated_type(SteadyVoltageDataArray)] = (
+        Field(
+            None,
+            title="Steady DC electron capacitance",
+            description="Device steady DC capacitance data based on electrons. If the simulation "
+            "has converged, these result should be close to that of holes.",
+        )
     )
 
-    steady_dc_current_voltage: Optional[SteadyVoltageDataArray] = Field(
+    steady_dc_current_voltage: Optional[data_array_annotated_type(SteadyVoltageDataArray)] = Field(
         None,
         title="Steady DC current-voltage",
         description="Device steady DC current-voltage relation for the device.",
     )
 
-    steady_dc_resistance_voltage: Optional[SteadyVoltageDataArray] = Field(
-        None,
-        title="Small signal resistance",
-        description="Steady DC computation of the small signal resistance. This is computed "
-        "as the derivative of the current-voltage relation :math:`\\frac{\\Delta V}{\\Delta I}`, and the result "
-        "is given in Ohms. Note that in 2D the resistance is given in :math:`\\Omega \\mu`.",
+    steady_dc_resistance_voltage: Optional[data_array_annotated_type(SteadyVoltageDataArray)] = (
+        Field(
+            None,
+            title="Small signal resistance",
+            description="Steady DC computation of the small signal resistance. This is computed "
+            "as the derivative of the current-voltage relation :math:`\\frac{\\Delta V}{\\Delta I}`, and the result "
+            "is given in Ohms. Note that in 2D the resistance is given in :math:`\\Omega \\mu`.",
+        )
     )
 
-    ac_current_voltage: Optional[FreqVoltageDataArray] = Field(
+    ac_current_voltage: Optional[data_array_annotated_type(FreqVoltageDataArray)] = Field(
         None,
         title="Small-signal AC current-voltage",
         description="Small-signal AC current as a function of DC bias voltage and frequency. "

@@ -8,7 +8,7 @@ import numpy as np
 from pydantic import Field
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.data.data_array import FreqDataArray, data_array_annotated_type
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.constants import C_0
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
@@ -39,13 +39,13 @@ if TYPE_CHECKING:
 class MicrowaveSMatrixData(MicrowaveBaseModel):
     """Stores the computed S-matrix and reference impedances for the terminal ports."""
 
-    port_reference_impedances: Optional[PortDataArray] = Field(
+    port_reference_impedances: Optional[data_array_annotated_type(PortDataArray)] = Field(
         None,
         title="Port Reference Impedances",
         description="Reference impedance for each port used in the S-parameter calculation. This is optional and may not be present if not specified or computed.",
     )
 
-    data: TerminalPortDataArray = Field(
+    data: data_array_annotated_type(TerminalPortDataArray) = Field(
         title="S-Matrix Data",
         description="An array containing the computed S-matrix of the device. The data is organized by terminal ports, representing the scattering parameters between them.",
     )

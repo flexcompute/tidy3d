@@ -13,6 +13,7 @@ from tidy3d.components.data.data_array import (
     PointDataArray,
     SpatialDataArray,
     SteadyVoltageDataArray,
+    data_array_annotated_type,
 )
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
@@ -302,14 +303,14 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
         description="Capacitance data associated with a Charge simulation.",
     )
 
-    hole_capacitance: Optional[SteadyVoltageDataArray] = Field(
+    hole_capacitance: Optional[data_array_annotated_type(SteadyVoltageDataArray)] = Field(
         None,
         title="Hole capacitance",
         description="Small signal capacitance :math:`(\\frac{dQ_p}{dV})` associated to the monitor.",
     )
     # C_p = hole_capacitance
 
-    electron_capacitance: Optional[SteadyVoltageDataArray] = Field(
+    electron_capacitance: Optional[data_array_annotated_type(SteadyVoltageDataArray)] = Field(
         None,
         title="Electron capacitance",
         description="Small signal capacitance :math:`(\\frac{dQn}{dV})` associated to the monitor.",

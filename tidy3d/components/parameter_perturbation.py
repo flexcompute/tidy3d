@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Optional, TypeVar, Union
 import numpy as np
 from pydantic import Field, NonNegativeFloat, model_validator
 
+from tidy3d.components.data.data_array import data_array_annotated_type
 from tidy3d.components.types.base import ArrayComplex, ArrayFloat, discriminated_union
 from tidy3d.constants import C_0, CMCUBE, EPSILON_0, HERTZ, KELVIN, PERCMCUBE, inf
 from tidy3d.exceptions import DataError
@@ -321,7 +322,7 @@ class CustomHeatPerturbation(HeatPerturbation):
     ... )
     """
 
-    perturbation_values: HeatDataArray = Field(
+    perturbation_values: data_array_annotated_type(HeatDataArray) = Field(
         title="Perturbation Values",
         description="Sampled perturbation values.",
     )
@@ -794,7 +795,7 @@ class CustomChargePerturbation(ChargePerturbation):
     ... )
     """
 
-    perturbation_values: ChargeDataArray = Field(
+    perturbation_values: data_array_annotated_type(ChargeDataArray) = Field(
         title="Petrubation Values",
         description="2D array (vs electron and hole densities) of sampled perturbation values.",
     )
@@ -1266,7 +1267,7 @@ class NedeljkovicSorefMashanovich(AbstractDeltaModel):
     -------
     """
 
-    perturb_coeffs: PerturbationCoefficientDataArray = Field(
+    perturb_coeffs: data_array_annotated_type(PerturbationCoefficientDataArray) = Field(
         default_factory=lambda: PerturbationCoefficientDataArray(
             np.column_stack(
                 [

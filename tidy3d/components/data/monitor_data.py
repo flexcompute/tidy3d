@@ -15,6 +15,7 @@ from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
+from tidy3d.components.data.data_array import data_array_annotated_type
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
 from tidy3d.components.monitor import (
@@ -1697,7 +1698,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         description="Mode monitor associated with the data.",
     )
 
-    amps: ModeAmpsDataArray = Field(
+    amps: data_array_annotated_type(ModeAmpsDataArray) = Field(
         title="Amplitudes",
         description="Complex-valued amplitudes associated with the mode.",
     )
@@ -2492,7 +2493,7 @@ class ModeSolverData(ModeData):
         description="Mode solver monitor associated with the data.",
     )
 
-    amps: Optional[ModeAmpsDataArray] = Field(
+    amps: Optional[data_array_annotated_type(ModeAmpsDataArray)] = Field(
         None,
         title="Amplitudes",
         description="Unused for ModeSolverData.",
@@ -2802,7 +2803,7 @@ class FluxData(MonitorData):
         description="Frequency-domain flux monitor associated with the data.",
     )
 
-    flux: FluxDataArray = Field(
+    flux: data_array_annotated_type(FluxDataArray) = Field(
         title="Flux",
         description="Flux values in the frequency-domain.",
     )
@@ -2858,7 +2859,7 @@ class FluxTimeData(MonitorData):
         description="Time-domain flux monitor associated with the data.",
     )
 
-    flux: FluxTimeDataArray = Field(
+    flux: data_array_annotated_type(FluxTimeDataArray) = Field(
         title="Flux",
         description="Flux values in the time-domain.",
     )
@@ -3192,27 +3193,27 @@ class FieldProjectionAngleData(AbstractFieldProjectionData):
         description="Surfaces of the monitor where near fields were recorded for projection",
     )
 
-    Er: FieldProjectionAngleDataArray = Field(
+    Er: data_array_annotated_type(FieldProjectionAngleDataArray) = Field(
         title="Er",
         description="Spatial distribution of r-component of the electric field.",
     )
-    Etheta: FieldProjectionAngleDataArray = Field(
+    Etheta: data_array_annotated_type(FieldProjectionAngleDataArray) = Field(
         title="Etheta",
         description="Spatial distribution of the theta-component of the electric field.",
     )
-    Ephi: FieldProjectionAngleDataArray = Field(
+    Ephi: data_array_annotated_type(FieldProjectionAngleDataArray) = Field(
         title="Ephi",
         description="Spatial distribution of phi-component of the electric field.",
     )
-    Hr: FieldProjectionAngleDataArray = Field(
+    Hr: data_array_annotated_type(FieldProjectionAngleDataArray) = Field(
         title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
     )
-    Htheta: FieldProjectionAngleDataArray = Field(
+    Htheta: data_array_annotated_type(FieldProjectionAngleDataArray) = Field(
         title="Htheta",
         description="Spatial distribution of theta-component of the magnetic field.",
     )
-    Hphi: FieldProjectionAngleDataArray = Field(
+    Hphi: data_array_annotated_type(FieldProjectionAngleDataArray) = Field(
         title="Hphi",
         description="Spatial distribution of phi-component of the magnetic field.",
     )
@@ -3394,27 +3395,27 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
         description="Surfaces of the monitor where near fields were recorded for projection",
     )
 
-    Er: FieldProjectionCartesianDataArray = Field(
+    Er: data_array_annotated_type(FieldProjectionCartesianDataArray) = Field(
         title="Er",
         description="Spatial distribution of r-component of the electric field.",
     )
-    Etheta: FieldProjectionCartesianDataArray = Field(
+    Etheta: data_array_annotated_type(FieldProjectionCartesianDataArray) = Field(
         title="Etheta",
         description="Spatial distribution of the theta-component of the electric field.",
     )
-    Ephi: FieldProjectionCartesianDataArray = Field(
+    Ephi: data_array_annotated_type(FieldProjectionCartesianDataArray) = Field(
         title="Ephi",
         description="Spatial distribution of phi-component of the electric field.",
     )
-    Hr: FieldProjectionCartesianDataArray = Field(
+    Hr: data_array_annotated_type(FieldProjectionCartesianDataArray) = Field(
         title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
     )
-    Htheta: FieldProjectionCartesianDataArray = Field(
+    Htheta: data_array_annotated_type(FieldProjectionCartesianDataArray) = Field(
         title="Htheta",
         description="Spatial distribution of theta-component of the magnetic field.",
     )
-    Hphi: FieldProjectionCartesianDataArray = Field(
+    Hphi: data_array_annotated_type(FieldProjectionCartesianDataArray) = Field(
         title="Hphi",
         description="Spatial distribution of phi-component of the magnetic field.",
     )
@@ -3539,27 +3540,27 @@ class FieldProjectionKSpaceData(AbstractFieldProjectionData):
         description="Surfaces of the monitor where near fields were recorded for projection",
     )
 
-    Er: FieldProjectionKSpaceDataArray = Field(
+    Er: data_array_annotated_type(FieldProjectionKSpaceDataArray) = Field(
         title="Er",
         description="Spatial distribution of r-component of the electric field.",
     )
-    Etheta: FieldProjectionKSpaceDataArray = Field(
+    Etheta: data_array_annotated_type(FieldProjectionKSpaceDataArray) = Field(
         title="Etheta",
         description="Spatial distribution of the theta-component of the electric field.",
     )
-    Ephi: FieldProjectionKSpaceDataArray = Field(
+    Ephi: data_array_annotated_type(FieldProjectionKSpaceDataArray) = Field(
         title="Ephi",
         description="Spatial distribution of phi-component of the electric field.",
     )
-    Hr: FieldProjectionKSpaceDataArray = Field(
+    Hr: data_array_annotated_type(FieldProjectionKSpaceDataArray) = Field(
         title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
     )
-    Htheta: FieldProjectionKSpaceDataArray = Field(
+    Htheta: data_array_annotated_type(FieldProjectionKSpaceDataArray) = Field(
         title="Htheta",
         description="Spatial distribution of theta-component of the magnetic field.",
     )
-    Hphi: FieldProjectionKSpaceDataArray = Field(
+    Hphi: data_array_annotated_type(FieldProjectionKSpaceDataArray) = Field(
         title="Hphi",
         description="Spatial distribution of phi-component of the magnetic field.",
     )
@@ -3666,27 +3667,27 @@ class DiffractionData(AbstractFieldProjectionData):
         description="Diffraction monitor associated with the data.",
     )
 
-    Er: DiffractionDataArray = Field(
+    Er: data_array_annotated_type(DiffractionDataArray) = Field(
         title="Er",
         description="Spatial distribution of r-component of the electric field.",
     )
-    Etheta: DiffractionDataArray = Field(
+    Etheta: data_array_annotated_type(DiffractionDataArray) = Field(
         title="Etheta",
         description="Spatial distribution of the theta-component of the electric field.",
     )
-    Ephi: DiffractionDataArray = Field(
+    Ephi: data_array_annotated_type(DiffractionDataArray) = Field(
         title="Ephi",
         description="Spatial distribution of phi-component of the electric field.",
     )
-    Hr: DiffractionDataArray = Field(
+    Hr: data_array_annotated_type(DiffractionDataArray) = Field(
         title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
     )
-    Htheta: DiffractionDataArray = Field(
+    Htheta: data_array_annotated_type(DiffractionDataArray) = Field(
         title="Htheta",
         description="Spatial distribution of theta-component of the magnetic field.",
     )
-    Hphi: DiffractionDataArray = Field(
+    Hphi: data_array_annotated_type(DiffractionDataArray) = Field(
         title="Hphi",
         description="Spatial distribution of phi-component of the magnetic field.",
     )
@@ -4008,7 +4009,7 @@ class DirectivityData(FieldProjectionAngleData):
         description="Monitor describing the angle-based projection grid on which to measure directivity data.",
     )
 
-    flux: FluxDataArray = Field(
+    flux: data_array_annotated_type(FluxDataArray) = Field(
         title="Flux",
         description="Flux values that are either computed from fields recorded on the "
         "projection surfaces or by integrating the projected fields over a spherical surface.",

@@ -13,6 +13,7 @@ from tidy3d.components.data.data_array import (
     FreqDataArray,
     FreqModeDataArray,
     ImpedanceFreqModeDataArray,
+    data_array_annotated_type,
 )
 from tidy3d.components.data.monitor_data import DirectivityData, ModeData, ModeSolverData
 from tidy3d.components.microwave.base import MicrowaveBaseModel
@@ -90,12 +91,12 @@ class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
     John Wiley & Sons, Chapter 2.9 (2016).
     """
 
-    power_incident: FreqDataArray = Field(
+    power_incident: data_array_annotated_type(FreqDataArray) = Field(
         title="Power incident",
         description="Array of values representing the incident power to an antenna.",
     )
 
-    power_reflected: FreqDataArray = Field(
+    power_reflected: data_array_annotated_type(FreqDataArray) = Field(
         title="Power reflected",
         description="Array of values representing power reflected due to an impedance mismatch with the antenna.",
     )

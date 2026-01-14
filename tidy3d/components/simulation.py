@@ -19,6 +19,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d.components.data.data_array import data_array_annotated_type
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
@@ -383,7 +384,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         "``autograd`` gradient processing.",
     )
 
-    post_norm: Union[float, FreqDataArray] = Field(
+    post_norm: Union[float, data_array_annotated_type(FreqDataArray)] = Field(
         1.0,
         title="Post Normalization Values",
         description="Factor to multiply the fields by after running, "

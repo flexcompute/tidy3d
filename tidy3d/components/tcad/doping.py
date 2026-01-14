@@ -10,7 +10,7 @@ from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.autograd import TracedSize
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import SpatialDataArray
+from tidy3d.components.data.data_array import SpatialDataArray, data_array_annotated_type
 from tidy3d.components.geometry.base import Box
 from tidy3d.constants import MICROMETER, PERCMCUBE, inf
 from tidy3d.exceptions import SetupError
@@ -313,7 +313,7 @@ class CustomDoping(AbstractDopingBox):
     ... )
     """
 
-    concentration: SpatialDataArray = Field(
+    concentration: data_array_annotated_type(SpatialDataArray) = Field(
         title="Doping concentration data array.",
         description="Doping concentration data array.",
         units=PERCMCUBE,

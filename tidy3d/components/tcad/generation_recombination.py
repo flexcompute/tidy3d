@@ -6,7 +6,7 @@ import numpy as np
 from pydantic import Field, PositiveFloat, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.data.data_array import SpatialDataArray
+from tidy3d.components.data.data_array import SpatialDataArray, data_array_annotated_type
 from tidy3d.constants import PERCMCUBE, SECOND
 
 if TYPE_CHECKING:
@@ -218,7 +218,7 @@ class DistributedGeneration(Tidy3dBaseModel):
     >>> dist_g = td.DistributedGeneration(rate=fd)
     """
 
-    rate: SpatialDataArray = Field(
+    rate: data_array_annotated_type(SpatialDataArray) = Field(
         title="Generation rate",
         description="Spatially varying generation rate.",
         units="1/(cm^3 s^1)",

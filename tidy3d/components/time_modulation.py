@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Optional, Union
 import numpy as np
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
+from tidy3d.components.data.data_array import data_array_annotated_type
 from tidy3d.constants import HERTZ, RADIAN
 from tidy3d.exceptions import ValidationError
 
@@ -135,14 +136,14 @@ class SpaceModulation(AbstractSpaceModulation):
     >>> space = SpaceModulation(amplitude=amp, phase=phase)
     """
 
-    amplitude: Union[float, SpatialDataArray] = Field(
+    amplitude: Union[float, data_array_annotated_type(SpatialDataArray)] = Field(
         1,
         title="Amplitude of modulation in space",
         description="Amplitude of modulation that can vary spatially. "
         "It takes the unit of whatever is being modulated.",
     )
 
-    phase: Union[float, SpatialDataArray] = Field(
+    phase: Union[float, data_array_annotated_type(SpatialDataArray)] = Field(
         0,
         title="Phase of modulation in space",
         description="Phase of modulation that can vary spatially.",

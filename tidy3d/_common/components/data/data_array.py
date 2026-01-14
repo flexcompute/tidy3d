@@ -76,6 +76,8 @@ DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
 # Toggle for emitting deprecation warnings from legacy xarray shims.
 LEGACY_SHIM_WARNINGS = True
+# Toggle for installing legacy xarray shims on import.
+LEGACY_SHIM_ENABLED = True
 
 
 @dataclass(frozen=True)
@@ -143,7 +145,7 @@ class DataArraySpec:
 
             raise ValueError("unsupported DataArray payload; missing inline data")
 
-        raise TypeError("expected an xarray.DataArray or serialized DataArray payload")
+        raise ValueError("expected an xarray.DataArray or serialized DataArray payload")
 
     def _from_inline(self, inline: Mapping[str, Any]) -> xr.DataArray:
         dims = inline.get("dims", self.dims)
@@ -1184,6 +1186,10 @@ def install_legacy_shims() -> None:
             return self.td.with_updated_data(data=data, coords=coords)
 
         xr.DataArray._with_updated_data = _with_updated_data
+
+
+if LEGACY_SHIM_ENABLED:
+    install_legacy_shims()
 
 
 class FreqDataArray(DataArray):
