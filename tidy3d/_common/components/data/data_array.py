@@ -200,6 +200,15 @@ class DataArraySpec:
                 if data_array.coords[dim].to_index().duplicated().any():
                     raise ValueError(f"duplicate coordinates in dimension {dim!r}")
 
+        if type(data_array) is not DataArray:
+            data_array = DataArray(
+                data_array.data,
+                coords=data_array.coords,
+                dims=data_array.dims,
+                name=data_array.name,
+                attrs=dict(data_array.attrs),
+            )
+
         return data_array
 
     def matches(self, data_array: xr.DataArray) -> bool:
@@ -225,8 +234,12 @@ def _default_schema_id(data_array_type: type[DataArray]) -> str:
     if override:
         return override
     base = data_array_type.__name__
+    if base == "DataArray":
+        return "tidy3d.data.data_array"
     if base.endswith("DataArray"):
         base = base[: -len("DataArray")]
+    if not base:
+        return "tidy3d.data.data_array"
     return f"tidy3d.data.{_camel_to_snake(base)}"
 
 
@@ -243,8 +256,10 @@ def _default_spec_for_type(data_array_type: type[DataArray]) -> DataArraySpec:
 
 
 def data_array_spec_for_type(data_array_type: type[DataArray]) -> DataArraySpec:
-    spec = data_array_type.__spec__ if isinstance(data_array_type.__spec__, DataArraySpec) else None
-    return spec or _default_spec_for_type(data_array_type)
+    spec = data_array_type.__spec__
+    if not isinstance(spec, DataArraySpec):
+        raise TypeError(f"{data_array_type.__name__} is missing a DataArraySpec.")
+    return spec
 
 
 def data_array_annotated_type(data_array_type: type[DataArray]) -> Any:
@@ -307,16 +322,18 @@ class DataArray(xr.DataArray):
     # optional stable schema id (defaults to class name if not set)
     _schema_id: str | None = None
     # schema metadata for spec-based validation
-    __spec__: DataArraySpec | None = None
+    __spec__: DataArraySpec = DataArraySpec(id="tidy3d.data.data_array", dims=())
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if cls is DataArray:
             return
         spec = cls.__dict__.get("__spec__")
-        if not isinstance(spec, DataArraySpec):
+        if spec is None:
             spec = _default_spec_for_type(cls)
             cls.__spec__ = spec
+        elif not isinstance(spec, DataArraySpec):
+            raise TypeError(f"{cls.__name__}.__spec__ must be a DataArraySpec.")
         register_data_array_spec(spec, cls)
 
     def __init__(self, data: Any, *args: Any, **kwargs: Any) -> None:
@@ -327,119 +344,49 @@ class DataArray(xr.DataArray):
         elif isinstance(data, (xr.Variable, xr.DataArray)):
             if isbox(data.data) and not is_tidy_box(data.data):
                 data.data = TidyArrayBox.from_arraybox(data.data)
+        if type(self) is not DataArray:
+            spec = data_array_spec_for_type(type(self))
+            coords = kwargs.get("coords", args[0] if len(args) > 0 else None)
+            dims = kwargs.get("dims", args[1] if len(args) > 1 else None)
+            if coords is None and dims is None:
+                kwargs = dict(kwargs)
+                kwargs["dims"] = spec.dims
+                args = ()
+            temp = xr.DataArray(data, *args, **kwargs)
+            temp = spec.validate_data_array(temp)
+            data = temp.data
+            args = ()
+            kwargs = {
+                "coords": temp.coords,
+                "dims": temp.dims,
+                "name": temp.name,
+                "attrs": dict(temp.attrs),
+            }
         super().__init__(data, *args, **kwargs)
 
     @classmethod
     def __get_pydantic_core_schema__(
         cls, source_type: Any, handler: GetCoreSchemaHandler
     ) -> core_schema.CoreSchema:
-        """Core schema definition for validation & serialization."""
+        """Delegate pydantic validation/serialization to the attached spec."""
         spec = data_array_spec_for_type(cls)
-
-        def _initial_parser(value: Any) -> Self:
-            if isinstance(value, cls):
-                return value
-
-            if isinstance(value, str) and value in {cls.__name__, cls.schema_id()}:
-                raise DataError(
-                    f"Trying to load '{cls.__name__}' from string placeholder '{value}' "
-                    "but the actual data is missing. DataArrays are not typically stored "
-                    "in JSON. Load from HDF5 or ensure the DataArray object is provided."
-                )
-
-            try:
-                instance = cls(value)
-                if not isinstance(instance, cls):
-                    raise TypeError(
-                        f"Constructor for {cls.__name__} returned unexpected type {type(instance)}"
-                    )
-                return instance
-            except Exception as e:
-                raise ValueError(
-                    f"Could not construct '{cls.__name__}' from input of type '{type(value)}'. "
-                    f"Ensure input is compatible with xarray.DataArray constructor. Original error: {e}"
-                ) from e
-
-        validation_schema = core_schema.no_info_plain_validator_function(_initial_parser)
-
-        def _apply_spec(val: Self) -> Self:
-            return spec.validate_data_array(val)
-
-        validation_schema = core_schema.no_info_after_validator_function(
-            _apply_spec, validation_schema
-        )
-
-        def _serialize_to_name(instance: Self) -> str:
-            return type(instance).schema_id()
-
-        # serialization behavior:
-        # - for JSON ('json' mode), use the _serialize_to_name function.
-        # - for Python ('python' mode), use Pydantic's default for the object type
-        serialization_schema = core_schema.plain_serializer_function_ser_schema(
-            _serialize_to_name,
-            return_schema=core_schema.str_schema(),
-            when_used="json",
-        )
-
-        return core_schema.json_or_python_schema(
-            python_schema=validation_schema,
-            json_schema=validation_schema,  # Use same validation rules for JSON input
-            serialization=serialization_schema,
-        )
+        return spec.__get_pydantic_core_schema__(source_type, handler)
 
     @classmethod
     def __get_pydantic_json_schema__(
-        cls, core_schema_obj: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+        cls, schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
     ) -> JsonSchemaValue:
-        """JSON schema definition (defines how it LOOKS in a schema, not the data)."""
-        return {
-            "type": "string",
-            "title": cls.__name__,
-            "description": (
-                f"Placeholder for a '{cls.__name__}' object. Actual data is typically "
-                "serialized separately (e.g., via HDF5) and not embedded in JSON."
-            ),
-            "td_schema": cls.schema_id(),
-        }
+        """Delegate JSON schema generation to the attached spec."""
+        spec = data_array_spec_for_type(cls)
+        return spec.__get_pydantic_json_schema__(schema, handler)
 
     @classmethod
     def schema_id(cls) -> str:
-        spec = cls.__spec__ if isinstance(cls.__spec__, DataArraySpec) else None
-        if spec is not None:
-            return spec.id
-        return cls.__name__
+        return data_array_spec_for_type(cls).id
 
-    @classmethod
-    def _validate_dims(cls, val: Self) -> Self:
-        """Make sure the dims are the same as ``_dims``, then put them in the correct order."""
-        if set(val.dims) != set(cls._dims):
-            raise ValueError(
-                f"Wrong dims for {cls.__name__}, expected '{cls._dims}', got '{val.dims}'"
-            )
-        if val.dims != cls._dims:
-            val = val.transpose(*cls._dims)
-        return val
-
-    @classmethod
-    def _assign_data_attrs(cls, val: Self) -> Self:
-        """Assign the correct data attributes to the :class:`.DataArray`."""
-        for attr_name, attr_val in cls._data_attrs.items():
-            val.attrs[attr_name] = attr_val
-        return val
-
-    @classmethod
-    def _assign_coord_attrs(cls, val: Self) -> Self:
-        """Assign the correct coordinate attributes to the :class:`.DataArray`."""
-        target_dims = set(val.dims) & set(cls._dims) & set(val.coords)
-        for dim in target_dims:
-            template = DIM_ATTRS.get(dim)
-            if not template:
-                continue
-
-            coord_attrs = val.coords[dim].attrs
-            missing = {k: v for k, v in template.items() if coord_attrs.get(k) != v}
-            coord_attrs.update(missing)
-        return val
+    @property
+    def spec(self) -> DataArraySpec:
+        return data_array_spec_for_type(type(self))
 
     def _interp_validator(self, field_name: Optional[str] = None) -> None:
         """Ensure the data can be interpolated or selected by checking for duplicate coordinates.
@@ -527,15 +474,8 @@ class DataArray(xr.DataArray):
     @classmethod
     def from_hdf5(cls, fname: PathLike, group_path: str) -> Self:
         """Load a DataArray from an hdf5 file with a given path to the group."""
-        path = pathlib.Path(fname)
-        with h5py.File(path, "r") as f:
-            sub_group = f[group_path]
-            values = np.array(sub_group[DATA_ARRAY_VALUE_NAME])
-            coords = {dim: np.array(sub_group[dim]) for dim in cls._dims if dim in sub_group}
-            for key, val in coords.items():
-                if val.dtype == "O":
-                    coords[key] = [byte_string.decode() for byte_string in val.tolist()]
-            return cls(values, coords=coords, dims=cls._dims)
+        spec = data_array_spec_for_type(cls)
+        return spec.from_hdf5(fname=fname, group_path=group_path)
 
     @classmethod
     def from_file(cls, fname: PathLike, group_path: str) -> Self:
@@ -1214,6 +1154,9 @@ def install_legacy_shims() -> None:
             return _with_updated_data_array(self, data=data, coords=coords)
 
         xr.DataArray._with_updated_data = _with_updated_data
+
+
+register_data_array_spec(DataArray.__spec__, DataArray)
 
 
 if LEGACY_SHIM_ENABLED:

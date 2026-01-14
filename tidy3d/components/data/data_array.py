@@ -22,6 +22,7 @@ from tidy3d._common.components.data.data_array import (
     TriangleMeshDataArray,
     _isinstance,
     _reflect_data_array,
+    _spatially_sorted_data_array,
     data_array_annotated_type,
     data_array_spec_for_type,
     data_array_spec_from_name,
@@ -882,7 +883,10 @@ def _make_base_result_data_array(result: DataArray) -> IntegralResultType:
         cls = TimeDataArray
     if "f" in result.coords and "mode_index" in result.coords:
         cls = FreqModeDataArray
-    return cls._assign_data_attrs(cls(data=result.data, coords=result.coords))
+    spec = data_array_spec_for_type(cls)
+    return spec.validate_data_array(
+        DataArray(data=result.data, coords=result.coords, dims=result.dims)
+    )
 
 
 def _make_voltage_data_array(result: DataArray) -> VoltageIntegralResultType:
@@ -892,7 +896,10 @@ def _make_voltage_data_array(result: DataArray) -> VoltageIntegralResultType:
         cls = VoltageTimeDataArray
     if "f" in result.coords and "mode_index" in result.coords:
         cls = VoltageFreqModeDataArray
-    return cls._assign_data_attrs(cls(data=result.data, coords=result.coords))
+    spec = data_array_spec_for_type(cls)
+    return spec.validate_data_array(
+        DataArray(data=result.data, coords=result.coords, dims=result.dims)
+    )
 
 
 def _make_current_data_array(result: DataArray) -> CurrentIntegralResultType:
@@ -902,7 +909,10 @@ def _make_current_data_array(result: DataArray) -> CurrentIntegralResultType:
         cls = CurrentTimeDataArray
     if "f" in result.coords and "mode_index" in result.coords:
         cls = CurrentFreqModeDataArray
-    return cls._assign_data_attrs(cls(data=result.data, coords=result.coords))
+    spec = data_array_spec_for_type(cls)
+    return spec.validate_data_array(
+        DataArray(data=result.data, coords=result.coords, dims=result.dims)
+    )
 
 
 def _make_impedance_data_array(result: DataArray) -> ImpedanceResultType:
@@ -912,15 +922,18 @@ def _make_impedance_data_array(result: DataArray) -> ImpedanceResultType:
         cls = ImpedanceTimeDataArray
     if "f" in result.coords and "mode_index" in result.coords:
         cls = ImpedanceFreqModeDataArray
-    return cls._assign_data_attrs(cls(data=result.data, coords=result.coords))
+    spec = data_array_spec_for_type(cls)
+    return spec.validate_data_array(
+        DataArray(data=result.data, coords=result.coords, dims=result.dims)
+    )
 
 
 IndexedDataArrayTypes = Union[
-    IndexedDataArray,
-    IndexedVoltageDataArray,
-    IndexedTimeDataArray,
-    IndexedFieldVoltageDataArray,
-    PointDataArray,
+    data_array_annotated_type(IndexedDataArray),
+    data_array_annotated_type(IndexedVoltageDataArray),
+    data_array_annotated_type(IndexedTimeDataArray),
+    data_array_annotated_type(IndexedFieldVoltageDataArray),
+    data_array_annotated_type(PointDataArray),
 ]
 
 IntegralResultType = Union[FreqDataArray, FreqModeDataArray, TimeDataArray]

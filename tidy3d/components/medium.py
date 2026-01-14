@@ -44,7 +44,13 @@ from tidy3d.log import log
 from .autograd.derivative_utils import integrate_within_bounds
 from .autograd.types import TracedFloat, TracedPolesAndResidues, TracedPositiveFloat
 from .base import Tidy3dBaseModel, cached_property
-from .data.data_array import ScalarFieldDataArray, SpatialDataArray, _isinstance, is_data_array_name
+from .data.data_array import (
+    ScalarFieldDataArray,
+    SpatialDataArray,
+    _isinstance,
+    _spatially_sorted_data_array,
+    is_data_array_name,
+)
 from .data.dataset import PermittivityDataset
 from .data.unstructured.base import UnstructuredGridDataset
 from .data.utils import (
@@ -1944,14 +1950,14 @@ class CustomMedium(AbstractCustomMedium):
         """Cached copy of permittivity sorted along spatial axes."""
         if self.permittivity is None:
             return None
-        return self.permittivity._spatially_sorted
+        return _spatially_sorted_data_array(self.permittivity)
 
     @cached_property
     def _conductivity_sorted(self) -> SpatialDataArray | None:
         """Cached copy of conductivity sorted along spatial axes."""
         if self.conductivity is None:
             return None
-        return self.conductivity._spatially_sorted
+        return _spatially_sorted_data_array(self.conductivity)
 
     @cached_property
     def _eps_components_sorted(self) -> dict[str, ScalarFieldDataArray]:
@@ -1959,7 +1965,8 @@ class CustomMedium(AbstractCustomMedium):
         if self.eps_dataset is None:
             return {}
         return {
-            key: comp._spatially_sorted for key, comp in self.eps_dataset.field_components.items()
+            key: _spatially_sorted_data_array(comp)
+            for key, comp in self.eps_dataset.field_components.items()
         }
 
     @cached_property
