@@ -13,7 +13,7 @@ import pytest
 
 import tidy3d as td
 from tidy3d import __version__
-from tidy3d.components.data.data_array import DATA_ARRAY_MAP
+from tidy3d.components.data.data_array import is_data_array_name
 from tidy3d.components.data.sim_data import DATA_TYPE_MAP
 
 from ..test_data.test_monitor_data import make_flux_data
@@ -242,7 +242,7 @@ def test_to_json_data():
     # type saved in the combined json file?
     data = make_flux_data()
     json_dict = json.loads(data._json_string)
-    assert json_dict["flux"] in DATA_ARRAY_MAP
+    assert is_data_array_name(json_dict["flux"])
 
 
 def test_to_hdf5_group_path_sim_data(tmp_path):

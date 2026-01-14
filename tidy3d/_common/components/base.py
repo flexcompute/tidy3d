@@ -33,6 +33,7 @@ from tidy3d._common.components.data.data_array import (
     data_array_type_from_name,
     is_data_array_name,
     iter_data_array_names,
+    write_data_array_to_hdf5,
 )
 from tidy3d._common.components.file_util import compress_file_to_gzip, extract_gzip_file
 from tidy3d._common.components.types.base import TYPE_TAG_STR, Undefined
@@ -1297,7 +1298,7 @@ class Tidy3dBaseModel(BaseModel):
 
                     # write the path to the element of the json dict where the data_array should be
                     if isinstance(value, xr.DataArray):
-                        value.to_hdf5(fname=f_handle, group_path=subpath)
+                        write_data_array_to_hdf5(value, f_handle=f_handle, group_path=subpath)
 
                     # if a tuple, assign each element a unique key
                     if isinstance(value, (list, tuple)):

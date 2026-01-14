@@ -486,13 +486,7 @@ class DataArray(xr.DataArray):
 
     def to_hdf5_handle(self, f_handle: h5py.File, group_path: str) -> None:
         """Save an ``xr.DataArray`` to the hdf5 file handle with a given path to the group."""
-        sub_group = f_handle.create_group(group_path)
-        sub_group[DATA_ARRAY_VALUE_NAME] = get_static(self.data)
-        for key, val in self.coords.items():
-            if val.dtype == "<U1":
-                sub_group[key] = val.values.tolist()
-            else:
-                sub_group[key] = val
+        write_data_array_to_hdf5(self, f_handle=f_handle, group_path=group_path)
 
     @classmethod
     def from_hdf5(cls, fname: PathLike, group_path: str) -> Self:
@@ -784,6 +778,19 @@ class DataArray(xr.DataArray):
         new_data = np.where(mask, new_data, old_data)
 
         return self.copy(deep=True, data=new_data)
+
+
+def write_data_array_to_hdf5(
+    data_array: xr.DataArray, f_handle: h5py.File, group_path: str
+) -> None:
+    """Save an ``xr.DataArray`` to an hdf5 file handle at the given group path."""
+    sub_group = f_handle.create_group(group_path)
+    sub_group[DATA_ARRAY_VALUE_NAME] = get_static(data_array.data)
+    for key, val in data_array.coords.items():
+        if val.dtype == "<U1":
+            sub_group[key] = val.values.tolist()
+        else:
+            sub_group[key] = val
 
 
 def _spatially_sorted_data_array(data_array: xr.DataArray) -> xr.DataArray:

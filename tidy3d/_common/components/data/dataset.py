@@ -11,9 +11,9 @@ from pydantic import Field
 
 from tidy3d._common.components.base import Tidy3dBaseModel
 from tidy3d._common.components.data.data_array import (
-    DataArray,
     TimeDataArray,
     TriangleMeshDataArray,
+    data_array_annotated_type,
 )
 from tidy3d._common.exceptions import DataError
 from tidy3d._common.log import log
@@ -21,7 +21,7 @@ from tidy3d._common.log import log
 if TYPE_CHECKING:
     from typing import Callable
 
-    from tidy3d._common.components.data.data_array import ScalarFieldDataArray
+    from tidy3d._common.components.data.data_array import DataArray, ScalarFieldDataArray
     from tidy3d._common.components.types.base import ArrayLike, Axis
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
@@ -38,7 +38,7 @@ class Dataset(Tidy3dBaseModel, ABC):
         data_arrs = {}
         for key in self.__class__.model_fields.keys():
             data = getattr(self, key)
-            if isinstance(data, DataArray):
+            if isinstance(data, xr.DataArray):
                 data_arrs[key] = data
         return data_arrs
 
@@ -46,7 +46,7 @@ class Dataset(Tidy3dBaseModel, ABC):
 class TriangleMeshDataset(Dataset):
     """Dataset for storing triangular surface data."""
 
-    surface_mesh: TriangleMeshDataArray = Field(
+    surface_mesh: data_array_annotated_type(TriangleMeshDataArray) = Field(
         title="Surface mesh data",
         description="Dataset containing the surface triangles and corresponding face indices "
         "for a surface mesh.",
@@ -154,7 +154,7 @@ class AbstractFieldDataset(Dataset, ABC):
 class TimeDataset(Dataset):
     """Dataset for storing a function of time."""
 
-    values: TimeDataArray = Field(
+    values: data_array_annotated_type(TimeDataArray) = Field(
         title="Values",
         description="Values as a function of time.",
     )

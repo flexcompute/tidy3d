@@ -18,6 +18,7 @@ from tidy3d.components.data.data_array import (
     data_array_annotated_type,
     install_legacy_shims,
 )
+from tidy3d.components.data.dataset import TimeDataset
 from tidy3d.exceptions import DataError
 
 np.random.seed(4)
@@ -395,6 +396,20 @@ def test_legacy_data_array_shims():
     assert reflected.dims == arr.dims
     updated = arr._with_updated_data(data=np.zeros((1, 1, 1)), coords={"x": 0, "y": 1, "z": 2})
     assert updated.dims == arr.dims
+
+
+def test_annotated_dataset_hdf5_roundtrip(tmp_path):
+    times = np.linspace(0, 1e-12, 4)
+    values = np.random.random(len(times))
+    data = xr.DataArray(values, coords={"t": times}, dims=("t",))
+    dataset = TimeDataset(values=data)
+
+    path = tmp_path / "time_dataset.hdf5"
+    dataset.to_hdf5(path)
+    loaded = TimeDataset.from_hdf5(path)
+
+    assert loaded.values.dims == data.dims
+    assert loaded.values.coords["t"].equals(data.coords["t"])
 
 
 def test_heat_data_array():
