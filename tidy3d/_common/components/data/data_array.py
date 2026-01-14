@@ -297,6 +297,7 @@ class DataArray(xr.DataArray):
         cls, source_type: Any, handler: GetCoreSchemaHandler
     ) -> core_schema.CoreSchema:
         """Core schema definition for validation & serialization."""
+        spec = data_array_spec_for_type(cls)
 
         def _initial_parser(value: Any) -> Self:
             if isinstance(value, cls):
@@ -323,14 +324,12 @@ class DataArray(xr.DataArray):
                 ) from e
 
         validation_schema = core_schema.no_info_plain_validator_function(_initial_parser)
+
+        def _apply_spec(val: Self) -> Self:
+            return spec.validate_data_array(val)
+
         validation_schema = core_schema.no_info_after_validator_function(
-            cls._validate_dims, validation_schema
-        )
-        validation_schema = core_schema.no_info_after_validator_function(
-            cls._assign_data_attrs, validation_schema
-        )
-        validation_schema = core_schema.no_info_after_validator_function(
-            cls._assign_coord_attrs, validation_schema
+            _apply_spec, validation_schema
         )
 
         def _serialize_to_name(instance: Self) -> str:
@@ -805,7 +804,8 @@ def _spatially_sorted_data_array(data_array: xr.DataArray) -> xr.DataArray:
             needs_sorting.append(axis)
 
     if needs_sorting:
-        return data_array.sortby(needs_sorting)
+        result = data_array.sortby(needs_sorting)
+        return _cast_data_array(result, data_array)
 
     return data_array
 
@@ -848,7 +848,8 @@ def _sel_inside_data_array(data_array: xr.DataArray, bounds: Bound) -> xr.DataAr
 
         inds_list.append(comp_inds)
 
-    return sorted_data.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
+    result = sorted_data.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
+    return _cast_data_array(result, data_array)
 
 
 def _does_cover_data_array(
@@ -889,7 +890,8 @@ def _is_uniform_data_array(data_array: xr.DataArray) -> bool:
 
 def _angle_data_array(data_array: xr.DataArray) -> xr.DataArray:
     values = np.angle(np.asarray(data_array.data))
-    return xr.DataArray(values, coords=data_array.coords, dims=data_array.dims)
+    result = xr.DataArray(values, coords=data_array.coords, dims=data_array.dims)
+    return _cast_data_array(result, data_array)
 
 
 def _with_updated_data_array(
@@ -913,7 +915,8 @@ def _with_updated_data_array(
 
     new_data = new_data + np.zeros_like(old_data)
     updated = np.where(mask, new_data, old_data)
-    return data_array.copy(deep=True, data=updated)
+    result = data_array.copy(deep=True, data=updated)
+    return _cast_data_array(result, data_array)
 
 
 def _reflect_data_array(
@@ -940,7 +943,8 @@ def _reflect_data_array(
     if reflection_only:
         coords[axis] = 2 * center - coords[axis]
         coords_dict = dict(zip("xyz", coords))
-        return xr.DataArray(data, coords=coords_dict, dims=sorted_data.dims).sortby("xyz"[axis])
+        reflected = type(sorted_data)(data, coords=coords_dict, dims=sorted_data.dims)
+        return _cast_data_array(reflected.sortby("xyz"[axis]), data_array)
 
     shape = np.array(np.shape(data))
     old_len = shape[axis]
@@ -964,7 +968,16 @@ def _reflect_data_array(
     coords[axis] = new_coords
     coords_dict = dict(zip("xyz", coords))
 
-    return xr.DataArray(new_data, coords=coords_dict, dims=sorted_data.dims)
+    reflected = type(sorted_data)(new_data, coords=coords_dict, dims=sorted_data.dims)
+    return _cast_data_array(reflected, data_array)
+
+
+def _cast_data_array(result: xr.DataArray, reference: xr.DataArray) -> xr.DataArray:
+    """Preserve subclass type when possible."""
+    ref_type = type(reference)
+    if ref_type is xr.DataArray or isinstance(result, ref_type):
+        return result
+    return ref_type(result.data, coords=result.coords, dims=result.dims)
 
 
 @xr.register_dataarray_accessor("td")
@@ -1183,16 +1196,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
     @property
     def _spatially_sorted(self) -> Self:
         """Check whether sorted and sort if not."""
-        needs_sorting = []
-        for axis in "xyz":
-            axis_coords = self.coords[axis].values
-            if len(axis_coords) > 1 and np.any(axis_coords[1:] < axis_coords[:-1]):
-                needs_sorting.append(axis)
-
-        if len(needs_sorting) > 0:
-            return self.sortby(needs_sorting)
-
-        return self
+        return _spatially_sorted_data_array(self)
 
     def sel_inside(self, bounds: Bound) -> Self:
         """Return a new SpatialDataArray that contains the minimal amount data necessary to cover
@@ -1210,50 +1214,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
         SpatialDataArray
             Extracted spatial data array.
         """
-        if any(bmin > bmax for bmin, bmax in zip(*bounds)):
-            raise DataError(
-                "Min and max bounds must be packaged as '(minx, miny, minz), (maxx, maxy, maxz)'."
-            )
-
-        # make sure data is sorted with respect to coordinates
-        sorted_self = self._spatially_sorted
-
-        inds_list = []
-
-        coords = (sorted_self.x, sorted_self.y, sorted_self.z)
-
-        for coord, smin, smax in zip(coords, bounds[0], bounds[1]):
-            length = len(coord)
-
-            # one point along direction, assume invariance
-            if length == 1:
-                comp_inds = [0]
-            else:
-                # if data does not cover structure at all take the closest index
-                if smax < coord[0]:  # structure is completely on the left side
-                    # take 2 if possible, so that linear iterpolation is possible
-                    comp_inds = np.arange(0, max(2, length))
-
-                elif smin > coord[-1]:  # structure is completely on the right side
-                    # take 2 if possible, so that linear iterpolation is possible
-                    comp_inds = np.arange(min(0, length - 2), length)
-
-                else:
-                    if smin < coord[0]:
-                        ind_min = 0
-                    else:
-                        ind_min = max(0, (coord >= smin).argmax().data - 1)
-
-                    if smax > coord[-1]:
-                        ind_max = length - 1
-                    else:
-                        ind_max = (coord >= smax).argmax().data
-
-                    comp_inds = np.arange(ind_min, ind_max + 1)
-
-            inds_list.append(comp_inds)
-
-        return sorted_self.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
+        return _sel_inside_data_array(self, bounds)
 
     def does_cover(self, bounds: Bound, rtol: float = 0.0, atol: float = 0.0) -> bool:
         """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
@@ -1275,23 +1236,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
         bool
             Full cover check outcome.
         """
-        if any(bmin > bmax for bmin, bmax in zip(*bounds)):
-            raise DataError(
-                "Min and max bounds must be packaged as '(minx, miny, minz), (maxx, maxy, maxz)'."
-            )
-        xyz = [self.x, self.y, self.z]
-        self_min = [0] * 3
-        self_max = [0] * 3
-        for dim in range(3):
-            coords = xyz[dim]
-            if len(coords) == 1:
-                self_min[dim] = bounds[0][dim]
-                self_max[dim] = bounds[1][dim]
-            else:
-                self_min[dim] = np.min(coords)
-                self_max[dim] = np.max(coords)
-        self_bounds = (tuple(self_min), tuple(self_max))
-        return bounds_contains(self_bounds, bounds, rtol=rtol, atol=atol)
+        return _does_cover_data_array(self, bounds, rtol=rtol, atol=atol)
 
 
 class ScalarFieldDataArray(AbstractSpatialDataArray):

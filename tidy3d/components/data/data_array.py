@@ -22,6 +22,7 @@ from tidy3d._common.components.data.data_array import (
     ScalarFieldDataArray,
     TimeDataArray,
     TriangleMeshDataArray,
+    _reflect_data_array,
     data_array_annotated_type,
     data_array_spec_for_type,
     data_array_spec_from_name,
@@ -134,51 +135,7 @@ class SpatialDataArray(AbstractSpatialDataArray):
             Data after reflection is performed.
         """
 
-        sorted_self = self._spatially_sorted
-
-        coords = [sorted_self.x.values, sorted_self.y.values, sorted_self.z.values]
-        data = np.array(sorted_self.data)
-
-        data_left_bound = coords[axis][0]
-
-        if np.isclose(center, data_left_bound):
-            num_duplicates = 1
-        elif center > data_left_bound:
-            raise DataError("Reflection center must be outside and to the left of the data region.")
-        else:
-            num_duplicates = 0
-
-        if reflection_only:
-            coords[axis] = 2 * center - coords[axis]
-            coords_dict = dict(zip("xyz", coords))
-
-            tmp_arr = SpatialDataArray(sorted_self.data, coords=coords_dict)
-
-            return tmp_arr.sortby("xyz"[axis])
-
-        shape = np.array(np.shape(data))
-        old_len = shape[axis]
-        shape[axis] = 2 * old_len - num_duplicates
-
-        ind_left = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
-        ind_right = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
-
-        ind_left[axis] = slice(old_len - 1, None, -1)
-        ind_right[axis] = slice(old_len - num_duplicates, None)
-
-        new_data = np.zeros(shape)
-
-        new_data[ind_left[0], ind_left[1], ind_left[2]] = data
-        new_data[ind_right[0], ind_right[1], ind_right[2]] = data
-
-        new_coords = np.zeros(shape[axis])
-        new_coords[old_len - num_duplicates :] = coords[axis]
-        new_coords[old_len - 1 :: -1] = 2 * center - coords[axis]
-
-        coords[axis] = new_coords
-        coords_dict = dict(zip("xyz", coords))
-
-        return SpatialDataArray(new_data, coords=coords_dict)
+        return _reflect_data_array(self, axis, center, reflection_only=reflection_only)
 
 
 class ScalarFieldTimeDataArray(AbstractSpatialDataArray):

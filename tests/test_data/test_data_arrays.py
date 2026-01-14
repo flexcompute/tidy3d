@@ -379,6 +379,17 @@ def test_annotated_data_array_spec():
         Model(field=xr.DataArray(np.zeros((2, 2)), dims=("x", "y")))
 
 
+def test_annotated_accepts_legacy_class():
+    ScalarFieldSpec = data_array_annotated_type(td.ScalarFieldDataArray)
+
+    class Model(BaseModel):
+        field: ScalarFieldSpec
+
+    data = make_scalar_field_data_array("Ex")
+    model = Model(field=data)
+    assert model.field.dims == data.dims
+
+
 def test_legacy_data_array_shims():
     install_legacy_shims()
     arr = xr.DataArray(
@@ -410,6 +421,22 @@ def test_annotated_dataset_hdf5_roundtrip(tmp_path):
 
     assert loaded.values.dims == data.dims
     assert loaded.values.coords["t"].equals(data.coords["t"])
+
+
+def test_legacy_class_spec_validation():
+    class Model(BaseModel):
+        field: td.ScalarFieldDataArray
+
+    data = xr.DataArray(
+        np.random.random((len(FS), 2, 3, 4)),
+        coords={"f": FS, "x": [0, 1], "y": [0, 1, 2], "z": [0, 1, 2, 3]},
+        dims=("f", "x", "y", "z"),
+    )
+    model = Model(field=data)
+    assert model.field.dims == ("x", "y", "z", "f")
+
+    with pytest.raises(ValidationError):
+        Model(field=xr.DataArray(np.zeros((2, 2)), dims=("x", "y")))
 
 
 def test_heat_data_array():
