@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import warnings
 from abc import ABC
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -73,6 +74,9 @@ DIM_ATTRS = {
 # name of the DataArray.values in the hdf5 file (xarray's default name too)
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
+# Toggle for emitting deprecation warnings from legacy xarray shims.
+LEGACY_SHIM_WARNINGS = True
+
 
 @dataclass(frozen=True)
 class DataArraySpec:
@@ -111,29 +115,7 @@ class DataArraySpec:
 
     def _validate(self, value: Any, info: core_schema.ValidationInfo) -> xr.DataArray:
         data_array = self._coerce_to_dataarray(value, info)
-
-        expected = tuple(self.dims)
-        given = tuple(str(d) for d in data_array.dims)
-        if set(given) != set(expected):
-            raise ValueError(f"wrong dims: expected {expected}, got {given}")
-
-        if given != expected:
-            data_array = data_array.transpose(*expected)
-
-        data_array = data_array.copy(deep=False)
-
-        if self.data_attrs:
-            data_array.attrs.update(self.data_attrs)
-        for dim, attrs in self.coord_attrs.items():
-            if dim in data_array.coords:
-                data_array.coords[dim].attrs.update(attrs)
-
-        if self.require_unique_coords:
-            for dim in expected:
-                if data_array.coords[dim].to_index().duplicated().any():
-                    raise ValueError(f"duplicate coordinates in dimension {dim!r}")
-
-        return data_array
+        return self.validate_data_array(data_array)
 
     def _serialize(self, value: xr.DataArray, info: core_schema.SerializationInfo) -> str:
         # Preserve existing JSON placeholder behavior by default.
@@ -171,6 +153,37 @@ class DataArraySpec:
         coords = dict(inline.get("coords", {}))
         data = np.asarray(inline.get("data"))
         return xr.DataArray(data, coords=coords, dims=dims)
+
+    def validate_data_array(self, data_array: xr.DataArray) -> xr.DataArray:
+        expected = tuple(self.dims)
+        given = tuple(str(d) for d in data_array.dims)
+        if set(given) != set(expected):
+            raise ValueError(f"wrong dims: expected {expected}, got {given}")
+
+        if given != expected:
+            data_array = data_array.transpose(*expected)
+
+        data_array = data_array.copy(deep=False)
+
+        if self.data_attrs:
+            data_array.attrs.update(self.data_attrs)
+        for dim, attrs in self.coord_attrs.items():
+            if dim in data_array.coords:
+                data_array.coords[dim].attrs.update(attrs)
+
+        if self.require_unique_coords:
+            for dim in expected:
+                if data_array.coords[dim].to_index().duplicated().any():
+                    raise ValueError(f"duplicate coordinates in dimension {dim!r}")
+
+        return data_array
+
+    def matches(self, data_array: xr.DataArray) -> bool:
+        try:
+            self.validate_data_array(data_array)
+        except ValueError:
+            return False
+        return True
 
 
 DATA_ARRAY_MAP: dict[str, type[DataArray]] = {}
@@ -263,8 +276,8 @@ class DataArray(xr.DataArray):
             return
         DATA_ARRAY_MAP[cls.__name__] = cls
         DATA_ARRAY_TYPES.append(cls)
-        spec = cls.__spec__ if isinstance(cls.__spec__, DataArraySpec) else None
-        if spec is None:
+        spec = cls.__dict__.get("__spec__")
+        if not isinstance(spec, DataArraySpec):
             spec = _default_spec_for_type(cls)
             cls.__spec__ = spec
         register_data_array_spec(spec, cls)
@@ -771,6 +784,373 @@ class DataArray(xr.DataArray):
         new_data = np.where(mask, new_data, old_data)
 
         return self.copy(deep=True, data=new_data)
+
+
+def _spatially_sorted_data_array(data_array: xr.DataArray) -> xr.DataArray:
+    needs_sorting = []
+    for axis in "xyz":
+        if axis not in data_array.coords:
+            raise DataError(
+                "Spatial DataArray methods require coordinates for 'x', 'y', and 'z' dimensions."
+            )
+        axis_coords = data_array.coords[axis].values
+        if len(axis_coords) > 1 and np.any(axis_coords[1:] < axis_coords[:-1]):
+            needs_sorting.append(axis)
+
+    if needs_sorting:
+        return data_array.sortby(needs_sorting)
+
+    return data_array
+
+
+def _sel_inside_data_array(data_array: xr.DataArray, bounds: Bound) -> xr.DataArray:
+    if any(bmin > bmax for bmin, bmax in zip(*bounds)):
+        raise DataError(
+            "Min and max bounds must be packaged as '(minx, miny, minz), (maxx, maxy, maxz)'."
+        )
+
+    sorted_data = _spatially_sorted_data_array(data_array)
+    inds_list = []
+
+    coords = (sorted_data.coords["x"], sorted_data.coords["y"], sorted_data.coords["z"])
+
+    for coord, smin, smax in zip(coords, bounds[0], bounds[1]):
+        length = len(coord)
+
+        # one point along direction, assume invariance
+        if length == 1:
+            comp_inds = [0]
+        else:
+            # if data does not cover structure at all take the closest index
+            if smax < coord[0]:
+                comp_inds = np.arange(0, max(2, length))
+            elif smin > coord[-1]:
+                comp_inds = np.arange(min(0, length - 2), length)
+            else:
+                if smin < coord[0]:
+                    ind_min = 0
+                else:
+                    ind_min = max(0, (coord >= smin).argmax().data - 1)
+
+                if smax > coord[-1]:
+                    ind_max = length - 1
+                else:
+                    ind_max = (coord >= smax).argmax().data
+
+                comp_inds = np.arange(ind_min, ind_max + 1)
+
+        inds_list.append(comp_inds)
+
+    return sorted_data.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
+
+
+def _does_cover_data_array(
+    data_array: xr.DataArray, bounds: Bound, rtol: float = 0.0, atol: float = 0.0
+) -> bool:
+    if any(bmin > bmax for bmin, bmax in zip(*bounds)):
+        raise DataError(
+            "Min and max bounds must be packaged as '(minx, miny, minz), (maxx, maxy, maxz)'."
+        )
+
+    for axis in "xyz":
+        if axis not in data_array.coords:
+            raise DataError(
+                "Spatial DataArray methods require coordinates for 'x', 'y', and 'z' dimensions."
+            )
+
+    xyz = [data_array.coords["x"], data_array.coords["y"], data_array.coords["z"]]
+    data_min = [0.0, 0.0, 0.0]
+    data_max = [0.0, 0.0, 0.0]
+    for dim in range(3):
+        coords = xyz[dim]
+        if len(coords) == 1:
+            data_min[dim] = bounds[0][dim]
+            data_max[dim] = bounds[1][dim]
+        else:
+            data_min[dim] = np.min(coords)
+            data_max[dim] = np.max(coords)
+    data_bounds = (tuple(data_min), tuple(data_max))
+    return bounds_contains(data_bounds, bounds, rtol=rtol, atol=atol)
+
+
+def _is_uniform_data_array(data_array: xr.DataArray) -> bool:
+    raw_data = np.asarray(data_array.data).ravel()
+    if raw_data.size == 0:
+        return True
+    return np.allclose(raw_data, raw_data[0])
+
+
+def _angle_data_array(data_array: xr.DataArray) -> xr.DataArray:
+    values = np.angle(np.asarray(data_array.data))
+    return xr.DataArray(values, coords=data_array.coords, dims=data_array.dims)
+
+
+def _with_updated_data_array(
+    data_array: xr.DataArray, data: np.ndarray, coords: dict[str, Any]
+) -> xr.DataArray:
+    mask = xr.zeros_like(data_array, dtype=bool)
+    mask.loc[coords] = True
+
+    old_data = np.asarray(data_array.data)
+    new_shape = list(old_data.shape)
+    for i, dim in enumerate(data_array.dims):
+        if dim in coords:
+            new_shape[i] = 1
+    try:
+        new_data = data.reshape(new_shape)
+    except ValueError as e:
+        raise ValueError(
+            "Couldn't reshape the supplied 'data' to update 'DataArray'. The provided data was "
+            f"of shape {data.shape} and tried to reshape to {new_shape}."
+        ) from e
+
+    new_data = new_data + np.zeros_like(old_data)
+    updated = np.where(mask, new_data, old_data)
+    return data_array.copy(deep=True, data=updated)
+
+
+def _reflect_data_array(
+    data_array: xr.DataArray, axis: int, center: float, reflection_only: bool = False
+) -> xr.DataArray:
+    sorted_data = _spatially_sorted_data_array(data_array)
+
+    coords = [
+        sorted_data.coords["x"].values,
+        sorted_data.coords["y"].values,
+        sorted_data.coords["z"].values,
+    ]
+    data = np.array(sorted_data.data)
+
+    data_left_bound = coords[axis][0]
+
+    if np.isclose(center, data_left_bound):
+        num_duplicates = 1
+    elif center > data_left_bound:
+        raise DataError("Reflection center must be outside and to the left of the data region.")
+    else:
+        num_duplicates = 0
+
+    if reflection_only:
+        coords[axis] = 2 * center - coords[axis]
+        coords_dict = dict(zip("xyz", coords))
+        return xr.DataArray(data, coords=coords_dict, dims=sorted_data.dims).sortby("xyz"[axis])
+
+    shape = np.array(np.shape(data))
+    old_len = shape[axis]
+    shape[axis] = 2 * old_len - num_duplicates
+
+    ind_left = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
+    ind_right = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
+
+    ind_left[axis] = slice(old_len - 1, None, -1)
+    ind_right[axis] = slice(old_len - num_duplicates, None)
+
+    new_data = np.zeros(shape)
+
+    new_data[ind_left[0], ind_left[1], ind_left[2]] = data
+    new_data[ind_right[0], ind_right[1], ind_right[2]] = data
+
+    new_coords = np.zeros(shape[axis])
+    new_coords[old_len - num_duplicates :] = coords[axis]
+    new_coords[old_len - 1 :: -1] = 2 * center - coords[axis]
+
+    coords[axis] = new_coords
+    coords_dict = dict(zip("xyz", coords))
+
+    return xr.DataArray(new_data, coords=coords_dict, dims=sorted_data.dims)
+
+
+@xr.register_dataarray_accessor("td")
+class Tidy3DAccessor:
+    def __init__(self, xarray_obj: xr.DataArray) -> None:
+        self._obj = xarray_obj
+
+    def validate(self, spec: DataArraySpec | None = None) -> xr.DataArray:
+        if spec is None:
+            if isinstance(self._obj, DataArray):
+                spec = data_array_spec_for_type(type(self._obj))
+            else:
+                raise ValueError("A DataArraySpec must be provided for plain xarray objects.")
+        return spec.validate_data_array(self._obj)
+
+    def sel_inside(self, bounds: Bound) -> xr.DataArray:
+        if isinstance(self._obj, DataArray):
+            return self._obj.sel_inside(bounds)
+        return _sel_inside_data_array(self._obj, bounds)
+
+    def does_cover(self, bounds: Bound, rtol: float = 0.0, atol: float = 0.0) -> bool:
+        if isinstance(self._obj, DataArray):
+            return self._obj.does_cover(bounds, rtol=rtol, atol=atol)
+        return _does_cover_data_array(self._obj, bounds, rtol=rtol, atol=atol)
+
+    @property
+    def is_uniform(self) -> bool:
+        if isinstance(self._obj, DataArray):
+            return self._obj.is_uniform
+        return _is_uniform_data_array(self._obj)
+
+    @property
+    def angle(self) -> xr.DataArray:
+        if isinstance(self._obj, DataArray):
+            return self._obj.angle
+        return _angle_data_array(self._obj)
+
+    @property
+    def abs(self) -> xr.DataArray:
+        if isinstance(self._obj, DataArray):
+            return self._obj.abs
+        return abs(self._obj)
+
+    def reflect(self, axis: int, center: float, reflection_only: bool = False) -> xr.DataArray:
+        if isinstance(self._obj, DataArray):
+            return self._obj.reflect(axis, center, reflection_only=reflection_only)
+        return _reflect_data_array(self._obj, axis, center, reflection_only=reflection_only)
+
+    def with_updated_data(self, data: np.ndarray, coords: dict[str, Any]) -> xr.DataArray:
+        if isinstance(self._obj, DataArray):
+            return self._obj._with_updated_data(data=data, coords=coords)
+        return _with_updated_data_array(self._obj, data=data, coords=coords)
+
+    def _with_updated_data(self, data: np.ndarray, coords: dict[str, Any]) -> xr.DataArray:
+        return self.with_updated_data(data=data, coords=coords)
+
+
+def td_validate(data_array: xr.DataArray, spec: DataArraySpec) -> xr.DataArray:
+    return data_array.td.validate(spec=spec)
+
+
+def td_sel_inside(data_array: xr.DataArray, bounds: Bound) -> xr.DataArray:
+    return data_array.td.sel_inside(bounds)
+
+
+def td_does_cover(
+    data_array: xr.DataArray, bounds: Bound, rtol: float = 0.0, atol: float = 0.0
+) -> bool:
+    return data_array.td.does_cover(bounds, rtol=rtol, atol=atol)
+
+
+def td_reflect(
+    data_array: xr.DataArray, axis: int, center: float, reflection_only: bool = False
+) -> xr.DataArray:
+    return data_array.td.reflect(axis, center, reflection_only=reflection_only)
+
+
+def td_with_updated_data(
+    data_array: xr.DataArray, data: np.ndarray, coords: dict[str, Any]
+) -> xr.DataArray:
+    return data_array.td.with_updated_data(data=data, coords=coords)
+
+
+def td_angle(data_array: xr.DataArray) -> xr.DataArray:
+    return data_array.td.angle
+
+
+def td_abs(data_array: xr.DataArray) -> xr.DataArray:
+    return data_array.td.abs
+
+
+def install_legacy_shims() -> None:
+    """Install deprecated xarray.DataArray methods that forward to ``da.td.*``."""
+
+    if not hasattr(xr.DataArray, "sel_inside"):
+
+        def _sel_inside(self: xr.DataArray, bounds: Bound) -> xr.DataArray:
+            if LEGACY_SHIM_WARNINGS:
+                warnings.warn(
+                    "xr.DataArray.sel_inside(...) is deprecated; use `da.td.sel_inside(...)` instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            return self.td.sel_inside(bounds)
+
+        xr.DataArray.sel_inside = _sel_inside
+
+    if not hasattr(xr.DataArray, "does_cover"):
+
+        def _does_cover(
+            self: xr.DataArray, bounds: Bound, rtol: float = 0.0, atol: float = 0.0
+        ) -> bool:
+            if LEGACY_SHIM_WARNINGS:
+                warnings.warn(
+                    "xr.DataArray.does_cover(...) is deprecated; use `da.td.does_cover(...)` instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            return self.td.does_cover(bounds, rtol=rtol, atol=atol)
+
+        xr.DataArray.does_cover = _does_cover
+
+    if not hasattr(xr.DataArray, "is_uniform"):
+
+        @property
+        def _is_uniform(self: xr.DataArray) -> bool:
+            if LEGACY_SHIM_WARNINGS:
+                warnings.warn(
+                    "xr.DataArray.is_uniform is deprecated; use `da.td.is_uniform` instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            return self.td.is_uniform
+
+        xr.DataArray.is_uniform = _is_uniform
+
+    if not hasattr(xr.DataArray, "angle"):
+
+        @property
+        def _angle(self: xr.DataArray) -> xr.DataArray:
+            if LEGACY_SHIM_WARNINGS:
+                warnings.warn(
+                    "xr.DataArray.angle is deprecated; use `da.td.angle` instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            return self.td.angle
+
+        xr.DataArray.angle = _angle
+
+    if not hasattr(xr.DataArray, "abs"):
+
+        @property
+        def _abs(self: xr.DataArray) -> xr.DataArray:
+            if LEGACY_SHIM_WARNINGS:
+                warnings.warn(
+                    "xr.DataArray.abs is deprecated; use `da.td.abs` instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            return self.td.abs
+
+        xr.DataArray.abs = _abs
+
+    if not hasattr(xr.DataArray, "reflect"):
+
+        def _reflect(
+            self: xr.DataArray, axis: int, center: float, reflection_only: bool = False
+        ) -> xr.DataArray:
+            if LEGACY_SHIM_WARNINGS:
+                warnings.warn(
+                    "xr.DataArray.reflect(...) is deprecated; use `da.td.reflect(...)` instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            return self.td.reflect(axis, center, reflection_only=reflection_only)
+
+        xr.DataArray.reflect = _reflect
+
+    if not hasattr(xr.DataArray, "_with_updated_data"):
+
+        def _with_updated_data(
+            self: xr.DataArray, data: np.ndarray, coords: dict[str, Any]
+        ) -> xr.DataArray:
+            if LEGACY_SHIM_WARNINGS:
+                warnings.warn(
+                    "xr.DataArray._with_updated_data(...) is deprecated; use `da.td.with_updated_data(...)` instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            return self.td.with_updated_data(data=data, coords=coords)
+
+        xr.DataArray._with_updated_data = _with_updated_data
 
 
 class FreqDataArray(DataArray):

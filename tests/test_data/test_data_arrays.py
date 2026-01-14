@@ -11,8 +11,13 @@ import pytest
 import xarray as xr
 import xarray.testing as xrt
 from autograd.test_util import check_grads
+from pydantic import BaseModel, ValidationError
 
 import tidy3d as td
+from tidy3d.components.data.data_array import (
+    data_array_annotated_type,
+    install_legacy_shims,
+)
 from tidy3d.exceptions import DataError
 
 np.random.seed(4)
@@ -355,6 +360,41 @@ def test_angle():
     assert isinstance(angle_data, xr.DataArray)
     assert angle_data.dims == data.dims
     assert angle_data.coords.equals(data.coords)
+
+
+def test_annotated_data_array_spec():
+    ScalarFieldSpec = data_array_annotated_type(td.ScalarFieldDataArray)
+
+    class Model(BaseModel):
+        field: ScalarFieldSpec
+
+    data = make_scalar_field_data_array("Ex")
+    data_plain = xr.DataArray(data.data, coords=data.coords, dims=data.dims)
+    model = Model(field=data_plain)
+    assert model.field.dims == data.dims
+    assert "tidy3d.data.scalar_field" in model.model_dump_json()
+
+    with pytest.raises(ValidationError):
+        Model(field=xr.DataArray(np.zeros((2, 2)), dims=("x", "y")))
+
+
+def test_legacy_data_array_shims():
+    install_legacy_shims()
+    arr = xr.DataArray(
+        np.random.random((3, 4, 5)),
+        coords={
+            "x": np.linspace(0, 1, 3),
+            "y": np.linspace(1, 2, 4),
+            "z": np.linspace(2, 3, 5),
+        },
+    )
+    bounds = ((0.2, 1.1, 2.1), (0.9, 1.9, 2.9))
+    selected = arr.sel_inside(bounds)
+    assert selected.dims == arr.dims
+    reflected = arr.reflect(axis=0, center=-0.5, reflection_only=True)
+    assert reflected.dims == arr.dims
+    updated = arr._with_updated_data(data=np.zeros((1, 1, 1)), coords={"x": 0, "y": 1, "z": 2})
+    assert updated.dims == arr.dims
 
 
 def test_heat_data_array():
