@@ -25,10 +25,13 @@ QTEM_POLARIZATION_THRESHOLD = 0.95
 
 
 class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
-    """
-    The :class:`.MicrowaveModeSpec` class specifies how quantities related to transmission line
-    modes and microwave waveguides are computed. For example, it defines the paths for line integrals, which are used to
-    compute voltage, current, and characteristic impedance of the transmission line.
+    """Specification for transmission line modes and microwave waveguides.
+
+    Notes
+    -----
+        The :class:`.MicrowaveModeSpec` class specifies how quantities related to transmission line
+        modes and microwave waveguides are computed. For example, it defines the paths for line integrals, which are used to
+        compute voltage, current, and characteristic impedance of the transmission line.
 
     Example
     -------

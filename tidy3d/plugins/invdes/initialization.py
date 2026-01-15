@@ -26,7 +26,9 @@ class AbstractInitializationSpec(Tidy3dBaseModel, ABC):
 class RandomInitializationSpec(AbstractInitializationSpec):
     """Specification for random initial parameters.
 
-    When a seed is provided, a call to `create_parameters` will always return the same array.
+    Notes
+    -----
+        When a seed is provided, a call to `create_parameters` will always return the same array.
     """
 
     min_value: float = pd.Field(

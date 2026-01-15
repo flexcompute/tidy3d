@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed interpolation handling for permittivity and conductivity gradients in `CustomPoleResidue`.
+- Fixed docstrings with missing Notes sections causing spurious parameters in Sphinx documentation.
 
 ## [2.10.1] - 2026-01-14
 

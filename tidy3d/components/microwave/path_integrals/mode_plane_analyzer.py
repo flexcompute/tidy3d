@@ -30,7 +30,9 @@ from tidy3d.exceptions import SetupError
 class ModePlaneAnalyzer(Box):
     """Analyzes conductor geometry intersecting a mode plane.
 
-    This class analyzes the geometry of conductors in a simulation cross-section and is for internal use.
+    Notes
+    -----
+        This class analyzes the geometry of conductors in a simulation cross-section and is for internal use.
     """
 
     _plane_validator = assert_plane()

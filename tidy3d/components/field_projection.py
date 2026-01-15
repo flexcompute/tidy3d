@@ -178,17 +178,17 @@ def _far_field_integral(
 
 
 class FieldProjector(Tidy3dBaseModel):
-    """
-    Projection of near fields to points on a given observation grid.
+    """Projection of near fields to points on a given observation grid.
 
+    Notes
+    -----
     .. TODO make images to illustrate this
 
     See Also
     --------
-
-    :class:`FieldProjectionAngleMonitor
+    :class:`FieldProjectionAngleMonitor`
         :class:`Monitor` that samples electromagnetic near fields in the frequency domain
-        and projects them at given observation angles.`
+        and projects them at given observation angles.
 
     **Notebooks**:
         * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_

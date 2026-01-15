@@ -33,8 +33,10 @@ class ChargeType(str, Enum):
 class TaskBlockInfo(TaskBase):
     """Information about the task's block status.
 
-    This includes details about how the task can be blocked by various features
-    such as user limits and insufficient balance.
+    Notes
+    -----
+        This includes details about how the task can be blocked by various features
+        such as user limits and insufficient balance.
     """
 
     chargeType: ChargeType = None
@@ -213,31 +215,51 @@ class BatchMember(TaskBase):
 
 
 class BatchDetail(TaskBase):
-    """
-    Provides a detailed, top-level view of a batch of tasks.
+    """Provides a detailed, top-level view of a batch of tasks.
 
-    This model serves as the main payload for retrieving comprehensive
-    information about a batch operation.
+    Notes
+    -----
+        This model serves as the main payload for retrieving comprehensive
+        information about a batch operation.
 
-    Attributes:
-        refId: A reference identifier for the entire batch.
-        optimizationId: Identifier for the optimization process, if any.
-        groupId: Identifier for the group the batch belongs to.
-        name: The user-defined name of the batch.
-        status: The current status of the batch.
-        totalTask: The total number of tasks in the batch.
-        preprocessSuccess: The count of tasks that completed preprocessing.
-        postprocessStatus: The status of the batch's postprocessing stage.
-        validateSuccess: The count of tasks that passed validation.
-        runSuccess: The count of tasks that ran successfully.
-        postprocessSuccess: The count of tasks that completed postprocessing.
-        taskBlockInfo: Information on what might be blocking the batch.
-        estFlexUnit: The estimated total flexible compute units for the batch.
-        totalSeconds: The total time in seconds the batch has taken.
-        totalCheckMillis: Total time in milliseconds spent on checks.
-        message: A general message providing information about the batch status.
-        tasks: A list of `BatchMember` objects, one for each task in the batch.
-        taskType: The type of tasks contained in the batch.
+    Attributes
+    ----------
+    refId
+        A reference identifier for the entire batch.
+    optimizationId
+        Identifier for the optimization process, if any.
+    groupId
+        Identifier for the group the batch belongs to.
+    name
+        The user-defined name of the batch.
+    status
+        The current status of the batch.
+    totalTask
+        The total number of tasks in the batch.
+    preprocessSuccess
+        The count of tasks that completed preprocessing.
+    postprocessStatus
+        The status of the batch's postprocessing stage.
+    validateSuccess
+        The count of tasks that passed validation.
+    runSuccess
+        The count of tasks that ran successfully.
+    postprocessSuccess
+        The count of tasks that completed postprocessing.
+    taskBlockInfo
+        Information on what might be blocking the batch.
+    estFlexUnit
+        The estimated total flexible compute units for the batch.
+    totalSeconds
+        The total time in seconds the batch has taken.
+    totalCheckMillis
+        Total time in milliseconds spent on checks.
+    message
+        A general message providing information about the batch status.
+    tasks
+        A list of `BatchMember` objects, one for each task in the batch.
+    taskType
+        The type of tasks contained in the batch.
     """
 
     refId: str = None
@@ -264,25 +286,36 @@ class BatchDetail(TaskBase):
 
 
 class AsyncJobDetail(TaskBase):
-    """
-    Provides a detailed view of an asynchronous job and its sub-tasks.
+    """Provides a detailed view of an asynchronous job and its sub-tasks.
 
-    This model represents a long-running operation. The 'result' attribute holds
-    the output of a completed job, which for orchestration jobs, is often a
-    JSON string mapping sub-task names to their unique IDs.
+    Notes
+    -----
+        This model represents a long-running operation. The 'result' attribute holds
+        the output of a completed job, which for orchestration jobs, is often a
+        JSON string mapping sub-task names to their unique IDs.
 
-    Attributes:
-        asyncId: The unique identifier for the asynchronous job.
-        status: The current overall status of the job (e.g., 'RUNNING', 'COMPLETED').
-        progress: The completion percentage of the job (from 0.0 to 100.0).
-        createdAt: The timestamp when the job was created.
-        completedAt: The timestamp when the job finished (successfully or not).
-        tasks: A dictionary mapping logical task keys to their unique task IDs.
-               This is often populated by parsing the 'result' of an orchestration task.
-        result: The raw string output of the completed job. If the job spawns other
-                tasks, this is expected to be a JSON string detailing those tasks.
-        taskBlockInfo: Information on any dependencies blocking the job from running.
-        message: A human-readable message about the job's status.
+    Attributes
+    ----------
+    asyncId
+        The unique identifier for the asynchronous job.
+    status
+        The current overall status of the job (e.g., 'RUNNING', 'COMPLETED').
+    progress
+        The completion percentage of the job (from 0.0 to 100.0).
+    createdAt
+        The timestamp when the job was created.
+    completedAt
+        The timestamp when the job finished (successfully or not).
+    tasks
+        A dictionary mapping logical task keys to their unique task IDs.
+        This is often populated by parsing the 'result' of an orchestration task.
+    result
+        The raw string output of the completed job. If the job spawns other
+        tasks, this is expected to be a JSON string detailing those tasks.
+    taskBlockInfo
+        Information on any dependencies blocking the job from running.
+    message
+        A human-readable message about the job's status.
     """
 
     asyncId: str

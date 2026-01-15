@@ -34,11 +34,12 @@ def generate_validation_data(expr: Expression) -> dict[str, xr.Dataset]:
 
 
 class Metric(Variable, ABC):
-    """
-    Base class for all metrics.
+    """Base class for all metrics.
 
-    To subclass Metric, you must implement an evaluate() method that takes a SimulationData
-    object and returns a scalar value.
+    Notes
+    -----
+        To subclass Metric, you must implement an evaluate() method that takes a SimulationData
+        object and returns a scalar value.
     """
 
     @property

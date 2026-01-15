@@ -74,11 +74,13 @@ class EMEInterfaceSMatrixDataset(Dataset):
 class EMEOverlapDataset(Dataset):
     """Dataset storing overlaps between EME modes.
 
-    ``Oij`` is the unconjugated overlap computed using the E field of cell ``i``
-    and the H field of cell ``j``.
+    Notes
+    -----
+        ``Oij`` is the unconjugated overlap computed using the E field of cell ``i``
+        and the H field of cell ``j``.
 
-    For consistency with ``Sij``, ``mode_index_out`` refers to the mode index
-    in cell ``i``, and ``mode_index_in`` refers to the mode index in cell ``j``.
+        For consistency with ``Sij``, ``mode_index_out`` refers to the mode index
+        in cell ``i``, and ``mode_index_in`` refers to the mode index in cell ``j``.
     """
 
     O11: EMEInterfaceSMatrixDataArray = pd.Field(
@@ -100,17 +102,20 @@ class EMEOverlapDataset(Dataset):
 
 class EMECoefficientDataset(Dataset):
     """Dataset storing various coefficients related to the EME simulation.
-    These coefficients can be used for debugging or optimization.
 
-    The ``A`` and ``B`` fields store the expansion coefficients for the modes in a cell.
-    These are defined at the cell centers.
+    Notes
+    -----
+        These coefficients can be used for debugging or optimization.
 
-    The ``n_complex`` and ``flux`` fields respectively store the complex-valued effective
-    propagation index and the power flux associated with the modes used in the
-    EME calculation.
+        The ``A`` and ``B`` fields store the expansion coefficients for the modes in a cell.
+        These are defined at the cell centers.
 
-    The ``interface_Sij`` fields store the S matrices associated with the interfaces
-    between EME cells.
+        The ``n_complex`` and ``flux`` fields respectively store the complex-valued effective
+        propagation index and the power flux associated with the modes used in the
+        EME calculation.
+
+        The ``interface_Sij`` fields store the S matrices associated with the interfaces
+        between EME cells.
     """
 
     A: Optional[EMECoefficientDataArray] = pd.Field(

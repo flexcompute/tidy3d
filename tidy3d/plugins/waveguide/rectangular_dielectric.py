@@ -37,14 +37,17 @@ EVANESCENT_TAIL = 1.5
 
 
 class RectangularDielectric(Tidy3dBaseModel):
-    """General rectangular dielectric waveguide
+    """General rectangular dielectric waveguide.
 
-    Supports:
-    - Strip and rib geometries
-    - Angled sidewalls
-    - Modes in waveguide bends
-    - Surface and sidewall loss models
-    - Coupled waveguides
+    Notes
+    -----
+        Supports:
+
+        - Strip and rib geometries
+        - Angled sidewalls
+        - Modes in waveguide bends
+        - Surface and sidewall loss models
+        - Coupled waveguides
     """
 
     wavelength: Union[float, ArrayFloat1D] = pydantic.Field(

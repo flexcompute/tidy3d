@@ -294,8 +294,10 @@ class Custom2DCurrentIntegralSpec(Custom2DPathIntegralSpec):
 class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
     """Specification for a composite current integral.
 
-    This class is used to set up a ``CompositeCurrentIntegral``, which combines
-    multiple current integrals. It does not perform any integration itself.
+    Notes
+    -----
+        This class is used to set up a ``CompositeCurrentIntegral``, which combines
+        multiple current integrals. It does not perform any integration itself.
 
     Example
     -------

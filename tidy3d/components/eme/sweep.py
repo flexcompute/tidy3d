@@ -86,13 +86,16 @@ class EMEFreqSweep(EMESweepSpec):
 
 class EMEPeriodicitySweep(EMESweepSpec):
     """Spec for sweeping number of repetitions of EME subgrids.
-    Useful for simulating long periodic structures like Bragg gratings,
-    as it allows the EME solver to reuse the modes and cell interface
-    scattering matrices.
 
-    Compared to setting ``num_reps`` directly in the ``eme_grid_spec``,
-    this sweep spec allows varying the number of repetitions,
-    effectively simulating multiple structures in a single EME simulation.
+    Notes
+    -----
+        Useful for simulating long periodic structures like Bragg gratings,
+        as it allows the EME solver to reuse the modes and cell interface
+        scattering matrices.
+
+        Compared to setting ``num_reps`` directly in the ``eme_grid_spec``,
+        this sweep spec allows varying the number of repetitions,
+        effectively simulating multiple structures in a single EME simulation.
 
     Example
     -------
