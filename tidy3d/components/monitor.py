@@ -281,9 +281,12 @@ class AbstractFieldMonitor(Monitor, ABC):
 class AbstractAuxFieldMonitor(Monitor, ABC):
     """:class:`.Monitor` that records auxiliary fields as a function of x,y,z.
 
-    Auxiliary fields are used in certain nonlinear material models.
-    :class:`.TwoPhotonAbsorption` uses `Nfx`, `Nfy`, and `Nfz` for the
-    free-carrier density."""
+    Notes
+    -----
+        Auxiliary fields are used in certain nonlinear material models.
+        :class:`.TwoPhotonAbsorption` uses `Nfx`, `Nfy`, and `Nfz` for the
+        free-carrier density.
+    """
 
     fields: tuple[AuxField, ...] = pydantic.Field(
         (),
@@ -531,9 +534,11 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
 class AuxFieldTimeMonitor(AbstractAuxFieldMonitor, TimeMonitor):
     """:class:`.Monitor` that records auxiliary fields in the time domain.
 
-    Auxiliary fields are used in certain nonlinear material models.
-    :class:`.TwoPhotonAbsorption` uses `Nfx`, `Nfy`, and `Nfz` for the
-    free-carrier density.
+    Notes
+    -----
+        Auxiliary fields are used in certain nonlinear material models.
+        :class:`.TwoPhotonAbsorption` uses `Nfx`, `Nfy`, and `Nfz` for the
+        free-carrier density.
 
     Example
     -------
@@ -895,15 +900,14 @@ class ModeSolverMonitor(AbstractModeMonitor):
 
 
 class FieldProjectionSurface(Tidy3dBaseModel):
-    """
-    Data structure to store surface monitors where near fields are recorded for
-    field projections.
+    """Data structure to store surface monitors where near fields are recorded for field projections.
 
+    Notes
+    -----
     .. TODO add example and derivation, and more relevant links.
 
     See Also
     --------
-
     **Notebooks**:
         * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
     """

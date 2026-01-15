@@ -12,9 +12,11 @@ from tidy3d.plugins.smatrix.data.data_array import ModalPortDataArray
 class ModalComponentModelerData(AbstractComponentModelerData):
     """A data container for the results of a :class:`.ModalComponentModeler` run.
 
-    This class stores the original modeler and the simulation data obtained
-    from running the simulations it defines. It also provides a method to
-    compute the S-matrix from the simulation data.
+    Notes
+    -----
+        This class stores the original modeler and the simulation data obtained
+        from running the simulations it defines. It also provides a method to
+        compute the S-matrix from the simulation data.
     """
 
     modeler: ModalComponentModeler = pd.Field(

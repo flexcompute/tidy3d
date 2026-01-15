@@ -48,18 +48,17 @@ AUTO_RADIATION_MONITOR_NUM_POINTS_PHI = 200
 
 
 class DirectivityMonitorSpec(MicrowaveBaseModel):
-    """
-    Specification for automatically generating a :class:`.DirectivityMonitor`.
+    """Specification for automatically generating a :class:`.DirectivityMonitor`.
 
-    When included in the :attr:`.TerminalComponentModeler.radiation_monitors` tuple,
-    a :class:`.DirectivityMonitor` will be automatically generated with the specified
-    parameters. This allows users to mix manual :class:`.DirectivityMonitor` objects
-    with automatically generated ones, each with customizable parameters.
+    Notes
+    -----
+        When included in the :attr:`.TerminalComponentModeler.radiation_monitors` tuple,
+        a :class:`.DirectivityMonitor` will be automatically generated with the specified
+        parameters. This allows users to mix manual :class:`.DirectivityMonitor` objects
+        with automatically generated ones, each with customizable parameters.
 
-    Note
-    ----
-    The default origin (`custom_origin`) for defining observation points in the automatically
-    generated monitor is set to (0, 0, 0) in the global coordinate system.
+        The default origin (`custom_origin`) for defining observation points in the automatically
+        generated monitor is set to (0, 0, 0) in the global coordinate system.
 
     Example
     -------

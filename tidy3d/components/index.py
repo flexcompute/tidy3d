@@ -17,13 +17,15 @@ from tidy3d.components.types.simulation import SimulationType
 class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):
     """An immutable dictionary-like container for objects.
 
-    This class maps unique string keys to corresponding value objects.
-    By inheriting from `collections.abc.Mapping`, it provides standard dictionary
-    behaviors like item access (`my_dict["my_key"]`), iteration (`for name in my_dict`), and
-    length checking (`len(my_dict)`).
+    Notes
+    -----
+        This class maps unique string keys to corresponding value objects.
+        By inheriting from `collections.abc.Mapping`, it provides standard dictionary
+        behaviors like item access (`my_dict["my_key"]`), iteration (`for name in my_dict`), and
+        length checking (`len(my_dict)`).
 
-    It automatically validates that the `keys` and `values`
-    tuples have matching lengths upon instantiation.
+        It automatically validates that the `keys` and `values`
+        tuples have matching lengths upon instantiation.
 
     Attributes
     ----------
@@ -121,13 +123,15 @@ class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):
 class SimulationMap(ValueMap, Mapping[str, SimulationType]):
     """An immutable dictionary-like container for simulations.
 
-    This class maps unique string keys to corresponding `Simulation` objects.
-    By inheriting from `collections.abc.Mapping`, it provides standard dictionary
-    behaviors like item access (`sims["sim_A"]`), iteration (`for name in sims`), and
-    length checking (`len(sims)`).
+    Notes
+    -----
+        This class maps unique string keys to corresponding `Simulation` objects.
+        By inheriting from `collections.abc.Mapping`, it provides standard dictionary
+        behaviors like item access (`sims["sim_A"]`), iteration (`for name in sims`), and
+        length checking (`len(sims)`).
 
-    It automatically validates that the `keys` and `values`
-    tuples have matching lengths upon instantiation.
+        It automatically validates that the `keys` and `values`
+        tuples have matching lengths upon instantiation.
 
     Attributes
     ----------

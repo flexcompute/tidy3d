@@ -18,21 +18,25 @@ from tidy3d.exceptions import SetupError
 class AutoImpedanceSpec(MicrowaveBaseModel):
     """Specification for fully automatic transmission line impedance computation.
 
-    This specification automatically calculates impedance by current
-    paths based on the simulation geometry and conductors that intersect the mode plane.
-    No user-defined path specifications are required.
+    Notes
+    -----
+        Automatically calculates impedance using paths based on simulation geometry
+        and conductors that intersect the mode plane. No user-defined path
+        specifications are required.
     """
 
 
 class CustomImpedanceSpec(MicrowaveBaseModel):
     """Specification for custom transmission line voltages and currents in mode solvers.
 
-    The :class:`.CustomImpedanceSpec` class specifies how quantities related to transmission line
-    modes are computed. It defines the paths for line integrals, which are used to
-    compute voltage, current, and characteristic impedance of the transmission line.
+    Notes
+    -----
+        The :class:`.CustomImpedanceSpec` class specifies how quantities related to transmission line
+        modes are computed. It defines the paths for line integrals, which are used to
+        compute voltage, current, and characteristic impedance of the transmission line.
 
-    Users must supply at least one of voltage or current path specifications to control where these integrals
-    are evaluated. Both voltage_spec and current_spec cannot be ``None`` simultaneously.
+        Users must supply at least one of voltage or current path specifications to control where these integrals
+        are evaluated. Both voltage_spec and current_spec cannot be ``None`` simultaneously.
 
     Example
     -------

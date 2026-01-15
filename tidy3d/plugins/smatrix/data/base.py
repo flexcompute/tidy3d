@@ -15,9 +15,11 @@ from tidy3d.plugins.smatrix.component_modelers.base import AbstractComponentMode
 class AbstractComponentModelerData(ABC, Tidy3dBaseModel):
     """A data container for the results of a :class:`.AbstractComponentModeler` run.
 
-    This class stores the original modeler and the simulation data obtained
-    from running the simulations it defines. It also provides a method to
-    compute the S-matrix from the simulation data.
+    Notes
+    -----
+        This class stores the original modeler and the simulation data obtained
+        from running the simulations it defines. It also provides a method to
+        compute the S-matrix from the simulation data.
     """
 
     modeler: AbstractComponentModeler = pd.Field(
