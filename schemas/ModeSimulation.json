@@ -12815,7 +12815,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2.10.1",
+      "default": "2.10.2",
       "type": "string"
     }
   },
