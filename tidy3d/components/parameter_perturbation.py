@@ -1251,6 +1251,8 @@ class NedeljkovicSorefMashanovich(AbstractDeltaModel):
     """Nedeljkovic-Soref-Mashanovich model for the perturbation of the refractive index and
     extinction coefficient due to free carriers.
 
+    References
+    ----------
     M. Nedeljkovic, R. Soref and G. Z. Mashanovich, "Free-Carrier Electrorefraction and Electroabsorption
     Modulation Predictions for Silicon Over the 1–14- μm Infrared Wavelength Range," in IEEE Photonics
     Journal, vol. 3, no. 6, pp. 1171-1180, Dec. 2011, doi: 10.1109/JPHOT.2011.2171930

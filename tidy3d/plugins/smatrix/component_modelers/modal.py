@@ -24,9 +24,11 @@ from .base import FWIDTH_FRAC, AbstractComponentModeler
 class ModalComponentModeler(AbstractComponentModeler):
     """A tool for modeling devices and computing scattering matrix elements.
 
-    This class orchestrates the process of running multiple simulations to
-    derive the scattering matrix (S-matrix) of a component. It uses modal
-    sources and monitors defined by a set of ports.
+    Notes
+    -----
+        This class orchestrates the process of running multiple simulations to
+        derive the scattering matrix (S-matrix) of a component. It uses modal
+        sources and monitors defined by a set of ports.
 
     See Also
     --------

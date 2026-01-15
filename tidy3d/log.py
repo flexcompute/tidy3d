@@ -106,16 +106,18 @@ class LogHandler:
 
 
 class Logger:
-    """Custom logger to avoid the complexities of the logging module
+    """Custom logger to avoid the complexities of the logging module.
 
-    The logger can be used in a context manager to avoid the emission of multiple messages. In this
-    case, the first message in the context is emitted normally, but any others are discarded. When
-    the context is exited, the number of discarded messages of each level is displayed with the
-    highest level of the captures messages.
+    Notes
+    -----
+        The logger can be used in a context manager to avoid the emission of multiple messages. In this
+        case, the first message in the context is emitted normally, but any others are discarded. When
+        the context is exited, the number of discarded messages of each level is displayed with the
+        highest level of the captures messages.
 
-    Messages can also be captured for post-processing. That can be enabled through 'set_capture' to
-    record all warnings emitted during model validation. A structured copy of all validation
-    messages can then be recovered through 'captured_warnings'.
+        Messages can also be captured for post-processing. That can be enabled through 'set_capture' to
+        record all warnings emitted during model validation. A structured copy of all validation
+        messages can then be recovered through 'captured_warnings'.
     """
 
     _static_cache = set()

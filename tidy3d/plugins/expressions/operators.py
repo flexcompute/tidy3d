@@ -9,11 +9,12 @@ from .types import NumberOrExpression, NumberType
 
 
 class UnaryOperator(Expression):
-    """
-    Base class for unary operators in the metrics module.
+    """Base class for unary operators in the metrics module.
 
-    This class represents an operation with a single operand.
-    Subclasses should implement the evaluate method to define the specific operation.
+    Notes
+    -----
+        This class represents an operation with a single operand.
+        Subclasses should implement the evaluate method to define the specific operation.
     """
 
     operand: NumberOrExpression = pd.Field(
@@ -34,11 +35,12 @@ class UnaryOperator(Expression):
 
 
 class BinaryOperator(Expression):
-    """
-    Base class for binary operators in the metrics module.
+    """Base class for binary operators in the metrics module.
 
-    This class represents an operation with two operands.
-    Subclasses should implement the evaluate method to define the specific operation.
+    Notes
+    -----
+        This class represents an operation with two operands.
+        Subclasses should implement the evaluate method to define the specific operation.
     """
 
     left: NumberOrExpression = pd.Field(

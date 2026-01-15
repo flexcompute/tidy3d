@@ -24,11 +24,12 @@ if TYPE_CHECKING:
 
 
 class Expression(Tidy3dBaseModel, ABC):
-    """
-    Base class for all expressions in the metrics module.
+    """Base class for all expressions in the metrics module.
 
-    This class serves as the foundation for all other components in the metrics module.
-    It provides common functionality and operator overloading for derived classes.
+    Notes
+    -----
+        This class serves as the foundation for all other components in the metrics module.
+        It provides common functionality and operator overloading for derived classes.
     """
 
     class Config:

@@ -7,8 +7,10 @@ from tidy3d.constants import NEPERPERMETER, PERMETER, RADPERMETER, VELOCITY_SI
 class PropagationConstantArray(FreqModeDataArray):
     """Data array for the complex propagation constant :math:`\\gamma = -\\alpha + j\\beta` with units of 1/m.
 
-    In the physics convention where time-harmonic fields evolve with :math:`e^{-j\\omega t}`, a wave
-    propagating in the +z direction varies as :math:`E(z) = E_0 e^{\\gamma z} = E_0 e^{-\\alpha z} e^{j\\beta z}`.
+    Notes
+    -----
+        In the physics convention where time-harmonic fields evolve with :math:`e^{-j\\omega t}`, a wave
+        propagating in the +z direction varies as :math:`E(z) = E_0 e^{\\gamma z} = E_0 e^{-\\alpha z} e^{j\\beta z}`.
     """
 
     __slots__ = ()

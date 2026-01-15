@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
-- Fixed microwave component docstrings causing spurious parameters in Sphinx documentation.
+- Fixed docstrings with missing Notes sections causing spurious parameters in Sphinx documentation.
 
 ## [2.10.1] - 2026-01-14
 

@@ -16,12 +16,14 @@ from tidy3d.components.types.simulation import SimulationDataType
 class SimulationDataMap(ValueMap, Mapping[str, SimulationDataType]):
     """An immutable dictionary-like container for simulation data.
 
-    It provides standard dictionary
-    behaviors like item access (`data["key"]`), iteration (`for key in data`), and
-    length checking (`len(data)`).
+    Notes
+    -----
+        It provides standard dictionary
+        behaviors like item access (`data["key"]`), iteration (`for key in data`), and
+        length checking (`len(data)`).
 
-    It automatically validates that the `keys` and `values`
-    tuples have matching lengths upon instantiation.
+        It automatically validates that the `keys` and `values`
+        tuples have matching lengths upon instantiation.
 
     Attributes
     ----------

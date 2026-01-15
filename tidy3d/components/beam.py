@@ -260,7 +260,9 @@ class PlaneWaveBeamProfile(BeamProfile):
     """Component for constructing plane wave beam data. The normal direction is implicitly
     defined by the ``size`` parameter.
 
-    See also :class:`.PlaneWave`.
+    See Also
+    --------
+    :class:`.PlaneWave`
     """
 
     angular_spec: Union[FixedInPlaneKSpec, FixedAngleSpec] = pd.Field(
@@ -353,7 +355,9 @@ class GaussianBeamProfile(BeamProfile):
     """Component for constructing Gaussian beam data. The normal direction is implicitly
     defined by the ``size`` parameter.
 
-    See also :class:`.GaussianBeam`.
+    See Also
+    --------
+    :class:`.GaussianBeam`
     """
 
     waist_radius: pd.PositiveFloat = pd.Field(
@@ -420,7 +424,9 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
     """Component for constructing astigmatic Gaussian beam data. The normal direction is implicitly
     defined by the ``size`` parameter.
 
-    See also :class:`.AstigmaticGaussianBeam`.
+    See Also
+    --------
+    :class:`.AstigmaticGaussianBeam`
     """
 
     waist_sizes: tuple[pd.PositiveFloat, pd.PositiveFloat] = pd.Field(
