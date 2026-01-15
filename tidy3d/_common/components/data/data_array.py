@@ -670,40 +670,6 @@ class DataArray(xr.DataArray):
                 result = result.transpose(*out_dims)
         return result
 
-    def _with_updated_data(self, data: np.ndarray, coords: dict[str, Any]) -> DataArray:
-        """Make copy of ``DataArray`` with ``data`` at specified ``coords``, autograd compatible
-
-        Constraints / Edge cases:
-            - `coords` must map to a specific value eg {x: '1'}, does not broadcast to arrays
-            - `data` will be reshaped to try to match `self.shape` except where `coords` present
-        """
-
-        # make mask
-        mask = xr.zeros_like(self, dtype=bool)
-        mask.loc[coords] = True
-
-        # reshape `data` to line up with `self.dims`, with shape of 1 along the selected axis
-        old_data = self.data
-        new_shape = list(old_data.shape)
-        for i, dim in enumerate(self.dims):
-            if dim in coords:
-                new_shape[i] = 1
-        try:
-            new_data = data.reshape(new_shape)
-        except ValueError as e:
-            raise ValueError(
-                "Couldn't reshape the supplied 'data' to update 'DataArray'. The provided data was "
-                f"of shape {data.shape} and tried to reshape to {new_shape}. If you encounter this "
-                "error please raise an issue on the tidy3d github repository with the context."
-            ) from e
-
-        # broadcast data to repeat data along the selected dimensions to match mask
-        new_data = new_data + np.zeros_like(old_data)
-
-        new_data = np.where(mask, new_data, old_data)
-
-        return self.copy(deep=True, data=new_data)
-
 
 def write_data_array_to_hdf5(
     data_array: xr.DataArray, f_handle: h5py.File, group_path: str
@@ -820,7 +786,7 @@ def _angle_data_array(data_array: xr.DataArray) -> xr.DataArray:
     return _cast_data_array(result, data_array)
 
 
-def _with_updated_data_array(
+def _with_updated_data(
     data_array: xr.DataArray, data: np.ndarray, coords: dict[str, Any]
 ) -> xr.DataArray:
     mask = xr.zeros_like(data_array, dtype=bool)
@@ -938,8 +904,8 @@ class Tidy3DAccessor:
     def reflect(self, axis: int, center: float, reflection_only: bool = False) -> xr.DataArray:
         return self._obj.reflect(axis, center, reflection_only=reflection_only)
 
-    def with_updated_data(self, data: np.ndarray, coords: dict[str, Any]) -> xr.DataArray:
-        return self._obj._with_updated_data(data=data, coords=coords)
+    def _with_updated_data(self, data: np.ndarray, coords: dict[str, Any]) -> xr.DataArray:
+        return _with_updated_data(self._obj, data=data, coords=coords)
 
 
 P = ParamSpec("P")
@@ -961,13 +927,9 @@ def legacy_da_shim(
     - `message`: override full warning text (otherwise inferred)
     """
 
-    def _default_new_name(legacy_name: str) -> str:
-        # Useful for cases like `_with_updated_data` -> `with_updated_data`.
-        return legacy_name[1:] if legacy_name.startswith("_") else legacy_name
-
     def deco(func: Callable[..., Any]) -> Any:
         legacy_name = name or func.__name__
-        target_name = new_name or _default_new_name(legacy_name)
+        target_name = new_name or legacy_name
 
         if message is None:
             if kind == "method":
@@ -1037,7 +999,7 @@ def install_legacy_shims() -> None:
     def _with_updated_data(
         self: xr.DataArray, data: np.ndarray, coords: dict[str, Any]
     ) -> xr.DataArray:
-        return _with_updated_data_array(self, data=data, coords=coords)
+        return self.td._with_updated_data(data=data, coords=coords)
 
 
 register_data_array_spec(DataArray.__spec__, DataArray)
