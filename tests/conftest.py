@@ -73,7 +73,7 @@ def pytest_xdist_auto_num_workers(config):
     available_mem_gb = psutil.virtual_memory().available / (1024**3)
 
     # allow 1.2gb per core to provide some buffer
-    mem_limited_cores = int(available_mem_gb / 1.2)
+    mem_limited_cores = int(available_mem_gb / 1.8)
 
     cores = min(cores, mem_limited_cores)
 

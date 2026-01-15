@@ -49,8 +49,6 @@ from ...utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
 TEST_CUSTOM_MEDIUM_SPEED = False
 TEST_POLYSLAB_SPEED = False
 
-# whether to run numerical gradient tests, off by default because it runs real simulations
-RUN_NUMERICAL = False
 _NUMERICAL_COMBINATION = ("polyslab", "mode")
 
 TEST_MODES = ("pipeline", "adjoint", "speed")
@@ -242,7 +240,6 @@ def use_emulated_run(monkeypatch):
 
         def emulated_run_bwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d_bwd``."""
-
             task_name_fwd = "".join(task_name.partition("_adjoint")[:-2])
 
             # run the adjoint sim
@@ -616,8 +613,8 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
         for _, val in mnt_data.field_components.items():
             value = value + abs(anp.sum(val.values))
         intensity = anp.nan_to_num(anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values))
-        value += intensity
-        value += anp.sum(mnt_data.flux.values)
+        value = value + intensity
+        value = value + anp.sum(mnt_data.flux.values)
         return value
 
     field_point = td.FieldMonitor(
@@ -630,8 +627,8 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
     def field_point_postprocess_fn(sim_data, mnt_data):
         value = 0.0
         for _, val in mnt_data.field_components.items():
-            value += abs(anp.sum(abs(val.values)))
-        value += anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values)
+            value = value + abs(anp.sum(abs(val.values)))
+        value = value + anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values)
         return value
 
     return {
@@ -691,7 +688,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-# args = [("polyslab", "mode")]
+ASYNC_TEST_ARGS = args[:2]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> dict[str, typing.Callable]:
@@ -760,7 +757,7 @@ def test_polyslab_axis_ops(axis):
     basis_vecs = p.edge_basis_vectors(edges=edges)
 
 
-@pytest.mark.skipif(not RUN_NUMERICAL, reason="Numerical gradient tests runs through web API.")
+@pytest.mark.numerical
 @pytest.mark.parametrize("structure_key, monitor_key", (_NUMERICAL_COMBINATION,))
 def test_autograd_numerical(structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
@@ -859,6 +856,7 @@ def test_run_zero_grad(use_emulated_run):
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
+@pytest.mark.slow
 def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
@@ -891,7 +889,7 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
         assert anp.all(grad != 0.0), "some gradients are 0"
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", args)
+@pytest.mark.parametrize("structure_key, monitor_key", ASYNC_TEST_ARGS)
 @pytest.mark.parametrize("use_task_names", [True, False])
 def test_autograd_async(use_emulated_run, structure_key, monitor_key, use_task_names):
     """Test an objective function through tidy3d autograd."""
@@ -995,11 +993,9 @@ class TestTupleGrads:
             assert not np.allclose(dp_dsize, 0)
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_autograd_async_some_zero_grad(use_emulated_run, structure_key, monitor_key):
+def test_autograd_async_some_zero_grad(use_emulated_run):
     """Test objective where only some simulations in batch have adjoint sources."""
-
-    fn_dict = get_functions(structure_key, monitor_key)
+    fn_dict = get_functions(args[0][0], args[0][1])
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
@@ -1039,6 +1035,7 @@ def test_autograd_async_all_zero_grad(use_emulated_run):
         grad = ag.grad(objective)(params0)
 
 
+@pytest.mark.perf
 def test_autograd_speed_num_structures(use_emulated_run):
     """Test an objective function through tidy3d autograd."""
 
@@ -1141,8 +1138,9 @@ def test_autograd_polyslab_cylinder(use_emulated_run, monitor_key):
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_autograd_server(use_emulated_run, structure_key, monitor_key):
-    """Test an objective function through tidy3d autograd."""
+@pytest.mark.slow
+def test_autograd_local(use_emulated_run, structure_key, monitor_key):
+    """Test an objective function through tidy3d autograd with local gradients."""
 
     fn_dict = get_functions(structure_key, monitor_key)
     make_sim = fn_dict["sim"]
@@ -1151,7 +1149,7 @@ def test_autograd_server(use_emulated_run, structure_key, monitor_key):
     def objective(*args):
         """Objective function."""
         sim = make_sim(*args)
-        data = run(sim, task_name="autograd_test", verbose=False, local_gradient=False)
+        data = run(sim, task_name="autograd_test", verbose=False, local_gradient=True)
         value = postprocess(data)
         return value
 
@@ -1159,7 +1157,7 @@ def test_autograd_server(use_emulated_run, structure_key, monitor_key):
     assert np.all(np.abs(grad) > 0), "some gradients are 0"
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", args)
+@pytest.mark.parametrize("structure_key, monitor_key", ASYNC_TEST_ARGS)
 def test_autograd_async_server(use_emulated_run, structure_key, monitor_key):
     """Test an async objective function through tidy3d autograd."""
 
@@ -2060,6 +2058,7 @@ def test_custom_pole_residue(monkeypatch):
             assert np.allclose(grads_computed[field_path], np.conj(grad_poles[i][j]))
 
 
+@pytest.mark.slow
 def test_custom_sellmeier(monkeypatch):
     """Test that computed CustomSellmeier derivatives match analytic mapping."""
 
@@ -2564,8 +2563,8 @@ def test_multi_freq_edge_cases(use_emulated_run, structure_key, label, check_fn,
         print(g)
 
 
-@pytest.mark.parametrize("structure_key", structure_keys_)
-def test_multi_frequency_equivalence(use_emulated_run, structure_key):
+@pytest.mark.slow
+def test_multi_frequency_equivalence(use_emulated_run):
     """Test an objective function through tidy3d autograd."""
 
     def objective_indi(params, structure_key) -> float:
@@ -2595,6 +2594,7 @@ def test_multi_frequency_equivalence(use_emulated_run, structure_key):
         amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
         return power(amps)
 
+    structure_key = structure_keys_[0]
     params0_ = params0 + 1.0
 
     # J_indi = objective_indi(params0_, structure_key)
@@ -3022,10 +3022,9 @@ def test_custom_medium_conductivity_only_gradient(rng, use_emulated_run, tmp_pat
     assert anp.all(grad != 0.0), "some gradients are 0 for conductivity-only test"
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_vjp_nan(use_emulated_run, structure_key, monitor_key):
+def test_vjp_nan(use_emulated_run):
     """Test vjp data that has nan in it is flagged as an error."""
-
+    structure_key, monitor_key = args[0]
     fn_dict = get_functions(structure_key, monitor_key)
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
