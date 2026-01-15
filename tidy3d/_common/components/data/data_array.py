@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import functools
 import pathlib
 import re
 import warnings
 from abc import ABC
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, ParamSpec, TypeVar
 
 import autograd.numpy as anp
 import h5py
@@ -31,11 +32,11 @@ from tidy3d._common.constants import (
     RADIAN,
     SECOND,
 )
-from tidy3d._common.exceptions import DataError, FileError
+from tidy3d._common.exceptions import DataError
 
 if TYPE_CHECKING:
     from os import PathLike
-    from typing import Optional, Union
+    from typing import Callable, Literal, Optional, Union
 
     from numpy.typing import NDArray
     from pydantic.annotated_handlers import GetCoreSchemaHandler
@@ -434,22 +435,6 @@ class DataArray(xr.DataArray):
     def to_hdf5_handle(self, f_handle: h5py.File, group_path: str) -> None:
         """Save an ``xr.DataArray`` to the hdf5 file handle with a given path to the group."""
         write_data_array_to_hdf5(self, f_handle=f_handle, group_path=group_path)
-
-    @classmethod
-    def from_hdf5(cls, fname: PathLike, group_path: str) -> Self:
-        """Load a DataArray from an hdf5 file with a given path to the group."""
-        spec = data_array_spec_for_type(cls)
-        return spec.from_hdf5(fname=fname, group_path=group_path)
-
-    @classmethod
-    def from_file(cls, fname: PathLike, group_path: str) -> Self:
-        """Load a DataArray from an hdf5 file with a given path to the group."""
-        path = pathlib.Path(fname)
-        if not any(suffix.lower() == ".hdf5" for suffix in path.suffixes):
-            raise FileError(
-                f"'DataArray' objects must be written to '.hdf5' format. Given filename of {path}."
-            )
-        return cls.from_hdf5(fname=path, group_path=group_path)
 
     def __hash__(self) -> int:
         """Generate hash value for a :class:`.DataArray` instance, needed for custom components."""
@@ -932,192 +917,127 @@ class Tidy3DAccessor:
     def __init__(self, xarray_obj: xr.DataArray) -> None:
         self._obj = xarray_obj
 
-    def validate(self, spec: DataArraySpec | None = None) -> xr.DataArray:
-        if spec is None:
-            if isinstance(self._obj, DataArray):
-                spec = data_array_spec_for_type(type(self._obj))
-            else:
-                raise ValueError("A DataArraySpec must be provided for plain xarray objects.")
-        return spec.validate_data_array(self._obj)
-
     def sel_inside(self, bounds: Bound) -> xr.DataArray:
-        if isinstance(self._obj, DataArray):
-            return self._obj.sel_inside(bounds)
-        return _sel_inside_data_array(self._obj, bounds)
+        return self._obj.sel_inside(bounds)
 
     def does_cover(self, bounds: Bound, rtol: float = 0.0, atol: float = 0.0) -> bool:
-        if isinstance(self._obj, DataArray):
-            return self._obj.does_cover(bounds, rtol=rtol, atol=atol)
-        return _does_cover_data_array(self._obj, bounds, rtol=rtol, atol=atol)
+        return self._obj.does_cover(bounds, rtol=rtol, atol=atol)
 
     @property
     def is_uniform(self) -> bool:
-        if isinstance(self._obj, DataArray):
-            return self._obj.is_uniform
-        return _is_uniform_data_array(self._obj)
+        return self._obj.is_uniform
 
     @property
     def angle(self) -> xr.DataArray:
-        if isinstance(self._obj, DataArray):
-            return self._obj.angle
-        return _angle_data_array(self._obj)
+        return self._obj.angle
 
     @property
     def abs(self) -> xr.DataArray:
-        if isinstance(self._obj, DataArray):
-            return self._obj.abs
-        return abs(self._obj)
+        return self._obj.abs
 
     def reflect(self, axis: int, center: float, reflection_only: bool = False) -> xr.DataArray:
-        if isinstance(self._obj, DataArray):
-            return self._obj.reflect(axis, center, reflection_only=reflection_only)
-        return _reflect_data_array(self._obj, axis, center, reflection_only=reflection_only)
+        return self._obj.reflect(axis, center, reflection_only=reflection_only)
 
     def with_updated_data(self, data: np.ndarray, coords: dict[str, Any]) -> xr.DataArray:
-        if isinstance(self._obj, DataArray):
-            return self._obj._with_updated_data(data=data, coords=coords)
-        return _with_updated_data_array(self._obj, data=data, coords=coords)
-
-    def _with_updated_data(self, data: np.ndarray, coords: dict[str, Any]) -> xr.DataArray:
-        return self.with_updated_data(data=data, coords=coords)
+        return self._obj._with_updated_data(data=data, coords=coords)
 
 
-def td_validate(data_array: xr.DataArray, spec: DataArraySpec) -> xr.DataArray:
-    return data_array.td.validate(spec=spec)
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
-def td_sel_inside(data_array: xr.DataArray, bounds: Bound) -> xr.DataArray:
-    return data_array.td.sel_inside(bounds)
+def legacy_da_shim(
+    *,
+    kind: Literal["method", "property"] = "method",
+    name: str | None = None,
+    new_name: str | None = None,
+    message: str | None = None,
+) -> Callable[[Callable[..., Any]], Any]:
+    """
+    Install a deprecated xr.DataArray shim if it doesn't already exist.
 
+    - `name`: legacy attribute name on xr.DataArray (defaults to function name)
+    - `new_name`: target name under da.td.* (defaults to name with one leading '_' stripped)
+    - `message`: override full warning text (otherwise inferred)
+    """
 
-def td_does_cover(
-    data_array: xr.DataArray, bounds: Bound, rtol: float = 0.0, atol: float = 0.0
-) -> bool:
-    return data_array.td.does_cover(bounds, rtol=rtol, atol=atol)
+    def _default_new_name(legacy_name: str) -> str:
+        # Useful for cases like `_with_updated_data` -> `with_updated_data`.
+        return legacy_name[1:] if legacy_name.startswith("_") else legacy_name
 
+    def deco(func: Callable[..., Any]) -> Any:
+        legacy_name = name or func.__name__
+        target_name = new_name or _default_new_name(legacy_name)
 
-def td_reflect(
-    data_array: xr.DataArray, axis: int, center: float, reflection_only: bool = False
-) -> xr.DataArray:
-    return data_array.td.reflect(axis, center, reflection_only=reflection_only)
+        if message is None:
+            if kind == "method":
+                msg = (
+                    f"xr.DataArray.{legacy_name}(...) is deprecated; "
+                    f"use `da.td.{target_name}(...)` instead."
+                )
+            else:
+                msg = (
+                    f"xr.DataArray.{legacy_name} is deprecated; use `da.td.{target_name}` instead."
+                )
+        else:
+            msg = message
 
+        if hasattr(xr.DataArray, legacy_name):
+            return func  # don't override existing attributes
 
-def td_with_updated_data(
-    data_array: xr.DataArray, data: np.ndarray, coords: dict[str, Any]
-) -> xr.DataArray:
-    return data_array.td.with_updated_data(data=data, coords=coords)
+        if kind == "property":
 
+            @functools.wraps(func)
+            def fget(self: xr.DataArray) -> Any:
+                if LEGACY_SHIM_WARNINGS:
+                    warnings.warn(msg, DeprecationWarning, stacklevel=2)
+                return func(self)
 
-def td_angle(data_array: xr.DataArray) -> xr.DataArray:
-    return data_array.td.angle
+            fget.__name__ = legacy_name
+            setattr(xr.DataArray, legacy_name, property(fget))
+            return fget
 
+        @functools.wraps(func)
+        def wrapper(self: xr.DataArray, *args: Any, **kwargs: Any) -> Any:
+            if LEGACY_SHIM_WARNINGS:
+                warnings.warn(msg, DeprecationWarning, stacklevel=2)
+            return func(self, *args, **kwargs)
 
-def td_abs(data_array: xr.DataArray) -> xr.DataArray:
-    return data_array.td.abs
+        wrapper.__name__ = legacy_name
+        setattr(xr.DataArray, legacy_name, wrapper)
+        return wrapper
+
+    return deco
 
 
 def install_legacy_shims() -> None:
-    """Install deprecated xarray.DataArray methods that forward to ``da.td.*``."""
+    @legacy_da_shim()
+    def reflect(
+        self: xr.DataArray, axis: int, center: float, reflection_only: bool = False
+    ) -> xr.DataArray:
+        return _reflect_data_array(self, axis, center, reflection_only=reflection_only)
 
-    if not hasattr(xr.DataArray, "sel_inside"):
+    @legacy_da_shim()
+    def sel_inside(self: xr.DataArray, bounds: Bound) -> xr.DataArray:
+        return _sel_inside_data_array(self, bounds)
 
-        def _sel_inside(self: xr.DataArray, bounds: Bound) -> xr.DataArray:
-            if LEGACY_SHIM_WARNINGS:
-                warnings.warn(
-                    "xr.DataArray.sel_inside(...) is deprecated; use `da.td.sel_inside(...)` instead.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-            return _sel_inside_data_array(self, bounds)
+    @legacy_da_shim()
+    def does_cover(self: xr.DataArray, bounds: Bound, rtol: float = 0.0, atol: float = 0.0) -> bool:
+        return _does_cover_data_array(self, bounds, rtol=rtol, atol=atol)
 
-        xr.DataArray.sel_inside = _sel_inside
+    @legacy_da_shim(kind="property")
+    def angle(self: xr.DataArray) -> xr.DataArray:
+        return _angle_data_array(self)
 
-    if not hasattr(xr.DataArray, "does_cover"):
+    @legacy_da_shim(kind="property")
+    def abs(self: xr.DataArray) -> xr.DataArray:
+        return abs(self)
 
-        def _does_cover(
-            self: xr.DataArray, bounds: Bound, rtol: float = 0.0, atol: float = 0.0
-        ) -> bool:
-            if LEGACY_SHIM_WARNINGS:
-                warnings.warn(
-                    "xr.DataArray.does_cover(...) is deprecated; use `da.td.does_cover(...)` instead.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-            return _does_cover_data_array(self, bounds, rtol=rtol, atol=atol)
-
-        xr.DataArray.does_cover = _does_cover
-
-    if not hasattr(xr.DataArray, "is_uniform"):
-
-        @property
-        def _is_uniform(self: xr.DataArray) -> bool:
-            if LEGACY_SHIM_WARNINGS:
-                warnings.warn(
-                    "xr.DataArray.is_uniform is deprecated; use `da.td.is_uniform` instead.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-            return _is_uniform_data_array(self)
-
-        xr.DataArray.is_uniform = _is_uniform
-
-    if not hasattr(xr.DataArray, "angle"):
-
-        @property
-        def _angle(self: xr.DataArray) -> xr.DataArray:
-            if LEGACY_SHIM_WARNINGS:
-                warnings.warn(
-                    "xr.DataArray.angle is deprecated; use `da.td.angle` instead.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-            return _angle_data_array(self)
-
-        xr.DataArray.angle = _angle
-
-    if not hasattr(xr.DataArray, "abs"):
-
-        @property
-        def _abs(self: xr.DataArray) -> xr.DataArray:
-            if LEGACY_SHIM_WARNINGS:
-                warnings.warn(
-                    "xr.DataArray.abs is deprecated; use `da.td.abs` instead.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-            return abs(self)
-
-        xr.DataArray.abs = _abs
-
-    if not hasattr(xr.DataArray, "reflect"):
-
-        def _reflect(
-            self: xr.DataArray, axis: int, center: float, reflection_only: bool = False
-        ) -> xr.DataArray:
-            if LEGACY_SHIM_WARNINGS:
-                warnings.warn(
-                    "xr.DataArray.reflect(...) is deprecated; use `da.td.reflect(...)` instead.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-            return _reflect_data_array(self, axis, center, reflection_only=reflection_only)
-
-        xr.DataArray.reflect = _reflect
-
-    if not hasattr(xr.DataArray, "_with_updated_data"):
-
-        def _with_updated_data(
-            self: xr.DataArray, data: np.ndarray, coords: dict[str, Any]
-        ) -> xr.DataArray:
-            if LEGACY_SHIM_WARNINGS:
-                warnings.warn(
-                    "xr.DataArray._with_updated_data(...) is deprecated; use `da.td.with_updated_data(...)` instead.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-            return _with_updated_data_array(self, data=data, coords=coords)
-
-        xr.DataArray._with_updated_data = _with_updated_data
+    @legacy_da_shim()
+    def _with_updated_data(
+        self: xr.DataArray, data: np.ndarray, coords: dict[str, Any]
+    ) -> xr.DataArray:
+        return _with_updated_data_array(self, data=data, coords=coords)
 
 
 register_data_array_spec(DataArray.__spec__, DataArray)
