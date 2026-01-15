@@ -352,30 +352,6 @@ class DataArray(xr.DataArray):
                 data.data = TidyArrayBox.from_arraybox(data.data)
         super().__init__(data, *args, **kwargs)
 
-    @classmethod
-    def __get_pydantic_core_schema__(
-        cls, source_type: Any, handler: GetCoreSchemaHandler
-    ) -> core_schema.CoreSchema:
-        """Delegate pydantic validation/serialization to the attached spec."""
-        spec = data_array_spec_for_type(cls)
-        return spec.__get_pydantic_core_schema__(source_type, handler)
-
-    @classmethod
-    def __get_pydantic_json_schema__(
-        cls, schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
-    ) -> JsonSchemaValue:
-        """Delegate JSON schema generation to the attached spec."""
-        spec = data_array_spec_for_type(cls)
-        return spec.__get_pydantic_json_schema__(schema, handler)
-
-    @classmethod
-    def schema_id(cls) -> str:
-        return data_array_spec_for_type(cls).id
-
-    @property
-    def spec(self) -> DataArraySpec:
-        return data_array_spec_for_type(type(self))
-
     def _interp_validator(self, field_name: Optional[str] = None) -> None:
         """Ensure the data can be interpolated or selected by checking for duplicate coordinates.
 

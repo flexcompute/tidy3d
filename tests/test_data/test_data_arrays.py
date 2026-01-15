@@ -425,7 +425,7 @@ def test_annotated_dataset_hdf5_roundtrip(tmp_path):
 
 def test_legacy_class_spec_validation():
     class Model(BaseModel):
-        field: td.ScalarFieldDataArray
+        field: data_array_annotated_type(td.ScalarFieldDataArray)
 
     data = xr.DataArray(
         np.random.random((len(FS), 2, 3, 4)),
