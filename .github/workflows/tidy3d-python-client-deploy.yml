@@ -1,4 +1,4 @@
-name: "public/tidy3d/python-client-deploy"
+name: "public/tidy3d/python-client-deploy-release"
 
 on:
   workflow_dispatch:
@@ -17,7 +17,32 @@ on:
         description: 'Deploy to production PyPI'
         type: boolean
         default: false
-  
+
+      release_type:
+        description: 'Release Type'
+        type: choice
+        default: 'draft'
+        required: false
+        options:
+          - draft
+          - testpypi
+          - pypi
+
+      sync_readthedocs:
+        description: 'Sync documentation to readthedocs repo'
+        type: boolean
+        default: false
+
+      deploy_github_release:
+        description: 'Create GitHub release'
+        type: boolean
+        default: false
+
+      push_to_latest:
+        description: 'Push to latest branch in readthedocs'
+        type: boolean
+        default: false
+
   workflow_call:
     inputs:
       release_tag:
@@ -30,6 +55,19 @@ on:
       deploy_pypi:
         type: boolean
         default: false
+      release_type:
+        description: 'Release Type'
+        type: string
+        default: 'draft'
+      sync_readthedocs:
+        type: boolean
+        default: false
+      deploy_github_release:
+        type: boolean
+        default: false
+      push_to_latest:
+        type: boolean
+        default: false
     secrets:
       TEST_PYPI_API_TOKEN:
         description: 'API token for uploading to TestPyPI'
@@ -37,36 +75,114 @@ on:
       PYPI_API_TOKEN:
         description: 'API token for uploading to PyPI'
         required: false
+      GH_PAT:
+        description: 'GitHub Personal Access Token for creating releases'
+        required: false
 
 permissions:
   contents: read
 
 jobs:
-  validate-inputs:
-    name: validate-deployment-inputs
+  determine-workflow-scope:
     runs-on: ubuntu-latest
     outputs:
       release_tag: ${{ env.RELEASE_TAG }}
-      deploy_testpypi: ${{ env.DEPLOY_TESTPYPI }}
-      deploy_pypi: ${{ env.DEPLOY_PYPI }}
+      release_type: ${{ env.RELEASE_TYPE }}
+      is_rc_release: ${{ steps.determine-config.outputs.is_rc_release }}
+      push_to_latest: ${{ steps.determine-config.outputs.push_to_latest }}
+      deploy_github_release: ${{ steps.determine-config.outputs.deploy_github_release }}
+      deploy_testpypi: ${{ steps.determine-config.outputs.deploy_testpypi }}
+      deploy_pypi: ${{ steps.determine-config.outputs.deploy_pypi }}
+      sync_readthedocs: ${{ steps.determine-config.outputs.sync_readthedocs }}
+      target_ref_for_docs: ${{ steps.determine-config.outputs.target_ref_for_docs }}
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+      RELEASE_TYPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_type || inputs.release_type }}
       DEPLOY_TESTPYPI: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_testpypi || inputs.deploy_testpypi }}
       DEPLOY_PYPI: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_pypi || inputs.deploy_pypi }}
+      SYNC_READTHEDOCS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sync_readthedocs || inputs.sync_readthedocs }}
+      DEPLOY_GITHUB_RELEASE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_github_release || inputs.deploy_github_release }}
+      PUSH_TO_LATEST: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.push_to_latest || inputs.push_to_latest }}
+    steps:
+      - name: checkout-repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: determine-config
+        id: determine-config
+        run: |
+          echo "=== Deployment Configuration ==="
+          echo "RELEASE_TAG: $RELEASE_TAG"
+          echo "RELEASE_TYPE: $RELEASE_TYPE"
+
+          # Determine RC status
+          is_rc_release=false
+          if [[ "$RELEASE_TAG" == *"rc"* ]]; then
+            is_rc_release=true
+          fi
+
+          # Determine target_ref_for_docs
+          push_to_latest=$PUSH_TO_LATEST
+          if [[ "$push_to_latest" == "true" ]]; then
+            target_ref_for_docs="latest"
+          else
+            target_ref_for_docs=""
+          fi
+
+          # Pass through deployment flags
+          deploy_github_release=$DEPLOY_GITHUB_RELEASE
+          deploy_testpypi=$DEPLOY_TESTPYPI
+          deploy_pypi=$DEPLOY_PYPI
+          sync_readthedocs=$SYNC_READTHEDOCS
+
+          echo "=== Configuration Outputs ==="
+          echo "is_rc_release: $is_rc_release"
+          echo "push_to_latest: $push_to_latest"
+          echo "target_ref_for_docs: $target_ref_for_docs"
+          echo "deploy_github_release: $deploy_github_release"
+          echo "deploy_testpypi: $deploy_testpypi"
+          echo "deploy_pypi: $deploy_pypi"
+          echo "sync_readthedocs: $sync_readthedocs"
+
+          # Save outputs
+          echo "is_rc_release=$is_rc_release" >> $GITHUB_OUTPUT
+          echo "push_to_latest=$push_to_latest" >> $GITHUB_OUTPUT
+          echo "deploy_github_release=$deploy_github_release" >> $GITHUB_OUTPUT
+          echo "deploy_testpypi=$deploy_testpypi" >> $GITHUB_OUTPUT
+          echo "deploy_pypi=$deploy_pypi" >> $GITHUB_OUTPUT
+          echo "sync_readthedocs=$sync_readthedocs" >> $GITHUB_OUTPUT
+          echo "target_ref_for_docs=$target_ref_for_docs" >> $GITHUB_OUTPUT
+
+          echo "✓ Configuration determined"
+
+  validate-inputs:
+    name: validate-deployment-inputs
+    needs: determine-workflow-scope
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ needs.determine-workflow-scope.outputs.release_tag }}
+      deploy_testpypi: ${{ needs.determine-workflow-scope.outputs.deploy_testpypi }}
+      deploy_pypi: ${{ needs.determine-workflow-scope.outputs.deploy_pypi }}
     steps:
       - name: validate-inputs
+        env:
+          RELEASE_TAG: ${{ needs.determine-workflow-scope.outputs.release_tag }}
+          DEPLOY_TESTPYPI: ${{ needs.determine-workflow-scope.outputs.deploy_testpypi }}
+          DEPLOY_PYPI: ${{ needs.determine-workflow-scope.outputs.deploy_pypi }}
         run: |
           set -e
-          echo "=== Deployment Configuration ==="
+          echo "=== Deployment Validation ==="
           echo "Release tag: $RELEASE_TAG"
           echo "Deploy to TestPyPI: $DEPLOY_TESTPYPI"
           echo "Deploy to PyPI: $DEPLOY_PYPI"
           echo ""
-          
-          # Validate at least one target is selected
+
+          # Validate at least one PyPI target is selected if we're building packages
           if [[ "$DEPLOY_TESTPYPI" != "true" && "$DEPLOY_PYPI" != "true" ]]; then
-            echo "Error: At least one deployment target must be selected"
-            exit 1
+            echo "ℹ No PyPI deployment targets selected - package build will be skipped"
+          else
+            echo "✓ At least one PyPI deployment target is selected"
           fi
           
           # Validate tag format
@@ -81,7 +197,10 @@ jobs:
 
   build-package:
     name: build-distribution-package
-    needs: validate-inputs
+    needs: [determine-workflow-scope, validate-inputs]
+    if: |
+      needs.determine-workflow-scope.outputs.deploy_testpypi == 'true' ||
+      needs.determine-workflow-scope.outputs.deploy_pypi == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: checkout-tag
@@ -194,20 +313,68 @@ jobs:
           echo "Successfully published to PyPI"
           echo "View at: https://pypi.org/project/tidy3d/"
 
+  sync-readthedocs:
+    name: sync-docs-to-readthedocs
+    needs: [determine-workflow-scope, build-package]
+    if: |
+      always() &&
+      (needs.build-package.result == 'success' || needs.build-package.result == 'skipped') &&
+      needs.determine-workflow-scope.outputs.sync_readthedocs == 'true'
+    uses: ./.github/workflows/tidy3d-docs-sync-readthedocs-repo.yml
+    permissions:
+      contents: write
+    with:
+      source_ref: ${{ needs.determine-workflow-scope.outputs.release_tag }}
+      target_ref: ${{ needs.determine-workflow-scope.outputs.target_ref_for_docs }}
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+
+  github-release:
+    name: create-github-release
+    needs: [determine-workflow-scope, deploy-pypi]
+    if: |
+      always() &&
+      needs.determine-workflow-scope.outputs.deploy_github_release == 'true' &&
+      needs.determine-workflow-scope.outputs.deploy_pypi == 'true' &&
+      needs.deploy-pypi.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.determine-workflow-scope.outputs.release_tag }}
+      IS_RC_RELEASE: ${{ needs.determine-workflow-scope.outputs.is_rc_release }}
+    steps:
+      - name: checkout-tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: create-github-release
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191  # v2.0.8
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+
   deployment-summary:
     name: deployment-summary
-    needs: [validate-inputs, build-package, deploy-testpypi, deploy-pypi]
+    needs: [determine-workflow-scope, validate-inputs, build-package, deploy-testpypi, deploy-pypi, sync-readthedocs, github-release]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: generate-summary
         env:
-          RELEASE_TAG: ${{ needs.validate-inputs.outputs.release_tag }}
+          RELEASE_TAG: ${{ needs.determine-workflow-scope.outputs.release_tag }}
           BUILD_RESULT: ${{ needs.build-package.result }}
           TESTPYPI_RESULT: ${{ needs.deploy-testpypi.result }}
           PYPI_RESULT: ${{ needs.deploy-pypi.result }}
-          DEPLOY_TESTPYPI: ${{ needs.validate-inputs.outputs.deploy_testpypi }}
-          DEPLOY_PYPI: ${{ needs.validate-inputs.outputs.deploy_pypi }}
+          DOCS_RESULT: ${{ needs.sync-readthedocs.result }}
+          GITHUB_RELEASE_RESULT: ${{ needs.github-release.result }}
+          DEPLOY_TESTPYPI: ${{ needs.determine-workflow-scope.outputs.deploy_testpypi }}
+          DEPLOY_PYPI: ${{ needs.determine-workflow-scope.outputs.deploy_pypi }}
+          SYNC_READTHEDOCS: ${{ needs.determine-workflow-scope.outputs.sync_readthedocs }}
+          DEPLOY_GITHUB_RELEASE: ${{ needs.determine-workflow-scope.outputs.deploy_github_release }}
         run: |
           echo "=== Deployment Summary ==="
           echo "Release Tag: ${RELEASE_TAG}"
@@ -215,27 +382,47 @@ jobs:
           echo "Build Package: ${BUILD_RESULT}"
           echo "TestPyPI: ${TESTPYPI_RESULT}"
           echo "PyPI: ${PYPI_RESULT}"
+          echo "ReadTheDocs Sync: ${DOCS_RESULT}"
+          echo "GitHub Release: ${GITHUB_RELEASE_RESULT}"
           echo ""
-          
-          # Check for failures
-          if [[ "${BUILD_RESULT}" == "failure" ]]; then
-            echo "Build failed"
-            exit 1
-          fi
-          
-          # Check if any selected deployment failed
+
+          # Check for failures in enabled steps
           failed=false
+
+          # Check build (required if any PyPI deployment is enabled)
+          if [[ ("${DEPLOY_TESTPYPI}" == "true" || "${DEPLOY_PYPI}" == "true") && "${BUILD_RESULT}" == "failure" ]]; then
+            echo "✗ Build failed"
+            failed=true
+          fi
+
+          # Check TestPyPI deployment
           if [[ "${DEPLOY_TESTPYPI}" == "true" && "${TESTPYPI_RESULT}" == "failure" ]]; then
-            echo "TestPyPI deployment failed"
+            echo "✗ TestPyPI deployment failed"
             failed=true
           fi
+
+          # Check PyPI deployment
           if [[ "${DEPLOY_PYPI}" == "true" && "${PYPI_RESULT}" == "failure" ]]; then
-            echo "PyPI deployment failed"
+            echo "✗ PyPI deployment failed"
             failed=true
           fi
-          
+
+          # Check docs sync
+          if [[ "${SYNC_READTHEDOCS}" == "true" && "${DOCS_RESULT}" == "failure" ]]; then
+            echo "✗ ReadTheDocs sync failed"
+            failed=true
+          fi
+
+          # Check GitHub release
+          if [[ "${DEPLOY_GITHUB_RELEASE}" == "true" && "${GITHUB_RELEASE_RESULT}" == "failure" ]]; then
+            echo "✗ GitHub release creation failed"
+            failed=true
+          fi
+
           if [[ "$failed" == "true" ]]; then
+            echo ""
+            echo "Deployment workflow completed with failures"
             exit 1
           fi
-          
-          echo "All selected deployments completed successfully"
+
+          echo "✓ All enabled deployment steps completed successfully"

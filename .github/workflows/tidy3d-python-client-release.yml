@@ -504,68 +504,26 @@ jobs:
           
           echo "proceed_deploy=$proceed_deploy" >> $GITHUB_OUTPUT
   
-  sync-readthedocs:
-    name: sync-docs-to-readthedocs
+  run-deploy-workflow:
+    name: run-deploy-release-workflow
     needs: [determine-workflow-scope, compile-tests-results]
     if: |
       always() &&
       (needs.compile-tests-results.outputs.proceed_deploy == 'true' || needs.compile-tests-results.result == 'skipped') &&
-      needs.determine-workflow-scope.outputs.sync_readthedocs == 'true'
-    uses: ./.github/workflows/tidy3d-docs-sync-readthedocs-repo.yml
-    permissions:
-      contents: write
-    with:
-      source_ref: ${{ needs.determine-workflow-scope.outputs.release_tag }}
-      target_ref: ${{ needs.determine-workflow-scope.outputs.push_to_latest == 'true' && 'latest' || '' }}
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-  
-  github-release:
-    name: create-github-release
-    needs: [determine-workflow-scope, compile-tests-results, deploy-packages]
-    if: |
-      always() &&
-      (needs.compile-tests-results.outputs.proceed_deploy == 'true' || needs.compile-tests-results.result == 'skipped') &&
-      needs.determine-workflow-scope.outputs.deploy_github_release == 'true' &&
-      needs.determine-workflow-scope.outputs.deploy_pypi == 'true' &&
-      needs.deploy-packages.result == 'success'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      RELEASE_TAG: ${{ needs.determine-workflow-scope.outputs.release_tag }}
-      IS_RC_RELEASE: ${{ needs.determine-workflow-scope.outputs.is_rc_release }}
-    steps:
-      - name: checkout-tag
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.RELEASE_TAG }}
-          persist-credentials: false
-      
-      - name: create-github-release
-        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191  # v2.0.8
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-  
-  deploy-packages:
-    name: deploy-to-package-repositories
-    needs: [determine-workflow-scope, compile-tests-results]
-    if: |
-      always() &&
-      (needs.compile-tests-results.outputs.proceed_deploy == 'true' || needs.compile-tests-results.result == 'skipped') &&
-      needs.determine-workflow-scope.outputs.run_deploy == 'true' &&
-      (needs.determine-workflow-scope.outputs.deploy_testpypi == 'true' || 
-       needs.determine-workflow-scope.outputs.deploy_pypi == 'true')
+      needs.determine-workflow-scope.outputs.run_deploy == 'true'
     uses: ./.github/workflows/tidy3d-python-client-deploy.yml
     permissions:
-      contents: read
+      contents: write
       id-token: write
     with:
       release_tag: ${{ needs.determine-workflow-scope.outputs.release_tag }}
+      release_type: ${{ needs.determine-workflow-scope.outputs.release_type }}
       deploy_testpypi: ${{ needs.determine-workflow-scope.outputs.deploy_testpypi == 'true' }}
       deploy_pypi: ${{ needs.determine-workflow-scope.outputs.deploy_pypi == 'true' }}
+      sync_readthedocs: ${{ needs.determine-workflow-scope.outputs.sync_readthedocs == 'true' }}
+      deploy_github_release: ${{ needs.determine-workflow-scope.outputs.deploy_github_release == 'true' }}
+      push_to_latest: ${{ needs.determine-workflow-scope.outputs.push_to_latest == 'true' }}
     secrets:
       TEST_PYPI_API_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
       PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      GH_PAT: ${{ secrets.GH_PAT }}
