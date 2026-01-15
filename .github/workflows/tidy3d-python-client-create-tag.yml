@@ -35,6 +35,12 @@ on:
       tag_created:
         description: 'Whether tag was successfully created'
         value: ${{ jobs.create-and-push-tag.result == 'success' }}
+      extracted_version:
+        description: 'Version extracted from pyproject.toml (e.g., v2.10.0)'
+        value: ${{ jobs.create-and-push-tag.outputs.extracted_version }}
+      release_tag:
+        description: 'Final release tag used (either provided or extracted)'
+        value: ${{ jobs.create-and-push-tag.outputs.release_tag }}
 
 permissions:
   contents: write
@@ -42,6 +48,9 @@ permissions:
 jobs:
   create-and-push-tag:
     runs-on: ubuntu-latest
+    outputs:
+      extracted_version: ${{ steps.extract-version.outputs.version_tag }}
+      release_tag: ${{ steps.set-release-tag.outputs.release_tag }}
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
       RELEASE_TYPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_type || inputs.release_type }}
@@ -52,7 +61,32 @@ jobs:
           fetch-depth: 1
           persist-credentials: true
           token: ${{ secrets.GH_PAT }}
-      
+
+      - name: extract-version
+        id: extract-version
+        run: |
+          set -e
+          echo "Extracting version from pyproject.toml..."
+
+          # Extract version from pyproject.toml
+          VERSION=$(grep -m 1 '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          VERSION_TAG="v${VERSION}"
+          echo "Extracted version from pyproject.toml: $VERSION"
+          echo "Formatted as tag: $VERSION_TAG"
+          echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
+
+          # If RELEASE_TAG is empty, use extracted version
+          if [[ -z "$RELEASE_TAG" || "$RELEASE_TAG" == "" ]]; then
+            echo "RELEASE_TAG was empty, using extracted version: $VERSION_TAG"
+            echo "RELEASE_TAG=$VERSION_TAG" >> $GITHUB_ENV
+          fi
+
+      - name: set-release-tag
+        id: set-release-tag
+        run: |
+          echo "Final release tag: $RELEASE_TAG"
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
       - name: validate-version-match
         if: env.RELEASE_TYPE == 'pypi' || env.RELEASE_TYPE == 'testpypi'
         run: |
