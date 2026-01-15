@@ -402,3 +402,37 @@ def test_get_geo_inds_with_span():
 
     inds = g._get_geo_inds(geo_full, span_inds=span_inds)
     assert np.array_equal(inds, expected)
+
+
+def test_discretize_inds_relax_precision():
+    """Test that relax_precision handles floating-point precision issues at cell boundaries."""
+    g = make_grid()
+
+    # Create a box where boundaries are exactly on cell boundaries
+    box_exact = td.Box(center=(0, 0, 0), size=(2, 2, 2))
+    inds_exact = g.discretize_inds(box=box_exact, extend=False, relax_precision=False)
+
+    # Create a box where min boundary is slightly below the cell boundary (precision issue)
+    # The grid has boundaries at x = -1, 0, 1; y = -2, -1, 0, 1, 2; z = -3, -2, -1, 0, 1, 2, 3
+    # A box from -1 to 1 should span indices [0, 2] in x
+    eps = 1e-14  # Small epsilon to simulate floating-point precision issues
+    box_min_below = td.Box(center=(0, 0, 0), size=(2 + eps, 2 + eps, 2 + eps))
+
+    # Without relax_precision, the slightly larger box may include extra cells
+    inds_no_relax = g.discretize_inds(box=box_min_below, extend=False, relax_precision=False)
+
+    # With relax_precision, the indices should match the exact case since boundaries are "close enough"
+    inds_with_relax = g.discretize_inds(box=box_min_below, extend=False, relax_precision=True)
+
+    # The relaxed precision should produce the same result as the exact box
+    assert inds_exact == inds_with_relax
+    assert inds_no_relax != inds_with_relax
+
+    # Test case where box max is slightly below a cell boundary
+    box_max_below = td.Box(center=(0, 0, 0), size=(2 - eps, 2 - eps, 2 - eps))
+    inds_max_no_relax = g.discretize_inds(box=box_max_below, extend=False, relax_precision=False)
+    inds_max_with_relax = g.discretize_inds(box=box_max_below, extend=False, relax_precision=True)
+
+    # With relaxed precision, the boundaries close to cell boundaries should be treated as equal
+    assert inds_exact == inds_max_with_relax
+    assert inds_max_no_relax != inds_max_with_relax
