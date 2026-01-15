@@ -1226,7 +1226,7 @@ class PermittivityPerturbation(Tidy3dBaseModel):
         temperature: Optional[CustomSpatialDataType] = None,
         electron_density: Optional[CustomSpatialDataType] = None,
         hole_density: Optional[CustomSpatialDataType] = None,
-    ) -> CustomSpatialDataType:
+    ) -> tuple[Optional[CustomSpatialDataType], Optional[CustomSpatialDataType]]:
         """Compute effictive pertubation to eps and sigma."""
 
         delta_eps_sampled = None

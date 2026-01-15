@@ -7228,6 +7228,8 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 
         if self.perturbation_spec is not None:
             pspec = self.perturbation_spec
+            delta_eps: Optional[CustomSpatialDataType] = None
+            delta_sigma: Optional[CustomSpatialDataType] = None
             if isinstance(pspec, PermittivityPerturbation):
                 delta_eps, delta_sigma = pspec._sample_delta_eps_delta_sigma(
                     temperature, electron_density, hole_density

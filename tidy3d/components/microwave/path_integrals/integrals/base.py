@@ -12,6 +12,7 @@ from tidy3d.components.data.data_array import (
     ScalarFieldTimeDataArray,
     ScalarModeFieldDataArray,
     _make_base_result_data_array,
+    data_array_annotated_type,
 )
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
 from tidy3d.components.microwave.path_integrals.specs.base import (
@@ -25,7 +26,11 @@ if TYPE_CHECKING:
     from tidy3d.components.data.data_array import IntegralResultType
 
 IntegrableMonitorDataType = Union[FieldData, FieldTimeData, ModeData, ModeSolverData]
-EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
+EMScalarFieldType = Union[
+    data_array_annotated_type(ScalarFieldDataArray),
+    data_array_annotated_type(ScalarFieldTimeDataArray),
+    data_array_annotated_type(ScalarModeFieldDataArray),
+]
 FieldParameter = Literal["E", "H"]
 
 

@@ -7,6 +7,7 @@ from tidy3d.components.data.data_array import (
     CurrentFreqModeDataArray,
     VoltageFreqDataArray,
     VoltageFreqModeDataArray,
+    data_array_annotated_type,
 )
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.modal import Port
@@ -16,5 +17,12 @@ from tidy3d.plugins.smatrix.ports.wave import WavePort
 LumpedPortType = Union[LumpedPort, CoaxialLumpedPort]
 TerminalPortType = Union[LumpedPortType, WavePort]
 PortType = Union[Port, TerminalPortType]
-PortVoltageType = Union[VoltageFreqDataArray, VoltageFreqModeDataArray]
-PortCurrentType = Union[CurrentFreqDataArray, CurrentFreqModeDataArray]
+PortVoltageType = Union[
+    data_array_annotated_type(VoltageFreqDataArray),
+    data_array_annotated_type(VoltageFreqModeDataArray),
+]
+
+PortCurrentType = Union[
+    data_array_annotated_type(CurrentFreqDataArray),
+    data_array_annotated_type(CurrentFreqModeDataArray),
+]

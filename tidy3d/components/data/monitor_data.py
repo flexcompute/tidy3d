@@ -121,10 +121,10 @@ MODE_INTERP_EXTRAPOLATION_TOLERANCE = 1e-2
 
 GRID_CORRECTION_TYPE = Union[
     float,
-    FreqDataArray,
-    TimeDataArray,
-    FreqModeDataArray,
-    EMEFreqModeDataArray,
+    data_array_annotated_type(FreqDataArray),
+    data_array_annotated_type(TimeDataArray),
+    data_array_annotated_type(FreqModeDataArray),
+    data_array_annotated_type(EMEFreqModeDataArray),
 ]
 
 
@@ -2866,10 +2866,10 @@ class FluxTimeData(MonitorData):
 
 
 ProjFieldType = Union[
-    FieldProjectionAngleDataArray,
-    FieldProjectionCartesianDataArray,
-    FieldProjectionKSpaceDataArray,
-    DiffractionDataArray,
+    data_array_annotated_type(FieldProjectionAngleDataArray),
+    data_array_annotated_type(FieldProjectionCartesianDataArray),
+    data_array_annotated_type(FieldProjectionKSpaceDataArray),
+    data_array_annotated_type(DiffractionDataArray),
 ]
 
 ProjMonitorType = Union[

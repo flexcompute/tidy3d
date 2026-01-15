@@ -21,7 +21,10 @@ if TYPE_CHECKING:
 
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
 
-CustomSpatialDataType = Union[SpatialDataArray, UnstructuredGridDatasetType]
+CustomSpatialDataType = Union[
+    data_array_annotated_type(SpatialDataArray),
+    UnstructuredGridDatasetType,
+]
 CustomSpatialDataTypeAnnotated = Union[
     discriminated_union(UnstructuredGridDatasetType),
     data_array_annotated_type(SpatialDataArray),

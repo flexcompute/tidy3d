@@ -13,6 +13,7 @@ from tidy3d._common.components.data.data_array import (
     FreqDataArray,
     ScalarFieldDataArray,
     _isinstance,
+    data_array_annotated_type,
 )
 from tidy3d._common.components.types.base import ArrayLike, Bound, Complex
 from tidy3d._common.config import config
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
 
 FieldData = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
-EpsType = Union[Complex, FreqDataArray]
+EpsType = Union[Complex, data_array_annotated_type(FreqDataArray)]
 ArrayFloat = NDArray[np.floating]
 ArrayComplex = NDArray[np.complexfloating]
 

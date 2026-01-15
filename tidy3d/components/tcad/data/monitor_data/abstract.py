@@ -10,7 +10,11 @@ import numpy as np
 from pydantic import Field
 
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
-from tidy3d.components.data.data_array import SpatialDataArray, _isinstance
+from tidy3d.components.data.data_array import (
+    SpatialDataArray,
+    _isinstance,
+    data_array_annotated_type,
+)
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.types import HeatChargeMonitorType
 from tidy3d.components.types import Coordinate, ScalarSymmetry
@@ -19,7 +23,8 @@ from tidy3d.constants import MICROMETER
 from tidy3d.log import log
 
 FieldDataset = Union[
-    SpatialDataArray, discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset])
+    data_array_annotated_type(SpatialDataArray),
+    discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset]),
 ]
 UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
 

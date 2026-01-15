@@ -936,13 +936,26 @@ IndexedDataArrayTypes = Union[
     data_array_annotated_type(PointDataArray),
 ]
 
-IntegralResultType = Union[FreqDataArray, FreqModeDataArray, TimeDataArray]
+IntegralResultType = Union[
+    data_array_annotated_type(FreqDataArray),
+    data_array_annotated_type(FreqModeDataArray),
+    data_array_annotated_type(TimeDataArray),
+]
+
 VoltageIntegralResultType = Union[
-    VoltageFreqDataArray, VoltageFreqModeDataArray, VoltageTimeDataArray
+    data_array_annotated_type(VoltageFreqDataArray),
+    data_array_annotated_type(VoltageFreqModeDataArray),
+    data_array_annotated_type(VoltageTimeDataArray),
 ]
+
 CurrentIntegralResultType = Union[
-    CurrentFreqDataArray, CurrentFreqModeDataArray, CurrentTimeDataArray
+    data_array_annotated_type(CurrentFreqDataArray),
+    data_array_annotated_type(CurrentFreqModeDataArray),
+    data_array_annotated_type(CurrentTimeDataArray),
 ]
+
 ImpedanceResultType = Union[
-    ImpedanceFreqDataArray, ImpedanceFreqModeDataArray, ImpedanceTimeDataArray
+    data_array_annotated_type(ImpedanceFreqDataArray),
+    data_array_annotated_type(ImpedanceFreqModeDataArray),
+    data_array_annotated_type(ImpedanceTimeDataArray),
 ]

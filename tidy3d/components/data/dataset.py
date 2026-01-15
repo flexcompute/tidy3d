@@ -189,12 +189,12 @@ class ModeFreqDataset(FreqDataset, ABC):
 
 
 EMScalarFieldType = Union[
-    ScalarFieldDataArray,
-    ScalarFieldTimeDataArray,
-    ScalarModeFieldDataArray,
-    ScalarModeFieldCylindricalDataArray,
-    EMEScalarModeFieldDataArray,
-    EMEScalarFieldDataArray,
+    data_array_annotated_type(ScalarFieldDataArray),
+    data_array_annotated_type(ScalarFieldTimeDataArray),
+    data_array_annotated_type(ScalarModeFieldDataArray),
+    data_array_annotated_type(ScalarModeFieldCylindricalDataArray),
+    data_array_annotated_type(EMEScalarModeFieldDataArray),
+    data_array_annotated_type(EMEScalarFieldDataArray),
 ]
 
 
