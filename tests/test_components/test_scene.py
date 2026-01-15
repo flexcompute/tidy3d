@@ -10,7 +10,7 @@ import pytest
 
 import tidy3d as td
 import tidy3d.components.scene as scene_mod
-from tidy3d.components.scene import MAX_NUM_MEDIUMS
+from tidy3d.components import scene
 from tidy3d.components.viz import STRUCTURE_EPS_CMAP, STRUCTURE_EPS_CMAP_R
 from tidy3d.exceptions import SetupError
 
@@ -19,6 +19,7 @@ from ..utils import SIM_FULL, cartesian_to_unstructured
 SCENE = td.Scene()
 
 SCENE_FULL = SIM_FULL.scene
+TEST_MAX_NUM_MEDIUMS = 3
 
 
 def test_scene_init():
@@ -240,11 +241,11 @@ def test_structure_eps_color_mapping_no_matplotlib(
     assert np.allclose(params.facecolor, expected)
 
 
-def test_num_mediums():
+def test_num_mediums(monkeypatch):
     """Make sure we error if too many mediums supplied."""
-
+    monkeypatch.setattr(scene, "MAX_NUM_MEDIUMS", TEST_MAX_NUM_MEDIUMS)
     structures = []
-    for i in range(MAX_NUM_MEDIUMS):
+    for i in range(TEST_MAX_NUM_MEDIUMS):
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 1))
         )

@@ -1032,6 +1032,7 @@ def _get_eme_mode_solver_data(num_sweep=0):
     )
 
 
+@pytest.mark.slow
 def _get_eme_field_data(num_sweep=0):
     dataset = _get_eme_field_dataset(num_sweep=num_sweep)
     kwargs = dataset.field_components
@@ -1099,6 +1100,7 @@ def _get_eme_port_modes(num_sweep=0):
     return mode_data.updated_copy(n_complex=n_complex, **kwargs)
 
 
+@pytest.mark.slow
 def test_eme_sim_data():
     sim = make_eme_sim()
     mode_monitor_data = _get_eme_mode_solver_data()
