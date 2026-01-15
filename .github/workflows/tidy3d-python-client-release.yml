@@ -123,6 +123,7 @@ jobs:
     outputs:
       release_tag: ${{ env.RELEASE_TAG }}
       release_type: ${{ env.RELEASE_TYPE }}
+      extracted_version: ${{ steps.extract-version.outputs.version_tag }}
       is_rc_release: ${{ steps.determine-workflow-steps.outputs.is_rc_release }}
       push_to_latest: ${{ steps.determine-workflow-steps.outputs.push_to_latest }}
       run_tag: ${{ steps.determine-workflow-steps.outputs.run_tag }}
@@ -148,10 +149,33 @@ jobs:
       DEPLOY_TESTPYPI: ${{ inputs.deploy_testpypi || false }}
       DEPLOY_PYPI: ${{ inputs.deploy_pypi || false }}
     steps:
+      - name: checkout-repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: extract-version-from-pyproject
+        id: extract-version
+        run: |
+          # Extract version from pyproject.toml
+          VERSION=$(grep -m 1 '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          VERSION_TAG="v${VERSION}"
+          echo "Extracted version from pyproject.toml: $VERSION"
+          echo "Formatted as tag: $VERSION_TAG"
+          echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
+
       - name: validate-tag-format
         run: |
           set -e
           echo "Validating release tag format..."
+
+          # Use extracted version if RELEASE_TAG is empty
+          if [[ -z "$RELEASE_TAG" || "$RELEASE_TAG" == "" ]]; then
+            RELEASE_TAG="${{ steps.extract-version.outputs.version_tag }}"
+            echo "RELEASE_TAG was empty, using extracted version: $RELEASE_TAG"
+            echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+          fi
+
           echo "Release tag: $RELEASE_TAG"
           echo "Release type: $RELEASE_TYPE"
           
