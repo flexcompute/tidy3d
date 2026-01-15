@@ -2212,7 +2212,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     ) -> tuple[Box, int, str]:
         """Return pec bounding box, frame axis and object's direction"""
 
-        span_inds = np.array(self.grid.discretize_inds(obj))
+        span_inds = np.array(self.grid.discretize_inds(obj, relax_precision=True))
         coords = self.grid.boundaries.to_list
         direction = obj.direction
         if isinstance(obj, ModeSource):

@@ -605,7 +605,9 @@ class Grid(Tidy3dBaseModel):
 
         return Coords(**yee_coords)
 
-    def discretize_inds(self, box: Box, extend: bool = False) -> list[tuple[int, int]]:
+    def discretize_inds(
+        self, box: Box, extend: bool = False, relax_precision: bool = False
+    ) -> list[tuple[int, int]]:
         """Start and stopping indexes for the cells that intersect with a :class:`Box`.
 
         Parameters
@@ -616,6 +618,9 @@ class Grid(Tidy3dBaseModel):
             If ``True``, ensure that the returned indexes extend sufficiently in every direction to
             be able to interpolate any field component at any point within the ``box``, for field
             components sampled on the Yee grid.
+        relax_precision : bool = False
+            If ``True``, relax the precision of the discretization to allow for small numerical
+            differences between the box boundaries and the cell boundaries.
 
         Returns
         -------
@@ -646,7 +651,7 @@ class Grid(Tidy3dBaseModel):
             # handle extensions
             if ind_max > ind_min and extend:
                 # Left side
-                if box.bounds[0][axis] < self.centers.to_list[axis][ind_min]:
+                if pts_min[axis] < self.centers.to_list[axis][ind_min]:
                     # Box bounds on the left side are to the left of the closest grid center
                     ind_min -= 1
 
@@ -654,9 +659,28 @@ class Grid(Tidy3dBaseModel):
                 ind_max += 1
 
             # store indexes
-            inds_list.append((ind_min, ind_max))
+            inds_list.append([ind_min, ind_max])
 
-        return inds_list
+        if relax_precision:
+            for dim in range(3):
+                # Fix some corner cases when the box boundary is very close to
+                # cell boundaries but due to finite precision is slightly smaller or larger
+                cell_bounds = np.array(boundaries.to_list[dim])
+                num_cells = len(cell_bounds) - 1
+                min_ind = inds_list[dim][0]
+                max_ind = inds_list[dim][1]
+                box_min = pts_min[dim]
+                box_max = pts_max[dim]
+                # Check if the cell boundary after current min is close to the box min,
+                # if it is close enough then choose that to be the new minimum cell index
+                if min_ind + 1 < num_cells and np.isclose(box_min, cell_bounds[min_ind + 1]):
+                    inds_list[dim][0] += 1
+                # Same but for the max cell boundary. If the current cell boundary is close to the box bounds,
+                # then it is considered equal and the stop index should be incremented
+                if max_ind < num_cells and np.isclose(box_max, cell_bounds[max_ind]):
+                    inds_list[dim][1] += 1
+
+        return [(ind_min, ind_max) for ind_min, ind_max in inds_list]
 
     def extended_subspace(
         self,
