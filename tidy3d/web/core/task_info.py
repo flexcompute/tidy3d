@@ -51,22 +51,47 @@ class TaskBlockInfo(TaskBase):
 
 
 class TaskInfo(TaskBase):
-    """General information about a task."""
+    """General information about a task or batch.
 
-    taskId: str
+    This unified class represents both simulation tasks and batch (modeler) tasks.
+    Batch-specific fields will be None for simulation tasks and vice versa.
+    """
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Common fields (used by both simulation tasks and batches)
+    # ─────────────────────────────────────────────────────────────────────────
+    taskId: str = None
     """Unique identifier for the task."""
 
     taskName: str = None
     """Name of the task."""
 
+    status: str = None
+    """Current status of the task."""
+
+    taskType: str = None
+    """Type of the task."""
+
+    version: str = None
+    """Version of the task."""
+
+    estFlexUnit: float = None
+    """Estimated flexible units for the task."""
+
+    realFlexUnit: float = None
+    """Actual flexible units used by the task."""
+
+    taskBlockInfo: TaskBlockInfo = None
+    """Blocking information for the task."""
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Simulation-specific fields (None for batches)
+    # ─────────────────────────────────────────────────────────────────────────
     nodeSize: int = None
     """Size of the node allocated for the task."""
 
     completedAt: Optional[datetime] = None
     """Timestamp when the task was completed."""
-
-    status: str = None
-    """Current status of the task."""
 
     realCost: float = None
     """Actual cost incurred by the task."""
@@ -86,14 +111,8 @@ class TaskInfo(TaskBase):
     estCostMax: float = None
     """Estimated maximum cost for the task."""
 
-    realFlexUnit: float = None
-    """Actual flexible units used by the task."""
-
     oriRealFlexUnit: float = None
     """Original real flexible units."""
-
-    estFlexUnit: float = None
-    """Estimated flexible units for the task."""
 
     estFlexCreditTimeStepping: float = None
     """Estimated flexible credits for time stepping."""
@@ -119,17 +138,53 @@ class TaskInfo(TaskBase):
     callbackUrl: str = None
     """Callback URL for task notifications."""
 
-    taskType: str = None
-    """Type of the task."""
-
     metadataStatus: str = None
     """Status of the metadata for the task."""
 
-    taskBlockInfo: TaskBlockInfo = None
-    """Blocking information for the task."""
+    # ─────────────────────────────────────────────────────────────────────────
+    # Batch-specific fields (None for simulation tasks)
+    # ─────────────────────────────────────────────────────────────────────────
+    refId: str = None
+    """Reference identifier for batches."""
 
-    version: str = None
-    """Version of the task."""
+    optimizationId: str = None
+    """Identifier for optimization process."""
+
+    groupId: str = None
+    """Identifier for the group the batch belongs to."""
+
+    totalTask: int = None
+    """Total number of tasks in the batch."""
+
+    preprocessSuccess: int = None
+    """Count of tasks that completed preprocessing."""
+
+    postprocessStatus: str = None
+    """Status of batch postprocessing."""
+
+    validateSuccess: int = None
+    """Count of tasks that passed validation."""
+
+    runSuccess: int = None
+    """Count of tasks that ran successfully."""
+
+    postprocessSuccess: int = None
+    """Count of tasks that completed postprocessing."""
+
+    totalSeconds: int = None
+    """Total time in seconds the batch has taken."""
+
+    totalCheckMillis: int = None
+    """Total time in milliseconds spent on checks."""
+
+    message: str = None
+    """Status message for the batch."""
+
+    tasks: list[BatchMember] = None
+    """List of batch member tasks (None for simulation tasks)."""
+
+    validateErrors: dict = None
+    """Validation errors dictionary for batches."""
 
 
 class RunInfo(TaskBase):
@@ -212,57 +267,6 @@ class BatchMember(TaskBase):
     summary: dict = None
 
 
-class BatchDetail(TaskBase):
-    """
-    Provides a detailed, top-level view of a batch of tasks.
-
-    This model serves as the main payload for retrieving comprehensive
-    information about a batch operation.
-
-    Attributes:
-        refId: A reference identifier for the entire batch.
-        optimizationId: Identifier for the optimization process, if any.
-        groupId: Identifier for the group the batch belongs to.
-        name: The user-defined name of the batch.
-        status: The current status of the batch.
-        totalTask: The total number of tasks in the batch.
-        preprocessSuccess: The count of tasks that completed preprocessing.
-        postprocessStatus: The status of the batch's postprocessing stage.
-        validateSuccess: The count of tasks that passed validation.
-        runSuccess: The count of tasks that ran successfully.
-        postprocessSuccess: The count of tasks that completed postprocessing.
-        taskBlockInfo: Information on what might be blocking the batch.
-        estFlexUnit: The estimated total flexible compute units for the batch.
-        totalSeconds: The total time in seconds the batch has taken.
-        totalCheckMillis: Total time in milliseconds spent on checks.
-        message: A general message providing information about the batch status.
-        tasks: A list of `BatchMember` objects, one for each task in the batch.
-        taskType: The type of tasks contained in the batch.
-    """
-
-    refId: str = None
-    optimizationId: str = None
-    groupId: str = None
-    name: str = None
-    status: str = None
-    totalTask: int = 0
-    preprocessSuccess: int = 0
-    postprocessStatus: str = None
-    validateSuccess: int = 0
-    runSuccess: int = 0
-    postprocessSuccess: int = 0
-    taskBlockInfo: BatchTaskBlockInfo = None
-    estFlexUnit: float = None
-    realFlexUnit: float = None
-    totalSeconds: int = None
-    totalCheckMillis: int = None
-    message: str = None
-    tasks: list[BatchMember] = []
-    validateErrors: dict = None
-    taskType: str = None
-    version: str = None
-
-
 class AsyncJobDetail(TaskBase):
     """
     Provides a detailed view of an asynchronous job and its sub-tasks.
@@ -296,4 +300,5 @@ class AsyncJobDetail(TaskBase):
     message: Optional[str] = None
 
 
+TaskInfo.update_forward_refs()
 AsyncJobDetail.update_forward_refs()

@@ -33,7 +33,7 @@ from .http_util import get_version as _get_protocol_version
 from .http_util import http
 from .s3utils import download_file, download_gz_file, upload_file
 from .stub import TaskStub
-from .task_info import BatchDetail, TaskInfo
+from .task_info import TaskInfo
 from .types import PayType, Queryable, ResourceLifecycle, Submittable, Tidy3DResource
 
 
@@ -861,22 +861,28 @@ class BatchTask(WebTask):
             return BatchTask(taskId=task_id, taskType=task_type)
         return None
 
-    def detail(self) -> BatchDetail:
+    def detail(self) -> TaskInfo:
         """Fetches the detailed information and status of the batch.
 
         Returns
         -------
-        BatchDetail
+        TaskInfo
             An object containing the batch's latest data.
         """
         resp = http.get(
             f"rf/task/{self.task_id}/statistics",
         )
-        # Some backends may return null for collection fields; coerce to sensible defaults
+        # Transform batch response to unified TaskInfo format
         if isinstance(resp, dict):
+            # Map batch field names to unified TaskInfo field names
+            if "name" in resp:
+                resp["taskName"] = resp.pop("name")
+            # Add taskId from the object itself (not in batch API response)
+            resp["taskId"] = self.task_id
+            # Coerce null collection fields to sensible defaults
             if resp.get("tasks") is None:
                 resp["tasks"] = []
-        return BatchDetail(**(resp or {}))
+        return TaskInfo(**(resp or {}))
 
     def check(
         self,

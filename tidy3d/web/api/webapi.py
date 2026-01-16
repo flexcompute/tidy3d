@@ -40,7 +40,6 @@ from tidy3d.web.core.constants import (
     TaskId,
 )
 from tidy3d.web.core.task_core import (
-    BatchDetail,
     BatchTask,
     Folder,
     SimulationTask,
@@ -619,7 +618,7 @@ def get_reduced_simulation(
 
 
 @wait_for_connection
-def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
+def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo:
     """Return information about a simulation task or a modeler batch.
 
     This function fetches details for a given task ID, automatically
@@ -635,9 +634,8 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo | BatchDetail:
 
     Returns
     -------
-    TaskInfo | BatchDetail
-        A ``TaskInfo`` object for a standard simulation task, or a
-        ``BatchDetail`` object for a modeler batch.
+    TaskInfo
+        An object containing information about the task or batch.
 
     Raises
     ------
@@ -719,7 +717,7 @@ def get_run_info(task_id: TaskId) -> tuple[Optional[float], Optional[float]]:
     return task.get_running_info()
 
 
-def _get_batch_detail_handle_error_status(batch: BatchTask) -> BatchDetail:
+def _get_batch_detail_handle_error_status(batch: BatchTask) -> TaskInfo:
     """Get batch detail and raise error if status is in ERROR_STATES."""
     detail = batch.detail()
     status = detail.status.lower()
@@ -1203,7 +1201,7 @@ def _monitor_modeler_batch(
     console = get_logging_console() if verbose else None
     task = BatchTask.get(task_id=task_id)
     detail = _get_batch_detail_handle_error_status(task)
-    name = detail.name or "modeler_batch"
+    name = detail.taskName or "modeler_batch"
     group_id = detail.groupId
     status = detail.status.lower()
 
@@ -1573,7 +1571,7 @@ def real_cost(task_id: str, verbose: bool = True) -> float | None:
     else:
         if verbose:
             console.log(f"Billed flex credit cost: {flex_unit:1.3f}.")
-            if flex_unit != ori_flex_unit and "FDTD" in task_info.taskType:
+            if flex_unit != ori_flex_unit and task_info.taskType and "FDTD" in task_info.taskType:
                 console.log(
                     "Note: the task cost pro-rated due to early shutoff was below the minimum "
                     "threshold, due to fast shutoff. Decreasing the simulation 'run_time' should "

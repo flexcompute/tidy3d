@@ -211,6 +211,14 @@ def mock_upload(monkeypatch, set_api_key):
 def mock_get_info(monkeypatch, set_api_key):
     """Mocks webapi.get_info."""
 
+    # Mock the batch API check (returns 404 to indicate it's not a batch task)
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/rf/task/{TASK_ID}/statistics",
+        json={"error": "Not found"},
+        status=404,
+    )
+
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
@@ -225,6 +233,8 @@ def mock_get_info(monkeypatch, set_api_key):
                 "metadataStatus": "processed",
                 "status": "success",
                 "s3Storage": 1.0,
+                "groupId": "group123",
+                "version": "v1",
             }
         },
         status=200,
@@ -437,19 +447,6 @@ def _test_load(mock_load, mock_get_info, tmp_path):
 
 @responses.activate
 def test_delete(set_api_key, mock_get_info):
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
-        json={
-            "data": {
-                "taskId": TASK_ID,
-                "groupId": "group123",
-                "version": "v1",
-                "createdAt": CREATED_AT,
-            }
-        },
-        status=200,
-    )
 
     responses.add(
         responses.DELETE,
