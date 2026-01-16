@@ -12,7 +12,7 @@ API |:computer:|
     mediums
     material_library
     boundary_conditions
-    discretization
+    discretization/index
     sources
     monitors
     output_data
