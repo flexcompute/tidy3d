@@ -1107,6 +1107,10 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         spatial_data: PermittivityDataset,
         dim: str,
     ) -> np.ndarray:
+        if isinstance(spatial_data, UnstructuredGridDataset):
+            raise NotImplementedError(
+                "Adjoint derivatives for unstructured custom media are not supported."
+            )
         coords_interp = {key: val for key, val in spatial_data.coords.items() if len(val) > 1}
         dims_sum = {dim for dim in spatial_data.coords.keys() if dim not in coords_interp}
 
@@ -1160,6 +1164,203 @@ class AbstractCustomMedium(AbstractMedium, ABC):
                 "message and some information about your simulation setup and we will investigate. "
             )
         return vjp_array
+
+    def _derivative_field_cmp_custom(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        spatial_data: SpatialDataArray,
+        dim: str,
+        freqs: NDArray,
+        bounds: Optional[Bound] = None,
+        component: str = "real",
+        interp_method: Optional[InterpMethod] = None,
+    ) -> NDArray:
+        """Compute the derivative with respect to a material property component."""
+        param_coords = {axis: np.asarray(spatial_data.coords[axis]) for axis in "xyz"}
+        eps_shape = [len(param_coords[axis]) for axis in "xyz"]
+        dtype_out = complex if component == "complex" else float
+
+        E_der_dim = E_der_map.get(f"E{dim}")
+        if E_der_dim is None or np.all(E_der_dim.values == 0):
+            return np.zeros(eps_shape, dtype=dtype_out)
+
+        field_coords = {axis: np.asarray(E_der_dim.coords[axis]) for axis in "xyz"}
+        values = E_der_dim.values
+
+        def _bounds_slice(axis: NDArray, vmin: float, vmax: float, *, name: str) -> slice:
+            n = axis.size
+            i0 = int(np.searchsorted(axis, vmin, side="left"))
+            i1 = int(np.searchsorted(axis, vmax, side="right"))
+            if i1 <= i0 and n:
+                old = (i0, i1)
+                if i1 < n:
+                    i1 = i0 + 1  # expand right
+                elif i0 > 0:
+                    i0 = i1 - 1  # expand left
+                log.warning(
+                    f"Empty bounds crop on '{name}' while computing CustomMedium parameter gradients "
+                    f"(adjoint field grid -> medium grid): bounds=[{vmin!r}, {vmax!r}], "
+                    f"grid=[{axis[0]!r}, {axis[-1]!r}] -> indices {old}; using ({i0}, {i1}).",
+                    log_once=True,
+                )
+            return slice(i0, i1)
+
+        # usage
+        if bounds is not None:
+            (xmin, ymin, zmin), (xmax, ymax, zmax) = bounds
+
+            sx = _bounds_slice(field_coords["x"], xmin, xmax, name="x")
+            sy = _bounds_slice(field_coords["y"], ymin, ymax, name="y")
+            sz = _bounds_slice(field_coords["z"], zmin, zmax, name="z")
+
+            field_coords = {k: field_coords[k][s] for k, s in (("x", sx), ("y", sy), ("z", sz))}
+            values = values[sx, sy, sz, :]
+
+        def _axis_sizes(coords: NDArray) -> NDArray:
+            if coords.size <= 1:
+                return np.array([1.0])
+            mid_points = (coords[1:] + coords[:-1]) / 2.0
+            dists = np.diff(mid_points)
+            sizes = np.zeros(coords.size)
+            sizes[1:-1] = dists
+            sizes[0] = 2 * abs(mid_points[0] - coords[0])
+            sizes[-1] = 2 * abs(coords[-1] - mid_points[-1])
+            return sizes
+
+        size_x = _axis_sizes(field_coords["x"])
+        size_y = _axis_sizes(field_coords["y"])
+        size_z = _axis_sizes(field_coords["z"])
+        scale = (
+            size_x[:, None, None, None] * size_y[None, :, None, None] * size_z[None, None, :, None]
+        )
+        np.multiply(values, scale, out=values)
+
+        method = interp_method if interp_method is not None else self.interp_method
+
+        def _transpose_interp_axis(
+            field_values: NDArray, field_coords_1d: NDArray, param_coords_1d: NDArray
+        ) -> NDArray:
+            """
+            Transpose (adjoint) of 1D interpolation along one axis.
+
+            Parameters
+            ----------
+            field_values : np.ndarray
+                Array of values sampled on the field grid along this axis.
+                Shape: (n_field, ...rest...).
+                Notes:
+                  - The first axis corresponds to `field_coords_1d`.
+                  - The remaining axes (...rest...) are treated as batch dimensions and are
+                    carried through unchanged.
+
+            field_coords_1d : np.ndarray
+                1D coordinates of the field grid along this axis.
+                Shape: (n_field,).
+
+            param_coords_1d : np.ndarray
+                1D coordinates of the parameter grid along this axis.
+                Shape: (n_param,). Must be sorted ascending for the searchsorted-based logic.
+
+            Returns
+            -------
+            param_values : np.ndarray
+                Field contributions accumulated onto the parameter grid along this axis.
+                Shape: (n_param, ...rest...).
+
+            Implementation note
+            -------------------
+            For efficient accumulation, we flatten the trailing dimensions (...rest...) into a single
+            dimension so we can run a vectorized `np.add.at` on a 2D buffer of shape (n_param, n_rest),
+            then reshape back to (n_param, ...rest...).
+            """
+            # Single-point parameter grid: every field sample maps to the only parameter entry,
+            if param_coords_1d.size == 1:
+                return field_values.sum(axis=0, keepdims=True)
+
+            # Ensure parameter coordinates are sorted for searchsorted-based binning.
+            if np.any(param_coords_1d[1:] < param_coords_1d[:-1]):
+                raise ValueError("Spatial coordinates must be sorted before computing derivatives.")
+            param_coords_sorted = param_coords_1d
+
+            n_param = param_coords_sorted.size
+            if method not in ALLOWED_INTERP_METHODS:
+                raise ValueError(
+                    f"Unsupported interpolation method: {method!r}. "
+                    f"Choose one of: {', '.join(ALLOWED_INTERP_METHODS)}."
+                )
+
+            # Flatten trailing dimensions into a single "rest" dimension for vectorized accumulation.
+            n_field = field_values.shape[0]
+            field_values_2d = field_values.reshape(n_field, -1)
+
+            if method == "nearest":
+                # Midpoints define bin edges between adjacent parameter coordinates.
+                param_midpoints = (param_coords_sorted[1:] + param_coords_sorted[:-1]) / 2.0
+                # Map each field coordinate to a nearest parameter-bin index.
+                param_index_nearest = np.searchsorted(param_midpoints, field_coords_1d)
+
+                # Accumulate all field samples into their assigned parameter bins.
+                param_values_2d = npo.zeros(
+                    (n_param, field_values_2d.shape[1]), dtype=field_values.dtype
+                )
+                npo.add.at(param_values_2d, param_index_nearest, field_values_2d)
+
+                param_values = param_values_2d.reshape((n_param,) + field_values.shape[1:])
+                return param_values
+
+            # linear
+            # Find bracketing parameter indices for each field coordinate.
+            param_index_upper = np.searchsorted(param_coords_sorted, field_coords_1d, side="right")
+            param_index_upper = np.clip(param_index_upper, 1, n_param - 1)
+            param_index_lower = param_index_upper - 1
+
+            # Compute interpolation fraction within the bracketing segment.
+            segment_width = (
+                param_coords_sorted[param_index_upper] - param_coords_sorted[param_index_lower]
+            )
+            segment_width = np.where(segment_width == 0, 1.0, segment_width)
+            frac_upper = (field_coords_1d - param_coords_sorted[param_index_lower]) / segment_width
+            frac_upper = np.clip(frac_upper, 0.0, 1.0)
+
+            # Weights per field sample (broadcast across the flattened trailing dimensions).
+            w_lower = (1.0 - frac_upper)[:, None]
+            w_upper = frac_upper[:, None]
+
+            # Accumulate contributions into both bracketing parameter indices.
+            param_values_2d = npo.zeros(
+                (n_param, field_values_2d.shape[1]), dtype=field_values.dtype
+            )
+            npo.add.at(param_values_2d, param_index_lower, field_values_2d * w_lower)
+            npo.add.at(param_values_2d, param_index_upper, field_values_2d * w_upper)
+
+            param_values = param_values_2d.reshape((n_param,) + field_values.shape[1:])
+            return param_values
+
+        def _interp_axis(
+            arr: NDArray, axis: int, field_axis: NDArray, param_axis: NDArray
+        ) -> NDArray:
+            """Accumulate values from the field grid onto the parameter grid along one axis.
+
+            Moves ``axis`` to the front, applies ``_transpose_interp_axis`` (adjoint of 1D interpolation)
+            to map from ``field_axis`` (n_field) to ``param_axis`` (n_param), then moves the axis back.
+            """
+            moved = np.moveaxis(arr, axis, 0)
+            moved = _transpose_interp_axis(moved, field_axis, param_axis)
+            return np.moveaxis(moved, 0, axis)
+
+        values = _interp_axis(values, 0, field_coords["x"], param_coords["x"])
+        values = _interp_axis(values, 1, field_coords["y"], param_coords["y"])
+        values = _interp_axis(values, 2, field_coords["z"], param_coords["z"])
+
+        freqs_da = np.asarray(E_der_dim.coords["f"])
+        if component == "sigma":
+            values = values.imag * (-1.0 / (2.0 * np.pi * freqs_da * EPSILON_0))
+        elif component == "imag":
+            values = values.imag
+        elif component == "real":
+            values = values.real
+
+        return values.sum(axis=-1).reshape(eps_shape)
 
 
 """ Dispersionless Medium """
@@ -2398,203 +2599,6 @@ class CustomMedium(AbstractCustomMedium):
 
         return vjps
 
-    def _derivative_field_cmp_custom(
-        self,
-        E_der_map: ElectromagneticFieldDataset,
-        spatial_data: SpatialDataArray,
-        dim: str,
-        freqs: NDArray,
-        bounds: Optional[Bound] = None,
-        component: str = "real",
-        interp_method: Optional[InterpMethod] = None,
-    ) -> NDArray:
-        """Compute the derivative with respect to a material property component."""
-        param_coords = {axis: np.asarray(spatial_data.coords[axis]) for axis in "xyz"}
-        eps_shape = [len(param_coords[axis]) for axis in "xyz"]
-        dtype_out = complex if component == "complex" else float
-
-        E_der_dim = E_der_map.get(f"E{dim}")
-        if E_der_dim is None or np.all(E_der_dim.values == 0):
-            return np.zeros(eps_shape, dtype=dtype_out)
-
-        field_coords = {axis: np.asarray(E_der_dim.coords[axis]) for axis in "xyz"}
-        values = E_der_dim.values
-
-        def _bounds_slice(axis: NDArray, vmin: float, vmax: float, *, name: str) -> slice:
-            n = axis.size
-            i0 = int(np.searchsorted(axis, vmin, side="left"))
-            i1 = int(np.searchsorted(axis, vmax, side="right"))
-            if i1 <= i0 and n:
-                old = (i0, i1)
-                if i1 < n:
-                    i1 = i0 + 1  # expand right
-                elif i0 > 0:
-                    i0 = i1 - 1  # expand left
-                log.warning(
-                    f"Empty bounds crop on '{name}' while computing CustomMedium parameter gradients "
-                    f"(adjoint field grid -> medium grid): bounds=[{vmin!r}, {vmax!r}], "
-                    f"grid=[{axis[0]!r}, {axis[-1]!r}] -> indices {old}; using ({i0}, {i1}).",
-                    log_once=True,
-                )
-            return slice(i0, i1)
-
-        # usage
-        if bounds is not None:
-            (xmin, ymin, zmin), (xmax, ymax, zmax) = bounds
-
-            sx = _bounds_slice(field_coords["x"], xmin, xmax, name="x")
-            sy = _bounds_slice(field_coords["y"], ymin, ymax, name="y")
-            sz = _bounds_slice(field_coords["z"], zmin, zmax, name="z")
-
-            field_coords = {k: field_coords[k][s] for k, s in (("x", sx), ("y", sy), ("z", sz))}
-            values = values[sx, sy, sz, :]
-
-        def _axis_sizes(coords: NDArray) -> NDArray:
-            if coords.size <= 1:
-                return np.array([1.0])
-            mid_points = (coords[1:] + coords[:-1]) / 2.0
-            dists = np.diff(mid_points)
-            sizes = np.zeros(coords.size)
-            sizes[1:-1] = dists
-            sizes[0] = 2 * abs(mid_points[0] - coords[0])
-            sizes[-1] = 2 * abs(coords[-1] - mid_points[-1])
-            return sizes
-
-        size_x = _axis_sizes(field_coords["x"])
-        size_y = _axis_sizes(field_coords["y"])
-        size_z = _axis_sizes(field_coords["z"])
-        scale = (
-            size_x[:, None, None, None] * size_y[None, :, None, None] * size_z[None, None, :, None]
-        )
-        np.multiply(values, scale, out=values)
-
-        method = interp_method if interp_method is not None else self.interp_method
-
-        def _transpose_interp_axis(
-            field_values: NDArray, field_coords_1d: NDArray, param_coords_1d: NDArray
-        ) -> NDArray:
-            """
-            Transpose (adjoint) of 1D interpolation along one axis.
-
-            Parameters
-            ----------
-            field_values : np.ndarray
-                Array of values sampled on the field grid along this axis.
-                Shape: (n_field, ...rest...).
-                Notes:
-                  - The first axis corresponds to `field_coords_1d`.
-                  - The remaining axes (...rest...) are treated as batch dimensions and are
-                    carried through unchanged.
-
-            field_coords_1d : np.ndarray
-                1D coordinates of the field grid along this axis.
-                Shape: (n_field,).
-
-            param_coords_1d : np.ndarray
-                1D coordinates of the parameter grid along this axis.
-                Shape: (n_param,). Must be sorted ascending for the searchsorted-based logic.
-
-            Returns
-            -------
-            param_values : np.ndarray
-                Field contributions accumulated onto the parameter grid along this axis.
-                Shape: (n_param, ...rest...).
-
-            Implementation note
-            -------------------
-            For efficient accumulation, we flatten the trailing dimensions (...rest...) into a single
-            dimension so we can run a vectorized `np.add.at` on a 2D buffer of shape (n_param, n_rest),
-            then reshape back to (n_param, ...rest...).
-            """
-            # Single-point parameter grid: every field sample maps to the only parameter entry,
-            if param_coords_1d.size == 1:
-                return field_values.sum(axis=0, keepdims=True)
-
-            # Ensure parameter coordinates are sorted for searchsorted-based binning.
-            if np.any(param_coords_1d[1:] < param_coords_1d[:-1]):
-                raise ValueError("Spatial coordinates must be sorted before computing derivatives.")
-            param_coords_sorted = param_coords_1d
-
-            n_param = param_coords_sorted.size
-            if method not in ALLOWED_INTERP_METHODS:
-                raise ValueError(
-                    f"Unsupported interpolation method: {method!r}. "
-                    f"Choose one of: {', '.join(ALLOWED_INTERP_METHODS)}."
-                )
-
-            # Flatten trailing dimensions into a single "rest" dimension for vectorized accumulation.
-            n_field = field_values.shape[0]
-            field_values_2d = field_values.reshape(n_field, -1)
-
-            if method == "nearest":
-                # Midpoints define bin edges between adjacent parameter coordinates.
-                param_midpoints = (param_coords_sorted[1:] + param_coords_sorted[:-1]) / 2.0
-                # Map each field coordinate to a nearest parameter-bin index.
-                param_index_nearest = np.searchsorted(param_midpoints, field_coords_1d)
-
-                # Accumulate all field samples into their assigned parameter bins.
-                param_values_2d = npo.zeros(
-                    (n_param, field_values_2d.shape[1]), dtype=field_values.dtype
-                )
-                npo.add.at(param_values_2d, param_index_nearest, field_values_2d)
-
-                param_values = param_values_2d.reshape((n_param,) + field_values.shape[1:])
-                return param_values
-
-            # linear
-            # Find bracketing parameter indices for each field coordinate.
-            param_index_upper = np.searchsorted(param_coords_sorted, field_coords_1d, side="right")
-            param_index_upper = np.clip(param_index_upper, 1, n_param - 1)
-            param_index_lower = param_index_upper - 1
-
-            # Compute interpolation fraction within the bracketing segment.
-            segment_width = (
-                param_coords_sorted[param_index_upper] - param_coords_sorted[param_index_lower]
-            )
-            segment_width = np.where(segment_width == 0, 1.0, segment_width)
-            frac_upper = (field_coords_1d - param_coords_sorted[param_index_lower]) / segment_width
-            frac_upper = np.clip(frac_upper, 0.0, 1.0)
-
-            # Weights per field sample (broadcast across the flattened trailing dimensions).
-            w_lower = (1.0 - frac_upper)[:, None]
-            w_upper = frac_upper[:, None]
-
-            # Accumulate contributions into both bracketing parameter indices.
-            param_values_2d = npo.zeros(
-                (n_param, field_values_2d.shape[1]), dtype=field_values.dtype
-            )
-            npo.add.at(param_values_2d, param_index_lower, field_values_2d * w_lower)
-            npo.add.at(param_values_2d, param_index_upper, field_values_2d * w_upper)
-
-            param_values = param_values_2d.reshape((n_param,) + field_values.shape[1:])
-            return param_values
-
-        def _interp_axis(
-            arr: NDArray, axis: int, field_axis: NDArray, param_axis: NDArray
-        ) -> NDArray:
-            """Accumulate values from the field grid onto the parameter grid along one axis.
-
-            Moves ``axis`` to the front, applies ``_transpose_interp_axis`` (adjoint of 1D interpolation)
-            to map from ``field_axis`` (n_field) to ``param_axis`` (n_param), then moves the axis back.
-            """
-            moved = np.moveaxis(arr, axis, 0)
-            moved = _transpose_interp_axis(moved, field_axis, param_axis)
-            return np.moveaxis(moved, 0, axis)
-
-        values = _interp_axis(values, 0, field_coords["x"], param_coords["x"])
-        values = _interp_axis(values, 1, field_coords["y"], param_coords["y"])
-        values = _interp_axis(values, 2, field_coords["z"], param_coords["z"])
-
-        freqs_da = np.asarray(E_der_dim.coords["f"])
-        if component == "sigma":
-            values = values.imag * (-1.0 / (2.0 * np.pi * freqs_da * EPSILON_0))
-        elif component == "imag":
-            values = values.imag
-        elif component == "real":
-            values = values.real
-
-        return values.sum(axis=-1).reshape(eps_shape)
-
 
 """ Dispersive Media """
 
@@ -3552,6 +3556,27 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                     return False
         return True
 
+    @staticmethod
+    def _sorted_spatial_data(data: CustomSpatialDataTypeAnnotated):
+        """Return spatial data sorted along its coordinates if applicable."""
+        if isinstance(data, SpatialDataArray):
+            return data._spatially_sorted
+        return data
+
+    @cached_property
+    def _eps_inf_sorted(self) -> CustomSpatialDataTypeAnnotated:
+        """Cached sorted copy of eps_inf when structured data is provided."""
+        return self._sorted_spatial_data(self.eps_inf)
+
+    @cached_property
+    def _poles_sorted(
+        self,
+    ) -> tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...]:
+        """Cached sorted copies of pole coefficients when structured data is provided."""
+        return tuple(
+            (self._sorted_spatial_data(a), self._sorted_spatial_data(c)) for a, c in self.poles
+        )
+
     def eps_dataarray_freq(
         self, frequency: float
     ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
@@ -3707,20 +3732,30 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint derivatives by preparing array data and calling the static helper."""
 
-        # accumulate complex-valued derivatives across xyz; start as complex to avoid casting issues
+        eps_inf_sorted = self._eps_inf_sorted
+        use_custom_derivative = isinstance(eps_inf_sorted, SpatialDataArray)
+
         dJ_deps_complex = 0.0 + 0.0j
         for dim in "xyz":
-            dJ_deps_complex += self._derivative_field_cmp(
-                E_der_map=derivative_info.E_der_map,
-                spatial_data=self.eps_inf,
-                dim=dim,
-                freqs=derivative_info.frequencies,
-                component="complex",
-            )
+            if use_custom_derivative:
+                dJ_deps_complex += self._derivative_field_cmp_custom(
+                    E_der_map=derivative_info.E_der_map,
+                    spatial_data=eps_inf_sorted,
+                    dim=dim,
+                    freqs=derivative_info.frequencies,
+                    bounds=derivative_info.bounds_intersect,
+                    component="complex",
+                )
+            else:
+                dJ_deps_complex += self._derivative_field_cmp(
+                    E_der_map=derivative_info.E_der_map,
+                    spatial_data=eps_inf_sorted,
+                    dim=dim,
+                )
 
         poles_vals = [
-            (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex))
-            for a, c in self.poles
+            (np.array(a_sorted.values, dtype=complex), np.array(c_sorted.values, dtype=complex))
+            for a_sorted, c_sorted in self._poles_sorted
         ]
 
         vjps_total = {}

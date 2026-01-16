@@ -34,7 +34,7 @@ from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd import autograd as autograd_module
 
-from ...utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
+from ...utils import SIM_FULL, AssertLogLevel, custom_poleresidue_u, run_emulated, tracer_arr
 
 """ Test configuration """
 
@@ -1998,8 +1998,15 @@ def test_custom_pole_residue(monkeypatch):
 
     monkeypatch.setattr(
         td.CustomPoleResidue,
-        "_derivative_field_cmp",
-        lambda self, E_der_map, spatial_data, dim, freqs, component="real": dJ_deps / 3.0,
+        "_derivative_field_cmp_custom",
+        lambda self,
+        E_der_map,
+        spatial_data,
+        dim,
+        freqs,
+        bounds=None,
+        component="real",
+        interp_method=None: dJ_deps / 3.0,
     )
 
     import importlib
@@ -2058,6 +2065,38 @@ def test_custom_pole_residue(monkeypatch):
         for j in range(2):
             field_path = ("poles", i, j)
             assert np.allclose(grads_computed[field_path], np.conj(grad_poles[i][j]))
+
+
+def test_custom_pole_residue_unstructured_derivatives():
+    """Ensure unstructured pole residue adjoints are explicitly unsupported."""
+    pr = custom_poleresidue_u
+    field_paths = [("eps_inf",), ("poles", 0, 0), ("poles", 0, 1)]
+
+    info = DerivativeInfo(
+        paths=field_paths,
+        E_der_map={},
+        D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
+        eps_data={},
+        eps_in=2.0,
+        eps_out=1.0,
+        frequencies=[3e8],
+        bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_no_structure=td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        ),
+        eps_inf_structure=td.ScalarFieldDataArray(
+            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        ),
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+    )
+
+    with pytest.raises(NotImplementedError, match="unstructured"):
+        pr._compute_derivatives(derivative_info=info)
 
 
 def test_custom_sellmeier(monkeypatch):
