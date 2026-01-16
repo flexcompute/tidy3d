@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Literal, Optional, Union
+from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import pydantic.v1 as pd
 
@@ -15,6 +15,9 @@ from tidy3d.components.monitor import (
     PermittivityMonitor,
 )
 from tidy3d.components.types import FreqArray
+
+if TYPE_CHECKING:
+    from .sweep import EMESweepSpecType
 
 BYTES_COMPLEX = 8
 
@@ -79,9 +82,10 @@ class EMEMonitor(AbstractMonitor, ABC):
         num_cells: int,
         num_transverse_cells: int,
         num_eme_cells: int,
+        num_virtual_eme_cells: int,
         num_freqs: int,
         num_modes: int,
-        num_sweep: int,
+        sweep_spec: Optional[EMESweepSpecType],
     ) -> int:
         """Size of monitor storage given the number of points after discretization.
 
@@ -94,16 +98,26 @@ class EMEMonitor(AbstractMonitor, ABC):
             after discretization by a :class:`.Simulation`.
         num_eme_cells: int
             Number of EME cells intersecting the monitor.
+        num_virtual_eme_cells: int
+            Number of virtual EME cells intersecting the monitor (includes repetitions).
         num_freqs: int
             Number of frequencies in the monitor.
         num_modes: int
             Number of modes in the monitor.
+        sweep_spec: Optional[EMESweepSpecType]
+            The sweep specification used in the simulation.
 
         Returns
         -------
         int
             Number of bytes to be stored in monitor.
         """
+
+    def _effective_num_sweep(self, num_sweep: int) -> int:
+        """Apply monitor sweep limiting if specified."""
+        if self.num_sweep is None:
+            return num_sweep
+        return min(num_sweep, self.num_sweep)
 
 
 class EMEModeSolverMonitor(EMEMonitor):
@@ -172,11 +186,15 @@ class EMEModeSolverMonitor(EMEMonitor):
         num_cells: int,
         num_transverse_cells: int,
         num_eme_cells: int,
+        num_virtual_eme_cells: int,
         num_freqs: int,
         num_modes: int,
-        num_sweep: int,
+        sweep_spec: Optional[EMESweepSpecType],
     ) -> int:
         """Size of monitor storage given the number of points after discretization."""
+        # EMEModeSolverMonitor only varies with sweep for EMEFreqSweep (sweep_modes)
+        num_sweep = sweep_spec.num_sweep if sweep_spec and sweep_spec.sweep_modes else 1
+        num_sweep = self._effective_num_sweep(num_sweep)
         bytes_single = (
             6
             * BYTES_COMPLEX
@@ -242,11 +260,15 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
         num_cells: int,
         num_transverse_cells: int,
         num_eme_cells: int,
+        num_virtual_eme_cells: int,
         num_freqs: int,
         num_modes: int,
-        num_sweep: int,
+        sweep_spec: Optional[EMESweepSpecType],
     ) -> int:
         """Size of monitor storage given the number of points after discretization."""
+        # EMEFieldMonitor uses full sweep count
+        num_sweep = sweep_spec.num_sweep if sweep_spec else 1
+        num_sweep = self._effective_num_sweep(num_sweep)
         bytes_single = 6 * BYTES_COMPLEX * num_cells * num_freqs * num_modes * 2 * num_sweep
         return bytes_single
 
@@ -263,9 +285,22 @@ class EMECoefficientMonitor(EMEMonitor):
     ...     size=(2,2,2),
     ...     freqs=[300e12],
     ...     num_modes=2,
+    ...     fields=['A', 'B'],
     ...     name="eme_coeffs"
     ... )
     """
+
+    fields: tuple[
+        Literal["A", "B", "n_complex", "flux", "interface_smatrices", "overlaps"], ...
+    ] = pd.Field(
+        ("A", "B"),
+        title="Coefficient Fields",
+        description="Collection of coefficient fields to store in the monitor. "
+        "Available fields: 'A' (forward mode coefficients), 'B' (backward mode coefficients), "
+        "'n_complex' (propagation indices), 'flux' (power flux), "
+        "'interface_smatrices' (S matrices at cell interfaces), "
+        "'overlaps' (mode overlaps).",
+    )
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
         (1, 1, 1),
@@ -291,15 +326,85 @@ class EMECoefficientMonitor(EMEMonitor):
         num_cells: int,
         num_transverse_cells: int,
         num_eme_cells: int,
+        num_virtual_eme_cells: int,
         num_freqs: int,
         num_modes: int,
-        num_sweep: int,
+        sweep_spec: Optional[EMESweepSpecType],
     ) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        bytes_single = (
-            4 * BYTES_COMPLEX * num_freqs * num_modes * num_modes * num_eme_cells * num_sweep
+        bytes_total = 0
+        num_interfaces = num_eme_cells - 1
+
+        # Compute per-field sweep counts based on sweep_spec properties
+        # A and B: use full sweep count
+        num_sweep_full = sweep_spec.num_sweep if sweep_spec else 1
+        num_sweep_full = self._effective_num_sweep(num_sweep_full)
+        # n_complex, flux, overlaps: only vary with EMEFreqSweep (sweep_modes)
+        num_sweep_modes = sweep_spec.num_sweep if sweep_spec and sweep_spec.sweep_modes else 1
+        num_sweep_modes = self._effective_num_sweep(num_sweep_modes)
+        # interface_smatrices: only vary with EMEFreqSweep or EMEModeSweep (sweep_interfaces)
+        num_sweep_interfaces = (
+            sweep_spec.num_sweep if sweep_spec and sweep_spec.sweep_interfaces else 1
         )
-        return bytes_single
+        num_sweep_interfaces = self._effective_num_sweep(num_sweep_interfaces)
+
+        # A and B: each is (f, sweep, 2 ports, virtual_cells, modes_out, modes_in)
+        # Each field has 2 ports, so: 2 ports * virtual_cells * modes * modes
+        if "A" in self.fields:
+            bytes_total += (
+                2
+                * BYTES_COMPLEX
+                * num_freqs
+                * num_sweep_full
+                * num_virtual_eme_cells
+                * num_modes
+                * num_modes
+            )
+        if "B" in self.fields:
+            bytes_total += (
+                2
+                * BYTES_COMPLEX
+                * num_freqs
+                * num_sweep_full
+                * num_virtual_eme_cells
+                * num_modes
+                * num_modes
+            )
+
+        # n_complex and flux: (f, sweep, cells, modes)
+        if "n_complex" in self.fields:
+            bytes_total += BYTES_COMPLEX * num_freqs * num_sweep_modes * num_eme_cells * num_modes
+        if "flux" in self.fields:
+            bytes_total += BYTES_COMPLEX * num_freqs * num_sweep_modes * num_eme_cells * num_modes
+
+        # interface_smatrices: 4 S matrices (S11, S12, S21, S22), each (f, sweep, cells-1, modes, modes)
+        if "interface_smatrices" in self.fields:
+            bytes_total += (
+                4
+                * BYTES_COMPLEX
+                * num_freqs
+                * num_sweep_interfaces
+                * num_interfaces
+                * num_modes
+                * num_modes
+            )
+
+        # overlaps: O11 (f, sweep, cells, modes, modes) + O12, O21 (f, sweep, cells-1, modes, modes)
+        if "overlaps" in self.fields:
+            bytes_total += (
+                BYTES_COMPLEX * num_freqs * num_sweep_modes * num_eme_cells * num_modes * num_modes
+            )  # O11
+            bytes_total += (
+                2
+                * BYTES_COMPLEX
+                * num_freqs
+                * num_sweep_modes
+                * num_interfaces
+                * num_modes
+                * num_modes
+            )  # O12, O21
+
+        return bytes_total
 
 
 EMEMonitorType = Union[

@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added `warn_once` option to logging configuration (`td.config.logging.warn_once`) that causes each unique warning message to be shown only once per process, reducing noise from repeated validation warnings.
+- `EMECoefficientMonitor` now supports all of the same fields as `EMESimulationData.coeffs`, with the benefit of downsampling. The fields can be selected via the `EMECoefficientMonitor.fields` property.
 
 ### Changed
 - Unified inside/outside permittivity handling for all geometries when computing shape gradients.
