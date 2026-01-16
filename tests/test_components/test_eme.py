@@ -278,9 +278,531 @@ def test_eme_monitor():
         colocate=False,
         name="eme_field",
     )
-    _ = td.EMECoefficientMonitor(
+    # test default fields
+    monitor_default = td.EMECoefficientMonitor(
         center=(1, 2, 3), size=(2, 2, 2), freqs=[300e12], num_modes=2, name="eme_coeffs"
     )
+    assert monitor_default.fields == (
+        "A",
+        "B",
+    )
+
+    # test custom fields subset
+    monitor_subset = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        fields=["A", "B", "overlaps"],
+        name="eme_coeffs_subset",
+    )
+    assert monitor_subset.fields == ("A", "B", "overlaps")
+
+    # test storage_size varies with fields
+    num_cells, num_transverse, num_eme_cells, num_virtual_eme_cells = 100, 50, 5, 5
+    num_freqs, num_modes = 2, 3
+    size_default = monitor_default.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_subset = monitor_subset.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    assert size_subset > size_default
+    assert size_subset > 0
+
+    # test empty fields gives zero storage
+    monitor_empty = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        fields=[],
+        name="eme_coeffs_empty",
+    )
+    size_empty = monitor_empty.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    assert size_empty == 0
+
+
+def test_eme_monitor_storage_size_with_sweep_spec():
+    """Test that storage_size correctly handles different sweep_spec types."""
+    import numpy as np
+
+    num_cells, num_transverse, num_eme_cells, num_virtual_eme_cells = 100, 50, 5, 5
+    num_freqs, num_modes = 2, 3
+    num_sweep = 10
+
+    # Create sweep specs
+    length_sweep = td.EMELengthSweep(scale_factors=np.linspace(0.5, 1.5, num_sweep))
+    mode_sweep = td.EMEModeSweep(num_modes=np.arange(1, num_sweep + 1))
+    freq_sweep = td.EMEFreqSweep(freq_scale_factors=np.linspace(0.9, 1.1, num_sweep))
+
+    # Verify sweep_spec properties
+    assert length_sweep.sweep_modes is False
+    assert length_sweep.sweep_interfaces is False
+    assert length_sweep.sweep_cells is True
+
+    assert mode_sweep.sweep_modes is False
+    assert mode_sweep.sweep_interfaces is True
+    assert mode_sweep.sweep_cells is True
+
+    assert freq_sweep.sweep_modes is True
+    assert freq_sweep.sweep_interfaces is True
+    assert freq_sweep.sweep_cells is True
+
+    # Monitor with only A and B fields (uses full sweep)
+    monitor_ab = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        fields=["A", "B"],
+        name="eme_coeffs_ab",
+    )
+
+    # Monitor with only n_complex and flux (uses sweep_modes)
+    monitor_nf = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        fields=["n_complex", "flux"],
+        name="eme_coeffs_nf",
+    )
+
+    # Monitor with only interface_smatrices (uses sweep_interfaces)
+    monitor_is = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        fields=["interface_smatrices"],
+        name="eme_coeffs_is",
+    )
+
+    # Monitor with overlaps (uses sweep_modes)
+    monitor_ov = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        fields=["overlaps"],
+        name="eme_coeffs_ov",
+    )
+    monitor_ab_limited = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=3,
+        fields=["A", "B"],
+        name="eme_coeffs_ab_limited",
+    )
+
+    # Get storage sizes with no sweep (baseline)
+    size_ab_none = monitor_ab.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_nf_none = monitor_nf.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_is_none = monitor_is.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_ov_none = monitor_ov.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+
+    # Test EMELengthSweep: only A, B should scale with sweep
+    size_ab_length = monitor_ab.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+    size_nf_length = monitor_nf.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+    size_is_length = monitor_is.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+    size_ov_length = monitor_ov.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+
+    # A, B should scale by num_sweep
+    assert size_ab_length == size_ab_none * num_sweep
+    # n_complex, flux should NOT scale (sweep_modes=False)
+    assert size_nf_length == size_nf_none
+    # interface_smatrices should NOT scale (sweep_interfaces=False)
+    assert size_is_length == size_is_none
+    # overlaps should NOT scale (sweep_modes=False)
+    assert size_ov_length == size_ov_none
+
+    # Test EMEModeSweep: A, B, interface_smatrices should scale
+    size_ab_mode = monitor_ab.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    size_nf_mode = monitor_nf.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    size_is_mode = monitor_is.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    size_ov_mode = monitor_ov.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+
+    # A, B should scale by num_sweep
+    assert size_ab_mode == size_ab_none * num_sweep
+    # n_complex, flux should NOT scale (sweep_modes=False)
+    assert size_nf_mode == size_nf_none
+    # interface_smatrices SHOULD scale (sweep_interfaces=True)
+    assert size_is_mode == size_is_none * num_sweep
+    # overlaps should NOT scale (sweep_modes=False)
+    assert size_ov_mode == size_ov_none
+    # monitor.num_sweep limits scaling
+    size_ab_mode_limited = monitor_ab_limited.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    assert size_ab_mode_limited == size_ab_none * 3
+
+    # Test EMEFreqSweep: everything should scale
+    size_ab_freq = monitor_ab.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+    size_nf_freq = monitor_nf.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+    size_is_freq = monitor_is.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+    size_ov_freq = monitor_ov.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+
+    # All fields should scale by num_sweep
+    assert size_ab_freq == size_ab_none * num_sweep
+    assert size_nf_freq == size_nf_none * num_sweep
+    assert size_is_freq == size_is_none * num_sweep
+    assert size_ov_freq == size_ov_none * num_sweep
+
+    # Test EMEModeSolverMonitor with sweep_spec
+    mode_solver_monitor = td.EMEModeSolverMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        name="eme_mode_solver",
+    )
+    mode_solver_monitor_limited = td.EMEModeSolverMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=4,
+        name="eme_mode_solver_limited",
+    )
+
+    size_ms_none = mode_solver_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_ms_length = mode_solver_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+    size_ms_mode = mode_solver_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    size_ms_freq = mode_solver_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+
+    # EMEModeSolverMonitor only scales with sweep_modes (EMEFreqSweep)
+    assert size_ms_length == size_ms_none
+    assert size_ms_mode == size_ms_none
+    assert size_ms_freq == size_ms_none * num_sweep
+    size_ms_freq_limited = mode_solver_monitor_limited.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+    assert size_ms_freq_limited == size_ms_none * 4
+
+    # Test EMEFieldMonitor with sweep_spec (uses full sweep)
+    field_monitor = td.EMEFieldMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 0),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        name="eme_field",
+    )
+    field_monitor_limited = td.EMEFieldMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 0),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=2,
+        name="eme_field_limited",
+    )
+
+    size_fm_none = field_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_fm_length = field_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+    size_fm_mode = field_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    size_fm_freq = field_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+
+    # EMEFieldMonitor uses full sweep for all sweep types
+    assert size_fm_length == size_fm_none * num_sweep
+    assert size_fm_mode == size_fm_none * num_sweep
+    assert size_fm_freq == size_fm_none * num_sweep
+    size_fm_freq_limited = field_monitor_limited.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+    assert size_fm_freq_limited == size_fm_none * 2
+
+    # Test EMEPeriodicitySweep: all sweep properties are False, so only A, B scale
+    periodicity_sweep = td.EMEPeriodicitySweep(
+        num_reps=[{"unit_cell": i} for i in range(1, num_sweep + 1)]
+    )
+
+    assert periodicity_sweep.sweep_modes is False
+    assert periodicity_sweep.sweep_interfaces is False
+    assert periodicity_sweep.sweep_cells is False
+
+    size_ab_period = monitor_ab.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=periodicity_sweep,
+    )
+    size_nf_period = monitor_nf.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=periodicity_sweep,
+    )
+    size_is_period = monitor_is.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=periodicity_sweep,
+    )
+    size_ov_period = monitor_ov.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=periodicity_sweep,
+    )
+
+    # A, B should scale by num_sweep (full sweep)
+    assert size_ab_period == size_ab_none * num_sweep
+    # n_complex, flux should NOT scale
+    assert size_nf_period == size_nf_none
+    # interface_smatrices should NOT scale
+    assert size_is_period == size_is_none
+    # overlaps should NOT scale
+    assert size_ov_period == size_ov_none
 
 
 def test_eme_simulation():
@@ -474,6 +996,17 @@ def test_eme_simulation():
     )
     with AssertLogLevel("WARNING", contains_str="store_coeffs"):
         sim_bad.updated_copy(store_coeffs=True).validate_pre_upload()
+    # port_modes warning
+    sim_bad = sim.updated_copy(
+        size=(10, 10, 10),
+        monitors=[],
+        store_coeffs=False,
+        freqs=list(1e14 * np.linspace(1, 2, 100)),
+        eme_grid_spec=td.EMEUniformGrid(mode_spec=td.EMEModeSpec(num_modes=100), num_cells=100),
+        grid_spec=sim.grid_spec.updated_copy(wavelength=1),
+    )
+    with AssertLogLevel("WARNING", contains_str="store_port_modes"):
+        sim_bad.updated_copy(store_port_modes=True).validate_pre_upload()
     sim_bad = sim.updated_copy(
         size=(10, 10, 10),
         monitors=[large_monitor],
@@ -591,6 +1124,17 @@ def test_eme_simulation():
         sim_bad.validate_pre_upload()
 
     _ = sim.port_modes_monitor
+
+    # test coeffs_full_monitor
+    coeffs_monitor = sim.coeffs_full_monitor
+    assert isinstance(coeffs_monitor, td.EMECoefficientMonitor)
+    assert coeffs_monitor.name == "_eme_coeffs_full_monitor"
+    # coeffs monitor is included in _monitors_full when store_coeffs=True
+    sim_with_coeffs = sim.updated_copy(store_coeffs=True, monitors=[])
+    assert any(m.name == "_eme_coeffs_full_monitor" for m in sim_with_coeffs._monitors_full)
+    # coeffs monitor is not included when store_coeffs=False
+    sim_no_coeffs = sim.updated_copy(store_coeffs=False, monitors=[])
+    assert not any(m.name == "_eme_coeffs_full_monitor" for m in sim_no_coeffs._monitors_full)
 
     # test freq sweep
     sim = sim.updated_copy(sweep_spec=None)

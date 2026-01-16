@@ -18,7 +18,7 @@ from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 from .dataset import EMECoefficientDataset, EMESMatrixDataset
-from .monitor_data import EMEFieldData, EMEModeSolverData, EMEMonitorDataType
+from .monitor_data import EMECoefficientData, EMEFieldData, EMEModeSolverData, EMEMonitorDataType
 
 
 class EMESimulationData(AbstractYeeGridSimulationData):
@@ -39,7 +39,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         None, title="S Matrix", description="Scattering matrix of the EME simulation."
     )
 
-    coeffs: Optional[EMECoefficientDataset] = pd.Field(
+    coeffs: Optional[Union[EMECoefficientData, EMECoefficientDataset]] = pd.Field(
         None,
         title="Coefficients",
         description="Coefficients from the EME simulation. Useful for debugging and optimization.",

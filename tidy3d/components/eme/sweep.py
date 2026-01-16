@@ -22,6 +22,21 @@ class EMESweepSpec(Tidy3dBaseModel, ABC):
     def num_sweep(self) -> pd.PositiveInt:
         """Number of sweep indices."""
 
+    @property
+    def sweep_modes(self) -> bool:
+        """Whether the sweep changes the modes."""
+        return False
+
+    @property
+    def sweep_interfaces(self) -> bool:
+        """Whether the sweep changes the cell interface scattering matrices."""
+        return False
+
+    @property
+    def sweep_cells(self) -> bool:
+        """Whether the sweep changes the propagation within a cell."""
+        return False
+
 
 class EMELengthSweep(EMESweepSpec):
     """Spec for sweeping EME cell lengths."""
@@ -40,6 +55,11 @@ class EMELengthSweep(EMESweepSpec):
     def num_sweep(self) -> pd.PositiveInt:
         """Number of sweep indices."""
         return len(self.scale_factors)
+
+    @property
+    def sweep_cells(self) -> bool:
+        """Whether the sweep changes the propagation within a cell."""
+        return True
 
 
 class EMEModeSweep(EMESweepSpec):
@@ -60,6 +80,16 @@ class EMEModeSweep(EMESweepSpec):
     def num_sweep(self) -> pd.PositiveInt:
         """Number of sweep indices."""
         return len(self.num_modes)
+
+    @property
+    def sweep_interfaces(self) -> bool:
+        """Whether the sweep changes the cell interface scattering matrices."""
+        return True
+
+    @property
+    def sweep_cells(self) -> bool:
+        """Whether the sweep changes the propagation within a cell."""
+        return True
 
 
 class EMEFreqSweep(EMESweepSpec):
@@ -82,6 +112,21 @@ class EMEFreqSweep(EMESweepSpec):
     def num_sweep(self) -> pd.PositiveInt:
         """Number of sweep indices."""
         return len(self.freq_scale_factors)
+
+    @property
+    def sweep_modes(self) -> bool:
+        """Whether the sweep changes the modes."""
+        return True
+
+    @property
+    def sweep_interfaces(self) -> bool:
+        """Whether the sweep changes the cell interface scattering matrices."""
+        return True
+
+    @property
+    def sweep_cells(self) -> bool:
+        """Whether the sweep changes the propagation within a cell."""
+        return True
 
 
 class EMEPeriodicitySweep(EMESweepSpec):

@@ -4666,6 +4666,24 @@
           "exclusiveMinimum": 0,
           "type": "integer"
         },
+        "fields": {
+          "default": [
+            "A",
+            "B"
+          ],
+          "items": {
+            "enum": [
+              "A",
+              "B",
+              "flux",
+              "interface_smatrices",
+              "n_complex",
+              "overlaps"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
         "freqs": {
           "anyOf": [
             {

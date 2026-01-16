@@ -49,6 +49,7 @@ MAX_SIMULATION_DATA_SIZE_GB = 50
 WARN_MODE_NUM_CELLS = 1e5
 MAX_MODE_NUM_CELLS = 5e6
 WARN_COEFF_DATA_SIZE_GB = 0.5
+WARN_PORT_MODES_DATA_SIZE_GB = 0.5
 
 
 # eme specific simulation parameters
@@ -589,6 +590,18 @@ class EMESimulation(AbstractYeeGridSimulation):
             normalize=self.normalize,
         )
 
+    @property
+    def coeffs_full_monitor(self) -> EMECoefficientMonitor:
+        """EME coefficient monitor for storing all coefficients without downsampling."""
+        size = [inf, inf, inf]
+        return EMECoefficientMonitor(
+            center=self.center,
+            size=size,
+            name="_eme_coeffs_full_monitor",
+            num_sweep=None,
+            fields=("A", "B", "n_complex", "flux", "interface_smatrices", "overlaps"),
+        )
+
     def _post_init_validators(self) -> None:
         """Call validators taking `self` that get run after init."""
         self._validate_port_offsets()
@@ -856,6 +869,33 @@ class EMESimulation(AbstractYeeGridSimulation):
             datas = self.monitors_data_size
             for monitor_ind, (monitor_name, monitor_size) in enumerate(datas.items()):
                 monitor_size_gb = monitor_size / 1e9
+
+                # specific warning for store_coeffs
+                if monitor_name == self.coeffs_full_monitor.name:
+                    if monitor_size_gb > WARN_COEFF_DATA_SIZE_GB:
+                        consolidated_logger.warning(
+                            f"Simulation 'coeffs' have estimated storage size "
+                            f"{monitor_size_gb:1.2f}GB. "
+                            "Consider setting 'store_coeffs=False' "
+                            "or reducing the number of frequencies, modes, "
+                            "EME cells, or sweep indices.",
+                        )
+                    total_size_gb += monitor_size_gb
+                    continue
+
+                # specific warning for store_port_modes
+                if monitor_name == self.port_modes_monitor.name:
+                    if monitor_size_gb > WARN_PORT_MODES_DATA_SIZE_GB:
+                        consolidated_logger.warning(
+                            f"Simulation 'port_modes' have estimated storage size "
+                            f"{monitor_size_gb:1.2f}GB. "
+                            "Consider setting 'store_port_modes=False' "
+                            "or reducing the number of frequencies, modes, or sweep indices.",
+                        )
+                    total_size_gb += monitor_size_gb
+                    continue
+
+                # general warning for user monitors
                 if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
                     consolidated_logger.warning(
                         f"Monitor '{monitor_name}' estimated storage is {monitor_size_gb:1.2f}GB. "
@@ -865,64 +905,6 @@ class EMESimulation(AbstractYeeGridSimulation):
                     )
 
                 total_size_gb += monitor_size_gb
-
-        # coefficients
-        if self.store_coeffs:
-            coeffs_size_b = 0
-            bytes_complex = 8
-            num_freqs = len(self.freqs)
-            num_modes = self.max_num_modes
-            num_eme_cells = self.eme_grid.num_cells
-            num_sweep = self._num_sweep
-            # A and B coefficients
-            coeffs_size_b += (
-                4 * bytes_complex * num_freqs * num_modes * num_modes * num_eme_cells * num_sweep
-            )
-            # interface smatrices
-            coeffs_size_b += (
-                4
-                * bytes_complex
-                * num_freqs
-                * num_modes
-                * num_modes
-                * (num_eme_cells - 1)
-                * self._num_sweep_interfaces
-            )
-            # n_complex and flux
-            coeffs_size_b += (
-                2 * bytes_complex * num_freqs * num_modes * num_eme_cells * self._num_sweep_modes
-            )
-            # overlaps
-            coeffs_size_b += (
-                2
-                * bytes_complex
-                * num_freqs
-                * num_modes
-                * num_modes
-                * (num_eme_cells - 1)
-                * self._num_sweep_modes
-            )
-            # self-overlaps
-            coeffs_size_b += (
-                bytes_complex
-                * num_freqs
-                * num_modes
-                * num_modes
-                * num_eme_cells
-                * self._num_sweep_modes
-            )
-
-            coeffs_size_gb = coeffs_size_b / 1e9
-            if coeffs_size_gb > WARN_COEFF_DATA_SIZE_GB:
-                log.warning(
-                    "Simulation 'coeffs' have estimated storage size "
-                    f"{coeffs_size_gb:1.2f}GB. "
-                    "Consider setting 'store_coeffs=False' "
-                    "or reducing the number of frequencies, modes, "
-                    "EME cells, or sweep indices."
-                )
-
-            total_size_gb += coeffs_size_gb
 
         if total_size_gb > MAX_SIMULATION_DATA_SIZE_GB:
             raise SetupError(
@@ -980,9 +962,12 @@ class EMESimulation(AbstractYeeGridSimulation):
     @property
     def _monitors_full(self) -> tuple[EMEMonitorType, ...]:
         """All monitors, including port modes monitor."""
+        monitors = list(self.monitors)
+        if self.store_coeffs:
+            monitors.append(self.coeffs_full_monitor)
         if self.store_port_modes:
-            return [*list(self.monitors), self.port_modes_monitor]
-        return list(self.monitors)
+            monitors.append(self.port_modes_monitor)
+        return monitors
 
     @cached_property
     def monitors_data_size(self) -> dict[str, float]:
@@ -993,17 +978,18 @@ class EMESimulation(AbstractYeeGridSimulation):
             if isinstance(monitor, EMEMonitor):
                 num_transverse_cells = self._monitor_num_transverse_cells(monitor)
                 num_eme_cells = self._monitor_num_eme_cells(monitor)
+                num_virtual_eme_cells = self._monitor_num_virtual_eme_cells(monitor)
                 num_freqs = self._monitor_num_freqs(monitor)
                 num_modes = self._monitor_num_modes(monitor)
-                num_sweep = self._monitor_num_sweep(monitor)
                 storage_size = float(
                     monitor.storage_size(
                         num_cells=num_cells,
                         num_transverse_cells=num_transverse_cells,
                         num_eme_cells=num_eme_cells,
+                        num_virtual_eme_cells=num_virtual_eme_cells,
                         num_freqs=num_freqs,
                         num_modes=num_modes,
-                        num_sweep=num_sweep,
+                        sweep_spec=self.sweep_spec,
                     )
                 )
             else:
@@ -1033,7 +1019,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     @property
     def _sweep_modes(self) -> bool:
         """Whether the sweep changes the modes."""
-        return self.sweep_spec is not None and isinstance(self.sweep_spec, EMEFreqSweep)
+        return self.sweep_spec is not None and self.sweep_spec.sweep_modes
 
     @property
     def _num_sweep_modes(self) -> pd.PositiveInt:
@@ -1045,9 +1031,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     @property
     def _sweep_interfaces(self) -> bool:
         """Whether the sweep changes the cell interface scattering matrices."""
-        return self.sweep_spec is not None and isinstance(
-            self.sweep_spec, (EMEFreqSweep, EMEModeSweep)
-        )
+        return self.sweep_spec is not None and self.sweep_spec.sweep_interfaces
 
     @property
     def _num_sweep_interfaces(self) -> pd.PositiveInt:
@@ -1059,9 +1043,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     @property
     def _sweep_cells(self) -> bool:
         """Whether the sweep changes the propagation within a cell."""
-        return self.sweep_spec is not None and isinstance(
-            self.sweep_spec, (EMELengthSweep, EMEFreqSweep, EMEModeSweep)
-        )
+        return self.sweep_spec is not None and self.sweep_spec.sweep_cells
 
     @property
     def _num_sweep_cells(self) -> pd.PositiveInt:
@@ -1095,6 +1077,21 @@ class EMESimulation(AbstractYeeGridSimulation):
     def _monitor_num_eme_cells(self, monitor: EMEMonitor) -> int:
         """Total number of EME cells included in monitor based on simulation grid."""
         return len(self._monitor_eme_cell_indices(monitor=monitor))
+
+    def _monitor_virtual_cell_indices(self, monitor: EMEMonitor) -> list[pd.NonNegativeInt]:
+        """Virtual EME cell indices inside monitor.
+        Returns the indices into the virtual_cell_indices list where the
+        physical cell index is in the monitor's eme_cell_indices.
+        """
+        physical_cell_indices = set(self._monitor_eme_cell_indices(monitor=monitor))
+        all_virtual_indices = self.eme_grid_spec.virtual_cell_indices
+        return [
+            i for i, phys_idx in enumerate(all_virtual_indices) if phys_idx in physical_cell_indices
+        ]
+
+    def _monitor_num_virtual_eme_cells(self, monitor: EMEMonitor) -> int:
+        """Number of virtual EME cells inside monitor."""
+        return len(self._monitor_virtual_cell_indices(monitor=monitor))
 
     def _monitor_freqs(self, monitor: Monitor) -> list[pd.NonNegativeFloat]:
         """Monitor frequencies."""
