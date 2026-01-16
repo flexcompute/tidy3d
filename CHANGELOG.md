@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Fixed interpolation handling for permittivity and conductivity gradients in `CustomPoleResidue`.
 
 ## [2.10.1] - 2026-01-14
 
