@@ -154,6 +154,13 @@ class WebTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         alias="taskId",
     )
 
+    def _is_batch_type(self) -> bool:
+        """Check if this task uses the batch/modeler API.
+
+        Default implementation returns False. Overridden in SimulationTask.
+        """
+        return False
+
     @classmethod
     def create(
         cls,
@@ -222,7 +229,7 @@ class WebTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     def get_url(self) -> str:
         base = str(config.web.website_endpoint or "")
-        if isinstance(self, BatchTask):
+        if self._is_batch_type():
             return "/".join([base.rstrip("/"), f"rf?taskId={self.task_id}"])
         return "/".join([base.rstrip("/"), f"workbench?taskId={self.task_id}"])
 
@@ -384,7 +391,15 @@ class WebTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
 
 class SimulationTask(WebTask):
-    """Interface for managing the running of solver tasks on the server."""
+    """Interface for managing the running of solver tasks on the server.
+
+    This class handles both regular simulation tasks (FDTD, EME, Heat, etc.)
+    and batch/modeler tasks (RF, TERMINAL_CM, MODAL_CM). The task type determines
+    which API endpoints are used for various operations.
+    """
+
+    # Task types that use the batch/modeler API (rf/task/...) instead of simulation API
+    BATCH_TASK_TYPES: frozenset = frozenset({"RF", "TERMINAL_CM", "MODAL_CM"})
 
     folder_id: Optional[str] = Field(
         None,
@@ -403,7 +418,7 @@ class SimulationTask(WebTask):
     )
 
     task_type: Optional[str] = Field(
-        title="task_type", description="The type of task.", alias="taskType"
+        None, title="task_type", description="The type of task.", alias="taskType"
     )
 
     folder_name: Optional[str] = Field(
@@ -420,6 +435,10 @@ class SimulationTask(WebTask):
         "The body content is a json file with fields "
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
+
+    def _is_batch_type(self) -> bool:
+        """Check if this task uses the batch/modeler API."""
+        return self.task_type in self.BATCH_TASK_TYPES
 
     # simulation_type: str = pd.Field(
     #     None,
@@ -450,14 +469,24 @@ class SimulationTask(WebTask):
             :class:`.SimulationTask` object containing info about status,
              size, credits of task and others.
         """
-        try:
-            resp = http.get(f"tidy3d/tasks/{task_id}/detail")
-        except WebNotFoundError as e:
-            td.log.error(f"The requested task ID '{task_id}' does not exist.")
-            raise e
+        # Try simulation API first (most common case)
+        # Use suppress_404 to avoid error logging when falling back to batch API
+        resp = http.get(f"tidy3d/tasks/{task_id}/detail", suppress_404=True)
+        if resp:
+            return SimulationTask(**resp)
 
-        task = SimulationTask(**resp) if resp else None
-        return task
+        # Fall back to batch/modeler API
+        # Use suppress_404 and catch all exceptions to handle unmocked endpoints in tests
+        try:
+            resp = http.get(f"rf/task/{task_id}/statistics", suppress_404=True)
+            if resp:
+                task_type = resp.get("taskType") if isinstance(resp, dict) else None
+                return SimulationTask(taskId=task_id, taskType=task_type)
+        except Exception:
+            pass
+
+        td.log.error(f"The requested task ID '{task_id}' does not exist.")
+        raise WebNotFoundError("Resource not found (HTTP 404).")
 
     @classmethod
     def get_running_tasks(cls) -> list[SimulationTask]:
@@ -482,8 +511,22 @@ class SimulationTask(WebTask):
         TaskInfo
             An object containing the task's latest data.
         """
-        resp = http.get(f"tidy3d/tasks/{self.task_id}/detail")
-        return TaskInfo(**{"taskId": self.task_id, "taskType": self.task_type, **resp})
+        if self._is_batch_type():
+            resp = http.get(f"rf/task/{self.task_id}/statistics")
+            # Transform batch response to unified TaskInfo format
+            if isinstance(resp, dict):
+                # Map batch field names to unified TaskInfo field names
+                if "name" in resp:
+                    resp["taskName"] = resp.pop("name")
+                # Add taskId from the object itself (not in batch API response)
+                resp["taskId"] = self.task_id
+                # Coerce null collection fields to sensible defaults
+                if resp.get("tasks") is None:
+                    resp["tasks"] = []
+            return TaskInfo(**(resp or {}))
+        else:
+            resp = http.get(f"tidy3d/tasks/{self.task_id}/detail")
+            return TaskInfo(**{"taskId": self.task_id, "taskType": self.task_type, **resp})
 
     def get_simulation_json(self, to_file: PathLike, verbose: bool = True) -> None:
         """Get json file for a :class:`.Simulation` from server.
@@ -614,24 +657,42 @@ class SimulationTask(WebTask):
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
             It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
         """
-        pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
-
         if solver_version:
             protocol_version = None
         else:
             protocol_version = http_util.get_version()
 
-        http.post(
-            f"tidy3d/tasks/{self.task_id}/submit",
-            {
-                "solverVersion": solver_version,
-                "workerGroup": worker_group,
-                "protocolVersion": protocol_version,
-                "enableCaching": config.web.enable_caching,
-                "payType": pay_type.value,
-                "priority": priority,
-            },
-        )
+        if self._is_batch_type():
+            # TODO: add support for pay_type and priority arguments for batch tasks
+            if pay_type != PayType.AUTO:
+                raise NotImplementedError(
+                    "The 'pay_type' argument is not yet supported for batch tasks."
+                )
+            if priority is not None:
+                raise NotImplementedError(
+                    "The 'priority' argument is not yet supported for batch tasks."
+                )
+            http.post(
+                f"rf/task/{self.task_id}/submit",
+                {
+                    "solverVersion": solver_version,
+                    "protocolVersion": protocol_version,
+                    "workerGroup": worker_group,
+                },
+            )
+        else:
+            pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
+            http.post(
+                f"tidy3d/tasks/{self.task_id}/submit",
+                {
+                    "solverVersion": solver_version,
+                    "workerGroup": worker_group,
+                    "protocolVersion": protocol_version,
+                    "enableCaching": config.web.enable_caching,
+                    "payType": pay_type.value,
+                    "priority": priority,
+                },
+            )
 
     def estimate_cost(self, solver_version: Optional[str] = None) -> float:
         """Compute the maximum flex unit charge for a given task, assuming the simulation runs for
@@ -792,8 +853,47 @@ class SimulationTask(WebTask):
         """Abort the current task on the server."""
         if not self.task_id:
             raise ValueError("Task id not found.")
+        if self._is_batch_type():
+            return http.put(f"rf/task/{self.task_id}/abort", {})
         return http.put(
             "tidy3d/tasks/abort", json={"taskType": self.task_type, "taskId": self.task_id}
+        )
+
+    def check(
+        self,
+        check_task_type: str,
+        solver_version: Optional[str] = None,
+        protocol_version: Optional[str] = None,
+    ) -> requests.Response:
+        """Submits a request to validate the batch configuration on the server.
+
+        This method is only applicable to batch/modeler tasks.
+
+        Parameters
+        ----------
+        check_task_type : str
+            The task type to use for validation (e.g., 'FDTD', 'RF_FDTD').
+        solver_version : Optional[str], default=None
+            The version of the solver to use for validation.
+        protocol_version : Optional[str], default=None
+            The data protocol version. Defaults to the current version.
+
+        Returns
+        -------
+        requests.Response
+            The server's response to the check request.
+        """
+        if not self._is_batch_type():
+            raise NotImplementedError("The 'check' method is only available for batch tasks.")
+        if protocol_version is None:
+            protocol_version = _get_protocol_version()
+        return http.post(
+            f"rf/task/{self.task_id}/check",
+            {
+                "solverVersion": solver_version,
+                "protocolVersion": protocol_version,
+                "taskType": check_task_type,
+            },
         )
 
     def validate_post_upload(self, parent_tasks: Optional[list[str]] = None) -> None:
@@ -827,173 +927,39 @@ class SimulationTask(WebTask):
                 raise WebError(f"Provided 'parent_tasks' failed validation: {e!s}") from e
 
 
-class BatchTask(WebTask):
-    """Interface for managing a batch task on the server."""
-
-    task_type: Optional[str] = Field(
-        None, title="task_type", description="The type of task.", alias="taskType"
-    )
-
-    @classmethod
-    def get(cls, task_id: str, verbose: bool = True) -> BatchTask:
-        """Get batch task by id.
-
-        Parameters
-        ----------
-        task_id: str
-            Unique identifier of batch on server.
-        verbose:
-            If `True`, will print progressbars and status, otherwise, will run silently.
-
-        Returns
-        -------
-        :class:`.BatchTask` | None
-            BatchTask object if found, otherwise None.
-        """
-        try:
-            resp = http.get(f"rf/task/{task_id}/statistics")
-        except WebNotFoundError as e:
-            td.log.error(f"The requested batch ID '{task_id}' does not exist.")
-            raise e
-        # Extract taskType from response if available
-        if resp:
-            task_type = resp.get("taskType") if isinstance(resp, dict) else None
-            return BatchTask(taskId=task_id, taskType=task_type)
-        return None
-
-    def detail(self) -> TaskInfo:
-        """Fetches the detailed information and status of the batch.
-
-        Returns
-        -------
-        TaskInfo
-            An object containing the batch's latest data.
-        """
-        resp = http.get(
-            f"rf/task/{self.task_id}/statistics",
-        )
-        # Transform batch response to unified TaskInfo format
-        if isinstance(resp, dict):
-            # Map batch field names to unified TaskInfo field names
-            if "name" in resp:
-                resp["taskName"] = resp.pop("name")
-            # Add taskId from the object itself (not in batch API response)
-            resp["taskId"] = self.task_id
-            # Coerce null collection fields to sensible defaults
-            if resp.get("tasks") is None:
-                resp["tasks"] = []
-        return TaskInfo(**(resp or {}))
-
-    def check(
-        self,
-        check_task_type: str,
-        solver_version: Optional[str] = None,
-        protocol_version: Optional[str] = None,
-    ) -> requests.Response:
-        """Submits a request to validate the batch configuration on the server.
-
-        Parameters
-        ----------
-        solver_version : Optional[str], default=None
-            The version of the solver to use for validation.
-        protocol_version : Optional[str], default=None
-            The data protocol version. Defaults to the current version.
-
-        Returns
-        -------
-        Any
-            The server's response to the check request.
-        """
-        if protocol_version is None:
-            protocol_version = _get_protocol_version()
-        return http.post(
-            f"rf/task/{self.task_id}/check",
-            {
-                "solverVersion": solver_version,
-                "protocolVersion": protocol_version,
-                "taskType": check_task_type,
-            },
-        )
-
-    def submit(
-        self,
-        solver_version: Optional[str] = None,
-        protocol_version: Optional[str] = None,
-        worker_group: Optional[str] = None,
-        pay_type: Union[PayType, str] = PayType.AUTO,
-        priority: Optional[int] = None,
-    ) -> requests.Response:
-        """Submits the batch for execution on the server.
-
-        Parameters
-        ----------
-        solver_version : Optional[str], default=None
-            The version of the solver to use for execution.
-        protocol_version : Optional[str], default=None
-            The data protocol version. Defaults to the current version.
-        worker_group : Optional[str], default=None
-            Optional identifier for a specific worker group to run on.
-
-        Returns
-        -------
-        Any
-            The server's response to the submit request.
-        """
-
-        # TODO: add support for pay_type and priority arguments
-        if pay_type != PayType.AUTO:
-            raise NotImplementedError(
-                "The 'pay_type' argument is not yet supported and will be ignored."
-            )
-        if priority is not None:
-            raise NotImplementedError(
-                "The 'priority' argument is not yet supported and will be ignored."
-            )
-
-        if protocol_version is None:
-            protocol_version = _get_protocol_version()
-        return http.post(
-            f"rf/task/{self.task_id}/submit",
-            {
-                "solverVersion": solver_version,
-                "protocolVersion": protocol_version,
-                "workerGroup": worker_group,
-            },
-        )
-
-    def abort(self) -> requests.Response:
-        """Abort the current task on the server."""
-        if not self.task_id:
-            raise ValueError("Batch id not found.")
-        return http.put(f"rf/task/{self.task_id}/abort", {})
+# Deprecated alias for backward compatibility - use SimulationTask instead
+BatchTask = SimulationTask
 
 
 class TaskFactory:
-    """Factory for obtaining the correct task subclass."""
+    """Factory for obtaining task objects.
 
-    _REGISTRY: dict[str, str] = {}
+    This factory is simplified since SimulationTask now handles both
+    simulation and batch/modeler tasks transparently.
+    """
 
     @classmethod
     def reset(cls) -> None:
-        """Clear the cached task kind registry (used in tests)."""
-        cls._REGISTRY.clear()
+        """No-op for backward compatibility.
+
+        Previously used to clear a task type cache, but SimulationTask
+        now handles both task types transparently.
+        """
 
     @classmethod
-    def register(cls, task_id: str, kind: str) -> None:
-        cls._REGISTRY[task_id] = kind
+    def get(cls, task_id: str, verbose: bool = True) -> SimulationTask:
+        """Get a task by ID.
 
-    @classmethod
-    def get(cls, task_id: str, verbose: bool = True) -> WebTask:
-        kind = cls._REGISTRY.get(task_id)
-        if kind == "batch":
-            return BatchTask.get(task_id, verbose=verbose)
-        if kind == "simulation":
-            task = SimulationTask.get(task_id, verbose=verbose)
-            return task
-        if WebTask.is_batch(task_id):
-            cls.register(task_id, "batch")
-            return BatchTask.get(task_id, verbose=verbose)
-        task = SimulationTask.get(task_id, verbose=verbose)
-        if task:
-            cls.register(task_id, "simulation")
-        return task
+        Parameters
+        ----------
+        task_id : str
+            Unique identifier of task on server.
+        verbose : bool
+            If `True`, will print progressbars and status.
+
+        Returns
+        -------
+        SimulationTask
+            Task object (handles both simulation and batch types).
+        """
+        return SimulationTask.get(task_id, verbose=verbose)

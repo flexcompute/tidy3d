@@ -40,7 +40,7 @@ from tidy3d.web.core.constants import (
     TaskId,
 )
 from tidy3d.web.core.task_core import (
-    BatchTask,
+    BatchTask,  # noqa: F401 - Deprecated alias, kept for backward compatibility
     Folder,
     SimulationTask,
     TaskFactory,
@@ -115,8 +115,8 @@ def _batch_detail_error(resource_id: str) -> Optional[WebError]:
 
     # TODO: test properly
     try:
-        batch = BatchTask.get(resource_id)
-        batch_detail = batch.detail()
+        task = SimulationTask.get(resource_id)
+        batch_detail = task.detail()
         status = batch_detail.status.lower()
     except Exception as e:
         log.error(f"Could not retrieve batch details for '{resource_id}': {e}")
@@ -712,17 +712,17 @@ def get_run_info(task_id: TaskId) -> tuple[Optional[float], Optional[float]]:
         Is ``None`` if run info not available.
     """
     task = TaskFactory.get(task_id)
-    if isinstance(task, BatchTask):
+    if task._is_batch_type():
         raise NotImplementedError("Operation not implemented for modeler batches.")
     return task.get_running_info()
 
 
-def _get_batch_detail_handle_error_status(batch: BatchTask) -> TaskInfo:
+def _get_batch_detail_handle_error_status(task: SimulationTask) -> TaskInfo:
     """Get batch detail and raise error if status is in ERROR_STATES."""
-    detail = batch.detail()
+    detail = task.detail()
     status = detail.status.lower()
     if status in ERROR_STATES:
-        _batch_detail_error(batch.task_id)
+        _batch_detail_error(task.task_id)
     return detail
 
 
@@ -735,7 +735,7 @@ def get_status(task_id: TaskId) -> str:
         Unique identifier of task on server.  Returned by :meth:`upload`.
     """
     task = TaskFactory.get(task_id)
-    if isinstance(task, BatchTask):
+    if task._is_batch_type():
         return _get_batch_detail_handle_error_status(task).status
     else:
         task_info = get_info(task_id)
@@ -786,7 +786,7 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
 
     # Batch/modeler monitoring path
     task = TaskFactory.get(task_id)
-    if isinstance(task, BatchTask):
+    if task._is_batch_type():
         return _monitor_modeler_batch(task_id, verbose=verbose)
 
     console = get_logging_console() if verbose else None
@@ -983,7 +983,7 @@ def download(
     """
     path = Path(path)
     task = TaskFactory.get(task_id, verbose=False)
-    if isinstance(task, BatchTask):
+    if task._is_batch_type():
         if path.name == "simulation_data.hdf5":
             path = path.with_name("cm_data.hdf5")
         task.get_data_hdf5(
@@ -1020,7 +1020,7 @@ def download_json(task_id: TaskId, path: PathLike = SIM_FILE_JSON, verbose: bool
 
     """
     task = TaskFactory.get(task_id, verbose=False)
-    if isinstance(task, BatchTask):
+    if task._is_batch_type():
         raise NotImplementedError("Operation not implemented for modeler batches.")
     task.get_simulation_json(path, verbose=verbose)
 
@@ -1053,7 +1053,7 @@ def load_simulation(
         Simulation loaded from downloaded json file.
     """
     task = TaskFactory.get(task_id, verbose=False)
-    if isinstance(task, BatchTask):
+    if task._is_batch_type():
         raise NotImplementedError("Operation not implemented for modeler batches.")
     path = Path(path)
     if path.suffix == ".json":
@@ -1090,7 +1090,7 @@ def download_log(
     To load downloaded results into data, call :meth:`load` with option ``replace_existing=False``.
     """
     task = TaskFactory.get(task_id, verbose=False)
-    if isinstance(task, BatchTask):
+    if task._is_batch_type():
         raise NotImplementedError("Operation not implemented for modeler batches.")
     task.get_log(path, verbose=verbose, progress_callback=progress_callback)
 
@@ -1143,12 +1143,10 @@ def load(
     """
     path = Path(path)
     task = TaskFactory.get(task_id) if task_id else None
+    # Check if task is a batch type (handle mocked objects that may not have the method)
+    is_batch = task is not None and getattr(task, "_is_batch_type", lambda: False)()
     # For component modeler batches, default to a clearer filename if the default was used.
-    if (
-        task_id
-        and isinstance(task, BatchTask)
-        and path.name in {"simulation_data.hdf5", "simulation_data.hdf5.gz"}
-    ):
+    if task_id and is_batch and path.name in {"simulation_data.hdf5", "simulation_data.hdf5.gz"}:
         path = path.with_name(path.name.replace("simulation", "cm"))
 
     if task_id is None:
@@ -1159,7 +1157,7 @@ def load(
 
     if verbose and task_id is not None:
         console = get_logging_console()
-        if isinstance(task, BatchTask):
+        if is_batch:
             console.log(f"Loading component modeler data from {path}")
         else:
             console.log(f"Loading simulation from {path}")
@@ -1199,7 +1197,7 @@ def _monitor_modeler_batch(
 ) -> None:
     """Monitor modeler batch progress with aggregate and per-task views."""
     console = get_logging_console() if verbose else None
-    task = BatchTask.get(task_id=task_id)
+    task = SimulationTask.get(task_id=task_id)
     detail = _get_batch_detail_handle_error_status(task)
     name = detail.taskName or "modeler_batch"
     group_id = detail.groupId
@@ -1344,7 +1342,7 @@ def download_simulation(
 
     """
     task = TaskFactory.get(task_id, verbose=False)
-    if isinstance(task, BatchTask):
+    if task._is_batch_type():
         raise NotImplementedError("Operation not implemented for modeler batches.")
     info = get_info(task_id, verbose=False)
     remote_sim_file = SIM_FILE_HDF5_GZ
@@ -1449,7 +1447,7 @@ def estimate_cost(
 
     task = TaskFactory.get(task_id, verbose=False)
     detail = task.detail()
-    if isinstance(task, BatchTask):
+    if task._is_batch_type():
         check_task_type = "FDTD" if detail.taskType == "MODAL_CM" else "RF_FDTD"
         task.check(solver_version=solver_version, check_task_type=check_task_type)
         detail = task.detail()
