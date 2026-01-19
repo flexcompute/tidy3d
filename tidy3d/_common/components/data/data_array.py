@@ -110,8 +110,8 @@ class DataArraySpec:
             {
                 "title": "xarray.DataArray",
                 "type": "object",
-                "td_schema": self.id,
-                "td_dims": list(self.dims),
+                "x-td-schema": self.id,
+                "x-dims": list(self.dims),
             }
         )
         return json_schema

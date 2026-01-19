@@ -83,6 +83,23 @@ def _canonicalize(obj: Any) -> Any:
         return obj
 
 
+def _rewrite_defs(obj: Any) -> Any:
+    """Rewrite $defs and refs to keep legacy definitions layout."""
+
+    if isinstance(obj, dict):
+        rewritten: dict[str, Any] = {}
+        for key, value in obj.items():
+            normalized_key = "definitions" if key == "$defs" else key
+            rewritten[normalized_key] = _rewrite_defs(value)
+        schema_ref = rewritten.get("$ref")
+        if isinstance(schema_ref, str):
+            rewritten["$ref"] = schema_ref.replace("#/$defs/", "#/definitions/")
+        return rewritten
+    if isinstance(obj, list):
+        return [_rewrite_defs(item) for item in obj]
+    return obj
+
+
 def _load_tidy3d_models():
     """Import and return the mapping of schema names to Tidy3D model classes.
 
@@ -137,7 +154,8 @@ def generate_schemas(output_dir: pathlib.Path = DEFAULT_SCHEMA_DIR):
             print(f"  -> Generating schema for '{name}'...")
 
             # Generate the schema dictionary from the class.
-            schema_dict = class_instance.schema()
+            schema_dict = class_instance.model_json_schema()
+            schema_dict = _rewrite_defs(schema_dict)
             schema_dict = _canonicalize(schema_dict)
 
             # Write the schema to a file with pretty printing.
