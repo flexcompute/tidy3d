@@ -1334,6 +1334,33 @@ def test_eme_sim_data():
             eme_cell_index=0,
         )
 
+    # test _validate_interp_specs warning for inconsistent interp_specs
+    mode_spec1 = td.EMEModeSpec(num_modes=10, interp_spec=td.ModeInterpSpec.cheb(num_points=3))
+    mode_spec2 = td.EMEModeSpec(num_modes=10, interp_spec=td.ModeInterpSpec.cheb(num_points=5))
+    eme_grid_spec_inconsistent = td.EMECompositeGrid(
+        subgrids=[
+            td.EMEUniformGrid(num_cells=2, mode_spec=mode_spec1),
+            td.EMEUniformGrid(num_cells=2, mode_spec=mode_spec2),
+        ],
+        subgrid_boundaries=[0],
+    )
+    with AssertLogLevel("WARNING", contains_str="interp_spec"):
+        sim_interp_test = sim.updated_copy(eme_grid_spec=eme_grid_spec_inconsistent)
+
+    # test _validate_interp_specs no warning for consistent interp_specs
+    mode_spec_consistent = td.EMEModeSpec(
+        num_modes=10, interp_spec=td.ModeInterpSpec.cheb(num_points=4)
+    )
+    eme_grid_spec_consistent = td.EMECompositeGrid(
+        subgrids=[
+            td.EMEUniformGrid(num_cells=2, mode_spec=mode_spec_consistent),
+            td.EMEUniformGrid(num_cells=2, mode_spec=mode_spec_consistent),
+        ],
+        subgrid_boundaries=[0],
+    )
+    with AssertLogLevel(None):
+        sim_interp_test = sim.updated_copy(eme_grid_spec=eme_grid_spec_consistent)
+
     # test freq sweep smatrix_in_basis
     sim = sim.updated_copy(sweep_spec=td.EMEFreqSweep(freq_scale_factors=np.linspace(1, 2, 10)))
     port_modes = _get_eme_port_modes(num_sweep=10)

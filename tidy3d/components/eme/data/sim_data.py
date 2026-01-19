@@ -20,6 +20,11 @@ from tidy3d.log import log
 from .dataset import EMECoefficientDataset, EMESMatrixDataset
 from .monitor_data import EMEFieldData, EMEModeSolverData, EMEMonitorDataType
 
+# Tolerance for frequency matching when filtering mode data to monitor-sampled frequencies.
+# Set to 1e-5 to provide sufficient margin for floating-point precision while ensuring
+# correct frequency alignment in broadband simulations with interpolation.
+MODE_FREQ_TOL = 1e-5
+
 
 class EMESimulationData(AbstractYeeGridSimulationData):
     """Data associated with an EME simulation."""
@@ -89,6 +94,18 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 key: field.squeeze(dim="sweep_index") for key, field in update_dict.items()
             }
 
+        # Re-introduce the normal coordinate with the correct value from eme_grid.centers
+        axis = self.simulation.axis
+        # convert propagation axis index to coordinate name
+        axis_name = "xyz"[axis]
+        center_value = self.simulation.eme_grid.centers[eme_cell_index]
+        update_dict = {
+            key: field.assign_coords({axis_name: [center_value]})
+            if axis_name in field.dims
+            else field
+            for key, field in update_dict.items()
+        }
+
         monitor = self.simulation.mode_solver_monitors[eme_cell_index]
         monitor = monitor.updated_copy(colocate=data.monitor.colocate)
         box = Box.from_bounds(
@@ -105,6 +122,17 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 "certain derived quantities, like the flux."
             )
         grid_expanded = self.simulation.discretize_monitor(monitor=monitor)
+
+        # filter only the relevant frequencies
+        monitor_freqs = np.asarray(
+            monitor.mode_spec._sampling_freqs_mode_solver_data(freqs=self.simulation.freqs),
+            dtype=float,
+        )
+        update_dict = {
+            key: field.sel(f=monitor_freqs, method="nearest", tolerance=MODE_FREQ_TOL)
+            for key, field in update_dict.items()
+        }
+
         return ModeSolverData(
             **update_dict,
             monitor=monitor,
@@ -214,7 +242,24 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         interp_spec1 = mode_spec1.interp_spec if mode_spec1 is not None else None
         interp_spec2 = mode_spec2.interp_spec if mode_spec2 is not None else None
 
-        modes1, modes2 = modes1._interpolated_copies_if_needed(other=modes2)
+        modes1, port_modes1 = modes1._interpolated_copies_if_needed(other=port_modes1)
+        modes2, port_modes2 = modes2._interpolated_copies_if_needed(other=port_modes2)
+
+        # Normalize modes if simulation.normalize is True
+        def normalize_modes_for_basis_conversion(modes):
+            """Normalize modes by flux magnitude if simulation.normalize is True."""
+            if not self.simulation.normalize:
+                return modes
+
+            scaling = np.sqrt(np.abs(modes.flux))
+            scaling = scaling.where(scaling != 0, 1)
+            normalized_fields = {
+                name: field / scaling for name, field in modes.field_components.items()
+            }
+            return modes.updated_copy(**normalized_fields)
+
+        modes1 = normalize_modes_for_basis_conversion(modes1)
+        modes2 = normalize_modes_for_basis_conversion(modes2)
 
         modes_in_1 = "mode_index" in list(modes1.field_components.values())[0].coords
         modes_in_2 = "mode_index" in list(modes2.field_components.values())[0].coords
