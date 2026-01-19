@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed coordinate snapping in shape gradient computation to handle 0 normal and grid spacing components.
 - Fixed duplicate printing of cost estimation of `Job`.
 - Fixed `outer_dot` with EME port modes `interpolated_copy`.
+- Fixed `_finalized_volumetric_structures` not respecting `structure_priority_mode` when no 2D materials or lumped elements are present.
 
 ### Removed
 - Removed support for inconsistent `interp_specs` in the EME grid.

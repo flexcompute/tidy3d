@@ -2277,7 +2277,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         """Volumetric structures in the simulation, including automatic frames around mode sources and internal absorbers, and 2d strutures converted into volumetric analogues."""
         modal_frames = self._modal_plane_frames
         if not self._contains_converted_volumetric_structures:
-            return list(self.structures) + modal_frames
+            return list(self.static_structures) + modal_frames
         return list(self.volumetric_structures) + modal_frames
 
     @cached_property

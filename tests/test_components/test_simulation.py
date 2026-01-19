@@ -3905,3 +3905,51 @@ def test_uniformly_padded_copy():
 
     with pytest.raises(ValueError):
         padded_sim = sim.uniformly_padded_copy(padding=-1)
+
+
+@pytest.mark.parametrize("structure_priority_mode", ["equal", "conductor"])
+def test_finalized_volumetric_structures_respects_priority_mode(structure_priority_mode):
+    """Test that _finalized_volumetric_structures respects structure_priority_mode."""
+    # Create structures with different media types
+    dielectric = td.Structure(
+        geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+        medium=td.Medium(permittivity=2.0),
+    )
+    pec_struct = td.Structure(
+        geometry=td.Box(size=(0.5, 0.5, 0.5), center=(0, 0, 0)),
+        medium=td.PEC,
+    )
+    lossy_metal = td.Structure(
+        geometry=td.Box(size=(0.8, 0.8, 0.8), center=(0, 0, 0)),
+        medium=td.LossyMetalMedium(conductivity=1e7, frequency_range=(1e14, 2e14)),
+    )
+
+    structures = [pec_struct, lossy_metal, dielectric]
+
+    sim = td.Simulation(
+        size=(2, 2, 2),
+        structures=structures,
+        structure_priority_mode=structure_priority_mode,
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+    )
+
+    # No 2D materials or lumped elements, so _finalized_volumetric_structures
+    # should use scene.sorted_structures
+    finalized_structures = sim._finalized_volumetric_structures
+    sorted_structures = sim.scene.sorted_structures
+
+    # Should match sorted_structures (modal_frames are empty in this case)
+    assert len(finalized_structures) == len(sorted_structures)
+    for fin, sorted_s in zip(finalized_structures, sorted_structures):
+        assert fin.medium == sorted_s.medium
+
+    if structure_priority_mode == "conductor":
+        # In conductor mode: PEC should be last, lossy metal second to last
+        assert finalized_structures[-1].medium == td.PEC
+        assert isinstance(finalized_structures[-2].medium, td.LossyMetalMedium)
+    else:
+        # In equal mode: original order preserved
+        assert finalized_structures[-1].medium == dielectric.medium
+        assert isinstance(finalized_structures[1].medium, td.LossyMetalMedium)
+        assert finalized_structures[0].medium == td.PEC
