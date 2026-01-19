@@ -280,7 +280,7 @@ def apply_adjoint(config: AdjointConfig) -> None:
     defaults = AdjointConfig()
     overridden = [
         name
-        for name in config.model_fields
+        for name in type(config).model_fields
         if name != "local_gradient" and getattr(config, name) != getattr(defaults, name)
     ]
     if not overridden:
