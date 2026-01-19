@@ -123,6 +123,7 @@ class Logger:
     def __init__(self) -> None:
         self.handlers = {}
         self.suppression = True
+        self.warn_once = False
         self._counts = None
         self._stack = None
         self._capture = False
@@ -251,8 +252,10 @@ class Logger:
     ) -> None:
         """Distribute log messages to all handlers"""
 
-        # Check global cache if requested (before composing/capturing to avoid duplicates)
-        if log_once:
+        # Check global cache if requested or if warn_once is enabled for warnings
+        # (before composing/capturing to avoid duplicates)
+        should_check_cache = log_once or (self.warn_once and level_name == "WARNING")
+        if should_check_cache:
             # Use the message body before composition as key
             if message in self._static_cache:
                 return
@@ -354,6 +357,17 @@ def set_logging_level(level: LogValue = DEFAULT_LEVEL) -> None:
 def set_log_suppression(value: bool) -> None:
     """Control log suppression for repeated messages."""
     log.suppression = value
+
+
+def set_warn_once(value: bool) -> None:
+    """Control whether warnings are only shown once per unique message.
+
+    Parameters
+    ----------
+    value : bool
+        When True, each unique warning message is only shown once per process.
+    """
+    log.warn_once = value
 
 
 def get_aware_datetime() -> datetime:

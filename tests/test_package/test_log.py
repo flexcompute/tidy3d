@@ -275,6 +275,59 @@ def test_log_suppression():
     td.config.log_suppression = True
 
 
+def test_warn_once():
+    """Test that warn_once setting causes each unique warning to only be shown once."""
+
+    # Clear the static cache to ensure clean test state
+    td.log._static_cache.clear()
+
+    # By default, warn_once should be False
+    assert td.log.warn_once is False
+    assert td.config.logging.warn_once is False
+
+    # Enable warn_once via config
+    td.config.logging.warn_once = True
+    assert td.log.warn_once is True
+
+    # First warning should go through
+    initial_cache_size = len(td.log._static_cache)
+    td.log.warning("unique_test_warning_message_1234")
+    assert len(td.log._static_cache) == initial_cache_size + 1
+    assert "unique_test_warning_message_1234" in td.log._static_cache
+
+    # Same warning should be skipped (cache doesn't grow)
+    td.log.warning("unique_test_warning_message_1234")
+    assert len(td.log._static_cache) == initial_cache_size + 1
+
+    # Different warning should go through
+    td.log.warning("different_warning_message_5678")
+    assert len(td.log._static_cache) == initial_cache_size + 2
+    assert "different_warning_message_5678" in td.log._static_cache
+
+    # Info messages should NOT be affected by warn_once
+    td.log.info("info_message_should_not_cache")
+    td.log.info("info_message_should_not_cache")
+    # Info messages don't use the cache when warn_once is enabled (only warnings do)
+    assert "info_message_should_not_cache" not in td.log._static_cache
+
+    # Error messages should NOT be affected by warn_once
+    td.log.error("error_message_should_not_cache")
+    td.log.error("error_message_should_not_cache")
+    assert "error_message_should_not_cache" not in td.log._static_cache
+
+    # Critical messages should NOT be affected by warn_once
+    td.log.critical("critical_message_should_not_cache")
+    td.log.critical("critical_message_should_not_cache")
+    assert "critical_message_should_not_cache" not in td.log._static_cache
+
+    # Disable warn_once
+    td.config.logging.warn_once = False
+    assert td.log.warn_once is False
+
+    # Clear cache for cleanup
+    td.log._static_cache.clear()
+
+
 def test_assert_log_level():
     """Test features of the assert_log_level"""
 
