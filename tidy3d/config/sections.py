@@ -23,7 +23,14 @@ from pydantic import (
 )
 
 from tidy3d._runtime import WASM_BUILD
-from tidy3d.log import DEFAULT_LEVEL, LogLevel, log, set_log_suppression, set_logging_level
+from tidy3d.log import (
+    DEFAULT_LEVEL,
+    LogLevel,
+    log,
+    set_log_suppression,
+    set_logging_level,
+    set_warn_once,
+)
 
 from .registry import get_manager as _get_attached_manager
 from .registry import register_handler, register_section
@@ -69,6 +76,12 @@ class LoggingConfig(ConfigSection):
         description="Suppress repeated log messages when True.",
     )
 
+    warn_once: bool = Field(
+        False,
+        title="Warn once",
+        description="When True, each unique warning message is only shown once per process.",
+    )
+
 
 @register_handler("logging")
 def apply_logging(config: LoggingConfig) -> None:
@@ -76,6 +89,7 @@ def apply_logging(config: LoggingConfig) -> None:
 
     set_logging_level(config.level)
     set_log_suppression(config.suppression)
+    set_warn_once(config.warn_once)
 
 
 @register_section("simulation")
