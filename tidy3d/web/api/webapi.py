@@ -1221,6 +1221,7 @@ def _monitor_modeler_batch(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(bar_width=25),
         TaskProgressColumn(),
+        TextColumn("[progress.description]{task.fields[status]}"),
         TimeElapsedColumn(),
     )
     # Make the header
@@ -1230,19 +1231,21 @@ def _monitor_modeler_batch(
     console.log(header)
     with Progress(*progress_columns, console=console, transient=False) as progress:
         # Phase: Run (aggregate + per-task)
-        p_run = progress.add_task("Run Total", total=1.0)
-        task_bars: dict[str, int] = {}
         stage = status_to_stage(status)[0]
+        p_run = progress.add_task("Run Total", total=1.0, status=f" {stage} ")
+        task_bars: dict[str, int] = {}
         prev_stage = status_to_stage(status)[0]
         console.log(f"Batch status = {status}")
 
         # Note: get_status errors if an erroring status occurred
-        while stage not in END_STATES:
+        end_monitor = False
+        while not end_monitor:
             total = len(detail.tasks)
             r = detail.runSuccess or 0
             if stage != prev_stage:
                 prev_stage = stage
                 console.log(f"Batch status = {stage}")
+                progress.update(p_run, status=f" {stage} ")
 
             # Create per-task bars as soon as tasks appear
             if total and total <= max_detail_tasks and detail.tasks:
@@ -1255,10 +1258,12 @@ def _monitor_modeler_batch(
                             f"  {name}",
                             total=1.0,
                             completed=STATE_PROGRESS_PERCENTAGE[tstatus] / 100,
+                            status=f" {tstatus} ",
                         )
                         task_bars[name] = pbar
 
-            # Aggregate run progress: average stage fraction across tasks
+            # Aggregate run progress: average stage fraction across tasks (80% weight)
+            # Final 20% achieved only when batch status is completed
             if detail.tasks:
                 acc = 0.0
                 n_members = 0
@@ -1267,9 +1272,17 @@ def _monitor_modeler_batch(
                     tstatus = (t.status or "draft").lower()
                     _, idx = status_to_stage(tstatus)
                     acc += max(0.0, min(1.0, idx / MAX_STEPS))
-                run_frac = (acc / float(n_members)) if n_members else 0.0
+                task_avg = (acc / float(n_members)) if n_members else 0.0
+                run_frac = task_avg * 0.8
             else:
-                run_frac = (r / total) if total else 0.0
+                run_frac = (r / total) * 0.8 if total else 0.0
+
+            # Final 20% only when batch is completed
+            if status in END_STATES:
+                # Makes sure last state is logged
+                end_monitor = True
+                run_frac = 1.0
+
             progress.update(p_run, completed=run_frac)
 
             # Update per-task bars
@@ -1281,11 +1294,11 @@ def _monitor_modeler_batch(
                         continue
                     tstatus = (t.status or "draft").lower()
                     _, idx = status_to_stage(tstatus)
-                    desc = f"  {tname} [{tstatus or 'draft'}]"
                     progress.update(
                         pbar,
                         completed=STATE_PROGRESS_PERCENTAGE[tstatus] / 100,
-                        description=desc,
+                        description=f"  {tname}",
+                        status=f" {tstatus} ",
                         refresh=False,
                     )
 
