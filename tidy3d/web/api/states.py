@@ -10,7 +10,7 @@ PROGRESSION_ORDER = (
     "success",
 )
 
-MAX_STEPS = len(PROGRESSION_ORDER) - 1
+MAX_STEPS = 4
 COMPLETED_PERCENT = 100
 
 PRE_ERROR_STATES = {
@@ -46,15 +46,20 @@ POSTPROCESS_STATES = {
     "run_success",
 }
 
-COMPLETED_STATES = {
+SUCCESS_STATES = {
     "visualize",
     "success",
     "completed",
     "processed",
     "postprocess_success",
+}
+
+DIVERGED_STATES = {
     "diverge",
     "diverged",
 }
+
+COMPLETED_STATES = DIVERGED_STATES | SUCCESS_STATES
 
 END_STATES = ERROR_STATES | COMPLETED_STATES
 
@@ -79,16 +84,22 @@ ALL_STATES = VALID_PROGRESS_STATES | ERROR_STATES
 STATE_PROGRESS_PERCENTAGE = dict.fromkeys(ALL_STATES, 0)
 STATE_PROGRESS_PERCENTAGE.update(dict.fromkeys(COMPLETED_STATES, COMPLETED_PERCENT))
 STATE_PROGRESS_PERCENTAGE.update(
-    {state: round((1 / MAX_STEPS) * COMPLETED_PERCENT) for state in QUEUED_STATES}
+    {state: round((0 / MAX_STEPS) * COMPLETED_PERCENT) for state in QUEUED_STATES}
 )
 STATE_PROGRESS_PERCENTAGE.update(
-    {state: round((2 / MAX_STEPS) * COMPLETED_PERCENT) for state in PREPROCESS_STATES}
+    {state: round((0 / MAX_STEPS) * COMPLETED_PERCENT) for state in DIVERGED_STATES}
 )
 STATE_PROGRESS_PERCENTAGE.update(
-    {state: round((3 / MAX_STEPS) * COMPLETED_PERCENT) for state in RUNNING_STATES}
+    {state: round((1 / MAX_STEPS) * COMPLETED_PERCENT) for state in PREPROCESS_STATES}
 )
 STATE_PROGRESS_PERCENTAGE.update(
-    {state: round((4 / MAX_STEPS) * COMPLETED_PERCENT) for state in POSTPROCESS_STATES}
+    {state: round((2 / MAX_STEPS) * COMPLETED_PERCENT) for state in RUNNING_STATES}
+)
+STATE_PROGRESS_PERCENTAGE.update(
+    {state: round((3 / MAX_STEPS) * COMPLETED_PERCENT) for state in POSTPROCESS_STATES}
+)
+STATE_PROGRESS_PERCENTAGE.update(
+    {state: round((4 / MAX_STEPS) * COMPLETED_PERCENT) for state in SUCCESS_STATES}
 )
 
 
@@ -110,14 +121,14 @@ def status_to_stage(status: str) -> tuple[str, int]:
     if s in DRAFT_STATES:
         return ("draft", 0)
     if s in QUEUED_STATES:
-        return ("queued", 1)
+        return ("queued", 0)
     if s in PREPROCESS_STATES:
-        return ("preprocess", 2)
+        return ("preprocess", 1)
     if s in RUNNING_STATES:
-        return ("running", 3)
+        return ("running", 2)
     if s in POSTPROCESS_STATES:
-        return ("postprocess", 4)
+        return ("postprocess", 3)
     if s in COMPLETED_STATES:
-        return ("success", 5)
+        return ("success", 4)
     # Unknown states map to earliest stage to avoid showing 100% prematurely
     return (s or "unknown", 0)
