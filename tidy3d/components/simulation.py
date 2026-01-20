@@ -1894,7 +1894,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             geometry = structure.geometry
 
             # subdivide
-            subdivided_geometries = subdivide(geometry, background_structures)
+            subdivided_geometries = subdivide(geometry, background_structures, grid=grid)
             # Create and add volumetric equivalents
             for i, subdivided_geometry in enumerate(subdivided_geometries):
                 # Snap to the grid and create volumetric equivalent

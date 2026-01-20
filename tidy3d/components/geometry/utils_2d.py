@@ -16,6 +16,12 @@ from tidy3d.components.structure import Structure
 from tidy3d.components.types import Axis, Shapely
 from tidy3d.constants import fp_eps
 
+# Relative tolerance for filtering slivers based on grid size.
+# Polygons with area < min_cell_area * _SLIVER_AREA_RTOL are filtered.
+# Polygons with any bounding box dimension < min_cell_size * _SLIVER_DIM_RTOL are filtered.
+_SLIVER_AREA_RTOL = 1e-4
+_SLIVER_DIM_RTOL = 1e-4
+
 
 def snap_coordinate_to_grid(grid: Grid, center: float, axis: Axis) -> float:
     """2D materials are snapped to grid along their normal axis"""
@@ -77,8 +83,65 @@ def get_neighbors(
     return neighbors_below, neighbors_above, check_delta
 
 
+def _is_sliver_polygon(polygon: shapely.Polygon, axis: Axis, grid: Grid | None) -> bool:
+    """Check if a polygon is a sliver (degenerate thin polygon) based on grid size.
+
+    A polygon is considered a sliver if:
+    - Its area is below the minimum polygon area threshold, OR
+    - When grid is provided: its area is much smaller than the minimum grid cell area
+      in the 2D plane, OR any of its bounding box dimensions is much smaller than
+      the corresponding minimum grid cell size.
+
+    Parameters
+    ----------
+    polygon : shapely.Polygon
+        The polygon to check.
+    axis : Axis
+        The normal axis of the 2D plane.
+    grid : Grid | None
+        Optional grid to use for computing relative thresholds based on cell sizes.
+
+    Returns
+    -------
+    bool
+        True if the polygon is a sliver and should be filtered out.
+    """
+    area = polygon.area
+
+    # Always apply absolute minimum area threshold
+    if area < _MIN_POLYGON_AREA:
+        return True
+
+    # If no grid provided, only use absolute threshold
+    if grid is None:
+        return False
+
+    # Get tangential axes (the 2D plane axes)
+    _, tan_axes = Geometry.pop_axis([0, 1, 2], axis=axis)
+
+    # Get minimum cell sizes along tangential directions
+    grid_sizes = grid.sizes
+    sizes_list = grid_sizes.to_list
+    min_cell_sizes = [np.min(sizes_list[ax]) for ax in tan_axes]
+    min_cell_area = min_cell_sizes[0] * min_cell_sizes[1]
+
+    # Check if area is too small relative to grid cell area
+    if area < min_cell_area * _SLIVER_AREA_RTOL:
+        return True
+
+    # Check if any bounding box dimension is too small relative to grid cell size
+    bounds = polygon.bounds  # (minx, miny, maxx, maxy)
+    bbox_dims = [bounds[2] - bounds[0], bounds[3] - bounds[1]]  # (width, height)
+
+    for dim_size, min_grid_size in zip(bbox_dims, min_cell_sizes):
+        if dim_size < min_grid_size * _SLIVER_DIM_RTOL:
+            return True
+
+    return False
+
+
 def subdivide(
-    geom: Geometry, structures: list[Structure]
+    geom: Geometry, structures: list[Structure], grid: Grid | None = None
 ) -> list[tuple[Geometry, Structure, Structure]]:
     """Subdivide geometry associated with a :class:`.Medium2D` into partitions
     that each have a homogeneous substrate / superstrate. Partitions are computed
@@ -90,6 +153,12 @@ def subdivide(
         A 2D geometry associated with the :class:`.Medium2D`.
     structures : List[Structure]
         List of structures that are checked for intersection with ``geom``.
+    grid : Grid, optional
+        Grid to use for filtering sliver polygons based on cell sizes. When provided,
+        polygons with area much smaller than the minimum grid cell area, or with any
+        bounding box dimension much smaller than the corresponding minimum grid cell
+        size, are filtered out. This prevents numerical artifacts from very thin
+        degenerate polygons that can arise from boolean operations.
 
     Returns
     -------
@@ -218,12 +287,11 @@ def subdivide(
         for polygon in element[0].geoms:
             final_polygons.append((polygon, element[1], element[2]))
 
-    # Create polyslab from subdivided geometry, while filtering out any
-    # polygons with very small areas
+    # Create polyslab from subdivided geometry, while filtering out sliver polygons
     polyslab_result = [
         (shapely_to_polyslab(element[0], axis, center), element[1], element[2])
         for element in final_polygons
-        if element[0].area >= _MIN_POLYGON_AREA
+        if not _is_sliver_polygon(element[0], axis, grid)
     ]
 
     return polyslab_result
