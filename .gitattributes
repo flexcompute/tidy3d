@@ -1,17 +1,27 @@
-# Linguist-vendored files
-docs/* linguist-vendored
-notebooks/* linguist-vendored
-tests/* linguist-vendored
+# Tidy3D Linguist attributes
+flex/public/tidy3d/docs/faq/* linguist-vendored
+flex/public/tidy3d/docs/notebooks/* linguist-vendored
+flex/public/tidy3d/tests/* linguist-vendored
 
-# Disable linguist detection for IPython notebooks
-*.ipynb linguist-detectable=false
+# Tidy3D CHANGELOG merge strategy
+flex/public/tidy3d/CHANGELOG.md merge=union
 
-# Mark IPython notebooks as generated files
-*.ipynb linguist-generated=true
-
-# Specify merge attributes for CHANGELOG.md
-CHANGELOG.md merge=union
-
-# Specify diff and merge attributes for IPython notebooks
-*.ipynb diff=jupyternotebook
-*.ipynb merge=jupyternotebook
+# Git LFS tracking for Tidy3D large files (path-scoped)
+flex/public/tidy3d/**/*.ipynb filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.hdf5 filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.hdf5.gz filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.h5 filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.png filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.gif filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.bmp filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.tiff filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.tif filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.svg filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.webp filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.stl filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.pkl filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.vtk filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.vtu filter=lfs diff=lfs merge=lfs -text
+flex/public/tidy3d/**/*.gds filter=lfs diff=lfs merge=lfs -text

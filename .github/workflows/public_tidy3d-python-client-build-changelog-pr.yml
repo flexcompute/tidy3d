@@ -44,14 +44,23 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    defaults:
+      run:
+        working-directory: flex/public/tidy3d
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ secrets.CI_USER_TOKEN }}
           ref: ${{ github.event.inputs.source_branch || 'develop' }}
           fetch-depth: 0
           submodules: false
           persist-credentials: false
+          lfs: true
+          sparse-checkout: |
+            flex/public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0

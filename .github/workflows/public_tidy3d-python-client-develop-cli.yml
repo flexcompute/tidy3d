@@ -32,24 +32,37 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flex/public/tidy3d
 
     steps:
     - name: Checkout code (HEAD)
       if: ${{ !env.RELEASE_TAG }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        token: ${{ secrets.CI_USER_TOKEN }}
         fetch-depth: 1
         submodules: false
         persist-credentials: false
+        sparse-checkout: |
+          flex/public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
 
     - name: Checkout code (TAG)
       if: ${{ env.RELEASE_TAG }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        token: ${{ secrets.CI_USER_TOKEN }}
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 1
         submodules: false
         persist-credentials: false
+        sparse-checkout: |
+          flex/public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
 
     - name: Set up Python
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0

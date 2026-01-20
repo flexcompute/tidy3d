@@ -67,6 +67,7 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: flex/public/tidy3d
     env:
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
@@ -77,18 +78,35 @@ jobs:
       if: ${{ !env.RELEASE_TAG }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        token: ${{ secrets.CI_USER_TOKEN }}
         fetch-depth: 1
         submodules: false
-        persist-credentials: false
+        persist-credentials: true
+        lfs: true
+        sparse-checkout: |
+          flex/public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        token: ${{ secrets.CI_USER_TOKEN }}
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 1
         submodules: false
-        persist-credentials: false
+        persist-credentials: true
+        lfs: true
+        sparse-checkout: |
+          flex/public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
+
+    - name: fetch-lfs-test-files
+      working-directory: ${{ github.workspace }}
+      run: |
+        git lfs pull --include="flex/public/tidy3d/tests/**"
 
     - name: set-python-${{ matrix.python-version }}
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -154,25 +172,24 @@ jobs:
 
     - name: verify-extras-installation
       run: |
-        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_API_KEY }}
-        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_API_KEY }}
+        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_PROD_API_KEY }}
+        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_PROD_API_KEY }}
         poetry run python -c "import tidy3d; print(f'tidy3d version: {tidy3d.__version__}')"
         poetry run python -c "import tidy3d_extras; print(f'tidy3d-extras version: {tidy3d_extras.__version__}')"
-        cd tests/
-        poetry run pytest _test_tidy3d_extras
+        poetry run pytest tests/_test_tidy3d_extras
 
     - name: run-doctests
       run: |
-        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_API_KEY }}
-        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_API_KEY }}
+        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_PROD_API_KEY }}
+        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_PROD_API_KEY }}
         poetry run pytest -rF --tb=short tidy3d
 
     - name: run-tests-coverage
       env:
         PYTHONUNBUFFERED: "1"
       run: |
-        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_API_KEY }}
-        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_API_KEY }}
+        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_PROD_API_KEY }}
+        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_PROD_API_KEY }}
         poetry run pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
         poetry run pytest --cov=tidy3d -rF --tb=short tests
         poetry run coverage report -m
@@ -214,6 +231,7 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: flex/public/tidy3d
     env:
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
@@ -224,18 +242,35 @@ jobs:
       if: ${{ !env.RELEASE_TAG }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        token: ${{ secrets.CI_USER_TOKEN }}
         fetch-depth: 1
         submodules: false
-        persist-credentials: false
+        persist-credentials: true
+        lfs: true
+        sparse-checkout: |
+          flex/public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        token: ${{ secrets.CI_USER_TOKEN }}
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 1
         submodules: false
-        persist-credentials: false
+        persist-credentials: true
+        lfs: true
+        sparse-checkout: |
+          flex/public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
+
+    - name: fetch-lfs-test-files
+      working-directory: ${{ github.workspace }}
+      run: |
+        git lfs pull --include="flex/public/tidy3d/tests/**"
 
     - name: set-python-${{ matrix.python-version }}
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -301,25 +336,24 @@ jobs:
 
     - name: verify-extras-installation
       run: |
-        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_API_KEY }}
-        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_API_KEY }}
+        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_PROD_API_KEY }}
+        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_PROD_API_KEY }}
         poetry run python -c "import tidy3d; print(f'tidy3d version: {tidy3d.__version__}')"
         poetry run python -c "import tidy3d_extras; print(f'tidy3d-extras version: {tidy3d_extras.__version__}')"
-        cd tests/
-        poetry run pytest _test_tidy3d_extras
+        poetry run pytest tests/_test_tidy3d_extras
 
     - name: run-doctests
       run: |
-        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_API_KEY }}
-        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_API_KEY }}
+        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_PROD_API_KEY }}
+        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_PROD_API_KEY }}
         poetry run pytest -rF --tb=short tidy3d
 
     - name: run-tests-coverage
       env:
         PYTHONUNBUFFERED: "1"
       run: |
-        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_API_KEY }}
-        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_API_KEY }}
+        export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_PROD_API_KEY }}
+        poetry run tidy3d configure --apikey ${{ secrets.TIDY3D_PROD_API_KEY }}
         poetry run pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
         poetry run pytest --cov=tidy3d -rF --tb=short tests
         poetry run coverage report -m
