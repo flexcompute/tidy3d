@@ -37,14 +37,31 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    defaults:
+      run:
+        working-directory: public/tidy3d
     steps:
+      - name: generate-app-token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.COPYBARA_APP_ID }}
+          private-key: ${{ secrets.COPYBARA_APP_PRIVATE_KEY }}
+          repositories: flex
+          owner: flexcompute
+
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
+          token: ${{ steps.app-token.outputs.token }}
           ref: ${{ github.event.inputs.source_branch || inputs.source_branch || 'develop' }}
           fetch-depth: 1
           submodules: false
           persist-credentials: false
+          sparse-checkout: |
+            public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
 
       - name: Set up Python
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
@@ -86,7 +103,7 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           commit-message: "chore(deps): :robot: Update `poetry.lock` for ${{ github.event.inputs.source_branch || inputs.source_branch || 'develop' }}"
           title: "chore(deps): :robot: Update `poetry.lock` for ${{ github.event.inputs.source_branch || inputs.source_branch || 'develop' }}"
           body: |

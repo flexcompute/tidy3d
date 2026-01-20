@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   update-lockfile:
-    uses: ./.github/workflows/tidy3d-python-client-update-lockfile.yml
+    uses: ./.github/workflows/public_tidy3d-python-client-update-lockfile.yml
     permissions:
       contents: write
       pull-requests: write
@@ -18,7 +18,7 @@ jobs:
       run-workflow: true
 
   daily-release:
-    uses: ./.github/workflows/tidy3d-python-client-release.yml
+    uses: ./.github/workflows/public_tidy3d-python-client-release.yml
     permissions:
       contents: write
       pull-requests: write

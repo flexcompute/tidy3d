@@ -66,38 +66,41 @@ jobs:
     outputs:
       synced_ref: ${{ steps.sync-result.outputs.synced_ref }}
     steps:
+      - name: generate-app-token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.COPYBARA_APP_ID }}
+          private-key: ${{ secrets.COPYBARA_APP_PRIVATE_KEY }}
+          repositories: flex
+          owner: flexcompute
+
       - name: full-checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          submodules: true
-          token: ${{ secrets.GH_PAT }}
+          submodules: false
+          lfs: true
+          token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
           ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           fetch-tags: true
           persist-credentials: true
-
-      - name: convert-ssh-submodules-to-https
-        run: |
-          if [ -f .gitmodules ]; then
-            echo "Converting SSH submodule URLs to HTTPS..."
-            sed -i 's|git@github.com:|https://github.com/|g' .gitmodules
-            git submodule sync
-            echo "Submodule URLs converted successfully"
-          else
-            echo "No .gitmodules file found, skipping conversion"
-          fi
+          sparse-checkout: |
+            public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
 
       - name: push-mirror-repo
         id: sync-result
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           SOURCE_REF: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           TARGET_REF: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_ref || inputs.target_ref }}
         run: |
           echo "Source reference: $SOURCE_REF"
           git pull origin "$SOURCE_REF"
           git remote add mirror https://github.com/flexcompute-readthedocs/tidy3d-docs.git
-         
+
           if [[ -n "$TARGET_REF" ]]; then
             echo "Pushing contents of '$SOURCE_REF' to remote ref '$TARGET_REF'."
             git push mirror "$SOURCE_REF:refs/heads/$TARGET_REF" --force
@@ -107,6 +110,6 @@ jobs:
             git push mirror "$SOURCE_REF" --force
             SYNCED_REF="$SOURCE_REF"
           fi
-          
+
           echo "synced_ref=$SYNCED_REF" >> $GITHUB_OUTPUT
           echo "? Successfully synced to: $SYNCED_REF"

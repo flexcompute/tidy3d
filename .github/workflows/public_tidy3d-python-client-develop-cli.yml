@@ -16,6 +16,11 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      COPYBARA_APP_ID:
+        required: true
+      COPYBARA_APP_PRIVATE_KEY:
+        required: true
     outputs:
       workflow_success:
         description: 'CLI tests workflow success status'
@@ -32,24 +37,46 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: public/tidy3d
 
     steps:
+    - name: generate-app-token
+      id: app-token
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ secrets.COPYBARA_APP_ID }}
+        private-key: ${{ secrets.COPYBARA_APP_PRIVATE_KEY }}
+        repositories: flex
+        owner: flexcompute
+
     - name: Checkout code (HEAD)
       if: ${{ !env.RELEASE_TAG }}
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       with:
+        token: ${{ steps.app-token.outputs.token }}
         fetch-depth: 1
         submodules: false
         persist-credentials: false
+        sparse-checkout: |
+          public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
 
     - name: Checkout code (TAG)
       if: ${{ env.RELEASE_TAG }}
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       with:
+        token: ${{ steps.app-token.outputs.token }}
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 1
         submodules: false
         persist-credentials: false
+        sparse-checkout: |
+          public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
 
     - name: Set up Python
       uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0

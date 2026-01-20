@@ -46,21 +46,34 @@ jobs:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
       RELEASE_TYPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_type || inputs.release_type }}
     steps:
+      - name: generate-app-token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.COPYBARA_APP_ID }}
+          private-key: ${{ secrets.COPYBARA_APP_PRIVATE_KEY }}
+          repositories: flex
+          owner: flexcompute
+
       - name: checkout-code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 1
           persist-credentials: true
-          token: ${{ secrets.GH_PAT }}
-      
+          token: ${{ steps.app-token.outputs.token }}
+          sparse-checkout: |
+            public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
+
       - name: validate-version-match
         if: env.RELEASE_TYPE == 'pypi' || env.RELEASE_TYPE == 'testpypi'
         run: |
           set -e
           echo "Validating version match with pyproject.toml..."
-          
+
           # Extract version from pyproject.toml
-          PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          PYPROJECT_VERSION=$(grep '^version = ' public/tidy3d/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
           echo "pyproject.toml version: $PYPROJECT_VERSION"
           
           # Strip 'v' prefix from release tag
