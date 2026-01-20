@@ -83,23 +83,31 @@ jobs:
     name: build-distribution-package
     needs: validate-inputs
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flex/public/tidy3d
     steps:
       - name: checkout-tag
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ secrets.CI_USER_TOKEN }}
           ref: ${{ needs.validate-inputs.outputs.release_tag }}
           persist-credentials: false
-      
+          sparse-checkout: |
+            flex/public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
+
       - name: setup-python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.10'
-      
+
       - name: install-poetry
         run: |
           python -m pip install --upgrade pip
           python -m pip install poetry
-      
+
       - name: build-package
         env:
           RELEASE_TAG: ${{ needs.validate-inputs.outputs.release_tag }}
@@ -111,12 +119,12 @@ jobs:
           ls -lh dist/
           echo ""
           echo "Package built successfully"
-      
+
       - name: upload-artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: dist-${{ needs.validate-inputs.outputs.release_tag }}
-          path: dist/
+          path: flex/public/tidy3d/dist/
           retention-days: 7
 
   deploy-testpypi:

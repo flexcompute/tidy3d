@@ -37,14 +37,22 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    defaults:
+      run:
+        working-directory: flex/public/tidy3d
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ secrets.CI_USER_TOKEN }}
           ref: ${{ github.event.inputs.source_branch || inputs.source_branch || 'develop' }}
           fetch-depth: 1
           submodules: false
           persist-credentials: false
+          sparse-checkout: |
+            flex/public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -86,7 +94,7 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8.1.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CI_USER_TOKEN }}
           commit-message: "chore(deps): :robot: Update `poetry.lock` for ${{ github.event.inputs.source_branch || inputs.source_branch || 'develop' }}"
           title: "chore(deps): :robot: Update `poetry.lock` for ${{ github.event.inputs.source_branch || inputs.source_branch || 'develop' }}"
           body: |

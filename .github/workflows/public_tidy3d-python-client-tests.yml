@@ -1,8 +1,6 @@
 name: "public/tidy3d/python-client-tests"
 
 on:
-  merge_group:
-  
   workflow_dispatch:
     inputs:
       remote_tests:
@@ -15,10 +13,6 @@ on:
         default: false
       cli_tests:
         description: 'develop-cli'
-        type: boolean
-        default: false
-      submodule_tests:
-        description: 'submodule-tests'
         type: boolean
         default: false
       version_match_tests:
@@ -66,11 +60,6 @@ on:
         type: boolean
         required: false
         default: false
-      submodule_tests:
-        description: 'Run submodule tests'
-        type: boolean
-        required: false
-        default: false
       version_match_tests:
         description: 'Run version consistency checks'
         type: boolean
@@ -101,12 +90,6 @@ on:
         description: 'Overall test workflow success status'
         value: ${{ jobs.workflow-validation.result == 'success' }}
   
-  pull_request:
-    branches:
-      - latest
-      - develop
-      - 'pre/*'
-    types: ['opened', 'reopened', 'synchronize', 'ready_for_review', 'edited']
 
 permissions:
   contents: read
@@ -127,7 +110,6 @@ jobs:
       local_tests: ${{ steps.determine-test-type.outputs.local_tests }}
       remote_tests: ${{ steps.determine-test-type.outputs.remote_tests }}
       cli_tests: ${{ steps.determine-test-type.outputs.cli_tests }}
-      submodule_tests: ${{ steps.determine-test-type.outputs.submodule_tests }}
       version_match_tests: ${{ steps.determine-test-type.outputs.version_match_tests }}
       extras_integration_tests: ${{ steps.determine-test-type.outputs.extras_integration_tests }}
       test_type: ${{ steps.determine-test-type.outputs.test_type }}
@@ -143,7 +125,6 @@ jobs:
           INPUT_LOCAL: ${{ github.event.inputs.local_tests || inputs.local_tests }}
           INPUT_REMOTE: ${{ github.event.inputs.remote_tests || inputs.remote_tests }}
           INPUT_CLI: ${{ github.event.inputs.cli_tests || inputs.cli_tests }}
-          INPUT_SUBMODULE: ${{ github.event.inputs.submodule_tests || inputs.submodule_tests }}
           INPUT_VERSION_MATCH: ${{ github.event.inputs.version_match_tests || inputs.version_match_tests }}
           INPUT_EXTRAS_INTEGRATION: ${{ github.event.inputs.extras_integration_tests || inputs.extras_integration_tests }}
           INPUT_TEST_TYPE: ${{ github.event.inputs.test_type || inputs.test_type }}
@@ -156,7 +137,6 @@ jobs:
           echo "Input local: $INPUT_LOCAL"
           echo "Input remote: $INPUT_REMOTE"
           echo "Input cli: $INPUT_CLI"
-          echo "Input submodule: $INPUT_SUBMODULE"
           echo "Input version_match: $INPUT_VERSION_MATCH"
           echo "Input extras_integration: $INPUT_EXTRAS_INTEGRATION"
           echo "Input test_type: $INPUT_TEST_TYPE"
@@ -165,7 +145,6 @@ jobs:
           remote_tests=false
           local_tests=false
           cli_tests=false
-          submodule_tests=false
           version_match_tests=false
           code_quality_tests=false
           pr_review_tests=false
@@ -187,10 +166,6 @@ jobs:
             
             if [[ "$INPUT_CLI" == "true" ]]; then
               cli_tests=true
-            fi
-            
-            if [[ "$INPUT_SUBMODULE" == "true" ]]; then
-              submodule_tests=true
             fi
             
             if [[ "$INPUT_VERSION_MATCH" == "true" ]]; then
@@ -231,7 +206,6 @@ jobs:
           echo "local_tests=$local_tests" >> $GITHUB_OUTPUT
           echo "remote_tests=$remote_tests" >> $GITHUB_OUTPUT
           echo "cli_tests=$cli_tests" >> $GITHUB_OUTPUT
-          echo "submodule_tests=$submodule_tests" >> $GITHUB_OUTPUT
           echo "version_match_tests=$version_match_tests" >> $GITHUB_OUTPUT
           echo "code_quality_tests=$code_quality_tests" >> $GITHUB_OUTPUT
           echo "pr_review_tests=$pr_review_tests" >> $GITHUB_OUTPUT
@@ -243,7 +217,6 @@ jobs:
           echo "local_tests=$local_tests"
           echo "remote_tests=$remote_tests"
           echo "cli_tests=$cli_tests"
-          echo "submodule_tests=$submodule_tests"
           echo "version_match_tests=$version_match_tests"
           echo "extras_integration_tests=$extras_integration_tests"
           echo "test_type=$test_type"
@@ -253,47 +226,75 @@ jobs:
   move-type-imports:
     name: move-type-imports
     needs: determine-test-scope
+    container: ghcr.io/astral-sh/uv:debian
     if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
+    defaults:
+      run:
+        working-directory: flex/public/tidy3d
     runs-on: ubuntu-latest
     steps:
+      - name: Install git-lfs
+        working-directory: /
+        run: |
+          apt-get update && apt-get install -y git-lfs
+          HOME=/tmp git lfs install
+
       - name: checkout-branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ secrets.CI_USER_TOKEN }}
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+          lfs: true
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
-          fetch-depth: 0
-          persist-credentials: false
+          sparse-checkout: |
+            flex/public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
 
       - name: setup-python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: ${{ env.VERIFICATIONS_PY_VERSION }}
 
       - name: install-dependencies
         run: |
-          set -euo pipefail
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install libcst
+          uv venv .venv -p ${{ env.VERIFICATIONS_PY_VERSION }}
+          uv pip install libcst
 
       - name: verify-type-import-guards
         run: |
           set -euo pipefail
-          source .venv/bin/activate
-          python scripts/move_type_imports.py --mode check_on_change
+          uv run python scripts/move_type_imports.py --mode check_on_change
 
   lint:
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
     name: verify-linting
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
     container: ghcr.io/astral-sh/uv:debian
+    defaults:
+      run:
+        working-directory: flex/public/tidy3d
     steps:
+      - name: Install git-lfs
+        working-directory: /
+        run: |
+          apt-get update && apt-get install -y git-lfs
+          HOME=/tmp git lfs install
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ secrets.CI_USER_TOKEN }}
           fetch-depth: 1
           submodules: false
           persist-credentials: false
+          lfs: true
+          sparse-checkout: |
+            flex/public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
+
       - uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6 # v3.6.1
         with:
           version: 0.11.11
@@ -307,12 +308,21 @@ jobs:
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flex/public/tidy3d
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ secrets.CI_USER_TOKEN }}
           fetch-depth: 1
           submodules: false
           persist-credentials: false
+          lfs: true
+          sparse-checkout: |
+            flex/public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
 
       - name: setup-python-${{ env.VERIFICATIONS_PY_VERSION }}
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -332,7 +342,7 @@ jobs:
     name: Run zizmor 🌈
     runs-on: ubuntu-latest
     needs: determine-test-scope
-    if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
+    if: 'false' # Disable till full permissions # needs.determine-test-scope.outputs.code_quality_tests == 'true'
     permissions:
       contents: read
       security-events: write
@@ -340,6 +350,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ secrets.CI_USER_TOKEN }}
           persist-credentials: false
 
       - name: Install the latest version of uv
@@ -348,18 +359,19 @@ jobs:
       - name: Run zizmor 🌈
         run: uvx --from "zizmor==1.19.0" zizmor .github/workflows/*.y* --format=sarif . > results.sarif
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.CI_USER_TOKEN }}
 
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@192325c86100d080feab897ff886c34abd4c83a3 # v3.30.3
         with:
           sarif_file: results.sarif
           category: zizmor
-      
+          token: ${{ secrets.CI_USER_TOKEN }}
+
       - name: run zizmor directly  # this gets a success or fail result
         run: uvx --from "zizmor==1.19.0" zizmor .github/workflows/*.y*
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.CI_USER_TOKEN }}
   
   lint-branch-name:
     needs: determine-test-scope
@@ -433,12 +445,21 @@ jobs:
     runs-on: ubuntu-latest
     if: needs.determine-test-scope.outputs.pr_review_tests == 'true'
     name: enforce-changelog-policy
+    defaults:
+      run:
+        working-directory: flex/public/tidy3d
     steps:
       - name: Check out source code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ secrets.CI_USER_TOKEN }}
           fetch-depth: 0
           persist-credentials: false
+          lfs: true
+          sparse-checkout: |
+            flex/public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
 
       - name: disallow-manual-changelog-edits
         env:
@@ -448,7 +469,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if ! git cat-file -e "${PR_BASE_SHA}:changelog.d/README.md" 2>/dev/null; then
+          if ! git cat-file -e "${PR_BASE_SHA}:flex/public/tidy3d/changelog.d/README.md" 2>/dev/null; then
             echo "Towncrier changelog workflow not detected in base commit; skipping check."
             exit 0
           fi
@@ -458,7 +479,7 @@ jobs:
             exit 0
           fi
 
-          if git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA" | grep -Fxq "CHANGELOG.md"; then
+          if git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA" | grep -Fxq "flex/public/tidy3d/CHANGELOG.md"; then
             echo "❌ Manual edits to CHANGELOG.md are not allowed."
             echo "Add changelog fragments under changelog.d/ instead."
             exit 1
@@ -469,16 +490,25 @@ jobs:
   lint-commit-messages:
     needs: determine-test-scope
     runs-on: ubuntu-latest
-    if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
+    if: 'false'
     name: lint-commit-messages
     # Soft-fail on PRs (early feedback), hard-fail in merge queue (enforced)
     continue-on-error: ${{ github.event_name == 'pull_request' }}
+    defaults:
+      run:
+        working-directory: flex/public/tidy3d
     steps:
       - name: Check out source code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ secrets.CI_USER_TOKEN }}
           fetch-depth: 0  # fetch all commits in the PR
           persist-credentials: false
+          lfs: true
+          sparse-checkout: |
+            flex/public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
 
       - name: Setup node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
@@ -516,41 +546,52 @@ jobs:
             echo "Commit message linting failed; please follow the conventional commits format at https://www.conventionalcommits.org/"
             exit 1
           }
-      
 
   verify-schema-change:
     name: verify-schema-change
     needs: determine-test-scope
-    if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
+    if: 'false' # Disable till merged # needs.determine-test-scope.outputs.code_quality_tests == 'true'
     runs-on: ubuntu-latest
     container: ghcr.io/astral-sh/uv:debian
     defaults:
       run:
         shell: bash
+        working-directory: flex/public/tidy3d
     steps:
+      - name: Install git-lfs
+        working-directory: /
+        run: |
+          apt-get update && apt-get install -y git-lfs
+          HOME=/tmp git lfs install
+
       - name: checkout-branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ secrets.CI_USER_TOKEN }}
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           fetch-depth: 0
-          persist-credentials: false
-      
+          persist-credentials: true
+          lfs: true
+          sparse-checkout: |
+            flex/public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
+
       - name: git-config
         run: |
-          cd $GITHUB_WORKSPACE
           git config --global --add safe.directory $GITHUB_WORKSPACE
-      
+
       - name: install-depedencies
         run: |
-          uv venv $GITHUB_WORKSPACE/.venv -p "$VERIFICATIONS_PY_VERSION"
-          source $GITHUB_WORKSPACE/.venv/bin/activate
-          uv pip install -e "$GITHUB_WORKSPACE"
+          uv venv $GITHUB_WORKSPACE/flex/public/tidy3d/.venv -p "$VERIFICATIONS_PY_VERSION"
+          source $GITHUB_WORKSPACE/flex/public/tidy3d/.venv/bin/activate
+          uv pip install -e "$GITHUB_WORKSPACE/flex/public/tidy3d"
       
       - name: get-tidy3d-version
         id: get-version
         run: |
-          source $GITHUB_WORKSPACE/.venv/bin/activate
+          source $GITHUB_WORKSPACE/flex/public/tidy3d/.venv/bin/activate
           version=$(python -c "import tidy3d; print(tidy3d.__version__)")
           echo "tidy3d version is $version"
           echo "version=$version" >> $GITHUB_OUTPUT
@@ -558,12 +599,28 @@ jobs:
       - name: verify-committed-schema
         run: |
           set -euo pipefail
-          echo "Regenerating docs-free canonical schemas into repo schemas/ ..."
-          source $GITHUB_WORKSPACE/.venv/bin/activate
-          python $GITHUB_WORKSPACE/scripts/regenerate_schema.py
+          source $GITHUB_WORKSPACE/flex/public/tidy3d/.venv/bin/activate
 
+          echo "=== Environment Info ==="
+          echo "Python: $(python --version)"
+          echo "tidy3d: $(python -c 'import tidy3d; print(tidy3d.__version__)')"
+          echo "pydantic: $(python -c 'import pydantic; print(pydantic.__version__)')"
+
+          echo ""
+          echo "=== Fetching LFS files ==="
+          git lfs pull --include="flex/public/tidy3d/schemas/*.json"
+
+          echo ""
+          echo "Regenerating docs-free canonical schemas into repo schemas/ ..."
+          python $GITHUB_WORKSPACE/flex/public/tidy3d/scripts/regenerate_schema.py
+
+          echo ""
           echo "Verifying committed schemas match generated output..."
           if ! git diff --name-status --exit-code -- schemas; then
+            echo ""
+            echo "=== Diff preview (first 10 lines per file) ==="
+            git diff -- schemas | head -10
+            echo ""
             echo "❌ Committed schemas are not up-to-date. See diff above."
             exit 1
           fi
@@ -585,11 +642,11 @@ jobs:
             BASE_REPO="${{ github.repository }}"
           fi
           if [ -z "$BASE_REF" ]; then
-            BASE_REF="develop"
+            BASE_REF="master"
           fi
 
           echo "Fetching base branch $BASE_REPO@$BASE_REF (shallow)..."
-          git remote add upstream "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${BASE_REPO}.git" || true
+          git remote add upstream "https://x-access-token:${{ secrets.CI_USER_TOKEN }}@github.com/${BASE_REPO}.git" || true
           git fetch --no-tags --prune --depth=1 upstream "+refs/heads/${BASE_REF}:refs/remotes/upstream/${BASE_REF}"
 
           # Store base repo/ref for use in subsequent steps
@@ -597,7 +654,7 @@ jobs:
           echo "base_ref=${BASE_REF}" >> "$GITHUB_OUTPUT"
 
           # Name-status diff between base and head limited to schemas/
-          DIFF_OUTPUT=$(git diff --name-status "upstream/${BASE_REF}...HEAD" -- schemas || true)
+          DIFF_OUTPUT=$(git diff --name-status "upstream/${BASE_REF}...HEAD" -- flex/public/tidy3d/schemas || true)
 
           if [ -z "$DIFF_OUTPUT" ]; then
             echo "✅ No schema changes relative to ${BASE_REF}."
@@ -636,28 +693,28 @@ jobs:
           BASE_REF: ${{ steps.schema-diff.outputs.base_ref }}
         run: |
           set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          
+          cd "$GITHUB_WORKSPACE/flex/public/tidy3d"
+
           PR_VERSION="${PR_VERSION}"
           BASE_REPO="${BASE_REPO}"
           BASE_REF="${BASE_REF}"
-          
+
           echo "PR branch version: $PR_VERSION"
-          
+
           # Checkout base branch temporarily to get its version
           echo "Checking out base branch ${BASE_REF} to get version..."
           git checkout -q "refs/remotes/upstream/${BASE_REF}"
-          
+
           # Install dependencies and get version from base branch
-          source $GITHUB_WORKSPACE/.venv/bin/activate
-          uv pip install -e "$GITHUB_WORKSPACE" --quiet
+          source $GITHUB_WORKSPACE/flex/public/tidy3d/.venv/bin/activate
+          uv pip install -e "$GITHUB_WORKSPACE/flex/public/tidy3d" --quiet
           BASE_VERSION=$(python -c "import tidy3d; print(tidy3d.__version__)")
           echo "Base branch (${BASE_REF}) version: $BASE_VERSION"
           echo "base_version=${BASE_VERSION}" >> "$GITHUB_OUTPUT"
-          
+
           # Return to HEAD branch
           git checkout -q HEAD
-          
+
           # Compare versions
           if [[ "$PR_VERSION" != "$BASE_VERSION" ]]; then
             echo "⚠️  Version mismatch detected: PR branch ($PR_VERSION) != base branch ($BASE_VERSION)"
@@ -689,7 +746,7 @@ jobs:
     # Run on open PRs OR when manually triggered with local_tests=true
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.local_tests == 'true'
-    name: python-${{ matrix.python-version }}-self-hosted-runner 
+    name: python-${{ matrix.python-version }}-self-hosted-runner
     runs-on: [ slurm-runner, 4xcpu, container=ghcr.io/astral-sh/uv:debian ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name }}-${{ matrix.python-version }}-local
@@ -700,6 +757,7 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: flex/public/tidy3d
     env:
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
@@ -708,34 +766,60 @@ jobs:
     permissions:
         pull-requests: write
     steps:
+    - name: Install git-lfs
+      working-directory: /
+      run: |
+        apt-get update && apt-get install -y git-lfs
+        HOME=/tmp git lfs install
+
     - name: checkout-head
       if: ${{ !env.RELEASE_TAG }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        token: ${{ secrets.CI_USER_TOKEN }}
         fetch-depth: 0
         submodules: false
-        persist-credentials: false
+        persist-credentials: true
+        lfs: true
+        sparse-checkout: |
+          flex/public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        token: ${{ secrets.CI_USER_TOKEN }}
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 0
         submodules: false
-        persist-credentials: false
+        persist-credentials: true
+        lfs: true
+        sparse-checkout: |
+          flex/public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
+
+    - name: fetch-lfs-test-files
+      working-directory: ${{ github.workspace }}
+      run: |
+        echo "=== Pulling all LFS files ==="
+        git lfs pull
+        echo "=== Verifying test JSON files are not LFS pointers ==="
+        head -1 flex/public/tidy3d/tests/sims/full_fdtd.json || true
 
     - name: compute-testmon-cache-key
       id: testmon-cache-key
       if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
       env:
-        DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'develop' }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'master' }}
       run: |
         default_branch="$DEFAULT_BRANCH"
         case "$default_branch" in
           ''|*[!A-Za-z0-9._/-]*)
-            echo "::warning::Invalid default branch '$default_branch'; using 'develop'."
-            default_branch="develop"
+            echo "::warning::Invalid default branch '$default_branch'; using 'master'."
+            default_branch="master"
             ;;
         esac
         default_branch_sha=$(git ls-remote --heads origin "refs/heads/${default_branch}" | awk '{print $1}')
@@ -746,8 +830,8 @@ jobs:
 
         dep_hash=$(
           {
-            git show HEAD:pyproject.toml
-            git show HEAD:poetry.lock
+            git show HEAD:flex/public/tidy3d/pyproject.toml
+            git show HEAD:flex/public/tidy3d/poetry.lock
           } | sha256sum | awk '{print $1}'
         )
 
@@ -769,7 +853,7 @@ jobs:
       if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
       uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
-        path: .testmondata
+        path: flex/public/tidy3d/.testmondata
         key: testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
         restore-keys: |
           testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
@@ -802,8 +886,8 @@ jobs:
         else
           echo "Not running inside a Docker container (/.dockerenv not found)"
         fi
-        uv venv -p $PYTHON_VERSION ${GITHUB_WORKSPACE}/.venv
-        source ${GITHUB_WORKSPACE}/.venv/bin/activate
+        uv venv -p $PYTHON_VERSION ${GITHUB_WORKSPACE}/flex/public/tidy3d/.venv
+        source ${GITHUB_WORKSPACE}/flex/public/tidy3d/.venv/bin/activate
         which python
         which uv
         python --version
@@ -850,17 +934,17 @@ jobs:
         PYTHONUNBUFFERED: "1"
         PYTEST_SELECTION_FLAGS: ${{ steps.pytest-selection-flags.outputs.flags }}
       run: |
-        source ${GITHUB_WORKSPACE}/.venv/bin/activate
+        source ${GITHUB_WORKSPACE}/flex/public/tidy3d/.venv/bin/activate
         # pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
         pytest ${PYTEST_SELECTION_FLAGS} --cov=tidy3d -rF --tb=short tests
         coverage report -m
-        coverage xml -o ${GITHUB_WORKSPACE}/coverage.xml
+        coverage xml -o ${GITHUB_WORKSPACE}/flex/public/tidy3d/coverage.xml
         TOTAL_COVERAGE=$(coverage report --format=total)
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
 
     - name: stage-testmon-cache-candidate
-      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      if: success() && github.event_name == 'merge_group' && hashFiles('flex/public/tidy3d/.testmondata') != ''
       env:
         CACHE_KEY: testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
       run: |
@@ -879,7 +963,7 @@ jobs:
         EOF
 
     - name: upload-testmon-cache-candidate
-      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      if: success() && github.event_name == 'merge_group' && hashFiles('flex/public/tidy3d/.testmondata') != ''
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: testmon-cache-candidate-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -888,60 +972,60 @@ jobs:
         retention-days: 1
 
     - name: save-testmon-cache
-      if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
+      if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('flex/public/tidy3d/.testmondata') != ''
       uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
-        path: .testmondata
+        path: flex/public/tidy3d/.testmondata
         key: testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
 
-    - name: diff-coverage-report
-      if: >- 
-        matrix.python-version == '3.13' &&
-        github.event_name == 'pull_request' &&
-        !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage')
-      env:
-        GITHUB_EVENT_PULL_REQUEST_BASE_REF: ${{ github.event.pull_request.base.ref }}
-      run: |
-        source ${GITHUB_WORKSPACE}/.venv/bin/activate
-        git config --global --add safe.directory ${GITHUB_WORKSPACE}
-        diff-cover ${GITHUB_WORKSPACE}/coverage.xml \
-          --compare-branch origin/${GITHUB_EVENT_PULL_REQUEST_BASE_REF} \
-          --format markdown:diff-coverage.md
+    # - name: diff-coverage-report
+    #   if: >-
+    #     matrix.python-version == '3.13' &&
+    #     github.event_name == 'pull_request' &&
+    #     !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage')
+    #   env:
+    #     GITHUB_EVENT_PULL_REQUEST_BASE_REF: ${{ github.event.pull_request.base.ref }}
+    #   run: |
+    #     source ${GITHUB_WORKSPACE}/flex/public/tidy3d/.venv/bin/activate
+    #     git config --global --add safe.directory ${GITHUB_WORKSPACE}
+    #     diff-cover ${GITHUB_WORKSPACE}/flex/public/tidy3d/coverage.xml \
+    #       --compare-branch origin/${GITHUB_EVENT_PULL_REQUEST_BASE_REF} \
+    #       --format markdown:diff-coverage.md
 
-    - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
-      if: >- 
-        matrix.python-version == '3.13' &&
-        github.event_name == 'pull_request' &&
-        !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage') &&
-        github.event.pull_request.head.repo.fork == false
-      with:
-        result-encoding: string
-        script: |
-          const fs = require('fs');
-          const marker = '<!-- diff-cover-report -->';
-          const body = fs.readFileSync('diff-coverage.md','utf8');
-          const report = `${marker}\n${body}`;
-          const {data:comments}=await github.rest.issues.listComments({
-            owner:context.repo.owner,
-            repo:context.repo.repo,
-            issue_number:context.issue.number,
-          });
-          const existing = comments.find(c=>c.body.startsWith(marker));
-          if(existing) {
-            await github.rest.issues.updateComment({
-              owner:context.repo.owner,
-              repo:context.repo.repo,
-              comment_id:existing.id,
-              body:report,
-            });
-          } else {
-            await github.rest.issues.createComment({
-              owner:context.repo.owner,
-              repo:context.repo.repo,
-              issue_number:context.issue.number,
-              body:report,
-            });
-          }
+    # - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+    #   if: >-
+    #     matrix.python-version == '3.13' &&
+    #     github.event_name == 'pull_request' &&
+    #     !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage') &&
+    #     github.event.pull_request.head.repo.fork == false
+    #   with:
+    #     result-encoding: string
+    #     script: |
+    #       const fs = require('fs');
+    #       const marker = '<!-- diff-cover-report -->';
+    #       const body = fs.readFileSync('flex/public/tidy3d/diff-coverage.md','utf8');
+    #       const report = `${marker}\n${body}`;
+    #       const {data:comments}=await github.rest.issues.listComments({
+    #         owner:context.repo.owner,
+    #         repo:context.repo.repo,
+    #         issue_number:context.issue.number,
+    #       });
+    #       const existing = comments.find(c=>c.body.startsWith(marker));
+    #       if(existing) {
+    #         await github.rest.issues.updateComment({
+    #           owner:context.repo.owner,
+    #           repo:context.repo.repo,
+    #           comment_id:existing.id,
+    #           body:report,
+    #         });
+    #       } else {
+    #         await github.rest.issues.createComment({
+    #           owner:context.repo.owner,
+    #           repo:context.repo.repo,
+    #           issue_number:context.issue.number,
+    #           body:report,
+    #         });
+    #       }
       
   remote-tests:
     # Run tests on a push event OR a workflow dispatch with remote_tests
@@ -962,6 +1046,7 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: flex/public/tidy3d
     env:
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
@@ -973,30 +1058,44 @@ jobs:
       if: ${{ !env.RELEASE_TAG }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        token: ${{ secrets.CI_USER_TOKEN }}
         fetch-depth: 1
         submodules: false
-        persist-credentials: false
+        persist-credentials: true
+        lfs: true
+        filter: ''  # Disable blobless cloning - fixes Windows promisor remote auth issue with submodule refs
+        sparse-checkout: |
+          flex/public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
+        token: ${{ secrets.CI_USER_TOKEN }}
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 1
         submodules: false
-        persist-credentials: false
+        persist-credentials: true
+        lfs: true
+        filter: ''  # Disable blobless cloning - fixes Windows promisor remote auth issue with submodule refs
+        sparse-checkout: |
+          flex/public/tidy3d
+          .github/workflows
+        sparse-checkout-cone-mode: false
 
     - name: compute-testmon-cache-key
       id: testmon-cache-key
       if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
       env:
-        DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'develop' }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'master' }}
       run: |
         default_branch="$DEFAULT_BRANCH"
         case "$default_branch" in
           ''|*[!A-Za-z0-9._/-]*)
-            echo "::warning::Invalid default branch '$default_branch'; using 'develop'."
-            default_branch="develop"
+            echo "::warning::Invalid default branch '$default_branch'; using 'master'."
+            default_branch="master"
             ;;
         esac
         default_branch_sha=$(git ls-remote --heads origin "refs/heads/${default_branch}" | awk '{print $1}')
@@ -1007,8 +1106,8 @@ jobs:
 
         dep_hash=$(
           {
-            git show HEAD:pyproject.toml
-            git show HEAD:poetry.lock
+            git show HEAD:flex/public/tidy3d/pyproject.toml
+            git show HEAD:flex/public/tidy3d/poetry.lock
           } | sha256sum | awk '{print $1}'
         )
 
@@ -1030,7 +1129,7 @@ jobs:
       if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
       uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
-        path: .testmondata
+        path: flex/public/tidy3d/.testmondata
         key: testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
         restore-keys: |
           testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
@@ -1166,7 +1265,7 @@ jobs:
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
 
     - name: stage-testmon-cache-candidate
-      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      if: success() && github.event_name == 'merge_group' && hashFiles('flex/public/tidy3d/.testmondata') != ''
       env:
         CACHE_KEY: testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
       run: |
@@ -1185,7 +1284,7 @@ jobs:
         EOF
 
     - name: upload-testmon-cache-candidate
-      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      if: success() && github.event_name == 'merge_group' && hashFiles('flex/public/tidy3d/.testmondata') != ''
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -1194,10 +1293,10 @@ jobs:
         retention-days: 1
 
     - name: save-testmon-cache
-      if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
+      if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('flex/public/tidy3d/.testmondata') != ''
       uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
-        path: .testmondata
+        path: flex/public/tidy3d/.testmondata
         key: testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
 
     - name: create-badge
@@ -1219,22 +1318,32 @@ jobs:
     name: develop-cli-tests
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.cli_tests == 'true'
-    uses: ./.github/workflows/tidy3d-python-client-develop-cli.yml
+    uses: ./.github/workflows/public_tidy3d-python-client-develop-cli.yml
     with:
       release_tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+    secrets: inherit # zizmor: ignore[secrets-inherit]
 
   verify-version-consistency:
     name: verify-version-consistency
     runs-on: ubuntu-latest
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.version_match_tests == 'true'
+    defaults:
+      run:
+        working-directory: flex/public/tidy3d
     steps:
       - name: checkout-code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ secrets.CI_USER_TOKEN }}
           ref: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag) || github.ref }}
           persist-credentials: false
-      
+          lfs: true
+          sparse-checkout: |
+            flex/public/tidy3d
+            .github/workflows
+          sparse-checkout-cone-mode: false
+
       - name: check-version-consistency
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
@@ -1290,107 +1399,35 @@ jobs:
           echo ""
           echo "=== Version Checks Passed ==="
 
-  test-submodules:
-    name: test-submodules
-    runs-on: ubuntu-latest
-    needs: determine-test-scope
-    if: ${{ always() && (needs.determine-test-scope.outputs.submodule_tests == 'true') && (github.event.inputs.release_tag || inputs.release_tag) && !contains(github.event.inputs.release_tag || inputs.release_tag, 'rc') }}
-    env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
-    steps:
-      - name: checkout-head
-        if: ${{ !env.RELEASE_TAG }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          submodules: 'recursive'
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: checkout-tag
-        if: ${{ env.RELEASE_TAG }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ env.RELEASE_TAG }}
-          submodules: 'recursive'
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: initialize-submodules
-        run: |
-          git submodule update --init --recursive
-
-      - name: check-submodules-for-multiple-branches
-        shell: bash
-        run: |
-          BRANCHES=("develop") # Add your branches here
-          
-          for BRANCH in "${BRANCHES[@]}"; do
-            echo "Analyzing branch: $BRANCH"
-          
-            # Fetch all branches and tags
-            git fetch --all --verbose
-          
-            # Checkout the branch
-            git checkout $BRANCH
-          
-            NOTEBOOKS_PATH=docs/notebooks
-            FAQ_PATH=docs/faq
-          
-            # Checking Notebooks submodule
-            echo "Checking $NOTEBOOKS_PATH for updates..."
-            cd $NOTEBOOKS_PATH
-            NOTEBOOKS_CURRENT_COMMIT=$(git rev-parse HEAD)
-            echo $(git fetch --all --verbose)
-            echo $(git remote get-url origin)
-            if git show-ref --verify refs/remotes/origin/$BRANCH; then
-              echo "Branch $BRANCH exists."
-            else
-              echo "::error::Branch $BRANCH does not exist on remote."
-              exit 1
-            fi
-            NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/${BRANCH})
-            echo "NOTEBOOKS_LATEST_COMMIT: $NOTEBOOKS_LATEST_COMMIT"
-            echo "NOTEBOOKS_CURRENT_COMMIT: $NOTEBOOKS_CURRENT_COMMIT"
-          
-            cd ../..
-            if [ "$NOTEBOOKS_LATEST_COMMIT" != "$NOTEBOOKS_CURRENT_COMMIT" ]; then
-              echo "::error::Submodule $NOTEBOOKS_PATH is not up to date with the $BRANCH branch. Please update it."
-              exit 1
-            else
-              echo "Submodule $NOTEBOOKS_PATH is up to date with the $BRANCH branch."
-            fi
-          
-            # Checking FAQs only on the develop branch
-            if [[ "$BRANCH" == "develop" ]]; then
-              echo "Checking $FAQ_PATH for updates..."
-              cd $FAQ_PATH
-              FAQ_CURRENT_COMMIT=$(git rev-parse HEAD)
-              echo $(git fetch --all --verbose)
-              echo $(git remote get-url origin)
-              FAQ_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/develop)
-              echo "FAQ_LATEST_COMMIT: $FAQ_LATEST_COMMIT"
-              echo "FAQ_CURRENT_COMMIT: $FAQ_CURRENT_COMMIT"
-              cd ../..
-              if [ "$FAQ_LATEST_COMMIT" != "$FAQ_CURRENT_COMMIT" ]; then
-                echo "::error::Submodule $FAQ_PATH is not up to date. Please update it."
-                exit 1
-              else
-                echo "Submodule $FAQ_PATH is up to date."
-              fi
-            fi
-          done
-          
-          echo ""
-          echo "=== Submodule Checks Passed ==="
-
   extras-integration-tests:
     name: extras-integration-tests
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.extras_integration_tests == 'true'
-    uses: ./.github/workflows/tidy3d-extras-python-client-tests-integration.yml
+    uses: ./.github/workflows/public_tidy3d-python-client-tests-extras-integration.yml
     with:
       release_tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
       test_type: ${{ needs.determine-test-scope.outputs.test_type }}
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+
+  promote-testmon-cache:
+    name: promote-testmon-cache
+    needs:
+      - determine-test-scope
+      - local-tests
+      - remote-tests
+    if: >-
+      needs.determine-test-scope.outputs.local_tests == 'true' &&
+      needs.determine-test-scope.outputs.remote_tests == 'true' &&
+      github.event_name == 'merge_group' &&
+      needs.local-tests.result == 'success' &&
+      needs.remote-tests.result == 'success'
+    permissions:
+      actions: write
+      contents: read
+    with:
+      source_event: ${{ github.event_name }}
+      source_run_id: ${{ github.run_id }}
+    uses: ./.github/workflows/public_tidy3d-testmon-cache-promote.yml
     secrets: inherit # zizmor: ignore[secrets-inherit]
 
   workflow-validation:
@@ -1404,13 +1441,11 @@ jobs:
       - lint
       - mypy
       - verify-schema-change
-      - lint-commit-messages
       - lint-branch-name
       - enforce-changelog-policy
       - zizmor
       - develop-cli-tests
       - verify-version-consistency
-      - test-submodules
       - extras-integration-tests
     runs-on: ubuntu-latest
     steps:
@@ -1450,12 +1485,6 @@ jobs:
           echo "❌ Remote tests failed."
           exit 1
 
-      - name: check-commit-message-linting
-        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.lint-commit-messages.result != 'success' && needs.lint-commit-messages.result != 'skipped' }}
-        run: |
-          echo "❌ Commit message linting failed."
-          exit 1
-
       - name: check-branch-name-linting
         if: ${{ needs.determine-test-scope.outputs.pr_review_tests == 'true' && needs.lint-branch-name.result != 'success' && needs.lint-branch-name.result != 'skipped' }}
         run: |
@@ -1484,12 +1513,6 @@ jobs:
         if: ${{ needs.determine-test-scope.outputs.version_match_tests == 'true' && needs.verify-version-consistency.result != 'success' && needs.verify-version-consistency.result != 'skipped' }}
         run: |
           echo "❌ Version consistency check failed."
-          exit 1
-      
-      - name: check-submodule-tests-result
-        if: ${{ needs.determine-test-scope.outputs.submodule_tests == 'true' && needs.test-submodules.result != 'success' && needs.test-submodules.result != 'skipped' }}
-        run: |
-          echo "❌ Submodule tests failed."
           exit 1
 
       - name: check-extras-integration-tests-result

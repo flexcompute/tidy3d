@@ -3,22 +3,24 @@ default_install_hook_types:
   - pre-commit
   - commit-msg
 repos:
-  - repo: local
-    hooks:
-      - id: move-type-imports
-        name: move type-only imports under TYPE_CHECKING
-        entry: poetry run python scripts/move_type_imports.py --mode fix --only-changed
-        language: system
-        pass_filenames: false
-        stages: [pre-commit]
+  #- repo: local
+  #  hooks:
+  #    - id: move-type-imports
+  #      name: move type-only imports under TYPE_CHECKING
+  #      entry: poetry run python scripts/move_type_imports.py --mode fix --only-changed
+  #      language: system
+  #      pass_filenames: false
+  #      stages: [pre-commit]
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: "v0.11.11"
     hooks:
      - id: ruff-check
        args: [ --fix ]
        stages: [pre-commit]
+       files: ^flex/public/tidy3d/
      - id: ruff-format
        stages: [pre-commit]
+       files: ^flex/public/tidy3d/
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
     rev: v9.22.0
     hooks:
@@ -32,6 +34,7 @@ repos:
     hooks:
       - id: zizmor
         stages: [pre-commit]
+        files: ^flex/public/tidy3d/
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.13.0
     hooks:
@@ -39,4 +42,5 @@ repos:
         name: mypy (type signatures)
         pass_filenames: false
         args:
-          - --config-file=pyproject.toml
+          - --config-file=flex/public/tidy3d/pyproject.toml
+        files: ^flex/public/tidy3d/

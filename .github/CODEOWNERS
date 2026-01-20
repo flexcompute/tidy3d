@@ -1,17 +1,18 @@
-.github/workflows/ @daquinteroflex
-tidy3d/components/autograd/ @yaugenst-flex @tylerflex @groberts-flex
-tidy3d/components/dispersion_fitter.py @caseyflex
-tidy3d/components/eme/ @caseyflex
-tidy3d/components/material/tcad/ @marc-flex
-tidy3d/components/microwave/ @dmarek-flex @weiliangjin2021
-tidy3d/components/nonlinear.py @caseyflex
-tidy3d/components/spice/ @marc-flex
-tidy3d/components/tcad/ @marc-flex
-tidy3d/config/ @yaugenst-flex
-tidy3d/plugins/autograd/ @yaugenst-flex
-tidy3d/plugins/expressions/ @yaugenst-flex
-tidy3d/plugins/klayout/ @bzhangflex
-tidy3d/plugins/microwave/ @dmarek-flex
-tidy3d/plugins/pytorch/ @yaugenst-flex
-tidy3d/web/cache.py @marcorudolphflex
-tidy3d/web/cli/cache.py @marcorudolphflex
+.github/workflows/public_tidy3d* @daquinteroflex
+.github/workflows/**copybara** @daquinteroflex
+flex/public/tidy3d/tidy3d/components/autograd/ @yaugenst-flex @tylerflex @groberts-flex
+flex/public/tidy3d/tidy3d/components/dispersion_fitter.py @caseyflex
+flex/public/tidy3d/tidy3d/components/eme/ @caseyflex
+flex/public/tidy3d/tidy3d/components/material/tcad/ @marc-flex
+flex/public/tidy3d/tidy3d/components/microwave/ @dmarek-flex @weiliangjin2021
+flex/public/tidy3d/tidy3d/components/nonlinear.py @caseyflex
+flex/public/tidy3d/tidy3d/components/spice/ @marc-flex
+flex/public/tidy3d/tidy3d/components/tcad/ @marc-flex
+flex/public/tidy3d/tidy3d/config/ @yaugenst-flex
+flex/public/tidy3d/tidy3d/plugins/autograd/ @yaugenst-flex
+flex/public/tidy3d/tidy3d/plugins/expressions/ @yaugenst-flex
+flex/public/tidy3d/tidy3d/plugins/klayout/ @bzhangflex
+flex/public/tidy3d/tidy3d/plugins/microwave/ @dmarek-flex
+flex/public/tidy3d/tidy3d/plugins/pytorch/ @yaugenst-flex
+flex/public/tidy3d/tidy3d/web/cache.py @marcorudolphflex
+flex/public/tidy3d/tidy3d/web/cli/cache.py @marcorudolphflex
