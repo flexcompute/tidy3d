@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.10.2] - 2026-01-21
 
 ### Added
 - Added `warn_once` option to logging configuration (`td.config.logging.warn_once`) that causes each unique warning message to be shown only once per process, reducing noise from repeated validation warnings.
@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Unified inside/outside permittivity handling for all geometries when computing shape gradients.
 - Enabled PEC gradients for dielectric structures embedded in PEC through use of `background_medium` field in `Structure` which includes shapes with combinations of dielectric-dielectric and dielectric-PEC boundaries.
+- Improved `ComponentModeler` task monitoring.
 
 ### Fixed
 - Fixed interpolation handling for permittivity and conductivity gradients in `CustomPoleResidue`.
@@ -1939,7 +1940,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.10.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.10.2...develop
+[2.10.2]: https://github.com/flexcompute/tidy3d/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/flexcompute/tidy3d/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/flexcompute/tidy3d/compare/v2.9.3...v2.10.0
 [2.9.3]: https://github.com/flexcompute/tidy3d/compare/v2.9.2...v2.9.3
