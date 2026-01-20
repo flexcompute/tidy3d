@@ -35,7 +35,7 @@ from tidy3d.components.geometry.utils import (
     snap_box_to_grid,
     traverse_geometries,
 )
-from tidy3d.components.geometry.utils_2d import subdivide
+from tidy3d.components.geometry.utils_2d import _is_sliver_polygon, subdivide
 from tidy3d.constants import LARGE_NUMBER, fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 
@@ -1277,6 +1277,114 @@ def test_subdivide():
         medium=td.Medium(), geometry=td.Box(size=(1, 1, 1), center=(1 - fp_eps, 0, 0))
     )
     subdivisions = subdivide(geom=overlapping_boxes, structures=[background_structure, box_sliver])
+
+
+def test_subdivide_large_geometry_sliver_filter():
+    """Test that sliver polygons are filtered based on grid cell size for large geometries.
+
+    When geometries have large coordinates, floating-point precision can create thin
+    "sliver" polygons during boolean operations. These should be filtered out when
+    their dimensions are much smaller than the grid cell size.
+    """
+    # Create a 2D geometry at large coordinates (similar to real-world case)
+    large_offset = 7000.0
+    geom = td.Box(size=(100, 35, 0), center=(0, large_offset, 0))
+
+    # Create background structure that covers the geometry
+    background = td.Structure(
+        medium=td.Medium(), geometry=td.Box(size=(200, 200, 200), center=(0, large_offset, 0))
+    )
+
+    # Create a structure that partially overlaps the 2D geometry.
+    # Position it so that boolean operations produce a tiny sliver at the edge
+    # due to floating-point precision at large coordinates.
+    # The sliver width will be on the order of fp_eps * coordinate_value ~ 1e-7 * 7000 ~ 0.001
+    sliver_offset = fp_eps * large_offset * 10  # ~0.001
+    overlapping_box = td.Structure(
+        medium=td.Medium(permittivity=2.0),
+        geometry=td.Box(
+            size=(50, 35 + sliver_offset, 100),
+            center=(25, large_offset + sliver_offset / 2, 50),
+        ),
+    )
+
+    # Create a grid with cell sizes much larger than the sliver
+    # Grid cell size of 1.0 means sliver with dim < 0.0001 should be filtered
+    # (threshold = 1.0 * _SLIVER_DIM_RTOL where _SLIVER_DIM_RTOL = 1e-4)
+    x_coords = np.linspace(-100, 100, 201)  # dx = 1.0
+    y_coords = np.linspace(large_offset - 50, large_offset + 50, 101)  # dy = 1.0
+    z_coords = np.linspace(-50, 50, 101)  # dz = 1.0
+    grid = td.Grid(boundaries=td.Coords(x=x_coords, y=y_coords, z=z_coords))
+
+    # Without grid-based filtering, this might create multiple subdivisions including slivers
+    # With grid-based filtering, slivers should be removed
+    subdivisions = subdivide(geom=geom, structures=[background, overlapping_box], grid=grid)
+
+    # Should have at most 2 subdivisions (the main regions, not slivers)
+    # In practice, for this setup we expect the subdivisions to be clean
+    # and not contain tiny sliver artifacts
+    assert len(subdivisions) == 2
+
+    # Verify that no subdivision has a dimension smaller than the sliver threshold
+    for subdivision in subdivisions:
+        subdiv_geom = subdivision[0]
+        bounds = subdiv_geom.bounds
+        for dim in range(3):
+            dim_size = bounds[1][dim] - bounds[0][dim]
+            if dim_size > 0:  # Skip zero-thickness dimensions (the 2D plane normal)
+                # The dimension should be at least comparable to grid cell size
+                # (not a tiny sliver)
+                assert dim_size >= 0.01, f"Found sliver with dimension {dim_size} in axis {dim}"
+
+
+def test_is_sliver_polygon_grid_based_filtering():
+    """Test _is_sliver_polygon function with grid-based relative thresholds.
+
+    This tests both the area-based and dimension-based sliver detection when a grid
+    is provided.
+    """
+    # Create a grid with cell size 1.0 in x and y directions
+    # For axis=2 (z-normal plane), tangential axes are x and y
+    x_coords = np.linspace(0, 10, 11)  # dx = 1.0
+    y_coords = np.linspace(0, 10, 11)  # dy = 1.0
+    z_coords = np.linspace(0, 10, 11)  # dz = 1.0
+    grid = td.Grid(boundaries=td.Coords(x=x_coords, y=y_coords, z=z_coords))
+
+    # With cell size 1.0:
+    # - Area threshold = 1.0 * 1.0 * 1e-4 = 1e-4
+    # - Dimension threshold = 1.0 * 1e-4 = 1e-4
+
+    # Test 1: Polygon with area below relative threshold (hits line 130)
+    # Small square polygon with sides 0.005 -> area = 2.5e-5 < 1e-4
+    # Both dimensions (0.005) are > 1e-4, so it won't be caught by dimension check
+    small_area_polygon = shapely.Polygon([(0, 0), (0.005, 0), (0.005, 0.005), (0, 0.005)])
+    assert small_area_polygon.area < 1e-4  # Verify area is below threshold
+    assert _is_sliver_polygon(small_area_polygon, axis=2, grid=grid) is True
+
+    # Test 2: Thin polygon with one dimension below relative threshold (hits line 138)
+    # Very thin but long polygon: 0.00005 x 10 -> area = 0.0005 >= 1e-4
+    # But one dimension (0.00005) is < 1e-4
+    thin_polygon = shapely.Polygon([(0, 0), (10, 0), (10, 0.00005), (0, 0.00005)])
+    assert thin_polygon.area >= 1e-4  # Area is above threshold
+    assert _is_sliver_polygon(thin_polygon, axis=2, grid=grid) is True
+
+    # Test 3: Normal polygon that should NOT be filtered
+    # Square polygon with sides 1.0 -> area = 1.0, both dims = 1.0
+    normal_polygon = shapely.Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    assert _is_sliver_polygon(normal_polygon, axis=2, grid=grid) is False
+
+    # Test 4: Without grid, only absolute threshold applies
+    # The small_area_polygon has area 2.5e-5, which may be above _MIN_POLYGON_AREA
+    # depending on its value, so let's test with a polygon that's definitely small
+    # but above absolute minimum
+    medium_polygon = shapely.Polygon([(0, 0), (0.01, 0), (0.01, 0.01), (0, 0.01)])
+    # Without grid, this should NOT be filtered (area 1e-4 is above absolute minimum)
+    assert _is_sliver_polygon(medium_polygon, axis=2, grid=None) is False
+    # With grid, this should be filtered (area 1e-4 = threshold, but < due to floating point)
+    # Actually 1e-4 == 1e-4, so it won't be filtered. Let's use slightly smaller.
+    smaller_polygon = shapely.Polygon([(0, 0), (0.009, 0), (0.009, 0.009), (0, 0.009)])
+    # Area = 8.1e-5 < 1e-4, so should be filtered with grid
+    assert _is_sliver_polygon(smaller_polygon, axis=2, grid=grid) is True
 
 
 def test_subdivide_geometry_group_with_polygon_holes():

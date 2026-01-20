@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.
 - Fixed frequency accumulation of gradients for custom dispersive media.
 - Fixed `snap_box_to_grid` producing zero-size boxes when using `Expand` behavior with very small intervals centered on a grid point.
+- Fixed sliver polygon artifacts in 2D material subdivision by filtering polygons based on grid cell size, preventing numerical issues with large-coordinate geometries.
 
 ## [2.10.2] - 2026-01-21
 
