@@ -149,6 +149,7 @@ from .viz import (
     equal_aspect,
     plot_params_abc,
     plot_params_bloch,
+    plot_params_min_grid_size,
     plot_params_override_structures,
     plot_params_pec,
     plot_params_pmc,
@@ -1127,6 +1128,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: Optional[tuple[float, float]] = None,
         override_structures_alpha: float = 1,
         snapping_points_alpha: float = 1,
+        finest_grid_region_alpha: float = 0.1,
         **kwargs: Any,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
@@ -1147,6 +1149,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Opacity of the override structures.
         snapping_points_alpha : float = 1
             Opacity of the snapping points.
+        finest_grid_region_alpha : float = 0.1
+            Opacity of the shaded regions highlighting finest grid regions.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         **kwargs
@@ -1257,6 +1261,40 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
+
+        # Plot shaded regions for minimal grid cell sizes
+        if finest_grid_region_alpha > 0:
+            min_size_locs = self.grid.fine_mesh_info
+            dim_names = ["x", "y", "z"]
+            dim_x = dim_names[axis_x]
+            dim_y = dim_names[axis_y]
+
+            xlim = ax.get_xlim()
+            ylim = ax.get_ylim()
+
+            plot_params = plot_params_min_grid_size.include_kwargs(alpha=finest_grid_region_alpha)
+
+            for (dim, location), size in min_size_locs.items():
+                # Only plot patches for dimensions in the current plane
+                if dim == dim_x:
+                    # Vertical patch (constant x)
+                    rect = mpl.patches.Rectangle(
+                        xy=(location - size / 2, ylim[0]),
+                        width=size,
+                        height=ylim[1] - ylim[0],
+                        **plot_params.to_kwargs(),
+                    )
+                    ax.add_patch(rect)
+                elif dim == dim_y:
+                    # Horizontal patch (constant y)
+                    rect = mpl.patches.Rectangle(
+                        xy=(xlim[0], location - size / 2),
+                        width=xlim[1] - xlim[0],
+                        height=size,
+                        **plot_params.to_kwargs(),
+                    )
+                    ax.add_patch(rect)
+
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
             ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units

@@ -85,3 +85,6 @@ plot_params_grid = PlotParams(edgecolor="black", lw=0.2)
 plot_params_lumped_element = PlotParams(
     alpha=0.4, facecolor="mediumblue", edgecolor="mediumblue", lw=3
 )
+plot_params_min_grid_size = PlotParams(
+    alpha=0.5, facecolor="gray", edgecolor="darkred", lw=0, fill=True, hatch=".", zorder=0
+)

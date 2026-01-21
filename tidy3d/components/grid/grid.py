@@ -17,6 +17,12 @@ from tidy3d.exceptions import SetupError
 # data type of one dimensional coordinate array.
 Coords1D = ArrayFloat1D
 
+# Percentage tolerance for identifying minimal cell sizes
+MIN_CELL_SIZE_TOLERANCE = 0.05  # 5%
+
+# Maximum number of minimal cell size locations to return
+MAX_MIN_SIZE_LOCATIONS = 10
+
 
 class Coords(Tidy3dBaseModel):
     """Holds data about a set of x,y,z positions on a grid.
@@ -479,6 +485,65 @@ class Grid(Tidy3dBaseModel):
         return float(min(min(sizes) for sizes in self.sizes.to_list))
 
     @property
+    def fine_mesh_info(self) -> dict[tuple[str, float], float]:
+        """Return locations where cell sizes are minimal or near-minimal.
+
+        Finds all grid cell centers where the cell size is within
+        ``MIN_CELL_SIZE_TOLERANCE`` of the minimum cell size across all dimensions.
+        Skips dimensions where cell sizes are nearly uniform (variation within
+        ``MIN_CELL_SIZE_TOLERANCE``). Returns at most ``MAX_MIN_SIZE_LOCATIONS``
+        entries.
+
+        Returns
+        -------
+        dict[tuple[str, float], float]
+            Dictionary mapping (dimension, location) tuples to cell sizes. Keys are
+            tuples of (dimension, coordinate) where dimension is 'x', 'y', or 'z' and
+            coordinate is the cell center position. Values are the corresponding cell
+            sizes at those locations. Empty dict if all dimensions are nearly uniform.
+
+        Example
+        -------
+        >>> x = np.array([0, 0.01, 0.02, 0.1, 0.2])  # varying cell sizes
+        >>> y = np.linspace(-1, 1, 11)
+        >>> z = np.linspace(-1, 1, 12)
+        >>> coords = Coords(x=x, y=y, z=z)
+        >>> grid = Grid(boundaries=coords)
+        >>> min_locs = grid.fine_mesh_info
+        >>> # Returns dict like {('x', 0.005): 0.01, ('x', 0.015): 0.01, ...}
+        """
+        min_cell_size = self.min_size
+        threshold = min_cell_size * (1.0 + MIN_CELL_SIZE_TOLERANCE)
+
+        centers = self.centers
+        sizes = self.sizes
+
+        locations = {}
+        for dim in "xyz":
+            dim_sizes = sizes.to_dict[dim]
+            dim_centers = centers.to_dict[dim]
+
+            # Skip nearly uniform dimensions
+            min_dim_size = np.min(dim_sizes)
+            max_dim_size = np.max(dim_sizes)
+            if max_dim_size - min_dim_size <= MIN_CELL_SIZE_TOLERANCE * min_dim_size:
+                continue
+
+            # Find indices where cell size is within tolerance of minimum
+            mask = dim_sizes <= threshold
+            if np.any(mask):
+                min_centers = dim_centers[mask]
+                min_sizes = dim_sizes[mask]
+                # Add each location and its size to the dictionary
+                for center, size in zip(min_centers, min_sizes):
+                    locations[(dim, float(center))] = float(size)
+                    # Stop if we've reached the maximum number of locations
+                    if len(locations) >= MAX_MIN_SIZE_LOCATIONS:
+                        return locations
+
+        return locations
+
+    @property
     def max_size(self) -> float:
         """Return maximal cells size in all dimensions.
 
@@ -502,6 +567,10 @@ class Grid(Tidy3dBaseModel):
             "min_grid_size": self.min_size,
             "max_grid_size": self.max_size,
             "computational_complexity": total_cells / self.min_size,
+            "fine_mesh_info": [
+                f"{dim}={loc:.4g} (size={size:.4g})"
+                for (dim, loc), size in self.fine_mesh_info.items()
+            ],
         }
 
     @property
