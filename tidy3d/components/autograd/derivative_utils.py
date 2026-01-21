@@ -568,11 +568,27 @@ class DerivativeInfo:
                 grid_centers_select[nearest_grid] - grid_centers_select[nearest_grid - 1]
             )
 
-        # assuming we move in the normal direction, finds which dimension we need to move the least
+        #
+        # Assuming we move in the normal direction, finds which dimension we need to move the least
         # in order to ensure we snap to a point outside the boundary in the worst case (i.e. - the
         # nearest point is just inside the surface)
+        #
+        # Cover for 2D cases using filter below:
+        # 2D case 1:
+        #    - in plane gradients where normal: [a, b, 0] and grid: [dx, dy, 0]
+        #    - want to rely on in plane normals for boundary snapping (filter on normal component = 0)
+        # 2D case 2:
+        #    - out of plane gradietns where normal: [0, 0, 1] and grid: [dx, dy, 0]
+        #    - want to rely on out of plane normal (so do not want to filter on grid component = 0)
+        #    - data may not be captured out of plane, so no snapping will occur even with coords_dn = 0
+        #
+        small_number = np.finfo(normals.dtype).eps
         coords_dn = np.min(
-            np.abs(grid_ddim) / (np.abs(normals) + np.finfo(normals.dtype).eps),
+            np.where(
+                (np.abs(normals) > small_number),
+                np.abs(grid_ddim) / (np.abs(normals) + small_number),
+                np.inf,
+            ),
             axis=1,
             keepdims=True,
         )
