@@ -436,3 +436,97 @@ def test_discretize_inds_relax_precision():
     # With relaxed precision, the boundaries close to cell boundaries should be treated as equal
     assert inds_exact == inds_max_with_relax
     assert inds_max_no_relax != inds_max_with_relax
+
+
+def test_fine_mesh_info_uniform_grid():
+    """Test that fine_mesh_info returns empty dict for uniform grids."""
+    # Create a uniform grid
+    boundaries_x = np.linspace(-1, 1, 11)  # uniform spacing of 0.2
+    boundaries_y = np.linspace(-2, 2, 21)  # uniform spacing of 0.2
+    boundaries_z = np.linspace(-3, 3, 31)  # uniform spacing of 0.2
+    boundaries = Coords(x=boundaries_x, y=boundaries_y, z=boundaries_z)
+    g = Grid(boundaries=boundaries)
+
+    # Uniform grids should return empty dict
+    info = g.fine_mesh_info
+    assert info == {}
+
+
+def test_fine_mesh_info_single_dimension_varying():
+    """Test fine_mesh_info with varying cell sizes in one dimension."""
+    # Create grid with varying x, uniform y and z
+    x = np.array([0.0, 0.01, 0.02, 0.1, 0.2, 0.5])  # varying cell sizes
+    y = np.linspace(-1, 1, 11)  # uniform
+    z = np.linspace(-1, 1, 12)  # uniform
+    boundaries = Coords(x=x, y=y, z=z)
+    g = Grid(boundaries=boundaries)
+
+    info = g.fine_mesh_info
+
+    # Should have entries only for x dimension
+    assert len(info) > 0
+    for key in info.keys():
+        dim, _ = key
+        assert dim == "x"
+
+    # The minimum cell size is 0.01 (between 0.0 and 0.01, and between 0.01 and 0.02)
+    # Centers at these locations are 0.005 and 0.015
+    assert ("x", 0.005) in info
+    assert ("x", 0.015) in info
+    assert np.isclose(info[("x", 0.005)], 0.01, rtol=1e-6)
+    assert np.isclose(info[("x", 0.015)], 0.01, rtol=1e-6)
+
+
+def test_fine_mesh_info_multiple_dimensions():
+    """Test fine_mesh_info with varying cell sizes in multiple dimensions."""
+    # Create grid with varying sizes in x and y
+    x = np.array([0.0, 0.01, 0.02, 0.15])  # min size 0.01
+    y = np.array([-1.0, -0.99, -0.98, -0.5, 0.0])  # min size 0.01
+    z = np.linspace(-1, 1, 11)  # uniform
+    boundaries = Coords(x=x, y=y, z=z)
+    g = Grid(boundaries=boundaries)
+
+    info = g.fine_mesh_info
+
+    # Should have entries for both x and y dimensions
+    x_entries = [key for key in info.keys() if key[0] == "x"]
+    y_entries = [key for key in info.keys() if key[0] == "y"]
+    assert len(x_entries) > 0
+    assert len(y_entries) > 0
+
+    # Check that all cell sizes are near minimum
+    min_size = g.min_size
+    for size in info.values():
+        assert size <= min_size * 1.05  # within 5% tolerance
+
+
+def test_fine_mesh_info_tolerance_threshold():
+    """Test that fine_mesh_info includes cells within tolerance of minimum."""
+    # Create grid with minimum size 0.1 and slightly larger cells
+    x = np.array(
+        [
+            0.0,
+            0.1,  # size 0.1 (min)
+            0.2,  # size 0.1 (min)
+            0.304,  # size 0.104 (within 5% tolerance)
+            0.5,  # size 0.196 (too large)
+        ]
+    )
+    y = np.linspace(-1, 1, 11)
+    z = np.linspace(-1, 1, 11)
+    boundaries = Coords(x=x, y=y, z=z)
+    g = Grid(boundaries=boundaries)
+
+    info = g.fine_mesh_info
+
+    # Should include the first three cells (sizes 0.1, 0.1, 0.104)
+    # but not the last one (size 0.196)
+    assert len(info) == 3
+
+    # Check that the expected centers are in info (with tolerance for floating point)
+    x_dims = [key for key in info.keys() if key[0] == "x"]
+    x_coords = [coord for dim, coord in x_dims]
+
+    assert any(np.isclose(coord, 0.05, atol=1e-9) for coord in x_coords)
+    assert any(np.isclose(coord, 0.15, atol=1e-9) for coord in x_coords)
+    assert any(np.isclose(coord, 0.252, atol=1e-9) for coord in x_coords)
