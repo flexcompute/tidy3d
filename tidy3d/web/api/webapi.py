@@ -458,6 +458,7 @@ def upload(
     source_required: bool = True,
     solver_version: Optional[str] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    verbose_estimate_cost: Optional[bool] = None,
 ) -> TaskId:
     """
     Upload simulation to server, but do not start running :class:`.Simulation`.
@@ -487,6 +488,8 @@ def upload(
         target solver version.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
+    verbose_estimate_cost : Optional[bool] = None
+        Determines if cost estimation should be printed. If ``None``, defaults to ``verbose`` argument.
 
     Returns
     -------
@@ -561,7 +564,8 @@ def upload(
         remote_sim_file=remote_sim_file,
     )
 
-    estimate_cost(task_id=resource_id, solver_version=solver_version, verbose=verbose)
+    verbose_estimate_cost = verbose if verbose_estimate_cost is None else verbose_estimate_cost
+    estimate_cost(task_id=resource_id, solver_version=solver_version, verbose=verbose_estimate_cost)
 
     task.validate_post_upload(parent_tasks=parent_tasks)
 
