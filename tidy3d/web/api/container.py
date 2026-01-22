@@ -360,14 +360,14 @@ class Job(WebContainer):
         if self.task_id_cached:
             return self.task_id_cached
         self._check_folder(self.folder_name)
-        return self._upload(verbose=False)
+        return self._upload(verbose_estimate_cost=False)
 
-    def _upload(self, verbose: Optional[bool] = None) -> TaskId:
+    def _upload(self, verbose_estimate_cost: Optional[bool] = None) -> TaskId:
         """Upload this job and return the task ID for handling."""
         # upload kwargs with all fields except task_id
         upload_kwargs = {key: getattr(self, key) for key in self._upload_fields}
-        if verbose is not None:
-            upload_kwargs["verbose"] = verbose
+        if verbose_estimate_cost is not None:
+            upload_kwargs["verbose_estimate_cost"] = verbose_estimate_cost
         task_id = web.upload(**upload_kwargs)
         return task_id
 
