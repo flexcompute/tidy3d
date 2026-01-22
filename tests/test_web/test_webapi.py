@@ -955,8 +955,22 @@ def apply_common_patches(
     monkeypatch.setattr(f"{api_path}.get_info", _fake_get_info)
 
     # other patches
-    monkeypatch.setattr(f"{api_path}.estimate_cost", lambda *a, **k: 0.0)
-    monkeypatch.setattr(f"{api_path}.upload", lambda *a, **k: k["task_name"])
+    def fake_estimate_cost(*args, **kwargs):
+        verbose = kwargs.pop("verbose", True)
+        if verbose:
+            print("estimate cost")
+        return 0.0
+
+    monkeypatch.setattr(f"{api_path}.estimate_cost", fake_estimate_cost)
+
+    def fake_upload(*args, **kwargs):
+        verbose = kwargs.pop("verbose", True)
+        verbose_estimate_cost = kwargs.pop("verbose_estimate_cost", None)
+        verbose_estimate_cost = verbose if verbose_estimate_cost is None else verbose_estimate_cost
+        fake_estimate_cost(verbose=verbose_estimate_cost)
+        return kwargs["task_name"]
+
+    monkeypatch.setattr(f"{api_path}.upload", fake_upload)
     monkeypatch.setattr(WebContainer, "_check_folder", lambda *a, **k: True)
     monkeypatch.setattr(f"{api_path}._modesolver_patch", lambda *_, **__: None, raising=False)
     monkeypatch.setattr(f"{api_path}.download", lambda *_, **__: None, raising=False)
@@ -1103,3 +1117,38 @@ def test_batch_run_accepts_pathlike_dir(monkeypatch, tmp_path, dir_builder):
 
     batch_file = Path(out_dir) / "batch.hdf5"
     assert batch_file.is_file()
+
+
+def test_job_estimate_cost_logging(monkeypatch, tmp_path, capsys):
+    def assert_estimate_cost_prints(count: int) -> None:
+        out, err = capsys.readouterr()
+        assert out.count("estimate cost") == count, (
+            f"expected {count}, got {out.count('estimate cost')}\nout: {out}"
+        )
+
+    sim = make_sim()
+    apply_common_patches(monkeypatch, tmp_path, taskid_to_sim={"task": sim})
+
+    job = Job(simulation=sim, task_name=TASK_NAME)
+
+    # accessing task_id should NOT print
+    _ = job.task_id
+    assert_estimate_cost_prints(0)
+
+    # upload should print
+    job.upload()
+    assert_estimate_cost_prints(1)
+
+    # test web estimate cost
+    td.web.api.webapi.estimate_cost(job.task_id, verbose=True)
+    assert_estimate_cost_prints(1)
+
+    td.web.api.webapi.estimate_cost(job.task_id, verbose=False)
+    assert_estimate_cost_prints(0)
+
+    # test job estimate cost
+    job.estimate_cost()
+    assert_estimate_cost_prints(1)
+
+    job.estimate_cost(verbose=False)
+    assert_estimate_cost_prints(0)
