@@ -20,7 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed docstrings with missing Notes sections causing spurious parameters in Sphinx documentation.
 - Fixed coordinate snapping in shape gradient computation to handle 0 normal and grid spacing components.
 - Fixed duplicate printing of cost estimation of `Job`.
-- Fixed EME with inconsistent `interp_spec`.
+- Fixed `outer_dot` with EME port modes `interpolated_copy`.
+
+### Removed
+- Removed support for inconsistent `interp_specs` in the EME grid.
 
 ## [2.10.1] - 2026-01-14
 

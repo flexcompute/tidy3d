@@ -1334,7 +1334,7 @@ def test_eme_sim_data():
             eme_cell_index=0,
         )
 
-    # test _validate_interp_specs warning for inconsistent interp_specs
+    # test _validate_interp_specs error for inconsistent interp_specs
     mode_spec1 = td.EMEModeSpec(num_modes=10, interp_spec=td.ModeInterpSpec.cheb(num_points=3))
     mode_spec2 = td.EMEModeSpec(num_modes=10, interp_spec=td.ModeInterpSpec.cheb(num_points=5))
     eme_grid_spec_inconsistent = td.EMECompositeGrid(
@@ -1344,10 +1344,10 @@ def test_eme_sim_data():
         ],
         subgrid_boundaries=[0],
     )
-    with AssertLogLevel("WARNING", contains_str="interp_spec"):
+    with pytest.raises(SetupError):
         sim_interp_test = sim.updated_copy(eme_grid_spec=eme_grid_spec_inconsistent)
 
-    # test _validate_interp_specs no warning for consistent interp_specs
+    # test _validate_interp_specs no error for consistent interp_specs
     mode_spec_consistent = td.EMEModeSpec(
         num_modes=10, interp_spec=td.ModeInterpSpec.cheb(num_points=4)
     )
