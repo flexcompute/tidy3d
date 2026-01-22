@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed interpolation handling for permittivity and conductivity gradients in `CustomPoleResidue`.
 - Fixed docstrings with missing Notes sections causing spurious parameters in Sphinx documentation.
 - Fixed coordinate snapping in shape gradient computation to handle 0 normal and grid spacing components.
+- Fixed duplicate printing of cost estimation of `Job`.
 
 ## [2.10.1] - 2026-01-14
 
