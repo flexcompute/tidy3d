@@ -20,11 +20,6 @@ from tidy3d.log import log
 from .dataset import EMECoefficientDataset, EMESMatrixDataset
 from .monitor_data import EMEFieldData, EMEModeSolverData, EMEMonitorDataType
 
-# Tolerance for frequency matching when filtering mode data to monitor-sampled frequencies.
-# Set to 1e-5 to provide sufficient margin for floating-point precision while ensuring
-# correct frequency alignment in broadband simulations with interpolation.
-MODE_FREQ_TOL = 1e-5
-
 
 class EMESimulationData(AbstractYeeGridSimulationData):
     """Data associated with an EME simulation."""
@@ -122,16 +117,6 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 "certain derived quantities, like the flux."
             )
         grid_expanded = self.simulation.discretize_monitor(monitor=monitor)
-
-        # filter only the relevant frequencies
-        monitor_freqs = np.asarray(
-            monitor.mode_spec._sampling_freqs_mode_solver_data(freqs=self.simulation.freqs),
-            dtype=float,
-        )
-        update_dict = {
-            key: field.sel(f=monitor_freqs, method="nearest", tolerance=MODE_FREQ_TOL)
-            for key, field in update_dict.items()
-        }
 
         return ModeSolverData(
             **update_dict,
@@ -242,25 +227,6 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         interp_spec1 = mode_spec1.interp_spec if mode_spec1 is not None else None
         interp_spec2 = mode_spec2.interp_spec if mode_spec2 is not None else None
 
-        modes1, port_modes1 = modes1._interpolated_copies_if_needed(other=port_modes1)
-        modes2, port_modes2 = modes2._interpolated_copies_if_needed(other=port_modes2)
-
-        # Normalize modes if simulation.normalize is True
-        def normalize_modes_for_basis_conversion(modes):
-            """Normalize modes by flux magnitude if simulation.normalize is True."""
-            if not self.simulation.normalize:
-                return modes
-
-            scaling = np.sqrt(np.abs(modes.flux))
-            scaling = scaling.where(scaling != 0, 1)
-            normalized_fields = {
-                name: field / scaling for name, field in modes.field_components.items()
-            }
-            return modes.updated_copy(**normalized_fields)
-
-        modes1 = normalize_modes_for_basis_conversion(modes1)
-        modes2 = normalize_modes_for_basis_conversion(modes2)
-
         modes_in_1 = "mode_index" in list(modes1.field_components.values())[0].coords
         modes_in_2 = "mode_index" in list(modes2.field_components.values())[0].coords
 
@@ -313,6 +279,10 @@ class EMESimulationData(AbstractYeeGridSimulationData):
 
             if self.simulation._sweep_modes:
                 port_modes1, port_modes2 = self.port_modes_list_sweep[sweep_index]
+                if not modes1_provided:
+                    modes1 = port_modes1
+                if not modes2_provided:
+                    modes2 = port_modes2
 
             if modes1_provided:
                 overlaps1 = modes1.outer_dot(port_modes1, conjugate=False)

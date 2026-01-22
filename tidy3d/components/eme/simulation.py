@@ -830,10 +830,9 @@ class EMESimulation(AbstractYeeGridSimulation):
         for mode_spec in self.eme_grid.mode_specs:
             interp_specs.append(mode_spec.interp_spec)
         if len(set(interp_specs)) > 1:
-            log.warning(
-                "The EME grid does not have identical 'interp_spec' in each "
-                "cell. This can decrease performance as the modes must be "
-                "interpolated before overlaps are computed."
+            raise SetupError(
+                "All of the 'mode_spec.interp_spec' in the EME grid must be identical. "
+                f"Currently, they are {set(interp_specs)}."
             )
 
     def _validate_size(self) -> None:
