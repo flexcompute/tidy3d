@@ -18356,6 +18356,14 @@
         }
       ]
     },
+    "structure_priority_mode": {
+      "default": "conductor",
+      "enum": [
+        "conductor",
+        "equal"
+      ],
+      "type": "string"
+    },
     "type": {
       "default": "TerminalComponentModeler",
       "enum": [
