@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `ModeSortSpec.keep_modes` which can be set to `"all"` to keep all modes in the mode solver (the default), `"filtered"` to keep only modes passing the filter defined by the `ModeSortSpec`, or an integer `N` to keep only the top `N` modes after filtering and sorting.
 - Added `fill_fraction_box` as a new filtering and sorting key which computes the field-energy fill fraction within a specified bounding box (`ModeSortSpec.bounding_box`).
 
+### Breaking Changes
+- Added `structure_priority_mode` for `TerminalComponentModeler` and default to `"conductor"` to ensure metal structures override dielectrics regardless of structure order, preventing order-dependent results in RF simulations.
+
 ### Changed
 - `ModeSortSpec.sort_key` is now required with a default of `"n_eff"` (previously optional with `None` default). `ModeSortSpec.sort_order` is now optional with a default of `None`, which automatically selects the natural order based on `sort_key` and `sort_reference`: ascending when a reference is provided (closest first), otherwise descending for `n_eff` and polarization fractions (higher values first), ascending for `k_eff` and `mode_area` (lower values first).
 

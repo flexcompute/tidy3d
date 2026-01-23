@@ -24,7 +24,7 @@ from tidy3d.components.monitor import DirectivityMonitor, ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Ax, Complex, Coordinate
-from tidy3d.components.types.base import annotate_type
+from tidy3d.components.types.base import PriorityMode, annotate_type
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, MICROMETER, OHM, fp_eps, inf
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
@@ -209,6 +209,16 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         description="The low frequency smoothing parameters for the terminal component simulation.",
     )
 
+    structure_priority_mode: Optional[PriorityMode] = pd.Field(
+        "conductor",
+        title="Structure Priority Setting",
+        description="If not `None`, override the structure priority mode in the simulation. "
+        "This field only affects structures of `priority=None`. "
+        "If `equal`, the priority of those structures is set to 0; if `conductor`, "
+        "the priority of structures made of :class:`LossyMetalMedium` is set to 90, "
+        ":class:`PECMedium` to 100, and others to 0.",
+    )
+
     @property
     def _sim_with_sources(self) -> Simulation:
         """Instance of :class:`.Simulation` with all sources and absorbers added for each port, for plotting."""
@@ -387,7 +397,8 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     @cached_property
     def _base_sim_no_radiation_monitors(self) -> Simulation:
-        """The intermediate base simulation with all grid refinement options, port loads (if present), and monitors added,
+        """The intermediate base simulation with all grid refinement options, structure priority mode,
+        port loads (if present), and monitors added,
         which is only missing the source excitations and radiation monitors.
         """
         # internal mesh override and snapping points are automatically generated from lumped elements.
@@ -400,11 +411,15 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                 "wavelength": C_0 / np.max(self.freqs),
             }
         )
-
+        update_dict = {
+            "grid_spec": grid_spec,
+            "lumped_elements": lumped_resistors,
+        }
+        if self.structure_priority_mode is not None:
+            update_dict["structure_priority_mode"] = self.structure_priority_mode
         # Make an initial simulation with new grid_spec to determine where LumpedPorts are snapped
         sim_wo_source = self.simulation.updated_copy(
-            grid_spec=grid_spec,
-            lumped_elements=lumped_resistors,
+            **update_dict,
             validate=False,
             deep=False,
         )

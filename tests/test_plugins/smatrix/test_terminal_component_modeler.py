@@ -2333,3 +2333,26 @@ def test_validate_port_refinement_with_uniform_grid():
         make_coaxial_component_modeler(
             port_types=(CoaxialLumpedPort, WavePort), grid_spec=uniform_grid
         )
+
+
+def test_structure_priority_mode_default():
+    """Test that TerminalComponentModeler defaults to conductor priority mode."""
+    modeler = make_component_modeler(planar_pec=True)
+
+    # Check that the modeler defaults to "conductor" mode
+    assert modeler.structure_priority_mode == "conductor"
+
+    # Check that base_sim uses this priority mode
+    assert modeler.base_sim.structure_priority_mode == "conductor"
+
+
+def test_structure_priority_mode_override():
+    """Test that structure_priority_mode can be overridden."""
+    # Create modeler with "equal" mode
+    modeler = make_component_modeler(planar_pec=True, structure_priority_mode="equal")
+
+    # Check that the override is applied
+    assert modeler.structure_priority_mode == "equal"
+
+    # Check that base_sim uses the overridden priority mode
+    assert modeler.base_sim.structure_priority_mode == "equal"
