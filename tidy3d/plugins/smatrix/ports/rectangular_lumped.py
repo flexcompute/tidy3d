@@ -9,7 +9,7 @@ import pydantic.v1 as pd
 from shapely import union_all
 from shapely.geometry.base import BaseMultipartGeometry
 
-from tidy3d.components.base import cached_property
+from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box, Geometry
@@ -30,7 +30,7 @@ from tidy3d.components.source.current import UniformCurrentSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import Axis, FreqArray, LumpDistType
-from tidy3d.components.validators import assert_line_or_plane
+from tidy3d.components.validators import assert_plane
 from tidy3d.exceptions import SetupError, ValidationError
 
 from .base_lumped import AbstractLumpedPort
@@ -38,6 +38,12 @@ from .base_lumped import AbstractLumpedPort
 
 class LumpedPort(AbstractLumpedPort, Box):
     """Class representing a single rectangular lumped port.
+
+    Note
+    ----
+    The port must be planar (exactly one zero-size dimension). One-dimensional ports
+    (two zero-size dimensions) are not supported. If you need a narrow port, provide a
+    small but finite width along the lateral axis (e.g., ``fp_eps`` or larger).
 
     Example
     -------
@@ -81,7 +87,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         "the lumped port.",
     )
 
-    _line_plane_validator = assert_line_or_plane()
+    _plane_validator = assert_plane()
 
     @cached_property
     def injection_axis(self):
@@ -89,6 +95,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         return self.size.index(0.0)
 
     @pd.validator("voltage_axis", always=True)
+    @skip_if_fields_missing(["size"])
     def _voltage_axis_in_plane(cls, val, values):
         """Ensure voltage integration axis is in the port's plane."""
         size = values.get("size")
