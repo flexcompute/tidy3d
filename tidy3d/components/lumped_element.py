@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from math import isclose
 from typing import Annotated, Literal, Optional, Union
 
 import numpy as np
@@ -13,8 +12,8 @@ from tidy3d.components.grid.grid import Grid
 from tidy3d.components.medium import PEC2D, Debye, Drude, Lorentz, Medium, Medium2D, PoleResidue
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.structure import MeshOverrideStructure, Structure
-from tidy3d.components.validators import assert_line_or_plane, assert_plane, validate_name_str
-from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
+from tidy3d.components.validators import assert_plane, validate_name_str
+from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM
 from tidy3d.exceptions import ValidationError
 
 from .base import cached_property, skip_if_fields_missing
@@ -106,9 +105,17 @@ class LumpedElement(MicrowaveBaseModel, ABC):
 
 
 class RectangularLumpedElement(LumpedElement, Box):
-    """Class representing a rectangular element with zero thickness. A :class:`RectangularLumpedElement`
-    is appended to the list of structures in the simulation as a :class:`.Medium2D` with the appropriate
-    material properties given their size, voltage axis, and the network they represent."""
+    """Class representing a rectangular planar element with zero thickness along its normal axis.
+    A :class:`RectangularLumpedElement` is appended to the list of structures in the simulation as
+    a :class:`.Medium2D` with the appropriate material properties given their size, voltage axis,
+    and the network they represent.
+
+    Note
+    ----
+    The element must be planar (exactly one zero-size dimension). One-dimensional elements
+    (two zero-size dimensions) are not supported. If you need a narrow element, provide a
+    small but finite width along the lateral axis.
+    """
 
     voltage_axis: Axis = pd.Field(
         ...,
@@ -127,7 +134,7 @@ class RectangularLumpedElement(LumpedElement, Box):
         "boundary along their ``normal_axis``, regardless of this option.",
     )
 
-    _line_plane_validator = assert_line_or_plane()
+    _plane_validator = assert_plane()
 
     @cached_property
     def normal_axis(self):
@@ -165,6 +172,7 @@ class RectangularLumpedElement(LumpedElement, Box):
 
         snap_location = [SnapLocation.Boundary] * 3
         snap_behavior = [SnapBehavior.Closest] * 3
+        # Apply Center/Expand snapping to lateral axis for proper grid alignment
         snap_location[self.lateral_axis] = SnapLocation.Center
         snap_behavior[self.lateral_axis] = SnapBehavior.Expand
         return SnappingSpec(location=snap_location, behavior=snap_behavior)
@@ -318,8 +326,6 @@ class LumpedResistor(RectangularLumpedElement):
             geometry=box,
             medium=Medium2D(**medium_dict),
         )
-
-    _plane_validator = assert_plane()
 
 
 class CoaxialLumpedResistor(LumpedElement):
@@ -961,7 +967,7 @@ class LinearLumpedElement(RectangularLumpedElement):
         cell_center = list(snap_point_to_grid(grid, self.center, snap_location))
         size = [0, 0, 0]
 
-        if self.dist_type != "off" and self.size[self.lateral_axis] != 0:
+        if self.dist_type != "off":
             cell_center[self.lateral_axis] = self.center[self.lateral_axis]
             size[self.lateral_axis] = self.size[self.lateral_axis]
         if self.dist_type == "on":
@@ -993,15 +999,6 @@ class LinearLumpedElement(RectangularLumpedElement):
         top_min[self.voltage_axis] = cell_max[self.voltage_axis]
         bottom_max = list(element_max)
         bottom_max[self.voltage_axis] = cell_min[self.voltage_axis]
-
-        # Create "wires" if the size is 0 along the lateral axis
-        if isclose(self.size[self.lateral_axis], 0, rel_tol=fp_eps, abs_tol=fp_eps):
-            lateral_center = cell_box.center[self.lateral_axis]
-            width = max(fp_eps, fp_eps * abs(lateral_center))
-            top_min[self.lateral_axis] = lateral_center - width
-            element_max[self.lateral_axis] = lateral_center + width
-            element_min[self.lateral_axis] = lateral_center - width
-            bottom_max[self.lateral_axis] = lateral_center + width
 
         top_box = Box.from_bounds(top_min, element_max)
         bottom_box = Box.from_bounds(element_min, bottom_max)
@@ -1106,9 +1103,6 @@ class LinearLumpedElement(RectangularLumpedElement):
         ub = np.searchsorted(grid_centers, cell_box.center[self.normal_axis])
         thickness_eff = grid_centers[ub] - grid_centers[ub - 1]
         width_eff = valid_connection.size[l_axis]
-        # After discretization a wire has an effective width equal to the grid cell size
-        if self.size[l_axis] == 0:
-            width_eff = cell_size[l_axis]
         # If there are two connections, they will share the same thickness and width
         # only their lengths along the voltage axis might be different
         common_size = list(valid_connection.size)

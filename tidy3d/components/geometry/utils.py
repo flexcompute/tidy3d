@@ -645,6 +645,22 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol: float 
                 strict_bounds=strict_bounds,
                 margin=+snap_margin,
             )
+            # Ensure non-zero size after expansion - if both bounds snapped to the
+            # same point (can happen when interval is very small and centered on a
+            # grid point), expand to span at least one grid cell.
+            if min_snap == max_snap:
+                snap_idx = np.searchsorted(coords, min_snap, side="left")
+                # Clamp to valid range and get adjacent grid points
+                lower_idx = max(0, snap_idx - 1)
+                upper_idx = min(len(coords) - 1, snap_idx)
+                if lower_idx == upper_idx:
+                    # At edge of grid - expand in the only available direction
+                    if upper_idx < len(coords) - 1:
+                        upper_idx += 1
+                    elif lower_idx > 0:
+                        lower_idx -= 1
+                min_snap = coords[lower_idx]
+                max_snap = coords[upper_idx]
         else:  # SnapType.Contract
             min_snap = get_upper_bound(
                 interval_min,

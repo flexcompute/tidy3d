@@ -23,7 +23,7 @@ The :class:`LumpedPort` feature represents a planar, uniform current excitation 
        impedance=50,   # port impedance
    )
 
-The :class:`LumpedPort` can be 1D (line) or 2D (plane). For 2D, only axis-aligned planes are supported at this time. Only real ``impedance`` values are supported at this time. 
+The :class:`LumpedPort` must be planar (exactly one zero-size dimension). Only axis-aligned planes are supported at this time. If you need a narrow port, provide a small but finite width along the lateral axis. Only real ``impedance`` values are supported at this time. 
 
 .. note::
 

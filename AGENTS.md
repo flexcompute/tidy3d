@@ -18,6 +18,7 @@
 - **Do** reuse `scripts/` utilities; **don't** add new helper modules without checking for an existing script first.
 
 ## Coding Style & Naming
+- Prefer top-level imports.
 - Favor descriptive `snake_case` functions and `PascalCase` classes tied to the physics domain.
 - Most simulation and monitor classes subclass `Tidy3dBaseModel`; reserve `pydantic.BaseModel` for lightweight helpers (see `tidy3d/updater.py`), and rely on `.updated_copy(...)` plus shared validators in `tidy3d/components/validators.py`.
 - Public APIs covered in `docs/` should use the existing Numpy-inspired block pattern rendered by our Sphinx Book Theme; lean on current API examples or the theme reference at https://sphinx-book-theme.readthedocs.io/en/stable/reference/api-numpy.html. Internal helpers may keep short docstrings but match local tone.

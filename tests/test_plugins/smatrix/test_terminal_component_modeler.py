@@ -562,6 +562,29 @@ def test_validate_port_voltage_axis():
         LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=0, impedance=50)
 
 
+def test_validate_port_must_be_planar():
+    """Test that 1D lumped ports (two zero-size dimensions) are not allowed.
+
+    Users must provide a finite width along the lateral axis. This ensures the
+    injection axis can be properly determined for the underlying lumped element.
+    """
+    # 1D port (two zeros) should fail validation
+    with pytest.raises(pd.ValidationError):
+        LumpedPort(center=(0, 0, 0), size=(1, 0, 0), voltage_axis=0, impedance=50, name="1D_port")
+
+    with pytest.raises(pd.ValidationError):
+        LumpedPort(center=(0, 0, 0), size=(0, 1, 0), voltage_axis=1, impedance=50, name="1D_port")
+
+    with pytest.raises(pd.ValidationError):
+        LumpedPort(center=(0, 0, 0), size=(0, 0, 1), voltage_axis=2, impedance=50, name="1D_port")
+
+    # Planar port (one zero) should work fine
+    port = LumpedPort(
+        center=(0, 0, 0), size=(0, 1, 2), voltage_axis=2, impedance=50, name="2D_port"
+    )
+    assert port.injection_axis == 0  # x is the injection axis (zero size)
+
+
 def test_lumped_port_from_structures():
     """Test automatic lumped port setup between two terminal structures."""
 
