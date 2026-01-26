@@ -66,7 +66,7 @@ def set_datasets_to_none(sim):
 
 
 def test_simulation_load_export(split_string, tmp_path):
-    major, minor, patch = __version__.split(".")
+    major, minor, patch, *_ = __version__.split(".")
     path = os.path.join(tmp_path, f"simulation_{major}_{minor}_{patch}.json")
     path_hdf5 = os.path.join(tmp_path, f"simulation_{major}_{minor}_{patch}.h5")
     SIM.to_file(path)

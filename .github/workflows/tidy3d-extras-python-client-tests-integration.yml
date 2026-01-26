@@ -123,12 +123,12 @@ jobs:
         poetry config http-basic.codeartifact aws $CODEARTIFACT_AUTH_TOKEN
         echo "✅ CodeArtifact authentication configured"
 
-    - name: regenerate-lockfile
+    - name: update-tidy3d-extras-lockfile
       run: |
         set -e
-        echo "Regenerating poetry.lock..."
-        poetry update --lock
-        echo "✅ Lockfile regenerated"
+        echo "Updating tidy3d-extras in poetry.lock..."
+        poetry update tidy3d-extras --lock
+        echo "✅ tidy3d-extras updated in lockfile"
 
     - name: install-project
       shell: bash
@@ -267,12 +267,12 @@ jobs:
         poetry config http-basic.codeartifact aws $CODEARTIFACT_AUTH_TOKEN
         echo "✅ CodeArtifact authentication configured"
 
-    - name: regenerate-lockfile
+    - name: update-tidy3d-extras-lockfile
       run: |
         set -e
-        echo "Regenerating poetry.lock..."
-        poetry update --lock
-        echo "✅ Lockfile regenerated"
+        echo "Updating tidy3d-extras in poetry.lock..."
+        poetry update tidy3d-extras --lock
+        echo "✅ tidy3d-extras updated in lockfile"
 
     - name: install-project
       shell: bash
