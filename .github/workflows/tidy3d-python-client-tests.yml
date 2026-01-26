@@ -752,7 +752,7 @@ jobs:
       uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a  # v1.4.1
       with:
         version: 2.1.1
-        virtualenvs-create: true
+        virtualenvs-create: false
         virtualenvs-in-project: true
 
     - name: set-python-${{ matrix.python-version }}
@@ -760,25 +760,56 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_CODEARTIFACT_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_CODEARTIFACT_ACCESS_SECRET }}
+        aws-region: us-east-1
+
+    - name: configure-codeartifact-authentication
+      run: |
+        set -e
+        echo "Getting CodeArtifact token..."
+        CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token \
+          --domain flexcompute \
+          --domain-owner 625554095313 \
+          --query authorizationToken \
+          --output text)
+
+        echo "Configuring Poetry with CodeArtifact credentials..."
+        poetry config http-basic.codeartifact aws $CODEARTIFACT_AUTH_TOKEN
+        echo "✅ CodeArtifact authentication configured"
+
+    - name: update-tidy3d-extras-lockfile
+      run: |
+        set -e
+        echo "Updating tidy3d-extras in poetry.lock..."
+        poetry update tidy3d-extras --lock
+        echo "✅ tidy3d-extras updated in lockfile"
+
     - name: install-project
       shell: bash
       run: |
         poetry --version
         python --version
-        python -m venv .venv
+        rm -rf .venv
         if [[ "${{ runner.os }}" == "Windows" ]]; then
+          python -m venv .venv
           source .venv/Scripts/activate
-          python --version
         else
+          echo "DEBUG: pythonLocation=$pythonLocation"
+          "$pythonLocation/bin/python" -m venv .venv
           source .venv/bin/activate
-          which python
+          echo "DEBUG: .venv/bin/python --version = $(.venv/bin/python --version)"
+          ls -la .venv/bin/python*
         fi
-        poetry env use python
+        poetry config virtualenvs.create false --local
         poetry env info
         poetry run pip install --upgrade pip wheel setuptools
         poetry run pip install gdstk --only-binary gdstk
         poetry install -E dev
-    
+
     - name: run-doctests
       run: |
         poetry run pytest -rF --tb=short tidy3d

@@ -13001,7 +13001,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2.10.2",
+      "default": "2.11.0.dev0",
       "type": "string"
     }
   },
