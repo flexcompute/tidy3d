@@ -123,27 +123,30 @@ jobs:
         poetry config http-basic.codeartifact aws $CODEARTIFACT_AUTH_TOKEN
         echo "✅ CodeArtifact authentication configured"
 
-    - name: regenerate-lockfile
+    - name: update-tidy3d-extras-lockfile
       run: |
         set -e
-        echo "Regenerating poetry.lock..."
-        poetry update --lock
-        echo "✅ Lockfile regenerated"
+        echo "Updating tidy3d-extras in poetry.lock..."
+        poetry update tidy3d-extras --lock
+        echo "✅ tidy3d-extras updated in lockfile"
 
     - name: install-project
       shell: bash
       run: |
         poetry --version
         python --version
-        python -m venv .venv
+        rm -rf .venv
         if [[ "${{ runner.os }}" == "Windows" ]]; then
+          python -m venv .venv
           source .venv/Scripts/activate
-          python --version
         else
+          echo "DEBUG: pythonLocation=$pythonLocation"
+          "$pythonLocation/bin/python" -m venv .venv
           source .venv/bin/activate
-          which python
+          echo "DEBUG: .venv/bin/python --version = $(.venv/bin/python --version)"
+          ls -la .venv/bin/python*
         fi
-        poetry env use python
+        poetry config virtualenvs.create false --local
         poetry env info
         poetry run pip install --upgrade pip wheel setuptools
         poetry run pip install gdstk --only-binary gdstk
@@ -267,32 +270,35 @@ jobs:
         poetry config http-basic.codeartifact aws $CODEARTIFACT_AUTH_TOKEN
         echo "✅ CodeArtifact authentication configured"
 
-    - name: regenerate-lockfile
+    - name: update-tidy3d-extras-lockfile
       run: |
         set -e
-        echo "Regenerating poetry.lock..."
-        poetry update --lock
-        echo "✅ Lockfile regenerated"
+        echo "Updating tidy3d-extras in poetry.lock..."
+        poetry update tidy3d-extras --lock
+        echo "✅ tidy3d-extras updated in lockfile"
 
     - name: install-project
       shell: bash
       run: |
         poetry --version
         python --version
-        python -m venv .venv
+        rm -rf .venv
         if [[ "${{ runner.os }}" == "Windows" ]]; then
+          python -m venv .venv
           source .venv/Scripts/activate
-          python --version
         else
+          echo "DEBUG: pythonLocation=$pythonLocation"
+          "$pythonLocation/bin/python" -m venv .venv
           source .venv/bin/activate
-          which python
+          echo "DEBUG: .venv/bin/python --version = $(.venv/bin/python --version)"
+          ls -la .venv/bin/python*
         fi
-        poetry env use python
+        poetry config virtualenvs.create false --local
         poetry env info
         poetry run pip install --upgrade pip wheel setuptools
         poetry run pip install gdstk --only-binary gdstk
         poetry install -E extras -E dev
-    
+
     - name: verify-extras-installation
       run: |
         export SIMCLOUD_APIKEY=${{ secrets.TIDY3D_API_KEY }}
