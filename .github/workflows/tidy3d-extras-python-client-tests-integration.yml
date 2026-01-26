@@ -123,6 +123,13 @@ jobs:
         poetry config http-basic.codeartifact aws $CODEARTIFACT_AUTH_TOKEN
         echo "✅ CodeArtifact authentication configured"
 
+    - name: regenerate-lockfile
+      run: |
+        set -e
+        echo "Regenerating poetry.lock..."
+        poetry update --lock
+        echo "✅ Lockfile regenerated"
+
     - name: install-project
       shell: bash
       run: |
@@ -259,6 +266,13 @@ jobs:
         echo "Configuring Poetry with CodeArtifact credentials..."
         poetry config http-basic.codeartifact aws $CODEARTIFACT_AUTH_TOKEN
         echo "✅ CodeArtifact authentication configured"
+
+    - name: regenerate-lockfile
+      run: |
+        set -e
+        echo "Regenerating poetry.lock..."
+        poetry update --lock
+        echo "✅ Lockfile regenerated"
 
     - name: install-project
       shell: bash
