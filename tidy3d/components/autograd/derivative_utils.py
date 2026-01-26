@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
 from tidy3d.components.data.utils import _zeros_like
-from tidy3d.components.types import ArrayLike, Bound, xyz
+from tidy3d.components.types import ArrayLike, Bound
 from tidy3d.config import config
 from tidy3d.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
 from tidy3d.log import log
@@ -20,11 +20,12 @@ from .types import PathType
 from .utils import get_static
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from typing import Callable, Union
 
     import xarray as xr
 
     from tidy3d.compat import Self
+    from tidy3d.components.types import xyz
 
 FieldData = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
@@ -677,8 +678,8 @@ class DerivativeInfo:
         eps_data: ScalarFieldDataArray,
         interpolator: LazyInterpolator,
         is_outside: bool,
-    ):
-        def _detect_pec(eps_mask):
+    ) -> np.ndarray:
+        def _detect_pec(eps_mask: np.ndarray) -> np.ndarray:
             return 1.0 * (eps_mask < config.adjoint.pec_detection_threshold)
 
         adjusted_coords = self._snap_spatial_coords_boundary(
@@ -974,7 +975,7 @@ class DerivativeInfo:
             if min_allowed_spacing_fraction is None:
                 min_allowed_spacing_fraction = config.adjoint.minimum_spacing_fraction
 
-        def spacing_by_permittivity(eps_array):
+        def spacing_by_permittivity(eps_array: ScalarFieldDataArray) -> np.ndarray:
             eps_real = np.asarray(eps_array.values, dtype=np.complex128).real
 
             dx_candidates = []

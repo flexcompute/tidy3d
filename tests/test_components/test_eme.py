@@ -1345,7 +1345,7 @@ def test_eme_sim_data():
         ],
         subgrid_boundaries=[0],
     )
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         sim_interp_test = sim.updated_copy(eme_grid_spec=eme_grid_spec_inconsistent)
 
     # test _validate_interp_specs no error for consistent interp_specs

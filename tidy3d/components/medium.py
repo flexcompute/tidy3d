@@ -1378,7 +1378,18 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         elif component == "real":
             values = values.real
 
-        return values.sum(axis=-1).reshape(eps_shape)
+        vjp_array = values.sum(axis=-1).reshape(eps_shape)
+
+        # match derivative dtype to the underlying dataset
+        target_array = getattr(spatial_data, "values", None)
+        if target_array is None and hasattr(spatial_data, "data"):
+            target_array = spatial_data.data
+        if target_array is not None:
+            target_dtype = np.asarray(target_array).dtype
+            if not np.issubdtype(target_dtype, np.complexfloating):
+                vjp_array = np.real(vjp_array).astype(target_dtype, copy=False)
+
+        return vjp_array
 
 
 """ Dispersionless Medium """
@@ -3591,7 +3602,9 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         return True
 
     @staticmethod
-    def _sorted_spatial_data(data: CustomSpatialDataTypeAnnotated):
+    def _sorted_spatial_data(
+        data: CustomSpatialDataTypeAnnotated,
+    ) -> CustomSpatialDataTypeAnnotated:
         """Return spatial data sorted along its coordinates if applicable."""
         if isinstance(data, SpatialDataArray):
             return data._spatially_sorted

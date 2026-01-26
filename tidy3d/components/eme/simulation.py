@@ -855,7 +855,8 @@ class EMESimulation(AbstractYeeGridSimulation):
                     )
         return self
 
-    def _validate_interp_specs(self) -> None:
+    @model_validator(mode="after")
+    def _validate_interp_specs(self) -> Self:
         """Require that the interp_specs are identical."""
         interp_specs = []
         for mode_spec in self.eme_grid.mode_specs:
@@ -865,6 +866,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                 "All of the 'mode_spec.interp_spec' in the EME grid must be identical. "
                 f"Currently, they are {set(interp_specs)}."
             )
+        return self
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
