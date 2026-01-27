@@ -1002,3 +1002,91 @@ def test_gap_meshing_tiny_nearly_parallel():
     # sim.plot_grid(y=0, ax=ax)
     # plt.show()
     assert sim.grid_info["min_grid_size"] > 0.05
+
+
+def test_gap_meshing_dl_min_warning():
+    """Test that warning is displayed when dl_min_from_gaps is very small relative to lateral grid size."""
+    from ..utils import AssertLogStr
+
+    wavelength = 1.0
+    # Create a very small gap that will trigger the warning
+    # For a grid with min_steps_per_wvl=10 and wavelength=1, the grid size will be around 0.1
+    # We need gap_width such that DL_MIN_FROM_GAPS_FRACTION * gap_width < GAP_REFINEMENT_WARNING_THRESH * min_lateral_grid_size
+    # gap_width < (0.1 * 0.1) / 0.45 ≈ 0.022
+    small_gap_width = 0.01  # Very small gap that will trigger warning
+
+    # Create two parallel PEC strips with a small gap between them
+    # Make structures smaller to avoid edge warnings (size 0.3 instead of 0.5 in y-direction)
+    strip1 = td.Structure(
+        geometry=td.Box(center=(-small_gap_width / 2 - 0.05, 0, 0), size=(0.1, 0.3, 0.2)),
+        medium=td.PECMedium(),
+    )
+
+    strip2 = td.Structure(
+        geometry=td.Box(center=(small_gap_width / 2 + 0.05, 0, 0), size=(0.1, 0.3, 0.2)),
+        medium=td.PECMedium(),
+    )
+
+    # Create layer refinement spec with gap meshing enabled
+    layer_spec = td.LayerRefinementSpec(
+        axis=2,  # z-axis
+        size=(td.inf, td.inf, 0.2),
+        center=(0, 0, 0),
+        gap_meshing_iters=1,
+        dl_min_from_gap_width=True,
+        corner_snapping=False,
+        corner_refinement=None,
+    )
+
+    grid_spec = td.GridSpec.auto(
+        wavelength=wavelength,
+        min_steps_per_wvl=10,  # This will create grid cells of ~0.1 size
+        layer_refinement_specs=[layer_spec],
+    )
+
+    # Test that warning IS displayed for very small gap
+    # Use AssertLogStr to filter out edge warnings and only check for our specific warning
+    with AssertLogStr("WARNING", contains_str="detected a very small gap width"):
+        sim = td.Simulation(
+            size=(1, 1, 0.2),
+            structures=[strip1, strip2],
+            grid_spec=grid_spec,
+            run_time=1e-15,
+        )
+
+    # Now test with a larger gap that should NOT trigger warning
+    # gap_width should be large enough: gap_width > (GAP_REFINEMENT_WARNING_THRESH * min_lateral_grid_size) / DL_MIN_FROM_GAPS_FRACTION
+    # For min_lateral_grid_size ~ 0.1: gap_width > (0.1 * 0.1) / 0.45 ≈ 0.022
+    large_gap_width = 0.05  # Large enough to not trigger warning
+
+    strip1_large = td.Structure(
+        geometry=td.Box(center=(-large_gap_width / 2 - 0.05, 0, 0), size=(0.1, 0.3, 0.2)),
+        medium=td.PECMedium(),
+    )
+
+    strip2_large = td.Structure(
+        geometry=td.Box(center=(large_gap_width / 2 + 0.05, 0, 0), size=(0.1, 0.3, 0.2)),
+        medium=td.PECMedium(),
+    )
+
+    # Test that warning is NOT displayed for larger gap
+    # Use AssertLogStr to exclude edge warnings and check that our specific warning is not present
+    with AssertLogStr("WARNING", excludes_str="detected a very small gap width"):
+        sim_large = td.Simulation(
+            size=(1, 1, 0.2),
+            structures=[strip1_large, strip2_large],
+            grid_spec=grid_spec,
+            run_time=1e-15,
+        )
+
+    # Test with dl_min_from_gap_width=False - should not warn even with small gap
+    layer_spec_no_gap = layer_spec.updated_copy(dl_min_from_gap_width=False)
+    grid_spec_no_gap = grid_spec.updated_copy(layer_refinement_specs=[layer_spec_no_gap])
+
+    with AssertLogStr("WARNING", excludes_str="detected a very small gap width"):
+        sim_no_gap = td.Simulation(
+            size=(1, 1, 0.2),
+            structures=[strip1, strip2],
+            grid_spec=grid_spec_no_gap,
+            run_time=1e-15,
+        )
