@@ -19,7 +19,7 @@ from tidy3d.log import log
 from .types import PathType
 from .utils import get_static
 
-FieldData = dict[str, ScalarFieldDataArray]
+FieldDataDict = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
 EpsType = FreqDataArray
 
@@ -51,35 +51,35 @@ class DerivativeInfo:
     paths: list[PathType]
     """List of paths to the traced fields that need derivatives calculated."""
 
-    E_der_map: FieldData
+    E_der_map: FieldDataDict
     """Electric field gradient map.
     Dataset where the field components ("Ex", "Ey", "Ez") store the multiplication
     of the forward and adjoint electric fields. The tangential components of this
     dataset are used when computing adjoint gradients for shifting boundaries.
     All components are used when computing volume-based gradients."""
 
-    D_der_map: FieldData
+    D_der_map: FieldDataDict
     """Displacement field gradient map.
     Dataset where the field components ("Ex", "Ey", "Ez") store the multiplication
     of the forward and adjoint displacement fields. The normal component of this
     dataset is used when computing adjoint gradients for shifting boundaries."""
 
-    E_fwd: FieldData
+    E_fwd: FieldDataDict
     """Forward electric fields.
     Dataset where the field components ("Ex", "Ey", "Ez") represent the forward
     electric fields used for computing gradients for a given structure."""
 
-    E_adj: FieldData
+    E_adj: FieldDataDict
     """Adjoint electric fields.
     Dataset where the field components ("Ex", "Ey", "Ez") represent the adjoint
     electric fields used for computing gradients for a given structure."""
 
-    D_fwd: FieldData
+    D_fwd: FieldDataDict
     """Forward displacement fields.
     Dataset where the field components ("Ex", "Ey", "Ez") represent the forward
     displacement fields used for computing gradients for a given structure."""
 
-    D_adj: FieldData
+    D_adj: FieldDataDict
     """Adjoint displacement fields.
     Dataset where the field components ("Ex", "Ey", "Ez") represent the adjoint
     displacement fields used for computing gradients for a given structure."""
@@ -119,19 +119,19 @@ class DerivativeInfo:
 
     # Optional fields with defaults
 
-    H_der_map: Optional[FieldData] = None
+    H_der_map: Optional[FieldDataDict] = None
     """Magnetic field gradient map.
     Dataset where the field components ("Hx", "Hy", "Hz") store the multiplication
     of the forward and adjoint magnetic fields. The tangential component of this
     dataset is used when computing adjoint gradients for shifting boundaries of
     structures composed of PEC mediums."""
 
-    H_fwd: Optional[FieldData] = None
+    H_fwd: Optional[FieldDataDict] = None
     """Forward magnetic fields.
     Dataset where the field components ("Hx", "Hy", "Hz") represent the forward
     magnetic fields used for computing gradients for a given structure."""
 
-    H_adj: Optional[FieldData] = None
+    H_adj: Optional[FieldDataDict] = None
     """Adjoint magnetic fields.
     Dataset where the field components ("Hx", "Hy", "Hz") represent the adjoint
     magnetic fields used for computing gradients for a given structure."""
@@ -688,7 +688,7 @@ class DerivativeInfo:
     ) -> np.ndarray:
         eps_dielectric_key, eps_dielectric_data = eps_dielectric
 
-        def _snap_coordinate_outside(field_components: FieldData):
+        def _snap_coordinate_outside(field_components: FieldDataDict):
             """Helper function to perform coordinate adjustment and compute edge distance for each
             component in `field_components`.
 

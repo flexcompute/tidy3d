@@ -13,7 +13,11 @@ import tidy3d as td
 import tidy3d.web as web
 from tidy3d.components.autograd import get_static
 
-td.config.local_cache.enabled = True
+
+@pytest.fixture(autouse=True)
+def _enable_local_cache(monkeypatch):
+    monkeypatch.setattr(td.config.local_cache, "enabled", True)
+
 
 SIM_SIZE_SCALE = (4, 3, 4)
 BOX_SIZE_SCALE = (1, 1, 1)
@@ -147,7 +151,7 @@ def _run_simulation(
 
 
 @pytest.mark.numerical
-def test_custom_pole_residue_grads_match_fd(numerical_case_dir, tmp_path):
+def test_custom_pole_residue_grads_match_fd(numerical_case_dir, tmp_path, _enable_local_cache):
     case = POLE_RESIDUE_CASE
     base_sim, monitor_name, freq0 = _build_base_sim(case)
     box_geom = _box_geometry(case["wavelength"])

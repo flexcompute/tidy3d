@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.
+- Fixed frequency accumulation of gradients for custom dispersive media.
 
 ## [2.10.2] - 2026-01-21
 
