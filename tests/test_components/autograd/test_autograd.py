@@ -72,13 +72,18 @@ CALL_OBJECTIVE = False
 
 
 # --- helpers for custom dispersive tests ---
-def _patch_cmp_to_const(monkeypatch, cls, dJ_const):
-    """Monkeypatch `_derivative_field_cmp` to return a constant split across xyz."""
-    monkeypatch.setattr(
-        cls,
-        "_derivative_field_cmp",
-        lambda self, E_der_map, spatial_data, dim: dJ_const / 3.0,
-    )
+def _patch_cmp_custom_to_const(monkeypatch, cls, dJ_const):
+    """Monkeypatch `_derivative_field_cmp_custom` to return a constant split across xyz."""
+
+    def _fake(self, E_der_map, spatial_data, dim, sum_over_freqs=True, **kwargs):
+        if sum_over_freqs:
+            if dJ_const.ndim > 3:
+                return dJ_const.sum(axis=-1) / 3.0
+            return dJ_const / 3.0
+        dJ_with_freq = dJ_const[..., None]
+        return dJ_with_freq / 3.0
+
+    monkeypatch.setattr(cls, "_derivative_field_cmp_custom", _fake)
 
 
 def _make_di(paths, freq):
@@ -2025,22 +2030,11 @@ def test_custom_pole_residue(monkeypatch):
 
     dJ_deps = np.conj(ag.holomorphic_grad(J)(eps0))
 
-    monkeypatch.setattr(
-        td.CustomPoleResidue,
-        "_derivative_field_cmp_custom",
-        lambda self,
-        E_der_map,
-        spatial_data,
-        dim,
-        freqs,
-        bounds=None,
-        component="real",
-        interp_method=None: dJ_deps / 3.0,
-    )
-
     import importlib
 
     importlib.reload(td)
+
+    _patch_cmp_custom_to_const(monkeypatch, td.CustomPoleResidue, dJ_deps)
 
     pr = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
     field_paths = [("eps_inf",)]
@@ -2166,7 +2160,7 @@ def test_custom_sellmeier(monkeypatch):
     eps_arr = eps_from(B1.values, C1.values) + eps_from(B2.values, C2.values)
     dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
 
-    _patch_cmp_to_const(monkeypatch, td.CustomSellmeier, dJ)
+    _patch_cmp_custom_to_const(monkeypatch, td.CustomSellmeier, dJ)
 
     di = _make_di(
         paths=[("coeffs", 0, 0), ("coeffs", 0, 1), ("coeffs", 1, 0), ("coeffs", 1, 1)],
@@ -2220,7 +2214,7 @@ def test_custom_lorentz(monkeypatch):
     )
     dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
 
-    _patch_cmp_to_const(monkeypatch, td.CustomLorentz, dJ)
+    _patch_cmp_custom_to_const(monkeypatch, td.CustomLorentz, dJ)
 
     di = _make_di(
         paths=[
@@ -2300,7 +2294,7 @@ def test_custom_drude(monkeypatch):
     eps_arr = eps_inf.values + term(fp1.values, dl1.values) + term(fp2.values, dl2.values)
     dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
 
-    _patch_cmp_to_const(monkeypatch, td.CustomDrude, dJ)
+    _patch_cmp_custom_to_const(monkeypatch, td.CustomDrude, dJ)
 
     di = _make_di(
         paths=[
@@ -2368,7 +2362,7 @@ def test_custom_debye(monkeypatch):
     eps_arr = eps_inf.values + term(de1.values, tau1.values) + term(de2.values, tau2.values)
     dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
 
-    _patch_cmp_to_const(monkeypatch, td.CustomDebye, dJ)
+    _patch_cmp_custom_to_const(monkeypatch, td.CustomDebye, dJ)
 
     di = _make_di(
         paths=[

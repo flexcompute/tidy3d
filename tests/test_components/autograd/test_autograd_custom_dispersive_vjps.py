@@ -49,10 +49,15 @@ def _deriv_info(freq):
     }
 
 
-def _patch_derivative_field_cmp(cls, dJ):
+def _patch_derivative_field_cmp_custom(cls, dJ):
     # Return dJ/3 for each of x,y,z so their sum equals dJ
-    def _fake(self, E_der_map, spatial_data, dim):
-        return dJ / 3.0
+    def _fake(self, E_der_map, spatial_data, dim, sum_over_freqs=True, **kwargs):
+        if sum_over_freqs:
+            if dJ.ndim > 3:
+                return dJ.sum(axis=-1) / 3.0
+            return dJ / 3.0
+        dJ_with_freq = dJ[..., None] if dJ.ndim == 3 else dJ
+        return dJ_with_freq / 3.0
 
     return _fake
 
@@ -81,10 +86,10 @@ def test_custom_sellmeier_vjp():
     # Monkeypatch derivative provider
     from tidy3d.components import medium as medium_mod
 
-    _orig = CustomSellmeier._derivative_field_cmp
+    _orig = CustomSellmeier._derivative_field_cmp_custom
     try:
-        medium_mod.CustomSellmeier._derivative_field_cmp = _patch_derivative_field_cmp(
-            CustomSellmeier, dJ
+        medium_mod.CustomSellmeier._derivative_field_cmp_custom = (
+            _patch_derivative_field_cmp_custom(CustomSellmeier, dJ)
         )
 
         paths = [("coeffs", 0, 0), ("coeffs", 0, 1), ("coeffs", 1, 0), ("coeffs", 1, 1)]
@@ -102,7 +107,7 @@ def test_custom_sellmeier_vjp():
         np.testing.assert_allclose(grads[("coeffs", 1, 0)], gB2, rtol=5e-6, atol=5e-7)
         np.testing.assert_allclose(grads[("coeffs", 1, 1)], gC2, rtol=5e-6, atol=5e-7)
     finally:
-        medium_mod.CustomSellmeier._derivative_field_cmp = _orig
+        medium_mod.CustomSellmeier._derivative_field_cmp_custom = _orig
 
 
 def test_custom_lorentz_vjp():
@@ -131,9 +136,9 @@ def test_custom_lorentz_vjp():
 
     from tidy3d.components import medium as medium_mod
 
-    _orig = CustomLorentz._derivative_field_cmp
+    _orig = CustomLorentz._derivative_field_cmp_custom
     try:
-        medium_mod.CustomLorentz._derivative_field_cmp = _patch_derivative_field_cmp(
+        medium_mod.CustomLorentz._derivative_field_cmp_custom = _patch_derivative_field_cmp_custom(
             CustomLorentz, dJ
         )
 
@@ -165,7 +170,7 @@ def test_custom_lorentz_vjp():
         np.testing.assert_allclose(grads[("coeffs", 1, 1)], g_f02, rtol=5e-6, atol=5e-7)
         np.testing.assert_allclose(grads[("coeffs", 1, 2)], g_dl2, rtol=5e-6, atol=5e-7)
     finally:
-        medium_mod.CustomLorentz._derivative_field_cmp = _orig
+        medium_mod.CustomLorentz._derivative_field_cmp_custom = _orig
 
 
 def test_custom_drude_vjp():
@@ -188,9 +193,11 @@ def test_custom_drude_vjp():
 
     from tidy3d.components import medium as medium_mod
 
-    _orig = CustomDrude._derivative_field_cmp
+    _orig = CustomDrude._derivative_field_cmp_custom
     try:
-        medium_mod.CustomDrude._derivative_field_cmp = _patch_derivative_field_cmp(CustomDrude, dJ)
+        medium_mod.CustomDrude._derivative_field_cmp_custom = _patch_derivative_field_cmp_custom(
+            CustomDrude, dJ
+        )
 
         paths = [
             ("eps_inf",),
@@ -214,7 +221,7 @@ def test_custom_drude_vjp():
         np.testing.assert_allclose(grads[("coeffs", 1, 0)], g_fp2, rtol=5e-6, atol=5e-7)
         np.testing.assert_allclose(grads[("coeffs", 1, 1)], g_dl2, rtol=5e-6, atol=5e-7)
     finally:
-        medium_mod.CustomDrude._derivative_field_cmp = _orig
+        medium_mod.CustomDrude._derivative_field_cmp_custom = _orig
 
 
 def test_custom_debye_vjp():
@@ -237,9 +244,11 @@ def test_custom_debye_vjp():
 
     from tidy3d.components import medium as medium_mod
 
-    _orig = CustomDebye._derivative_field_cmp
+    _orig = CustomDebye._derivative_field_cmp_custom
     try:
-        medium_mod.CustomDebye._derivative_field_cmp = _patch_derivative_field_cmp(CustomDebye, dJ)
+        medium_mod.CustomDebye._derivative_field_cmp_custom = _patch_derivative_field_cmp_custom(
+            CustomDebye, dJ
+        )
 
         paths = [
             ("eps_inf",),
@@ -263,4 +272,4 @@ def test_custom_debye_vjp():
         np.testing.assert_allclose(grads[("coeffs", 1, 0)], g_de2, rtol=5e-6, atol=5e-7)
         np.testing.assert_allclose(grads[("coeffs", 1, 1)], g_tau2, rtol=5e-6, atol=5e-7)
     finally:
-        medium_mod.CustomDebye._derivative_field_cmp = _orig
+        medium_mod.CustomDebye._derivative_field_cmp_custom = _orig

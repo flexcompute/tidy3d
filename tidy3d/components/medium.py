@@ -49,6 +49,7 @@ from .data.unstructured.base import UnstructuredGridDataset
 from .data.utils import (
     CustomSpatialDataType,
     CustomSpatialDataTypeAnnotated,
+    UnstructuredGridDatasetType,
     _check_same_coordinates,
     _get_numpy_array,
     _ones_like,
@@ -1101,79 +1102,15 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         if isinstance(field, UnstructuredGridDataset):
             return any(len(subfield) == 0 for subfield in [field.points, field.cells, field.values])
 
-    def _derivative_field_cmp(
-        self,
-        E_der_map: ElectromagneticFieldDataset,
-        spatial_data: PermittivityDataset,
-        dim: str,
-    ) -> np.ndarray:
-        if isinstance(spatial_data, UnstructuredGridDataset):
-            raise NotImplementedError(
-                "Adjoint derivatives for unstructured custom media are not supported."
-            )
-        coords_interp = {key: val for key, val in spatial_data.coords.items() if len(val) > 1}
-        dims_sum = {dim for dim in spatial_data.coords.keys() if dim not in coords_interp}
-
-        eps_coordinate_shape = [
-            len(spatial_data.coords[dim]) for dim in spatial_data.dims if dim in "xyz"
-        ]
-
-        # compute sizes along each of the interpolation dimensions
-        sizes_list = []
-        for _, coords in coords_interp.items():
-            num_coords = len(coords)
-            coords = np.array(coords)
-
-            # compute distances between midpoints for all internal coords
-            mid_points = (coords[1:] + coords[:-1]) / 2.0
-            dists = np.diff(mid_points)
-            sizes = np.zeros(num_coords)
-            sizes[1:-1] = dists
-
-            # estimate the sizes on the edges using 2 x the midpoint distance
-            sizes[0] = 2 * abs(mid_points[0] - coords[0])
-            sizes[-1] = 2 * abs(coords[-1] - mid_points[-1])
-
-            sizes_list.append(sizes)
-
-        # turn this into a volume element, should be re-sizeable to the gradient shape
-        if sizes_list:
-            d_vol = functools.reduce(np.outer, sizes_list)
-        else:
-            # if sizes_list is empty, then reduce() fails
-            d_vol = np.array(1.0)
-
-        # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
-        E_der_dim = E_der_map[f"E{dim}"]
-        E_der_dim_interp = (
-            E_der_dim.interp(**coords_interp, assume_sorted=True).fillna(0.0).sum(dims_sum).sum("f")
-        )
-        vjp_array = np.array(E_der_dim_interp.values).astype(complex)
-        vjp_array = vjp_array.reshape(eps_coordinate_shape)
-
-        # multiply by volume elements (if possible, being defensive here..)
-        try:
-            vjp_array *= d_vol.reshape(vjp_array.shape)
-        except ValueError:
-            log.warning(
-                "Skipping volume element normalization of 'CustomMedium' gradients. "
-                f"Could not reshape the volume elements of shape {d_vol.shape} "
-                f"to the shape of the gradient {vjp_array.shape}. "
-                "If you encounter this warning, gradient direction will be accurate but the norm "
-                "will be inaccurate. Please raise an issue on the tidy3d front end with this "
-                "message and some information about your simulation setup and we will investigate. "
-            )
-        return vjp_array
-
     def _derivative_field_cmp_custom(
         self,
-        E_der_map: ElectromagneticFieldDataset,
+        E_der_map: dict[str, ScalarFieldDataArray],
         spatial_data: SpatialDataArray,
         dim: str,
-        freqs: NDArray,
         bounds: Optional[Bound] = None,
         component: str = "real",
         interp_method: Optional[InterpMethod] = None,
+        sum_over_freqs: bool = True,
     ) -> NDArray:
         """Compute the derivative with respect to a material property component."""
         param_coords = {axis: np.asarray(spatial_data.coords[axis]) for axis in "xyz"}
@@ -1205,7 +1142,6 @@ class AbstractCustomMedium(AbstractMedium, ABC):
                 )
             return slice(i0, i1)
 
-        # usage
         if bounds is not None:
             (xmin, ymin, zmin), (xmax, ymax, zmax) = bounds
 
@@ -1360,7 +1296,9 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         elif component == "real":
             values = values.real
 
-        return values.sum(axis=-1).reshape(eps_shape)
+        if sum_over_freqs:
+            return values.sum(axis=-1).reshape(eps_shape)
+        return values.reshape([*eps_shape, values.shape[-1]])
 
 
 """ Dispersionless Medium """
@@ -2556,7 +2494,6 @@ class CustomMedium(AbstractCustomMedium):
                         E_der_map=derivative_info.E_der_map,
                         spatial_data=spatial_data,
                         dim=dim,
-                        freqs=derivative_info.frequencies,
                         bounds=derivative_info.bounds_intersect,
                         component="real",
                     )
@@ -2572,7 +2509,6 @@ class CustomMedium(AbstractCustomMedium):
                         E_der_map=derivative_info.E_der_map,
                         spatial_data=spatial_data,
                         dim=dim,
-                        freqs=derivative_info.frequencies,
                         bounds=derivative_info.bounds_intersect,
                         component="sigma",
                     )
@@ -2588,7 +2524,6 @@ class CustomMedium(AbstractCustomMedium):
                     E_der_map=derivative_info.E_der_map,
                     spatial_data=spatial_data,
                     dim=dim,
-                    freqs=derivative_info.frequencies,
                     bounds=derivative_info.bounds_intersect,
                     component="complex",
                 )
@@ -2839,14 +2774,15 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
         Returns
         -------
         np.ndarray
-            Complex-valued aggregated dJ array with the same spatial shape as ``spatial_ref``.
+            Complex-valued aggregated dJ array with frequency as the last axis.
         """
         dJ = 0.0 + 0.0j
         for dim in "xyz":
-            dJ += self._derivative_field_cmp(
+            dJ += self._derivative_field_cmp_custom(
                 E_der_map=derivative_info.E_der_map,
                 spatial_data=spatial_ref,
                 dim=dim,
+                sum_over_freqs=False,
             )
         return dJ
 
@@ -2855,8 +2791,24 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
         """Compute Re(dJ * conj(weight)) with proper broadcasting."""
         return np.real(dJ * np.conj(weight))
 
+    def _sum_real_over_freqs(self, dJ: np.ndarray, freqs: list[float] | np.ndarray) -> np.ndarray:
+        """Sum real parts over the frequency axis using the shared accumulator."""
+        freqs = np.asarray(freqs, float)
+        if freqs.size == 0:
+            raise ValueError("freqs must not be empty")
+        if np.ndim(dJ) == 0 or np.shape(dJ)[-1] != freqs.size:
+            raise ValueError(
+                f"Expected frequency axis on dJ with size {freqs.size}, got shape {np.shape(dJ)}."
+            )
+
+        ones = np.ones_like(dJ[..., 0], dtype=float)
+        return self._sum_over_freqs(freqs=freqs, dJ=dJ, weight_fn=lambda _f, ones=ones: ones)
+
     def _sum_over_freqs(
-        self, freqs: list[float] | np.ndarray, dJ: np.ndarray, weight_fn
+        self,
+        freqs: list[float] | np.ndarray,
+        dJ: np.ndarray,
+        weight_fn: Callable[[float], np.ndarray],
     ) -> np.ndarray:
         """Accumulate gradient contributions over frequencies using provided weight function.
 
@@ -2874,8 +2826,19 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
         np.ndarray
             Real-valued gradient array matching dJ's broadcasted shape.
         """
-        g = 0.0
-        for f in freqs:
+        freqs = np.asarray(freqs, float)
+        if freqs.size == 0:
+            raise ValueError("freqs must not be empty")
+
+        weight0 = weight_fn(freqs[0])
+        if dJ.ndim == np.ndim(weight0) + 1 and dJ.shape[-1] == freqs.size:
+            g = self._accum_real_inner(dJ[..., 0], weight0)
+            for idx, f in enumerate(freqs[1:], start=1):
+                g = g + self._accum_real_inner(dJ[..., idx], weight_fn(f))
+            return g
+
+        g = self._accum_real_inner(dJ, weight0)
+        for f in freqs[1:]:
             g = g + self._accum_real_inner(dJ, weight_fn(f))
         return g
 
@@ -3707,61 +3670,38 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         return self.updated_copy(eps_inf=eps_inf_reduced, poles=poles_reduced)
 
-    def _derivative_field_cmp(
-        self,
-        E_der_map: ElectromagneticFieldDataset,
-        spatial_data: CustomSpatialDataTypeAnnotated,
-        dim: str,
-        freqs=None,
-        component: str = "complex",
-    ) -> np.ndarray:
-        """Compatibility wrapper for derivative computation.
-
-        Accepts the extended signature used by other custom media (
-        e.g., `CustomMedium._derivative_field_cmp`) while delegating the actual
-        computation to the base implementation that only depends on
-        `E_der_map`, `spatial_data`, and `dim`.
-
-        Parameters `freqs` and `component` are ignored for this model since the
-        derivative is taken with respect to the complex permittivity directly.
-        """
-        return super()._derivative_field_cmp(
-            E_der_map=E_der_map, spatial_data=spatial_data, dim=dim
-        )
-
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint derivatives by preparing array data and calling the static helper."""
 
         eps_inf_sorted = self._eps_inf_sorted
-        use_custom_derivative = isinstance(eps_inf_sorted, SpatialDataArray)
+        is_unstructured = isinstance(eps_inf_sorted, UnstructuredGridDatasetType)
+        if is_unstructured:
+            raise NotImplementedError(
+                "Adjoint derivatives for unstructured custom media are not supported."
+            )
 
         dJ_deps_complex = 0.0 + 0.0j
         for dim in "xyz":
-            if use_custom_derivative:
-                dJ_deps_complex += self._derivative_field_cmp_custom(
-                    E_der_map=derivative_info.E_der_map,
-                    spatial_data=eps_inf_sorted,
-                    dim=dim,
-                    freqs=derivative_info.frequencies,
-                    bounds=derivative_info.bounds_intersect,
-                    component="complex",
-                )
-            else:
-                dJ_deps_complex += self._derivative_field_cmp(
-                    E_der_map=derivative_info.E_der_map,
-                    spatial_data=eps_inf_sorted,
-                    dim=dim,
-                )
+            dJ_deps_complex += self._derivative_field_cmp_custom(
+                E_der_map=derivative_info.E_der_map,
+                spatial_data=eps_inf_sorted,
+                dim=dim,
+                bounds=derivative_info.bounds_intersect,
+                component="complex",
+                sum_over_freqs=False,
+            )
 
         poles_vals = [
             (np.array(a_sorted.values, dtype=complex), np.array(c_sorted.values, dtype=complex))
             for a_sorted, c_sorted in self._poles_sorted
         ]
 
+        freqs = np.asarray(derivative_info.frequencies, float)
         vjps_total = {}
-        for freq in derivative_info.frequencies:
+        for idx, freq in enumerate(freqs):
+            dJ_deps_complex_f = dJ_deps_complex[..., idx]
             vjps_f = PoleResidue._get_vjps_from_params(
-                dJ_deps_complex=dJ_deps_complex,
+                dJ_deps_complex=dJ_deps_complex_f,
                 poles_vals=poles_vals,
                 omega=2 * np.pi * freq,
                 requested_paths=derivative_info.paths,
@@ -4702,7 +4642,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
         # eps_inf path
         if ("eps_inf",) in derivative_info.paths:
-            grads[("eps_inf",)] = np.real(dJ)
+            grads[("eps_inf",)] = self._sum_real_over_freqs(dJ, derivative_info.frequencies)
 
         # per-coefficient contributions
         for i, (de_da, f0_da, dl_da) in enumerate(self.coeffs):
@@ -5059,7 +4999,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
         grads: AutogradFieldMap = {}
         if ("eps_inf",) in derivative_info.paths:
-            grads[("eps_inf",)] = np.real(dJ)
+            grads[("eps_inf",)] = self._sum_real_over_freqs(dJ, derivative_info.frequencies)
 
         for i, (fp_da, dl_da) in enumerate(self.coeffs):
             need_fp = ("coeffs", i, 0) in derivative_info.paths
@@ -5338,7 +5278,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
         grads: AutogradFieldMap = {}
         if ("eps_inf",) in derivative_info.paths:
-            grads[("eps_inf",)] = np.real(dJ)
+            grads[("eps_inf",)] = self._sum_real_over_freqs(dJ, derivative_info.frequencies)
 
         for i, (de_da, tau_da) in enumerate(self.coeffs):
             need_de = ("coeffs", i, 0) in derivative_info.paths
