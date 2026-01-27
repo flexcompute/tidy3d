@@ -386,6 +386,7 @@ jobs:
 
       - name: enforce-jira-key
         id: enforce-jira-key
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]'
         env:
           STEPS_EXTRACT_BRANCH_NAME_OUTPUTS_BRANCH_NAME: ${{ steps.extract-branch-name.outputs.branch_name }}
         run: |
