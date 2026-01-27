@@ -59,20 +59,20 @@ class RectangularDielectric(Tidy3dBaseModel):
     wavelength: Union[float, ArrayFloat1D] = Field(
         title="Wavelength",
         description="Wavelength(s) at which to calculate modes (in μm).",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     core_width: Union[Size1D, ArrayFloat1D] = Field(
         title="Core width",
         description="Core width at the top of the waveguide. If set to an array, defines "
         "the widths of adjacent waveguides.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     core_thickness: Size1D = Field(
         title="Core Thickness",
         description="Thickness of the core layer.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     core_medium: MediumType = Field(
@@ -98,7 +98,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         0.0,
         title="Slab Thickness",
         description="Thickness of the slab for rib geometry.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     clad_thickness: Optional[Union[Size1D, ArrayFloat1D]] = Field(
@@ -106,7 +106,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         title="Clad Thickness",
         description="Domain size above the core layer. An array can be used to define a layered "
         "clad. The last layer is extended into the PML as an infinitely thick layer.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     box_thickness: Optional[Union[Size1D, ArrayFloat1D]] = Field(
@@ -114,14 +114,14 @@ class RectangularDielectric(Tidy3dBaseModel):
         title="Box Thickness",
         description="Domain size below the core layer. An array can be used to define a layered "
         "substrate. The last layer is extended into the PML as an infinitely thick layer.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     side_margin: Optional[Size1D] = Field(
         None,
         title="Side Margin",
         description="Domain size to the sides of the waveguide core.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     sidewall_angle: float = Field(
@@ -130,7 +130,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         description="Angle of the core sidewalls measured from the vertical direction (in "
         "radians).  Positive (negative) values create waveguides with bases wider (narrower) "
         "than their tops.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     gap: Union[float, ArrayFloat1D] = Field(
@@ -138,14 +138,14 @@ class RectangularDielectric(Tidy3dBaseModel):
         title="Gap",
         description="Distance between adjacent waveguides, measured at the top core edges.  "
         "An array can be used to define one gap per pair of adjacent waveguides.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     sidewall_thickness: Size1D = Field(
         0.0,
         title="Sidewall Thickness",
         description="Sidewall layer thickness (within core).",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     sidewall_medium: Optional[MediumType] = Field(
@@ -160,7 +160,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         title="Surface Thickness",
         description="Thickness of the surface layers defined on the top of the waveguide and  "
         "slab regions (if any).",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     surface_medium: Optional[MediumType] = Field(
@@ -176,14 +176,14 @@ class RectangularDielectric(Tidy3dBaseModel):
         description="Center of the waveguide geometry.  This coordinate represents the base "
         "of the waveguides (substrate surface) in the normal axis, and center of the geometry "
         "in the remaining axes.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     length: Size1D = Field(
         1e30,
         title="Length",
         description="Length of the waveguides in the propagation direction",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     propagation_axis: Axis = Field(

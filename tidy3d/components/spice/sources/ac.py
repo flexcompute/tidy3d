@@ -43,14 +43,14 @@ class SSACVoltageSource(Tidy3dBaseModel):
     voltage: ArrayFloat1D = Field(
         title="DC Bias Voltages",
         description="List of DC operating point voltages (above ground) used with :class:`VoltageBC`.",
-        units=VOLT,
+        json_schema_extra={"units": VOLT},
     )
 
     amplitude: FiniteFloat = Field(
         default=1.0,
         title="Small Signal Amplitude",
         description="Amplitude of the small-signal perturbation for SSAC analysis.",
-        units=VOLT,
+        json_schema_extra={"units": VOLT},
     )
 
     @field_validator("voltage")

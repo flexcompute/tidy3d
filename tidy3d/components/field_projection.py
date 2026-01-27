@@ -223,7 +223,7 @@ class FieldProjector(Tidy3dBaseModel):
         title="Local origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
         "average of the centers of all surface monitors.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @model_validator(mode="after")

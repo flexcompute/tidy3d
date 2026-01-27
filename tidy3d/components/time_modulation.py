@@ -71,7 +71,9 @@ class ContinuousWaveTimeModulation(AbstractTimeDependence):
     """
 
     freq0: PositiveFloat = Field(
-        title="Modulation Frequency", description="Modulation frequency.", units=HERTZ
+        title="Modulation Frequency",
+        description="Modulation frequency.",
+        json_schema_extra={"units": HERTZ},
     )
 
     def amp_time(self, time: float) -> complex:
@@ -146,7 +148,7 @@ class SpaceModulation(AbstractSpaceModulation):
         0,
         title="Phase of modulation in space",
         description="Phase of modulation that can vary spatially.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     interp_method: InterpMethod = Field(

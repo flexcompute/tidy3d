@@ -33,7 +33,9 @@ class ConstantEffectiveDOS(EffectiveDOS):
     """Constant effective density of states model."""
 
     N: PositiveFloat = Field(
-        title="Effective DOS", description="Effective density of states", units=PERCMCUBE
+        title="Effective DOS",
+        description="Effective density of states",
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     def calc_eff_dos(self, T: float) -> float:

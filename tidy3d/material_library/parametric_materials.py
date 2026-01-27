@@ -73,16 +73,19 @@ class Graphene(ParametricVariantItem2D):
         GRAPHENE_DEF_MU_C,
         title="Chemical potential in eV",
         description="Chemical potential in eV.",
-        units=ELECTRON_VOLT,
+        json_schema_extra={"units": ELECTRON_VOLT},
     )
     temp: float = Field(
-        GRAPHENE_DEF_TEMP, title="Temperature in K", description="Temperature in K.", units=KELVIN
+        GRAPHENE_DEF_TEMP,
+        title="Temperature in K",
+        description="Temperature in K.",
+        json_schema_extra={"units": KELVIN},
     )
     gamma: float = Field(
         GRAPHENE_DEF_GAMMA,
         title="Scattering rate in eV",
         description="Scattering rate in eV. Must be small compared to the optical frequency.",
-        units=ELECTRON_VOLT,
+        json_schema_extra={"units": ELECTRON_VOLT},
     )
     scaling: float = Field(
         1,

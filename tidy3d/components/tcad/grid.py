@@ -41,7 +41,7 @@ class UniformUnstructuredGrid(UnstructuredGrid):
     dl: PositiveFloat = Field(
         title="Grid Size",
         description="Grid size for uniform grid generation.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     min_edges_per_circumference: PositiveFloat = Field(
@@ -73,14 +73,14 @@ class GridRefinementRegion(Box):
     dl_internal: PositiveFloat = Field(
         title="Internal mesh cell size",
         description="Mesh cell size inside the refinement region",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     transition_thickness: NonNegativeFloat = Field(
         title="Interface Distance",
         description="Thickness of a transition layer outside the box where the mesh cell size changes from the"
         "internal size to the external one.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
 
@@ -90,13 +90,13 @@ class GridRefinementLine(Tidy3dBaseModel, ABC):
     r1: Coordinate = Field(
         title="Start point of the line",
         description="Start point of the line in x, y, and z.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     r2: Coordinate = Field(
         title="End point of the line",
         description="End point of the line in x, y, and z.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @field_validator("r1", "r2")
@@ -110,14 +110,14 @@ class GridRefinementLine(Tidy3dBaseModel, ABC):
     dl_near: PositiveFloat = Field(
         title="Mesh cell size near the line",
         description="Mesh cell size near the line",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     distance_near: NonNegativeFloat = Field(
         title="Near distance",
         description="Distance from the line within which ``dl_near`` is enforced."
         "Typically the same as ``dl_near`` or its multiple.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     distance_bulk: NonNegativeFloat = Field(
@@ -125,7 +125,7 @@ class GridRefinementLine(Tidy3dBaseModel, ABC):
         description="Distance from the line outside of which ``dl_bulk`` is enforced."
         "Typically twice of ``dl_bulk`` or its multiple. Use larger values for a smoother "
         "transition from ``dl_near`` to ``dl_bulk``.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @model_validator(mode="after")
@@ -154,20 +154,20 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
     dl_interface: PositiveFloat = Field(
         title="Interface Grid Size",
         description="Grid size near material interfaces.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     dl_bulk: PositiveFloat = Field(
         title="Bulk Grid Size",
         description="Grid size away from material interfaces.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     distance_interface: NonNegativeFloat = Field(
         title="Interface Distance",
         description="Distance from interface within which ``dl_interface`` is enforced."
         "Typically the same as ``dl_interface`` or its multiple.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     distance_bulk: NonNegativeFloat = Field(
@@ -175,7 +175,7 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         description="Distance from interface outside of which ``dl_bulk`` is enforced."
         "Typically twice of ``dl_bulk`` or its multiple. Use larger values for a smoother "
         "transition from ``dl_interface`` to ``dl_bulk``.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     sampling: PositiveFloat = Field(

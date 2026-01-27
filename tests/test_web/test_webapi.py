@@ -16,7 +16,7 @@ from responses import matchers
 
 import tidy3d as td
 from tests.test_web.test_tidy3d_stub import is_lazy_object
-from tidy3d import Simulation
+from tidy3d import Simulation, config
 from tidy3d.__main__ import main
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.monitor_data import FieldData
@@ -67,7 +67,7 @@ INVALID_TASK_ID = "INVALID_TASK_ID"
 task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
 
-Env.dev.active()
+config.switch_profile("dev")
 
 
 class FakeJob:

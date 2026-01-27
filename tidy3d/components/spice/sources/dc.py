@@ -62,7 +62,7 @@ class DCVoltageSource(Tidy3dBaseModel):
     voltage: ArrayFloat1D = Field(
         title="Voltage",
         description="DC voltage usually used as source in :class:`VoltageBC` boundary conditions.",
-        units=VOLT,
+        json_schema_extra={"units": VOLT},
     )
 
     # TODO: This should have always been in the field above but was introduced wrongly as a
@@ -158,7 +158,7 @@ class DCCurrentSource(Tidy3dBaseModel):
     current: FiniteFloat = Field(
         title="Current",
         description="DC current usually used as source in :class:`CurrentBC` boundary conditions.",
-        units=AMP,
+        json_schema_extra={"units": AMP},
     )
 
     # TODO: This should have always been in the field above but was introduced wrongly as a

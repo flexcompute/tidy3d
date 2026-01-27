@@ -29,7 +29,10 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
     )
 
     phase: float = Field(
-        0.0, title="Phase", description="Phase shift of the time dependence.", units=RADIAN
+        0.0,
+        title="Phase",
+        description="Phase shift of the time dependence.",
+        json_schema_extra={"units": RADIAN},
     )
 
     @abstractmethod

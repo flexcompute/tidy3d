@@ -58,19 +58,19 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         (0.0, 0.0, 0.0),
         title="Center",
         description="Center of object in x, y, and z.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     outer_diameter: PositiveFloat = Field(
         title="Outer Diameter",
         description="Diameter of the outer coaxial circle.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     inner_diameter: PositiveFloat = Field(
         title="Inner Diameter",
         description="Diameter of the inner coaxial circle.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     normal_axis: Axis = Field(

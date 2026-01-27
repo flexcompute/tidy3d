@@ -114,7 +114,7 @@ class DirectivityMonitorSpec(MicrowaveBaseModel):
         title="Local Origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
         "monitor's center.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
 

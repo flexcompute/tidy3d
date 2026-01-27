@@ -18,7 +18,7 @@ class ConstantMobilityModel(Tidy3dBaseModel):
     mu: NonNegativeFloat = Field(
         title="Mobility",
         description="Mobility",
-        units="cm²/V-s",
+        json_schema_extra={"units": "cm²/V-s"},
     )
 
 
@@ -120,13 +120,13 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
     mu_min: PositiveFloat = Field(
         title="Minimum electron mobility",
         description="Minimum electron mobility  :math:`\\mu_{\\text{min}}`  at reference temperature (300K).",
-        units="cm^2/V-s",
+        json_schema_extra={"units": "cm^2/V-s"},
     )
 
     mu: PositiveFloat = Field(
         title="Reference mobility",
         description="Reference mobility at reference temperature (300K).",
-        units="cm^2/V-s",
+        json_schema_extra={"units": "cm^2/V-s"},
     )
 
     # thermal exponent for reference mobility
@@ -144,7 +144,7 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
     ref_N: PositiveFloat = Field(
         title="Reference doping",
         description="Reference doping at reference temperature (300K).",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     # temperature exponent

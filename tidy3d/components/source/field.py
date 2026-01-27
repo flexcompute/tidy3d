@@ -270,7 +270,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the injection axis.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     angle_phi: float = Field(
@@ -278,7 +278,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "
         "injection axis.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     pol_angle: float = Field(
@@ -292,7 +292,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         "- ``Ey`` polarization for propagation along ``x``."
         "- ``Ex`` polarization for propagation along ``y``."
         "- ``Ex`` polarization for propagation along ``z``.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     @field_validator("angle_theta")
@@ -584,7 +584,7 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         1.0,
         title="Waist Radius",
         description="Radius of the beam at the waist.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     waist_distance: float = Field(
@@ -596,7 +596,7 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         "means the beam waist is positioned in the ``-`` direction (behind the source). "
         "A negative value means the beam waist is in the ``+`` direction (in front of the source). "
         "For an angled source, the distance is defined along the rotated propagation direction.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     num_freqs: int = Field(
@@ -645,7 +645,7 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         (1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     waist_distances: tuple[float, float] = Field(
@@ -657,7 +657,7 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         "is on the ``-`` side (behind) the source plane. When ``direction`` is ``+`` and "
         "``waist_distances`` are negative, the waist is on the ``+`` side (in front) of "
         "the source plane.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     num_freqs: int = Field(

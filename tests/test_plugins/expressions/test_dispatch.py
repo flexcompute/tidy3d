@@ -8,7 +8,7 @@ from tidy3d.plugins.expressions.variables import Constant
 
 def test_expression_parse_obj_round_trip():
     expr = Constant(3.14)
-    parsed = Expression.model_validate(expr.dict())
+    parsed = Expression.model_validate(expr.model_dump())
     assert isinstance(parsed, Constant)
     assert parsed.value == pytest.approx(3.14)
 

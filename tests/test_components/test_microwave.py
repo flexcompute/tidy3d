@@ -564,13 +564,15 @@ def test_composite_current_integral_validation():
 
     current_spec = td.AxisAlignedCurrentIntegralSpec(center=(1, 2, 3), size=(0, 1, 1), sign="-")
     voltage_spec = td.AxisAlignedVoltageIntegralSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
-    path_spec = td.CompositeCurrentIntegralSpec(path_specs=[current_spec], sum_spec="sum")
-
+    path_spec = td.CompositeCurrentIntegralSpec(path_specs=(current_spec,), sum_spec="sum")
     with pytest.raises(pd.ValidationError):
         path_spec.updated_copy(path_specs=[])
-
-    with pytest.raises(pd.ValidationError):
-        path_spec.updated_copy(path_specs=[voltage_spec])
+    with pytest.warns(
+        UserWarning,
+        match=r"(?s)Pydantic serializer warnings:.*path_specs.*",
+    ):
+        with pytest.raises(pd.ValidationError):
+            path_spec.updated_copy(path_specs=[voltage_spec])
 
 
 def test_composite_current_integral_bounds():

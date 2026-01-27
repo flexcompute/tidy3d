@@ -40,13 +40,13 @@ class SlotboomBandGapNarrowing(Tidy3dBaseModel):
     v1: PositiveFloat = Field(
         title=":math:`V_{1,bgn}` parameter",
         description=":math:`V_{1,bgn}` parameter",
-        units=VOLT,
+        json_schema_extra={"units": VOLT},
     )
 
     n2: PositiveFloat = Field(
         title=":math:`N_{2,bgn}` parameter",
         description=":math:`N_{2,bgn}` parameter",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     c2: float = Field(
@@ -58,5 +58,5 @@ class SlotboomBandGapNarrowing(Tidy3dBaseModel):
         title="Minimum total doping",
         description="Bandgap narrowing is applied at location where total doping "
         "is higher than ``min_N``.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )

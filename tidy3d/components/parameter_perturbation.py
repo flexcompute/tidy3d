@@ -136,7 +136,7 @@ class HeatPerturbation(AbstractPerturbation):
         (0, inf),
         title="Temperature range",
         description="Temperature range in which perturbation model is valid.",
-        units=KELVIN,
+        json_schema_extra={"units": KELVIN},
     )
 
     @abstractmethod
@@ -238,13 +238,13 @@ class LinearHeatPerturbation(HeatPerturbation):
     temperature_ref: NonNegativeFloat = Field(
         title="Reference temperature",
         description="Temperature at which perturbation is zero.",
-        units=KELVIN,
+        json_schema_extra={"units": KELVIN},
     )
 
     coeff: Union[float, Complex] = Field(
         title="Thermo-optic Coefficient",
         description="Sensitivity (derivative) of perturbation with respect to temperature.",
-        units=f"1/{KELVIN}",
+        json_schema_extra={"units": f"1/{KELVIN}"},
     )
 
     @cached_property
@@ -332,7 +332,7 @@ class CustomHeatPerturbation(HeatPerturbation):
         description="Temperature range in which perturbation model is valid. For "
         ":class:`.CustomHeatPerturbation` this field is computed automatically based on "
         "temperature sample points provided in ``perturbation_values``.",
-        units=KELVIN,
+        json_schema_extra={"units": KELVIN},
     )
 
     interp_method: InterpMethod = Field(
@@ -642,25 +642,25 @@ class LinearChargePerturbation(ChargePerturbation):
         title="Reference Electron Density",
         description="Electron density value at which there is no perturbation due to electrons's "
         "presence.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     hole_ref: NonNegativeFloat = Field(
         title="Reference Hole Density",
         description="Hole density value at which there is no perturbation due to holes' presence.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     electron_coeff: float = Field(
         title="Sensitivity to Electron Density",
         description="Sensitivity (derivative) of perturbation with respect to electron density.",
-        units=CMCUBE,
+        json_schema_extra={"units": CMCUBE},
     )
 
     hole_coeff: float = Field(
         title="Sensitivity to Hole Density",
         description="Sensitivity (derivative) of perturbation with respect to hole density.",
-        units=CMCUBE,
+        json_schema_extra={"units": CMCUBE},
     )
 
     @cached_property
@@ -1516,7 +1516,7 @@ class NedeljkovicSorefMashanovich(AbstractDeltaModel):
     ref_freq: NonNegativeFloat = Field(
         title="Reference Frequency",
         description="Reference frequency to evaluate perturbation at (Hz).",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
 
     electrons_grid: ArrayFloat = Field(
@@ -1669,7 +1669,7 @@ class IndexPerturbation(Tidy3dBaseModel):
     freq: NonNegativeFloat = Field(
         title="Frequency",
         description="Frequency to evaluate permittivity at (Hz).",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
 
     @model_validator(mode="after")

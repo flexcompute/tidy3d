@@ -42,7 +42,7 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
         (0, 0, 0),
         title="Symmetry Center",
         description="Symmetry center of the original simulation in x, y, and z.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @abstractmethod

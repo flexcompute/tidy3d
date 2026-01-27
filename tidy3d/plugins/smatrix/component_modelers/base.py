@@ -67,7 +67,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     freqs: FreqArray = Field(
         title="Frequencies",
         description="Array or list of frequencies at which to compute port parameters.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
 
     remove_dc_component: bool = Field(

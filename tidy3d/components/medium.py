@@ -188,7 +188,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         None,
         title="Frequency Range",
         description="Optional range of validity for the medium.",
-        units=(HERTZ, HERTZ),
+        json_schema_extra={"units": (HERTZ, HERTZ)},
     )
 
     allow_gain: bool = Field(
@@ -1523,7 +1523,11 @@ class Medium(AbstractMedium):
     """
 
     permittivity: TracedFloat = Field(
-        1.0, ge=1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
+        1.0,
+        ge=1.0,
+        title="Permittivity",
+        description="Relative permittivity.",
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     conductivity: TracedFloat = Field(
@@ -1531,7 +1535,7 @@ class Medium(AbstractMedium):
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
         "permittivity at angular frequency omega is given by conductivity/omega.",
-        units=CONDUCTIVITY,
+        json_schema_extra={"units": CONDUCTIVITY},
     )
 
     @model_validator(mode="after")
@@ -1712,7 +1716,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
     permittivity: CustomSpatialDataTypeAnnotated = Field(
         title="Permittivity",
         description="Relative permittivity.",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     conductivity: Optional[CustomSpatialDataTypeAnnotated] = Field(
@@ -1720,7 +1724,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
         "permittivity at angular frequency omega is given by conductivity/omega.",
-        units=CONDUCTIVITY,
+        json_schema_extra={"units": CONDUCTIVITY},
     )
 
     _no_nans = validate_no_nans("permittivity", "conductivity")
@@ -1894,7 +1898,7 @@ class CustomMedium(AbstractCustomMedium):
         None,
         title="Permittivity",
         description="Spatial profile of relative permittivity.",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     conductivity: Optional[CustomSpatialDataTypeAnnotated] = Field(
@@ -1903,7 +1907,7 @@ class CustomMedium(AbstractCustomMedium):
         description="Spatial profile Electric conductivity. Defined such "
         "that the imaginary part of the complex permittivity at angular "
         "frequency omega is given by conductivity/omega.",
-        units=CONDUCTIVITY,
+        json_schema_extra={"units": CONDUCTIVITY},
     )
 
     _no_nans = validate_no_nans("eps_dataset", "permittivity", "conductivity")
@@ -2962,14 +2966,14 @@ class PoleResidue(DispersiveMedium):
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     poles: TracedPolesAndResidues = Field(
         (),
         title="Poles",
         description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
-        units=(RADPERSEC, RADPERSEC),
+        json_schema_extra={"units": (RADPERSEC, RADPERSEC)},
     )
 
     @field_validator("poles")
@@ -3550,7 +3554,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     eps_inf: CustomSpatialDataTypeAnnotated = Field(
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     poles: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
@@ -3558,7 +3562,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             (),
             title="Poles",
             description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
-            units=(RADPERSEC, RADPERSEC),
+            json_schema_extra={"units": (RADPERSEC, RADPERSEC)},
         )
     )
 
@@ -3865,7 +3869,7 @@ class Sellmeier(DispersiveMedium):
     coeffs: tuple[tuple[float, PositiveFloat], ...] = Field(
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
-        units=(None, MICROMETER + "^2"),
+        json_schema_extra={"units": (None, MICROMETER + "^2")},
     )
 
     @model_validator(mode="after")
@@ -4079,7 +4083,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         Field(
             title="Coefficients",
             description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
-            units=(None, MICROMETER + "^2"),
+            json_schema_extra={"units": (None, MICROMETER + "^2")},
         )
     )
 
@@ -4355,13 +4359,13 @@ class Lorentz(DispersiveMedium):
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     coeffs: tuple[tuple[float, float, NonNegativeFloat], ...] = Field(
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
-        units=(PERMITTIVITY, HERTZ, HERTZ),
+        json_schema_extra={"units": (PERMITTIVITY, HERTZ, HERTZ)},
     )
 
     @field_validator("coeffs")
@@ -4611,7 +4615,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     eps_inf: CustomSpatialDataTypeAnnotated = Field(
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     coeffs: tuple[
@@ -4624,7 +4628,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     ] = Field(
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
-        units=(PERMITTIVITY, HERTZ, HERTZ),
+        json_schema_extra={"units": (PERMITTIVITY, HERTZ, HERTZ)},
     )
 
     _no_nans = validate_no_nans("eps_inf", "coeffs")
@@ -4882,13 +4886,13 @@ class Drude(DispersiveMedium):
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     coeffs: tuple[tuple[float, PositiveFloat], ...] = Field(
         title="Coefficients",
         description="List of (:math:`f_i, \\delta_i`) values for model.",
-        units=(HERTZ, HERTZ),
+        json_schema_extra={"units": (HERTZ, HERTZ)},
     )
 
     _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
@@ -5031,14 +5035,14 @@ class CustomDrude(CustomDispersiveMedium, Drude):
     eps_inf: CustomSpatialDataTypeAnnotated = Field(
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     coeffs: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
         Field(
             title="Coefficients",
             description="List of (:math:`f_i, \\delta_i`) values for model.",
-            units=(HERTZ, HERTZ),
+            json_schema_extra={"units": (HERTZ, HERTZ)},
         )
     )
 
@@ -5229,13 +5233,13 @@ class Debye(DispersiveMedium):
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     coeffs: tuple[tuple[float, PositiveFloat], ...] = Field(
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
-        units=(PERMITTIVITY, SECOND),
+        json_schema_extra={"units": (PERMITTIVITY, SECOND)},
     )
 
     @model_validator(mode="after")
@@ -5391,14 +5395,14 @@ class CustomDebye(CustomDispersiveMedium, Debye):
     eps_inf: CustomSpatialDataTypeAnnotated = Field(
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     coeffs: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
         Field(
             title="Coefficients",
             description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
-            units=(PERMITTIVITY, SECOND),
+            json_schema_extra={"units": (PERMITTIVITY, SECOND)},
         )
     )
 
@@ -5673,7 +5677,7 @@ class HammerstadSurfaceRoughness(AbstractSurfaceRoughness):
     rq: PositiveFloat = Field(
         title="RMS Peak-to-Valley Height",
         description="RMS peak-to-valley height (Rq) of the surface roughness.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     roughness_factor: float = Field(
@@ -5750,7 +5754,7 @@ class HuraySurfaceRoughness(AbstractSurfaceRoughness):
         description="List of (:math:`f_i, r_i`) values for model, where :math:`f_i` is "
         "the ratio of total sphere surface area to the flat surface area, and :math:`r_i` "
         "the radius of the sphere.",
-        units=(None, MICROMETER),
+        json_schema_extra={"units": (None, MICROMETER)},
     )
 
     @classmethod
@@ -5839,14 +5843,17 @@ class LossyMetalMedium(Medium):
     )
 
     permittivity: Literal[1.0] = Field(
-        1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
+        1.0,
+        title="Permittivity",
+        description="Relative permittivity.",
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     conductivity: PositiveFloat = Field(
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
         "permittivity at angular frequency omega is given by conductivity/omega.",
-        units=CONDUCTIVITY,
+        json_schema_extra={"units": CONDUCTIVITY},
     )
 
     roughness: Optional[SurfaceRoughnessType] = Field(
@@ -5862,13 +5869,13 @@ class LossyMetalMedium(Medium):
         title="Conductor Thickness",
         description="When the thickness of the conductor is not much greater than skin depth, "
         "1D transmission line model is applied to compute the surface impedance of the thin conductor.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     frequency_range: FreqBound = Field(
         title="Frequency Range",
         description="Frequency range of validity for the medium.",
-        units=(HERTZ, HERTZ),
+        json_schema_extra={"units": (HERTZ, HERTZ)},
     )
 
     fit_param: SurfaceImpedanceFitterParam = Field(
@@ -6358,7 +6365,7 @@ class FullyAnisotropicMedium(AbstractMedium):
         [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
         title="Permittivity",
         description="Relative permittivity tensor.",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     conductivity: TensorReal = Field(
@@ -6366,7 +6373,7 @@ class FullyAnisotropicMedium(AbstractMedium):
         title="Conductivity",
         description="Electric conductivity tensor. Defined such that the imaginary part "
         "of the complex permittivity at angular frequency omega is given by conductivity/omega.",
-        units=CONDUCTIVITY,
+        json_schema_extra={"units": CONDUCTIVITY},
     )
 
     @field_validator("modulation_spec")
@@ -6979,14 +6986,14 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         None,
         title="Permittivity Perturbation",
         description="List of heat and/or charge perturbations to permittivity.",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     conductivity_perturbation: Optional[ParameterPerturbation] = Field(
         None,
         title="Permittivity Perturbation",
         description="List of heat and/or charge perturbations to permittivity.",
-        units=CONDUCTIVITY,
+        json_schema_extra={"units": CONDUCTIVITY},
     )
 
     _permittivity_perturbation_validator = validate_parameter_perturbation(
@@ -7155,7 +7162,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         title="Perturbation of Epsilon at Infinity",
         description="Perturbations to relative permittivity at infinite frequency "
         "(:math:`\\epsilon_\\infty`).",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     poles_perturbation: Optional[
@@ -7164,7 +7171,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         None,
         title="Perturbations of Poles",
         description="Perturbations to poles of the model.",
-        units=(RADPERSEC, RADPERSEC),
+        json_schema_extra={"units": (RADPERSEC, RADPERSEC)},
     )
 
     _eps_inf_perturbation_validator = validate_parameter_perturbation(

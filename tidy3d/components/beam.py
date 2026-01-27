@@ -38,13 +38,13 @@ class BeamProfile(Box):
         title="Sampling resolution",
         description="Sampling resolution in the tangential directions of the beam (defines a "
         "number of equally spaced points).",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     freqs: FreqArray = Field(
         title="Frequencies",
         description="List of frequencies at which the beam is sampled.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
 
     background_medium: MediumType = Field(
@@ -57,7 +57,7 @@ class BeamProfile(Box):
         0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the normal axis.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     angle_phi: float = Field(
@@ -65,7 +65,7 @@ class BeamProfile(Box):
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "
         "normal axis.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     pol_angle: float = Field(
@@ -79,7 +79,7 @@ class BeamProfile(Box):
         "- ``Ey`` polarization for propagation along ``x``."
         "- ``Ex`` polarization for propagation along ``y``."
         "- ``Ex`` polarization for propagation along ``z``.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     direction: Direction = Field(
@@ -370,7 +370,7 @@ class GaussianBeamProfile(BeamProfile):
         1.0,
         title="Waist Radius",
         description="Radius of the beam at the waist.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     waist_distance: float = Field(
@@ -382,7 +382,7 @@ class GaussianBeamProfile(BeamProfile):
         "means the beam waist is positioned in the ``-`` direction (behind the beam). "
         "A negative value means the beam waist is in the ``+`` direction (in front of the beam). "
         "For an angled beam, the distance is defined along the rotated propagation direction.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
     _backward_waist_warning = warn_backward_waist_distance("waist_distance")
 
@@ -439,7 +439,7 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
         (1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     waist_distances: tuple[float, float] = Field(
@@ -451,7 +451,7 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
         "is on the ``-`` side (behind) the beam plane. When ``direction`` is ``+`` and "
         "``waist_distances`` are negative, the waist is on the ``+`` side (in front) of "
         "the beam plane.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
     _backward_waist_warning = warn_backward_waist_distance("waist_distances")
 

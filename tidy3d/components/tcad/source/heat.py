@@ -24,7 +24,7 @@ class HeatSource(StructureBasedHeatChargeSource):
     rate: Union[float, SpatialDataArray] = Field(
         title="Volumetric Heat Rate",
         description="Volumetric rate of heating or cooling (if negative).",
-        units=VOLUMETRIC_HEAT_RATE,
+        json_schema_extra={"units": VOLUMETRIC_HEAT_RATE},
     )
 
 

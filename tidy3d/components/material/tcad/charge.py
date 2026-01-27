@@ -34,7 +34,7 @@ class AbstractChargeMedium(AbstractMedium):
         ge=1.0,
         title="Permittivity",
         description="Relative permittivity.",
-        units=PERMITTIVITY,
+        json_schema_extra={"units": PERMITTIVITY},
     )
 
     @property
@@ -85,7 +85,7 @@ class ChargeConductorMedium(AbstractChargeMedium):
     conductivity: PositiveFloat = Field(
         title="Electric conductivity",
         description="Electric conductivity of material.",
-        units=CONDUCTIVITY,
+        json_schema_extra={"units": CONDUCTIVITY},
     )
 
 
@@ -265,19 +265,19 @@ class SemiconductorMedium(AbstractChargeMedium):
     N_c: Union[EffectiveDOSModelType, PositiveFloat] = Field(
         title="Effective density of electron states",
         description=":math:`N_c` Effective density of states in the conduction band.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     N_v: Union[EffectiveDOSModelType, PositiveFloat] = Field(
         title="Effective density of hole states",
         description=":math:`N_v` Effective density of states in the valence band.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     E_g: Union[EnergyBandGapModelType, PositiveFloat] = Field(
         title="Band-gap energy",
         description=":math:`E_g` Band-gap energy",
-        units=ELECTRON_VOLT,
+        json_schema_extra={"units": ELECTRON_VOLT},
     )
 
     mobility_n: MobilityModelType = Field(
@@ -300,7 +300,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         None,
         title="Bandgap narrowing model.",
         description=":math:`\\Delta E_g` Bandgap narrowing model.",
-        units=ELECTRON_VOLT,
+        json_schema_extra={"units": ELECTRON_VOLT},
     )
 
     N_a: Union[
@@ -314,7 +314,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         description="Concentration of acceptor impurities, which create mobile holes, resulting in p-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
         "or a tuple/list of geometric shapes to define specific doped regions.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     N_d: Union[
@@ -328,7 +328,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         description="Concentration of donor impurities, which create mobile electrons, resulting in n-type material. "
         "Can be specified as a single float for uniform doping, a :class:`SpatialDataArray` for a custom profile, "
         "or a tuple/list of geometric shapes to define specific doped regions.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     # DEPRECATION VALIDATORS

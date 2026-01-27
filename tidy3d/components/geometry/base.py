@@ -1567,7 +1567,7 @@ class Centered(Geometry, ABC):
         None,
         title="Center",
         description="Center of object in x, y, and z.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @field_validator("center", mode="before")
@@ -1692,7 +1692,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         "along the ``axis`` direction; "
         "and ``-np.pi/2<sidewall_angle<0`` specifies an expanding cross section "
         "along the ``axis`` direction.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     reference_plane: PlanePosition = Field(
@@ -1884,7 +1884,7 @@ class Circular(Geometry):
     radius: NonNegativeFloat = Field(
         title="Radius",
         description="Radius of geometry.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @field_validator("radius")
@@ -1931,7 +1931,7 @@ class Box(SimplePlaneIntersection, Centered):
     size: TracedSize = Field(
         title="Size",
         description="Size in x, y, and z directions.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @classmethod

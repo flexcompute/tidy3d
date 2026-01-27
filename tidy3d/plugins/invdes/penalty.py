@@ -57,7 +57,7 @@ class ErosionDilationPenalty(AbstractPenalty):
         "Corresponds to ``radius`` in the :class:`ConicFilter` used for filtering. "
         "The parameter array is dilated and eroded by half of this value with each operation. "
         "Roughly corresponds to the desired minimum feature size and radius of curvature.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     beta: float = Field(

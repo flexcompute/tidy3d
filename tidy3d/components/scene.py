@@ -1480,7 +1480,7 @@ class Scene(Tidy3dBaseModel):
             color_value = min(1.0, max(0.0, color_value))
             if mpl is not None:
                 cmap_name = _get_colormap(reverse=reverse)
-                cmap = mpl.cm.get_cmap(cmap_name)
+                cmap = plt.get_cmap(cmap_name)
                 rgba = tuple(float(component) for component in cmap(color_value))
             else:
                 gray_value = color_value if reverse else 1.0 - color_value

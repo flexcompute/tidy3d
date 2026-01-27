@@ -397,7 +397,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
     def _classify_mode(self, mode_index: int) -> ModeClassification:
         """Classify mode as TEM, quasi-TEM, TE, TM, or Hybrid based on TE/TM fractions."""
         # Make quasi-TEM classification choice based on lowest frequency available
-        min_f_idx = self.wg_TE_fraction.f.argmin()
+        min_f_idx = self.wg_TE_fraction.f.data.argmin()
         low_f_TE_frac = self.wg_TE_fraction.sel(mode_index=mode_index).isel(f=min_f_idx).values
         low_f_TM_frac = self.wg_TM_fraction.sel(mode_index=mode_index).isel(f=min_f_idx).values
         # Otherwise we use the average value of the fraction across frequencies

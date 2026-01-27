@@ -84,7 +84,7 @@ class PolySlab(base.Planar):
     slab_bounds: tuple[TracedFloat, TracedFloat] = Field(
         title="Slab Bounds",
         description="Minimum and maximum positions of the slab along axis dimension.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     dilation: float = Field(
@@ -92,7 +92,7 @@ class PolySlab(base.Planar):
         title="Dilation",
         description="Dilation of the supplied polygon by shifting each edge along its "
         "normal outwards direction by a distance; a negative value corresponds to erosion.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     vertices: TracedArrayFloat2D = Field(
@@ -101,7 +101,7 @@ class PolySlab(base.Planar):
         "face vertices at the ``reference_plane``. "
         "The index of dimension should be in the ascending order: e.g. if "
         "the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @staticmethod

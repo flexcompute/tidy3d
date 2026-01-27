@@ -93,31 +93,31 @@ class FluidMedium(AbstractHeatMedium):
         default=None,
         title="Fluid Thermal Conductivity",
         description="Thermal conductivity (k) of the fluid.",
-        units=THERMAL_CONDUCTIVITY,
+        json_schema_extra={"units": THERMAL_CONDUCTIVITY},
     )
     viscosity: Optional[NonNegativeFloat] = Field(
         default=None,
         title="Fluid Dynamic Viscosity",
         description="Dynamic viscosity (μ) of the fluid.",
-        units=DYNAMIC_VISCOSITY,
+        json_schema_extra={"units": DYNAMIC_VISCOSITY},
     )
     specific_heat: Optional[NonNegativeFloat] = Field(
         default=None,
         title="Fluid Specific Heat",
         description="Specific heat of the fluid at constant pressure.",
-        units=SPECIFIC_HEAT,
+        json_schema_extra={"units": SPECIFIC_HEAT},
     )
     density: Optional[NonNegativeFloat] = Field(
         default=None,
         title="Fluid Density",
         description="Density (ρ) of the fluid.",
-        units=DENSITY,
+        json_schema_extra={"units": DENSITY},
     )
     expansivity: Optional[NonNegativeFloat] = Field(
         default=None,
         title="Fluid Thermal Expansivity",
         description="Thermal expansion coefficient (β) of the fluid.",
-        units=THERMAL_EXPANSIVITY,
+        json_schema_extra={"units": THERMAL_EXPANSIVITY},
     )
 
     @classmethod
@@ -163,20 +163,20 @@ class SolidMedium(AbstractHeatMedium):
         None,
         title="Heat capacity",
         description=f"Specific heat capacity in unit of {SPECIFIC_HEAT_CAPACITY}.",
-        units=SPECIFIC_HEAT_CAPACITY,
+        json_schema_extra={"units": SPECIFIC_HEAT_CAPACITY},
     )
 
     conductivity: PositiveFloat = Field(
         title="Thermal conductivity",
         description=f"Thermal conductivity of material in units of {THERMAL_CONDUCTIVITY}.",
-        units=THERMAL_CONDUCTIVITY,
+        json_schema_extra={"units": THERMAL_CONDUCTIVITY},
     )
 
     density: Optional[PositiveFloat] = Field(
         None,
         title="Density",
         description=f"Mass density of material in units of {DENSITY}.",
-        units=DENSITY,
+        json_schema_extra={"units": DENSITY},
     )
 
     @classmethod

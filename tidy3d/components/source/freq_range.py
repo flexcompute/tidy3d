@@ -42,13 +42,13 @@ class FreqRange(Tidy3dBaseModel):
     freq0: PositiveFloat = Field(
         title="Central frequency",
         description="Real-valued positive central frequency.",
-        units="Hz",
+        json_schema_extra={"units": "Hz"},
     )
 
     fwidth: PositiveFloat = Field(
         title="Frequency bandwidth",
         description="Real-valued positive width of the frequency range (bandwidth).",
-        units="Hz",
+        json_schema_extra={"units": "Hz"},
     )
 
     @property

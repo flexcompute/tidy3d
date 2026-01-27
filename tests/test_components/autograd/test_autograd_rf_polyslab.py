@@ -11,7 +11,7 @@ import pytest
 import tidy3d as td
 import tidy3d.web as web
 
-td.config.logging_level = "ERROR"
+td.config.logging.level = "ERROR"
 
 PLOT_FD_ADJ_COMPARISON = False
 NUM_VERTICES_PER_FD_TESTS = 10

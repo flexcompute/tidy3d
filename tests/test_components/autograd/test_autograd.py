@@ -2163,7 +2163,7 @@ def test_custom_sellmeier(monkeypatch):
     def eps_from(B, C):
         return 1.0 + B * lam2 / (lam2 - C)
 
-    eps_arr = eps_from(B1.values, C1.values) + eps_from(B2.values, C2.values)
+    eps_arr = eps_from(B1.values, C1.values) + eps_from(B2.values, C2.values) + 0j
     dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
 
     _patch_cmp_to_const(monkeypatch, td.CustomSellmeier, dJ)

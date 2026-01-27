@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import pathlib
 from abc import ABC
-from os import PathLike
-from typing import Optional, TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from pydantic import Field, field_validator, model_validator

@@ -967,11 +967,11 @@ def test_mode_solver_data_stored_freqs(num_freqs, num_points, reduce_data, expec
     )
 
     if rf:
-        mode_spec = td.MicrowaveModeSpec(**mode_spec.dict(exclude={"type"}))
+        mode_spec = td.MicrowaveModeSpec(**mode_spec.model_dump(exclude={"type"}))
         monitor = td.MicrowaveModeSolverMonitor(
-            **monitor.dict(exclude={"type", "mode_spec"}), mode_spec=mode_spec
+            **monitor.model_dump(exclude={"type", "mode_spec"}), mode_spec=mode_spec
         )
-        data = td.ModeSolverData(**data.dict(exclude={"type", "monitor"}), monitor=monitor)
+        data = td.ModeSolverData(**data.model_dump(exclude={"type", "monitor"}), monitor=monitor)
 
     # Check _stored_freqs length
     assert len(data.monitor._stored_freqs) == expected_stored_len, (

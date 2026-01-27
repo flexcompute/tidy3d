@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import warnings
+
 import gdstk
 import matplotlib.pyplot as plt
 import numpy as np
@@ -316,9 +318,15 @@ def test_component_modeler_run_only(monkeypatch):
     assert np.all(s_matrix.values == 0.0)
 
     # make sure lists are correctly converted into tuples
-    run_only = [list(ONLY_SOURCE)]
-    modeler = modeler.updated_copy(run_only=run_only)
-    assert ONLY_SOURCE in modeler.matrix_indices_run_sim
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"(?s)Pydantic serializer warnings:.*field_name='run_only'.*",
+            category=UserWarning,
+        )
+        run_only = [list(ONLY_SOURCE)]
+        modeler = modeler.updated_copy(run_only=run_only)
+        assert ONLY_SOURCE in modeler.matrix_indices_run_sim
 
 
 def _test_mappings(element_mappings, s_matrix):

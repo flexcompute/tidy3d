@@ -379,13 +379,13 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     radius: TracedSize1D = Field(
         title="Radius",
         description="Radius of geometry at the ``reference_plane``.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     length: TracedSize1D = Field(
         title="Length",
         description="Defines thickness of cylinder along axis dimension.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @model_validator(mode="after")

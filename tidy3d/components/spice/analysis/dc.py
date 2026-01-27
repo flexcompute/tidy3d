@@ -89,5 +89,5 @@ class IsothermalSteadyChargeDCAnalysis(SteadyChargeDCAnalysis):
         title="Temperature",
         description="Lattice temperature. Assumed constant throughout the device. "
         "Carriers are assumed to be at thermodynamic equilibrium with the lattice.",
-        units=KELVIN,
+        json_schema_extra={"units": KELVIN},
     )

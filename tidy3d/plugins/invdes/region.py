@@ -33,13 +33,13 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
     size: Size = Field(
         title="Size",
         description="Size in x, y, and z directions.",
-        units=td.constants.MICROMETER,
+        json_schema_extra={"units": td.constants.MICROMETER},
     )
 
     center: Coordinate = Field(
         title="Center",
         description="Center of object in x, y, and z.",
-        units=td.constants.MICROMETER,
+        json_schema_extra={"units": td.constants.MICROMETER},
     )
 
     eps_bounds: tuple[float, float] = Field(

@@ -49,7 +49,7 @@ class FossumCarrierLifetime(Tidy3dBaseModel):
     tau_300: PositiveFloat = Field(
         title="Tau at 300K",
         description="Carrier lifetime at 300K",
-        units=SECOND,
+        json_schema_extra={"units": SECOND},
     )
 
     alpha_T: float = Field(
@@ -60,7 +60,7 @@ class FossumCarrierLifetime(Tidy3dBaseModel):
     N0: PositiveFloat = Field(
         title="Reference concentration",
         description="Reference concentration",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     A: float = Field(
@@ -113,13 +113,13 @@ class AugerRecombination(Tidy3dBaseModel):
     c_n: PositiveFloat = Field(
         title="Constant for electrons",
         description="Constant for electrons.",
-        units="cm^6/s",
+        json_schema_extra={"units": "cm^6/s"},
     )
 
     c_p: PositiveFloat = Field(
         title="Constant for holes",
         description="Constant for holes.",
-        units="cm^6/s",
+        json_schema_extra={"units": "cm^6/s"},
     )
 
 
@@ -147,7 +147,7 @@ class RadiativeRecombination(Tidy3dBaseModel):
     r_const: float = Field(
         title="Radiation constant",
         description="Radiation constant of the radiative recombination model.",
-        units="cm^3/s",
+        json_schema_extra={"units": "cm^3/s"},
     )
 
 
@@ -188,13 +188,13 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
     tau_n: Union[PositiveFloat, CarrierLifetimeType] = Field(
         title="Electron lifetime",
         description="Electron lifetime",
-        units=SECOND,
+        json_schema_extra={"units": SECOND},
     )
 
     tau_p: Union[PositiveFloat, CarrierLifetimeType] = Field(
         title="Hole lifetime",
         description="Hole lifetime",
-        units=SECOND,
+        json_schema_extra={"units": SECOND},
     )
 
 
@@ -221,7 +221,7 @@ class DistributedGeneration(Tidy3dBaseModel):
     rate: SpatialDataArray = Field(
         title="Generation rate",
         description="Spatially varying generation rate.",
-        units="1/(cm^3 s^1)",
+        json_schema_extra={"units": "1/(cm^3 s^1)"},
     )
 
     @classmethod
@@ -283,19 +283,19 @@ class HurkxDirectBandToBandTunneling(Tidy3dBaseModel):
         4e14,
         title="Parameter :math:`A`",
         description="Parameter :math:`A` in the direct BTBT Hurkx model.",
-        units="1/(cm^3 s)",
+        json_schema_extra={"units": "1/(cm^3 s)"},
     )
     B: float = Field(
         1.9e6,
         title="Parameter :math:`B`",
         description="Parameter :math:`B` in the direct BTBT Hurkx model.",
-        units="V/cm",
+        json_schema_extra={"units": "V/cm"},
     )
     E_0: PositiveFloat = Field(
         1,
         title="Reference electric field :math:`E_0`",
         description="Reference electric field :math:`E_0` in the direct BTBT Hurkx model.",
-        units="V/cm",
+        json_schema_extra={"units": "V/cm"},
     )
     sigma: float = Field(
         2.5,
@@ -344,23 +344,23 @@ class SelberherrImpactIonization(Tidy3dBaseModel):
     alpha_n_inf: PositiveFloat = Field(
         title="Electron ionization coefficient at infinite field",
         description="Electron ionization coefficient at infinite field.",
-        units="1/cm",
+        json_schema_extra={"units": "1/cm"},
     )
     alpha_p_inf: PositiveFloat = Field(
         title="Hole ionization coefficient at infinite field",
         description="Hole ionization coefficient at infinite field.",
-        units="1/cm",
+        json_schema_extra={"units": "1/cm"},
     )
     E_n_crit: PositiveFloat = Field(
         title="Critical electric field for electrons",
         description="Critical electric field for electrons.",
-        units="V/cm",
+        json_schema_extra={"units": "V/cm"},
     )
     E_p_crit: PositiveFloat = Field(
         ...,
         title="Critical electric field for holes",
         description="Critical electric field for holes.",
-        units="V/cm",
+        json_schema_extra={"units": "V/cm"},
     )
     beta_n: PositiveFloat = Field(
         title="Exponent for electrons",

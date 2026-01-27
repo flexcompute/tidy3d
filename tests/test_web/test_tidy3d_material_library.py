@@ -4,10 +4,11 @@ import pytest
 import responses
 
 import tidy3d as td
+from tidy3d import config
 from tidy3d.web.api.material_library import MaterialLibrary
 from tidy3d.web.core.environment import Env
 
-Env.dev.active()
+config.switch_profile("dev")
 
 
 @pytest.fixture

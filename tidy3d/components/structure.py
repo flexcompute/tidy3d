@@ -786,7 +786,7 @@ class MeshOverrideStructure(AbstractStructure):
     ] = Field(
         title="Grid Size",
         description="Grid size along x, y, z directions.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     priority: int = Field(

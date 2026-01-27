@@ -2459,7 +2459,7 @@ def test_heat_conduction_simulations():
     # test error if structures aren't conducting
     with pytest.raises(ValidationError):
         struct_error = struct1.updated_copy(
-            medium=struct1.medium.updated_copy(charge=td.ChargeInsulatorMedium)
+            medium=struct1.medium.updated_copy(charge=td.ChargeInsulatorMedium())
         )
         _ = sim.updated_copy(structures=[struct_error])
 

@@ -31,7 +31,7 @@ class VoltageBC(HeatChargeBC):
     source: VoltageSourceType = Field(
         title="Voltage",
         description="Electric potential to be applied at the specified boundary.",
-        units=VOLT,
+        json_schema_extra={"units": VOLT},
     )
 
 
@@ -49,7 +49,7 @@ class CurrentBC(HeatChargeBC):
     source: CurrentSourceType = Field(
         title="Current Source",
         description="A current source",
-        units=CURRENT_DENSITY,
+        json_schema_extra={"units": CURRENT_DENSITY},
     )
     # TODO translation between currentsource amps and currentdensity, why not amps here?
 

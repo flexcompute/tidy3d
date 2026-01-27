@@ -25,7 +25,7 @@ def test_log():
 
 
 def test_log_config(tmp_path):
-    td.config.logging_level = "DEBUG"
+    td.config.logging.level = "DEBUG"
     td.set_logging_file(str(tmp_path / "test.log"))
     assert len(td.log.handlers) == 2
     assert td.log.handlers["console"].level == _get_level_int("DEBUG")
@@ -51,15 +51,15 @@ def test_exception_message():
 
 def test_logging_upper():
     """Make sure we get an error if lowercase."""
-    td.config.logging_level = "WARNING"
+    td.config.logging.level = "WARNING"
     with pytest.raises(ValidationError):
-        td.config.logging_level = "warning"
+        td.config.logging.level = "warning"
 
 
 def test_logging_unrecognized():
     """If unrecognized option, raise validation error."""
     with pytest.raises(ValidationError):
-        td.config.logging_level = "blah"
+        td.config.logging.level = "blah"
 
 
 def test_logging_warning_capture():
@@ -291,14 +291,14 @@ def test_log_suppression():
             suppressed_log.warning("Warning message")
         assert td.log._counts[30] == 3
 
-    td.config.log_suppression = False
+    td.config.logging.suppression = False
     with td.log as suppressed_log:
         assert td.log._counts is None
         for _ in range(4):
             suppressed_log.warning("Warning message")
         assert td.log._counts is None
 
-    td.config.log_suppression = True
+    td.config.logging.suppression = True
 
 
 def test_warn_once():

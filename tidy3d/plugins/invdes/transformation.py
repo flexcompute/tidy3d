@@ -47,7 +47,7 @@ class FilterProject(InvdesBaseModel):
         "It is useful to apply a ``FilterProject`` transformation to 'encourage' larger "
         "feature sizes, but we ultimately recommend creating a ``ErosionDilationPenalty`` to the "
         "``DesignRegion.penalties`` if you have strict fabrication constraints.",
-        units=td.constants.MICROMETER,
+        json_schema_extra={"units": td.constants.MICROMETER},
     )
 
     beta: float = Field(

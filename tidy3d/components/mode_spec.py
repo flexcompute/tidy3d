@@ -493,7 +493,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the injection axis.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     angle_phi: float = Field(
@@ -501,7 +501,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "
         "injection axis.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     precision: Literal["auto", "single", "double"] = Field(
@@ -519,7 +519,7 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         description="A curvature radius for simulation of waveguide bends. Can be negative, in "
         "which case the mode plane center has a smaller value than the curvature center along the "
         "tangential axis perpendicular to the bend axis.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     bend_axis: Optional[Axis2D] = Field(

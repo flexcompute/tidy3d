@@ -618,13 +618,13 @@ SIM_FULL = td.Simulation(
             medium=td.Medium(
                 nonlinear_spec=td.NonlinearSpec(
                     num_iters=10,
-                    models=[
+                    models=(
                         td.NonlinearSusceptibility(chi3=0.1),
                         td.TwoPhotonAbsorption(
                             beta=1, sigma=1, tau=1, e_e=1, e_h=0.8, c_e=1, c_h=1
                         ),
                         td.KerrNonlinearity(n2=1),
-                    ],
+                    ),
                 )
             ),
         ),
@@ -1304,7 +1304,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
 
     def make_medium_data(monitor: td.MediumMonitor) -> td.MediumData:
         """make a random PermittivityData from a PermittivityMonitor."""
-        field_mnt = td.FieldMonitor(**monitor.dict(exclude={"type", "fields"}))
+        field_mnt = td.FieldMonitor(**monitor.model_dump(exclude={"type", "fields"}))
         field_data = make_field_data(monitor=field_mnt)
         return td.MediumData(
             monitor=monitor,

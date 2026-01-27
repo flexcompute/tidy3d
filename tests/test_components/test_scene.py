@@ -146,7 +146,7 @@ def test_get_structure_plot_params():
     pp = SCENE_FULL._get_structure_eps_plot_params(
         medium=SCENE_FULL.medium, freq=1, eps_min=1, eps_max=2
     )
-    expected_color = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP)(0.0)
+    expected_color = plt.get_cmap(STRUCTURE_EPS_CMAP)(0.0)
     assert np.allclose(pp.facecolor, expected_color)
     pp = SCENE_FULL._get_structure_eps_plot_params(medium=td.PEC, freq=1, eps_min=1, eps_max=2)
     assert pp.facecolor == "gold"
@@ -165,7 +165,7 @@ def test_structure_eps_color_mapping():
         norm=norm,
         reverse=False,
     )
-    expected_min = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP)(norm(1.0))
+    expected_min = plt.get_cmap(STRUCTURE_EPS_CMAP)(norm(1.0))
     assert np.allclose(pp_min.facecolor, expected_min)
 
     pp_max = SCENE_FULL._get_structure_eps_plot_params(
@@ -176,7 +176,7 @@ def test_structure_eps_color_mapping():
         norm=norm,
         reverse=False,
     )
-    expected_max = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP)(norm(5.0))
+    expected_max = plt.get_cmap(STRUCTURE_EPS_CMAP)(norm(5.0))
     assert np.allclose(pp_max.facecolor, expected_max)
 
     pp_min_reverse = SCENE_FULL._get_structure_eps_plot_params(
@@ -187,7 +187,7 @@ def test_structure_eps_color_mapping():
         norm=norm,
         reverse=True,
     )
-    expected_min_reverse = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP_R)(norm(1.0))
+    expected_min_reverse = plt.get_cmap(STRUCTURE_EPS_CMAP_R)(norm(1.0))
     assert np.allclose(pp_min_reverse.facecolor, expected_min_reverse)
 
     pp_max_reverse = SCENE_FULL._get_structure_eps_plot_params(
@@ -198,7 +198,7 @@ def test_structure_eps_color_mapping():
         norm=norm,
         reverse=True,
     )
-    expected_max_reverse = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP_R)(norm(5.0))
+    expected_max_reverse = plt.get_cmap(STRUCTURE_EPS_CMAP_R)(norm(5.0))
     assert np.allclose(pp_max_reverse.facecolor, expected_max_reverse)
 
 

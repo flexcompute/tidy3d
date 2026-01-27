@@ -88,7 +88,7 @@ class RotationAroundAxis(AbstractRotation):
         0.0,
         title="Angle of Rotation",
         description="Angle of rotation in radians.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     @field_validator("axis")

@@ -333,9 +333,9 @@ def test_warn_zero_grad(use_emulated_run):  # noqa: F811
     design_region = optimizer.design.design_region.updated_copy(penalties=())
     design = optimizer.design.updated_copy(design_region=design_region)
     optimizer = optimizer.updated_copy(design=design)
-
-    with pytest.raises(SetupError, match="All elements of the gradient are exactly zero"):
-        optimizer.run(post_process_fn=post_process_fn_untraced)
+    with pytest.warns(UserWarning, match=r"Output seems independent of input"):
+        with pytest.raises(SetupError, match=r"All elements of the gradient are exactly zero"):
+            optimizer.run(post_process_fn=post_process_fn_untraced)
 
 
 def test_scaled_objective_grad_not_filtered(use_emulated_run):  # noqa: F811

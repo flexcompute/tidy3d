@@ -29,7 +29,7 @@ class AbstractDopingBox(Box):
         (inf, inf, inf),
         title="Size",
         description="Size in x, y, and z directions.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     def _get_indices_in_box(
@@ -96,7 +96,7 @@ class ConstantDoping(AbstractDopingBox):
         default=0,
         title="Doping concentration density.",
         description="Doping concentration density.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     def _get_contrib(self, coords: dict, meshgrid: bool = True) -> NDArray:
@@ -163,13 +163,13 @@ class GaussianDoping(AbstractDopingBox):
         title="Reference concentration.",
         description="Reference concentration. This is the minimum concentration in the box "
         "and it is attained at the edges/faces of the box.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     concentration: PositiveFloat = Field(
         title="Concentration",
         description="The concentration at the center of the box.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     width: PositiveFloat = Field(
@@ -177,7 +177,7 @@ class GaussianDoping(AbstractDopingBox):
         description="Width of the gaussian. The concentration will transition from "
         "``concentration`` at the center of the box to ``ref_con`` at the edge/face "
         "of the box in a distance equal to ``width``. ",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     source: str = Field(
@@ -316,7 +316,7 @@ class CustomDoping(AbstractDopingBox):
     concentration: SpatialDataArray = Field(
         title="Doping concentration data array.",
         description="Doping concentration data array.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     def _get_contrib(self, coords: dict, meshgrid: bool = True) -> NDArray:

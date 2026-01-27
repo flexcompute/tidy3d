@@ -33,7 +33,6 @@ from tidy3d.log import log
 from tidy3d.packaging import disable_local_subpixel, supports_local_subpixel, tidy3d_extras
 from tidy3d.updater import Updater
 
-from .autograd.types import AutogradFieldMap
 from .base import cached_property
 from .base_sim.simulation import AbstractSimulation
 from .boundary import (
@@ -142,6 +141,7 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
 
+    from .autograd.types import AutogradFieldMap
     from .boundary import BoundaryEdgeType
     from .data.dataset import Dataset
     from .data.utils import CustomSpatialDataType
@@ -2975,7 +2975,7 @@ class Simulation(AbstractYeeGridSimulation):
         "Alternatively, user may supply a :class:`RunTimeSpec` to this field, which will auto-"
         "compute the ``run_time`` based on the contents of the spec. If this option is used, "
         "the evaluated ``run_time`` value is available in the ``Simulation._run_time`` property.",
-        units=SECOND,
+        json_schema_extra={"units": SECOND},
     )
     """
     Total electromagnetic evolution time in seconds. If simulation 'shutoff' is specified, simulation will

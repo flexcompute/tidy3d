@@ -9,6 +9,7 @@ from pydantic import Field, NonNegativeFloat
 from scipy.optimize import minimize
 
 import tidy3d as td
+from tidy3d import log
 from tidy3d.components.autograd.functions import _straight_through_clip
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.grid.grid import Coords
@@ -313,6 +314,8 @@ def initialize_params_from_simulation(
 
     bounds_list = [bounds] * params0.size
     try:
+        if verbose:
+            log.warning("SciPy's L-BFGS-B optimizer no longer supports verbose output. ")
         res = minimize(
             fun=val_and_grad,
             x0=params0.ravel(),
@@ -320,7 +323,7 @@ def initialize_params_from_simulation(
             jac=True,
             bounds=bounds_list,
             callback=callback,
-            options={"maxiter": maxiter, "disp": verbose},
+            options={"maxiter": maxiter},
         )
         x_final = res.x
     except StopIteration:

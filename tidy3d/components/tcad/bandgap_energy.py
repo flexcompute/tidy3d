@@ -12,7 +12,7 @@ class ConstantEnergyBandGap(Tidy3dBaseModel):
     eg: PositiveFloat = Field(
         title="Band Gap",
         description="Energy band gap",
-        units=ELECTRON_VOLT,
+        json_schema_extra={"units": ELECTRON_VOLT},
     )
 
 
@@ -48,17 +48,17 @@ class VarshniEnergyBandGap(Tidy3dBaseModel):
     eg_0: PositiveFloat = Field(
         title="Band Gap at 0 K",
         description="Energy band gap at absolute zero (0 Kelvin).",
-        units=ELECTRON_VOLT,
+        json_schema_extra={"units": ELECTRON_VOLT},
     )
 
     alpha: PositiveFloat = Field(
         title="Varshni Alpha Coefficient",
         description="Empirical Varshni coefficient (α).",
-        units="eV/K",
+        json_schema_extra={"units": "eV/K"},
     )
 
     beta: PositiveFloat = Field(
         title="Varshni Beta Coefficient",
         description="Empirical Varshni coefficient (β), related to the Debye temperature.",
-        units="K",
+        json_schema_extra={"units": "K"},
     )

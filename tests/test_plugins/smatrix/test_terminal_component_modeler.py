@@ -1397,12 +1397,12 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     S21 = (port1_idx, port0_idx)
     S12 = (port0_idx, port1_idx)
     S22 = (port1_idx, port1_idx)
-    element_mappings = ((S11, S22, 1),)
+    element_mappings = ((S11, S22, 1 + 0j),)
     modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
     assert len(modeler_with_mappings.sim_dict) == 2
 
     # Column 1 is mapped to column 2, resulting in one simulation
-    element_mappings = ((S11, S22, 1), (S21, S12, 1))
+    element_mappings = ((S11, S22, 1 + 0j), (S21, S12, 1 + 0j))
     modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
     tcm_data = run_component_modeler(monkeypatch, modeler_with_mappings)
     s_matrix = tcm_data.smatrix().data
@@ -1411,7 +1411,7 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     assert len(modeler_with_mappings.sim_dict) == 1
 
     # Mapping is incomplete, so two simulations are run
-    element_mappings = ((S11, S22, 1), (S12, S21, 1))
+    element_mappings = ((S11, S22, 1 + 0j), (S12, S21, 1 + 0j))
     modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
     assert len(modeler_with_mappings.sim_dict) == 2
 

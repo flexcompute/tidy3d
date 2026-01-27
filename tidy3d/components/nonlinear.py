@@ -107,7 +107,7 @@ class NonlinearSusceptibility(NonlinearModel):
         0,
         title="Chi3",
         description=":math:`\\chi_3` nonlinear susceptibility.",
-        units=f"{MICROMETER}^2 / {VOLT}^2",
+        json_schema_extra={"units": f"{MICROMETER}^2 / {VOLT}^2"},
     )
 
     numiters: Optional[PositiveInt] = Field(
@@ -188,14 +188,14 @@ class TwoPhotonAbsorption(NonlinearModel):
         0,
         title="TPA coefficient",
         description="Coefficient for two-photon absorption (TPA).",
-        units=f"{MICROMETER} / {WATT}",
+        json_schema_extra={"units": f"{MICROMETER} / {WATT}"},
     )
 
     tau: NonNegativeFloat = Field(
         0,
         title="Carrier lifetime",
         description="Lifetime for the free carriers created by two-photon absorption (TPA).",
-        units=f"{SECOND}",
+        json_schema_extra={"units": f"{SECOND}"},
     )
 
     sigma: NonNegativeFloat = Field(
@@ -203,7 +203,7 @@ class TwoPhotonAbsorption(NonlinearModel):
         title="FCA cross section",
         description="Total cross section for free-carrier absorption (FCA). "
         "Contains contributions from electrons and from holes.",
-        units=f"{MICROMETER}^2",
+        json_schema_extra={"units": f"{MICROMETER}^2"},
     )
     e_e: NonNegativeFloat = Field(
         1,
@@ -219,13 +219,13 @@ class TwoPhotonAbsorption(NonlinearModel):
         0,
         title="Electron coefficient",
         description="Coefficient for the free electron refractive index shift in the free-carrier plasma dispersion (FCPD).",
-        units=f"{MICROMETER}^(3 e_e)",
+        json_schema_extra={"units": f"{MICROMETER}^(3 e_e)"},
     )
     c_h: float = Field(
         0,
         title="Hole coefficient",
         description="Coefficient for the free hole refractive index shift in the free-carrier plasma dispersion (FCPD).",
-        units=f"{MICROMETER}^(3 e_h)",
+        json_schema_extra={"units": f"{MICROMETER}^(3 e_h)"},
     )
 
     n0: Optional[float] = Field(
@@ -316,7 +316,7 @@ class KerrNonlinearity(NonlinearModel):
         0,
         title="Nonlinear refractive index",
         description="Nonlinear refractive index in the Kerr nonlinearity.",
-        units=f"{MICROMETER}^2 / {WATT}",
+        json_schema_extra={"units": f"{MICROMETER}^2 / {WATT}"},
     )
 
     n0: Optional[float] = Field(

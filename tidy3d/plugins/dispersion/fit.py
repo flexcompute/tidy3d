@@ -38,7 +38,7 @@ class DispersionFitter(Tidy3dBaseModel):
     wvl_um: ArrayFloat1D = Field(
         title="Wavelength data",
         description="Wavelength data in micrometers.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     n_data: ArrayFloat1D = Field(
@@ -57,7 +57,7 @@ class DispersionFitter(Tidy3dBaseModel):
         title="Wavelength range [wvl_min,wvl_max] for fitting",
         description="Truncate the wavelength, n and k data to the wavelength range '[wvl_min, "
         "wvl_max]' for fitting.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @field_validator("wvl_um")

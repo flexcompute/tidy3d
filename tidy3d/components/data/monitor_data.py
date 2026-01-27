@@ -3355,7 +3355,9 @@ class FieldProjectionAngleData(AbstractFieldProjectionData):
         slice_opposite_phi = slice_opposite_phi.assign_coords(
             theta=(2 * np.pi - slice_opposite_phi.theta)
         )
-        data_array = xr.concat((slice_phi, slice_opposite_phi), dim="theta").sortby("theta")
+        data_array = xr.concat(
+            (slice_phi, slice_opposite_phi), dim="theta", coords="minimal", compat="override"
+        ).sortby("theta")
         return FieldProjectionAngleDataArray(data_array)
 
 
@@ -3694,7 +3696,7 @@ class DiffractionData(AbstractFieldProjectionData):
     sim_size: tuple[float, float] = Field(
         title="Domain size",
         description="Size of the near field in the local x and y directions.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     bloch_vecs: Union[tuple[float, float], tuple[ArrayFloat1D, ArrayFloat1D]] = Field(

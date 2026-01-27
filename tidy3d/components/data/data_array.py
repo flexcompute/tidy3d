@@ -727,12 +727,12 @@ class AbstractSpatialDataArray(DataArray, ABC):
                     if smin < coord[0]:
                         ind_min = 0
                     else:
-                        ind_min = max(0, (coord >= smin).argmax().data - 1)
+                        ind_min = max(0, (coord >= smin).data.argmax() - 1)
 
                     if smax > coord[-1]:
                         ind_max = length - 1
                     else:
-                        ind_max = (coord >= smax).argmax().data
+                        ind_max = (coord >= smax).data.argmax()
 
                     comp_inds = np.arange(ind_min, ind_max + 1)
 

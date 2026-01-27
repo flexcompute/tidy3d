@@ -110,12 +110,12 @@ class Pulse(SourceTime, ABC):
     freq0: PositiveFloat = Field(
         title="Central Frequency",
         description="Central frequency of the pulse.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
     fwidth: PositiveFloat = Field(
         title="",
         description="Standard deviation of the frequency content of the pulse.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
 
     offset: float = Field(
@@ -617,7 +617,7 @@ class BroadbandPulse(SourceTime):
     freq_range: FreqBound = Field(
         title="Frequency Range",
         description="Frequency range where the pulse should have significant energy.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
     minimum_amplitude: float = Field(
         0.3,

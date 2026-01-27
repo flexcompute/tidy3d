@@ -48,7 +48,7 @@ class EMEModeSpec(ModeSpec):
         description="Polar angle of the propagation axis from the injection axis. Not currently "
         "supported in EME cells. Use an additional 'ModeSolverMonitor' and "
         "'sim_data.smatrix_in_basis' to achieve off-normal injection in EME.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     angle_phi: Literal[0.0] = Field(
@@ -58,7 +58,7 @@ class EMEModeSpec(ModeSpec):
         "injection axis. Not currently supported in EME cells. Use an additional "
         "'ModeSolverMonitor' and 'sim_data.smatrix_in_basis' to achieve off-normal "
         "injection in EME.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     precision: Literal["auto", "single", "double"] = Field(

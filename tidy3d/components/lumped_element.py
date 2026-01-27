@@ -298,7 +298,7 @@ class LumpedResistor(RectangularLumpedElement):
     resistance: PositiveFloat = Field(
         title="Resistance",
         description="Resistance value in ohms.",
-        unit=OHM,
+        json_schema_extra={"units": OHM},
     )
 
     def _sheet_conductance(self, box: Optional[Box] = None) -> float:
@@ -333,26 +333,26 @@ class CoaxialLumpedResistor(LumpedElement):
     resistance: PositiveFloat = Field(
         title="Resistance",
         description="Resistance value in ohms.",
-        unit=OHM,
+        json_schema_extra={"units": OHM},
     )
 
     center: Coordinate = Field(
         (0.0, 0.0, 0.0),
         title="Center",
         description="Center of object in x, y, and z.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     outer_diameter: PositiveFloat = Field(
         title="Outer Diameter",
         description="Diameter of the outer concentric circle.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     inner_diameter: PositiveFloat = Field(
         title="Inner Diameter",
         description="Diameter of the inner concentric circle.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     normal_axis: Axis = Field(
@@ -577,21 +577,21 @@ class RLCNetwork(MicrowaveBaseModel):
         None,
         title="Resistance",
         description="Resistance value in ohms.",
-        unit=OHM,
+        json_schema_extra={"units": OHM},
     )
 
     capacitance: Optional[PositiveFloat] = Field(
         None,
         title="Capacitance",
         description="Capacitance value in farads.",
-        unit=FARAD,
+        json_schema_extra={"units": FARAD},
     )
 
     inductance: Optional[PositiveFloat] = Field(
         None,
         title="Inductance",
         description="Inductance value in henrys.",
-        unit=HENRY,
+        json_schema_extra={"units": HENRY},
     )
 
     network_topology: Literal["series", "parallel"] = Field(

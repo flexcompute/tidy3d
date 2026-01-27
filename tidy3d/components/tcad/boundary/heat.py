@@ -34,7 +34,7 @@ class TemperatureBC(HeatChargeBC):
     temperature: PositiveFloat = Field(
         title="Temperature",
         description="Temperature value.",
-        units=KELVIN,
+        json_schema_extra={"units": KELVIN},
     )
 
 
@@ -50,7 +50,7 @@ class HeatFluxBC(HeatChargeBC):
     flux: float = Field(
         title="Heat Flux",
         description="Heat flux value.",
-        units=HEAT_FLUX,
+        json_schema_extra={"units": HEAT_FLUX},
     )
 
 
@@ -84,14 +84,14 @@ class VerticalNaturalConvectionCoeffModel(Tidy3dBaseModel):
     plate_length: NonNegativeFloat = Field(
         title="Plate Characteristic Length",
         description="Characteristic length (L), defined as the height of the vertical plate.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     gravity: NonNegativeFloat = Field(
         default=GRAV_ACC,
         title="Gravitational Acceleration",
         description="Gravitational acceleration (g).",
-        units=ACCELERATION,
+        json_schema_extra={"units": ACCELERATION},
     )
 
     @classmethod
@@ -164,11 +164,11 @@ class ConvectionBC(HeatChargeBC):
     ambient_temperature: PositiveFloat = Field(
         title="Ambient Temperature",
         description="Ambient temperature.",
-        units=KELVIN,
+        json_schema_extra={"units": KELVIN},
     )
 
     transfer_coeff: Union[NonNegativeFloat, VerticalNaturalConvectionCoeffModel] = Field(
         title="Heat Transfer Coefficient",
         description="Heat transfer coefficient value.",
-        units=HEAT_TRANSFER_COEFF,
+        json_schema_extra={"units": HEAT_TRANSFER_COEFF},
     )

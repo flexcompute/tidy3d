@@ -1033,7 +1033,7 @@ class ChebWindow(AbstractWindow):
         default=30,
         title="Attenuation",
         description="Desired attenuation level of sidelobes.",
-        units="dB",
+        json_schema_extra={"units": "dB"},
     )
 
     def _get_weights_discrete(self, N: int) -> ArrayLike:
@@ -1086,7 +1086,7 @@ class TaylorWindow(AbstractWindow):
         default=30,
         title="Sidelobe Suppression Level",
         description="Desired suppression of sidelobe level relative to the DC gain.",
-        units="dB",
+        json_schema_extra={"units": "dB"},
     )
 
     nbar: conint(gt=0, le=10) = Field(

@@ -85,7 +85,7 @@ def basic_simulation():
         size=(1, 1, 1),
         grid_spec=td.GridSpec.auto(wavelength=1.0),
         run_time=1e-12,
-        sources=[pt_dipole],
+        sources=(pt_dipole,),
     )
 
 

@@ -24,7 +24,7 @@ class UnsteadySpec(Tidy3dBaseModel):
         ...,
         title="Time-step",
         description="Time step taken for each iteration of the time integration loop.",
-        units=SECOND,
+        json_schema_extra={"units": SECOND},
     )
 
     total_time_steps: PositiveInt = Field(
@@ -54,7 +54,7 @@ class UnsteadyHeatAnalysis(Tidy3dBaseModel):
         ...,
         title="Initial temperature.",
         description="Initial value for the temperature field.",
-        units=KELVIN,
+        json_schema_extra={"units": KELVIN},
     )
 
     unsteady_spec: UnsteadySpec = Field(

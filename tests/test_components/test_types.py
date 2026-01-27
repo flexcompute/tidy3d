@@ -18,7 +18,7 @@ def test_schemas():
         c: Complex
 
     _ = S(f=[13], c=1 + 1j, ca=[1 + 1j])
-    S.schema()
+    S.model_json_schema()
 
 
 def test_array_like():

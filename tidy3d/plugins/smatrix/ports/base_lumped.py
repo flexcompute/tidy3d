@@ -31,7 +31,7 @@ class AbstractLumpedPort(AbstractTerminalPort):
         DEFAULT_REFERENCE_IMPEDANCE,
         title="Reference impedance",
         description="Reference port impedance for scattering parameter computation.",
-        units=OHM,
+        json_schema_extra={"units": OHM},
     )
 
     num_grid_cells: Optional[PositiveInt] = Field(

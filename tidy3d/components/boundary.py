@@ -135,7 +135,7 @@ class ABCBoundary(AbstractABCBoundary):
         description="Effective conductivity for determining propagation constant. "
         "If ``None``, this value will be automatically inferred from the medium at "
         "the domain boundary and the central frequency of the source.",
-        units=CONDUCTIVITY,
+        json_schema_extra={"units": CONDUCTIVITY},
     )
 
     @model_validator(mode="after")
@@ -199,7 +199,7 @@ class BroadbandModeABCSpec(Tidy3dBaseModel):
     frequency_range: FreqBound = Field(
         title="Frequency Range",
         description="Frequency range for the broadband mode absorption boundary conditions.",
-        units=(HERTZ, HERTZ),
+        json_schema_extra={"units": (HERTZ, HERTZ)},
     )
 
     fit_param: BroadbandModeABCFitterParam = Field(
@@ -605,14 +605,14 @@ class AbsorberParams(Tidy3dBaseModel):
         0.0,
         title="Sigma Minimum",
         description="Minimum value of the absorber conductivity.",
-        units=PML_SIGMA,
+        json_schema_extra={"units": PML_SIGMA},
     )
 
     sigma_max: NonNegativeFloat = Field(
         1.5,
         title="Sigma Maximum",
         description="Maximum value of the absorber conductivity.",
-        units=PML_SIGMA,
+        json_schema_extra={"units": PML_SIGMA},
     )
 
 
@@ -643,11 +643,17 @@ class PMLParams(AbsorberParams):
     )
 
     alpha_min: NonNegativeFloat = Field(
-        0.0, title="Alpha Minimum", description="Minimum value of the PML alpha.", units=PML_SIGMA
+        0.0,
+        title="Alpha Minimum",
+        description="Minimum value of the PML alpha.",
+        json_schema_extra={"units": PML_SIGMA},
     )
 
     alpha_max: NonNegativeFloat = Field(
-        1.5, title="Alpha Maximum", description="Maximum value of the PML alpha.", units=PML_SIGMA
+        1.5,
+        title="Alpha Maximum",
+        description="Maximum value of the PML alpha.",
+        json_schema_extra={"units": PML_SIGMA},
     )
 
 

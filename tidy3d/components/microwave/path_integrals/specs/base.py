@@ -152,7 +152,7 @@ class Custom2DPathIntegralSpec(AbstractAxesRH):
         "if the axis corresponds with ``y``, the coordinates of the vertices should be (x, z). "
         "If you wish to indicate a closed contour, the final vertex should be made "
         "equal to the first vertex, i.e., ``vertices[-1] == vertices[0]``",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @staticmethod

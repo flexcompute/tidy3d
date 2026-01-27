@@ -39,7 +39,7 @@ class AbstractSSACAnalysis(Tidy3dBaseModel, ABC):
         title="Small Signal AC Frequencies",
         description="List of frequencies for small signal AC analysis. "
         "At least one :class:`.SSACVoltageSource` must be present in the boundary conditions.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
 
     @field_validator("freqs")

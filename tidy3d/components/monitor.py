@@ -95,7 +95,7 @@ class FreqMonitor(Monitor, ABC):
     freqs: FreqArray = Field(
         title="Frequencies",
         description="Array or list of frequencies stored by the field monitor.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
 
     apodization: ApodizationSpec = Field(
@@ -146,7 +146,7 @@ class TimeMonitor(Monitor, ABC):
         0.0,
         title="Start Time",
         description="Time at which to start monitor recording.",
-        units=SECOND,
+        json_schema_extra={"units": SECOND},
     )
 
     stop: Optional[NonNegativeFloat] = Field(
@@ -154,7 +154,7 @@ class TimeMonitor(Monitor, ABC):
         title="Stop Time",
         description="Time at which to stop monitor recording.  "
         "If not specified, record until end of simulation.",
-        units=SECOND,
+        json_schema_extra={"units": SECOND},
     )
 
     interval: Optional[PositiveInt] = Field(
@@ -947,7 +947,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         title="Local Origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
         "monitor's center.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     far_field_approx: bool = Field(
@@ -1221,21 +1221,21 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
         1e6,
         title="Projection Distance",
         description="Radial distance of the projection points from ``local_origin``.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     theta: ObsGridArray = Field(
         title="Polar Angles",
         description="Polar angles with respect to the global z axis, relative to the location of "
         "``local_origin``, at which to project fields.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     phi: ObsGridArray = Field(
         title="Azimuth Angles",
         description="Azimuth angles with respect to the global z axis, relative to the location of "
         "``local_origin``, at which to project fields.",
-        units=RADIAN,
+        json_schema_extra={"units": RADIAN},
     )
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -1408,7 +1408,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
         title="Projection Distance",
         description="Signed distance of the projection plane along ``proj_axis``. "
         "from the plane containing ``local_origin``.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     x: ObsGridArray = Field(
@@ -1417,7 +1417,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
         "When ``proj_axis`` is 0, this corresponds to the global y axis. "
         "When ``proj_axis`` is 1, this corresponds to the global x axis. "
         "When ``proj_axis`` is 2, this corresponds to the global x axis. ",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     y: ObsGridArray = Field(
@@ -1426,7 +1426,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
         "When ``proj_axis`` is 0, this corresponds to the global z axis. "
         "When ``proj_axis`` is 1, this corresponds to the global z axis. "
         "When ``proj_axis`` is 2, this corresponds to the global y axis. ",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -1513,7 +1513,7 @@ class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
         1e6,
         title="Projection Distance",
         description="Radial distance of the projection points from ``local_origin``.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     ux: ObsGridArray = Field(

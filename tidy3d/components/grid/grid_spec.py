@@ -300,7 +300,7 @@ class UniformGrid(GridSpec1d):
     dl: PositiveFloat = Field(
         title="Grid Size",
         description="Grid size for uniform grid generation.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @field_validator("dl")
@@ -385,7 +385,7 @@ class CustomGridBoundaries(GridSpec1d):
     coords: Coords1D = Field(
         title="Grid Boundary Coordinates",
         description="An array of grid boundary coordinates.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     def _make_coords_initial(
@@ -472,7 +472,7 @@ class CustomGrid(GridSpec1d):
         "``(center - sum(dl)/2, center + sum(dl)/2)``, unless a ``custom_offset`` is given. "
         "Note: if supplied sizes do not cover the simulation size, the first and last sizes "
         "are repeated to cover the simulation domain.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     custom_offset: Optional[float] = Field(
@@ -481,7 +481,7 @@ class CustomGrid(GridSpec1d):
         description="The starting coordinate of the grid which defines the simulation center. "
         "If ``None``, the simulation center is set such that it spans the region "
         "``(center - sum(dl)/2, center + sum(dl)/2)``.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     def _make_coords_initial(
@@ -572,7 +572,7 @@ class AbstractAutoGrid(GridSpec1d):
         "with ``enforced=True``. It is a soft bound, meaning that the actual minimal "
         "grid size might be slightly smaller. If ``None`` or 0, a heuristic lower bound "
         "value will be applied.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @abstractmethod
@@ -823,7 +823,7 @@ class QuasiUniformGrid(AbstractAutoGrid):
         title="Grid Size",
         description="Grid size for quasi-uniform grid generation. Grid size at some locations can be "
         "slightly smaller.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     def _preprocessed_structures(self, structures: list[StructureType]) -> list[StructureType]:
@@ -1012,7 +1012,7 @@ class GridRefinement(Tidy3dBaseModel):
         None,
         title="Grid Size",
         description="Grid step size in the refined region.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     num_cells: PositiveInt = Field(
@@ -2469,7 +2469,7 @@ class GridSpec(Tidy3dBaseModel):
         "the source central frequency. "
         "Note: it only takes effect when at least one of the three dimensions "
         "uses :class:`.AutoGrid`.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     override_structures: tuple[discriminated_union(StructureType), ...] = Field(

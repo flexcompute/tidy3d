@@ -369,7 +369,7 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
         None,
         title="Electric field",
         description="Contains the computed electric field.",
-        units=":math:`V/\\mu m`",
+        json_schema_extra={"units": ":math:`V/\\mu m`"},
     )
 
     @property
@@ -407,7 +407,7 @@ class SteadyCurrentDensityData(HeatChargeMonitorData):
         title="Current density",
         description="Contains the computed current density.",
         discriminator=TYPE_TAG_STR,
-        units=":math:`A/\\mu m^2`",
+        json_schema_extra={"units": ":math:`A/\\mu m^2`"},
     )
 
     @property

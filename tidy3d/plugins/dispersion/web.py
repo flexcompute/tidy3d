@@ -48,7 +48,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         description="Upper bound of real and imagniary part of oscillator "
         "strength ``c`` in the model :class:`.PoleResidue` (The default 'None' will trigger "
         "automatic setup based on the frequency range of interest).",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
     bound_f: Optional[NonNegativeFloat] = Field(
         None,
@@ -56,14 +56,14 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         description="Upper bound of real and imaginary part of ``a`` that corresponds to pole "
         "damping rate and frequency in the model :class:`.PoleResidue` (The default 'None' "
         "will trigger automatic setup based on the frequency range of interest).",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
     bound_f_lower: NonNegativeFloat = Field(
         0.0,
         title="Lower bound of pole frequency",
         description="Lower bound of imaginary part of ``a`` that corresponds to pole "
         "frequency in the model :class:`.PoleResidue`.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
     bound_eps_inf: float = Field(
         10.0,
@@ -114,7 +114,7 @@ class FitterData(AdvancedFitterParam):
     wvl_um: tuple[float, ...] = Field(
         title="Wavelengths",
         description="A set of wavelengths for dispersion data.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
     n_data: tuple[float, ...] = Field(
         title="Index of refraction",
@@ -144,13 +144,13 @@ class FitterData(AdvancedFitterParam):
         100.0,
         title="Upper bound of oscillator strength",
         description="Upper bound of oscillator strength in the model.",
-        units="eV",
+        json_schema_extra={"units": "eV"},
     )
     bound_f: PositiveFloat = Field(
         100.0,
         title="Upper bound of pole frequency",
         description="Upper bound of pole frequency in the model.",
-        units="eV",
+        json_schema_extra={"units": "eV"},
     )
 
     @staticmethod

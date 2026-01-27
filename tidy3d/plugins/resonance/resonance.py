@@ -90,7 +90,7 @@ class ResonanceFinder(Tidy3dBaseModel):
         "frequencies. Note that frequencies outside this window may be returned. "
         "A narrow frequency window that only contains a few resonances may give enhanced "
         "accuracy compared to a broad frequency window with many resonances.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
 
     init_num_freqs: PositiveInt = Field(

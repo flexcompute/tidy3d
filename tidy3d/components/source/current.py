@@ -106,7 +106,7 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
         (0, 0, 0),
         title="Size",
         description="Size in x, y, and z directions, constrained to ``(0, 0, 0)``.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @classmethod

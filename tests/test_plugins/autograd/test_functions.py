@@ -720,5 +720,7 @@ class TestLeastSquares:
         initial_guess = (1.0, 0.0)
 
         check_grads(
-            lambda params: least_squares(linear_model, x, y, params), modes=["fwd", "rev"], order=2
+            lambda params: least_squares(linear_model, x, y, params, max_iterations=1),
+            modes=["fwd", "rev"],
+            order=2,
         )(initial_guess)

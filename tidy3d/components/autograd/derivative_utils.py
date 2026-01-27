@@ -975,7 +975,7 @@ class DerivativeInfo:
             if min_allowed_spacing_fraction is None:
                 min_allowed_spacing_fraction = config.adjoint.minimum_spacing_fraction
 
-        def spacing_by_permittivity(eps_array: ScalarFieldDataArray) -> np.ndarray:
+        def spacing_by_permittivity(eps_array: ScalarFieldDataArray) -> float:
             eps_real = np.asarray(eps_array.values, dtype=np.complex128).real
 
             dx_candidates = []

@@ -51,7 +51,7 @@ class TemperatureData(HeatChargeMonitorData):
         None,
         title="Temperature",
         description="Spatial temperature field.",
-        units=KELVIN,
+        json_schema_extra={"units": KELVIN},
     )
 
     @property

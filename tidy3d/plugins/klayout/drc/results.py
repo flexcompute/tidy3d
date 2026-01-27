@@ -380,7 +380,7 @@ class DRCResults(Tidy3dBaseModel):
             resultsfile=resultsfile,
             max_results=max_results,
         )
-        return cls.construct(violations_by_category=violations)
+        return cls.model_construct(violations_by_category=violations)
 
 
 def violations_from_file(

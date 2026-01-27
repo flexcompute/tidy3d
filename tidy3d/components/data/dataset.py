@@ -710,7 +710,7 @@ class ModeSolverDataset(ElectromagneticFieldDataset, ModeFreqDataset):
         None,
         title="Dispersion",
         description="Dispersion parameter for the mode.",
-        units=PICOSECOND_PER_NANOMETER_PER_KILOMETER,
+        json_schema_extra={"units": PICOSECOND_PER_NANOMETER_PER_KILOMETER},
     )
 
     @property
