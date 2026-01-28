@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import pydantic.v1 as pydantic
 from typing_extensions import Self
@@ -12,6 +12,9 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.geometry2d import Geometry2D, Geometry2DType
 from tidy3d.components.geometry.layout.layered_geometry import LayeredGeometry
 from tidy3d.components.geometry.layout.stackup import Stackup
+
+if TYPE_CHECKING:
+    from tidy3d.components.structure import Structure
 
 
 class LayeredStructure(Tidy3dBaseModel):
@@ -221,4 +224,51 @@ class LayeredStructure(Tidy3dBaseModel):
                 f"Available layers: {stackup.layer_names}"
             )
         return lg
+
+    def to_structures(self) -> list["Structure"]:
+        """Convert all geometries to 3D tidy3d Structures.
+
+        Each LayeredGeometry is converted to a Structure using:
+        - z_bounds, sidewall_angle, axis from the corresponding LayerSpec
+        - medium from the LayerSpec (required)
+
+        Returns
+        -------
+        list[Structure]
+            List of 3D Structure objects ready for simulation.
+
+        Raises
+        ------
+        ValueError
+            If any LayerSpec has medium=None.
+
+        Example
+        -------
+        >>> structures = board.to_structures()
+        >>> sim = Simulation(..., structures=structures)
+        """
+        # Import here to avoid circular imports
+        from tidy3d.components.structure import Structure
+
+        structures = []
+        for lg in self.geometries:
+            layer_spec = self.stackup[lg.layer]
+
+            if layer_spec.medium is None:
+                raise ValueError(
+                    f"LayerSpec '{layer_spec.name}' has medium=None. "
+                    "A medium is required to create a Structure."
+                )
+
+            geometry_3d = lg.geometry.to_3d_geometry(
+                slab_bounds=layer_spec.slab_bounds,
+                axis=layer_spec.axis,
+                sidewall_angle=layer_spec.sidewall_angle,
+            )
+
+            structures.append(
+                Structure(geometry=geometry_3d, medium=layer_spec.medium)
+            )
+
+        return structures
 

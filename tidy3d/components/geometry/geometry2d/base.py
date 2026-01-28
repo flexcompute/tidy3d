@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import Coordinate2D, Shapely
+from tidy3d.components.types import Axis, Coordinate2D, Shapely
+
+if TYPE_CHECKING:
+    from tidy3d.components.geometry.base import Geometry
 
 # Type alias for 2D bounding box: ((min_x, min_y), (max_x, max_y))
 Bound2D = tuple[Coordinate2D, Coordinate2D]
@@ -40,5 +44,31 @@ class Geometry2D(Tidy3dBaseModel, ABC):
         Shapely
             A shapely geometry (Point, Polygon, MultiPolygon, etc.)
             representing this 2D shape.
+        """
+
+    @abstractmethod
+    def to_3d_geometry(
+        self,
+        slab_bounds: tuple[float, float],
+        axis: Axis = 2,
+        sidewall_angle: float = 0.0,
+    ) -> "Geometry":
+        """Convert to a 3D tidy3d Geometry by extrusion.
+
+        Parameters
+        ----------
+        slab_bounds : tuple[float, float]
+            (z_min, z_max) bounds for the extruded geometry.
+        axis : Axis
+            Axis perpendicular to the 2D plane (extrusion direction).
+            Default is 2 (z-axis).
+        sidewall_angle : float
+            Angle of the sidewall in radians. Positive values create
+            a narrower top than bottom. Default is 0.0.
+
+        Returns
+        -------
+        Geometry
+            A 3D tidy3d Geometry (Cylinder, Box, PolySlab, etc.).
         """
 
