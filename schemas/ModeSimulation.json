@@ -11026,8 +11026,15 @@
           ]
         },
         "radius": {
-          "minimum": 0,
-          "type": "number"
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ]
         },
         "type": {
           "default": "Sphere",

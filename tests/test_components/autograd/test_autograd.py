@@ -28,6 +28,7 @@ from tidy3d.components.autograd.field_map import FieldMap
 from tidy3d.components.autograd.utils import get_static, is_tidy_box
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.data.data_array import DataArray
+from tidy3d.components.geometry.primitives import discretization_wavelength
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
 from tidy3d.plugins.polyslab import ComplexPolySlab
@@ -569,6 +570,14 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         medium=td.Medium(permittivity=mesh_eps),
     )
 
+    # use first 4 params for radius/center, rest for eps
+    cx, cy, cz = params[1:4]
+    sphere_geom = td.Sphere(radius=params[0] + 1, center=(cx, cy, cz))
+    sphere = td.Structure(
+        geometry=sphere_geom,
+        medium=td.Medium(permittivity=anp.mean(params[4:]) + 2),
+    )
+
     return {
         "medium": medium,
         "center_list": center_list,
@@ -584,6 +593,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         "custom_pole_res": custom_pole_res,
         "cylinder": cylinder,
         "triangle_mesh": triangle_mesh,
+        "sphere": sphere,
     }
 
 
@@ -682,6 +692,7 @@ structure_keys_ = (
     "custom_pole_res",
     "cylinder",
     "triangle_mesh",
+    "sphere",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 
@@ -1991,10 +2002,8 @@ def test_cylinder_discretization(eps_real):
     with AssertLogLevel(
         "WARNING", contains_str="The minimum wavelength inside the cylinder material"
     ):
-        cylinder = td.Cylinder(axis=2, length=info.wavelength_min, radius=2 * info.wavelength_min)
-
         expected_wvl_mat = info.wavelength_min * config.adjoint.min_wvl_fraction
-        wvl_mat = cylinder._discretization_wavelength(derivative_info=info)
+        wvl_mat = discretization_wavelength(info, "cylinder")
 
         assert np.isclose(expected_wvl_mat, wvl_mat), (
             "Unexpected wavelength for discretizing cylinder!"
@@ -3336,3 +3345,33 @@ def test_geometry_group_passes_intersected_bounds_to_children():
     assert object.__getattribute__(big_box, "recorded_bounds_intersect") == group.bounds, (
         f"got {object.__getattribute__(big_box, 'recorded_bounds_intersect')} and {group.bounds}"
     )
+
+
+@pytest.mark.parametrize("monitor_key", ("mode",))
+def test_autograd_sphere_0_radius(use_emulated_run, monitor_key):
+    """Integration test that Sphere gradients are non-zero (mirrors cylinder check)."""
+
+    monitor, postprocess = make_monitors()[monitor_key]
+
+    def make_sphere(radius, x0, y0, z0):
+        return td.Sphere(center=(x0, y0, z0), radius=radius)
+
+    def make_sim(params):
+        geometry = make_sphere(*params)
+        structure = td.Structure(geometry=geometry, medium=td.Medium(permittivity=2))
+        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
+
+    p0 = [0.0, 0.0, 0.0, 0.0]
+
+    def objective(params):
+        sim = make_sim(params)
+        if PLOT_SIM:
+            plot_sim(sim, plot_eps=True)
+        data = run(sim, task_name="autograd_test", verbose=False)
+        return anp.sum(anp.abs(data[monitor.name].amps)).item()
+
+    with AssertLogLevel("WARNING", contains_str="cannot be computed"):
+        val_sphere, grad_sphere = ag.value_and_grad(objective)(p0)
+    # first 4 parameters are related to the geometry
+    geom_grad = np.asarray(get_static(grad_sphere[:4]), dtype=float)
+    assert np.allclose(geom_grad, 0.0)
