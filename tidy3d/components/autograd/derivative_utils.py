@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Optional
@@ -20,6 +21,7 @@ from .types import PathType
 from .utils import get_static
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from typing import Callable, Union
 
     import xarray as xr
@@ -161,6 +163,10 @@ class DerivativeInfo:
     When provided, avoids redundant interpolator creation for multiple geometries
     sharing the same field data. This significantly improves performance for
     GeometryGroup processing."""
+
+    cached_min_spacing_from_permittivity: Optional[float] = None
+    """Cached `min_spacing_from_permittivity` to be used for objects like GeometryGroup
+    to avoid recomputing this value multiple times in `adaptive_vjp_spacing`."""
 
     # private cache for interpolators
     _interpolators_cache: dict = field(default_factory=dict, init=False, repr=False)
@@ -942,6 +948,54 @@ class DerivativeInfo:
                 projected[key] = field_map[key]
         return projected
 
+    @property
+    def min_spacing_from_permittivity(self) -> float:
+        if self.cached_min_spacing_from_permittivity is not None:
+            return self.cached_min_spacing_from_permittivity
+
+        def spacing_by_permittivity(eps_array: ScalarFieldDataArray) -> float:
+            eps_real = np.asarray(eps_array.values, dtype=np.complex128).real
+
+            dx_candidates = []
+            max_frequency = np.max(self.frequencies)
+
+            # wavelength-based sampling for dielectrics
+            if np.any(eps_real > 0):
+                eps_max = eps_real[eps_real > 0].max()
+                lambda_min = self.wavelength_min / np.sqrt(eps_max)
+                dx_candidates.append(lambda_min)
+
+            # skin depth sampling for metals
+            if np.any(eps_real <= 0):
+                omega = 2 * np.pi * max_frequency
+                eps_neg = eps_real[eps_real <= 0]
+                delta_min = C_0 / (omega * np.sqrt(np.abs(eps_neg).max()))
+                dx_candidates.append(delta_min)
+
+            computed_spacing = min(dx_candidates)
+
+            return computed_spacing
+
+        eps_spacings = [
+            spacing_by_permittivity(eps_array) for _, eps_array in self.eps_data.items()
+        ]
+        min_spacing = np.min(eps_spacings)
+
+        return min_spacing
+
+    @contextmanager
+    def cache_min_spacing_from_permittivity(self) -> Iterator[None]:
+        """
+        Cache min_spacing_from_permittivity for the duration of the block. Cache
+        is always cleared on exit.
+        """
+
+        self.cached_min_spacing_from_permittivity = self.min_spacing_from_permittivity
+        try:
+            yield
+        finally:
+            self.cached_min_spacing_from_permittivity = None
+
     def adaptive_vjp_spacing(
         self,
         wl_fraction: Optional[float] = None,
@@ -975,33 +1029,7 @@ class DerivativeInfo:
             if min_allowed_spacing_fraction is None:
                 min_allowed_spacing_fraction = config.adjoint.minimum_spacing_fraction
 
-        def spacing_by_permittivity(eps_array: ScalarFieldDataArray) -> float:
-            eps_real = np.asarray(eps_array.values, dtype=np.complex128).real
-
-            dx_candidates = []
-            max_frequency = np.max(self.frequencies)
-
-            # wavelength-based sampling for dielectrics
-            if np.any(eps_real > 0):
-                eps_max = eps_real[eps_real > 0].max()
-                lambda_min = self.wavelength_min / np.sqrt(eps_max)
-                dx_candidates.append(wl_fraction * lambda_min)
-
-            # skin depth sampling for metals
-            if np.any(eps_real <= 0):
-                omega = 2 * np.pi * max_frequency
-                eps_neg = eps_real[eps_real <= 0]
-                delta_min = C_0 / (omega * np.sqrt(np.abs(eps_neg).max()))
-                dx_candidates.append(wl_fraction * delta_min)
-
-            computed_spacing = min(dx_candidates)
-
-            return computed_spacing
-
-        eps_spacings = [
-            spacing_by_permittivity(eps_array) for _, eps_array in self.eps_data.items()
-        ]
-        computed_spacing = np.min(eps_spacings)
+        computed_spacing = wl_fraction * self.min_spacing_from_permittivity
 
         min_allowed_spacing = self.wavelength_min * min_allowed_spacing_fraction
 
