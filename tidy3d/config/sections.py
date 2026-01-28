@@ -363,6 +363,15 @@ class WebConfig(ConfigSection):
         le=300,
     )
 
+    monitor_error_grace_period: NonNegativeFloat = Field(
+        60.0,
+        title="Monitor error grace period",
+        description=(
+            "Seconds to wait out transient error statuses during web.monitor() "
+            "before raising an error."
+        ),
+    )
+
     ssl_version: Optional[str] = Field(
         None,
         title="SSL/TLS version",

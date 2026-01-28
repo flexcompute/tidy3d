@@ -1,6 +1,7 @@
 # Tests webapi and things that depend on it
 from __future__ import annotations
 
+import json
 import os
 import posixpath
 from concurrent.futures import Future
@@ -25,7 +26,7 @@ from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import PointDipole
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import SetupError, WebError
 from tidy3d.web import common
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job, WebContainer
@@ -41,6 +42,7 @@ from tidy3d.web.api.webapi import (
     estimate_cost,
     get_info,
     get_run_info,
+    get_status,
     get_tasks,
     load,
     load_simulation,
@@ -51,6 +53,7 @@ from tidy3d.web.api.webapi import (
 )
 from tidy3d.web.core.environment import Env
 from tidy3d.web.core.exceptions import WebNotFoundError
+from tidy3d.web.core.task_info import TaskInfo
 from tidy3d.web.core.types import PayType, TaskType
 
 TASK_NAME = "task_name_test"
@@ -272,7 +275,7 @@ def mock_monitor(monkeypatch):
     status_count = [0]
     statuses = ("upload", "running", "running", "running", "running", "running", "success")
 
-    def mock_get_status(task_id):
+    def mock_get_status(task_id, **_kwargs):
         current_count = min(status_count[0], len(statuses) - 1)
         current_status = statuses[current_count]
         status_count[0] += 1
@@ -417,6 +420,61 @@ def test_run_with_invalid_priority(mock_webapi, priority):
 @responses.activate
 def test_get_run_info(mock_get_run_info, mock_get_info):
     assert get_run_info(TASK_ID) == (100, 0)
+
+
+def test_get_status_grace_period_recovers(monkeypatch):
+    statuses = iter(["run_error", "run_error", "running"])
+
+    def mock_get_info(task_id):
+        status = next(statuses, "running")
+        return TaskInfo(taskId=task_id, status=status, taskType=TaskType.MODE.name)
+
+    time_state = {"t": 0.0}
+
+    def fake_monotonic():
+        return time_state["t"]
+
+    def fake_sleep(seconds):
+        time_state["t"] += seconds
+
+    monkeypatch.setattr(f"{api_path}.TaskFactory.get", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(f"{api_path}.get_info", mock_get_info)
+    monkeypatch.setattr(f"{api_path}.REFRESH_TIME", 0.01)
+    monkeypatch.setattr(f"{api_path}.time.sleep", fake_sleep)
+    monkeypatch.setattr(f"{api_path}.time.monotonic", fake_monotonic)
+
+    assert get_status(TASK_ID, error_grace_period=0.05) == "running"
+
+
+def test_get_status_grace_period_expires(monkeypatch):
+    statuses = iter(["run_error", "run_error", "run_error"])
+
+    def mock_get_info(task_id):
+        status = next(statuses, "run_error")
+        return TaskInfo(taskId=task_id, status=status, taskType=TaskType.MODE.name)
+
+    def mock_get_error_json(self, to_file, **_kwargs):
+        with open(to_file, "w", encoding="utf8") as handle:
+            json.dump({"msg": "boom"}, handle)
+        return Path(to_file)
+
+    time_state = {"t": 0.0}
+
+    def fake_monotonic():
+        return time_state["t"]
+
+    def fake_sleep(seconds):
+        time_state["t"] += seconds
+
+    monkeypatch.setattr(f"{api_path}.TaskFactory.get", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(f"{api_path}.get_info", mock_get_info)
+    monkeypatch.setattr(f"{api_path}.SimulationTask.get_error_json", mock_get_error_json)
+    monkeypatch.setattr(f"{api_path}.REFRESH_TIME", 0.01)
+    monkeypatch.setattr(f"{api_path}.time.sleep", fake_sleep)
+    monkeypatch.setattr(f"{api_path}.time.monotonic", fake_monotonic)
+
+    with pytest.raises(WebError, match="boom"):
+        get_status(TASK_ID, error_grace_period=0.02)
 
 
 @responses.activate

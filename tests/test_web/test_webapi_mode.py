@@ -184,7 +184,7 @@ def mock_monitor(monkeypatch):
     status_count = [0]
     statuses = ("upload", "running", "running", "running", "running", "running", "success")
 
-    def mock_get_status(task_id):
+    def mock_get_status(task_id, **_kwargs):
         current_count = min(status_count[0], len(statuses) - 1)
         current_status = statuses[current_count]
         status_count[0] += 1

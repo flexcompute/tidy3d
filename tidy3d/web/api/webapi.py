@@ -732,22 +732,50 @@ def _get_batch_detail_handle_error_status(batch: BatchTask) -> BatchDetail:
     return detail
 
 
-def get_status(task_id: TaskId) -> str:
+def get_status(task_id: TaskId, *, error_grace_period: float = 0.0) -> str:
     """Get the status of a task. Raises an error if status is "error".
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
+    error_grace_period : float = 0.0
+        Seconds to wait out transient error statuses before raising an error.
     """
+
+    def _wait_out_error(fetch_status: Callable[[], str], raw_status: str | None) -> str | None:
+        if error_grace_period <= 0:
+            return raw_status
+        deadline = time.monotonic() + error_grace_period
+        status = (raw_status or "").lower()
+        while status in ERROR_STATES and time.monotonic() < deadline:
+            time.sleep(REFRESH_TIME)
+            raw_status = fetch_status()
+            status = (raw_status or "").lower()
+        return raw_status
+
     task = TaskFactory.get(task_id)
     if isinstance(task, BatchTask):
-        return _get_batch_detail_handle_error_status(task).status
+        detail = task.detail()
+        raw_status = detail.status
+        status = (raw_status or "").lower()
+        if status in ERROR_STATES:
+            raw_status = _wait_out_error(lambda: task.detail().status, raw_status)
+            status = (raw_status or "").lower()
+        if status in ERROR_STATES:
+            _batch_detail_error(task.task_id)
+        return raw_status
     else:
         task_info = get_info(task_id)
-        status = task_info.status
+        raw_status = task_info.status
+        status = (raw_status or "").lower()
         if status == "visualize":
             return "success"
+        if status in ERROR_STATES:
+            raw_status = _wait_out_error(lambda: get_info(task_id).status, raw_status)
+            status = (raw_status or "").lower()
+            if status == "visualize":
+                return "success"
         if status in ERROR_STATES:
             try:
                 # Try to obtain the error message
@@ -762,7 +790,7 @@ def get_status(task_id: TaskId) -> str:
                 error_msg = "Error message could not be obtained, please contact customer support."
 
             raise WebError(f"Error running task {task_id}! {error_msg}")
-    return status
+    return raw_status
 
 
 def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] = None) -> None:
@@ -823,18 +851,21 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
             est_flex_unit = task_info.estFlexUnit
         return est_flex_unit
 
+    def _get_status() -> str:
+        return get_status(task_id, error_grace_period=config.web.monitor_error_grace_period)
+
     def monitor_preprocess() -> None:
         """Periodically check the status."""
-        status = get_status(task_id)
+        status = _get_status()
         while status not in END_STATES and status != "running":
-            new_status = get_status(task_id)
+            new_status = _get_status()
             if new_status != status:
                 status = new_status
                 if verbose and status != "running":
                     console.log(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
-    status = get_status(task_id)
+    status = _get_status()
 
     if verbose:
         console.log(f"status = {status}")
@@ -861,7 +892,7 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
         console.log("starting up solver")
 
     # while running but before the percentage done is available, keep waiting
-    while get_run_info(task_id)[0] is None and get_status(task_id) == "running":
+    while get_run_info(task_id)[0] is None and _get_status() == "running":
         time.sleep(REFRESH_TIME)
 
     # while running but percentage done is available
@@ -873,9 +904,7 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
                 pbar_pd = progress.add_task("% done", total=100)
                 perc_done, _ = get_run_info(task_id)
 
-                while (
-                    perc_done is not None and perc_done < 100 and get_status(task_id) == "running"
-                ):
+                while perc_done is not None and perc_done < 100 and _get_status() == "running":
                     perc_done, field_decay = get_run_info(task_id)
                     new_description = f"solver progress (field decay = {field_decay:.2e})"
                     progress.update(pbar_pd, completed=perc_done, description=new_description)
@@ -892,9 +921,7 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
                 pbar_pd = progress.add_task("% done", total=100)
                 perc_done, _ = get_run_info(task_id)
 
-                while (
-                    perc_done is not None and perc_done < 100 and get_status(task_id) == "running"
-                ):
+                while perc_done is not None and perc_done < 100 and _get_status() == "running":
                     perc_done, _ = get_run_info(task_id)
                     new_description = "solver progress"
                     progress.update(pbar_pd, completed=perc_done, description=new_description)
@@ -904,26 +931,26 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
                 new_description = "solver progress"
                 progress.update(pbar_pd, completed=100, refresh=True, description=new_description)
         else:
-            while get_status(task_id) == "running":
+            while _get_status() == "running":
                 perc_done, _ = get_run_info(task_id)
                 time.sleep(RUN_REFRESH_TIME)
 
     else:
         # non-verbose case, just keep checking until status is not running or perc_done >= 100
         perc_done, _ = get_run_info(task_id)
-        while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
+        while perc_done is not None and perc_done < 100 and _get_status() == "running":
             perc_done, field_decay = get_run_info(task_id)
             time.sleep(RUN_REFRESH_TIME)
 
     # post processing
     if verbose:
-        status = get_status(task_id)
+        status = _get_status()
         if status != "running":
             console.log(f"status = {status}")
 
         with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
             while status not in END_STATES:
-                new_status = get_status(task_id)
+                new_status = _get_status()
                 if new_status != status:
                     status = new_status
                     console.log(f"status = {status}")
@@ -933,7 +960,7 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
             url = _get_url(task_id)
             console.log(f"View simulation result at [blue underline][link={url}]'{url}'[/link].")
     else:
-        while get_status(task_id) not in END_STATES:
+        while _get_status() not in END_STATES:
             time.sleep(REFRESH_TIME)
 
 
