@@ -5,6 +5,7 @@ import copy
 import cProfile
 import typing
 import warnings
+from contextlib import nullcontext
 from dataclasses import dataclass
 from importlib import reload
 from os.path import join
@@ -1967,6 +1968,96 @@ def test_adaptive_spacing(eps_real):
         assert np.isclose(expected_vjp_spacing, vjp_spacing), "Unexpected adaptive vjp spacing!"
 
 
+def test_adaptive_spacing_cache(rng, redirect_stdout_to_stderr, monkeypatch):
+    """Ensure the cache is not affecting `GeometryGroup` results or persisting after derivative computation."""
+    x_geom = [-0.5, 0.5]
+    y_geom = [-0.5, 0.5]
+
+    radius = 0.3
+
+    geometries = []
+    for x_center in x_geom:
+        for y_center in y_geom:
+            geometries.append(
+                td.Cylinder(center=(x_center, y_center, 0.0), length=0.5, radius=radius)
+            )
+
+    field_paths = []
+    for idx in range(len(geometries)):
+        field_paths.append(("geometries", idx, "radius"))
+
+    geometry = td.GeometryGroup(geometries=geometries)
+
+    eps_keys = ["eps_xx", "eps_yy", "eps_zz"]
+
+    N = 20
+    xcoord = np.linspace(-1, 1, N)
+    ycoord = np.linspace(-1, 1, N)
+    zcoord = np.linspace(-1, 1, N)
+
+    eps_out_data = rng.uniform(1, 2, (N, N, N, 1))
+    eps_in_data = rng.uniform(1, 2, (N, N, N, 1))
+
+    freq = 1.94e14
+
+    def random_scalar_data_array():
+        return td.ScalarFieldDataArray(
+            rng.uniform(1, 2, (N, N, N, 1)),
+            coords={"x": xcoord, "y": ycoord, "z": zcoord, "f": [freq]},
+        )
+
+    E_fwd = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+    E_adj = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+    D_fwd = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+    D_adj = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+    E_der_map = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+    D_der_map = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+
+    derivative_info = DerivativeInfo(
+        paths=tuple(field_paths),
+        E_der_map=E_der_map,
+        D_der_map=D_der_map,
+        E_fwd=E_fwd,
+        D_fwd=D_fwd,
+        E_adj=E_adj,
+        D_adj=D_adj,
+        eps_data={
+            key: td.ScalarFieldDataArray(
+                rng.uniform(1, 2, (N, N, N, 1)),
+                coords={"x": xcoord, "y": ycoord, "z": zcoord, "f": [freq]},
+            )
+            for key in eps_keys
+        },
+        frequencies=[freq],
+        bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_out=td.ScalarFieldDataArray(
+            eps_out_data, coords={"x": xcoord, "y": ycoord, "z": zcoord, "f": [freq]}
+        ),
+        eps_in=td.ScalarFieldDataArray(
+            eps_in_data, coords={"x": xcoord, "y": ycoord, "z": zcoord, "f": [freq]}
+        ),
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+    )
+
+    vjp_with_cache = geometry._compute_derivatives(derivative_info)
+
+    assert derivative_info.cached_min_spacing_from_permittivity is None, (
+        "Unexpected cached variable persistence."
+    )
+
+    monkeypatch.setattr(
+        derivative_info, "cache_min_spacing_from_permittivity", lambda: nullcontext()
+    )
+
+    vjp_without_cache = geometry._compute_derivatives(derivative_info)
+
+    for k, v in vjp_with_cache.items():
+        assert v == vjp_without_cache[k], (
+            "Geometry group computation changed when running with cache."
+        )
+
+
 @pytest.mark.parametrize("eps_real", [1e6, -1e8])
 def test_cylinder_discretization(eps_real):
     freq = 5e9
@@ -3284,6 +3375,18 @@ def test_geometry_group_passes_intersected_bounds_to_children():
         bounds_intersect: tuple
         simulation_bounds: tuple
         interpolators: dict | None = None
+        cached_min_spacing_from_permittivity: float | None = None
+        eps_data = {
+            key: td.ScalarFieldDataArray(
+                [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [200e12]}
+            )
+            for key in ["eps_xx", "eps_yy", "eps_zz"]
+        }
+        frequencies = [200e12]
+
+        cache_min_spacing_from_permittivity = DerivativeInfo.cache_min_spacing_from_permittivity
+        min_spacing_from_permittivity = DerivativeInfo.min_spacing_from_permittivity
+        wavelength_min = property(lambda self: DerivativeInfo.wavelength_min.fget(self))
 
         def create_interpolators(self, dtype: float = float):
             return self.interpolators or {}
@@ -3295,6 +3398,7 @@ def test_geometry_group_passes_intersected_bounds_to_children():
                 "bounds_intersect": self.bounds_intersect,
                 "simulation_bounds": self.simulation_bounds,
                 "interpolators": self.interpolators,
+                "cached_min_spacing_from_permittivity": self.cached_min_spacing_from_permittivity,
             }
             data.update({k: v for k, v in kwargs.items() if k in data})
             return SimpleDerivativeInfo(**data)

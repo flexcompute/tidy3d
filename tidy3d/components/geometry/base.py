@@ -3593,26 +3593,28 @@ class GeometryGroup(Geometry):
         # create interpolators once for all geometries to avoid redundant field data conversions
         interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
 
-        for field_path in derivative_info.paths:
-            _, index, *geo_path = field_path
-            geo = self.geometries[index]
-            # pass pre-computed interpolators if available
-            geo_info = derivative_info.updated_copy(
-                paths=[tuple(geo_path)],
-                bounds=geo.bounds,
-                bounds_intersect=self.bounds_intersection(
-                    geo.bounds, derivative_info.simulation_bounds
-                ),
-                deep=False,
-                interpolators=interpolators,
-            )
+        with derivative_info.cache_min_spacing_from_permittivity():
+            for field_path in derivative_info.paths:
+                _, index, *geo_path = field_path
 
-            vjp_dict_geo = geo._compute_derivatives(geo_info)
+                geo = self.geometries[index]
+                # pass pre-computed interpolators if available
+                geo_info = derivative_info.updated_copy(
+                    paths=[tuple(geo_path)],
+                    bounds=geo.bounds,
+                    bounds_intersect=self.bounds_intersection(
+                        geo.bounds, derivative_info.simulation_bounds
+                    ),
+                    deep=False,
+                    interpolators=interpolators,
+                )
 
-            if len(vjp_dict_geo) != 1:
-                raise AssertionError("Got multiple gradients for single geometry field.")
+                vjp_dict_geo = geo._compute_derivatives(geo_info)
 
-            grad_vjps[field_path] = vjp_dict_geo.popitem()[1]
+                if len(vjp_dict_geo) != 1:
+                    raise AssertionError("Got multiple gradients for single geometry field.")
+
+                grad_vjps[field_path] = vjp_dict_geo.popitem()[1]
 
         return grad_vjps
 

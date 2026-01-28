@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
 - Added validation to `GaussianDoping` to ensure `ref_con < concentration`, validate `source` face identifier, and warn the user when the box size is not sufficient for the specified transition width.
 - Local caching is now enabled by default (set `td.config.local_cache.enabled=False` to opt out).
+- Reduced computation time of `adaptive_vjp_spacing` for `GeometryGroup` by allowing permittivity based spacing value to be cached.
 
 ### Fixed
 - Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.

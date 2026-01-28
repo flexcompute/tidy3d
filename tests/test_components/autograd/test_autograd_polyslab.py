@@ -132,6 +132,9 @@ class DummyDI:
             else ((-2e3, -2e3, -2e3), (2e3, 2e3, 2e3))
         )
 
+        self.cached_min_spacing_from_permittivity = None
+
+    min_spacing_from_permittivity = DerivativeInfo.min_spacing_from_permittivity
     adaptive_vjp_spacing = DerivativeInfo.adaptive_vjp_spacing
     wavelength_min = property(lambda self: DerivativeInfo.wavelength_min.fget(self))
     wavelength_max = property(lambda self: DerivativeInfo.wavelength_max.fget(self))
