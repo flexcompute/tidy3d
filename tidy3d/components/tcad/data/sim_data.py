@@ -221,7 +221,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
     -------
     >>> import tidy3d as td
     >>> import numpy as np
-    >>> temp_mnt = td.TemperatureMonitor(size=(1, 2, 3), name="sample")
+    >>> temp_mnt = td.TemperatureMonitor(size=(1, 2, 3), name="sample", unstructured=True)
     >>> heat_sim = HeatChargeSimulation(
     ...     size=(3.0, 3.0, 3.0),
     ...     structures=[
@@ -506,7 +506,7 @@ class VolumeMesherData(AbstractHeatChargeSimulationData):
     >>> import tidy3d as td
     >>> import numpy as np
     >>> mesh_mnt = td.VolumeMeshMonitor(size=(1, 2, 3), name="mesh")
-    >>> temp_mnt = td.TemperatureMonitor(size=(1, 2, 3), name="sample")
+    >>> temp_mnt = td.TemperatureMonitor(size=(1, 2, 3), name="sample", unstructured=True)
     >>> heat_sim = td.HeatChargeSimulation(
     ...     size=(3.0, 3.0, 3.0),
     ...     structures=[

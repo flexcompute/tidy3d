@@ -37,7 +37,7 @@ class TemperatureData(HeatChargeMonitorData):
     >>> temp_data = SpatialDataArray(
     ...     np.ones((2, 3, 4)), coords={"x": [0, 1], "y": [0, 1, 2], "z": [0, 1, 2, 3]}
     ... )
-    >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="temperature")
+    >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="temperature", unstructured=True)
     >>> temp_mnt_data = TemperatureData(
     ...     monitor=temp_mnt, temperature=temp_data, symmetry=(0, 1, 0), symmetry_center=(0, 0, 0)
     ... )

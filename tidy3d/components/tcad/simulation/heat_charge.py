@@ -228,7 +228,7 @@ class HeatChargeSimulation(AbstractSimulation):
     ...             condition=td.TemperatureBC(temperature=500),
     ...         )
     ...     ],
-    ...     monitors=[td.TemperatureMonitor(size=(1, 2, 3), name="sample")],
+    ...     monitors=[td.TemperatureMonitor(size=(1, 2, 3), name="sample", unstructured=True)],
     ... )
 
     To run a drift-diffusion (``Charge`` |:zap:|) system:
@@ -1999,7 +1999,7 @@ class HeatChargeSimulation(AbstractSimulation):
         ...             condition=TemperatureBC(temperature=500),
         ...         )
         ...     ],
-        ...     monitors=[TemperatureMonitor(name="temp_monitor", center=(0, 0, 0), size=(1, 1, 1))],
+        ...     monitors=[TemperatureMonitor(name="temp_monitor", center=(0, 0, 0), size=(1, 1, 1), unstructured=True)],
         ... )
         """
 
