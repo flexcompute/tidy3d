@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `ModeSortSpec.sort_key` is now required with a default of `"n_eff"` (previously optional with `None` default). `ModeSortSpec.sort_order` is now optional with a default of `None`, which automatically selects the natural order based on `sort_key` and `sort_reference`: ascending when a reference is provided (closest first), otherwise descending for `n_eff` and polarization fractions (higher values first), ascending for `k_eff` and `mode_area` (lower values first).
 - Added `symmetric_pseudo` option for `s_param_def` in `TerminalComponentModeler` which applies a scaling factor that ensures the S-matrix is symmetric in reciprocal systems.
+- Added deprecation warning for `TemperatureMonitor` and `SteadyPotentialMonitor` when `unstructured` parameter is not explicitly set. The default value of `unstructured` will change from `False` to `True` in the next release.
+- Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
 
 ### Fixed
 - Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.

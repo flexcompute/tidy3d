@@ -43,7 +43,7 @@ class HeatSimulation(HeatChargeSimulation):
     ...             condition=td.TemperatureBC(temperature=500),
     ...         )
     ...     ],
-    ...     monitors=[td.TemperatureMonitor(size=(1, 2, 3), name="sample")],
+    ...     monitors=[td.TemperatureMonitor(size=(1, 2, 3), name="sample", unstructured=True)],
     ... )
     """
 

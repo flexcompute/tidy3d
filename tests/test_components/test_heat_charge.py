@@ -232,7 +232,7 @@ def boundary_conditions():
 @pytest.fixture(scope="module")
 def monitors():
     """Creates monitors of different types and sizes."""
-    temp_mnt1 = td.TemperatureMonitor(size=(1.6, 2, 3), name="test")
+    temp_mnt1 = td.TemperatureMonitor(size=(1.6, 2, 3), name="test", unstructured=False)
     temp_mnt2 = td.TemperatureMonitor(size=(1.6, 2, 3), name="tet", unstructured=True)
     temp_mnt3 = td.TemperatureMonitor(
         center=(0, 0.9, 0), size=(1.6, 0, 3), name="tri", unstructured=True, conformal=True
@@ -241,7 +241,7 @@ def monitors():
         center=(0, 0.9, 0), size=(1.6, 0, 3), name="empty", unstructured=True, conformal=False
     )
 
-    volt_mnt1 = td.SteadyPotentialMonitor(size=(1.6, 2, 3), name="v_test")
+    volt_mnt1 = td.SteadyPotentialMonitor(size=(1.6, 2, 3), name="v_test", unstructured=False)
     volt_mnt2 = td.SteadyPotentialMonitor(size=(1.6, 2, 3), name="v_tet", unstructured=True)
     volt_mnt3 = td.SteadyPotentialMonitor(
         center=(0, 0.9, 0), size=(1.6, 0, 3), name="v_tri", unstructured=True, conformal=True
@@ -952,7 +952,7 @@ def test_freqs_validation():
     structures = [cathode, silicon, anode]
 
     volt_monitor = td.SteadyPotentialMonitor(
-        center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="voltage"
+        center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="voltage", unstructured=False
     )
 
     charge_tolerance = td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400)
@@ -1137,6 +1137,42 @@ def test_vertical_natural_convection():
         )
 
 
+def test_unstructured_default_warning():
+    """Test that warning is issued when unstructured uses default (not explicitly set)."""
+    # Should warn: unstructured not set (defaults to False)
+    with AssertLogLevel("WARNING", contains_str="default value of 'unstructured'"):
+        td.TemperatureMonitor(size=(1, 1, 1), name="test1")
+
+    # Should NOT warn: unstructured explicitly set to False
+    with AssertLogLevel(None):
+        td.TemperatureMonitor(size=(1, 1, 1), name="test2", unstructured=False)
+
+    # Should NOT warn: unstructured explicitly set to True
+    with AssertLogLevel(None):
+        td.TemperatureMonitor(size=(1, 1, 1), name="test3", unstructured=True)
+
+    # Should warn: SteadyPotentialMonitor with default unstructured (not explicitly set)
+    with AssertLogLevel("WARNING", contains_str="default value of 'unstructured'"):
+        td.SteadyPotentialMonitor(size=(1, 1, 1), name="test4")
+
+    # Should NOT warn: SteadyPotentialMonitor with unstructured explicitly set to False
+    with AssertLogLevel(None):
+        td.SteadyPotentialMonitor(size=(1, 1, 1), name="test5", unstructured=False)
+
+    # Should NOT warn: SteadyPotentialMonitor with unstructured explicitly set to True
+    with AssertLogLevel(None):
+        td.SteadyPotentialMonitor(size=(1, 1, 1), name="test6", unstructured=True)
+
+    # Should NOT warn: monitors with unstructured: Literal[True] (always unstructured=True)
+    with AssertLogLevel(None):
+        td.SteadyFreeCarrierMonitor(size=(1, 1, 1), name="test7")
+        td.SteadyEnergyBandMonitor(size=(1, 1, 1), name="test8")
+        td.SteadyCapacitanceMonitor(size=(1, 1, 1), name="test9")
+        td.SteadyElectricFieldMonitor(size=(1, 1, 1), name="test10")
+        td.SteadyCurrentDensityMonitor(size=(1, 1, 1), name="test11")
+        td.VolumeMeshMonitor(size=(1, 1, 1), name="test12")
+
+
 def test_heat_charge_monitors_validation(monitors):
     """Checks for no name and negative size in monitors."""
     temp_mnt = monitors[0]
@@ -1164,7 +1200,7 @@ def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction
 
     # Voltage monitor
     volt_monitor = td.SteadyPotentialMonitor(
-        center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="voltage"
+        center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="voltage", unstructured=False
     )
     # A voltage monitor in a heat simulation should throw error if no ChargeConductorMedium is present
     with pytest.raises(pd.ValidationError):
@@ -1174,7 +1210,7 @@ def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction
 
     # Temperature monitor
     temp_monitor = td.TemperatureMonitor(
-        center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="temperature"
+        center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="temperature", unstructured=False
     )
     # A temperature monitor should throw error in a conduction simulation if no SolidSpec is present
     with pytest.raises(pd.ValidationError):
@@ -1184,7 +1220,9 @@ def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction
 
     # check error is raised in voltage monitor doesn't cross a conducting medium
     with pytest.raises(pd.ValidationError):
-        volt_mnt = td.SteadyPotentialMonitor(center=(0, 0, 0), size=(0, td.inf, td.inf))
+        volt_mnt = td.SteadyPotentialMonitor(
+            center=(0, 0, 0), size=(0, td.inf, td.inf), unstructured=False
+        )
         _ = conduction_simulation.updated_copy(monitors=[volt_mnt])
 
 
@@ -1365,7 +1403,7 @@ def test_sim_data_plotting(simulation_data):
         heat_sim_data.updated_copy(data=[heat_sim_data.data[0]] * 2)
 
     # Test updating simulation data with invalid simulation
-    temp_mnt = td.TemperatureMonitor(size=(1, 2, 3), name="test")
+    temp_mnt = td.TemperatureMonitor(size=(1, 2, 3), name="test", unstructured=False)
     temp_mnt = temp_mnt.updated_copy(name="test2")
 
     sim = heat_sim_data.simulation.updated_copy(monitors=[temp_mnt])
@@ -1797,6 +1835,7 @@ def test_heat_charge_sim_bounds(shift_amount, log_level):
                     center=[0, 0, 0],
                     size=(td.inf, td.inf, td.inf),
                     name="test_monitor",
+                    unstructured=False,
                 )
             ],
         )
@@ -1846,7 +1885,10 @@ def test_sim_structure_extent(box_size, log_level):
             grid_spec=td.UniformUnstructuredGrid(dl=0.1),
             monitors=[
                 td.SteadyPotentialMonitor(
-                    center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="test_monitor"
+                    center=(0, 0, 0),
+                    size=(td.inf, td.inf, td.inf),
+                    name="test_monitor",
+                    unstructured=False,
                 )
             ],
         )
@@ -1993,8 +2035,8 @@ def test_simulation_with_multiple_sources_and_monitors(
     ]
 
     monitors = [
-        td.TemperatureMonitor(size=(1.6, 2, 3), name="temp_mnt1"),
-        td.SteadyPotentialMonitor(size=(1.6, 2, 3), name="volt_mnt1"),
+        td.TemperatureMonitor(size=(1.6, 2, 3), name="temp_mnt1", unstructured=False),
+        td.SteadyPotentialMonitor(size=(1.6, 2, 3), name="volt_mnt1", unstructured=False),
     ]
 
     boundary_spec = [
@@ -2036,7 +2078,7 @@ def test_dynamic_simulation_updates(heat_simulation):
     assert updated_sim.center == new_center
 
     # Add a new monitor
-    new_monitor = td.TemperatureMonitor(size=(1, 1, 1), name="new_temp_mnt")
+    new_monitor = td.TemperatureMonitor(size=(1, 1, 1), name="new_temp_mnt", unstructured=False)
     updated_sim = heat_simulation.updated_copy(
         monitors=(*list(heat_simulation.monitors), new_monitor)
     )
@@ -2242,7 +2284,7 @@ def test_bandgap_monitor():
 def test_additional_edge_cases():
     """Test additional edge cases and error handling."""
     # Attempt to create a monitor with zero size
-    td.TemperatureMonitor(size=(0, 0, 0), name="zero_size_mnt")
+    td.TemperatureMonitor(size=(0, 0, 0), name="zero_size_mnt", unstructured=False)
 
     # Create a simulation with overlapping structures
     td.HeatChargeSimulation(
@@ -2652,6 +2694,7 @@ def test_heat_charge_simulation_plot():
         center=(0, 0, 0),
         size=(1, 1, 0),
         name="temp_mnt",
+        unstructured=False,
     )
 
     # Create a HEAT simulation
