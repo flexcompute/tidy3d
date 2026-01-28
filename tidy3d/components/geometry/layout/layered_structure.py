@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Optional
 
 import pydantic.v1 as pydantic
@@ -36,10 +37,13 @@ class LayeredStructure(Tidy3dBaseModel):
     >>>
     >>> # Create structure and add geometries
     >>> board = LayeredStructure(stackup=stackup)
-    >>> board = board.add("top_copper",
-    ...     Rectangle2D(center=(0, 0), size=(10, 0.5)),
-    ...     Circle2D(center=(5, 0), radius=0.3),
-    ...     net="CLK"
+    >>> board = board.add(
+    ...     layer="top_copper",
+    ...     geometries=[
+    ...         Rectangle2D(center=(0, 0), size=(10, 0.5)),
+    ...         Circle2D(center=(5, 0), radius=0.3),
+    ...     ],
+    ...     net="CLK",
     ... )
     >>>
     >>> # Query by layer
@@ -63,7 +67,10 @@ class LayeredStructure(Tidy3dBaseModel):
     )
 
     def add(
-        self, layer: str, *geometries: Geometry2D, net: Optional[str] = None
+        self,
+        layer: str,
+        geometries: Sequence[Geometry2D],
+        net: Optional[str] = None,
     ) -> Self:
         """Add geometries to a layer with optional net assignment.
 
@@ -75,8 +82,8 @@ class LayeredStructure(Tidy3dBaseModel):
         layer : str
             Name of the layer to add geometries to.
             Must exist in the stackup.
-        *geometries : Geometry2D
-            One or more 2D geometries to add.
+        geometries : Sequence[Geometry2D]
+            List or tuple of 2D geometries to add.
         net : str, optional
             Net name to assign to all added geometries.
 
@@ -87,9 +94,16 @@ class LayeredStructure(Tidy3dBaseModel):
 
         Example
         -------
-        >>> board = board.add("top_copper", trace1, trace2, pad1, net="CLK")
-        >>> board = board.add("gnd_plane", gnd_fill, net="GND")
+        >>> board = board.add("top_copper", [trace1, trace2, pad1], net="CLK")
+        >>> board = board.add("gnd_plane", [gnd_fill], net="GND")
         """
+        # Validate layer exists in stackup
+        if layer not in self.stackup:
+            raise ValueError(
+                f"Layer '{layer}' not found in stackup. "
+                f"Available layers: {self.stackup.layer_names}"
+            )
+
         new_entries = tuple(
             LayeredGeometry(geometry=g, layer=layer, net=net) for g in geometries
         )

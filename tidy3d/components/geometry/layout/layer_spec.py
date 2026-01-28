@@ -8,7 +8,7 @@ import pydantic.v1 as pydantic
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.medium import MediumType3D
-from tidy3d.components.types import Axis
+from tidy3d.components.types import TYPE_TAG_STR, Axis
 
 
 class LayerSpec(Tidy3dBaseModel):
@@ -52,6 +52,7 @@ class LayerSpec(Tidy3dBaseModel):
         None,
         title="Medium",
         description="Material for this layer. None represents air/void.",
+        discriminator=TYPE_TAG_STR,
     )
 
     sidewall_angle: float = pydantic.Field(
