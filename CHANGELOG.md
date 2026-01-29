@@ -13,12 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Grid.fine_mesh_info` property to identify and report locations where grid cell sizes are fine for understanding meshing hotspots.
 - Added visualization of finest grid regions in `Simulation.plot_grid()` with shaded regions highlighting areas of fine meshing.
 - Added autograd support for `Sphere`.
+- Added `GaussianOverlapMonitor` and `AstigmaticGaussianOverlapMonitor` for decomposing electromagnetic fields onto Gaussian beam profiles.
+- Added `GaussianPort` and `AstigmaticGaussianPort` for S-matrix calculations using Gaussian beam sources and overlap monitors.
+- Added `symmetric_pseudo` option for `s_param_def` in `TerminalComponentModeler` which applies a scaling factor that ensures the S-matrix is symmetric in reciprocal systems.
+- Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
 
 ### Breaking Changes
 - Added `structure_priority_mode` for `TerminalComponentModeler` and default to `"conductor"` to ensure metal structures override dielectrics regardless of structure order, preventing order-dependent results in RF simulations.
 - 1D lumped elements (with zero lateral extent) are no longer allowed. Use a small finite lateral extent (e.g., `1e-6`) instead.
-- Added `GaussianOverlapMonitor` and `AstigmaticGaussianOverlapMonitor` for decomposing electromagnetic fields onto Gaussian beam profiles.
-- Added `GaussianPort` and `AstigmaticGaussianPort` for S-matrix calculations using Gaussian beam sources and overlap monitors.
+- `ModeSortSpec.sort_key` is now required with a default of `"n_eff"` (previously optional with `None` default). `ModeSortSpec.sort_order` is now optional with a default of `None`, which automatically selects the natural order based on `sort_key` and `sort_reference`: ascending when a reference is provided (closest first), otherwise descending for `n_eff` and polarization fractions (higher values first), ascending for `k_eff` and `mode_area` (lower values first).
+- Changed the interpretation of `waist_distance` and `waist_distances` for backward-propagating Gaussian beams (`GaussianBeam`, `AstigmaticGaussianBeam`, `GaussianBeamProfile`, `AstigmaticGaussianBeamProfile`). Previously, the waist position was interpreted relative to the directed propagation axis, meaning switching `direction` from `+` to `-` would also flip the waist position in the global reference frame. Now, the waist position is defined consistently for both directions: a positive `waist_distance` always places the beam waist behind the source/monitor plane (toward the negative normal axis), regardless of propagation direction. This ensures reciprocity between Gaussian sources and overlap monitors used in port-based S-matrix calculations. Users with existing simulations using backward-propagating Gaussian beams with non-zero waist distances may need to adjust their values.
 
 ### Changed
 - `ModeSortSpec.sort_key` is now required with a default of `"n_eff"` (previously optional with `None` default). `ModeSortSpec.sort_order` is now optional with a default of `None`, which automatically selects the natural order based on `sort_key` and `sort_reference`: ascending when a reference is provided (closest first), otherwise descending for `n_eff` and polarization fractions (higher values first), ascending for `k_eff` and `mode_area` (lower values first).
@@ -65,7 +69,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added validation to `DCVoltageSource` that warns when duplicate voltage values are detected in the `voltage` array, including treating `0` and `-0` as the same value.
 
 ### Changed
-- **Breaking**: Changed the interpretation of `waist_distance` and `waist_distances` for backward-propagating Gaussian beams (`GaussianBeam`, `AstigmaticGaussianBeam`, `GaussianBeamProfile`, `AstigmaticGaussianBeamProfile`). Previously, the waist position was interpreted relative to the directed propagation axis, meaning switching `direction` from `+` to `-` would also flip the waist position in the global reference frame. Now, the waist position is defined consistently for both directions: a positive `waist_distance` always places the beam waist behind the source/monitor plane (toward the negative normal axis), regardless of propagation direction. This ensures reciprocity between Gaussian sources and overlap monitors used in port-based S-matrix calculations. Users with existing simulations using backward-propagating Gaussian beams with non-zero waist distances may need to adjust their values.
 - For `HeatChargeSimulation` objects, the `plot` function now adds the simulation boundary conditions.
 - Improved memory performance in `postprocess_adj` by using `isel` instead of `sel` for xarray slicing.
 

@@ -327,6 +327,7 @@ def warn_backward_waist_distance(field_name: str):
                 "sources and overlap monitors used for port-based S-matrix calculations. "
                 "If your simulation relied on the previous behavior (where the waist position "
                 "flipped with direction), you may need to adjust your waist distance values.",
+                log_once=True,
             )
         return values
 
