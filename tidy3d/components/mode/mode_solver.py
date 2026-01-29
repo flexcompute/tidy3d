@@ -85,7 +85,12 @@ from tidy3d.log import log
 
 if TYPE_CHECKING:
     from matplotlib.colors import Colormap
-from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
+from tidy3d.packaging import (
+    Tidy3dImportError,
+    _check_tidy3d_extras_available,
+    supports_local_subpixel,
+    tidy3d_extras,
+)
 
 # Importing the local solver may not work if e.g. scipy is not installed
 IMPORT_ERROR_MSG = """Could not import local solver, 'ModeSolver' objects can still be constructed
@@ -98,6 +103,41 @@ try:
 except ImportError:
     log.warning(IMPORT_ERROR_MSG)
     LOCAL_SOLVER_IMPORTED = False
+
+
+def _get_solver_func():
+    """Get the best available mode solver function.
+
+    Returns the tidy3d-extras compute_modes if available (handles all cases including
+    fully tensorial), otherwise falls back to the base compute_modes which will raise
+    an informative error if a tensorial solve is attempted.
+
+    Returns
+    -------
+    callable
+        The compute_modes function to use for solving.
+
+    Raises
+    ------
+    ImportError
+        If the local solver could not be imported (e.g., scipy not installed).
+    """
+    if not LOCAL_SOLVER_IMPORTED:
+        raise ImportError(IMPORT_ERROR_MSG)
+
+    # Try to get tidy3d-extras solver (handles all cases including tensorial)
+    try:
+        _check_tidy3d_extras_available(quiet=True)
+        if tidy3d_extras["mod"] is not None:
+            from tidy3d_extras.mode import EigSolver as ExtrasEigSolver
+
+            return ExtrasEigSolver.compute_modes
+    except (Tidy3dImportError, ImportError, AttributeError):
+        pass
+
+    # Fall back to base solver (will raise error if tensorial solve is attempted)
+    return compute_modes
+
 
 FIELD = tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
 MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
@@ -1644,10 +1684,9 @@ class ModeSolver(Tidy3dBaseModel):
         The fields are rotated from propagation coordinates back to global coordinates.
         """
 
-        if not LOCAL_SOLVER_IMPORTED:
-            raise ImportError(IMPORT_ERROR_MSG)
+        solver_func = _get_solver_func()
 
-        solver_fields, n_complex, eps_spec = compute_modes(
+        solver_fields, n_complex, eps_spec = solver_func(
             eps_cross=self._solver_eps(freq),
             coords=coords,
             freq=freq,
@@ -1701,14 +1740,13 @@ class ModeSolver(Tidy3dBaseModel):
         Modes are computed as linear combinations of ``basis_fields``.
         """
 
-        if not LOCAL_SOLVER_IMPORTED:
-            raise ImportError(IMPORT_ERROR_MSG)
+        solver_func = _get_solver_func()
 
         solver_basis_fields = self._postprocess_solver_fields_inverse(
             fields=basis_fields, normal_axis=self.normal_axis, plane=self.plane
         )
 
-        solver_fields, n_complex, eps_spec = compute_modes(
+        solver_fields, n_complex, eps_spec = solver_func(
             eps_cross=self._solver_eps(freq),
             coords=coords,
             freq=freq,

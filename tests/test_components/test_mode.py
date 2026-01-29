@@ -510,3 +510,97 @@ def test_filter_pol_with_default_sort_spec():
             filter_pol="te",
             sort_spec=td.ModeSortSpec(sort_reference=1.5),
         )
+
+
+def _make_tensorial_mode_sim(angle_theta=0, fully_anisotropic=False):
+    """Helper to create a mode simulation that requires a tensorial solver."""
+    structures = []
+    if fully_anisotropic:
+        # Use a FullyAnisotropicMedium
+        structures.append(
+            td.Structure(
+                geometry=td.Box(size=(1, 1, td.inf)),
+                medium=td.FullyAnisotropicMedium(
+                    permittivity=np.eye(3) * 4.0 + np.array([[0, 0.1, 0], [0.1, 0, 0], [0, 0, 0]])
+                ),
+            )
+        )
+    else:
+        structures.append(
+            td.Structure(
+                geometry=td.Box(size=(1, 1, td.inf)),
+                medium=td.Medium(permittivity=4.0),
+            )
+        )
+
+    return td.ModeSimulation(
+        size=(2, 2, 0),
+        freqs=[td.C_0],
+        mode_spec=td.ModeSpec(num_modes=1, angle_theta=angle_theta),
+        grid_spec=td.GridSpec.uniform(dl=0.2),
+        structures=structures,
+    )
+
+
+def test_tensorial_mode_solver_error_without_extras(monkeypatch):
+    """Test that attempting to run a tensorial mode solver locally without tidy3d-extras raises an error."""
+    import tidy3d.components.mode.mode_solver as mode_solver_module
+    from tidy3d.components.mode.solver import compute_modes
+
+    # Mock _get_solver_func to always return the base solver (simulating no tidy3d-extras)
+    monkeypatch.setattr(mode_solver_module, "_get_solver_func", lambda: compute_modes)
+
+    # Test with angle_theta (angled mode) - should raise NotImplementedError from base solver
+    sim = _make_tensorial_mode_sim(angle_theta=np.pi / 6)
+    with pytest.raises(NotImplementedError, match="tensorial mode solver"):
+        sim.run_local()
+
+    # Test with fully anisotropic medium
+    sim_aniso = _make_tensorial_mode_sim(fully_anisotropic=True)
+    with pytest.raises(NotImplementedError, match="tensorial mode solver"):
+        sim_aniso.run_local()
+
+
+def test_tensorial_mode_solver_with_extras():
+    """Test that tensorial mode solver works when tidy3d-extras is available and usable."""
+    from tidy3d.components.mode.mode_solver import _get_solver_func
+    from tidy3d.components.mode.solver import compute_modes
+
+    # Check if _get_solver_func returns something other than the base solver
+    solver_func = _get_solver_func()
+    if solver_func is compute_modes:
+        pytest.skip("tidy3d-extras not available or not properly initialized/licensed")
+
+    # Test with angle_theta (angled mode)
+    sim = _make_tensorial_mode_sim(angle_theta=np.pi / 6)
+    result = sim.run_local()
+    assert result is not None
+    # ModeSimulationData has n_eff through modes_raw
+    assert result.modes_raw.n_eff is not None
+
+    # Test with fully anisotropic medium
+    sim_aniso = _make_tensorial_mode_sim(fully_anisotropic=True)
+    result_aniso = sim_aniso.run_local()
+    assert result_aniso is not None
+    assert result_aniso.modes_raw.n_eff is not None
+
+
+def test_diagonal_mode_solver_still_works():
+    """Test that the diagonal (non-tensorial) mode solver still works without tidy3d-extras."""
+    # Simple waveguide simulation that doesn't require tensorial solver
+    sim = td.ModeSimulation(
+        size=(2, 2, 0),
+        freqs=[td.C_0],
+        mode_spec=td.ModeSpec(num_modes=1),  # No angle, no anisotropy
+        grid_spec=td.GridSpec.uniform(dl=0.2),
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, td.inf)),
+                medium=td.Medium(permittivity=4.0),
+            )
+        ],
+    )
+    result = sim.run_local()
+    assert result is not None
+    # ModeSimulationData has n_eff through modes_raw
+    assert result.modes_raw.n_eff is not None
