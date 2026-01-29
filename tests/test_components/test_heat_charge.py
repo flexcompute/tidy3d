@@ -2830,3 +2830,72 @@ def test_heat_charge_simulation_plot():
         "for CHARGE simulations, resulting in at least 2 more visual elements "
         "than charge_sim.scene.plot()"
     )
+
+
+def test_cylinder_small_radius_warning():
+    """Test that warning is issued for very small cylinder radii in HeatChargeSimulation."""
+    solid = td.MultiPhysicsMedium(
+        heat=td.SolidSpec(conductivity=1, capacity=1),
+        name="solid",
+    )
+    background = td.MultiPhysicsMedium(
+        heat=td.FluidSpec(),
+        name="background",
+    )
+
+    # Test non-tapered cylinder with tiny radius
+    tiny_cylinder = td.Structure(
+        geometry=td.Cylinder(center=(0, 0, 0), radius=1e-8, length=1, axis=2),
+        medium=solid,
+        name="tiny",
+    )
+    with AssertLogLevel("WARNING", contains_str="radius"):
+        _ = td.HeatChargeSimulation(
+            center=(0, 0, 0),
+            size=(2, 2, 2),
+            medium=background,
+            structures=[tiny_cylinder],
+            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            monitors=[td.TemperatureMonitor(size=(1, 1, 1), name="tmp")],
+        )
+
+    # Test transformed (translated) cylinder with tiny radius
+    tiny_cylinder_transformed = td.Structure(
+        geometry=td.Cylinder(center=(0, 0, 0), radius=1e-8, length=1, axis=2).translated(
+            x=0.1, y=0.0, z=0.0
+        ),
+        medium=solid,
+        name="tiny_transformed",
+    )
+    with AssertLogLevel("WARNING", contains_str="radius"):
+        _ = td.HeatChargeSimulation(
+            center=(0, 0, 0),
+            size=(2, 2, 2),
+            medium=background,
+            structures=[tiny_cylinder_transformed],
+            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            monitors=[td.TemperatureMonitor(size=(1, 1, 1), name="tmp")],
+        )
+
+    # Test tapered cylinder with steep sidewall causing negative radius_top
+    tapered_cylinder = td.Structure(
+        geometry=td.Cylinder(
+            center=(0, 0, 0),
+            radius=0.1,
+            length=1,
+            axis=2,
+            sidewall_angle=np.pi / 3,  # 60 degrees - causes negative radius_top
+            reference_plane="bottom",
+        ),
+        medium=solid,
+        name="tapered",
+    )
+    with AssertLogLevel("WARNING", contains_str="radius_top"):
+        _ = td.HeatChargeSimulation(
+            center=(0, 0, 0),
+            size=(2, 2, 2),
+            medium=background,
+            structures=[tapered_cylinder],
+            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            monitors=[td.TemperatureMonitor(size=(1, 1, 1), name="tmp")],
+        )

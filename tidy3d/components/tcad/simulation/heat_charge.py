@@ -16,7 +16,9 @@ from tidy3d.components.bc_placement import (
     StructureSimulationBoundary,
     StructureStructureInterface,
 )
-from tidy3d.components.geometry.base import Box
+from tidy3d.components.geometry.base import Box, Transformed
+from tidy3d.components.geometry.primitives import Cylinder
+from tidy3d.components.geometry.utils import flatten_groups
 from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
     SemiconductorMedium,
@@ -122,6 +124,11 @@ AnalysisSpecType = Union[ElectricalAnalysisType, UnsteadyHeatAnalysis]
 
 # define some limits for transient heat simulations
 TRANSIENT_HEAT_MAX_STEPS = 1000
+
+# OpenCASCADE minimum tolerance for cylinder radii
+OPENCASCADE_CYLINDER_RADIUS_TOL = 1e-6
+# Minimum radius as fraction of the larger radius (for tapered cylinders)
+MIN_CYLINDER_RADIUS_FRACTION = 0.01
 
 
 class TCADAnalysisTypes(str, Enum):
@@ -352,6 +359,50 @@ class HeatChargeSimulation(AbstractSimulation):
                 raise SetupError(
                     f"'HeatSimulation' does not currently support structures with dimensions of zero size ('structures[{ind}]')."
                 )
+        return val
+
+    @field_validator("structures")
+    @classmethod
+    def _warn_small_cylinder_radius(cls, val: tuple[Structure, ...]) -> tuple[Structure, ...]:
+        """Warn if any Cylinder geometry has radius too small for meshing."""
+        for structure in val:
+            for geometry in flatten_groups(
+                structure.geometry, flatten_nonunion_type=True, flatten_transformed=True
+            ):
+                # Unwrap Transformed to get the base geometry
+                base_geometry = geometry.geometry if isinstance(geometry, Transformed) else geometry
+                if isinstance(base_geometry, Cylinder):
+                    r_bottom = base_geometry.radius_bottom
+                    r_top = base_geometry.radius_top
+                    is_tapered = not np.isclose(r_bottom, r_top)
+
+                    # Compute minimum allowed radius (matches backend heat_mesh.py logic)
+                    min_radius = max(
+                        OPENCASCADE_CYLINDER_RADIUS_TOL,
+                        MIN_CYLINDER_RADIUS_FRACTION * max(abs(r_bottom), abs(r_top)),
+                    )
+
+                    # Warn if radii are below minimum
+                    if is_tapered:
+                        if r_bottom < min_radius:
+                            log.warning(
+                                f"Cylinder 'radius_bottom' ({r_bottom:.3e}) is below the minimum "
+                                f"radius for meshing ({min_radius:.3e}). The sidewall angle may be "
+                                f"too steep. Will be clamped to minimum radius or mesh size, whichever is larger."
+                            )
+                        if r_top < min_radius:
+                            log.warning(
+                                f"Cylinder 'radius_top' ({r_top:.3e}) is below the minimum "
+                                f"radius for meshing ({min_radius:.3e}). The sidewall angle may be "
+                                f"too steep. Will be clamped to minimum radius or mesh size, whichever is larger."
+                            )
+                    else:
+                        if r_bottom < min_radius:
+                            log.warning(
+                                f"Cylinder 'radius' ({r_bottom:.3e}) is below the minimum "
+                                f"radius for meshing ({min_radius:.3e}). "
+                                f"Will be clamped to minimum radius or mesh size, whichever is larger."
+                            )
         return val
 
     def _check_cross_solids(self, objs: tuple[Box, ...]) -> tuple[int, ...]:

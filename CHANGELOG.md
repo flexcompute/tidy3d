@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Grid.fine_mesh_info` property to identify and report locations where grid cell sizes are fine for understanding meshing hotspots.
 - Added visualization of finest grid regions in `Simulation.plot_grid()` with shaded regions highlighting areas of fine meshing.
 - Added autograd support for `Sphere`.
+- Added validation warning in `HeatChargeSimulation` for very small `Cylinder` radii to help users avoid meshing and numerical issues.
 - Added `GaussianOverlapMonitor` and `AstigmaticGaussianOverlapMonitor` for decomposing electromagnetic fields onto Gaussian beam profiles.
 - Added `GaussianPort` and `AstigmaticGaussianPort` for S-matrix calculations using Gaussian beam sources and overlap monitors.
 - Added `symmetric_pseudo` option for `s_param_def` in `TerminalComponentModeler` which applies a scaling factor that ensures the S-matrix is symmetric in reciprocal systems.
