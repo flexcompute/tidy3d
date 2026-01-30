@@ -37,6 +37,18 @@ TMP_BATCH_PREFIX = "tmp_batch"
 _CACHE: Optional[LocalCache] = None
 
 
+def _remove_cache_dir(path: os.PathLike, *, recreate: bool) -> None:
+    """Remove a cache directory and optionally recreate it."""
+    cache_path = Path(path)
+    if cache_path.exists():
+        try:
+            shutil.rmtree(cache_path)
+        except (FileNotFoundError, OSError):
+            return
+    if recreate:
+        cache_path.mkdir(parents=True, exist_ok=True)
+
+
 def get_cache_entry_dir(root: os.PathLike, key: str) -> Path:
     """
     Returns the cache directory for a given key.
@@ -304,13 +316,7 @@ class LocalCache:
     def clear(self, hard: bool = False) -> None:
         """Remove all cache contents. If set to hard, root directory is removed."""
         with self._with_lock():
-            if self._root.exists():
-                try:
-                    shutil.rmtree(self._root)
-                    if not hard:
-                        self._root.mkdir(parents=True, exist_ok=True)
-                except (FileNotFoundError, OSError):
-                    pass
+            _remove_cache_dir(self._root, recreate=not hard)
             if not hard:
                 self._write_stats(CacheStats())
 
@@ -851,7 +857,7 @@ def resolve_local_cache(use_cache: Optional[bool] = None) -> Optional[LocalCache
                 shutil.move(old_root, new_root)
         except Exception as e:
             log.warning(f"Failed to move cache directory: {e}. Delete old cache.")
-            shutil.rmtree(old_root)
+            _remove_cache_dir(old_root, recreate=False)
 
     _CACHE = LocalCache(
         directory=config.local_cache.directory,
