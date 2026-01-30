@@ -53,6 +53,41 @@ TASK_TO_SIM: dict[str, td.Simulation] = {}  # task_id -> Simulation
 PATH_TO_SIM: dict[str, td.Simulation] = {}  # artifact path -> Simulation
 
 
+@pytest.fixture(autouse=True)
+def _isolate_local_cache(tmp_path, monkeypatch):
+    """Keep cache operations in a temp dir and avoid moving/deleting real cache."""
+    import tidy3d.web.cache as cache_mod
+    from tidy3d.config import get_manager
+
+    real_remove_cache_dir = cache_mod._remove_cache_dir
+    temp_cache_dir = (tmp_path / "cache").resolve()
+
+    def _safe_remove_cache_dir(path, *, recreate):
+        target = Path(path).resolve()
+        allowed_root = tmp_path.resolve().parent
+        try:
+            target.relative_to(allowed_root)
+        except ValueError:
+            return
+        real_remove_cache_dir(target, recreate=recreate)
+
+    monkeypatch.setattr(cache_mod, "_CACHE", None)
+    monkeypatch.setenv("TIDY3D_LOCAL_CACHE__ENABLED", "true")
+    monkeypatch.setenv("TIDY3D_LOCAL_CACHE__DIRECTORY", str(temp_cache_dir))
+    manager = get_manager()
+    manager._runtime_overrides.clear()
+    manager._reload()
+    monkeypatch.setattr(cache_mod, "_remove_cache_dir", _safe_remove_cache_dir)
+    yield
+    # Avoid resolve_local_cache() here to prevent migration into production paths.
+    cache_mod.LocalCache(
+        directory=temp_cache_dir,
+        max_entries=config.local_cache.max_entries,
+        max_size_gb=config.local_cache.max_size_gb,
+    ).clear(hard=True)
+    cache_mod._CACHE = None
+
+
 def _reset_fake_maps():
     TASK_TO_SIM.clear()
     PATH_TO_SIM.clear()
@@ -259,7 +294,7 @@ def _reset_counters(counters: dict[str, int]) -> None:
         counters[key] = 0
 
 
-def _test_run_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data):
+def test_run_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data):
     counters = _patch_run_pipeline(monkeypatch)
     out_path = tmp_path / "result.hdf5"
     clear()
@@ -274,7 +309,7 @@ def _test_run_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data):
     assert counters == {"upload": 0, "start": 0, "monitor": 0, "download": 0}
 
 
-def _test_load_simulation_if_cached(monkeypatch, tmp_path, basic_simulation):
+def test_load_simulation_if_cached(monkeypatch, tmp_path, basic_simulation):
     counters = _patch_run_pipeline(monkeypatch)
     out_path = tmp_path / "result_load_simulation_if_cached.hdf5"
     cache = resolve_local_cache(True)
@@ -294,7 +329,7 @@ def _test_load_simulation_if_cached(monkeypatch, tmp_path, basic_simulation):
     assert sim_data_from_cache_with_path.simulation == basic_simulation
 
 
-def _test_mode_solver_caching(monkeypatch, tmp_path):
+def test_mode_solver_caching(monkeypatch, tmp_path):
     counters = _patch_run_pipeline(monkeypatch)
     tmp_file = tmp_path / "tmp.hdf5"
     # store in cache
@@ -344,7 +379,7 @@ def _test_mode_solver_caching(monkeypatch, tmp_path):
     assert load_simulation_if_cached(mode_sim, path=tmp_file) is not None
 
 
-def _test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path):
+def test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path):
     counters = _patch_run_pipeline(monkeypatch)
     monkeypatch.setattr(config.local_cache, "max_entries", 128)
     monkeypatch.setattr(config.local_cache, "max_size_gb", 10)
@@ -382,7 +417,7 @@ def _test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path):
     assert len(cache) == 3
 
 
-def _test_verbosity(monkeypatch, basic_simulation, tmp_path):
+def test_verbosity(monkeypatch, basic_simulation, tmp_path):
     _CSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")  # ANSI CSI
     _OSC8_RE = re.compile(r"\x1b\]8;.*?(?:\x1b\\|\x07)", re.DOTALL)  # OSC-8 hyperlinks
 
@@ -439,7 +474,7 @@ def _test_verbosity(monkeypatch, basic_simulation, tmp_path):
         # test for batched runs
         buf.truncate(0)
         buf.seek(0)
-        run([basic_simulation, sim3], verbose=True, path=tmp_path)
+        run([basic_simulation, sim3], verbose=True, path=tmp_path / "batch-1")
         txt = _normalize_console_text(buf.getvalue())
         assert "Got 1 simulation from cache" in txt, (
             f"Expected 'Got 1 simulation from cache' in log, got '{buf.getvalue()}'"
@@ -448,13 +483,13 @@ def _test_verbosity(monkeypatch, basic_simulation, tmp_path):
         # if some found
         buf.truncate(0)
         buf.seek(0)
-        run([basic_simulation, sim2], verbose=False, path=tmp_path)
+        run([basic_simulation, sim2], verbose=False, path=tmp_path / "batch-2")
         assert buf.getvalue().strip() == "", f"Expected empty log, got '{buf.getvalue()}'"
 
         # if all found
         buf.truncate(0)
         buf.seek(0)
-        run([basic_simulation, sim2], verbose=False, path=tmp_path)
+        run([basic_simulation, sim2], verbose=False, path=tmp_path / "batch-3")
         assert buf.getvalue().strip() == "", f"Expected empty log, got '{buf.getvalue()}'"
 
     finally:
@@ -462,7 +497,7 @@ def _test_verbosity(monkeypatch, basic_simulation, tmp_path):
         log_mod.log.handlers["console"].console = orig_console
 
 
-def _test_job_run_cache(monkeypatch, basic_simulation, tmp_path):
+def test_job_run_cache(monkeypatch, basic_simulation, tmp_path):
     counters = _patch_run_pipeline(monkeypatch)
     cache = resolve_local_cache(use_cache=True)
     cache.clear()
@@ -485,7 +520,7 @@ def _test_job_run_cache(monkeypatch, basic_simulation, tmp_path):
     assert os.path.exists(out2_path)
 
 
-def _test_autograd_cache(monkeypatch, request, tmp_path):
+def test_autograd_cache(monkeypatch, request, tmp_path):
     counters = _patch_run_pipeline(monkeypatch)
 
     # "Original" rule: the one autograd uses by default
@@ -540,7 +575,7 @@ def _test_autograd_cache(monkeypatch, request, tmp_path):
     assert len(cache) == 2
 
 
-def _test_load_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data):
+def test_load_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data):
     clear()
     counters = _patch_run_pipeline(monkeypatch)
     out_path = tmp_path / "load.hdf5"
@@ -558,7 +593,8 @@ def _test_load_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data):
     assert len(cache) == 1  # still 1 item in cache
 
 
-def _test_checksum_mismatch_triggers_refresh(monkeypatch, tmp_path, basic_simulation):
+def test_checksum_mismatch_triggers_refresh(monkeypatch, tmp_path, basic_simulation):
+    _patch_run_pipeline(monkeypatch)
     out_path = tmp_path / "checksum.hdf5"
     clear()
 
@@ -573,7 +609,7 @@ def _test_checksum_mismatch_triggers_refresh(monkeypatch, tmp_path, basic_simula
     assert len(cache) == 0
 
 
-def _test_cache_eviction_by_entries(monkeypatch, tmp_path_factory, basic_simulation):
+def test_cache_eviction_by_entries(monkeypatch, tmp_path_factory, basic_simulation):
     monkeypatch.setattr(config.local_cache, "max_entries", 1)
     cache = resolve_local_cache(use_cache=True)
     cache.clear()
@@ -593,7 +629,7 @@ def _test_cache_eviction_by_entries(monkeypatch, tmp_path_factory, basic_simulat
     assert entries[0]["simulation_hash"] == sim2._hash_self()
 
 
-def _test_cache_eviction_by_size(monkeypatch, tmp_path_factory, basic_simulation):
+def test_cache_eviction_by_size(monkeypatch, tmp_path_factory, basic_simulation):
     monkeypatch.setattr(config.local_cache, "max_size_gb", float(10_000 * 1e-9))
     cache = resolve_local_cache(use_cache=True)
     cache.clear()
@@ -613,7 +649,7 @@ def _test_cache_eviction_by_size(monkeypatch, tmp_path_factory, basic_simulation
     assert entries[0]["simulation_hash"] == sim2._hash_self()
 
 
-def _test_cache_stats_tracking(monkeypatch, tmp_path_factory, basic_simulation):
+def test_cache_stats_tracking(monkeypatch, tmp_path_factory, basic_simulation):
     monkeypatch.setattr(config.local_cache, "max_entries", 10)
     cache = resolve_local_cache(use_cache=True)
     cache.clear()
@@ -650,7 +686,7 @@ def _test_cache_stats_tracking(monkeypatch, tmp_path_factory, basic_simulation):
     cache.clear()
 
 
-def _test_cache_stats_sync(monkeypatch, tmp_path_factory, basic_simulation):
+def test_cache_stats_sync(monkeypatch, tmp_path_factory, basic_simulation):
     monkeypatch.setattr(config.local_cache, "max_entries", 10)
     cache = resolve_local_cache(use_cache=True)
     cache.clear()
@@ -687,7 +723,7 @@ def _test_cache_stats_sync(monkeypatch, tmp_path_factory, basic_simulation):
     cache.clear()
 
 
-def _test_store_and_fetch_do_not_iterate(monkeypatch, tmp_path, basic_simulation):
+def test_store_and_fetch_do_not_iterate(monkeypatch, tmp_path, basic_simulation):
     cache = resolve_local_cache(use_cache=True)
     cache.clear()
 
@@ -727,7 +763,7 @@ def _test_store_and_fetch_do_not_iterate(monkeypatch, tmp_path, basic_simulation
     cache.clear()
 
 
-def _test_configure_cache_roundtrip(monkeypatch, tmp_path):
+def test_configure_cache_roundtrip(monkeypatch, tmp_path):
     monkeypatch.setattr(config.local_cache, "enabled", True)
     monkeypatch.setattr(config.local_cache, "directory", tmp_path)
     monkeypatch.setattr(config.local_cache, "max_size_gb", 1.23)
@@ -740,7 +776,7 @@ def _test_configure_cache_roundtrip(monkeypatch, tmp_path):
     assert local_cache.max_entries == 5
 
 
-def _test_env_var_overrides(monkeypatch, tmp_path):
+def test_env_var_overrides(monkeypatch, tmp_path):
     cache_dir = tmp_path / "cache"
     monkeypatch.setenv("TIDY3D_LOCAL_CACHE__ENABLED", "true")
     monkeypatch.setenv("TIDY3D_LOCAL_CACHE__DIRECTORY", str(cache_dir))
@@ -751,7 +787,7 @@ def _test_env_var_overrides(monkeypatch, tmp_path):
 
     cache = resolve_local_cache()
     assert cache is not None
-    assert cache._root == cache_dir
+    assert cache._root == cache_dir.resolve()
     assert cache.max_size_gb == 0.5
     assert cache.max_entries == 7
 
@@ -763,9 +799,9 @@ def _test_env_var_overrides(monkeypatch, tmp_path):
     manager._reload()
 
 
-def _test_cache_cli_commands(monkeypatch, tmp_path_factory, basic_simulation):
+def test_cache_cli_commands(monkeypatch, tmp_path_factory, basic_simulation, tmp_path):
     runner = CliRunner()
-    cache_dir = tmp_path_factory.mktemp("cli_cache")
+    cache_dir = tmp_path
     artifact_dir = tmp_path_factory.mktemp("cli_cache_artifact")
 
     monkeypatch.setattr(config.local_cache, "enabled", True)
@@ -804,28 +840,3 @@ def _test_cache_cli_commands(monkeypatch, tmp_path_factory, basic_simulation):
     list_after = runner.invoke(tidy3d_cli, ["cache", "list"])
     assert list_after.exit_code == 0
     assert "Cache is empty." in list_after.output
-
-
-def test_cache_sequential(
-    monkeypatch, tmp_path, tmp_path_factory, basic_simulation, fake_data, request
-):
-    """Run all critical cache tests in sequence to ensure stability."""
-    monkeypatch.setattr(config.local_cache, "enabled", True)
-
-    _test_env_var_overrides(monkeypatch, tmp_path)
-    _test_load_simulation_if_cached(monkeypatch, tmp_path, basic_simulation)
-    _test_run_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data)
-    _test_load_cache_hit(monkeypatch, tmp_path, basic_simulation, fake_data)
-    _test_checksum_mismatch_triggers_refresh(monkeypatch, tmp_path, basic_simulation)
-    _test_cache_eviction_by_entries(monkeypatch, tmp_path_factory, basic_simulation)
-    _test_cache_eviction_by_size(monkeypatch, tmp_path_factory, basic_simulation)
-    _test_cache_stats_tracking(monkeypatch, tmp_path_factory, basic_simulation)
-    _test_cache_stats_sync(monkeypatch, tmp_path_factory, basic_simulation)
-    _test_run_cache_hit_async(monkeypatch, basic_simulation, tmp_path)
-    _test_job_run_cache(monkeypatch, basic_simulation, tmp_path)
-    _test_autograd_cache(monkeypatch, request, tmp_path)
-    _test_configure_cache_roundtrip(monkeypatch, tmp_path)
-    _test_store_and_fetch_do_not_iterate(monkeypatch, tmp_path, basic_simulation)
-    _test_mode_solver_caching(monkeypatch, tmp_path)
-    _test_verbosity(monkeypatch, basic_simulation, tmp_path)
-    _test_cache_cli_commands(monkeypatch, tmp_path_factory, basic_simulation)
