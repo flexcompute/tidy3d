@@ -1920,12 +1920,17 @@ def test_gaussian_doping_initialization():
 
 
 def test_gaussian_doping_sigma_calculation():
-    """Test sigma calculation in GaussianDoping."""
+    """Test sigma calculation in GaussianDoping and ref_con validator."""
     box = td.GaussianDoping(
         size=(1, 1, 1), ref_con=1e15, concentration=1e18, width=0.1, source="xmin"
     )
     expected_sigma = np.sqrt(-(0.1**2) / (2 * np.log(1e15 / 1e18)))
     assert np.isclose(box.sigma, expected_sigma), "Sigma calculation is incorrect."
+
+    with pytest.raises(pd.ValidationError, match="must be less than.*concentration"):
+        _ = td.GaussianDoping(
+            size=(1, 1, 1), ref_con=1e19, concentration=1e18, width=0.1, source="xmin"
+        )
 
 
 def test_gaussian_doping_get_contrib():
@@ -1973,6 +1978,44 @@ def test_gaussian_doping_bounds_behavior():
         source="xmin",
     )
     assert box.bounds == box_coords, "Bounds should match provided box_coords."
+
+
+def test_gaussian_doping_validator_source():
+    """Test validator for source face."""
+    valid_sources = ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"]
+    for source in valid_sources:
+        _ = td.GaussianDoping(
+            size=(1, 1, 1), ref_con=1e15, concentration=1e18, width=0.1, source=source
+        )
+
+    with pytest.raises(pd.ValidationError):
+        _ = td.GaussianDoping(
+            size=(1, 1, 1), ref_con=1e15, concentration=1e18, width=0.1, source="invalid"
+        )
+
+
+def test_gaussian_doping_validator_width():
+    """Test validator for width vs size."""
+    width = 0.1
+    _ = td.GaussianDoping(
+        size=(0.2, 0.2, 0.2), ref_con=1e15, concentration=1e18, width=width, source="xmin"
+    )
+    _ = td.GaussianDoping(
+        size=(np.inf, 1, 1), ref_con=1e15, concentration=1e18, width=width, source="xmin"
+    )
+
+    with AssertLogLevel("WARNING", contains_str="'x' direction"):
+        _ = td.GaussianDoping(
+            size=(0.15, 1, 1), ref_con=1e15, concentration=1e18, width=width, source="xmin"
+        )
+    with AssertLogLevel("WARNING", contains_str="'y' direction"):
+        _ = td.GaussianDoping(
+            size=(1, 0.15, 1), ref_con=1e15, concentration=1e18, width=width, source="xmin"
+        )
+    with AssertLogLevel("WARNING", contains_str="'z' direction"):
+        _ = td.GaussianDoping(
+            size=(1, 1, 0.15), ref_con=1e15, concentration=1e18, width=width, source="xmin"
+        )
 
 
 def test_2D_doping_box():
