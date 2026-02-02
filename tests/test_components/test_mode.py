@@ -544,11 +544,16 @@ def _make_tensorial_mode_sim(angle_theta=0, fully_anisotropic=False):
 
 def test_tensorial_mode_solver_error_without_extras(monkeypatch):
     """Test that attempting to run a tensorial mode solver locally without tidy3d-extras raises an error."""
-    import tidy3d.components.mode.mode_solver as mode_solver_module
+    from tidy3d.components.mode import mode_solver as mode_solver_module
     from tidy3d.components.mode.solver import compute_modes
+    from tidy3d.packaging import tidy3d_extras
 
     # Mock _get_solver_func to always return the base solver (simulating no tidy3d-extras)
     monkeypatch.setattr(mode_solver_module, "_get_solver_func", lambda: compute_modes)
+
+    # Also disable local subpixel to prevent tidy3d-extras from bypassing our patched code path
+    # when tidy3d-extras is installed and licensed
+    monkeypatch.setitem(tidy3d_extras, "use_local_subpixel", False)
 
     # Test with angle_theta (angled mode) - should raise NotImplementedError from base solver
     sim = _make_tensorial_mode_sim(angle_theta=np.pi / 6)

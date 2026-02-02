@@ -133,6 +133,7 @@ def _get_solver_func():
 
             return ExtrasEigSolver.compute_modes
     except (Tidy3dImportError, ImportError, AttributeError):
+        # tidy3d-extras is optional; if unavailable or incompatible, fall back to base solver.
         pass
 
     # Fall back to base solver (will raise error if tensorial solve is attempted)
