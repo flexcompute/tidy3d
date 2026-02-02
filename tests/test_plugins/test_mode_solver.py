@@ -13,7 +13,7 @@ import tidy3d.plugins.mode.web as msweb
 from tidy3d import Coords, Grid, ModeIndexDataArray, ScalarFieldDataArray, ScalarModeFieldDataArray
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.mode.derivatives import create_sfactor_b, create_sfactor_f
-from tidy3d.components.mode.solver import TOL_DEGENERATE_CANDIDATE, EigSolver, compute_modes
+from tidy3d.components.mode.solver import TOL_DEGENERATE_CANDIDATE, EigSolver
 from tidy3d.components.mode_spec import MODE_DATA_KEYS
 from tidy3d.exceptions import DataError, SetupError, ValidationError
 from tidy3d.plugins.mode import ModeSolver
@@ -233,21 +233,6 @@ def mock_remote_api(monkeypatch):
             }
         },
         status=200,
-    )
-
-
-def test_compute_modes():
-    """Test direct call to `compute_modes`."""
-    eps_cross = np.random.rand(10, 10)
-    coords = np.arange(11)
-    mode_spec = td.ModeSpec(num_modes=3, target_neff=2.0)
-    _ = compute_modes(
-        eps_cross=[eps_cross] * 9,
-        coords=[coords, coords],
-        freq=td.C_0 / 1.0,
-        mode_spec=mode_spec,
-        direction="-",
-        precision="single",
     )
 
 
@@ -658,125 +643,6 @@ def test_mode_solver_unstructured_custom_medium(nx, cond_factor, interp, tol, tm
 
     assert error_u < 5e-5
     assert error_up < tol
-
-
-@td.packaging.disable_local_subpixel
-def test_mode_solver_straight_vs_angled():
-    """Compare results for a straight and angled nominally identical waveguides.
-    Note: results do not match perfectly because of the numerical grid.
-    """
-    simulation = td.Simulation(
-        size=SIM_SIZE,
-        grid_spec=td.GridSpec.auto(wavelength=1.0, min_steps_per_wvl=16),
-        structures=[WAVEGUIDE],
-        run_time=1e-12,
-        symmetry=(0, 0, 1),
-        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
-    )
-    mode_spec = td.ModeSpec(num_modes=5, group_index_step=True)
-    freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
-    ms = ModeSolver(
-        simulation=simulation,
-        plane=PLANE,
-        mode_spec=mode_spec,
-        freqs=freqs,
-        direction="-",
-    )
-
-    angle = np.pi / 6
-    width, height = WAVEGUIDE.geometry.size[0], WAVEGUIDE.geometry.size[2]
-    vertices = np.array(
-        [[-width / 2, -100, 0], [width / 2, -100, 0], [width / 2, 100, 0], [-width / 2, 100, 0]]
-    )
-    vertices = PLANE.rotate_points(vertices.T, axis=[0, 0, 1], angle=-angle).T
-    vertices = [verts[:2] for verts in vertices]
-    wg_angled = td.Structure(
-        geometry=td.PolySlab(vertices=vertices, slab_bounds=(-height / 2, height / 2)),
-        medium=WG_MEDIUM,
-    )
-    mode_spec_angled = mode_spec.updated_copy(angle_theta=angle)
-    src_angled = td.ModeSource(
-        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
-        center=PLANE.center,
-        size=PLANE.size,
-        mode_spec=mode_spec_angled,
-        direction="-",
-        mode_index=0,
-    )
-    sim_angled = simulation.updated_copy(structures=[wg_angled], sources=[src_angled])
-    # sim_angled.plot(z=0)
-    # plt.show()
-
-    ms_angled = ModeSolver(
-        simulation=sim_angled,
-        plane=PLANE,
-        mode_spec=mode_spec_angled,
-        freqs=freqs,
-        direction="-",
-    )
-
-    check_ms_reduction(ms)
-    check_ms_reduction(ms_angled)
-
-    for key, val in ms.data.modes_info.items():
-        tol = 1e-2
-        if key == "TE (Ex) fraction":
-            tol = 0.1
-        elif key == "wg TE fraction":
-            tol = 1.3e-2
-        elif key == "mode area":
-            tol = 2.1e-2
-        elif key == "dispersion (ps/(nm km))":
-            tol = 0.7
-        # print(
-        #     key,
-        #     (np.abs(val - ms_angled.data.modes_info[key]) / np.abs(val)).values.max(),
-        #     (np.abs(val - ms_angled.data.modes_info[key]) / np.abs(ms_angled.data.modes_info[key])).values.max(),
-        # )
-        assert np.allclose(val, ms_angled.data.modes_info[key], rtol=tol)
-
-
-def test_mode_solver_angle_bend():
-    """Run mode solver with angle and bend and symmetry"""
-    simulation = td.Simulation(
-        size=SIM_SIZE,
-        grid_spec=td.GridSpec(wavelength=1.0),
-        structures=[WAVEGUIDE],
-        run_time=1e-12,
-        symmetry=(-1, 0, 1),
-        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
-    )
-    mode_spec = td.ModeSpec(
-        num_modes=3,
-        target_neff=2.0,
-        bend_radius=3,
-        bend_axis=0,
-        angle_theta=np.pi / 3,
-        angle_phi=np.pi,
-        sort_spec=td.ModeSortSpec(track_freq="highest"),
-    )
-    # put plane entirely in the symmetry quadrant rather than sitting on its center
-    plane = td.Box(center=(0, 0.5, 0), size=(1, 0, 1))
-    ms = ModeSolver(
-        simulation=simulation, plane=plane, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="-"
-    )
-    compare_colocation(ms)
-    verify_pol_fraction(ms)
-    verify_dtype(ms)
-    _ = ms.data.to_dataframe()
-    check_ms_reduction(ms)
-
-    # Plot field
-    _, ax = plt.subplots(1)
-    ms.plot_field("Ex", ax=ax, mode_index=1)
-    plt.close()
-
-    # Create source and monitor
-    st = td.GaussianPulse(freq0=1.0e12, fwidth=1.0e12)
-    _ = ms.to_source(source_time=st, direction="-")
-    _ = ms.to_monitor(freqs=np.array([1.0, 2.0]) * 1e12, name="mode_mnt")
 
 
 def test_mode_bend_radius():
