@@ -9,10 +9,9 @@ def process_robots_txt(app, exception):
     with open(robots_file) as f:
         contents = f.read()
 
-    site_map = "/".join(
-        [app.config["html_baseurl"], app.config["language"], app.config["version"], "sitemap.xml"]
-    ).replace("//", "/")
-    contents += f"\nSitemap: {site_map}"
+    site_map = f"{app.config['html_baseurl'].rstrip('/')}/en/latest/sitemap.xml"
+    contents += f"\nSitemap: {site_map}\n"
+    contents += "Disallow: /projects/tidy3d/en/v*/\n"
 
     # Update the robots.txt file with the modified contents
     with open(robots_file, "w") as f:
