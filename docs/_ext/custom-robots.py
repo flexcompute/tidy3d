@@ -27,7 +27,8 @@ def process_robots_txt(app, exception):
     lines = [
         line
         for line in contents.splitlines()
-        if not line.startswith("Sitemap:") and line.strip() != "Disallow: /projects/tidy3d/en/v*/"
+        if not line.startswith("Sitemap:")
+        and line.strip().lower() != "disallow: /projects/tidy3d/en/v*/"
     ]
     inserted = False
     for index, line in enumerate(lines):
