@@ -3,6 +3,7 @@
 from typing import Union
 
 from tidy3d.components.geometry.geometry2d.base import Geometry2D
+from tidy3d.components.geometry.geometry2d.path import ArcSegment, Path2D
 from tidy3d.components.geometry.geometry2d.polygon import Polygon2D
 from tidy3d.components.geometry.geometry2d.primitives import Circle2D, Rectangle2D
 
@@ -10,6 +11,7 @@ from tidy3d.components.geometry.geometry2d.primitives import Circle2D, Rectangle
 # Update this when adding new Geometry2D subclasses
 Geometry2DType = Union[
     Circle2D,
+    Path2D,
     Polygon2D,
     Rectangle2D,
 ]
@@ -18,9 +20,11 @@ Geometry2DType = Union[
 Polygon2D.update_forward_refs(Geometry2DType=Geometry2DType)
 
 __all__ = [
+    "ArcSegment",
     "Geometry2D",
     "Geometry2DType",
     "Circle2D",
+    "Path2D",
     "Polygon2D",
     "Rectangle2D",
 ]
