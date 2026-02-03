@@ -147,24 +147,49 @@ structure = loader.load(use_lossy_dielectric=False)
 structure = loader.load(frequency_range=(1e9, 20e9))
 ```
 
-### Include Dielectric Layers
+### Include/Exclude Dielectric Layers
+
+By default, dielectric layers are included in the stackup (`include_dielectrics=True`):
 
 ```python
-# Include dielectric layers in stackup
-structure = loader.load(include_dielectrics=True)
+# Dielectrics included by default
+structure = loader.load()
+
+# Exclude dielectric layers (only conductors and drills)
+structure = loader.load(include_dielectrics=False)
 ```
 
-### Drill Layer Span
+### DRILL Layer Support
 
-Drill layers specify `START_NAME` and `END_NAME` for via spans:
+DRILL layers (vias) are automatically handled:
+
+1. **Z-span calculation**: Drill layers span from `START_NAME` to `END_NAME` layers
+   as specified in the ODB++ matrix file.
+
+2. **Geometry loading**: Via pads (typically Circle2D) are loaded and placed at
+   the correct z-bounds.
+
+3. **Medium assignment**: Drill layers use PECMedium or LossyMetalMedium
+   (conductive) like signal layers.
 
 ```python
 from tidy3d.plugins.odb import StackupBuilder
 
 builder = StackupBuilder(odb_path, loader.matrix, step_name)
+
+# Inspect drill layers
 for drill in builder.get_drill_layers():
     print(f"{drill.name}: {drill.start_layer} -> {drill.end_layer}")
+
+# Get z-span for a drill layer
+z_bounds_map = {spec.name: spec.z_bounds for spec in stackup.layers}
+for drill in builder.get_drill_layers():
+    span = builder.get_drill_z_span(drill, z_bounds_map)
+    print(f"{drill.name}: z=[{span[0]:.2f}, {span[1]:.2f}] µm")
 ```
+
+**Note**: If `START_NAME` or `END_NAME` references a non-physical layer (e.g.,
+SILK_SCREEN), the loader automatically finds an adjacent physical layer.
 
 ## Limitations
 
@@ -222,10 +247,19 @@ class ODBLoader:
     
     def load(
         self,
-        step: str = None,  # Default: first step
-        layers: list[str] = None,  # Default: all layers
+        step: str = None,                       # Default: first step
+        layers: list[str] = None,               # Default: all layers
+        stackup: Stackup = None,                # User-provided stackup
+        layer_thicknesses: dict[str, float] = None,  # Per-layer overrides (µm)
+        default_conductor_thickness: float = 35.0,   # 1oz copper
+        default_dielectric_thickness: float = 200.0,
+        default_permittivity: float = 4.2,           # FR4
+        include_dielectrics: bool = True,            # Include dielectric layers
+        frequency_range: tuple[float, float] = (0.1e9, 10e9),
+        use_lossy_metal: bool = True,                # LossyMetalMedium vs PEC
+        use_lossy_dielectric: bool = True,           # Lossy vs lossless
     ) -> LayeredStructure:
-        """Load ODB++ into LayeredStructure."""
+        """Load ODB++ into LayeredStructure with automatic stackup."""
 ```
 
 ### StackupBuilder
@@ -247,9 +281,12 @@ class StackupBuilder:
         default_conductor_thickness: float = 35.0,
         default_dielectric_thickness: float = 200.0,
         default_permittivity: float = 4.2,
-        include_dielectrics: bool = False,
+        include_dielectrics: bool = True,  # Changed: now True by default
+        use_lossy_metal: bool = True,
+        use_lossy_dielectric: bool = True,
+        frequency_range: tuple[float, float] = (0.1e9, 10e9),
     ) -> Stackup:
-        """Build Stackup with z_bounds and mediums."""
+        """Build Stackup with z_bounds, mediums, and drill layers."""
     
     def get_drill_layers(self) -> list[LayerStackupInfo]:
         """Get drill layer definitions with start/end spans."""

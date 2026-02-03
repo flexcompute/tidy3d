@@ -131,7 +131,7 @@ class ODBLoader:
         default_conductor_thickness: float = 35.0,
         default_dielectric_thickness: float = 200.0,
         default_permittivity: float = 4.2,
-        include_dielectrics: bool = False,
+        include_dielectrics: bool = True,
         frequency_range: tuple[float, float] = (0.1e9, 10e9),
         use_lossy_metal: bool = True,
         use_lossy_dielectric: bool = True,
@@ -155,7 +155,7 @@ class ODBLoader:
         default_permittivity : float
             Default dielectric constant for FR4 (default: 4.2).
         include_dielectrics : bool
-            If True, include dielectric layers in stackup (default: False).
+            If True, include dielectric layers in stackup (default: True).
         frequency_range : tuple[float, float]
             Frequency range (f_min, f_max) in Hz for lossy material models.
             Default is (0.1e9, 10e9) Hz.

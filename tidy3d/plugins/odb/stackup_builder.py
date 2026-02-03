@@ -261,25 +261,36 @@ def parse_stackup_data(
             except ValueError:
                 pass
 
-        # Copper weight (oz/ft²) - derive thickness: 1 oz ≈ 35 µm
-        # This is the most reliable way to get conductor thickness
+        # Copper weight/thickness - different ODB++ sources use different conventions:
+        #
+        # Convention 1 (ieee1_microstrip): copper_weight in mm (e.g., 0.01563 mm = 15.63 µm)
+        # Convention 2 (plasma_odb): copper_weight in µm directly (e.g., 16 µm)
+        # Convention 3: copper_weight in oz/ft² (e.g., 0.5 oz = 17.5 µm, 1 oz = 35 µm)
+        #
+        # Heuristic to detect convention:
+        # - Value < 0.1: likely mm, multiply by 1000 to get µm
+        # - Value 0.1 to 5: likely oz, multiply by 35 to get µm
+        # - Value > 5: likely µm or 16ths-oz, use as-is or divide by 16
         if "copper_weight" in layer_attrs:
             try:
-                # copper_weight can be in various formats:
-                # - Direct oz value (0.5, 1, 2)
-                # - Some tools use 16ths of oz (8=0.5oz, 16=1oz, 32=2oz)
                 cw = float(layer_attrs["copper_weight"])
                 if cw > 0:
                     info.copper_weight = cw
-                    # Determine if it's direct oz or 16ths
-                    # If value is small (< 10), assume direct oz
-                    # If value is larger, assume 16ths of oz
-                    if cw < 10:
-                        # Direct oz: 0.5oz=17.5µm, 1oz=35µm, 2oz=70µm
+
+                    if cw < 0.1:
+                        # Convention 1: Value in mm (e.g., 0.01563 mm → 15.63 µm)
+                        info.thickness = cw * 1000.0
+                    elif cw < 5:
+                        # Convention 3: Value in oz (e.g., 0.5 oz → 17.5 µm)
                         info.thickness = cw * 35.0
-                    else:
-                        # 16ths of oz: 8=0.5oz, 16=1oz, 32=2oz
+                    elif cw < 100:
+                        # Convention 2 or 16ths: Value likely in µm or 16ths-oz
+                        # 16 µm is reasonable, but 16/16 oz = 35 µm is also valid
+                        # Use 16ths-oz conversion for values 5-100
                         info.thickness = (cw / 16.0) * 35.0
+                    else:
+                        # Very large values: assume already in µm
+                        info.thickness = cw
             except ValueError:
                 pass
 
@@ -411,7 +422,7 @@ class StackupBuilder:
         default_conductor_thickness: float = 35.0,
         default_dielectric_thickness: float = 200.0,
         default_permittivity: float = 4.2,
-        include_dielectrics: bool = False,
+        include_dielectrics: bool = True,
         frequency_range: Tuple[float, float] = DEFAULT_FREQ_RANGE,
         use_lossy_metal: bool = True,
         use_lossy_dielectric: bool = True,
@@ -429,7 +440,7 @@ class StackupBuilder:
         default_permittivity : float
             Default dielectric constant for FR4.
         include_dielectrics : bool
-            If True, include dielectric layers in stackup.
+            If True, include dielectric layers in stackup (default: True).
         frequency_range : tuple[float, float]
             Frequency range (f_min, f_max) in Hz for lossy material models.
             Default is (0.1e9, 10e9) Hz.
@@ -478,6 +489,41 @@ class StackupBuilder:
                 LayerSpec(
                     name=layer_info.name,
                     z_bounds=z_bounds,
+                    medium=medium,
+                )
+            )
+
+        # Add DRILL layers with calculated z-spans
+        drill_layers = self.get_drill_layers()
+        for drill_layer in drill_layers:
+            if layer_filter and drill_layer.name not in layer_filter:
+                continue
+
+            drill_z_span = self.get_drill_z_span(drill_layer, z_bounds_map)
+            if drill_z_span is None:
+                self._warnings.append(
+                    f"Could not calculate z-span for drill layer '{drill_layer.name}' "
+                    f"(START={drill_layer.start_layer}, END={drill_layer.end_layer})"
+                )
+                continue
+
+            # Drill/via layers use PEC or LossyMetal (conductive)
+            if use_lossy_metal:
+                try:
+                    import tidy3d.rf as rf
+                    medium = rf.LossyMetalMedium(
+                        conductivity=DEFAULT_COPPER_CONDUCTIVITY,
+                        frequency_range=frequency_range,
+                    )
+                except ImportError:
+                    medium = PECMedium()
+            else:
+                medium = PECMedium()
+
+            layer_specs.append(
+                LayerSpec(
+                    name=drill_layer.name,
+                    z_bounds=drill_z_span,
                     medium=medium,
                 )
             )
@@ -661,6 +707,10 @@ class StackupBuilder:
     ) -> Optional[tuple[float, float]]:
         """Get z-span for a drill layer.
 
+        The drill spans from the bottom of the START layer to the top of the
+        END layer. This follows ODB++ convention where START_NAME is the
+        top-most layer and END_NAME is the bottom-most layer in the span.
+
         Parameters
         ----------
         drill_layer : LayerStackupInfo
@@ -671,7 +721,12 @@ class StackupBuilder:
         Returns
         -------
         Optional[tuple[float, float]]
-            (z_min, z_max) spanning from start to end layer.
+            (z_min, z_max) spanning from end layer top to start layer bottom.
+
+        Notes
+        -----
+        If START or END layer is non-physical (e.g., SILK_SCREEN), the method
+        attempts to find an adjacent physical layer. If not found, returns None.
         """
         start = drill_layer.start_layer
         end = drill_layer.end_layer
@@ -682,13 +737,76 @@ class StackupBuilder:
         start_bounds = z_bounds_map.get(start)
         end_bounds = z_bounds_map.get(end)
 
+        # If start layer is non-physical, try to find an adjacent physical layer
+        if not start_bounds:
+            start_bounds = self._find_adjacent_layer_bounds(start, z_bounds_map, "below")
+            if start_bounds:
+                self._warnings.append(
+                    f"Drill '{drill_layer.name}': START layer '{start}' is non-physical, "
+                    f"using adjacent layer bounds"
+                )
+
+        # If end layer is non-physical, try to find an adjacent physical layer
+        if not end_bounds:
+            end_bounds = self._find_adjacent_layer_bounds(end, z_bounds_map, "above")
+            if end_bounds:
+                self._warnings.append(
+                    f"Drill '{drill_layer.name}': END layer '{end}' is non-physical, "
+                    f"using adjacent layer bounds"
+                )
+
         if not start_bounds or not end_bounds:
             return None
 
-        # Drill spans from top of start layer to bottom of end layer
-        # (or vice versa depending on direction)
+        # Drill z-span spans the full vertical extent from bottom to top
         z_min = min(start_bounds[0], end_bounds[0])
         z_max = max(start_bounds[1], end_bounds[1])
 
         return (z_min, z_max)
+
+    def _find_adjacent_layer_bounds(
+        self, layer_name: str, z_bounds_map: dict[str, tuple[float, float]], direction: str
+    ) -> Optional[tuple[float, float]]:
+        """Find bounds of an adjacent physical layer when target is non-physical.
+
+        Parameters
+        ----------
+        layer_name : str
+            Name of the non-physical layer.
+        z_bounds_map : dict[str, tuple[float, float]]
+            Layer name to z_bounds mapping.
+        direction : str
+            "above" to look for higher-z layer, "below" for lower-z layer.
+
+        Returns
+        -------
+        Optional[tuple[float, float]]
+            Bounds of adjacent physical layer, or None if not found.
+        """
+        # Find the row of the target layer
+        target_row = None
+        for layer in self.stackup_data.layers:
+            if layer.name == layer_name:
+                target_row = layer.row
+                break
+
+        if target_row is None:
+            return None
+
+        # Sort layers by row
+        sorted_layers = sorted(self.stackup_data.layers, key=lambda x: x.row)
+
+        # Find adjacent physical layer based on direction
+        if direction == "below":
+            # For START layer, look at layers with higher row number (below in matrix = above in z)
+            for layer in sorted_layers:
+                if layer.row > target_row and layer.name in z_bounds_map:
+                    return z_bounds_map[layer.name]
+        else:  # above
+            # For END layer, look at layers with lower row number (above in matrix = below in z)
+            for layer in reversed(sorted_layers):
+                if layer.row < target_row and layer.name in z_bounds_map:
+                    return z_bounds_map[layer.name]
+
+        return None
 
