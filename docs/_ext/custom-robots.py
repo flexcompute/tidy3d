@@ -11,12 +11,12 @@ def process_robots_txt(app, exception):
 
     expected_baseurl = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
     html_baseurl = f"{app.config['html_baseurl'].rstrip('/')}/"
-    if html_baseurl != expected_baseurl:
+    if app.config.get("version") == "latest" and html_baseurl != expected_baseurl:
         raise ValueError(
             "html_baseurl must be the latest docs URL for robots.txt generation. "
             f"Expected {expected_baseurl!r}, got {html_baseurl!r}."
         )
-    site_map = f"{html_baseurl.rstrip('/')}/sitemap.xml"
+    site_map = f"{expected_baseurl.rstrip('/')}/sitemap.xml"
 
     lines = [
         line
