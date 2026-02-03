@@ -389,8 +389,8 @@ class GaussianPulse(Pulse):
         pulse = cls(freq0=freq0, fwidth=fwidth, **kwargs)
         if np.abs(pulse._rel_amp_freq(fmin)) < WARN_SOURCE_AMPLITUDE:
             log.warning(
-                "Source amplitude is not sufficiently large throughout the specified frequency range, "
-                "which can result in inaccurate simulation results. Please decrease the frequency range.",
+                "Default source time profile is less accurate for the specified broadband frequency range. "
+                "For more accurate results, consider reducing the frequency range or using a 'BroadbandSource'.",
             )
         return pulse
 

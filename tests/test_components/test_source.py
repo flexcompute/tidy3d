@@ -133,7 +133,7 @@ def test_gaussian_from_frequency_range():
     g2 = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax)
     assert g2.remove_dc_component
 
-    with AssertLogLevel("WARNING", contains_str="not sufficiently large"):
+    with AssertLogLevel("WARNING", contains_str="broadband"):
         g_small = td.GaussianPulse.from_frequency_range(
             fmin=fmin, fmax=60e9, remove_dc_component=True
         )
