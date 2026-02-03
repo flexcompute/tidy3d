@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from urllib.parse import urlsplit, urlunsplit
 
 
 def process_robots_txt(app, exception):
@@ -10,19 +9,14 @@ def process_robots_txt(app, exception):
     with open(robots_file) as f:
         contents = f.read()
 
-    html_baseurl = app.config["html_baseurl"].rstrip("/")
-    parts = urlsplit(html_baseurl)
-    path = parts.path.rstrip("/")
-    segments = [segment for segment in path.split("/") if segment]
-    if (
-        len(segments) >= 2
-        and segments[-2] == "en"
-        and (segments[-1] == "latest" or segments[-1].startswith("v"))
-    ):
-        segments = segments[:-2]
-    base_path = f"/{'/'.join(segments)}" if segments else ""
-    base_url = urlunsplit((parts.scheme, parts.netloc, base_path, "", ""))
-    site_map = f"{base_url}/en/latest/sitemap.xml"
+    expected_baseurl = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
+    html_baseurl = f"{app.config['html_baseurl'].rstrip('/')}/"
+    if html_baseurl != expected_baseurl:
+        raise ValueError(
+            "html_baseurl must be the latest docs URL for robots.txt generation. "
+            f"Expected {expected_baseurl!r}, got {html_baseurl!r}."
+        )
+    site_map = f"{html_baseurl.rstrip('/')}/sitemap.xml"
 
     lines = [
         line
