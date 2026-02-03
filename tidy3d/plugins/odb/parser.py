@@ -838,6 +838,25 @@ class ProfileData:
     surface: Optional[SurfaceRecord] = None
 
 
+@dataclass
+class EDAData:
+    """Parsed EDA data file for net assignments.
+
+    Attributes
+    ----------
+    units : str
+        "MM" or "INCH".
+    layer_names : list[str]
+        Layer names in index order from LYR line.
+    net_assignments : dict[tuple[str, int], str]
+        Mapping from (layer_name, feature_index) to net name.
+    """
+
+    units: str = "MM"
+    layer_names: list[str] = field(default_factory=list)
+    net_assignments: dict[tuple[str, int], str] = field(default_factory=dict)
+
+
 def read_profile_data(
     odb_path: Path, step_name: str, layer_name: Optional[str] = None
 ) -> ProfileData:
@@ -885,4 +904,104 @@ def read_profile_data(
                 return result
 
     return result
+
+
+def parse_eda_data(content: str) -> EDAData:
+    """Parse EDA data file content for net assignments.
+
+    Parameters
+    ----------
+    content : str
+        Raw text content of eda/data file.
+
+    Returns
+    -------
+    EDAData
+        Parsed net assignment data.
+
+    Notes
+    -----
+    EDA data format:
+    - `LYR <layer1> <layer2> ...` - Layer names in index order
+    - `NET <name>` - Start of a net block
+    - `FID <type> <layer_idx> <feature_idx>` - Feature assignment
+      - type: C (copper), L (line), H (hole), etc.
+
+    Example
+    -------
+    >>> content = open("design.odb/steps/pcb/eda/data").read()
+    >>> eda = parse_eda_data(content)
+    >>> net = eda.net_assignments.get(("TRACE", 0))  # Get net for feature 0 on TRACE
+    """
+    data = EDAData()
+    lines = content.split("\n")
+    current_net: Optional[str] = None
+
+    for line in lines:
+        line = line.strip()
+
+        # Skip comments and empty lines
+        if not line or line.startswith("#"):
+            continue
+
+        # Units
+        if line.startswith("UNITS="):
+            data.units = line.split("=")[1].strip()
+            continue
+
+        # Layer index mapping: LYR <layer1> <layer2> ...
+        if line.startswith("LYR "):
+            # Parse layer names (space-separated after "LYR ")
+            layer_part = line[4:].strip()
+            data.layer_names = layer_part.split()
+            continue
+
+        # Net definition: NET <name> [;;ID=xxx]
+        if line.startswith("NET "):
+            # Extract net name (before any ";;" attributes)
+            net_part = line[4:].split(";;")[0].strip()
+            current_net = net_part
+            continue
+
+        # Feature ID: FID <type> <layer_idx> <feature_idx>
+        if line.startswith("FID ") and current_net is not None:
+            parts = line.split()
+            if len(parts) >= 4:
+                try:
+                    # parts[1] = type (C, L, H, etc.)
+                    layer_idx = int(parts[2])
+                    feature_idx = int(parts[3])
+
+                    # Map layer index to layer name
+                    if 0 <= layer_idx < len(data.layer_names):
+                        layer_name = data.layer_names[layer_idx]
+                        data.net_assignments[(layer_name, feature_idx)] = current_net
+                except (ValueError, IndexError):
+                    pass
+            continue
+
+    return data
+
+
+def read_eda_data(odb_path: Path, step_name: str) -> EDAData:
+    """Read and parse EDA data file for net assignments.
+
+    Parameters
+    ----------
+    odb_path : Path
+        Path to ODB++ root directory.
+    step_name : str
+        Step name.
+
+    Returns
+    -------
+    EDAData
+        Parsed EDA data, or empty EDAData if file doesn't exist.
+    """
+    eda_path = odb_path / "steps" / step_name / "eda" / "data"
+    if not eda_path.exists():
+        return EDAData()
+
+    content = eda_path.read_text(encoding="utf-8", errors="ignore")
+    return parse_eda_data(content)
 

@@ -10,7 +10,7 @@ import math
 import warnings
 import tidy3d as td
 from pathlib import Path
-from typing import Generator, Optional, Union
+from typing import Generator, List, Optional, Union
 
 from tidy3d.components.geometry.geometry2d import (
     Circle2D,
@@ -26,12 +26,14 @@ from tidy3d.components.geometry.layout import (
 )
 from tidy3d.plugins.odb.parser import (
     ArcRecord,
+    EDAData,
     FeaturesData,
     LineRecord,
     MatrixData,
     PadRecord,
     PolygonContour,
     SurfaceRecord,
+    read_eda_data,
     read_features,
     read_matrix,
     read_profile_data,
@@ -44,6 +46,19 @@ from tidy3d.plugins.odb.utils import (
     is_full_circle,
     split_full_circle,
 )
+
+# Tolerance for endpoint matching (in microns) - matches RF GUI approach
+MERGE_TOLERANCE = 1e-6
+
+
+def _endpoints_match(x1: float, y1: float, x2: float, y2: float) -> bool:
+    """Check if two points are within tolerance."""
+    return abs(x1 - x2) <= MERGE_TOLERANCE and abs(y1 - y2) <= MERGE_TOLERANCE
+
+
+def _widths_match(w1: float, w2: float) -> bool:
+    """Check if two widths are within tolerance."""
+    return abs(w1 - w2) <= MERGE_TOLERANCE
 
 
 class ODBLoader:
@@ -72,7 +87,6 @@ class ODBLoader:
     -----
     This is the MVP implementation with the following limitations:
 
-    - Net assignment not implemented (all geometries have net=None)
     - Trace grouping not implemented (each L/A record is a separate Path2D)
     - Unknown symbols are skipped with warning
     - Oval symbols are approximated as rectangles
@@ -136,6 +150,7 @@ class ODBLoader:
         frequency_range: tuple[float, float] = (0.1e9, 10e9),
         use_lossy_metal: bool = True,
         use_lossy_dielectric: bool = True,
+        group_traces: bool = True,
     ) -> LayeredStructure:
         """Load ODB++ into LayeredStructure.
 
@@ -168,6 +183,10 @@ class ODBLoader:
             If True, use FastDispersionFitter.constant_loss_tangent_model() for
             dielectric layers with loss tangent from ODB++ attributes.
             If False, use lossless Medium. Default is True.
+        group_traces : bool
+            If True (default), merge consecutive connected Line/Arc records
+            into multi-segment Path2D objects. This reduces geometry count
+            and produces proper traces with end caps only at trace endpoints.
 
         Returns
         -------
@@ -182,7 +201,8 @@ class ODBLoader:
         - Dielectric layers use constant_loss_tangent_model if loss tangent is
           available in ODB++ attributes
         - Unknown symbols are skipped with warning
-        - Net assignment not yet implemented (all geometries have net=None)
+        - Trace grouping merges consecutive L/A records with matching width,
+          net, and connected endpoints into single Path2D objects
 
         Example
         -------
@@ -245,6 +265,15 @@ class ODBLoader:
         step_profile = profile_data.surface
         profile_units = profile_data.units
 
+        # Read EDA data for net assignments
+        eda_data = read_eda_data(self.path, step)
+
+        # Build case-insensitive layer name mapping for EDA data
+        # EDA layer names may be lowercase while matrix names are uppercase
+        eda_layer_map: dict[str, str] = {}
+        for eda_layer in eda_data.layer_names:
+            eda_layer_map[eda_layer.upper()] = eda_layer
+
         # Load each layer's features
         for layer_def in self.matrix.layers:
             # Skip if not in filter
@@ -256,10 +285,19 @@ class ODBLoader:
                 continue
 
             features_data = read_features(self.path, step, layer_def.name)
-            geometries = list(self._convert_features(features_data, layer_def.name))
+
+            # Convert features with net assignments
+            # Returns list of (geometry, net_name) tuples
+            # Use EDA layer name (may be different case than matrix layer name)
+            eda_layer_name = eda_layer_map.get(layer_def.name.upper(), layer_def.name)
+            geom_net_pairs = list(
+                self._convert_features_with_nets(
+                    features_data, eda_layer_name, eda_data, group_traces
+                )
+            )
 
             # Auto-fill empty dielectric layers with board profile
-            if not geometries and layer_def.type in ("DIELECTRIC", "SOLDER_MASK"):
+            if not geom_net_pairs and layer_def.type in ("DIELECTRIC", "SOLDER_MASK"):
                 # Try layer-specific profile first, then step profile
                 layer_profile_data = read_profile_data(self.path, step, layer_def.name)
                 profile = layer_profile_data.surface or step_profile
@@ -268,7 +306,7 @@ class ODBLoader:
                 if profile:
                     profile_geom = self._convert_surface(profile, units)
                     if profile_geom:
-                        geometries = [profile_geom]
+                        geom_net_pairs = [(profile_geom, None)]
                         self._warnings.append(
                             f"Layer '{layer_def.name}' has no features, using board profile"
                         )
@@ -277,8 +315,15 @@ class ODBLoader:
                         f"Dielectric layer '{layer_def.name}' is empty and no profile found"
                     )
 
-            if geometries:
-                structure = structure.add(layer_def.name, geometries)
+            # Group geometries by net for efficient adding
+            if geom_net_pairs:
+                net_groups: dict[Optional[str], list[Geometry2D]] = {}
+                for geom, net in geom_net_pairs:
+                    net_groups.setdefault(net, []).append(geom)
+
+                # Add each net group to structure
+                for net, geoms in net_groups.items():
+                    structure = structure.add(layer_def.name, geoms, net=net)
 
         # Report warnings
         for warning in self._warnings:
@@ -303,28 +348,297 @@ class ODBLoader:
         Geometry2D
             Converted geometry objects.
         """
-        units = data.units
+        for geom, _ in self._convert_features_with_nets(
+            data, layer_name, EDAData(), group_traces=True
+        ):
+            yield geom
 
-        for feature in data.features:
+    def _convert_features_with_nets(
+        self,
+        data: FeaturesData,
+        layer_name: str,
+        eda_data: EDAData,
+        group_traces: bool = True,
+    ) -> Generator[tuple[Geometry2D, Optional[str]], None, None]:
+        """Convert parsed features to Geometry2D objects with net assignments.
+
+        Parameters
+        ----------
+        data : FeaturesData
+            Parsed features data.
+        layer_name : str
+            Layer name (for net lookup and error messages).
+        eda_data : EDAData
+            Parsed EDA data for net assignments.
+        group_traces : bool
+            If True, merge consecutive connected Line/Arc records into
+            multi-segment Path2D objects.
+
+        Yields
+        ------
+        tuple[Geometry2D, Optional[str]]
+            (geometry, net_name) tuples. net_name is None if not assigned.
+        """
+        units = data.units
+        features = data.features
+        symbols = data.symbols
+
+        def get_net(idx: int) -> Optional[str]:
+            """Look up net for feature index."""
+            net = eda_data.net_assignments.get((layer_name, idx))
+            return None if net == "$NONE$" else net
+
+        i = 0
+        while i < len(features):
+            feature = features[i]
+            net_name = get_net(i)
+
+            # Try trace grouping for Line/Arc records
+            if group_traces and isinstance(feature, (LineRecord, ArcRecord)):
+                # Find extent of mergeable consecutive records
+                merge_end = self._find_merge_extent(
+                    features, i, symbols, units, layer_name, eda_data
+                )
+
+                if merge_end > i:
+                    # Create merged multi-segment Path2D
+                    geom = self._create_merged_trace(
+                        features[i : merge_end + 1], symbols, units
+                    )
+                    if geom:
+                        yield geom, net_name
+                    i = merge_end + 1
+                    continue
+
+            # Single feature conversion
             if isinstance(feature, LineRecord):
-                geom = self._convert_line(feature, data.symbols, units)
+                geom = self._convert_line(feature, symbols, units)
                 if geom:
-                    yield geom
+                    yield geom, net_name
 
             elif isinstance(feature, ArcRecord):
-                geom = self._convert_arc(feature, data.symbols, units)
+                geom = self._convert_arc(feature, symbols, units)
                 if geom:
-                    yield geom
+                    yield geom, net_name
 
             elif isinstance(feature, PadRecord):
-                geom = self._convert_pad(feature, data.symbols, units)
+                geom = self._convert_pad(feature, symbols, units)
                 if geom:
-                    yield geom
+                    yield geom, net_name
 
             elif isinstance(feature, SurfaceRecord):
                 geom = self._convert_surface(feature, units)
                 if geom:
-                    yield geom
+                    yield geom, net_name
+
+            i += 1
+
+    def _find_merge_extent(
+        self,
+        features: list,
+        start_idx: int,
+        symbols: dict,
+        units: str,
+        layer_name: str,
+        eda_data: EDAData,
+    ) -> int:
+        """Find the last index of consecutive mergeable Line/Arc records.
+
+        Parameters
+        ----------
+        features : list
+            List of feature records.
+        start_idx : int
+            Starting index.
+        symbols : dict
+            Symbol index to name mapping.
+        units : str
+            Units string.
+        layer_name : str
+            Layer name for net lookup.
+        eda_data : EDAData
+            EDA data for net lookup.
+
+        Returns
+        -------
+        int
+            Last index of mergeable records (>= start_idx).
+            Returns start_idx if no merging possible.
+        """
+
+        def get_net(idx: int) -> Optional[str]:
+            net = eda_data.net_assignments.get((layer_name, idx))
+            return None if net == "$NONE$" else net
+
+        def get_width_and_cap(
+            record: Union[LineRecord, ArcRecord]
+        ) -> tuple[Optional[float], str]:
+            """Get width (in microns) and cap style for a record."""
+            sym_name = symbols.get(record.symbol_num, "")
+            if not sym_name:
+                return None, ""
+            sym_info = parse_symbol(sym_name)
+            if sym_info.type == "unknown" or sym_info.width is None:
+                return None, ""
+            width_um = convert_to_microns(sym_info.width, units, is_symbol_dim=True)
+            cap = "round" if sym_info.type == "round" else "square"
+            return width_um, cap
+
+        def get_end_point(record: Union[LineRecord, ArcRecord]) -> tuple[float, float]:
+            """Get end point in microns."""
+            return (
+                convert_to_microns(record.xe, units),
+                convert_to_microns(record.ye, units),
+            )
+
+        def get_start_point(record: Union[LineRecord, ArcRecord]) -> tuple[float, float]:
+            """Get start point in microns."""
+            return (
+                convert_to_microns(record.xs, units),
+                convert_to_microns(record.ys, units),
+            )
+
+        merge_end = start_idx
+        prev = features[start_idx]
+        prev_width, prev_cap = get_width_and_cap(prev)
+        prev_net = get_net(start_idx)
+
+        if prev_width is None:
+            return start_idx
+
+        for j in range(start_idx + 1, len(features)):
+            curr = features[j]
+
+            # Must be Line or Arc
+            if not isinstance(curr, (LineRecord, ArcRecord)):
+                break
+
+            # Check width and cap
+            curr_width, curr_cap = get_width_and_cap(curr)
+            if curr_width is None:
+                break
+            if not _widths_match(prev_width, curr_width):
+                break
+            if curr_cap != prev_cap:
+                break
+
+            # Check net
+            curr_net = get_net(j)
+            if curr_net != prev_net:
+                break
+
+            # Check endpoint connectivity
+            prev_end = get_end_point(prev)
+            curr_start = get_start_point(curr)
+            if not _endpoints_match(prev_end[0], prev_end[1], curr_start[0], curr_start[1]):
+                break
+
+            # Can merge
+            merge_end = j
+            prev = curr
+
+        return merge_end
+
+    def _create_merged_trace(
+        self,
+        records: list[Union[LineRecord, ArcRecord]],
+        symbols: dict,
+        units: str,
+    ) -> Optional[Path2D]:
+        """Create a multi-segment Path2D from merged Line/Arc records.
+
+        Parameters
+        ----------
+        records : list
+            List of LineRecord and/or ArcRecord to merge.
+        symbols : dict
+            Symbol index to name mapping.
+        units : str
+            Units string.
+
+        Returns
+        -------
+        Optional[Path2D]
+            Merged path, or None if conversion failed.
+        """
+        if not records:
+            return None
+
+        first = records[0]
+        sym_name = symbols.get(first.symbol_num, "")
+        sym_info = parse_symbol(sym_name)
+
+        if sym_info.type == "unknown" or sym_info.width is None:
+            return None
+
+        width_um = convert_to_microns(sym_info.width, units, is_symbol_dim=True)
+        if width_um <= 0:
+            return None
+
+        end_cap = "round" if sym_info.type == "round" else "square"
+
+        # Build vertices list: start with first record's start point
+        vertices: list[tuple[float, float]] = [
+            (
+                convert_to_microns(first.xs, units),
+                convert_to_microns(first.ys, units),
+            )
+        ]
+
+        # Add each record's end point (and arc info if applicable)
+        segment_types: list[str] = []  # "line" or "arc"
+        arc_centers: list[Optional[tuple[float, float]]] = []
+        arc_clockwise: list[bool] = []
+
+        for record in records:
+            xe = convert_to_microns(record.xe, units)
+            ye = convert_to_microns(record.ye, units)
+            vertices.append((xe, ye))
+
+            if isinstance(record, ArcRecord):
+                segment_types.append("arc")
+                xc = convert_to_microns(record.xc, units)
+                yc = convert_to_microns(record.yc, units)
+                arc_centers.append((xc, yc))
+                arc_clockwise.append(record.clockwise)
+            else:
+                segment_types.append("line")
+                arc_centers.append(None)
+                arc_clockwise.append(False)
+
+        # If all segments are lines, use simple Path2D
+        if all(st == "line" for st in segment_types):
+            return Path2D(
+                vertices=tuple(vertices),
+                width=width_um,
+                end_cap=end_cap,
+            )
+
+        # For mixed line/arc, we need to use Path2D with proper arc handling
+        # Build the path segment by segment
+        # Note: Path2D currently supports from_line and from_arc for single segments
+        # For multi-segment with arcs, we need to build manually
+
+        # For now, create a polyline approximation for arcs
+        # TODO: Enhance Path2D to support mixed line/arc segments natively
+        final_vertices: list[tuple[float, float]] = [vertices[0]]
+
+        for idx, seg_type in enumerate(segment_types):
+            if seg_type == "line":
+                final_vertices.append(vertices[idx + 1])
+            else:
+                # Arc segment - approximate with line for now
+                # A proper implementation would store arc info in Path2D
+                final_vertices.append(vertices[idx + 1])
+                self._warnings.append(
+                    f"Arc segment in merged trace approximated as line"
+                )
+
+        return Path2D(
+            vertices=tuple(final_vertices),
+            width=width_um,
+            end_cap=end_cap,
+        )
 
     def _convert_line(
         self, record: LineRecord, symbols: dict, units: str
