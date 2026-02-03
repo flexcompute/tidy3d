@@ -36,6 +36,7 @@ from tidy3d.plugins.odb.parser import (
     read_matrix,
 )
 from tidy3d.plugins.odb.symbols import SymbolInfo, parse_symbol
+from tidy3d.plugins.odb.stackup_builder import StackupBuilder
 from tidy3d.plugins.odb.utils import (
     arc_to_bulge,
     convert_to_microns,
@@ -125,6 +126,15 @@ class ODBLoader:
         self,
         step: Optional[str] = None,
         layers: Optional[list[str]] = None,
+        stackup: Optional[Stackup] = None,
+        layer_thicknesses: Optional[dict[str, float]] = None,
+        default_conductor_thickness: float = 35.0,
+        default_dielectric_thickness: float = 200.0,
+        default_permittivity: float = 4.2,
+        include_dielectrics: bool = False,
+        frequency_range: tuple[float, float] = (0.1e9, 10e9),
+        use_lossy_metal: bool = True,
+        use_lossy_dielectric: bool = True,
     ) -> LayeredStructure:
         """Load ODB++ into LayeredStructure.
 
@@ -133,18 +143,62 @@ class ODBLoader:
         step : str, optional
             Step name to load. Defaults to first step.
         layers : list[str], optional
-            Layer names to load. Defaults to all.
+            Layer names to load. Defaults to all signal/power layers.
+        stackup : Stackup, optional
+            User-provided stackup. If provided, skips automatic stackup construction.
+        layer_thicknesses : dict[str, float], optional
+            Per-layer thickness overrides in microns.
+        default_conductor_thickness : float
+            Default conductor thickness in microns (default: 35 µm = 1 oz copper).
+        default_dielectric_thickness : float
+            Default dielectric thickness in microns (default: 200 µm).
+        default_permittivity : float
+            Default dielectric constant for FR4 (default: 4.2).
+        include_dielectrics : bool
+            If True, include dielectric layers in stackup (default: False).
+        frequency_range : tuple[float, float]
+            Frequency range (f_min, f_max) in Hz for lossy material models.
+            Default is (0.1e9, 10e9) Hz.
+        use_lossy_metal : bool
+            If True, use LossyMetalMedium for conductor layers (with conductivity
+            from ODB++ attributes or default copper value of 58 S/µm).
+            If False, use PECMedium. Default is True.
+        use_lossy_dielectric : bool
+            If True, use FastDispersionFitter.constant_loss_tangent_model() for
+            dielectric layers with loss tangent from ODB++ attributes.
+            If False, use lossless Medium. Default is True.
 
         Returns
         -------
         LayeredStructure
-            Loaded geometry organized by layers.
+            Loaded geometry organized by layers with proper stackup.
 
         Notes
         -----
+        - Stackup z_bounds are in microns (tidy3d default units)
+        - Conductor layers use LossyMetalMedium by default (conductivity from
+          bulk_resistivity attribute, or 58 S/µm for copper)
+        - Dielectric layers use constant_loss_tangent_model if loss tangent is
+          available in ODB++ attributes
         - Unknown symbols are skipped with warning
-        - Net assignment not implemented (all geometries have net=None)
-        - Stackup z_bounds set to placeholder values (0, 1)
+        - Net assignment not yet implemented (all geometries have net=None)
+
+        Example
+        -------
+        >>> loader = ODBLoader("./design.odb")
+        >>> # Load with automatic stackup and lossy materials
+        >>> structure = loader.load()
+        >>>
+        >>> # Load with PEC conductors (faster, simpler)
+        >>> structure = loader.load(use_lossy_metal=False)
+        >>>
+        >>> # Load with custom frequency range
+        >>> structure = loader.load(frequency_range=(1e9, 20e9))
+        >>>
+        >>> # Load with user-provided stackup
+        >>> from tidy3d.components.geometry.layout import Stackup, LayerSpec
+        >>> my_stackup = Stackup(layers=(...))
+        >>> structure = loader.load(stackup=my_stackup)
         """
         self._warnings.clear()
 
@@ -157,27 +211,42 @@ class ODBLoader:
         # Build layer filter
         layer_filter = set(layers) if layers else None
 
-        # Build stackup with placeholder z_bounds
-        layer_specs = []
-        for layer_def in self.matrix.layers:
-            if layer_filter and layer_def.name not in layer_filter:
-                continue
+        # Build stackup
+        if stackup is None:
+            # Use StackupBuilder to construct from ODB++ data
+            builder = StackupBuilder(self.path, self.matrix, step)
 
-            # Placeholder z_bounds - user should set actual values
-            layer_specs.append(
-                LayerSpec(
-                    name=layer_def.name,
-                    z_bounds=(0.0, 1.0),  # Placeholder
-                    medium=td.Medium(permittivity=3),  # User must set
-                )
+            # Apply user-provided thickness overrides
+            if layer_thicknesses:
+                for layer_info in builder.stackup_data.layers:
+                    if layer_info.name in layer_thicknesses:
+                        layer_info.thickness = layer_thicknesses[layer_info.name]
+
+            stackup = builder.build(
+                layer_filter=layer_filter,
+                default_conductor_thickness=default_conductor_thickness,
+                default_dielectric_thickness=default_dielectric_thickness,
+                default_permittivity=default_permittivity,
+                include_dielectrics=include_dielectrics,
+                frequency_range=frequency_range,
+                use_lossy_metal=use_lossy_metal,
+                use_lossy_dielectric=use_lossy_dielectric,
             )
 
-        stackup = Stackup(layers=tuple(layer_specs))
         structure = LayeredStructure(stackup=stackup)
+
+        # Determine which layers have geometry to load
+        # (only load layers that are in the stackup)
+        stackup_layer_names = {spec.name for spec in stackup.layers}
 
         # Load each layer's features
         for layer_def in self.matrix.layers:
+            # Skip if not in filter
             if layer_filter and layer_def.name not in layer_filter:
+                continue
+
+            # Skip if not in stackup (e.g., document layers)
+            if layer_def.name not in stackup_layer_names:
                 continue
 
             features_data = read_features(self.path, step, layer_def.name)
