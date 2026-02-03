@@ -11,7 +11,8 @@ def process_robots_txt(app, exception):
 
     expected_baseurl = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
     html_baseurl = f"{app.config['html_baseurl'].rstrip('/')}/"
-    if app.config.get("version") == "latest" and html_baseurl != expected_baseurl:
+    rtd_version = os.environ.get("READTHEDOCS_VERSION")
+    if rtd_version == "latest" and html_baseurl != expected_baseurl:
         raise ValueError(
             "html_baseurl must be the latest docs URL for robots.txt generation. "
             f"Expected {expected_baseurl!r}, got {html_baseurl!r}."
