@@ -126,6 +126,23 @@ def make_json_compatible(json_string: str) -> str:
     return json_string.replace(tmp_string, '"-Infinity"')
 
 
+def _jsonify_inf_nan(value: Any) -> Any:
+    """Convert inf/-inf/NaN floats to JSON-style string sentinels."""
+    if isinstance(value, (float, np.floating)):
+        if math.isnan(value):
+            return "NaN"
+        if math.isinf(value):
+            return "Infinity" if value > 0 else "-Infinity"
+        return float(value) if isinstance(value, np.floating) else value
+    if isinstance(value, Mapping):
+        return {key: _jsonify_inf_nan(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_jsonify_inf_nan(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_jsonify_inf_nan(item) for item in value)
+    return value
+
+
 def _get_valid_extension(fname: PathLike) -> str:
     """Return the file extension from fname, validated to accepted ones."""
     valid_extensions = [".json", ".yaml", ".hdf5", ".h5", ".hdf5.gz"]
@@ -1042,20 +1059,32 @@ class Tidy3dBaseModel(BaseModel):
         >>> simulation.to_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
         export_model = self.to_static()
-        # We intentionally round-trip through JSON to preserve the exact JSON-mode serialization
-        # behavior in YAML output (notably `ser_json_inf_nan="strings"` for Infinity/-Infinity/NaN).
-        json_string = export_model.model_dump_json()
-        self._warn_if_contains_data(json_string)
-        model_dict = json.loads(json_string)
+        # Preserve JSON-mode serialization behavior in YAML output (notably
+        # `ser_json_inf_nan="strings"` for Infinity/-Infinity/NaN) without a string round-trip.
+        model_dict = export_model.model_dump(mode="json", exclude_unset=False)
+        model_dict = _jsonify_inf_nan(model_dict)
+        self._warn_if_contains_data(model_dict)
         path = Path(fname)
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w+", encoding="utf-8") as file_handle:
             yaml.dump(model_dict, file_handle, indent=INDENT_JSON_FILE)
 
     @staticmethod
-    def _warn_if_contains_data(json_str: str) -> None:
-        """Log a warning if the json string contains data, used in '.json' and '.yaml' file."""
-        if any((key in json_str for key, _ in DATA_ARRAY_MAP.items())):
+    def _warn_if_contains_data(payload: Union[str, Mapping[str, Any], Sequence[Any]]) -> None:
+        """Log a warning if the json payload contains data, used in '.json' and '.yaml' file."""
+
+        def _contains_data(obj: Any) -> bool:
+            if isinstance(obj, str):
+                return any(key in obj for key in DATA_ARRAY_MAP)
+            if isinstance(obj, Mapping):
+                return any(
+                    _contains_data(key) or _contains_data(value) for key, value in obj.items()
+                )
+            if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
+                return any(_contains_data(item) for item in obj)
+            return False
+
+        if _contains_data(payload):
             log.warning(
                 "Data contents found in the model to be written to file. "
                 "Note that this data will not be included in '.json' or '.yaml' formats. "

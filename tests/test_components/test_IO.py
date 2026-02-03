@@ -114,19 +114,59 @@ def test_to_yaml_encodes_inf_nan_as_strings(tmp_path):
         z: float
 
     path = str(tmp_path / "inf_nan.yaml")
-    InfNanModel(x=math.inf, y=-math.inf, z=math.nan).to_yaml(path)
+    model = InfNanModel(x=math.inf, y=-math.inf, z=math.nan)
+    model.to_yaml(path)
 
     with open(path, encoding="utf-8") as f:
         model_dict = yaml.safe_load(f)
 
-    assert model_dict["x"] == "Infinity"
+    assert model_dict["x"] == "Infinity", f"got {model_dict}"
     assert model_dict["y"] == "-Infinity"
     assert model_dict["z"] == "NaN"
+    assert model_dict == json.loads(model.model_dump_json())
 
     loaded = InfNanModel.from_yaml(path)
     assert math.isinf(loaded.x) and loaded.x > 0
     assert math.isinf(loaded.y) and loaded.y < 0
     assert math.isnan(loaded.z)
+
+
+def test_to_json_encodes_inf_nan_as_strings(tmp_path):
+    """Lock JSON output format for Infinity/-Infinity/NaN (JSON-aligned string encoding)."""
+
+    class InfNanModel(Tidy3dBaseModel):
+        x: float
+        y: float
+        z: float
+
+    path = str(tmp_path / "inf_nan.json")
+    InfNanModel(x=math.inf, y=-math.inf, z=math.nan).to_json(path)
+
+    with open(path, encoding="utf-8") as f:
+        model_dict = json.load(f)
+
+    assert model_dict["x"] == "Infinity"
+    assert model_dict["y"] == "-Infinity"
+    assert model_dict["z"] == "NaN"
+
+    loaded = InfNanModel.from_json(path)
+    assert math.isinf(loaded.x) and loaded.x > 0
+    assert math.isinf(loaded.y) and loaded.y < 0
+    assert math.isnan(loaded.z)
+
+
+def test_warn_if_contains_data_accepts_json_object(monkeypatch):
+    """Ensure data warnings can be triggered from a JSON-like object."""
+    messages = []
+
+    def fake_warning(message, *args, **kwargs):
+        messages.append(message % args if args else message)
+
+    monkeypatch.setattr(td.log, "warning", fake_warning)
+    data_key = next(iter(DATA_ARRAY_MAP))
+    Tidy3dBaseModel._warn_if_contains_data({"data": [data_key]})
+
+    assert any("Data contents found in the model" in msg for msg in messages)
 
 
 def test_simulation_load_export_hdf5(split_string, tmp_path):

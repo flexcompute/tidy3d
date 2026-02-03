@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
 from rich.console import Console
 
 import tidy3d as td
-from tidy3d.material_library.material_library import MaterialItemUniaxial
+from tidy3d.material_library.material_library import MaterialItemUniaxial, export_matlib_to_file
 
 
 def test_material_library_summary():
@@ -17,6 +19,45 @@ def test_material_library_rich_console():
     """Test the rich representation of the material library which validates its styles etc."""
     console = Console()
     console.print(td.material_library)
+
+
+def test_export_matlib_to_file_json_mode(tmp_path):
+    """Ensure material library export uses JSON-mode model dumps."""
+    path = tmp_path / "matlib.json"
+    export_matlib_to_file(path)
+
+    with path.open(encoding="utf-8") as f:
+        matlib_dict = json.load(f)
+
+    material_key = next(
+        key
+        for key, material in td.material_library.items()
+        if not isinstance(material, (type, MaterialItemUniaxial))
+    )
+    material = td.material_library[material_key]
+    variant_key = next(iter(material.variants))
+    json_key = f'{material.name} ("{material_key}")'
+    expected_medium = material.variants[variant_key].medium.model_dump(
+        mode="json", exclude_unset=False
+    )
+    assert matlib_dict[json_key][variant_key] == expected_medium
+
+    uniaxial_key = next(
+        key
+        for key, material in td.material_library.items()
+        if isinstance(material, MaterialItemUniaxial)
+    )
+    uniaxial = td.material_library[uniaxial_key]
+    uniaxial_variant = next(iter(uniaxial.variants))
+    uniaxial_json_key = f'{uniaxial.name} ("{uniaxial_key}")'
+    ordinary = uniaxial.variants[uniaxial_variant].ordinary.model_dump(
+        mode="json", exclude_unset=False
+    )
+    extraordinary = uniaxial.variants[uniaxial_variant].extraordinary.model_dump(
+        mode="json", exclude_unset=False
+    )
+    expected_uniaxial = {"ordinary": ordinary, "extraordinary": extraordinary}
+    assert matlib_dict[uniaxial_json_key][uniaxial_variant] == expected_uniaxial
 
 
 def test_material_summary():

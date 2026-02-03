@@ -50,7 +50,8 @@ def export_matlib_to_file(fname: PathLike = "matlib.json") -> None:
     """Write the material library to a .json file."""
     mat_lib_dict = {
         f'{mat.name} ("{mat_name}")': {
-            var_name: json.loads(var.medium._json_string) for var_name, var in mat.variants.items()
+            var_name: var.medium.model_dump(mode="json", exclude_unset=False)
+            for var_name, var in mat.variants.items()
         }
         for mat_name, mat in material_library.items()
         if not isinstance(mat, (type, MaterialItemUniaxial))
@@ -61,8 +62,8 @@ def export_matlib_to_file(fname: PathLike = "matlib.json") -> None:
         {
             f'{mat.name} ("{mat_name}")': {
                 var_name: {
-                    "ordinary": json.loads(var.ordinary._json_string),
-                    "extraordinary": json.loads(var.extraordinary._json_string),
+                    "ordinary": var.ordinary.model_dump(mode="json", exclude_unset=False),
+                    "extraordinary": var.extraordinary.model_dump(mode="json", exclude_unset=False),
                 }
                 for var_name, var in mat.variants.items()
             }
