@@ -749,3 +749,140 @@ def iter_layers(odb_path: Path, step_name: str) -> Iterator[str]:
             if layer_dir.is_dir():
                 yield layer_dir.name
 
+
+def read_profile(
+    odb_path: Path, step_name: str, layer_name: Optional[str] = None
+) -> Optional[SurfaceRecord]:
+    """Read and parse profile file (board outline) for a step or layer.
+
+    The profile file defines the board outline as a Surface record. This is
+    used to auto-fill dielectric layers that have no explicit geometry.
+
+    Parameters
+    ----------
+    odb_path : Path
+        Path to ODB++ root directory.
+    step_name : str
+        Step name.
+    layer_name : str, optional
+        Layer name. If provided, looks for layer-specific profile first,
+        then falls back to step profile.
+
+    Returns
+    -------
+    Optional[SurfaceRecord]
+        Parsed profile as a Surface record, or None if not found.
+
+    Notes
+    -----
+    Profile lookup order:
+    1. Layer-specific: steps/<step>/layers/<layer>/profile
+    2. Step-level: steps/<step>/profile
+    """
+    # Try layer-specific profile first
+    if layer_name:
+        layer_profile_path = (
+            odb_path / "steps" / step_name / "layers" / layer_name / "profile"
+        )
+        if layer_profile_path.exists():
+            content = layer_profile_path.read_text(encoding="utf-8", errors="ignore")
+            return _parse_profile_content(content)
+
+    # Fall back to step-level profile
+    step_profile_path = odb_path / "steps" / step_name / "profile"
+    if step_profile_path.exists():
+        content = step_profile_path.read_text(encoding="utf-8", errors="ignore")
+        return _parse_profile_content(content)
+
+    return None
+
+
+def _parse_profile_content(content: str) -> Optional[SurfaceRecord]:
+    """Parse profile file content into a SurfaceRecord.
+
+    Parameters
+    ----------
+    content : str
+        Raw profile file content.
+
+    Returns
+    -------
+    Optional[SurfaceRecord]
+        Parsed Surface record, or None if parsing failed.
+    """
+    # Profile files have the same format as features files but typically
+    # contain just one Surface record representing the board outline
+    data = parse_features(content)
+
+    # Return the first Surface record found
+    for feature in data.features:
+        if isinstance(feature, SurfaceRecord):
+            return feature
+
+    return None
+
+
+@dataclass
+class ProfileData:
+    """Parsed profile file data.
+
+    Attributes
+    ----------
+    units : str
+        "MM" or "INCH".
+    surface : Optional[SurfaceRecord]
+        Board outline as a Surface record.
+    """
+
+    units: str = "MM"
+    surface: Optional[SurfaceRecord] = None
+
+
+def read_profile_data(
+    odb_path: Path, step_name: str, layer_name: Optional[str] = None
+) -> ProfileData:
+    """Read and parse profile file with units information.
+
+    Parameters
+    ----------
+    odb_path : Path
+        Path to ODB++ root directory.
+    step_name : str
+        Step name.
+    layer_name : str, optional
+        Layer name for layer-specific profile lookup.
+
+    Returns
+    -------
+    ProfileData
+        Parsed profile data including units.
+    """
+    result = ProfileData()
+
+    # Try layer-specific profile first
+    if layer_name:
+        layer_profile_path = (
+            odb_path / "steps" / step_name / "layers" / layer_name / "profile"
+        )
+        if layer_profile_path.exists():
+            content = layer_profile_path.read_text(encoding="utf-8", errors="ignore")
+            data = parse_features(content)
+            result.units = data.units
+            for feature in data.features:
+                if isinstance(feature, SurfaceRecord):
+                    result.surface = feature
+                    return result
+
+    # Fall back to step-level profile
+    step_profile_path = odb_path / "steps" / step_name / "profile"
+    if step_profile_path.exists():
+        content = step_profile_path.read_text(encoding="utf-8", errors="ignore")
+        data = parse_features(content)
+        result.units = data.units
+        for feature in data.features:
+            if isinstance(feature, SurfaceRecord):
+                result.surface = feature
+                return result
+
+    return result
+

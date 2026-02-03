@@ -34,6 +34,7 @@ from tidy3d.plugins.odb.parser import (
     SurfaceRecord,
     read_features,
     read_matrix,
+    read_profile_data,
 )
 from tidy3d.plugins.odb.symbols import SymbolInfo, parse_symbol
 from tidy3d.plugins.odb.stackup_builder import StackupBuilder
@@ -239,6 +240,11 @@ class ODBLoader:
         # (only load layers that are in the stackup)
         stackup_layer_names = {spec.name for spec in stackup.layers}
 
+        # Read step profile (board outline) for auto-filling empty dielectric layers
+        profile_data = read_profile_data(self.path, step)
+        step_profile = profile_data.surface
+        profile_units = profile_data.units
+
         # Load each layer's features
         for layer_def in self.matrix.layers:
             # Skip if not in filter
@@ -251,6 +257,25 @@ class ODBLoader:
 
             features_data = read_features(self.path, step, layer_def.name)
             geometries = list(self._convert_features(features_data, layer_def.name))
+
+            # Auto-fill empty dielectric layers with board profile
+            if not geometries and layer_def.type in ("DIELECTRIC", "SOLDER_MASK"):
+                # Try layer-specific profile first, then step profile
+                layer_profile_data = read_profile_data(self.path, step, layer_def.name)
+                profile = layer_profile_data.surface or step_profile
+                units = layer_profile_data.units if layer_profile_data.surface else profile_units
+
+                if profile:
+                    profile_geom = self._convert_surface(profile, units)
+                    if profile_geom:
+                        geometries = [profile_geom]
+                        self._warnings.append(
+                            f"Layer '{layer_def.name}' has no features, using board profile"
+                        )
+                else:
+                    self._warnings.append(
+                        f"Dielectric layer '{layer_def.name}' is empty and no profile found"
+                    )
 
             if geometries:
                 structure = structure.add(layer_def.name, geometries)
