@@ -10,8 +10,10 @@ from typing_extensions import Self
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.geometry2d import Geometry2D, Geometry2DType
+from tidy3d.components.geometry.geometry2d.base import Bound2D
 from tidy3d.components.geometry.layout.layered_geometry import LayeredGeometry
 from tidy3d.components.geometry.layout.stackup import Stackup
+from tidy3d.components.types import Bound, Coordinate, Coordinate2D
 
 if TYPE_CHECKING:
     from tidy3d.components.structure import Structure
@@ -209,6 +211,124 @@ class LayeredStructure(Tidy3dBaseModel):
             Geometries where net is None.
         """
         return tuple(lg.geometry for lg in self.geometries if lg.net is None)
+
+    @property
+    def bounds_2d(self) -> Optional[Bound2D]:
+        """Get the overall 2D bounding box across all geometries.
+
+        Returns
+        -------
+        Optional[Bound2D]
+            Tuple of ((min_x, min_y), (max_x, max_y)), or None if no geometries.
+        """
+        if not self.geometries:
+            return None
+
+        min_x = min_y = float("inf")
+        max_x = max_y = float("-inf")
+
+        for lg in self.geometries:
+            (x0, y0), (x1, y1) = lg.geometry.bounds_2d
+            min_x = min(min_x, x0)
+            min_y = min(min_y, y0)
+            max_x = max(max_x, x1)
+            max_y = max(max_y, y1)
+
+        return ((min_x, min_y), (max_x, max_y))
+
+    @property
+    def bounds_3d(self) -> Optional[Bound]:
+        """Get the full 3D bounding box including layer heights from stackup.
+
+        Only considers z-bounds of layers that have geometries assigned.
+
+        Returns
+        -------
+        Optional[Bound]
+            Tuple of ((min_x, min_y, min_z), (max_x, max_y, max_z)),
+            or None if no geometries.
+        """
+        bounds_2d = self.bounds_2d
+        if bounds_2d is None:
+            return None
+
+        (min_x, min_y), (max_x, max_y) = bounds_2d
+
+        # Get z-bounds only from layers that have geometries
+        min_z = float("inf")
+        max_z = float("-inf")
+
+        for layer_name in self.layer_names:
+            layer_spec = self.stackup[layer_name]
+            z0, z1 = layer_spec.z_bounds
+            min_z = min(min_z, z0)
+            max_z = max(max_z, z1)
+
+        return ((min_x, min_y, min_z), (max_x, max_y, max_z))
+
+    @property
+    def center_2d(self) -> Optional[Coordinate2D]:
+        """Get the center point of the 2D bounding box.
+
+        Returns
+        -------
+        Optional[Coordinate2D]
+            Tuple of (center_x, center_y), or None if no geometries.
+        """
+        bounds = self.bounds_2d
+        if bounds is None:
+            return None
+
+        (min_x, min_y), (max_x, max_y) = bounds
+        return ((min_x + max_x) / 2, (min_y + max_y) / 2)
+
+    @property
+    def size_2d(self) -> Optional[Coordinate2D]:
+        """Get the size of the 2D bounding box.
+
+        Returns
+        -------
+        Optional[Coordinate2D]
+            Tuple of (size_x, size_y), or None if no geometries.
+        """
+        bounds = self.bounds_2d
+        if bounds is None:
+            return None
+
+        (min_x, min_y), (max_x, max_y) = bounds
+        return (max_x - min_x, max_y - min_y)
+
+    @property
+    def center_3d(self) -> Optional[Coordinate]:
+        """Get the center point of the 3D bounding box.
+
+        Returns
+        -------
+        Optional[Coordinate]
+            Tuple of (center_x, center_y, center_z), or None if no geometries.
+        """
+        bounds = self.bounds_3d
+        if bounds is None:
+            return None
+
+        (min_x, min_y, min_z), (max_x, max_y, max_z) = bounds
+        return ((min_x + max_x) / 2, (min_y + max_y) / 2, (min_z + max_z) / 2)
+
+    @property
+    def size_3d(self) -> Optional[Coordinate]:
+        """Get the size of the 3D bounding box.
+
+        Returns
+        -------
+        Optional[Coordinate]
+            Tuple of (size_x, size_y, size_z), or None if no geometries.
+        """
+        bounds = self.bounds_3d
+        if bounds is None:
+            return None
+
+        (min_x, min_y, min_z), (max_x, max_y, max_z) = bounds
+        return (max_x - min_x, max_y - min_y, max_z - min_z)
 
     def __len__(self) -> int:
         """Number of geometry entries."""

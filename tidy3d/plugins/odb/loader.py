@@ -1,0 +1,739 @@
+"""ODB++ to LayeredStructure loader.
+
+High-level API for loading ODB++ PCB design files into tidy3d's
+2D geometry layer system.
+"""
+
+from __future__ import annotations
+
+import math
+import warnings
+import tidy3d as td
+from pathlib import Path
+from typing import Generator, Optional, Union
+
+from tidy3d.components.geometry.geometry2d import (
+    Circle2D,
+    Geometry2D,
+    Path2D,
+    Polygon2D,
+    Rectangle2D,
+)
+from tidy3d.components.geometry.layout import (
+    LayeredStructure,
+    LayerSpec,
+    Stackup,
+)
+from tidy3d.plugins.odb.parser import (
+    ArcRecord,
+    FeaturesData,
+    LineRecord,
+    MatrixData,
+    PadRecord,
+    PolygonContour,
+    SurfaceRecord,
+    read_features,
+    read_matrix,
+)
+from tidy3d.plugins.odb.symbols import SymbolInfo, parse_symbol
+from tidy3d.plugins.odb.utils import (
+    arc_to_bulge,
+    convert_to_microns,
+    is_full_circle,
+    split_full_circle,
+)
+
+
+class ODBLoader:
+    """Load ODB++ files into LayeredStructure.
+
+    Parameters
+    ----------
+    path : str or Path
+        Path to ODB++ directory (unzipped).
+
+    Example
+    -------
+    >>> from tidy3d.plugins.odb import ODBLoader
+    >>>
+    >>> loader = ODBLoader("./my_design.odb")
+    >>> structure = loader.load()
+    >>>
+    >>> # Check what was loaded
+    >>> print(structure.layer_names)
+    >>> print(len(structure.geometries))
+    >>>
+    >>> # Filter to specific layers
+    >>> structure = loader.load(layers=["TRACE", "GND"])
+
+    Notes
+    -----
+    This is the MVP implementation with the following limitations:
+
+    - Net assignment not implemented (all geometries have net=None)
+    - Trace grouping not implemented (each L/A record is a separate Path2D)
+    - Unknown symbols are skipped with warning
+    - Oval symbols are approximated as rectangles
+    - Rotation for Rectangle2D not fully supported
+    - Stackup z_bounds are placeholders (user must configure)
+    """
+
+    def __init__(self, path: Union[str, Path]):
+        self.path = Path(path)
+        if not self.path.exists():
+            raise FileNotFoundError(f"ODB++ path not found: {self.path}")
+
+        self._matrix: Optional[MatrixData] = None
+        self._warnings: list[str] = []
+
+    @property
+    def matrix(self) -> MatrixData:
+        """Parsed matrix data (lazy loaded).
+
+        Returns
+        -------
+        MatrixData
+            Parsed layer and step definitions.
+        """
+        if self._matrix is None:
+            self._matrix = read_matrix(self.path)
+        return self._matrix
+
+    @property
+    def layer_names(self) -> list[str]:
+        """List of layer names from the matrix file.
+
+        Returns
+        -------
+        list[str]
+            Layer names in stackup order.
+        """
+        return [layer.name for layer in self.matrix.layers]
+
+    @property
+    def step_names(self) -> list[str]:
+        """List of step names from the matrix file.
+
+        Returns
+        -------
+        list[str]
+            Step names.
+        """
+        return [step.name for step in self.matrix.steps]
+
+    def load(
+        self,
+        step: Optional[str] = None,
+        layers: Optional[list[str]] = None,
+    ) -> LayeredStructure:
+        """Load ODB++ into LayeredStructure.
+
+        Parameters
+        ----------
+        step : str, optional
+            Step name to load. Defaults to first step.
+        layers : list[str], optional
+            Layer names to load. Defaults to all.
+
+        Returns
+        -------
+        LayeredStructure
+            Loaded geometry organized by layers.
+
+        Notes
+        -----
+        - Unknown symbols are skipped with warning
+        - Net assignment not implemented (all geometries have net=None)
+        - Stackup z_bounds set to placeholder values (0, 1)
+        """
+        self._warnings.clear()
+
+        # Determine step
+        if step is None:
+            if not self.matrix.steps:
+                raise ValueError("No steps found in ODB++ matrix")
+            step = self.matrix.steps[0].name
+
+        # Build layer filter
+        layer_filter = set(layers) if layers else None
+
+        # Build stackup with placeholder z_bounds
+        layer_specs = []
+        for layer_def in self.matrix.layers:
+            if layer_filter and layer_def.name not in layer_filter:
+                continue
+
+            # Placeholder z_bounds - user should set actual values
+            layer_specs.append(
+                LayerSpec(
+                    name=layer_def.name,
+                    z_bounds=(0.0, 1.0),  # Placeholder
+                    medium=td.Medium(permittivity=3),  # User must set
+                )
+            )
+
+        stackup = Stackup(layers=tuple(layer_specs))
+        structure = LayeredStructure(stackup=stackup)
+
+        # Load each layer's features
+        for layer_def in self.matrix.layers:
+            if layer_filter and layer_def.name not in layer_filter:
+                continue
+
+            features_data = read_features(self.path, step, layer_def.name)
+            geometries = list(self._convert_features(features_data, layer_def.name))
+
+            if geometries:
+                structure = structure.add(layer_def.name, geometries)
+
+        # Report warnings
+        for warning in self._warnings:
+            warnings.warn(warning, stacklevel=2)
+
+        return structure
+
+    def _convert_features(
+        self, data: FeaturesData, layer_name: str
+    ) -> Generator[Geometry2D, None, None]:
+        """Convert parsed features to Geometry2D objects.
+
+        Parameters
+        ----------
+        data : FeaturesData
+            Parsed features data.
+        layer_name : str
+            Layer name (for error messages).
+
+        Yields
+        ------
+        Geometry2D
+            Converted geometry objects.
+        """
+        units = data.units
+
+        for feature in data.features:
+            if isinstance(feature, LineRecord):
+                geom = self._convert_line(feature, data.symbols, units)
+                if geom:
+                    yield geom
+
+            elif isinstance(feature, ArcRecord):
+                geom = self._convert_arc(feature, data.symbols, units)
+                if geom:
+                    yield geom
+
+            elif isinstance(feature, PadRecord):
+                geom = self._convert_pad(feature, data.symbols, units)
+                if geom:
+                    yield geom
+
+            elif isinstance(feature, SurfaceRecord):
+                geom = self._convert_surface(feature, units)
+                if geom:
+                    yield geom
+
+    def _convert_line(
+        self, record: LineRecord, symbols: dict, units: str
+    ) -> Optional[Path2D]:
+        """Convert L record to Path2D.
+
+        Parameters
+        ----------
+        record : LineRecord
+            Parsed line record.
+        symbols : dict
+            Symbol index to name mapping.
+        units : str
+            Units string ("MM" or "INCH").
+
+        Returns
+        -------
+        Optional[Path2D]
+            Converted path, or None if conversion failed.
+        """
+        sym_name = symbols.get(record.symbol_num, "")
+        if not sym_name:
+            self._warnings.append(f"Line record references missing symbol {record.symbol_num}")
+            return None
+
+        sym_info = parse_symbol(sym_name)
+
+        if sym_info.type == "unknown":
+            # Warning already issued by parse_symbol
+            return None
+
+        width = sym_info.width
+        if width is None:
+            self._warnings.append(f"Symbol '{sym_name}' not suitable for line stroke")
+            return None
+
+        # Convert units to microns
+        width_um = convert_to_microns(width, units, is_symbol_dim=True)
+        
+        # Validate width is positive
+        if width_um <= 0:
+            self._warnings.append(f"Line with zero/negative width ({width_um}), skipping")
+            return None
+        
+        xs = convert_to_microns(record.xs, units)
+        ys = convert_to_microns(record.ys, units)
+        xe = convert_to_microns(record.xe, units)
+        ye = convert_to_microns(record.ye, units)
+
+        # Skip zero-length lines
+        length_sq = (xe - xs) ** 2 + (ye - ys) ** 2
+        if length_sq < 1e-12:
+            return None
+
+        # Determine end cap style
+        end_cap = "round" if sym_info.type == "round" else "square"
+
+        return Path2D.from_line(
+            start=(xs, ys),
+            end=(xe, ye),
+            width=width_um,
+            end_cap=end_cap,
+        )
+
+    def _convert_arc(
+        self, record: ArcRecord, symbols: dict, units: str
+    ) -> Optional[Path2D]:
+        """Convert A record to Path2D with arc segment.
+
+        Parameters
+        ----------
+        record : ArcRecord
+            Parsed arc record.
+        symbols : dict
+            Symbol index to name mapping.
+        units : str
+            Units string ("MM" or "INCH").
+
+        Returns
+        -------
+        Optional[Path2D]
+            Converted path, or None if conversion failed.
+        """
+        sym_name = symbols.get(record.symbol_num, "")
+        if not sym_name:
+            self._warnings.append(f"Arc record references missing symbol {record.symbol_num}")
+            return None
+
+        sym_info = parse_symbol(sym_name)
+
+        if sym_info.type == "unknown":
+            return None
+
+        if sym_info.type != "round":
+            self._warnings.append(f"Arc requires round symbol, got {sym_info.type}")
+            return None
+
+        width = sym_info.width
+        if width is None:
+            return None
+
+        width_um = convert_to_microns(width, units, is_symbol_dim=True)
+        
+        # Validate width is positive
+        if width_um <= 0:
+            self._warnings.append(f"Arc with zero/negative width ({width_um}), skipping")
+            return None
+        
+        xs = convert_to_microns(record.xs, units)
+        ys = convert_to_microns(record.ys, units)
+        xe = convert_to_microns(record.xe, units)
+        ye = convert_to_microns(record.ye, units)
+        xc = convert_to_microns(record.xc, units)
+        yc = convert_to_microns(record.yc, units)
+
+        return Path2D.from_arc(
+            start=(xs, ys),
+            end=(xe, ye),
+            center=(xc, yc),
+            width=width_um,
+            clockwise=record.clockwise,
+            end_cap="round",
+        )
+
+    def _convert_pad(
+        self, record: PadRecord, symbols: dict, units: str
+    ) -> Optional[Geometry2D]:
+        """Convert P record to Circle2D or Rectangle2D.
+
+        Parameters
+        ----------
+        record : PadRecord
+            Parsed pad record.
+        symbols : dict
+            Symbol index to name mapping.
+        units : str
+            Units string ("MM" or "INCH").
+
+        Returns
+        -------
+        Optional[Geometry2D]
+            Converted geometry, or None if conversion failed.
+        """
+        sym_name = symbols.get(record.symbol_num, "")
+        if not sym_name:
+            self._warnings.append(f"Pad record references missing symbol {record.symbol_num}")
+            return None
+
+        sym_info = parse_symbol(sym_name)
+
+        if sym_info.type == "unknown":
+            return None
+
+        x = convert_to_microns(record.x, units)
+        y = convert_to_microns(record.y, units)
+
+        # Parse orientation (simplified - full implementation would handle mirror)
+        rotation = self._parse_orient_def(record.orient_def)
+        rotation += sym_info.rotation
+
+        if sym_info.type == "round":
+            diameter = convert_to_microns(sym_info.params["diameter"], units, is_symbol_dim=True)
+            return Circle2D(center=(x, y), radius=diameter / 2)
+
+        elif sym_info.type == "square":
+            side = convert_to_microns(sym_info.params["side"], units, is_symbol_dim=True)
+            if rotation != 0 and rotation % 90 != 0:
+                self._warnings.append(f"Pad rotation ({rotation}°) not fully supported for square")
+            return Rectangle2D(center=(x, y), size=(side, side))
+
+        elif sym_info.type == "rect":
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            if rotation != 0 and rotation % 90 != 0:
+                self._warnings.append(f"Pad rotation ({rotation}°) not fully supported for rect")
+            # Handle 90° rotations by swapping dimensions
+            if rotation == 90 or rotation == 270:
+                width, height = height, width
+            return Rectangle2D(center=(x, y), size=(width, height))
+
+        elif sym_info.type == "oval":
+            # Oval → approximate as rectangle for now
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            self._warnings.append(f"Oval symbol '{sym_name}' approximated as rectangle")
+            return Rectangle2D(center=(x, y), size=(width, height))
+
+        elif sym_info.type == "diamond":
+            # Diamond → approximate as polygon would be better, use rectangle for now
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            self._warnings.append(f"Diamond symbol '{sym_name}' approximated as rectangle")
+            return Rectangle2D(center=(x, y), size=(width, height))
+
+        elif sym_info.type == "octagon":
+            # Octagon → approximate as rectangle
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            self._warnings.append(f"Octagon symbol '{sym_name}' approximated as rectangle")
+            return Rectangle2D(center=(x, y), size=(width, height))
+
+        elif sym_info.type == "donut_r":
+            # Round donut (annular ring) → Polygon2D with circular exterior and hole
+            outer_d = convert_to_microns(
+                sym_info.params["outer_diameter"], units, is_symbol_dim=True
+            )
+            inner_d = convert_to_microns(
+                sym_info.params["inner_diameter"], units, is_symbol_dim=True
+            )
+            outer_r = outer_d / 2
+            inner_r = inner_d / 2
+            # Create circular polygon exterior (using bulges for full circle approximation)
+            # For now, approximate as a polygon without inner hole
+            # TODO: Use Polygon2D with Circle2D hole when properly supported
+            # Approximate outer circle with 32 vertices
+            n = 32
+            vertices = [
+                (x + outer_r * math.cos(2 * math.pi * i / n),
+                 y + outer_r * math.sin(2 * math.pi * i / n))
+                for i in range(n)
+            ]
+            hole = Circle2D(center=(x, y), radius=inner_r)
+            return Polygon2D(vertices=vertices, holes=(hole,))
+
+        elif sym_info.type == "donut_s":
+            # Square donut → Rectangle exterior with square hole
+            outer_s = convert_to_microns(
+                sym_info.params["outer_side"], units, is_symbol_dim=True
+            )
+            inner_s = convert_to_microns(
+                sym_info.params["inner_side"], units, is_symbol_dim=True
+            )
+            # Outer rectangle vertices (CCW)
+            half_outer = outer_s / 2
+            vertices = [
+                (x - half_outer, y - half_outer),
+                (x + half_outer, y - half_outer),
+                (x + half_outer, y + half_outer),
+                (x - half_outer, y + half_outer),
+            ]
+            # Inner rectangle as hole (using Rectangle2D)
+            hole = Rectangle2D(center=(x, y), size=(inner_s, inner_s))
+            return Polygon2D(vertices=vertices, holes=(hole,))
+
+        return None
+
+    def _convert_surface(self, record: SurfaceRecord, units: str) -> Optional[Polygon2D]:
+        """Convert S record to Polygon2D.
+
+        Parameters
+        ----------
+        record : SurfaceRecord
+            Parsed surface record.
+        units : str
+            Units string ("MM" or "INCH").
+
+        Returns
+        -------
+        Optional[Polygon2D]
+            Converted polygon, or None if conversion failed.
+        """
+        if not record.contours:
+            return None
+
+        # Find island (exterior) contour
+        islands = [c for c in record.contours if not c.is_hole]
+        holes = [c for c in record.contours if c.is_hole]
+
+        if not islands:
+            self._warnings.append("Surface has no island contour, skipping")
+            return None
+
+        if len(islands) > 1:
+            self._warnings.append("Surface has multiple islands, using first only")
+
+        # Convert island to vertices and bulges
+        vertices, bulges = self._contour_to_vertices(islands[0], units)
+
+        if not vertices or len(vertices) < 3:
+            self._warnings.append("Surface has insufficient vertices, skipping")
+            return None
+
+        # Convert holes to Geometry2D objects
+        hole_geoms: list[Geometry2D] = []
+        for hole_contour in holes:
+            hole_geom = self._convert_hole(hole_contour, units)
+            if hole_geom:
+                hole_geoms.append(hole_geom)
+
+        # Determine if we need bulges (only if any are non-zero)
+        has_bulges = any(abs(b) > 1e-12 for b in bulges)
+
+        return Polygon2D(
+            vertices=vertices,
+            bulges=tuple(bulges) if has_bulges else None,
+            holes=tuple(hole_geoms) if hole_geoms else (),
+        )
+
+    def _convert_hole(
+        self, contour: PolygonContour, units: str
+    ) -> Optional[Geometry2D]:
+        """Convert a hole contour to geometry.
+
+        Parameters
+        ----------
+        contour : PolygonContour
+            Hole contour.
+        units : str
+            Units string.
+
+        Returns
+        -------
+        Optional[Geometry2D]
+            Circle2D for circular holes, Polygon2D otherwise.
+        """
+        # Check if it's a circular hole (single full-circle arc)
+        if self._is_circular_hole(contour):
+            center, radius = self._extract_circle_from_contour(contour, units)
+            if radius > 0:
+                return Circle2D(center=center, radius=radius)
+
+        # Otherwise, convert to polygon
+        vertices, bulges = self._contour_to_vertices(contour, units)
+        if not vertices or len(vertices) < 3:
+            return None
+
+        has_bulges = any(abs(b) > 1e-12 for b in bulges)
+
+        return Polygon2D(
+            vertices=vertices,
+            bulges=tuple(bulges) if has_bulges else None,
+        )
+
+    def _contour_to_vertices(
+        self, contour: PolygonContour, units: str
+    ) -> tuple[list[tuple[float, float]], list[float]]:
+        """Convert contour segments to vertices and bulges.
+
+        Parameters
+        ----------
+        contour : PolygonContour
+            Contour to convert.
+        units : str
+            Units string.
+
+        Returns
+        -------
+        tuple[list, list]
+            (vertices, bulges) where vertices is list of (x, y) tuples
+            and bulges is list of bulge values for each edge.
+        """
+        vertices: list[tuple[float, float]] = []
+        bulges: list[float] = []
+
+        prev_point: Optional[tuple[float, float]] = None
+
+        for seg in contour.segments:
+            if seg["type"] == "start":
+                x = convert_to_microns(seg["x"], units)
+                y = convert_to_microns(seg["y"], units)
+                vertices.append((x, y))
+                prev_point = (x, y)
+
+            elif seg["type"] == "line":
+                x = convert_to_microns(seg["x"], units)
+                y = convert_to_microns(seg["y"], units)
+                # Bulge for previous edge (straight line = 0)
+                if vertices:
+                    bulges.append(0.0)
+                vertices.append((x, y))
+                prev_point = (x, y)
+
+            elif seg["type"] == "arc":
+                xe = convert_to_microns(seg["xe"], units)
+                ye = convert_to_microns(seg["ye"], units)
+                xc = convert_to_microns(seg["xc"], units)
+                yc = convert_to_microns(seg["yc"], units)
+                cw = seg["cw"]
+
+                if prev_point is None:
+                    self._warnings.append("Arc segment without previous point")
+                    continue
+
+                # Check for full circle
+                if is_full_circle(prev_point, (xe, ye), (xc, yc)):
+                    # Split into two semicircles
+                    midpoint, bulge1, bulge2 = split_full_circle(prev_point, (xc, yc), cw)
+                    bulges.append(bulge1)
+                    vertices.append(midpoint)
+                    bulges.append(bulge2)
+                    vertices.append((xe, ye))
+                else:
+                    # Calculate bulge
+                    bulge = arc_to_bulge(prev_point, (xe, ye), (xc, yc), cw)
+                    bulges.append(bulge)
+                    vertices.append((xe, ye))
+
+                prev_point = (xe, ye)
+
+        # Final bulge for closing edge (last vertex to first vertex)
+        if len(bulges) < len(vertices):
+            bulges.append(0.0)  # Assume straight closing edge
+
+        # Remove duplicate closing vertex if present
+        if len(vertices) > 1:
+            dist = (
+                (vertices[0][0] - vertices[-1][0]) ** 2
+                + (vertices[0][1] - vertices[-1][1]) ** 2
+            ) ** 0.5
+            if dist < 1e-9:
+                vertices = vertices[:-1]
+                bulges = bulges[:-1]
+
+        return vertices, bulges
+
+    def _is_circular_hole(self, contour: PolygonContour) -> bool:
+        """Check if contour represents a circular hole (single full-circle arc).
+
+        Parameters
+        ----------
+        contour : PolygonContour
+            Contour to check.
+
+        Returns
+        -------
+        bool
+            True if contour is a single circular arc representing a full circle.
+        """
+        arc_count = sum(1 for s in contour.segments if s["type"] == "arc")
+        line_count = sum(1 for s in contour.segments if s["type"] == "line")
+        return arc_count == 1 and line_count == 0
+
+    def _extract_circle_from_contour(
+        self, contour: PolygonContour, units: str
+    ) -> tuple[tuple[float, float], float]:
+        """Extract center and radius from circular hole contour.
+
+        Parameters
+        ----------
+        contour : PolygonContour
+            Circular contour.
+        units : str
+            Units string.
+
+        Returns
+        -------
+        tuple[tuple[float, float], float]
+            ((center_x, center_y), radius)
+        """
+        for seg in contour.segments:
+            if seg["type"] == "arc":
+                xc = convert_to_microns(seg["xc"], units)
+                yc = convert_to_microns(seg["yc"], units)
+                xe = convert_to_microns(seg["xe"], units)
+                ye = convert_to_microns(seg["ye"], units)
+                radius = ((xe - xc) ** 2 + (ye - yc) ** 2) ** 0.5
+                return (xc, yc), radius
+
+        # Fallback - shouldn't happen if _is_circular_hole returned True
+        return (0.0, 0.0), 0.0
+
+    def _parse_orient_def(self, orient_def: str) -> float:
+        """Parse orientation definition to rotation degrees.
+
+        Parameters
+        ----------
+        orient_def : str
+            Orientation definition string.
+
+        Returns
+        -------
+        float
+            Rotation in degrees (0, 90, 180, 270, or arbitrary angle).
+
+        Notes
+        -----
+        ODB++ orientation encoding:
+        - 0-7: Legacy values (0=0°, 1=90°, 2=180°, 3=270°, 4-7=mirrored)
+        - "8 <angle>": Arbitrary rotation, no mirror
+        - "9 <angle>": Arbitrary rotation, with mirror
+        """
+        # Simplified - full implementation handles 0-7, 8+angle, 9+angle (mirror)
+        try:
+            val = int(orient_def)
+            if val < 4:
+                return float(val * 90 % 360)
+            elif val < 8:
+                # 4-7 are mirrored versions
+                self._warnings.append("Mirrored orientation not fully supported")
+                return float((val - 4) * 90 % 360)
+        except ValueError:
+            pass
+
+        # Check for "8 <angle>" or "9 <angle>" format
+        parts = orient_def.split()
+        if len(parts) == 2 and parts[0] in ("8", "9"):
+            try:
+                angle = float(parts[1])
+                if parts[0] == "9":
+                    self._warnings.append("Mirrored orientation not fully supported")
+                return angle
+            except ValueError:
+                pass
+
+        return 0.0
+
