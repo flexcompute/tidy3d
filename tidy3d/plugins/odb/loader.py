@@ -378,26 +378,62 @@ class ODBLoader:
         ------
         tuple[Geometry2D, Optional[str]]
             (geometry, net_name) tuples. net_name is None if not assigned.
+
+        Notes
+        -----
+        Net assignment is looked up from two sources:
+        1. EDA data file (eda/data) via layer_name and feature index
+        2. Feature-level attributes (.net_name attribute in features file)
+        Source 1 takes precedence if both are present.
         """
         units = data.units
         features = data.features
         symbols = data.symbols
 
-        def get_net(idx: int) -> Optional[str]:
-            """Look up net for feature index."""
+        # Find .net_name attribute index in features file
+        net_name_attr_idx: Optional[int] = None
+        for attr_idx, attr_name in data.attr_names.items():
+            if attr_name == ".net_name":
+                net_name_attr_idx = attr_idx
+                break
+
+        def get_net_from_feature(feature) -> Optional[str]:
+            """Get net name from feature's own attributes."""
+            if net_name_attr_idx is None:
+                return None
+            if not hasattr(feature, "attributes") or not feature.attributes:
+                return None
+            if net_name_attr_idx not in feature.attributes:
+                return None
+            try:
+                text_idx = int(feature.attributes[net_name_attr_idx])
+                net = data.attr_texts.get(text_idx)
+                return None if net == "$NONE$" else net
+            except (ValueError, TypeError):
+                return None
+
+        def get_net(idx: int, feature=None) -> Optional[str]:
+            """Look up net for feature index, checking EDA data then feature attributes."""
+            # First try EDA data
             net = eda_data.net_assignments.get((layer_name, idx))
-            return None if net == "$NONE$" else net
+            if net is not None:
+                return None if net == "$NONE$" else net
+            # Fall back to feature attributes
+            if feature is not None:
+                return get_net_from_feature(feature)
+            return None
 
         i = 0
         while i < len(features):
             feature = features[i]
-            net_name = get_net(i)
+            net_name = get_net(i, feature)
 
             # Try trace grouping for Line/Arc records
             if group_traces and isinstance(feature, (LineRecord, ArcRecord)):
                 # Find extent of mergeable consecutive records
                 merge_end = self._find_merge_extent(
-                    features, i, symbols, units, layer_name, eda_data
+                    features, i, symbols, units, layer_name, eda_data,
+                    data.attr_names, data.attr_texts
                 )
 
                 if merge_end > i:
@@ -441,6 +477,8 @@ class ODBLoader:
         units: str,
         layer_name: str,
         eda_data: EDAData,
+        attr_names: dict,
+        attr_texts: dict,
     ) -> int:
         """Find the last index of consecutive mergeable Line/Arc records.
 
@@ -458,6 +496,10 @@ class ODBLoader:
             Layer name for net lookup.
         eda_data : EDAData
             EDA data for net lookup.
+        attr_names : dict
+            Attribute index to name mapping from features file.
+        attr_texts : dict
+            Attribute text index to text mapping from features file.
 
         Returns
         -------
@@ -465,10 +507,37 @@ class ODBLoader:
             Last index of mergeable records (>= start_idx).
             Returns start_idx if no merging possible.
         """
+        # Find .net_name attribute index
+        net_name_attr_idx: Optional[int] = None
+        for attr_idx, attr_name in attr_names.items():
+            if attr_name == ".net_name":
+                net_name_attr_idx = attr_idx
+                break
 
-        def get_net(idx: int) -> Optional[str]:
+        def get_net_from_feature(feature) -> Optional[str]:
+            """Get net name from feature's own attributes."""
+            if net_name_attr_idx is None:
+                return None
+            if not hasattr(feature, "attributes") or not feature.attributes:
+                return None
+            if net_name_attr_idx not in feature.attributes:
+                return None
+            try:
+                text_idx = int(feature.attributes[net_name_attr_idx])
+                net = attr_texts.get(text_idx)
+                return None if net == "$NONE$" else net
+            except (ValueError, TypeError):
+                return None
+
+        def get_net(idx: int, feature=None) -> Optional[str]:
+            # First try EDA data
             net = eda_data.net_assignments.get((layer_name, idx))
-            return None if net == "$NONE$" else net
+            if net is not None:
+                return None if net == "$NONE$" else net
+            # Fall back to feature attributes
+            if feature is not None:
+                return get_net_from_feature(feature)
+            return None
 
         def get_width_and_cap(
             record: Union[LineRecord, ArcRecord]
@@ -501,7 +570,7 @@ class ODBLoader:
         merge_end = start_idx
         prev = features[start_idx]
         prev_width, prev_cap = get_width_and_cap(prev)
-        prev_net = get_net(start_idx)
+        prev_net = get_net(start_idx, prev)
 
         if prev_width is None:
             return start_idx
@@ -523,7 +592,7 @@ class ODBLoader:
                 break
 
             # Check net
-            curr_net = get_net(j)
+            curr_net = get_net(j, curr)
             if curr_net != prev_net:
                 break
 
