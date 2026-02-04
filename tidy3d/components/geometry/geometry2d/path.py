@@ -142,7 +142,7 @@ class Path2D(Geometry2D):
     )
 
     arc_resolution: pydantic.PositiveInt = pydantic.Field(
-        64,
+        32,
         title="Arc Resolution",
         description="Number of line segments used to approximate a full circle "
         "when tessellating arc segments.",

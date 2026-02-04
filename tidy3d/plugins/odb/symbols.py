@@ -13,8 +13,9 @@ from typing import Callable, Literal, Optional
 
 # Symbol type literals
 SymbolType = Literal[
-    "round", "square", "rect", "oval", "diamond", "octagon",
-    "donut_r", "donut_s", "unknown"
+    "round", "square", "rect", "rounded_rect", "chamfered_rect",
+    "oval", "diamond", "octagon",
+    "donut_r", "donut_s", "donut_sr", "unknown"
 ]
 
 
@@ -25,16 +26,22 @@ class SymbolInfo:
     Attributes
     ----------
     type : SymbolType
-        Type of symbol: "round", "square", "rect", "oval", "diamond",
-        "octagon", or "unknown".
+        Type of symbol: "round", "square", "rect", "rounded_rect",
+        "chamfered_rect", "oval", "diamond", "octagon", "donut_r",
+        "donut_s", "donut_sr", or "unknown".
     params : dict[str, float]
         Symbol parameters. Keys depend on type:
         - round: {"diameter": float}
         - square: {"side": float}
-        - rect: {"width": float, "height": float, "corner_radius": float}
+        - rect: {"width": float, "height": float}
+        - rounded_rect: {"width", "height", "corner_radius", "corners"}
+        - chamfered_rect: {"width", "height", "corner_radius", "corners"}
         - oval: {"width": float, "height": float}
         - diamond: {"width": float, "height": float}
         - octagon: {"width": float, "height": float, "corner": float}
+        - donut_r: {"outer_diameter", "inner_diameter"}
+        - donut_s: {"outer_side", "inner_side"}
+        - donut_sr: {"outer_side", "inner_diameter"}
         - unknown: {"name": str}
     rotation : float
         Rotation in degrees (ODB++ v7+). Default 0.0.
@@ -62,14 +69,25 @@ class SymbolInfo:
 # Symbol parsing patterns
 # Format: prefix<num>, prefix<w>x<h>, etc.
 # Optional rotation suffix: _<angle>
+# Note: Order matters - more specific patterns must come before general ones
 _PATTERNS: dict[str, re.Pattern] = {
     # r<d> or r<d>_<rotation>
     "round": re.compile(r"^r(\d+(?:\.\d+)?)(?:_(\d+(?:\.\d+)?))?$"),
     # s<s> or s<s>_<rotation>
     "square": re.compile(r"^s(\d+(?:\.\d+)?)(?:_(\d+(?:\.\d+)?))?$"),
-    # rect<w>x<h> or rect<w>x<h>xr<rad> or rect<w>x<h>xc<rad> with optional corners
+    # rect<w>x<h>xr<rad> - rounded rectangle (must come before plain rect)
+    # Optional corner selection: x<1234> where digits indicate which corners
+    "rounded_rect": re.compile(
+        r"^rect(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)xr(\d+(?:\.\d+)?)(?:x(\d+))?(?:_(\d+(?:\.\d+)?))?$"
+    ),
+    # rect<w>x<h>xc<rad> - chamfered rectangle (must come before plain rect)
+    # Optional corner selection: x<1234> where digits indicate which corners
+    "chamfered_rect": re.compile(
+        r"^rect(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)xc(\d+(?:\.\d+)?)(?:x(\d+))?(?:_(\d+(?:\.\d+)?))?$"
+    ),
+    # rect<w>x<h> - plain rectangle
     "rect": re.compile(
-        r"^rect(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)(?:x[rc](\d+(?:\.\d+)?))?(?:x(\d+))?(?:_(\d+(?:\.\d+)?))?$"
+        r"^rect(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)(?:_(\d+(?:\.\d+)?))?$"
     ),
     # oval<w>x<h>
     "oval": re.compile(r"^oval(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)(?:_(\d+(?:\.\d+)?))?$"),
@@ -83,6 +101,8 @@ _PATTERNS: dict[str, re.Pattern] = {
     "donut_r": re.compile(r"^donut_r(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)(?:_(\d+(?:\.\d+)?))?$"),
     # donut_s<outer>x<inner> (square donut)
     "donut_s": re.compile(r"^donut_s(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)(?:_(\d+(?:\.\d+)?))?$"),
+    # donut_sr<outer>x<inner> (square with round hole)
+    "donut_sr": re.compile(r"^donut_sr(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)(?:_(\d+(?:\.\d+)?))?$"),
 }
 
 # Extensible registry for custom symbol types (dogbone, thermal, etc.)
@@ -137,11 +157,14 @@ def parse_symbol(name: str) -> SymbolInfo:
     - r<d>: round (circle) with diameter d
     - s<s>: square with side s
     - rect<w>x<h>: rectangle with width w, height h
-    - rect<w>x<h>xr<rad>: rounded rectangle
-    - rect<w>x<h>xc<rad>: chamfered rectangle
+    - rect<w>x<h>xr<rad>: rounded rectangle with corner radius rad
+    - rect<w>x<h>xc<rad>: chamfered rectangle with corner chamfer rad
     - oval<w>x<h>: oval (stadium shape)
-    - di<w>x<h>: diamond
-    - oct<w>x<h>x<r>: octagon
+    - di<w>x<h>: diamond (rhombus)
+    - oct<w>x<h>x<r>: octagon with corner size r
+    - donut_r<od>x<id>: round donut (annular ring)
+    - donut_s<od>x<id>: square donut
+    - donut_sr<od>x<id>: square with round hole
 
     Example
     -------
@@ -214,15 +237,41 @@ def _build_symbol_info(sym_type: str, match: re.Match) -> SymbolInfo:
             rotation=float(groups[1]) if groups[1] else 0.0,
         )
 
+    elif sym_type == "rounded_rect":
+        # rect<w>x<h>xr<rad> with optional corners x<1234>
+        return SymbolInfo(
+            type="rounded_rect",
+            params={
+                "width": float(groups[0]),
+                "height": float(groups[1]),
+                "corner_radius": float(groups[2]),
+                "corners": groups[3] if groups[3] else "1234",  # All corners by default
+            },
+            rotation=float(groups[4]) if groups[4] else 0.0,
+        )
+
+    elif sym_type == "chamfered_rect":
+        # rect<w>x<h>xc<rad> with optional corners x<1234>
+        return SymbolInfo(
+            type="chamfered_rect",
+            params={
+                "width": float(groups[0]),
+                "height": float(groups[1]),
+                "corner_radius": float(groups[2]),
+                "corners": groups[3] if groups[3] else "1234",  # All corners by default
+            },
+            rotation=float(groups[4]) if groups[4] else 0.0,
+        )
+
     elif sym_type == "rect":
+        # Plain rect<w>x<h>
         return SymbolInfo(
             type="rect",
             params={
                 "width": float(groups[0]),
                 "height": float(groups[1]),
-                "corner_radius": float(groups[2]) if groups[2] else 0.0,
             },
-            rotation=float(groups[4]) if groups[4] else 0.0,
+            rotation=float(groups[2]) if groups[2] else 0.0,
         )
 
     elif sym_type == "oval":
@@ -272,6 +321,17 @@ def _build_symbol_info(sym_type: str, match: re.Match) -> SymbolInfo:
             params={
                 "outer_side": float(groups[0]),
                 "inner_side": float(groups[1]),
+            },
+            rotation=float(groups[2]) if groups[2] else 0.0,
+        )
+
+    elif sym_type == "donut_sr":
+        # Square with round hole
+        return SymbolInfo(
+            type="donut_sr",
+            params={
+                "outer_side": float(groups[0]),
+                "inner_diameter": float(groups[1]),
             },
             rotation=float(groups[2]) if groups[2] else 0.0,
         )

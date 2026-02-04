@@ -611,19 +611,31 @@ class ODBLoader:
                 base_shape = Rectangle2D(center=(0, 0), size=(width, height))
 
             elif sym_info.type == "oval":
-                # Approximate as rectangle
+                # Oval (stadium shape) - use accurate representation
                 width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
                 height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
-                self._warnings.append(f"Oval symbol '{sym_name}' approximated as rectangle")
-                base_shape = Rectangle2D(center=(0, 0), size=(width, height))
+                base_shape = self._create_oval_polygon(width, height)
+
+            elif sym_info.type == "diamond":
+                # Diamond (rhombus)
+                width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+                height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+                hw, hh = width / 2, height / 2
+                vertices = [(hw, 0), (0, hh), (-hw, 0), (0, -hh)]
+                base_shape = Polygon2D(vertices=vertices)
+
+            elif sym_info.type == "octagon":
+                # Octagon (chamfered rectangle)
+                width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+                height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+                corner = convert_to_microns(sym_info.params["corner"], units, is_symbol_dim=True)
+                vertices = self._create_octagon_vertices(width, height, corner)
+                base_shape = Polygon2D(vertices=vertices)
 
             else:
-                # For other symbol types, fall back to individual pad conversion
-                self._warnings.append(
-                    f"Symbol type '{sym_info.type}' in DRILL layer, yielding individually"
-                )
+                # For other symbol types (donuts, rounded rect, etc.), fall back to individual conversion
+                # These shapes often have holes which can't be efficiently grouped in Array2D
                 for px, py in positions:
-                    # Create the base pad geometry directly at position
                     geom = self._convert_symbol_to_geometry(sym_name, px, py, units)
                     if geom:
                         yield geom, net_name
@@ -662,11 +674,26 @@ class ODBLoader:
         self, sym_name: str, x: float, y: float, units: str
     ) -> Optional[Geometry2D]:
         """Convert a symbol to geometry at a specific position.
-        
+
         Helper for DRILL layer fallback when symbol type doesn't support Array2D grouping.
+        Uses accurate geometry representations for all symbol types.
+
+        Parameters
+        ----------
+        sym_name : str
+            Symbol name string.
+        x, y : float
+            Position in microns.
+        units : str
+            Units string for symbol dimensions.
+
+        Returns
+        -------
+        Optional[Geometry2D]
+            Geometry at position, or None if conversion failed.
         """
         sym_info = parse_symbol(sym_name)
-        
+
         if sym_info.type == "unknown":
             return None
 
@@ -684,12 +711,30 @@ class ODBLoader:
             return Rectangle2D(center=(x, y), size=(width, height))
 
         elif sym_info.type == "oval":
+            # Oval (stadium shape)
             width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
             height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
-            self._warnings.append(f"Oval symbol '{sym_name}' approximated as rectangle")
-            return Rectangle2D(center=(x, y), size=(width, height))
+            base = self._create_oval_polygon(width, height)
+            return self._translate_polygon(base, x, y)
+
+        elif sym_info.type == "diamond":
+            # Diamond (rhombus)
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            hw, hh = width / 2, height / 2
+            vertices = [(x + hw, y), (x, y + hh), (x - hw, y), (x, y - hh)]
+            return Polygon2D(vertices=vertices)
+
+        elif sym_info.type == "octagon":
+            # Octagon (chamfered rectangle)
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            corner = convert_to_microns(sym_info.params["corner"], units, is_symbol_dim=True)
+            vertices = self._create_octagon_vertices(width, height, corner)
+            return Polygon2D(vertices=[(vx + x, vy + y) for vx, vy in vertices])
 
         elif sym_info.type == "donut_r":
+            # Round donut (annular ring)
             outer_d = convert_to_microns(
                 sym_info.params["outer_diameter"], units, is_symbol_dim=True
             )
@@ -698,16 +743,20 @@ class ODBLoader:
             )
             outer_r = outer_d / 2
             inner_r = inner_d / 2
-            n = 32
+            # Use quarter-circle bulges for accurate circle
+            bulge_quarter = math.tan(math.pi / 8)
             vertices = [
-                (x + outer_r * math.cos(2 * math.pi * i / n),
-                 y + outer_r * math.sin(2 * math.pi * i / n))
-                for i in range(n)
+                (x + outer_r, y),
+                (x, y + outer_r),
+                (x - outer_r, y),
+                (x, y - outer_r),
             ]
+            bulges = (bulge_quarter, bulge_quarter, bulge_quarter, bulge_quarter)
             hole = Circle2D(center=(x, y), radius=inner_r)
-            return Polygon2D(vertices=vertices, holes=(hole,))
+            return Polygon2D(vertices=vertices, bulges=bulges, holes=(hole,))
 
         elif sym_info.type == "donut_s":
+            # Square donut
             outer_s = convert_to_microns(
                 sym_info.params["outer_side"], units, is_symbol_dim=True
             )
@@ -723,6 +772,54 @@ class ODBLoader:
             ]
             hole = Rectangle2D(center=(x, y), size=(inner_s, inner_s))
             return Polygon2D(vertices=vertices, holes=(hole,))
+
+        elif sym_info.type == "donut_sr":
+            # Square with round hole
+            outer_s = convert_to_microns(
+                sym_info.params["outer_side"], units, is_symbol_dim=True
+            )
+            inner_d = convert_to_microns(
+                sym_info.params["inner_diameter"], units, is_symbol_dim=True
+            )
+            half_outer = outer_s / 2
+            inner_r = inner_d / 2
+            vertices = [
+                (x - half_outer, y - half_outer),
+                (x + half_outer, y - half_outer),
+                (x + half_outer, y + half_outer),
+                (x - half_outer, y + half_outer),
+            ]
+            hole = Circle2D(center=(x, y), radius=inner_r)
+            return Polygon2D(vertices=vertices, holes=(hole,))
+
+        elif sym_info.type == "rounded_rect":
+            # Rounded rectangle
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            corner_radius = convert_to_microns(
+                sym_info.params["corner_radius"], units, is_symbol_dim=True
+            )
+            corners = sym_info.params.get("corners", "1234")
+            vertices, bulges = self._create_rounded_rect_vertices(
+                width, height, corner_radius, corners
+            )
+            return Polygon2D(
+                vertices=[(vx + x, vy + y) for vx, vy in vertices],
+                bulges=bulges,
+            )
+
+        elif sym_info.type == "chamfered_rect":
+            # Chamfered rectangle
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            corner_radius = convert_to_microns(
+                sym_info.params["corner_radius"], units, is_symbol_dim=True
+            )
+            corners = sym_info.params.get("corners", "1234")
+            vertices = self._create_chamfered_rect_vertices(
+                width, height, corner_radius, corners
+            )
+            return Polygon2D(vertices=[(vx + x, vy + y) for vx, vy in vertices])
 
         return None
 
@@ -1160,40 +1257,48 @@ class ODBLoader:
                 base_shape = Rectangle2D(center=(0, 0), size=(width, height))
 
         elif sym_info.type == "oval":
-            # Oval → approximate as rectangle for now (TODO: improve with scaled circle)
+            # Oval → Stadium shape (rectangle with semicircle endcaps)
             width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
             height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
-            self._warnings.append(f"Oval symbol '{sym_name}' approximated as rectangle")
+            base_shape = self._create_oval_polygon(width, height)
+            # For axis-aligned cases without mirror, just translate
             if not mirror_x and rotation_deg in (0, 180):
-                return Rectangle2D(center=(x, y), size=(width, height))
+                return self._translate_polygon(base_shape, x, y)
             elif not mirror_x and rotation_deg in (90, 270):
-                return Rectangle2D(center=(x, y), size=(height, width))
-            else:
-                base_shape = Rectangle2D(center=(0, 0), size=(width, height))
+                # Swap dimensions for 90/270 rotation
+                base_shape = self._create_oval_polygon(height, width)
+                return self._translate_polygon(base_shape, x, y)
 
         elif sym_info.type == "diamond":
-            # Diamond → approximate as rectangle for now (TODO: rotated square)
+            # Diamond → 4-vertex rhombus polygon
             width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
             height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
-            self._warnings.append(f"Diamond symbol '{sym_name}' approximated as rectangle")
+            hw, hh = width / 2, height / 2
+            # Vertices at cardinal points (right, top, left, bottom) - CCW order
+            vertices = [(hw, 0), (0, hh), (-hw, 0), (0, -hh)]
+            base_shape = Polygon2D(vertices=vertices)
+            # For axis-aligned cases without mirror, just translate
             if not mirror_x and rotation_deg in (0, 180):
-                return Rectangle2D(center=(x, y), size=(width, height))
+                return Polygon2D(vertices=[(vx + x, vy + y) for vx, vy in vertices])
             elif not mirror_x and rotation_deg in (90, 270):
-                return Rectangle2D(center=(x, y), size=(height, width))
-            else:
-                base_shape = Rectangle2D(center=(0, 0), size=(width, height))
+                # Swap dimensions for 90/270 rotation
+                vertices_rotated = [(hh, 0), (0, hw), (-hh, 0), (0, -hw)]
+                return Polygon2D(vertices=[(vx + x, vy + y) for vx, vy in vertices_rotated])
 
         elif sym_info.type == "octagon":
-            # Octagon → approximate as rectangle (TODO: proper 8-vertex polygon)
+            # Octagon → 8-vertex polygon (chamfered rectangle)
             width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
             height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
-            self._warnings.append(f"Octagon symbol '{sym_name}' approximated as rectangle")
+            corner = convert_to_microns(sym_info.params["corner"], units, is_symbol_dim=True)
+            vertices = self._create_octagon_vertices(width, height, corner)
+            base_shape = Polygon2D(vertices=vertices)
+            # For axis-aligned cases without mirror, just translate
             if not mirror_x and rotation_deg in (0, 180):
-                return Rectangle2D(center=(x, y), size=(width, height))
+                return Polygon2D(vertices=[(vx + x, vy + y) for vx, vy in vertices])
             elif not mirror_x and rotation_deg in (90, 270):
-                return Rectangle2D(center=(x, y), size=(height, width))
-            else:
-                base_shape = Rectangle2D(center=(0, 0), size=(width, height))
+                # Swap dimensions for 90/270 rotation
+                vertices_rotated = self._create_octagon_vertices(height, width, corner)
+                return Polygon2D(vertices=[(vx + x, vy + y) for vx, vy in vertices_rotated])
 
         elif sym_info.type == "donut_r":
             # Round donut (annular ring) → Polygon2D with circular exterior and hole
@@ -1247,6 +1352,82 @@ class ODBLoader:
                     holes=(Rectangle2D(center=(x, y), size=(inner_s, inner_s)),)
                 )
 
+        elif sym_info.type == "donut_sr":
+            # Square with round hole
+            outer_s = convert_to_microns(
+                sym_info.params["outer_side"], units, is_symbol_dim=True
+            )
+            inner_d = convert_to_microns(
+                sym_info.params["inner_diameter"], units, is_symbol_dim=True
+            )
+            half_outer = outer_s / 2
+            inner_r = inner_d / 2
+            # Centered at origin
+            vertices = [
+                (-half_outer, -half_outer),
+                (half_outer, -half_outer),
+                (half_outer, half_outer),
+                (-half_outer, half_outer),
+            ]
+            hole = Circle2D(center=(0, 0), radius=inner_r)
+            base_shape = Polygon2D(vertices=vertices, holes=(hole,))
+            # For axis-aligned cases, just translate
+            if not mirror_x and rotation_deg in (0, 90, 180, 270):
+                return Polygon2D(
+                    vertices=[(vx + x, vy + y) for vx, vy in vertices],
+                    holes=(Circle2D(center=(x, y), radius=inner_r),)
+                )
+
+        elif sym_info.type == "rounded_rect":
+            # Rounded rectangle → Polygon2D with corner bulges
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            corner_radius = convert_to_microns(
+                sym_info.params["corner_radius"], units, is_symbol_dim=True
+            )
+            corners = sym_info.params.get("corners", "1234")
+            vertices, bulges = self._create_rounded_rect_vertices(
+                width, height, corner_radius, corners
+            )
+            base_shape = Polygon2D(vertices=vertices, bulges=bulges)
+            # For axis-aligned cases without mirror, just translate
+            if not mirror_x and rotation_deg in (0, 180):
+                return Polygon2D(
+                    vertices=[(vx + x, vy + y) for vx, vy in vertices],
+                    bulges=bulges,
+                )
+            elif not mirror_x and rotation_deg in (90, 270):
+                # Swap dimensions for 90/270 rotation
+                vertices_r, bulges_r = self._create_rounded_rect_vertices(
+                    height, width, corner_radius, corners
+                )
+                return Polygon2D(
+                    vertices=[(vx + x, vy + y) for vx, vy in vertices_r],
+                    bulges=bulges_r,
+                )
+
+        elif sym_info.type == "chamfered_rect":
+            # Chamfered rectangle → 8-vertex polygon
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            corner_radius = convert_to_microns(
+                sym_info.params["corner_radius"], units, is_symbol_dim=True
+            )
+            corners = sym_info.params.get("corners", "1234")
+            vertices = self._create_chamfered_rect_vertices(
+                width, height, corner_radius, corners
+            )
+            base_shape = Polygon2D(vertices=vertices)
+            # For axis-aligned cases without mirror, just translate
+            if not mirror_x and rotation_deg in (0, 180):
+                return Polygon2D(vertices=[(vx + x, vy + y) for vx, vy in vertices])
+            elif not mirror_x and rotation_deg in (90, 270):
+                # Swap dimensions for 90/270 rotation
+                vertices_r = self._create_chamfered_rect_vertices(
+                    height, width, corner_radius, corners
+                )
+                return Polygon2D(vertices=[(vx + x, vy + y) for vx, vy in vertices_r])
+
         # If we have a base shape that needs transformation
         if base_shape is not None:
             return self._apply_pad_transform(base_shape, x, y, rotation_deg, mirror_x)
@@ -1299,6 +1480,271 @@ class ODBLoader:
 
         # Convert to list for pydantic validation
         return Transformed2D(geometry=base_shape, transform=transform.tolist())
+
+    def _create_oval_polygon(
+        self, width: float, height: float
+    ) -> Polygon2D:
+        """Create an oval (stadium) shape as Polygon2D with bulges.
+
+        The oval is a rectangle with semicircular endcaps. Uses bulge=1.0
+        for semicircles (180° arcs).
+
+        Parameters
+        ----------
+        width : float
+            Total width of the oval.
+        height : float
+            Total height of the oval.
+
+        Returns
+        -------
+        Polygon2D
+            Stadium shape centered at origin.
+        """
+        hw, hh = width / 2, height / 2
+
+        if abs(width - height) < 1e-9:
+            # Circle case: use 4 quarter-circle arcs
+            # Vertices at cardinal points, each edge is a quarter circle (bulge ≈ 0.414)
+            r = hw
+            # tan(90°/4) = tan(22.5°) ≈ 0.4142
+            bulge_quarter = math.tan(math.pi / 8)
+            vertices = [(r, 0), (0, r), (-r, 0), (0, -r)]
+            bulges = (bulge_quarter, bulge_quarter, bulge_quarter, bulge_quarter)
+            return Polygon2D(vertices=vertices, bulges=bulges)
+
+        if width > height:
+            # Horizontal stadium: semicircles on left and right
+            # The semicircle radius is hh (half height)
+            hw2 = hw - hh  # Half-width of the straight section
+            # Vertices: bottom-left, bottom-right, top-right, top-left (CCW)
+            # Edges: bottom (straight), right semicircle, top (straight), left semicircle
+            vertices = [(-hw2, -hh), (hw2, -hh), (hw2, hh), (-hw2, hh)]
+            # bulge = 1.0 for semicircle (180° arc), 0 for straight
+            bulges = (0.0, 1.0, 0.0, 1.0)
+        else:
+            # Vertical stadium: semicircles on top and bottom
+            hh2 = hh - hw  # Half-height of the straight section
+            # Vertices: right-bottom, right-top, left-top, left-bottom (CCW)
+            vertices = [(hw, -hh2), (hw, hh2), (-hw, hh2), (-hw, -hh2)]
+            # bulge = 1.0 for semicircle
+            bulges = (1.0, 0.0, 1.0, 0.0)
+
+        return Polygon2D(vertices=vertices, bulges=bulges)
+
+    def _translate_polygon(
+        self, polygon: Polygon2D, dx: float, dy: float
+    ) -> Polygon2D:
+        """Translate a Polygon2D by (dx, dy).
+
+        Parameters
+        ----------
+        polygon : Polygon2D
+            Polygon to translate.
+        dx, dy : float
+            Translation offsets.
+
+        Returns
+        -------
+        Polygon2D
+            Translated polygon.
+        """
+        new_vertices = [
+            (float(v[0]) + dx, float(v[1]) + dy) for v in polygon.vertices
+        ]
+        # Translate holes if present
+        new_holes = []
+        for hole in polygon.holes:
+            if isinstance(hole, Circle2D):
+                new_holes.append(Circle2D(
+                    center=(hole.center[0] + dx, hole.center[1] + dy),
+                    radius=hole.radius,
+                ))
+            elif isinstance(hole, Rectangle2D):
+                new_holes.append(Rectangle2D(
+                    center=(hole.center[0] + dx, hole.center[1] + dy),
+                    size=hole.size,
+                ))
+            elif isinstance(hole, Polygon2D):
+                new_holes.append(self._translate_polygon(hole, dx, dy))
+            else:
+                # For other types, use Transformed2D
+                new_holes.append(Transformed2D(
+                    geometry=hole,
+                    transform=Transformed2D.translation(dx, dy),
+                ))
+
+        return Polygon2D(
+            vertices=new_vertices,
+            bulges=polygon.bulges,
+            holes=tuple(new_holes) if new_holes else (),
+        )
+
+    def _create_octagon_vertices(
+        self, width: float, height: float, corner: float
+    ) -> list[tuple[float, float]]:
+        """Create octagon vertices (chamfered rectangle).
+
+        Parameters
+        ----------
+        width : float
+            Total width.
+        height : float
+            Total height.
+        corner : float
+            Corner chamfer size.
+
+        Returns
+        -------
+        list[tuple[float, float]]
+            8 vertices in CCW order, centered at origin.
+        """
+        hw, hh = width / 2, height / 2
+        c = min(corner, hw, hh)  # Clamp corner to valid range
+
+        # 8 vertices starting from bottom-right, going CCW
+        return [
+            (hw, -hh + c),       # bottom-right, above corner
+            (hw, hh - c),        # top-right, below corner
+            (hw - c, hh),        # top-right, left of corner
+            (-hw + c, hh),       # top-left, right of corner
+            (-hw, hh - c),       # top-left, below corner
+            (-hw, -hh + c),      # bottom-left, above corner
+            (-hw + c, -hh),      # bottom-left, right of corner
+            (hw - c, -hh),       # bottom-right, left of corner
+        ]
+
+    def _create_rounded_rect_vertices(
+        self,
+        width: float,
+        height: float,
+        corner_radius: float,
+        corners: str = "1234",
+    ) -> tuple[list[tuple[float, float]], tuple[float, ...]]:
+        """Create rounded rectangle vertices with bulges for corner arcs.
+
+        Parameters
+        ----------
+        width : float
+            Total width.
+        height : float
+            Total height.
+        corner_radius : float
+            Corner radius.
+        corners : str
+            Which corners to round: "1"=top-right, "2"=top-left,
+            "3"=bottom-left, "4"=bottom-right. Default "1234" = all.
+
+        Returns
+        -------
+        tuple[list, tuple]
+            (vertices, bulges) for Polygon2D.
+        """
+        hw, hh = width / 2, height / 2
+        r = min(corner_radius, hw, hh)  # Clamp radius
+
+        # Quarter-circle bulge: tan(90°/4) = tan(22.5°)
+        bulge_quarter = math.tan(math.pi / 8)
+
+        # Build vertices and bulges going CCW from bottom-right
+        vertices = []
+        bulges = []
+
+        # Corner 4: bottom-right
+        if "4" in corners and r > 0:
+            vertices.extend([(hw, -hh + r), (hw - r, -hh)])
+            bulges.extend([bulge_quarter, 0.0])
+        else:
+            vertices.append((hw, -hh))
+            bulges.append(0.0)
+
+        # Corner 3: bottom-left
+        if "3" in corners and r > 0:
+            vertices.extend([(-hw + r, -hh), (-hw, -hh + r)])
+            bulges.extend([bulge_quarter, 0.0])
+        else:
+            vertices.append((-hw, -hh))
+            bulges.append(0.0)
+
+        # Corner 2: top-left
+        if "2" in corners and r > 0:
+            vertices.extend([(-hw, hh - r), (-hw + r, hh)])
+            bulges.extend([bulge_quarter, 0.0])
+        else:
+            vertices.append((-hw, hh))
+            bulges.append(0.0)
+
+        # Corner 1: top-right
+        if "1" in corners and r > 0:
+            vertices.extend([(hw - r, hh), (hw, hh - r)])
+            bulges.extend([bulge_quarter, 0.0])
+        else:
+            vertices.append((hw, hh))
+            bulges.append(0.0)
+
+        # Fix the last bulge to close the polygon properly
+        # The last edge connects back to the first vertex
+        if len(bulges) > 0:
+            bulges[-1] = 0.0  # Last edge to first vertex is straight
+
+        return vertices, tuple(bulges)
+
+    def _create_chamfered_rect_vertices(
+        self,
+        width: float,
+        height: float,
+        corner_radius: float,
+        corners: str = "1234",
+    ) -> list[tuple[float, float]]:
+        """Create chamfered rectangle vertices.
+
+        Parameters
+        ----------
+        width : float
+            Total width.
+        height : float
+            Total height.
+        corner_radius : float
+            Corner chamfer size.
+        corners : str
+            Which corners to chamfer: "1"=top-right, "2"=top-left,
+            "3"=bottom-left, "4"=bottom-right. Default "1234" = all.
+
+        Returns
+        -------
+        list[tuple[float, float]]
+            Vertices in CCW order, centered at origin.
+        """
+        hw, hh = width / 2, height / 2
+        c = min(corner_radius, hw, hh)  # Clamp chamfer
+
+        vertices = []
+
+        # Corner 4: bottom-right
+        if "4" in corners and c > 0:
+            vertices.extend([(hw, -hh + c), (hw - c, -hh)])
+        else:
+            vertices.append((hw, -hh))
+
+        # Corner 3: bottom-left
+        if "3" in corners and c > 0:
+            vertices.extend([(-hw + c, -hh), (-hw, -hh + c)])
+        else:
+            vertices.append((-hw, -hh))
+
+        # Corner 2: top-left
+        if "2" in corners and c > 0:
+            vertices.extend([(-hw, hh - c), (-hw + c, hh)])
+        else:
+            vertices.append((-hw, hh))
+
+        # Corner 1: top-right
+        if "1" in corners and c > 0:
+            vertices.extend([(hw - c, hh), (hw, hh - c)])
+        else:
+            vertices.append((hw, hh))
+
+        return vertices
 
     def _convert_surface(self, record: SurfaceRecord, units: str) -> Optional[Polygon2D]:
         """Convert S record to Polygon2D.
