@@ -20,6 +20,7 @@ from tidy3d.components.geometry.geometry2d import (
     Rectangle2D,
 )
 from tidy3d.components.geometry.layout import (
+    LayeredGeometry,
     LayeredStructure,
     LayerSpec,
     Stackup,
@@ -254,8 +255,6 @@ class ODBLoader:
                 use_lossy_dielectric=use_lossy_dielectric,
             )
 
-        structure = LayeredStructure(stackup=stackup)
-
         # Determine which layers have geometry to load
         # (only load layers that are in the stackup)
         stackup_layer_names = {spec.name for spec in stackup.layers}
@@ -273,6 +272,13 @@ class ODBLoader:
         eda_layer_map: dict[str, str] = {}
         for eda_layer in eda_data.layer_names:
             eda_layer_map[eda_layer.upper()] = eda_layer
+
+        # Collect LayeredGeometry objects directly using construct() to skip
+        # per-object validation. This is safe because:
+        # 1. Geometry2D objects are already validated when created
+        # 2. Layer names are checked against stackup below
+        # 3. Net names are just strings from parsed EDA data
+        all_layered_geoms: list[LayeredGeometry] = []
 
         # Load each layer's features
         for layer_def in self.matrix.layers:
@@ -315,15 +321,21 @@ class ODBLoader:
                         f"Dielectric layer '{layer_def.name}' is empty and no profile found"
                     )
 
-            # Group geometries by net for efficient adding
-            if geom_net_pairs:
-                net_groups: dict[Optional[str], list[Geometry2D]] = {}
-                for geom, net in geom_net_pairs:
-                    net_groups.setdefault(net, []).append(geom)
+            # Build LayeredGeometry objects directly, skipping per-object validation
+            for geom, net in geom_net_pairs:
+                all_layered_geoms.append(
+                    LayeredGeometry.construct(
+                        geometry=geom,
+                        layer=layer_def.name,
+                        net=net,
+                    )
+                )
 
-                # Add each net group to structure
-                for net, geoms in net_groups.items():
-                    structure = structure.add(layer_def.name, geoms, net=net)
+        # Create structure with pre-built geometries (final validation happens here)
+        structure = LayeredStructure(
+            stackup=stackup,
+            geometries=tuple(all_layered_geoms),
+        )
 
         # Report warnings
         for warning in self._warnings:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 import pydantic.v1 as pydantic
 from typing_extensions import Self
@@ -73,24 +73,30 @@ class LayeredStructure(Tidy3dBaseModel):
 
     def add(
         self,
-        layer: str,
-        geometries: Sequence[Geometry2D],
-        net: Optional[str] = None,
+        layer: Union[str, Sequence[str]],
+        geometries: Union[Geometry2D, Sequence[Geometry2D]],
+        net: Union[str, Sequence[str], None] = None,
     ) -> Self:
-        """Add geometries to a layer with optional net assignment.
+        """Add geometries to layer(s) with optional net assignment(s).
 
         Creates LayeredGeometry wrappers internally. Returns a new
         LayeredStructure with the geometries added (immutable pattern).
 
+        Supports broadcasting: a single layer or net value is applied to all
+        geometries. When a sequence of layers or nets is provided, it must
+        match the number of geometries.
+
         Parameters
         ----------
-        layer : str
-            Name of the layer to add geometries to.
-            Must exist in the stackup.
-        geometries : Sequence[Geometry2D]
-            List or tuple of 2D geometries to add.
-        net : str, optional
-            Net name to assign to all added geometries.
+        layer : str or Sequence[str]
+            Layer name(s). If a single string, all geometries are added to
+            that layer. If a sequence, must match length of geometries.
+            All layers must exist in the stackup.
+        geometries : Geometry2D or Sequence[Geometry2D]
+            Single geometry or sequence of 2D geometries to add.
+        net : str, Sequence[str], or None, optional
+            Net name(s). If a single string or None, applied to all geometries.
+            If a sequence, must match length of geometries.
 
         Returns
         -------
@@ -99,18 +105,62 @@ class LayeredStructure(Tidy3dBaseModel):
 
         Example
         -------
+        >>> # Single geometry
+        >>> board = board.add("top_copper", trace, net="CLK")
+        >>>
+        >>> # Multiple geometries, single layer/net (broadcast)
         >>> board = board.add("top_copper", [trace1, trace2, pad1], net="CLK")
-        >>> board = board.add("gnd_plane", [gnd_fill], net="GND")
+        >>>
+        >>> # Multiple geometries, multiple layers, single net
+        >>> board = board.add(["top_copper", "bottom_copper"], [trace1, trace2], net="GND")
+        >>>
+        >>> # Multiple geometries, single layer, multiple nets
+        >>> board = board.add("top_copper", [trace1, trace2], net=["CLK", "DATA"])
+        >>>
+        >>> # Multiple geometries, multiple layers, multiple nets
+        >>> board = board.add(["top", "bottom"], [g1, g2], net=["NET1", "NET2"])
         """
-        # Validate layer exists in stackup
-        if layer not in self.stackup:
-            raise ValueError(
-                f"Layer '{layer}' not found in stackup. "
-                f"Available layers: {self.stackup.layer_names}"
-            )
+        # Normalize geometries to a list
+        if isinstance(geometries, Geometry2D):
+            geom_list = [geometries]
+        else:
+            geom_list = list(geometries)
+
+        n = len(geom_list)
+
+        # Normalize layer to a list
+        if isinstance(layer, str):
+            layer_list = [layer] * n
+        else:
+            layer_list = list(layer)
+            if len(layer_list) != n:
+                raise ValueError(
+                    f"Length of layer sequence ({len(layer_list)}) must match "
+                    f"number of geometries ({n})."
+                )
+
+        # Normalize net to a list
+        if net is None or isinstance(net, str):
+            net_list = [net] * n
+        else:
+            net_list = list(net)
+            if len(net_list) != n:
+                raise ValueError(
+                    f"Length of net sequence ({len(net_list)}) must match "
+                    f"number of geometries ({n})."
+                )
+
+        # Validate all layers exist in stackup
+        for lyr in layer_list:
+            if lyr not in self.stackup:
+                raise ValueError(
+                    f"Layer '{lyr}' not found in stackup. "
+                    f"Available layers: {self.stackup.layer_names}"
+                )
 
         new_entries = tuple(
-            LayeredGeometry(geometry=g, layer=layer, net=net) for g in geometries
+            LayeredGeometry(geometry=g, layer=lyr, net=nt)
+            for g, lyr, nt in zip(geom_list, layer_list, net_list)
         )
         return self.copy(update={"geometries": self.geometries + new_entries})
 
@@ -345,12 +395,20 @@ class LayeredStructure(Tidy3dBaseModel):
             )
         return lg
 
-    def to_structures(self) -> list["Structure"]:
+    def to_structures(self, split_by_net: bool = False) -> list["Structure"]:
         """Convert all geometries to 3D tidy3d Structures.
 
-        Each LayeredGeometry is converted to a Structure using:
-        - z_bounds, sidewall_angle, axis from the corresponding LayerSpec
-        - medium from the LayerSpec (required)
+        Geometries are grouped and combined into a GeometryGroup per group.
+        This is more efficient than creating one Structure per geometry.
+
+        Parameters
+        ----------
+        split_by_net : bool, optional
+            If False (default), geometries are grouped by layer only, producing
+            one Structure per layer named "<layer>".
+            If True, geometries are grouped by (layer, net), producing one
+            Structure per unique combination named "<layer>_<net>" (or "<layer>"
+            if net is None).
 
         Returns
         -------
@@ -364,15 +422,28 @@ class LayeredStructure(Tidy3dBaseModel):
 
         Example
         -------
-        >>> structures = board.to_structures()
+        >>> structures = board.to_structures()  # One per layer
+        >>> structures = board.to_structures(split_by_net=True)  # One per (layer, net)
         >>> sim = Simulation(..., structures=structures)
         """
-        # Import here to avoid circular imports
+        from collections import defaultdict
+
+        from tidy3d.components.geometry.base import GeometryGroup
         from tidy3d.components.structure import Structure
 
+        # Group geometries by layer only, or by (layer, net)
+        if split_by_net:
+            groups: dict[tuple[str, Optional[str]], list[Geometry2D]] = defaultdict(list)
+            for lg in self.geometries:
+                groups[(lg.layer, lg.net)].append(lg.geometry)
+        else:
+            groups: dict[tuple[str, Optional[str]], list[Geometry2D]] = defaultdict(list)
+            for lg in self.geometries:
+                groups[(lg.layer, None)].append(lg.geometry)
+
         structures = []
-        for lg in self.geometries:
-            layer_spec = self.stackup[lg.layer]
+        for (layer_name, net_name), geom_2d_list in groups.items():
+            layer_spec = self.stackup[layer_name]
 
             if layer_spec.medium is None:
                 raise ValueError(
@@ -380,14 +451,29 @@ class LayeredStructure(Tidy3dBaseModel):
                     "A medium is required to create a Structure."
                 )
 
-            geometry_3d = lg.geometry.to_3d_geometry(
-                slab_bounds=layer_spec.slab_bounds,
-                axis=layer_spec.axis,
-                sidewall_angle=layer_spec.sidewall_angle,
-            )
+            # Convert all 2D geometries to 3D, flattening any nested GeometryGroups
+            geometries_3d = []
+            for g in geom_2d_list:
+                geom_3d = g.to_3d_geometry(
+                    slab_bounds=layer_spec.slab_bounds,
+                    axis=layer_spec.axis,
+                    sidewall_angle=layer_spec.sidewall_angle,
+                )
+                if isinstance(geom_3d, GeometryGroup):
+                    geometries_3d.extend(geom_3d.geometries)
+                else:
+                    geometries_3d.append(geom_3d)
 
+            # Build structure name: <layer>_<net> or just <layer> if no net
+            if split_by_net and net_name is not None:
+                struct_name = f"{layer_name}_{net_name}"
+            else:
+                struct_name = layer_name
+
+            # Create single Structure with GeometryGroup
+            group = GeometryGroup(geometries=tuple(geometries_3d))
             structures.append(
-                Structure(geometry=geometry_3d, medium=layer_spec.medium)
+                Structure(geometry=group, medium=layer_spec.medium, name=struct_name)
             )
 
         return structures
