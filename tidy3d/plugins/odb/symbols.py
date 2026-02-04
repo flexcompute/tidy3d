@@ -15,7 +15,7 @@ from typing import Callable, Literal, Optional
 SymbolType = Literal[
     "round", "square", "rect", "rounded_rect", "chamfered_rect",
     "oval", "diamond", "octagon",
-    "donut_r", "donut_s", "donut_sr", "unknown"
+    "donut_r", "donut_s", "donut_sr", "donut_s_rounded", "unknown"
 ]
 
 
@@ -28,7 +28,7 @@ class SymbolInfo:
     type : SymbolType
         Type of symbol: "round", "square", "rect", "rounded_rect",
         "chamfered_rect", "oval", "diamond", "octagon", "donut_r",
-        "donut_s", "donut_sr", or "unknown".
+        "donut_s", "donut_sr", "donut_s_rounded", or "unknown".
     params : dict[str, float]
         Symbol parameters. Keys depend on type:
         - round: {"diameter": float}
@@ -42,6 +42,7 @@ class SymbolInfo:
         - donut_r: {"outer_diameter", "inner_diameter"}
         - donut_s: {"outer_side", "inner_side"}
         - donut_sr: {"outer_side", "inner_diameter"}
+        - donut_s_rounded: {"outer_side", "inner_side", "corner_radius", "corners"}
         - unknown: {"name": str}
     rotation : float
         Rotation in degrees (ODB++ v7+). Default 0.0.
@@ -99,6 +100,11 @@ _PATTERNS: dict[str, re.Pattern] = {
     ),
     # donut_r<outer>x<inner> (round donut/annular ring)
     "donut_r": re.compile(r"^donut_r(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)(?:_(\d+(?:\.\d+)?))?$"),
+    # donut_s<outer>x<inner>xr<rad> (rounded square donut - must come before plain donut_s)
+    # Optional corner selection: x<1234> where digits indicate which corners
+    "donut_s_rounded": re.compile(
+        r"^donut_s(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)xr(\d+(?:\.\d+)?)(?:x(\d+))?(?:_(\d+(?:\.\d+)?))?$"
+    ),
     # donut_s<outer>x<inner> (square donut)
     "donut_s": re.compile(r"^donut_s(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)(?:_(\d+(?:\.\d+)?))?$"),
     # donut_sr<outer>x<inner> (square with round hole)
@@ -164,6 +170,7 @@ def parse_symbol(name: str) -> SymbolInfo:
     - oct<w>x<h>x<r>: octagon with corner size r
     - donut_r<od>x<id>: round donut (annular ring)
     - donut_s<od>x<id>: square donut
+    - donut_s<od>x<id>xr<rad>: rounded square donut
     - donut_sr<od>x<id>: square with round hole
 
     Example
@@ -313,6 +320,19 @@ def _build_symbol_info(sym_type: str, match: re.Match) -> SymbolInfo:
                 "inner_diameter": float(groups[1]),
             },
             rotation=float(groups[2]) if groups[2] else 0.0,
+        )
+
+    elif sym_type == "donut_s_rounded":
+        # Rounded square donut: donut_s<od>x<id>xr<rad> with optional corners x<1234>
+        return SymbolInfo(
+            type="donut_s_rounded",
+            params={
+                "outer_side": float(groups[0]),
+                "inner_side": float(groups[1]),
+                "corner_radius": float(groups[2]),
+                "corners": groups[3] if groups[3] else "1234",  # All corners by default
+            },
+            rotation=float(groups[4]) if groups[4] else 0.0,
         )
 
     elif sym_type == "donut_s":

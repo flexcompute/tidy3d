@@ -773,6 +773,34 @@ class ODBLoader:
             hole = Rectangle2D(center=(x, y), size=(inner_s, inner_s))
             return Polygon2D(vertices=vertices, holes=(hole,))
 
+        elif sym_info.type == "donut_s_rounded":
+            # Rounded square donut - both outer and inner squares have rounded corners
+            outer_s = convert_to_microns(
+                sym_info.params["outer_side"], units, is_symbol_dim=True
+            )
+            inner_s = convert_to_microns(
+                sym_info.params["inner_side"], units, is_symbol_dim=True
+            )
+            corner_radius = convert_to_microns(
+                sym_info.params["corner_radius"], units, is_symbol_dim=True
+            )
+            corners = sym_info.params.get("corners", "1234")
+            # Outer rounded rectangle
+            outer_verts, outer_bulges = self._create_rounded_rect_vertices(
+                outer_s, outer_s, corner_radius, corners
+            )
+            outer_verts = [(vx + x, vy + y) for vx, vy in outer_verts]
+            # Inner rounded rectangle (hole) - scale corner radius proportionally
+            inner_corner_radius = min(corner_radius, inner_s / 2)
+            inner_verts, inner_bulges = self._create_rounded_rect_vertices(
+                inner_s, inner_s, inner_corner_radius, corners
+            )
+            inner_hole = Polygon2D(
+                vertices=[(vx + x, vy + y) for vx, vy in inner_verts],
+                bulges=inner_bulges,
+            )
+            return Polygon2D(vertices=outer_verts, bulges=outer_bulges, holes=(inner_hole,))
+
         elif sym_info.type == "donut_sr":
             # Square with round hole
             outer_s = convert_to_microns(
@@ -1350,6 +1378,44 @@ class ODBLoader:
                 return Polygon2D(
                     vertices=[(vx + x, vy + y) for vx, vy in vertices],
                     holes=(Rectangle2D(center=(x, y), size=(inner_s, inner_s)),)
+                )
+
+        elif sym_info.type == "donut_s_rounded":
+            # Rounded square donut - both outer and inner squares have rounded corners
+            outer_s = convert_to_microns(
+                sym_info.params["outer_side"], units, is_symbol_dim=True
+            )
+            inner_s = convert_to_microns(
+                sym_info.params["inner_side"], units, is_symbol_dim=True
+            )
+            corner_radius = convert_to_microns(
+                sym_info.params["corner_radius"], units, is_symbol_dim=True
+            )
+            corners = sym_info.params.get("corners", "1234")
+            # Outer rounded rectangle (centered at origin)
+            outer_verts, outer_bulges = self._create_rounded_rect_vertices(
+                outer_s, outer_s, corner_radius, corners
+            )
+            # Inner rounded rectangle (hole) - scale corner radius proportionally
+            inner_corner_radius = min(corner_radius, inner_s / 2)
+            inner_verts, inner_bulges = self._create_rounded_rect_vertices(
+                inner_s, inner_s, inner_corner_radius, corners
+            )
+            inner_hole = Polygon2D(vertices=inner_verts, bulges=inner_bulges)
+            base_shape = Polygon2D(
+                vertices=outer_verts, bulges=outer_bulges, holes=(inner_hole,)
+            )
+            # For axis-aligned cases without mirror, just translate
+            if not mirror_x and rotation_deg in (0, 90, 180, 270):
+                return Polygon2D(
+                    vertices=[(vx + x, vy + y) for vx, vy in outer_verts],
+                    bulges=outer_bulges,
+                    holes=(
+                        Polygon2D(
+                            vertices=[(vx + x, vy + y) for vx, vy in inner_verts],
+                            bulges=inner_bulges,
+                        ),
+                    ),
                 )
 
         elif sym_info.type == "donut_sr":
