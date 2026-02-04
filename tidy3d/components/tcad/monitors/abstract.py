@@ -8,6 +8,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base_sim.monitor import AbstractMonitor
 from tidy3d.components.types import ArrayFloat1D
+from tidy3d.log import log
 
 BYTES_REAL = 4
 
@@ -29,8 +30,21 @@ class HeatChargeMonitor(AbstractMonitor, ABC):
         "significance for the latter ones. Effectively, setting ``conformal = True`` for "
         "unstructured monitors (``unstructured = True``) ensures that returned values "
         "will not be obtained by interpolation during postprocessing but rather directly "
-        "transferred from the computational grid.",
+        "transferred from the computational grid. Note: if the simulation mesh uses "
+        "``remove_fragments=True``, this option is ignored (treated as ``False``). "
+        "Deprecated: this field will be removed in version 2.12.",
     )
+
+    @pd.root_validator(pre=True)
+    def _warn_conformal_deprecated(cls, values):
+        """Warn if deprecated ``conformal`` field is provided."""
+        # Note:  Only warn when the deprecated flag is actually enabled.
+        if isinstance(values, dict) and values.get("conformal"):
+            log.warning(
+                "The `conformal` flag is deprecated and will be removed in version 2.12. "
+                "It has no effect when the simulation mesh is created with `remove_fragments=True`.",
+            )
+        return values
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""

@@ -3322,6 +3322,10 @@
           "minimum": 0,
           "type": "number"
         },
+        "remove_fragments": {
+          "default": false,
+          "type": "boolean"
+        },
         "sampling": {
           "default": 100,
           "exclusiveMinimum": 0,
@@ -9515,6 +9519,10 @@
           "default": 0.001,
           "minimum": 0,
           "type": "number"
+        },
+        "remove_fragments": {
+          "default": false,
+          "type": "boolean"
         },
         "type": {
           "default": "UniformUnstructuredGrid",
