@@ -13,11 +13,13 @@ from pathlib import Path
 from typing import Generator, List, Optional, Union
 
 from tidy3d.components.geometry.geometry2d import (
+    Array2D,
     Circle2D,
     Geometry2D,
     Path2D,
     Polygon2D,
     Rectangle2D,
+    Transformed2D,
 )
 from tidy3d.components.geometry.layout import (
     LayeredGeometry,
@@ -296,11 +298,20 @@ class ODBLoader:
             # Returns list of (geometry, net_name) tuples
             # Use EDA layer name (may be different case than matrix layer name)
             eda_layer_name = eda_layer_map.get(layer_def.name.upper(), layer_def.name)
-            geom_net_pairs = list(
-                self._convert_features_with_nets(
-                    features_data, eda_layer_name, eda_data, group_traces
+            
+            # Use optimized DRILL layer conversion for via/drill layers
+            if layer_def.type == "DRILL":
+                geom_net_pairs = list(
+                    self._convert_drill_features_with_nets(
+                        features_data, eda_layer_name, eda_data
+                    )
                 )
-            )
+            else:
+                geom_net_pairs = list(
+                    self._convert_features_with_nets(
+                        features_data, eda_layer_name, eda_data, group_traces
+                    )
+                )
 
             # Auto-fill empty dielectric layers with board profile
             if not geom_net_pairs and layer_def.type in ("DIELECTRIC", "SOLDER_MASK"):
@@ -480,6 +491,240 @@ class ODBLoader:
                     yield geom, net_name
 
             i += 1
+
+    def _convert_drill_features_with_nets(
+        self,
+        data: FeaturesData,
+        layer_name: str,
+        eda_data: EDAData,
+    ) -> Generator[tuple[Geometry2D, Optional[str]], None, None]:
+        """Convert DRILL layer features to Array2D objects grouped by (symbol, net).
+
+        For DRILL layers (vias), this method groups vias by their symbol (size/shape)
+        and net assignment, creating compact Array2D objects instead of individual
+        Circle2D objects.
+
+        Parameters
+        ----------
+        data : FeaturesData
+            Parsed features data.
+        layer_name : str
+            Layer name (for net lookup and error messages).
+        eda_data : EDAData
+            Parsed EDA data for net assignments.
+
+        Yields
+        ------
+        tuple[Geometry2D, Optional[str]]
+            (geometry, net_name) tuples. geometry is Array2D for grouped vias.
+        """
+        units = data.units
+        features = data.features
+        symbols = data.symbols
+
+        # Find .net_name attribute index in features file
+        net_name_attr_idx: Optional[int] = None
+        for attr_idx, attr_name in data.attr_names.items():
+            if attr_name == ".net_name":
+                net_name_attr_idx = attr_idx
+                break
+
+        def get_net_from_feature(feature) -> Optional[str]:
+            """Get net name from feature's own attributes."""
+            if net_name_attr_idx is None:
+                return None
+            if not hasattr(feature, "attributes") or not feature.attributes:
+                return None
+            if net_name_attr_idx not in feature.attributes:
+                return None
+            try:
+                text_idx = int(feature.attributes[net_name_attr_idx])
+                net = data.attr_texts.get(text_idx)
+                return None if net == "$NONE$" else net
+            except (ValueError, TypeError):
+                return None
+
+        def get_net(idx: int, feature=None) -> Optional[str]:
+            """Look up net for feature index."""
+            # First try EDA data
+            net = eda_data.net_assignments.get((layer_name, idx))
+            if net is not None:
+                return None if net == "$NONE$" else net
+            # Fall back to feature attributes
+            if feature is not None:
+                return get_net_from_feature(feature)
+            return None
+
+        # Group pads by (symbol_name, net_name)
+        # Key: (symbol_name, net_name)
+        # Value: list of (x, y) positions
+        groups: dict[tuple[str, Optional[str]], list[tuple[float, float]]] = {}
+        
+        # Track non-pad features to yield individually
+        non_pad_features: list[tuple[int, object]] = []
+
+        for i, feature in enumerate(features):
+            if isinstance(feature, PadRecord):
+                sym_name = symbols.get(feature.symbol_num, "")
+                if not sym_name:
+                    self._warnings.append(
+                        f"Pad record references missing symbol {feature.symbol_num}"
+                    )
+                    continue
+
+                net_name = get_net(i, feature)
+                x = convert_to_microns(feature.x, units)
+                y = convert_to_microns(feature.y, units)
+
+                key = (sym_name, net_name)
+                if key not in groups:
+                    groups[key] = []
+                groups[key].append((x, y))
+            else:
+                # Non-pad features (lines, arcs, surfaces) - track for individual yield
+                non_pad_features.append((i, feature))
+
+        # Convert each group to Array2D
+        for (sym_name, net_name), positions in groups.items():
+            sym_info = parse_symbol(sym_name)
+            
+            if sym_info.type == "unknown":
+                self._warnings.append(f"Unknown symbol '{sym_name}' in DRILL layer, skipping")
+                continue
+
+            # Create base shape at origin
+            base_shape: Optional[Geometry2D] = None
+
+            if sym_info.type == "round":
+                diameter = convert_to_microns(
+                    sym_info.params["diameter"], units, is_symbol_dim=True
+                )
+                base_shape = Circle2D(center=(0, 0), radius=diameter / 2)
+
+            elif sym_info.type == "square":
+                side = convert_to_microns(sym_info.params["side"], units, is_symbol_dim=True)
+                base_shape = Rectangle2D(center=(0, 0), size=(side, side))
+
+            elif sym_info.type == "rect":
+                width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+                height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+                base_shape = Rectangle2D(center=(0, 0), size=(width, height))
+
+            elif sym_info.type == "oval":
+                # Approximate as rectangle
+                width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+                height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+                self._warnings.append(f"Oval symbol '{sym_name}' approximated as rectangle")
+                base_shape = Rectangle2D(center=(0, 0), size=(width, height))
+
+            else:
+                # For other symbol types, fall back to individual pad conversion
+                self._warnings.append(
+                    f"Symbol type '{sym_info.type}' in DRILL layer, yielding individually"
+                )
+                for px, py in positions:
+                    # Create the base pad geometry directly at position
+                    geom = self._convert_symbol_to_geometry(sym_name, px, py, units)
+                    if geom:
+                        yield geom, net_name
+                continue
+
+            if base_shape is None:
+                continue
+
+            # Create Array2D with all positions
+            array = Array2D(
+                base_shape=base_shape,
+                positions=tuple(positions),
+            )
+            yield array, net_name
+
+        # Yield non-pad features individually (lines, arcs, surfaces in drill layers)
+        for i, feature in non_pad_features:
+            net_name = get_net(i, feature)
+
+            if isinstance(feature, LineRecord):
+                geom = self._convert_line(feature, symbols, units)
+                if geom:
+                    yield geom, net_name
+
+            elif isinstance(feature, ArcRecord):
+                geom = self._convert_arc(feature, symbols, units)
+                if geom:
+                    yield geom, net_name
+
+            elif isinstance(feature, SurfaceRecord):
+                geom = self._convert_surface(feature, units)
+                if geom:
+                    yield geom, net_name
+
+    def _convert_symbol_to_geometry(
+        self, sym_name: str, x: float, y: float, units: str
+    ) -> Optional[Geometry2D]:
+        """Convert a symbol to geometry at a specific position.
+        
+        Helper for DRILL layer fallback when symbol type doesn't support Array2D grouping.
+        """
+        sym_info = parse_symbol(sym_name)
+        
+        if sym_info.type == "unknown":
+            return None
+
+        if sym_info.type == "round":
+            diameter = convert_to_microns(sym_info.params["diameter"], units, is_symbol_dim=True)
+            return Circle2D(center=(x, y), radius=diameter / 2)
+
+        elif sym_info.type == "square":
+            side = convert_to_microns(sym_info.params["side"], units, is_symbol_dim=True)
+            return Rectangle2D(center=(x, y), size=(side, side))
+
+        elif sym_info.type == "rect":
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            return Rectangle2D(center=(x, y), size=(width, height))
+
+        elif sym_info.type == "oval":
+            width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
+            height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
+            self._warnings.append(f"Oval symbol '{sym_name}' approximated as rectangle")
+            return Rectangle2D(center=(x, y), size=(width, height))
+
+        elif sym_info.type == "donut_r":
+            outer_d = convert_to_microns(
+                sym_info.params["outer_diameter"], units, is_symbol_dim=True
+            )
+            inner_d = convert_to_microns(
+                sym_info.params["inner_diameter"], units, is_symbol_dim=True
+            )
+            outer_r = outer_d / 2
+            inner_r = inner_d / 2
+            n = 32
+            vertices = [
+                (x + outer_r * math.cos(2 * math.pi * i / n),
+                 y + outer_r * math.sin(2 * math.pi * i / n))
+                for i in range(n)
+            ]
+            hole = Circle2D(center=(x, y), radius=inner_r)
+            return Polygon2D(vertices=vertices, holes=(hole,))
+
+        elif sym_info.type == "donut_s":
+            outer_s = convert_to_microns(
+                sym_info.params["outer_side"], units, is_symbol_dim=True
+            )
+            inner_s = convert_to_microns(
+                sym_info.params["inner_side"], units, is_symbol_dim=True
+            )
+            half_outer = outer_s / 2
+            vertices = [
+                (x - half_outer, y - half_outer),
+                (x + half_outer, y - half_outer),
+                (x + half_outer, y + half_outer),
+                (x - half_outer, y + half_outer),
+            ]
+            hole = Rectangle2D(center=(x, y), size=(inner_s, inner_s))
+            return Polygon2D(vertices=vertices, holes=(hole,))
+
+        return None
 
     def _find_merge_extent(
         self,
@@ -847,7 +1092,7 @@ class ODBLoader:
     def _convert_pad(
         self, record: PadRecord, symbols: dict, units: str
     ) -> Optional[Geometry2D]:
-        """Convert P record to Circle2D or Rectangle2D.
+        """Convert P record to Geometry2D, applying rotation/mirror via Transformed2D.
 
         Parameters
         ----------
@@ -876,50 +1121,79 @@ class ODBLoader:
         x = convert_to_microns(record.x, units)
         y = convert_to_microns(record.y, units)
 
-        # Parse orientation (simplified - full implementation would handle mirror)
-        rotation = self._parse_orient_def(record.orient_def)
-        rotation += sym_info.rotation
+        # Parse orientation: rotation (degrees) and mirror flag
+        rotation_deg, mirror_x = self._parse_orient_def(record.orient_def)
+        rotation_deg += sym_info.rotation
+        rotation_deg = rotation_deg % 360  # Normalize to [0, 360)
+
+        # Build base shape at origin first, then apply transform
+        base_shape: Optional[Geometry2D] = None
 
         if sym_info.type == "round":
             diameter = convert_to_microns(sym_info.params["diameter"], units, is_symbol_dim=True)
+            # Circles are rotationally symmetric, no transform needed
             return Circle2D(center=(x, y), radius=diameter / 2)
 
         elif sym_info.type == "square":
             side = convert_to_microns(sym_info.params["side"], units, is_symbol_dim=True)
-            if rotation != 0 and rotation % 90 != 0:
-                self._warnings.append(f"Pad rotation ({rotation}°) not fully supported for square")
-            return Rectangle2D(center=(x, y), size=(side, side))
+            # Squares are symmetric under 90° rotation, only mirror matters
+            if mirror_x and rotation_deg % 90 != 0:
+                # Mirror + non-90° rotation needs transform
+                base_shape = Rectangle2D(center=(0, 0), size=(side, side))
+            elif rotation_deg != 0 and rotation_deg % 90 != 0:
+                # Non-90° rotation needs transform
+                base_shape = Rectangle2D(center=(0, 0), size=(side, side))
+            else:
+                return Rectangle2D(center=(x, y), size=(side, side))
 
         elif sym_info.type == "rect":
             width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
             height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
-            if rotation != 0 and rotation % 90 != 0:
-                self._warnings.append(f"Pad rotation ({rotation}°) not fully supported for rect")
-            # Handle 90° rotations by swapping dimensions
-            if rotation == 90 or rotation == 270:
-                width, height = height, width
-            return Rectangle2D(center=(x, y), size=(width, height))
+            
+            # For axis-aligned rectangles, we can optimize 90° rotations
+            if not mirror_x and rotation_deg in (0, 180):
+                return Rectangle2D(center=(x, y), size=(width, height))
+            elif not mirror_x and rotation_deg in (90, 270):
+                return Rectangle2D(center=(x, y), size=(height, width))
+            else:
+                # Non-90° rotation or mirror: use Transformed2D
+                base_shape = Rectangle2D(center=(0, 0), size=(width, height))
 
         elif sym_info.type == "oval":
-            # Oval → approximate as rectangle for now
+            # Oval → approximate as rectangle for now (TODO: improve with scaled circle)
             width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
             height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
             self._warnings.append(f"Oval symbol '{sym_name}' approximated as rectangle")
-            return Rectangle2D(center=(x, y), size=(width, height))
+            if not mirror_x and rotation_deg in (0, 180):
+                return Rectangle2D(center=(x, y), size=(width, height))
+            elif not mirror_x and rotation_deg in (90, 270):
+                return Rectangle2D(center=(x, y), size=(height, width))
+            else:
+                base_shape = Rectangle2D(center=(0, 0), size=(width, height))
 
         elif sym_info.type == "diamond":
-            # Diamond → approximate as polygon would be better, use rectangle for now
+            # Diamond → approximate as rectangle for now (TODO: rotated square)
             width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
             height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
             self._warnings.append(f"Diamond symbol '{sym_name}' approximated as rectangle")
-            return Rectangle2D(center=(x, y), size=(width, height))
+            if not mirror_x and rotation_deg in (0, 180):
+                return Rectangle2D(center=(x, y), size=(width, height))
+            elif not mirror_x and rotation_deg in (90, 270):
+                return Rectangle2D(center=(x, y), size=(height, width))
+            else:
+                base_shape = Rectangle2D(center=(0, 0), size=(width, height))
 
         elif sym_info.type == "octagon":
-            # Octagon → approximate as rectangle
+            # Octagon → approximate as rectangle (TODO: proper 8-vertex polygon)
             width = convert_to_microns(sym_info.params["width"], units, is_symbol_dim=True)
             height = convert_to_microns(sym_info.params["height"], units, is_symbol_dim=True)
             self._warnings.append(f"Octagon symbol '{sym_name}' approximated as rectangle")
-            return Rectangle2D(center=(x, y), size=(width, height))
+            if not mirror_x and rotation_deg in (0, 180):
+                return Rectangle2D(center=(x, y), size=(width, height))
+            elif not mirror_x and rotation_deg in (90, 270):
+                return Rectangle2D(center=(x, y), size=(height, width))
+            else:
+                base_shape = Rectangle2D(center=(0, 0), size=(width, height))
 
         elif sym_info.type == "donut_r":
             # Round donut (annular ring) → Polygon2D with circular exterior and hole
@@ -931,18 +1205,22 @@ class ODBLoader:
             )
             outer_r = outer_d / 2
             inner_r = inner_d / 2
-            # Create circular polygon exterior (using bulges for full circle approximation)
-            # For now, approximate as a polygon without inner hole
-            # TODO: Use Polygon2D with Circle2D hole when properly supported
-            # Approximate outer circle with 32 vertices
+            # Approximate outer circle with 32 vertices (centered at origin)
             n = 32
             vertices = [
-                (x + outer_r * math.cos(2 * math.pi * i / n),
-                 y + outer_r * math.sin(2 * math.pi * i / n))
+                (outer_r * math.cos(2 * math.pi * i / n),
+                 outer_r * math.sin(2 * math.pi * i / n))
                 for i in range(n)
             ]
-            hole = Circle2D(center=(x, y), radius=inner_r)
-            return Polygon2D(vertices=vertices, holes=(hole,))
+            hole = Circle2D(center=(0, 0), radius=inner_r)
+            base_shape = Polygon2D(vertices=vertices, holes=(hole,))
+            # Round donuts are rotationally symmetric, only need translation (and mirror)
+            if not mirror_x:
+                # Just translate
+                return Polygon2D(
+                    vertices=[(vx + x, vy + y) for vx, vy in vertices],
+                    holes=(Circle2D(center=(x, y), radius=inner_r),)
+                )
 
         elif sym_info.type == "donut_s":
             # Square donut → Rectangle exterior with square hole
@@ -952,19 +1230,75 @@ class ODBLoader:
             inner_s = convert_to_microns(
                 sym_info.params["inner_side"], units, is_symbol_dim=True
             )
-            # Outer rectangle vertices (CCW)
             half_outer = outer_s / 2
+            # Centered at origin
             vertices = [
-                (x - half_outer, y - half_outer),
-                (x + half_outer, y - half_outer),
-                (x + half_outer, y + half_outer),
-                (x - half_outer, y + half_outer),
+                (-half_outer, -half_outer),
+                (half_outer, -half_outer),
+                (half_outer, half_outer),
+                (-half_outer, half_outer),
             ]
-            # Inner rectangle as hole (using Rectangle2D)
-            hole = Rectangle2D(center=(x, y), size=(inner_s, inner_s))
-            return Polygon2D(vertices=vertices, holes=(hole,))
+            hole = Rectangle2D(center=(0, 0), size=(inner_s, inner_s))
+            base_shape = Polygon2D(vertices=vertices, holes=(hole,))
+            # For axis-aligned cases, just translate
+            if not mirror_x and rotation_deg in (0, 90, 180, 270):
+                return Polygon2D(
+                    vertices=[(vx + x, vy + y) for vx, vy in vertices],
+                    holes=(Rectangle2D(center=(x, y), size=(inner_s, inner_s)),)
+                )
+
+        # If we have a base shape that needs transformation
+        if base_shape is not None:
+            return self._apply_pad_transform(base_shape, x, y, rotation_deg, mirror_x)
 
         return None
+
+    def _apply_pad_transform(
+        self,
+        base_shape: Geometry2D,
+        x: float,
+        y: float,
+        rotation_deg: float,
+        mirror_x: bool,
+    ) -> Geometry2D:
+        """Apply rotation, mirror, and translation to a pad shape.
+
+        Parameters
+        ----------
+        base_shape : Geometry2D
+            Shape centered at origin.
+        x, y : float
+            Target position (microns).
+        rotation_deg : float
+            Rotation angle in degrees (counter-clockwise).
+        mirror_x : bool
+            Whether to mirror across X-axis (flip Y).
+
+        Returns
+        -------
+        Geometry2D
+            Transformed shape at target position.
+        """
+        import numpy as np
+
+        # Build composite transform: mirror → rotate → translate
+        # Transform applied right-to-left, so we build: T @ R @ M
+        transform = np.eye(3)
+
+        # 1. Mirror (if needed) - reflect across X-axis (negate Y)
+        if mirror_x:
+            transform = transform @ np.array(Transformed2D.reflection("x"))
+
+        # 2. Rotate (if needed)
+        if rotation_deg != 0:
+            angle_rad = math.radians(rotation_deg)
+            transform = transform @ np.array(Transformed2D.rotation(angle_rad))
+
+        # 3. Translate to final position
+        transform = np.array(Transformed2D.translation(x, y)) @ transform
+
+        # Convert to list for pydantic validation
+        return Transformed2D(geometry=base_shape, transform=transform.tolist())
 
     def _convert_surface(self, record: SurfaceRecord, units: str) -> Optional[Polygon2D]:
         """Convert S record to Polygon2D.
@@ -1181,8 +1515,8 @@ class ODBLoader:
         # Fallback - shouldn't happen if _is_circular_hole returned True
         return (0.0, 0.0), 0.0
 
-    def _parse_orient_def(self, orient_def: str) -> float:
-        """Parse orientation definition to rotation degrees.
+    def _parse_orient_def(self, orient_def: str) -> tuple[float, bool]:
+        """Parse orientation definition to rotation degrees and mirror flag.
 
         Parameters
         ----------
@@ -1191,25 +1525,24 @@ class ODBLoader:
 
         Returns
         -------
-        float
-            Rotation in degrees (0, 90, 180, 270, or arbitrary angle).
+        tuple[float, bool]
+            (rotation_degrees, mirror_x) where rotation is 0-360 and mirror_x
+            indicates X-axis reflection.
 
         Notes
         -----
         ODB++ orientation encoding:
-        - 0-7: Legacy values (0=0°, 1=90°, 2=180°, 3=270°, 4-7=mirrored)
+        - 0-3: No mirror, rotation = value * 90°
+        - 4-7: Mirror X, rotation = (value - 4) * 90°
         - "8 <angle>": Arbitrary rotation, no mirror
-        - "9 <angle>": Arbitrary rotation, with mirror
+        - "9 <angle>": Arbitrary rotation, with mirror X
         """
-        # Simplified - full implementation handles 0-7, 8+angle, 9+angle (mirror)
         try:
             val = int(orient_def)
             if val < 4:
-                return float(val * 90 % 360)
+                return (float(val * 90 % 360), False)
             elif val < 8:
-                # 4-7 are mirrored versions
-                self._warnings.append("Mirrored orientation not fully supported")
-                return float((val - 4) * 90 % 360)
+                return (float((val - 4) * 90 % 360), True)
         except ValueError:
             pass
 
@@ -1218,11 +1551,10 @@ class ODBLoader:
         if len(parts) == 2 and parts[0] in ("8", "9"):
             try:
                 angle = float(parts[1])
-                if parts[0] == "9":
-                    self._warnings.append("Mirrored orientation not fully supported")
-                return angle
+                mirror = parts[0] == "9"
+                return (angle, mirror)
             except ValueError:
                 pass
 
-        return 0.0
+        return (0.0, False)
 
