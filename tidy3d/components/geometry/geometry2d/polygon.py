@@ -16,6 +16,49 @@ from tidy3d.components.types import ArrayFloat2D, Axis, Shapely, TYPE_TAG_STR, a
 from tidy3d.exceptions import SetupError
 
 
+def _extract_polygons(geom: Shapely) -> Optional[Shapely]:
+    """Extract only polygon geometries from a shapely geometry.
+
+    This is used after buffer(0) or make_valid() to filter out
+    degenerate results like LineString or Point.
+
+    Parameters
+    ----------
+    geom : Shapely
+        Input geometry (may be Polygon, MultiPolygon, GeometryCollection, etc.)
+
+    Returns
+    -------
+    Optional[Shapely]
+        A Polygon or MultiPolygon containing only polygon parts,
+        or None if no polygon parts exist.
+    """
+    if geom.is_empty:
+        return None
+
+    if geom.geom_type == "Polygon":
+        return geom
+
+    if geom.geom_type == "MultiPolygon":
+        return geom
+
+    if geom.geom_type == "GeometryCollection":
+        polygons = []
+        for g in geom.geoms:
+            if g.geom_type == "Polygon":
+                polygons.append(g)
+            elif g.geom_type == "MultiPolygon":
+                polygons.extend(g.geoms)
+        if not polygons:
+            return None
+        if len(polygons) == 1:
+            return polygons[0]
+        return shapely.MultiPolygon(polygons)
+
+    # For other types (Point, LineString, etc.), return None
+    return None
+
+
 def _bulge_to_arc_points(
     p1: tuple[float, float],
     p2: tuple[float, float],
@@ -208,7 +251,7 @@ class Polygon2D(Geometry2D):
 
     @pydantic.validator("vertices", always=True, pre=True)
     def _coerce_and_validate_vertices(cls, val) -> ArrayFloat2D:
-        """Ensure vertices is (N, 2) array with N >= 3, strip closing vertex."""
+        """Ensure vertices is (N, 2) array with N >= 3, strip duplicates."""
         val = np.asarray(val, dtype=float)
 
         if val.ndim != 2 or val.shape[1] != 2:
@@ -225,10 +268,33 @@ class Polygon2D(Geometry2D):
         if np.allclose(val[0], val[-1], rtol=1e-10, atol=1e-14):
             val = val[:-1]
 
+        # Remove consecutive duplicate vertices (can cause self-intersection errors)
+        # Check distances between consecutive vertices, including wrap-around
+        if val.shape[0] >= 2:
+            # Compute squared distances between consecutive vertices
+            diffs = np.diff(val, axis=0)  # (N-1, 2)
+            dist_sq = np.sum(diffs**2, axis=1)  # (N-1,)
+            
+            # Also check wrap-around (last to first)
+            wrap_diff = val[0] - val[-1]
+            wrap_dist_sq = np.sum(wrap_diff**2)
+            
+            # Keep vertices where distance to previous is > tolerance
+            # Use 1e-20 as threshold for squared distance (1e-10 linear)
+            tol_sq = 1e-20
+            keep_mask = np.concatenate([[True], dist_sq > tol_sq])  # First vertex always kept
+            val = val[keep_mask]
+            
+            # Remove last vertex if it's duplicate of first (after filtering)
+            if val.shape[0] >= 2:
+                wrap_diff = val[0] - val[-1]
+                if np.sum(wrap_diff**2) <= tol_sq:
+                    val = val[:-1]
+
         if val.shape[0] < 3:
             raise SetupError(
                 "Polygon2D requires at least 3 distinct vertices after "
-                "removing duplicate closing vertex."
+                "removing duplicate vertices."
             )
 
         return val
@@ -315,6 +381,19 @@ class Polygon2D(Geometry2D):
         exterior_coords = self._tessellate_exterior()
         result = shapely.Polygon(exterior_coords)
 
+        # Fix self-intersections using buffer(0)
+        # This is equivalent to RF GUI's NonZero fill rule approach using Manifold3D
+        # buffer(0) resolves self-intersections and always produces polygon output
+        if not result.is_valid:
+            result = result.buffer(0)
+            # Extract only polygon parts if result is a collection
+            result = _extract_polygons(result)
+            if result is None or result.is_empty:
+                raise SetupError(
+                    "Polygon2D has self-intersecting geometry that collapsed to "
+                    "non-polygon output. The source geometry may be degenerate."
+                )
+
         if not self.holes:
             return result
 
@@ -332,6 +411,16 @@ class Polygon2D(Geometry2D):
                 continue
 
             result = result.difference(hole_shapely)
+
+        # Final fix after hole subtraction
+        if not result.is_valid:
+            result = result.buffer(0)
+            result = _extract_polygons(result)
+            if result is None or result.is_empty:
+                raise SetupError(
+                    "Polygon2D became degenerate after hole subtraction. "
+                    "Check that holes don't completely consume the polygon."
+                )
 
         return result
 

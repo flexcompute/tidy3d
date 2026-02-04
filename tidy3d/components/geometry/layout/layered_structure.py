@@ -470,10 +470,14 @@ class LayeredStructure(Tidy3dBaseModel):
             else:
                 struct_name = layer_name
 
-            # Create single Structure with GeometryGroup
-            group = GeometryGroup(geometries=tuple(geometries_3d))
+            # Use geometry directly if only one, otherwise wrap in GeometryGroup
+            if len(geometries_3d) == 1:
+                geometry = geometries_3d[0]
+            else:
+                geometry = GeometryGroup(geometries=tuple(geometries_3d))
+
             structures.append(
-                Structure(geometry=group, medium=layer_spec.medium, name=struct_name)
+                Structure(geometry=geometry, medium=layer_spec.medium, name=struct_name)
             )
 
         return structures
