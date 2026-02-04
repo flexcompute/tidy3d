@@ -6,7 +6,7 @@ from abc import ABC
 from math import cos, isclose, sin
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.dataset import FieldDataset
@@ -14,11 +14,13 @@ from tidy3d.components.data.validators import validate_can_interpolate, validate
 from tidy3d.components.types import Polarization
 from tidy3d.components.validators import assert_single_freq_in_range, warn_if_dataset_none
 from tidy3d.constants import MICROMETER
+from tidy3d.log import log
 
 from .base import Source
 
 if TYPE_CHECKING:
-    from .time import SourceTimeType
+    from tidy3d.compat import Self
+    from tidy3d.components.source import SourceTimeType
 
 
 class CurrentSource(Source, ABC):
@@ -73,8 +75,36 @@ class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
     -------
     >>> from tidy3d import GaussianPulse
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
-    >>> pt_source = UniformCurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')
+    >>> pt_source = UniformCurrentSource(
+    ...     size=(0,0,0), source_time=pulse, polarization='Ex', current_amplitude_definition='total',
+    ... )
     """
+
+    current_amplitude_definition: Literal["density", "total"] = Field(
+        "density",
+        title="Current Amplitude Definition",
+        description="Defines how the ``source_time`` amplitude is interpreted. "
+        "If ``'total'``, the ``source_time`` parameter is interpreted as the total "
+        "current in Amperes (A) / Volts (V) when an electric / magnetic current polarization "
+        "is chosen. The solver automatically scales the current density by the source "
+        "cross-sectional area to ensure the integrated current equals the specified amplitude, "
+        "regardless of mesh resolution. If ``'density'`` (default), ``source_time`` represents "
+        "the current density (e.g., A/m²), meaning the total injected current will scale with "
+        "the source geometry size.",
+    )
+
+    @model_validator(mode="after")
+    def _warn_current_amplitude_definition_default_change(self) -> Self:
+        """Warn that the default of 'current_amplitude_definition' will change from 'density' to 'total'."""
+        if "current_amplitude_definition" not in self.model_fields_set:
+            log.warning(
+                "The default value of 'current_amplitude_definition' for 'UniformCurrentSource' "
+                "will change from 'density' to 'total' in a future release. To avoid this warning "
+                "and ensure consistent behavior, please explicitly set "
+                "current_amplitude_definition='density' or current_amplitude_definition='total' "
+                "when creating the source."
+            )
+        return self
 
 
 class PointDipole(CurrentSource, ReverseInterpolatedSource):

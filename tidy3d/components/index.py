@@ -173,6 +173,7 @@ class SimulationMap(ValueMap, Mapping[str, SimulationType]):
     ...             center=(0, 0.5, 0),
     ...             polarization="Hx",
     ...             source_time=GaussianPulse(freq0=2e14, fwidth=4e13),
+    ...             current_amplitude_definition="total",
     ...         )
     ...     ],
     ...     monitors=[

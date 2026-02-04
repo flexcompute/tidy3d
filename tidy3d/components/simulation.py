@@ -2456,6 +2456,7 @@ class Simulation(AbstractYeeGridSimulation):
     ...             size=(0, 0, 0),
     ...             center=(0, 0.5, 0),
     ...             polarization="Hx",
+    ...             current_amplitude_definition='total',
     ...             source_time=GaussianPulse(
     ...                 freq0=2e14,
     ...                 fwidth=4e13,

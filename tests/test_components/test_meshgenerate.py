@@ -663,6 +663,7 @@ def test_small_structure_size():
         source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
 
     # Warning raised as structure is too thin

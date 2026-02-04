@@ -141,6 +141,7 @@ class LumpedPort(AbstractLumpedPort, Box):
             name=self.name,
             interpolate=True,
             confine_to_bounds=True,
+            current_amplitude_definition="total",
         )
 
     def to_load(self, snap_center: Optional[float] = None) -> LumpedResistor:

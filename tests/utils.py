@@ -699,6 +699,7 @@ SIM_FULL = td.Simulation(
                 freq0=2e14,
                 fwidth=4e13,
             ),
+            current_amplitude_definition="total",
         ),
         td.PointDipole(
             center=(0, 0.5, 0),
@@ -805,6 +806,7 @@ SIM_FULL = td.Simulation(
             source_time=td.CustomSourceTime.from_values(
                 freq0=2e14, fwidth=4e13, values=np.linspace(0, 10, 1000), dt=1e-12 / 100
             ),
+            current_amplitude_definition="total",
         ),
     ),
     monitors=(

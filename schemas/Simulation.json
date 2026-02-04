@@ -15233,6 +15233,14 @@
           "default": false,
           "type": "boolean"
         },
+        "current_amplitude_definition": {
+          "default": "density",
+          "enum": [
+            "density",
+            "total"
+          ],
+          "type": "string"
+        },
         "interpolate": {
           "default": true,
           "type": "boolean"

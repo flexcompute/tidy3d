@@ -919,6 +919,7 @@ class SimulationData(AbstractYeeGridSimulationData):
     ...                 freq0=2e14,
     ...                 fwidth=4e13,
     ...             ),
+    ...             current_amplitude_definition="total",
     ...         )
     ...     ],
     ... )
