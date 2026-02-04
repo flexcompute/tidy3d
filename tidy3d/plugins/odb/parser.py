@@ -580,13 +580,18 @@ def _parse_pad_record(line: str) -> Optional[PadRecord]:
         return None
 
     try:
+        # Join all parts from index 6 onwards (orient_type and optional angle)
+        # For orient types 8/9, the angle is in the next field: "8 270.0"
+        # This matches RF GUI: p.args.slice(5).join(' ')
+        orient_def = " ".join(parts[6:]) if len(parts) > 6 else "0"
+
         return PadRecord(
             x=float(parts[1]),
             y=float(parts[2]),
             symbol_num=int(parts[3]),
             polarity=parts[4],
             dcode=int(parts[5]) if len(parts) > 5 else 0,
-            orient_def=parts[6] if len(parts) > 6 else "0",
+            orient_def=orient_def,
             attributes=attrs,
         )
     except (ValueError, IndexError):

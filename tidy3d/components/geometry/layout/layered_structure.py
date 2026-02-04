@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import pydantic.v1 as pydantic
 from typing_extensions import Self
@@ -13,10 +13,25 @@ from tidy3d.components.geometry.geometry2d import Geometry2D, Geometry2DType
 from tidy3d.components.geometry.geometry2d.base import Bound2D
 from tidy3d.components.geometry.layout.layered_geometry import LayeredGeometry
 from tidy3d.components.geometry.layout.stackup import Stackup
-from tidy3d.components.types import Bound, Coordinate, Coordinate2D
+from tidy3d.components.types import Ax, Bound, Coordinate, Coordinate2D, Shapely
+from tidy3d.components.viz import add_ax_if_none, equal_aspect, polygon_patch
 
 if TYPE_CHECKING:
     from tidy3d.components.structure import Structure
+
+# Default layer color palette for plotting
+LAYER_CMAP = [
+    "#689DBC",  # blue
+    "#D0698E",  # pink
+    "#5E6EAD",  # purple
+    "#C6224E",  # red
+    "#BDB3E2",  # lavender
+    "#9EC3E0",  # light blue
+    "#77B88D",  # green
+    "#877EBC",  # violet
+    "#E8A838",  # orange
+    "#5DADE2",  # sky blue
+]
 
 
 class LayeredStructure(Tidy3dBaseModel):
@@ -481,4 +496,241 @@ class LayeredStructure(Tidy3dBaseModel):
             )
 
         return structures
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot(
+        self,
+        layers: Optional[Union[str, Sequence[str]]] = None,
+        nets: Optional[Union[str, Sequence[str]]] = None,
+        ax: Ax = None,
+        xlim: Optional[tuple[float, float]] = None,
+        ylim: Optional[tuple[float, float]] = None,
+        alpha: float = 0.8,
+        edgecolor: str = "black",
+        linewidth: float = 0.5,
+        layer_colors: Optional[dict[str, str]] = None,
+        show_legend: bool = True,
+        **patch_kwargs: Any,
+    ) -> Ax:
+        """Plot 2D geometries on a matplotlib axes.
+
+        Renders the 2D geometries from selected layers, with optional net
+        filtering. Each layer is assigned a distinct color from a default
+        palette or custom color mapping.
+
+        Parameters
+        ----------
+        layers : str, Sequence[str], or None
+            Layer name(s) to plot. If None, plots all layers with geometries.
+        nets : str, Sequence[str], or None
+            Net name(s) to filter. If None, no net filtering is applied
+            (all geometries on selected layers are plotted).
+        ax : matplotlib.axes._subplots.Axes
+            Matplotlib axes to plot on. If None, one is created.
+        xlim : tuple[float, float], optional
+            X-axis limits (min_x, max_x). Auto-calculated from bounds if None.
+        ylim : tuple[float, float], optional
+            Y-axis limits (min_y, max_y). Auto-calculated from bounds if None.
+        alpha : float
+            Opacity for fill color (0-1). Default 0.8.
+        edgecolor : str
+            Edge color for all shapes. Default "black".
+        linewidth : float
+            Line width for edges. Default 0.5.
+        layer_colors : dict[str, str], optional
+            Custom color mapping {layer_name: color}. Uses default colormap
+            for layers not specified.
+        show_legend : bool
+            Whether to show a legend for layers. Default True.
+        **patch_kwargs
+            Additional kwargs passed to matplotlib patches.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The matplotlib axes with plotted geometries.
+
+        Example
+        -------
+        >>> # Plot all layers
+        >>> board.plot()
+        >>>
+        >>> # Plot specific layers
+        >>> board.plot(layers=["top_copper", "bottom_copper"])
+        >>>
+        >>> # Plot single layer filtered by net
+        >>> board.plot(layers="top_copper", nets="CLK")
+        >>>
+        >>> # Custom colors and styling
+        >>> board.plot(
+        ...     layer_colors={"top_copper": "gold", "substrate": "#8B4513"},
+        ...     alpha=0.6,
+        ...     edgecolor="navy",
+        ... )
+        """
+        from matplotlib.collections import PatchCollection
+
+        # Determine which layers to plot
+        if layers is None:
+            layers_to_plot = self.layer_names
+        elif isinstance(layers, str):
+            layers_to_plot = [layers]
+        else:
+            layers_to_plot = list(layers)
+
+        # Validate layers exist
+        for lyr in layers_to_plot:
+            if lyr not in self.stackup:
+                raise ValueError(
+                    f"Layer '{lyr}' not found in stackup. "
+                    f"Available layers: {self.stackup.layer_names}"
+                )
+
+        # Build color map for layers
+        if layer_colors is None:
+            layer_colors = {}
+        color_map = {}
+        for i, layer in enumerate(layers_to_plot):
+            color_map[layer] = layer_colors.get(layer, LAYER_CMAP[i % len(LAYER_CMAP)])
+
+        # Build net filter set
+        net_set: Optional[set[str]] = None
+        if nets is not None:
+            net_set = {nets} if isinstance(nets, str) else set(nets)
+
+        # Determine view bounds for pre-filtering (if xlim/ylim specified)
+        # Use slightly expanded bounds to avoid clipping edge geometries
+        view_x_min = xlim[0] if xlim else float("-inf")
+        view_x_max = xlim[1] if xlim else float("inf")
+        view_y_min = ylim[0] if ylim else float("-inf")
+        view_y_max = ylim[1] if ylim else float("inf")
+        has_view_filter = xlim is not None or ylim is not None
+
+        # Collect patches per layer for batch rendering
+        layer_patches: dict[str, list] = {lyr: [] for lyr in layers_to_plot}
+        # Separate storage for lines and points (can't go in PatchCollection)
+        layer_lines: dict[str, list[tuple]] = {lyr: [] for lyr in layers_to_plot}
+        layer_points: dict[str, list[tuple]] = {lyr: [] for lyr in layers_to_plot}
+
+        # Collect geometries
+        for lg in self.geometries:
+            if lg.layer not in layers_to_plot:
+                continue
+            if net_set is not None and lg.net not in net_set:
+                continue
+
+            # Bounding box pre-filtering: skip geometries outside view bounds
+            if has_view_filter:
+                (gx0, gy0), (gx1, gy1) = lg.geometry.bounds_2d
+                if gx1 < view_x_min or gx0 > view_x_max:
+                    continue  # Entirely outside x range
+                if gy1 < view_y_min or gy0 > view_y_max:
+                    continue  # Entirely outside y range
+
+            # Convert to shapely and collect patches
+            shape = lg.geometry.to_shapely()
+            self._collect_patches(
+                shape=shape,
+                patches_list=layer_patches[lg.layer],
+                lines_list=layer_lines[lg.layer],
+                points_list=layer_points[lg.layer],
+            )
+
+        # Render patches using PatchCollection (batch rendering for performance)
+        plotted_layers: set[str] = set()
+        for layer in layers_to_plot:
+            patches = layer_patches[layer]
+            lines = layer_lines[layer]
+            points = layer_points[layer]
+
+            if patches or lines or points:
+                plotted_layers.add(layer)
+                facecolor = color_map[layer]
+
+                # Add polygon patches as a collection
+                if patches:
+                    collection = PatchCollection(
+                        patches,
+                        facecolors=facecolor,
+                        edgecolors=edgecolor,
+                        alpha=alpha,
+                        linewidths=linewidth,
+                        **patch_kwargs,
+                    )
+                    ax.add_collection(collection)
+
+                # Add lines (can't be batched in PatchCollection)
+                for xs, ys in lines:
+                    ax.plot(xs, ys, color=facecolor, linewidth=linewidth)
+
+                # Add points
+                if points:
+                    px = [p[0] for p in points]
+                    py = [p[1] for p in points]
+                    ax.scatter(px, py, color=facecolor, s=20)
+
+        # Set axis limits
+        bounds = self.bounds_2d
+        if xlim is not None:
+            ax.set_xlim(xlim)
+        elif bounds is not None:
+            (x0, _), (x1, _) = bounds
+            margin = (x1 - x0) * 0.05 if x1 > x0 else 0.1
+            ax.set_xlim(x0 - margin, x1 + margin)
+
+        if ylim is not None:
+            ax.set_ylim(ylim)
+        elif bounds is not None:
+            (_, y0), (_, y1) = bounds
+            margin = (y1 - y0) * 0.05 if y1 > y0 else 0.1
+            ax.set_ylim(y0 - margin, y1 + margin)
+
+        # Add legend
+        if show_legend and plotted_layers:
+            from matplotlib.patches import Patch
+
+            # Preserve layer order from layers_to_plot
+            handles = [
+                Patch(facecolor=color_map[lyr], edgecolor=edgecolor, label=lyr, alpha=alpha)
+                for lyr in layers_to_plot
+                if lyr in plotted_layers
+            ]
+            if handles:
+                ax.legend(handles=handles, loc="best")
+
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_title("LayeredStructure")
+
+        return ax
+
+    def _collect_patches(
+        self,
+        shape: Shapely,
+        patches_list: list,
+        lines_list: list[tuple],
+        points_list: list[tuple],
+    ) -> None:
+        """Collect matplotlib patches from a shapely geometry.
+
+        Flattens multi-geometries and separates polygons, lines, and points
+        for efficient batch rendering.
+        """
+        # Handle multi-geometries by flattening
+        if shape.geom_type in ("MultiPolygon", "GeometryCollection", "MultiLineString"):
+            for sub_shape in shape.geoms:
+                self._collect_patches(sub_shape, patches_list, lines_list, points_list)
+            return
+
+        if shape.geom_type == "Polygon" and not shape.is_empty:
+            # Create patch but don't set colors - PatchCollection will handle that
+            patch = polygon_patch(shape)
+            patches_list.append(patch)
+        elif shape.geom_type == "LineString" and not shape.is_empty:
+            xs, ys = zip(*shape.coords)
+            lines_list.append((xs, ys))
+        elif shape.geom_type == "Point" and not shape.is_empty:
+            points_list.append((shape.x, shape.y))
+        # Silently skip unsupported geometry types
 
