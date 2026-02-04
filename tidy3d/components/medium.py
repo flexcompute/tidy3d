@@ -128,6 +128,8 @@ LOSSY_METAL_DEFAULT_TOLERANCE_RMS = 1e-3
 
 ALLOWED_INTERP_METHODS = get_args(InterpMethod)
 
+CUSTOM_MEDIUM_BOUNDARY_COORDINATE_TOLERANCE = 1e-12
+
 
 def ensure_freq_in_range(
     eps_model: Callable[[AbstractMedium, float], complex],
@@ -1140,10 +1142,17 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             return np.zeros(eps_shape, dtype=dtype_out)
 
         field_coords = {axis: np.asarray(E_der_dim.coords[axis]) for axis in "xyz"}
-        values = E_der_dim.values
+        # copy here to avoid modifying the derivative_info object data in E_der_map
+        values = E_der_dim.values.copy()
 
         def _bounds_slice(axis: NDArray, vmin: float, vmax: float, *, name: str) -> slice:
             n = axis.size
+
+            # protect against field value coordinates right at the structure boundary being
+            # exluded due to numerical precision
+            vmin -= CUSTOM_MEDIUM_BOUNDARY_COORDINATE_TOLERANCE
+            vmax += CUSTOM_MEDIUM_BOUNDARY_COORDINATE_TOLERANCE
+
             i0 = int(np.searchsorted(axis, vmin, side="left"))
             i1 = int(np.searchsorted(axis, vmax, side="right"))
             if i1 <= i0 and n:

@@ -17,6 +17,7 @@ from pydantic import Field
 from tidy3d.components.autograd.utils import split_list
 from tidy3d.components.base import JSON_TAG, Tidy3dBaseModel, cached_property
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
+from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
@@ -1112,11 +1113,8 @@ class SimulationData(AbstractYeeGridSimulationData):
         # grab boundary conditions with flipped Bloch vectors (for adjoint)
         bc_adj = sim_original.boundary_spec.flipped_bloch_vecs
 
-        # set the ADJ grid spec wavelength to the original wavelength (for same meshing)
-        grid_spec_original = sim_original.grid_spec
-        if sim_original.sources and grid_spec_original.wavelength is None:
-            wavelength_original = grid_spec_original.wavelength_from_sources(sim_original.sources)
-            grid_spec_adj = grid_spec_original.updated_copy(wavelength=wavelength_original)
+        # set the ADJ grid spec to use the same grid as sim_original for consistent meshing
+        grid_spec_adj = GridSpec.from_grid(sim_original.grid)
 
         adj_sims = []
         for adjoint_source_info in adjoint_source_infos:
@@ -1131,6 +1129,7 @@ class SimulationData(AbstractYeeGridSimulationData):
                 "boundary_spec": bc_adj,
                 "monitors": monitors,
                 "post_norm": adjoint_source_info.post_norm,
+                "grid_spec": grid_spec_adj,
             }
 
             if adjoint_source_info.normalize_sim:
@@ -1139,9 +1138,6 @@ class SimulationData(AbstractYeeGridSimulationData):
                 normalize_index_adj = None
 
             sim_adj_update_dict["normalize_index"] = normalize_index_adj
-
-            if sim_original.sources and grid_spec_original.wavelength is None:
-                sim_adj_update_dict["grid_spec"] = grid_spec_adj
 
             adj_sims.append(sim_original.updated_copy(**sim_adj_update_dict))
 

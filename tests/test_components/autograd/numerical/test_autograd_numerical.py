@@ -117,7 +117,21 @@ def make_base_sim(
     return sim_base
 
 
-def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir):
+def create_objective_function(
+    geometry, create_sim_base, eval_fn, sim_path_dir, perm_init, cm_interp_method
+):
+    block_structure = td.Structure.from_permittivity_array(
+        eps_data=perm_init,
+        geometry=geometry,
+    )
+
+    sim_base = create_sim_base()
+
+    sim_with_block = sim_base.updated_copy(structures=(*sim_base.structures, block_structure))
+
+    # use a fixed grid for all forward and finite difference simulations
+    grid_fixed = sim_with_block.grid
+
     def objective(perm_arrays):
         sim_base = create_sim_base()
 
@@ -128,8 +142,13 @@ def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir):
                 geometry=geometry,
             )
 
+            block_structure = block_structure.updated_copy(
+                medium=block_structure.medium.updated_copy(interp_method=cm_interp_method)
+            )
+
             sim_with_block = sim_base.updated_copy(
-                structures=(*sim_base.structures, block_structure)
+                structures=(*sim_base.structures, block_structure),
+                grid_spec=td.GridSpec.from_grid(grid_fixed),
             )
 
             simulation_dict[f"numerical_field_testing_{idx}"] = sim_with_block.copy()
@@ -184,6 +203,7 @@ background_indices = [1.0, 1.5]
 mesh_wvls_um = [1.55, 1.55, 10 * 1.55, 10 * 1.55]
 adj_wvls_um = [1.55, 2.2, 10 * 1.55, 10 * 2.2]
 monitor_sizes_3d_wvl = [(0.5, 0.5, 0), (0.5, 0.5, 0.5), (0.5, 0, 0), (0, 0.5, 0), (0, 0, 0)]
+cm_interp_methods = ["nearest", "linear"]
 
 field_data_test_parameters = []
 
@@ -197,19 +217,21 @@ for idx in range(len(mesh_wvls_um)):
 
         for monitor_bg_index in background_indices:
             for eval_fn_idx, eval_fn in enumerate(eval_fns):
-                field_data_test_parameters.append(
-                    {
-                        "mesh_wvl_um": mesh_wvl_um,
-                        "adj_wvl_um": adj_wvl_um,
-                        "monitor_size_wvl": monitor_size_wvl,
-                        "monitor_bg_index": monitor_bg_index,
-                        "eval_fn": eval_fn,
-                        "eval_fn_name": eval_fn_names[eval_fn_idx],
-                        "test_number": test_number,
-                    }
-                )
+                for cm_interp_method in cm_interp_methods:
+                    field_data_test_parameters.append(
+                        {
+                            "mesh_wvl_um": mesh_wvl_um,
+                            "adj_wvl_um": adj_wvl_um,
+                            "monitor_size_wvl": monitor_size_wvl,
+                            "monitor_bg_index": monitor_bg_index,
+                            "eval_fn": eval_fn,
+                            "eval_fn_name": eval_fn_names[eval_fn_idx],
+                            "cm_interp_method": cm_interp_method,
+                            "test_number": test_number,
+                        }
+                    )
 
-                test_number += 1
+                    test_number += 1
 
 
 @pytest.mark.numerical
@@ -236,6 +258,7 @@ def test_finite_difference_field_data(
         monitor_bg_index,
         eval_fn,
         eval_fn_name,
+        cm_interp_method,
         test_number,
     ) = operator.itemgetter(
         "mesh_wvl_um",
@@ -244,10 +267,10 @@ def test_finite_difference_field_data(
         "monitor_bg_index",
         "eval_fn",
         "eval_fn_name",
+        "cm_interp_method",
         "test_number",
     )(field_data_test_parameters)
 
-    dim_um = mesh_wvl_um
     dim_um = mesh_wvl_um
     thickness_um = 0.5 * mesh_wvl_um
     block = td.Box(center=(0, 0, 0), size=(dim_um, dim_um, thickness_um))
@@ -266,6 +289,8 @@ def test_finite_difference_field_data(
     sim_path_dir = numerical_case_dir / "simulations" / f"test{test_number}"
     sim_path_dir.mkdir(parents=True, exist_ok=True)
 
+    perm_init = FINITE_DIFF_PERM_SEED * np.ones((dim, dim, Nz))
+
     objective = create_objective_function(
         block,
         lambda mesh_wvl_um=mesh_wvl_um,
@@ -281,11 +306,11 @@ def test_finite_difference_field_data(
         ),
         eval_fn,
         sim_path_dir=str(sim_path_dir),
+        perm_init=perm_init,
+        cm_interp_method=cm_interp_method,
     )
 
     obj_val_and_grad = ag.value_and_grad(objective)
-
-    perm_init = FINITE_DIFF_PERM_SEED * np.ones((dim, dim, Nz))
 
     obj, adj_grad = obj_val_and_grad([perm_init])
 
@@ -332,11 +357,21 @@ def test_finite_difference_field_data(
     print(f"Monitor size: {monitor_size_wvl}")
     print(f"Background index for monitor: {monitor_bg_index}")
     print(f"Eval function: {eval_fn_name}")
+    print(f"Custom medium interpolation method: {cm_interp_method}")
     print(f"RMS Error: {rms_error}")
     print(f"FD, Adj magnitudes: {fd_mag}, {adj_mag}")
     print(f"Percentage Error: {percentage_error}")
     print("-" * 20)
     print("\n" * 3)
+
+    if PLOT_FD_ADJ_COMPARISON:
+        plt.plot(pattern_dot_adj_gradient, color="g", linewidth=2.0, label="Adjoint")
+        plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--", label="Finite difference")
+        plt.title(f"Gradient for objective: {eval_fn_name}")
+        plt.xlabel("Sample number")
+        plt.ylabel("Gradient value")
+        plt.legend()
+        plt.show()
 
     test_results[SAVE_FD_LOC, :] = fd_grad
     test_results[SAVE_ADJ_LOC, :] = pattern_dot_adj_gradient
@@ -355,13 +390,3 @@ def test_finite_difference_field_data(
             np.save(save_path, test_results)
 
     test_number += 1
-
-    if PLOT_FD_ADJ_COMPARISON:
-        plt.plot(pattern_dot_adj_gradient, color="g", linewidth=2.0)
-        plt.plot(fd_grad, color="b", linewidth=1.5, linestyle="--")
-        plt.title(f"Gradient for objective: {eval_fn_name}")
-        plt.legend(["Finite difference", "Adjoint"])
-        plt.xlabel("Sample number")
-        plt.ylabel("Gradient value")
-        plt.legend()
-        plt.show()
