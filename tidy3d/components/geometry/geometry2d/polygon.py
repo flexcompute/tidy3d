@@ -129,10 +129,11 @@ def _bulge_to_arc_points(
     d = radius * math.cos(half_abs_theta)
 
     # Center position: move from midpoint perpendicular to chord
-    # For positive bulge (CCW arc): arc bulges LEFT, so center is to the RIGHT
-    # For negative bulge (CW arc): arc bulges RIGHT, so center is to the LEFT
-    # The center is on the OPPOSITE side of where the arc bulges
-    sign = -1 if bulge > 0 else 1
+    # For positive bulge (CCW arc): center is to the LEFT of chord direction
+    # For negative bulge (CW arc): center is to the RIGHT of chord direction
+    # Note: For arcs > 180°, cos(half_theta) is negative, which automatically
+    # places the center on the correct side (the "d" value becomes negative).
+    sign = 1 if bulge > 0 else -1
     cx = mx + sign * d * nx
     cy = my + sign * d * ny
 
