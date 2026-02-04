@@ -70,8 +70,47 @@ def test_UniformCurrentSource():
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 
     # test we can make generic UniformCurrentSource
-    _ = td.UniformCurrentSource(size=(1, 1, 1), source_time=g, polarization="Ez", interpolate=False)
-    _ = td.UniformCurrentSource(size=(1, 1, 1), source_time=g, polarization="Ez", interpolate=True)
+    _ = td.UniformCurrentSource(
+        size=(1, 1, 1),
+        source_time=g,
+        polarization="Ez",
+        interpolate=False,
+        current_amplitude_definition="total",
+    )
+    _ = td.UniformCurrentSource(
+        size=(1, 1, 1),
+        source_time=g,
+        polarization="Ez",
+        interpolate=True,
+        current_amplitude_definition="total",
+    )
+
+
+def test_UniformCurrentSource_amplitude_definition_warning():
+    """Test deprecation warning when current_amplitude_definition is not explicitly set."""
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
+
+    # Not set: should warn
+    with AssertLogLevel("WARNING", contains_str="current_amplitude_definition"):
+        _ = td.UniformCurrentSource(size=(1, 1, 1), source_time=g, polarization="Ez")
+
+    # Explicitly "density": no warning
+    with AssertLogLevel(None):
+        _ = td.UniformCurrentSource(
+            size=(1, 1, 1),
+            source_time=g,
+            polarization="Ez",
+            current_amplitude_definition="density",
+        )
+
+    # Explicitly "total": no warning
+    with AssertLogLevel(None):
+        _ = td.UniformCurrentSource(
+            size=(1, 1, 1),
+            source_time=g,
+            polarization="Ez",
+            current_amplitude_definition="total",
+        )
 
 
 def test_source_times():

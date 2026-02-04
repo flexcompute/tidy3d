@@ -2147,6 +2147,7 @@ def test_autograd_multi_source_normalize_index(use_emulated_run):
         center=(0.0, -0.2, 0.0),
         polarization="Hx",
         source_time=source_time,
+        current_amplitude_definition="total",
     )
     source1 = source0.updated_copy(center=(0.0, 0.2, 0.0))
 
