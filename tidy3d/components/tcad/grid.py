@@ -25,6 +25,12 @@ class UnstructuredGrid(Tidy3dBaseModel, ABC):
         "Use ``relative_min_dl=0`` to remove this constraint.",
     )
 
+    remove_fragments: bool = pd.Field(
+        False,
+        title="Remove Fragments",
+        description="Whether to remove fragments before meshing. This is useful when overlapping structures generate internal boundaries that can lead to very small cell volumes.",
+    )
+
 
 class UniformUnstructuredGrid(UnstructuredGrid):
     """Uniform grid.
