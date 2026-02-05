@@ -476,7 +476,7 @@ class LocalCacheConfig(ConfigSection):
     """Settings controlling the optional local simulation cache."""
 
     enabled: bool = Field(
-        False,
+        True,
         title="Enable cache",
         description="Enable or disable the local simulation cache.",
         json_schema_extra={"persist": True},
