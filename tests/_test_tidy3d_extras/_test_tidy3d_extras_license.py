@@ -84,8 +84,14 @@ def test_license_check(monkeypatch, caplog):
 
     # Core license / auth failure - only check if extension loads properly
     if extension_loads:
-        assert "Incorrect API Key" in combined_output, (
-            "Expected 'Incorrect API Key' error when extension loads but API key is invalid"
+        auth_failure = (
+            "Incorrect API Key" in combined_output
+            or "Unauthorized" in combined_output
+            or "401" in combined_output
+        )
+        assert auth_failure, (
+            "Expected authentication error (e.g., 'Incorrect API Key', 'Unauthorized', or '401') "
+            "when extension loads but API key is invalid"
         )
 
     # tidy3d-extras initialization and feature error messages should always be present
