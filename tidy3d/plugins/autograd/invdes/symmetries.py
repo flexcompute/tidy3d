@@ -14,7 +14,7 @@ def symmetrize_mirror(array: NDArray, axis: int | tuple[int, int]) -> NDArray:
     ----------
     array : NDArray
         The input array to be symmetrized.
-    axis: int | tuple[int, int]
+    axis: Union[int, tuple[int, int]]
         The symmetry axis. This can either be a single axis (x=0 or y=1) or a tuple of both axes.
 
     Returns
@@ -136,7 +136,7 @@ def symmetrize_diagonal(array: NDArray, anti: bool = False) -> NDArray:
     ----------
     array : NDArray
         The input array to be symmetrized. Must be square.
-    anti : bool, optional
+    anti : Optional[bool]
         If False (default), symmetrizes along the main diagonal (top-left to bottom-right).
         If True, symmetrizes along the anti-diagonal (top-right to bottom-left).
 

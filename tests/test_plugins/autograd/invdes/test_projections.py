@@ -118,3 +118,18 @@ def test_projection_gradient_correctness(beta, size, radius, smoothing_radius):
         return smoothed_projection(x, beta=beta, eta=0.5).mean()
 
     check_grads(_helper_fn, modes=["fwd", "rev"], order=2)(arr)
+
+
+def test_smoothed_projection_coords_matches_dl():
+    nx, ny = 40, 30
+    dx, dy = 0.2, 0.05
+    x = np.arange(nx) * dx
+    y = np.arange(ny) * dy
+
+    arr = np.zeros((nx, ny))
+    arr[:, ny // 2 :] = 1.0
+
+    result_coords = smoothed_projection(arr, beta=np.inf, eta=0.5, coords=(x, y))
+    result_dl = smoothed_projection(arr, beta=np.inf, eta=0.5, dl=(dx, dy))
+
+    assert np.allclose(result_coords, result_dl, rtol=1e-6, atol=1e-6)

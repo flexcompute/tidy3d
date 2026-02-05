@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
 - Added flag `remove_fragments` to the base `UnstructuredGrid` to remove fragments in unstructured grids. This can ease meshing by eliminating internal boundaries in overlapping structures.
 - Added deprecation warning for `conformal` in TCAD heat/charge monitors when explicitly set; this option is ignored (treated as `False`) when meshing with `remove_fragments=True`.
+- Added support of non-uniform grids in inverse-design filters and penalties via coordinate arrays (`coords`).
 
 ### Breaking Changes
 - Added optional automatic extrusion of structures at the simulation boundaries into/through PML/Absorber layers via `extrude_structures` field in class `AbsorberSpec`.
@@ -39,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed frequency accumulation of gradients for custom dispersive media.
 - Fixed `snap_box_to_grid` producing zero-size boxes when using `Expand` behavior with very small intervals centered on a grid point.
 - Fixed sliver polygon artifacts in 2D material subdivision by filtering polygons based on grid cell size, preventing numerical issues with large-coordinate geometries.
+- Fixed invdes filtering, projection, and erosion/dilation penalties to operate in physical space when coordinates or per-axis spacing are provided.
 
 ## [2.10.2] - 2026-01-21
 

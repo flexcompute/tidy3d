@@ -174,9 +174,9 @@ The `TopologyDesignRegion` combines geometric information (size, center) about t
 
 #### Discretization
 
-The `TopologyDesignRegion` contains a `pixel_size` parameter, which sets the resolution of the permittivity grid and also determines the shape of the parameter array.
+The `TopologyDesignRegion` contains a `pixel_size` parameter, which sets the resolution of the permittivity grid and also determines the shape of the parameter array. It can be a single value or a per-axis tuple (``(dx, dy, dz)``) for anisotropic grids.
 
-The `pixel_size` is also passed to the various penalties and transformations to allow them to work properly with the design region.
+The `pixel_size` is passed to penalties and transformations so feature sizes and smoothing operate in physical space on a uniform (or per-axis) grid. For fully nonuniform grids, the autograd helpers accept explicit `coords` (for example `data_array.coords`) to define the physical spacing; `coords` cannot be combined with `dl` or `size_px`.
 
 If not specified in a later step, this `pixel_size` will be used to set the FDTD grid size of the structure in the last `Simulation`. It is therefore a good idea to either set it to a low value (about equal to the simulation grid cell size) or manually set the mesh override structure resolution in the `TopologyDesignRegion.mesh_override_dl` field to overwrite it.
 

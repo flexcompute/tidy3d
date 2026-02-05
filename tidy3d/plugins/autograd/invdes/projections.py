@@ -4,6 +4,11 @@ import autograd.numpy as np
 from numpy.typing import NDArray
 
 from tidy3d.plugins.autograd.constants import BETA_DEFAULT, ETA_DEFAULT
+from tidy3d.plugins.autograd.invdes.spacing import (
+    GridCoords,
+    cell_sizes_from_coords,
+    normalize_coords,
+)
 
 
 def ramp_projection(array: NDArray, width: float = 0.1, center: float = 0.5) -> NDArray:
@@ -79,6 +84,9 @@ def smoothed_projection(
     beta: float = BETA_DEFAULT,
     eta: float = ETA_DEFAULT,
     scaling_factor=1.0,
+    *,
+    dl: float | tuple[float, float] | None = None,
+    coords: GridCoords | None = None,
 ) -> NDArray:
     """
     Apply a subpixel-smoothed projection method.
@@ -100,9 +108,10 @@ def smoothed_projection(
     process.
 
     .. warning::
-        This function assumes that the device is placed on a uniform grid. When using
-        ```GridSpec.auto``` in the simulation, make sure to place a ``MeshOverrideStructure`` at
-        the position of the optimized geometry.
+        If ``coords`` or ``dl`` are not provided, this function assumes that the device is placed
+        on a uniform grid with unit spacing. When using ``GridSpec.auto`` in the simulation,
+        make sure to place a ``MeshOverrideStructure`` at the position of the optimized geometry
+        or supply the design coordinates directly.
 
     Parameters
     ----------
@@ -113,7 +122,13 @@ def smoothed_projection(
     eta : float = ETA_DEFAULT
         The midpoint of the projection.
     scaling_factor: float = 1.0
-        Optional scaling factor to adjust dx and dy to different resolutions.
+        Optional scaling factor to adjust dx and dy to different resolutions when ``dl`` and
+        ``coords`` are not supplied.
+    dl : Optional[Union[float, Tuple[float, float]]]
+        Physical grid spacing. If provided, overrides ``scaling_factor``.
+    coords : Optional[GridCoords]
+        Coordinate arrays for each axis. If provided, gradients and smoothing are computed in
+        physical space using the supplied coordinates, and ``dl``/``scaling_factor`` are ignored.
 
     Example
     -------
@@ -134,16 +149,29 @@ def smoothed_projection(
     if array.ndim != 2:
         raise ValueError(f"Smoothed projection expects a 2d-array, but got shape {array.shape=}")
 
-    # smoothing kernel is circle (or ellipse for non-uniform grid)
-    # we choose smoothing kernel with unit area, which is r~=0.56, a bit larger than (arbitrary) default r=0.55 in paper
-    dx = dy = scaling_factor
-    smooth_radius = np.sqrt(1 / np.pi) * scaling_factor
+    if coords is not None:
+        coords_tuple = normalize_coords(coords, ndim=2, shape=array.shape)
+        x_coords, y_coords = coords_tuple
+        grad_x, grad_y = np.gradient(array, x_coords, y_coords)
+        rho_filtered_grad_helper = grad_x**2 + grad_y**2
+
+        cell_sizes = cell_sizes_from_coords(coords_tuple)
+        dx_mesh, dy_mesh = np.meshgrid(cell_sizes[0], cell_sizes[1], indexing="ij")
+        smooth_radius = np.sqrt(dx_mesh * dy_mesh / np.pi)
+    else:
+        if dl is not None:
+            if np.isscalar(dl):
+                dx = dy = float(dl)
+            else:
+                dx, dy = (float(val) for val in dl)
+        else:
+            dx = dy = float(scaling_factor)
+
+        grad_x, grad_y = np.gradient(array)
+        rho_filtered_grad_helper = (grad_x / dx) ** 2 + (grad_y / dy) ** 2
+        smooth_radius = np.sqrt(dx * dy / np.pi)
 
     original_projected = tanh_projection(array, beta=beta, eta=eta)
-
-    # finite-difference spatial gradients
-    rho_filtered_grad = np.gradient(array)
-    rho_filtered_grad_helper = (rho_filtered_grad[0] / dx) ** 2 + (rho_filtered_grad[1] / dy) ** 2
 
     nonzero_norm = np.abs(rho_filtered_grad_helper) > 1e-10
 

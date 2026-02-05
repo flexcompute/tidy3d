@@ -11,6 +11,7 @@ import pydantic.v1 as pd
 import tidy3d as td
 from tidy3d.plugins.autograd.functions import threshold
 from tidy3d.plugins.autograd.invdes import make_filter_and_project
+from tidy3d.plugins.autograd.invdes.spacing import GridCoords
 
 from .base import InvdesBaseModel
 
@@ -70,10 +71,20 @@ class FilterProject(InvdesBaseModel):
         "If ``True``, the values are snapped to the min and max values after projection.",
     )
 
-    def evaluate(self, spatial_data: anp.ndarray, design_region_dl: float) -> anp.ndarray:
-        """Evaluate this transformation on spatial data, given some grid size in the region."""
+    def evaluate(
+        self,
+        spatial_data: anp.ndarray,
+        design_region_dl: float | tuple[float, ...] | None = None,
+        *,
+        design_region_coords: GridCoords | None = None,
+    ) -> anp.ndarray:
+        """Evaluate this transformation on spatial data, given grid spacing or coordinates."""
         filt_proj = make_filter_and_project(
-            self.radius, design_region_dl, beta=self.beta, eta=self.eta
+            self.radius,
+            design_region_dl,
+            coords=design_region_coords,
+            beta=self.beta,
+            eta=self.eta,
         )
         data_projected = filt_proj(spatial_data)
 

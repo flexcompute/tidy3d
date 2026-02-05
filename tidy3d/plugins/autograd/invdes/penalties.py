@@ -6,36 +6,21 @@ import autograd.numpy as np
 import pydantic.v1 as pd
 from numpy.typing import NDArray
 
-from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayFloat2D
 from tidy3d.plugins.autograd.types import PaddingType
 
-from .parametrizations import FilterAndProject
+from .parametrizations import FilterAndProject, FilterKernelSpec
+from .spacing import GridCoords
 
 
-class ErosionDilationPenalty(Tidy3dBaseModel):
+class ErosionDilationPenalty(FilterKernelSpec):
     """A class that computes a penalty for erosion/dilation of a parameter map not being unity."""
 
-    radius: Union[float, tuple[float, ...]] = pd.Field(
-        ..., title="Radius", description="The radius of the kernel."
-    )
-    dl: Union[float, tuple[float, ...]] = pd.Field(
-        ..., title="Grid Spacing", description="The grid spacing."
-    )
-    size_px: Union[int, tuple[int, ...]] = pd.Field(
-        None, title="Size in Pixels", description="The size of the kernel in pixels."
-    )
     beta: pd.NonNegativeFloat = pd.Field(
         20.0, title="Beta", description="The beta parameter for the tanh projection."
     )
     eta: pd.NonNegativeFloat = pd.Field(
         0.5, title="Eta", description="The eta parameter for the tanh projection."
-    )
-    filter_type: str = pd.Field(
-        "conic", title="Filter Type", description="The type of filter to create."
-    )
-    padding: PaddingType = pd.Field(
-        "reflect", title="Padding", description="The padding mode to use."
     )
     delta_eta: float = pd.Field(
         0.01,
@@ -59,6 +44,7 @@ class ErosionDilationPenalty(Tidy3dBaseModel):
         filtproj = FilterAndProject(
             radius=self.radius,
             dl=self.dl,
+            coords=self.coords,
             size_px=self.size_px,
             beta=self.beta,
             eta=self.eta,
@@ -91,8 +77,9 @@ class ErosionDilationPenalty(Tidy3dBaseModel):
 
 def make_erosion_dilation_penalty(
     radius: Union[float, tuple[float, ...]],
-    dl: Union[float, tuple[float, ...]],
+    dl: Optional[Union[float, tuple[float, ...]]] = None,
     *,
+    coords: Optional[GridCoords] = None,
     size_px: Optional[Union[int, tuple[int, ...]]] = None,
     beta: float = 20.0,
     eta: float = 0.5,
@@ -101,6 +88,18 @@ def make_erosion_dilation_penalty(
 ) -> Callable:
     """Computes a penalty for erosion/dilation of a parameter map not being unity.
 
+    Parameters
+    ----------
+    radius : Union[float, Tuple[float, ...]]
+        Physical radius of the erosion/dilation filter.
+    dl : Optional[Union[float, Tuple[float, ...]]]
+        Grid spacing. Required unless ``coords`` or ``size_px`` is provided.
+    coords : Optional[GridCoords]
+        Coordinate arrays for each axis. When provided, filtering is performed in physical space
+        using the supplied coordinates. ``coords`` cannot be combined with ``dl`` or ``size_px``.
+    size_px : Optional[Union[int, Tuple[int, ...]]]
+        Size of the kernel in pixels. When provided, ``radius``/``dl`` are not required.
+
     See Also
     --------
     :func:`~penalties.ErosionDilationPenalty`.
@@ -108,6 +107,7 @@ def make_erosion_dilation_penalty(
     return ErosionDilationPenalty(
         radius=radius,
         dl=dl,
+        coords=coords,
         size_px=size_px,
         beta=beta,
         eta=eta,

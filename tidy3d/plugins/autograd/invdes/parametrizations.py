@@ -18,31 +18,90 @@ from tidy3d.plugins.autograd.types import KernelType, PaddingType
 
 from .filters import make_filter
 from .projections import tanh_projection
+from .spacing import GridCoords, coerce_coords_input
 
 
-class FilterAndProject(Tidy3dBaseModel):
-    """A class that combines filtering and projection operations."""
+class FilterKernelSpec(Tidy3dBaseModel):
+    """Shared filter kernel specification for inverse-design operations."""
 
     radius: Union[float, tuple[float, ...]] = pd.Field(
         ..., title="Radius", description="The radius of the kernel."
     )
-    dl: Union[float, tuple[float, ...]] = pd.Field(
-        ..., title="Grid Spacing", description="The grid spacing."
+    dl: Optional[Union[float, tuple[float, ...]]] = pd.Field(
+        None,
+        title="Grid Spacing",
+        description="The grid spacing. Required unless ``coords`` or ``size_px`` is provided. "
+        "Cannot be used together with ``coords``.",
+    )
+    coords: Optional[GridCoords] = pd.Field(
+        None,
+        title="Grid Coordinates",
+        description="Coordinate arrays for each axis. When provided, filtering is performed in "
+        "physical space using the supplied coordinates. Accepted inputs include a ``Coords`` "
+        "instance, a mapping such as ``data_array.coords`` keyed by ``('x', 'y', 'z')`` (for the "
+        "relevant axes), or a tuple/list of coordinate arrays in axis order.",
     )
     size_px: Union[int, tuple[int, ...]] = pd.Field(
-        None, title="Size in Pixels", description="The size of the kernel in pixels."
-    )
-    beta: pd.NonNegativeFloat = pd.Field(
-        BETA_DEFAULT, title="Beta", description="The beta parameter for the tanh projection."
-    )
-    eta: pd.NonNegativeFloat = pd.Field(
-        ETA_DEFAULT, title="Eta", description="The eta parameter for the tanh projection."
+        None,
+        title="Size in Pixels",
+        description="The size of the kernel in pixels (index space). Use ``dl`` or ``coords`` for "
+        "physical‑space radii. Do not combine with ``coords``.",
     )
     filter_type: KernelType = pd.Field(
         "conic", title="Filter Type", description="The type of filter to create."
     )
     padding: PaddingType = pd.Field(
         "reflect", title="Padding", description="The padding mode to use."
+    )
+
+    @pd.validator("coords", pre=True)
+    def _coerce_coords(cls, val):
+        return coerce_coords_input(val)
+
+    @pd.root_validator
+    def _validate_grid_inputs(cls, values):
+        radius = values.get("radius")
+        dl = values.get("dl")
+        coords = values.get("coords")
+        size_px = values.get("size_px")
+
+        if coords is not None and dl is not None:
+            raise ValueError("Provide either 'coords' or 'dl', not both.")
+
+        if coords is not None and size_px is not None:
+            raise ValueError(
+                "Provide either 'coords' (physical-space) or 'size_px' (pixel-space), not both."
+            )
+
+        if size_px is not None:
+            if radius is not None or dl is not None:
+                td.log.warning(
+                    "Both 'size_px' and physical-space parameters were provided. "
+                    "'size_px' will take precedence."
+                )
+            return values
+
+        if coords is not None:
+            if radius is None:
+                raise ValueError("When 'coords' is provided, 'radius' must also be provided.")
+            return values
+
+        if radius is None or dl is None:
+            raise ValueError(
+                "Provide either 'size_px', or both 'radius' and 'dl', or 'radius' with 'coords'."
+            )
+
+        return values
+
+
+class FilterAndProject(FilterKernelSpec):
+    """A class that combines filtering and projection operations."""
+
+    beta: pd.NonNegativeFloat = pd.Field(
+        BETA_DEFAULT, title="Beta", description="The beta parameter for the tanh projection."
+    )
+    eta: pd.NonNegativeFloat = pd.Field(
+        ETA_DEFAULT, title="Eta", description="The eta parameter for the tanh projection."
     )
 
     def __call__(
@@ -67,6 +126,7 @@ class FilterAndProject(Tidy3dBaseModel):
         filter_instance = make_filter(
             radius=self.radius,
             dl=self.dl,
+            coords=self.coords,
             size_px=self.size_px,
             filter_type=self.filter_type,
             padding=self.padding,
@@ -84,6 +144,7 @@ def make_filter_and_project(
     radius: Optional[Union[float, tuple[float, ...]]] = None,
     dl: Optional[Union[float, tuple[float, ...]]] = None,
     *,
+    coords: Optional[GridCoords] = None,
     size_px: Optional[Union[int, tuple[int, ...]]] = None,
     beta: float = BETA_DEFAULT,
     eta: float = ETA_DEFAULT,
@@ -92,6 +153,16 @@ def make_filter_and_project(
 ) -> Callable:
     """Create a function that filters and projects an array.
 
+    Parameters
+    ----------
+    dl : Optional[Union[float, Tuple[float, ...]]]
+        Grid spacing. Required unless ``coords`` or ``size_px`` is provided.
+    coords : Optional[GridCoords]
+        Coordinate arrays for each axis. When provided, filtering is performed in physical space
+        using the supplied coordinates. ``coords`` cannot be combined with ``dl`` or ``size_px``.
+    size_px : Optional[Union[int, Tuple[int, ...]]]
+        Size of the kernel in pixels. When provided, ``radius``/``dl`` are not required.
+
     See Also
     --------
     :func:`~parametrizations.FilterAndProject`.
@@ -99,6 +170,7 @@ def make_filter_and_project(
     return FilterAndProject(
         radius=radius,
         dl=dl,
+        coords=coords,
         size_px=size_px,
         beta=beta,
         eta=eta,
@@ -156,7 +228,7 @@ def initialize_params_from_simulation(
         and the expectations of ``param_to_structure``.
     maxiter : int = 100
         Maximum number of L‑BFGS‑B iterations.
-    freq : float, optional
+    freq : Optional[float]
         Frequency at which permittivity is evaluated. If ``None``, uses infinite frequency.
     outside_handling : {"extrapolate", "mask", "nan"} = "mask"
         Strategy for points where design coordinates fall outside the sampled base epsilon:
@@ -164,7 +236,7 @@ def initialize_params_from_simulation(
         - "mask": include only points within the coverage bounds of ``sim.epsilon`` on the
           extended subgrid.
         - "nan": sample on a non‑extended subgrid and ignore points where interpolation returns NaN.
-    bounds : tuple[float | None, float | None] = (0.0, 1.0)
+    bounds : tuple[Optional[float], Optional[float]] = (0.0, 1.0)
         Element‑wise parameter bounds, e.g. ``(0.0, 1.0)`` or ``(-1.0, 1.0)``. Use ``None`` to
         indicate an unbounded side.
     rel_improve_tol : float = 1e-3

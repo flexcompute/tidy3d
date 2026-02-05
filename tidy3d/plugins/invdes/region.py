@@ -133,11 +133,14 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
 class TopologyDesignRegion(DesignRegion):
     """Design region as a pixellated permittivity grid."""
 
-    pixel_size: pd.PositiveFloat = pd.Field(
+    pixel_size: typing.Union[
+        pd.PositiveFloat,
+        tuple[pd.PositiveFloat, pd.PositiveFloat, pd.PositiveFloat],
+    ] = pd.Field(
         ...,
         title="Pixel Size",
-        description="Pixel size of the design region in x, y, z. For now, we only support the same "
-        "pixel size in all 3 dimensions. If ``TopologyDesignRegion.override_structure_dl`` is left "
+        description="Pixel size of the design region in x, y, z. Can be a single value or a tuple "
+        "of three values for per-axis spacing. If ``TopologyDesignRegion.override_structure_dl`` is left "
         "``None``, the ``pixel_size`` will determine the FDTD mesh size in the design region. "
         "Therefore, if your pixel size is large compared to the FDTD grid size, we recommend "
         "setting the ``override_structure_dl`` directly to "
@@ -342,7 +345,7 @@ class TopologyDesignRegion(DesignRegion):
         return td.Structure(geometry=self.geometry, medium=medium, priority=self.priority)
 
     @property
-    def _override_structure_dl(self) -> float:
+    def _override_structure_dl(self) -> typing.Union[float, tuple[float, float, float]]:
         """Override structure step size along all three dimensions."""
         if self.override_structure_dl is None:
             return self.pixel_size
@@ -358,10 +361,14 @@ class TopologyDesignRegion(DesignRegion):
 
         if not dl:
             return None
+        if np.isscalar(dl):
+            dl_tuple = (dl, dl, dl)
+        else:
+            dl_tuple = tuple(dl)
 
         return td.MeshOverrideStructure(
             geometry=self.geometry,
-            dl=(dl, dl, dl),
+            dl=dl_tuple,
             enforce=True,
         )
 
@@ -370,11 +377,15 @@ class TopologyDesignRegion(DesignRegion):
     ) -> anp.ndarray:
         """Evaluate a transformation, passing in design_region_dl."""
         self._check_params(params)
-        return transformation.evaluate(spatial_data=params, design_region_dl=self.pixel_size)
+        return transformation.evaluate(
+            spatial_data=params,
+            design_region_dl=self.pixel_size,
+            design_region_coords=self.coords,
+        )
 
     def evaluate_penalty(self, penalty: PenaltyType, material_density: anp.ndarray) -> float:
         """Evaluate an erosion-dilation penalty, passing in pixel_size."""
-        return penalty.evaluate(x=material_density, pixel_size=self.pixel_size)
+        return penalty.evaluate(x=material_density, pixel_size=self.pixel_size, coords=self.coords)
 
 
 DesignRegionType = typing.Union[TopologyDesignRegion]
