@@ -101,15 +101,18 @@ class DerivativeInfo:
     Dataset of relative permittivity values along all three dimensions.
     Used for automatically computing permittivity inside or outside of a simple geometry."""
 
-    eps_in: EpsType
+    eps_in: EpsType | None
     """Permittivity inside the Structure.
-    Typically computed from Structure.medium.eps_model.
-    Used when it cannot be computed from eps_data or when eps_approx=True."""
+    Computed only when structure.medium.is_custom is False. Contains the simulation
+    permittivity inside the structure when the simulation background medium is set to
+    the structure medium and all structures after the current structure are kept. Should
+    be used as the inside permittivity for shape derivative computations."""
 
     eps_out: EpsType
     """Permittivity outside the Structure.
-    Typically computed from Simulation.medium.eps_model.
-    Used when it cannot be computed from eps_data or when eps_approx=True."""
+    Contains the simulation permittivity outside the structure when the current structure
+    is removed from the structure list. Should be used as the outside permittivity for
+    shape derivative computations."""
 
     bounds: Bound
     """Geometry bounds.
@@ -222,7 +225,8 @@ class DerivativeInfo:
         """Create interpolators for field components and permittivity data.
 
         Creates and caches ``RegularGridInterpolator`` objects for all field components
-        (E_fwd, E_adj, D_fwd, D_adj) and permittivity data (eps_inf, eps_no).
+        (E_fwd, E_adj, D_fwd, D_adj) and permittivity data (eps_in, eps_out, eps_data).
+        Contains (H_fwd, H_adj) field components when relevant for certain material types.
         This caching strategy significantly improves performance by avoiding
         repeated interpolator construction in gradient evaluation loops.
 
@@ -237,7 +241,7 @@ class DerivativeInfo:
         dict
             Nested dictionary structure:
             - Field data: {"E_fwd": {"Ex": interpolator, ...}, ...}
-            - Permittivity: {"eps_inf": interpolator, "eps_no": interpolator}
+            - Permittivity: {"eps_in": interpolator, "eps_out": interpolator, "eps_data": interpolator}
         """
         from scipy.interpolate import RegularGridInterpolator
 
