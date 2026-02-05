@@ -11,6 +11,7 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.source import AbstractSource
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.types import TYPE_TAG_STR
+from tidy3d.components.types.time import SourceTimeType
 from tidy3d.components.validators import _assert_min_freq, _warn_unsupported_traced_argument
 from tidy3d.components.viz import (
     ARROW_ALPHA,
@@ -18,8 +19,6 @@ from tidy3d.components.viz import (
     ARROW_COLOR_SOURCE,
     plot_params_source,
 )
-
-from .time import SourceTimeType
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -70,7 +69,7 @@ class Source(Box, AbstractSource, ABC):
     @classmethod
     def _freqs_lower_bound(cls, val: SourceTimeType) -> SourceTimeType:
         """Raise validation error if central frequency is too low."""
-        _assert_min_freq(val._freq0_sigma_centroid, msg_start="'source_time.freq0'")
+        _assert_min_freq(val._freq0_sigma_centroid, msg_start="'source_time' central frequency")
         return val
 
     def plot(

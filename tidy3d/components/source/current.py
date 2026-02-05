@@ -20,7 +20,7 @@ from .base import Source
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
-    from tidy3d.components.source import SourceTimeType
+    from tidy3d.components.types.time import SourceTimeType
 
 
 class CurrentSource(Source, ABC):

@@ -10,8 +10,8 @@ from pydantic import Field, field_validator, model_validator
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.utils import _shift_value_signed
 from tidy3d.components.simulation import Simulation
-from tidy3d.components.source.time import SourceTimeType
 from tidy3d.components.types import Complex, FreqArray
+from tidy3d.components.types.time import SourceTimeType
 from tidy3d.components.validators import (
     assert_unique_names,
     validate_freqs_min,

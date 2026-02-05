@@ -13,7 +13,8 @@ import xarray as xr
 from shapely import LineString
 
 import tidy3d as td
-from tidy3d.components.data.data_array import FreqModeDataArray
+from tidy3d.components.data.data_array import FreqModeDataArray, TimeDataArray
+from tidy3d.components.data.dataset import TimeDataset
 from tidy3d.components.data.monitor_data import FreqDataArray
 from tidy3d.components.microwave.formulas.circuit_parameters import (
     capacitance_colinear_cylindrical_wire_segments,
@@ -2378,3 +2379,233 @@ def test_microwave_mode_data_interpolation():
     assert np.allclose(Z0_at_end_mode1, expected_Z0_end_mode1, rtol=1e-6), (
         f"Z0 at endpoint should match original: expected {expected_Z0_end_mode1}, got {Z0_at_end_mode1}"
     )
+
+
+# --- Baseband source time tests ---
+def _make_sim_with_source_time(source_time):
+    """Helper to create a Simulation with a PointDipole using the given source_time."""
+    freq_range = source_time.frequency_range()
+    fmid = 0.5 * (freq_range[0] + freq_range[1])
+    return td.Simulation(
+        size=(2, 1, 1),
+        grid_spec=td.GridSpec.uniform(dl=0.04),
+        monitors=[
+            td.FieldMonitor(
+                center=(0, 0, 0),
+                size=(1, 1, 0),
+                freqs=[fmid],
+                name="field",
+            ),
+        ],
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=source_time,
+            )
+        ],
+        run_time=source_time.end_time() or 50e-9,
+    )
+
+
+def test_baseband_phase_locked():
+    """Phase must be 0 for all baseband sources."""
+    with pytest.raises(pd.ValidationError):
+        td.BasebandStep(rise_time=1e-9, phase=1.0)
+    with pytest.raises(pd.ValidationError):
+        td.BasebandGaussianPulse(twidth=1e-9, phase=0.5)
+    with pytest.raises(pd.ValidationError):
+        td.BasebandRectangularPulse(rise_time=1e-10, twidth=1e-9, phase=np.pi)
+
+
+def test_baseband_step_source_time():
+    """Construction, amp_time shape, end_time for step source."""
+    step = td.BasebandStep(rise_time=1e-9)
+    assert step.rise_time == 1e-9
+    assert step.offset == 5.0
+    assert step.phase == 0
+    assert step.end_time() is None
+
+    times = np.linspace(0, 20e-9, 1000)
+    amp = step.amp_time(times)
+
+    # near 0 well before step center
+    assert np.abs(amp[0]) < 0.01
+    # ~0.5 at step center
+    t_center_idx = np.argmin(np.abs(times - step.t_center))
+    assert np.abs(amp[t_center_idx] - 0.5) < 0.01
+    # ~1.0 well after step center
+    assert np.abs(amp[-1] - 1.0) < 0.01
+
+    fmin, fmax = step.frequency_range()
+    assert fmin == 0.0
+    sigma = 1e-9 / 2.5631031310892006
+    assert np.isclose(fmax, 4.0 / (2 * np.pi * sigma), rtol=1e-6)
+
+
+def test_baseband_gaussian_source_time():
+    """Construction, amp_time shape, end_time, frequency_range for Gaussian."""
+    gauss = td.BasebandGaussianPulse(twidth=1e-9)
+    assert gauss.twidth == 1e-9
+    assert gauss.offset == 5.0
+
+    times = np.linspace(0, 20e-9, 1000)
+    amp = gauss.amp_time(times)
+
+    # peak amplitude at t_center
+    t_center_idx = np.argmin(np.abs(times - gauss.t_center))
+    assert np.isclose(np.abs(amp[t_center_idx]), gauss.amplitude, rtol=0.01)
+    # ~0 far from center
+    assert np.abs(amp[0]) < 0.01
+    assert np.abs(amp[-1]) < 0.01
+
+    assert np.isclose(gauss.end_time(), gauss.t_center + 10 * gauss.twidth, atol=1e-15)
+
+    fmin, fmax = gauss.frequency_range()
+    assert fmin == 0.0
+    assert np.isclose(fmax, 4.0 / (2 * np.pi * 1e-9), rtol=1e-6)
+
+
+def test_baseband_pulse_source_time():
+    """Construction, amp_time shape, end_time, frequency_range for pulse."""
+    pulse = td.BasebandRectangularPulse(rise_time=1e-10, twidth=1e-9)
+    assert pulse.rise_time == 1e-10
+    assert pulse.twidth == 1e-9
+
+    times = np.linspace(0, 5e-9, 5000)
+    amp = pulse.amp_time(times)
+
+    # ~0 before pulse
+    assert np.abs(amp[0]) < 0.01
+    # ~1.0 in flat-top region
+    flat_top_time = 0.5 * (pulse.t_start + pulse.t_stop)
+    flat_idx = np.argmin(np.abs(times - flat_top_time))
+    assert np.isclose(np.abs(amp[flat_idx]), pulse.amplitude, rtol=0.01)
+    # ~0 after falling edge
+    assert np.abs(amp[-1]) < 0.01
+
+    sigma = pulse.rise_time / 2.5631031310892006
+    assert np.isclose(pulse.end_time(), pulse.t_stop + 10 * sigma, atol=1e-15)
+
+    fmin, fmax = pulse.frequency_range()
+    assert fmin == 0.0
+    assert np.isclose(fmax, 4.0 / (2 * np.pi * sigma), rtol=1e-6)
+
+
+def test_baseband_custom_source_time():
+    """Construction, interpolation, end_time for custom source."""
+    # from_values constructor
+    values = np.array([0.0, 0.5, 1.0, 0.5, 0.0])
+    dt = 1e-9
+    cst = td.BasebandCustomSourceTime.from_values(values=values, dt=dt)
+    assert cst.source_time_dataset is not None
+
+    # interpolation matches at data points
+    amp = cst.amp_time(np.array([0.0, 1e-9, 2e-9, 3e-9, 4e-9]))
+    assert np.allclose(np.real(amp), values, atol=1e-10)
+    # linear interpolation at midpoint (scalar input returns 0-d array)
+    amp_mid = cst.amp_time(0.5e-9)
+    assert np.isclose(np.real(amp_mid), 0.25, atol=0.01)
+
+    # end_time is last non-zero sample
+    assert np.isclose(cst.end_time(), 3e-9, atol=1e-15)
+
+    # None dataset raises SetupError
+    with pytest.raises(td.exceptions.SetupError):
+        td.BasebandCustomSourceTime().end_time()
+
+
+def test_baseband_custom_source_time_edge_cases():
+    """Edge cases for BasebandCustomSourceTime: single-point, None dataset, all-zeros."""
+    # single-point dataset must raise
+    with pytest.raises(pd.ValidationError):
+        td.BasebandCustomSourceTime.from_values(values=np.array([1.0]), dt=1e-9)
+
+    # None dataset: data_times, amp_time, frequency_range, end_time
+    empty = td.BasebandCustomSourceTime()
+    assert len(empty.data_times) == 0
+    with pytest.raises(td.exceptions.SetupError):
+        empty.amp_time(0.0)
+    with pytest.raises(td.exceptions.SetupError):
+        empty.frequency_range()
+    with pytest.raises(td.exceptions.SetupError):
+        empty.end_time()
+
+    # unsorted time coordinates must raise
+    unsorted_da = TimeDataArray([1.0, 2.0, 3.0], coords={"t": [0.0, 2e-9, 1e-9]})
+    with pytest.raises(pd.ValidationError):
+        td.BasebandCustomSourceTime(source_time_dataset=TimeDataset(values=unsorted_da))
+
+    # all-zero dataset returns None end_time
+    zeros = td.BasebandCustomSourceTime.from_values(values=np.zeros(5), dt=1e-9)
+    assert zeros.end_time() is None
+
+    # dt <= 0 must raise
+    with pytest.raises(ValidationError):
+        td.BasebandCustomSourceTime.from_values(values=np.array([0.0, 1.0]), dt=0)
+    with pytest.raises(ValidationError):
+        td.BasebandCustomSourceTime.from_values(values=np.array([0.0, 1.0]), dt=-1)
+
+    # Non-uniform time dataset produces valid frequency_range
+    times_nonuniform = np.array([0.0, 0.5e-9, 2e-9, 3e-9, 4e-9])
+    vals = np.array([0.0, 0.5, 1.0, 0.5, 0.0])
+    dataarray = TimeDataArray(vals, coords={"t": times_nonuniform})
+    dataset = TimeDataset(values=dataarray)
+    cst = td.BasebandCustomSourceTime(source_time_dataset=dataset)
+    fmin, fmax = cst.frequency_range()
+    assert fmin >= 0
+    assert fmax > fmin
+
+
+def test_baseband_custom_frequency_range():
+    """FFT-based frequency_range for custom source matches analytical Gaussian result."""
+    sigma = 1e-9
+    gauss = td.BasebandGaussianPulse(twidth=sigma)
+
+    # Sample the Gaussian envelope; use a long window (8x sigma*offset) for sufficient zero-padding
+    times = np.linspace(0, 40e-9, 4096)
+    dt = times[1] - times[0]
+    values = gauss.amp_time(times)
+
+    cst = td.BasebandCustomSourceTime.from_values(values=values, dt=dt)
+
+    _, fmax_analytical = gauss.frequency_range()
+    _, fmax_fft = cst.frequency_range()
+
+    assert fmax_fft == pytest.approx(fmax_analytical, rel=0.05)
+
+
+def test_baseband_source_in_simulation():
+    """Each baseband source type works inside a Simulation (full validation)."""
+    _make_sim_with_source_time(td.BasebandStep(rise_time=1e-9))
+    _make_sim_with_source_time(td.BasebandGaussianPulse(twidth=1e-9))
+    _make_sim_with_source_time(td.BasebandRectangularPulse(rise_time=1e-10, twidth=1e-9))
+
+    times = np.linspace(0, 10e-9, 1000)
+    values = np.exp(-((times - 5e-9) ** 2) / (2 * (1e-9) ** 2))
+    dt = times[1] - times[0]
+    _make_sim_with_source_time(td.BasebandCustomSourceTime.from_values(values=values, dt=dt))
+
+
+def test_baseband_source_plot():
+    """plot() and plot_spectrum() work for each baseband source type."""
+    sources = [
+        (td.BasebandStep(rise_time=1e-9), 20e-9),
+        (td.BasebandGaussianPulse(twidth=1e-9), 20e-9),
+        (td.BasebandRectangularPulse(rise_time=1e-10, twidth=1e-9), 5e-9),
+    ]
+    for src, t_end in sources:
+        times = np.linspace(0, t_end, 2000)
+        _, ax = plt.subplots()
+        src.plot(times, ax=ax)
+        plt.close()
+        _, ax = plt.subplots()
+        src.plot_spectrum(times, ax=ax)
+        plt.close()
+
+    # custom source plot
+    cst = td.BasebandCustomSourceTime.from_values(values=np.linspace(0, 1, 100), dt=1e-10)
+    times = np.linspace(0, 10e-9, 1000)
+    _, ax = plt.subplots()
+    cst.plot(times, ax=ax)
+    plt.close()
