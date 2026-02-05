@@ -24,7 +24,7 @@ from tidy3d.plugins.smatrix.ports.base import AbstractBasePort
 if TYPE_CHECKING:
     from typing import Optional
 
-    from tidy3d.components.source.time import SourceTimeType
+    from tidy3d.components.types.time import SourceTimeType
 
 
 class ModalPortDataArray(DataArray):

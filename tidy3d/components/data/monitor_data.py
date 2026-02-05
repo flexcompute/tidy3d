@@ -96,7 +96,6 @@ if TYPE_CHECKING:
     from tidy3d.components.mode_spec import ModeSortSpec, ModeSpec
     from tidy3d.components.source.base import Source
     from tidy3d.components.source.current import PointDipole
-    from tidy3d.components.source.time import SourceTimeType
     from tidy3d.components.types import (
         ArrayFloat2D,
         Direction,
@@ -106,6 +105,7 @@ if TYPE_CHECKING:
         Size,
         TrackFreq,
     )
+    from tidy3d.components.types.time import SourceTimeType
 
     from .data_array import MixedModeDataArray, ModeIndexDataArray, ScalarFieldTimeDataArray
     from .dataset import Dataset

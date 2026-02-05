@@ -594,6 +594,12 @@ def test_custom_source_time():
     _ = cst.amp_time(-1)
     assert np.allclose(cst.amp_time([2]), np.exp(-1j * 2 * np.pi * 2 * freq0), rtol=0, atol=ATOL)
 
+    # unsorted time coordinates must raise
+    unsorted_vals = td.components.data.data_array.TimeDataArray([1, 2, 3], coords={"t": [0, 2, 1]})
+    unsorted_dataset = td.components.data.dataset.TimeDataset(values=unsorted_vals)
+    with pytest.raises(ValidationError):
+        td.CustomSourceTime(source_time_dataset=unsorted_dataset, freq0=freq0, fwidth=0.1e12)
+
     vals = td.components.data.data_array.TimeDataArray([1, 2], coords={"t": [-1, -0.5]})
     dataset = td.components.data.dataset.TimeDataset(values=vals)
     cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
@@ -615,6 +621,18 @@ def test_custom_source_time():
         dataset = td.components.data.dataset.TimeDataset(values=vals)
         cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
         assert np.allclose(cst.amp_time([0]), [1], rtol=0, atol=ATOL)
+
+    # dt <= 0 must raise
+    with pytest.raises(td.exceptions.ValidationError):
+        td.CustomSourceTime.from_values(freq0=1e12, fwidth=1e11, values=np.array([0, 1]), dt=0)
+    with pytest.raises(td.exceptions.ValidationError):
+        td.CustomSourceTime.from_values(freq0=1e12, fwidth=1e11, values=np.array([0, 1]), dt=-1)
+
+    # all-zero dataset: end_time returns None instead of crashing
+    cst_zeros = td.CustomSourceTime.from_values(
+        freq0=1e12, fwidth=1e11, values=np.zeros(5), dt=1e-12
+    )
+    assert cst_zeros.end_time() is None
 
 
 def test_custom_field_source():

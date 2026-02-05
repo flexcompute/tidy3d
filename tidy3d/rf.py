@@ -84,6 +84,14 @@ from tidy3d.components.microwave.path_integrals.specs.voltage import (
     AxisAlignedVoltageIntegralSpec,
     Custom2DVoltageIntegralSpec,
 )
+
+# Baseband source times
+from tidy3d.components.microwave.time import (
+    BasebandCustomSourceTime,
+    BasebandGaussianPulse,
+    BasebandRectangularPulse,
+    BasebandStep,
+)
 from tidy3d.components.monitor import DirectivityMonitor
 
 # Source frame
@@ -149,6 +157,10 @@ __all__ = [
     "AxisAlignedPathIntegral",
     "AxisAlignedVoltageIntegral",
     "AxisAlignedVoltageIntegralSpec",
+    "BasebandCustomSourceTime",
+    "BasebandGaussianPulse",
+    "BasebandRectangularPulse",
+    "BasebandStep",
     "BlackmanHarrisWindow",
     "BlackmanWindow",
     "ChebWindow",
