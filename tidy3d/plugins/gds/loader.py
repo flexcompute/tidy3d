@@ -231,14 +231,18 @@ class GDSLoader:
                         f"Layer '{layer_name}' not in stackup, skipping geometries"
                     )
 
-        # Build LayeredGeometry objects
+        # Build LayeredGeometry objects using construct() to skip per-object validation.
+        # This is safe because:
+        # 1. Geometry2D objects are already validated when created
+        # 2. Layer names are checked against stackup below
+        # 3. Net is always None (no EDA data for GDS)
         stackup_layers = set(spec.name for spec in stackup.layers)
         all_layered_geoms = []
 
         for geom, layer_name in geom_layer_pairs:
             if layer_name in stackup_layers:
                 all_layered_geoms.append(
-                    LayeredGeometry(
+                    LayeredGeometry.construct(
                         geometry=geom,
                         layer=layer_name,
                         net=None,
@@ -668,6 +672,12 @@ class GDSLoader:
     def _convert_polygon(self, polygon, gds_scale: float) -> Optional[Polygon2D]:
         """Convert gdstk.Polygon to Polygon2D.
 
+        Uses Polygon2D.construct() to skip pydantic validation for performance.
+        This is safe because:
+        1. gdstk guarantees (N, 2) shaped point arrays
+        2. Shapely handles duplicate vertices via buffer(0) in to_shapely()
+        3. to_shapely() catches degenerate cases with explicit error handling
+
         Parameters
         ----------
         polygon : gdstk.Polygon
@@ -684,20 +694,16 @@ class GDSLoader:
         if len(points) < 3:
             return None
 
-        vertices = [(float(p[0]) * gds_scale, float(p[1]) * gds_scale) for p in points]
-        
-        # Pre-validate: remove consecutive duplicates and check count
-        vertices = self._clean_vertices(vertices)
-        if len(vertices) < 3:
-            return None
-        
-        try:
-            # Suppress pydantic validator warnings for invalid polygons
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                return Polygon2D(vertices=vertices)
-        except Exception:
-            return None
+        # Scale and convert to numpy array directly
+        vertices = np.asarray(points, dtype=float) * gds_scale
+
+        # Use construct() to skip pydantic validation
+        return Polygon2D.construct(
+            vertices=vertices,
+            bulges=None,
+            holes=(),
+            arc_resolution=32,
+        )
 
     def _convert_path(
         self, path, gds_scale: float
@@ -779,6 +785,8 @@ class GDSLoader:
     def _path_to_polygon(self, path, gds_scale: float) -> Optional[Polygon2D]:
         """Convert path to polygon via tessellation.
 
+        Uses Polygon2D.construct() to skip pydantic validation for performance.
+
         Parameters
         ----------
         path : gdstk path
@@ -804,63 +812,16 @@ class GDSLoader:
             if len(points) < 3:
                 return None
 
-            vertices = [
-                (float(p[0]) * gds_scale, float(p[1]) * gds_scale)
-                for p in points
-            ]
-            
-            # Pre-validate: remove consecutive duplicates and check count
-            vertices = self._clean_vertices(vertices)
-            if len(vertices) < 3:
-                return None
-            
-            # Suppress pydantic validator warnings for invalid polygons
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                return Polygon2D(vertices=vertices)
+            # Scale and convert to numpy array directly
+            vertices = np.asarray(points, dtype=float) * gds_scale
+
+            # Use construct() to skip pydantic validation
+            return Polygon2D.construct(
+                vertices=vertices,
+                bulges=None,
+                holes=(),
+                arc_resolution=32,
+            )
 
         except Exception:
             return None
-    
-    def _clean_vertices(
-        self, vertices: list[tuple[float, float]]
-    ) -> list[tuple[float, float]]:
-        """Remove consecutive duplicate vertices.
-
-        Matches the validation logic in Polygon2D exactly to avoid
-        validation warnings.
-
-        Parameters
-        ----------
-        vertices : list[tuple[float, float]]
-            Input vertices.
-
-        Returns
-        -------
-        list[tuple[float, float]]
-            Cleaned vertices.
-        """
-        if len(vertices) < 2:
-            return vertices
-        
-        val = np.asarray(vertices, dtype=float)
-        
-        # Strip duplicate closing vertex if present
-        if len(val) >= 2 and np.allclose(val[0], val[-1], rtol=1e-10, atol=1e-14):
-            val = val[:-1]
-        
-        # Remove consecutive duplicate vertices
-        if val.shape[0] >= 2:
-            diffs = np.diff(val, axis=0)
-            dist_sq = np.sum(diffs**2, axis=1)
-            tol_sq = 1e-20
-            keep_mask = np.concatenate([[True], dist_sq > tol_sq])
-            val = val[keep_mask]
-            
-            # Remove last vertex if it's duplicate of first (after filtering)
-            if val.shape[0] >= 2:
-                wrap_diff = val[0] - val[-1]
-                if np.sum(wrap_diff**2) <= tol_sq:
-                    val = val[:-1]
-        
-        return [(float(v[0]), float(v[1])) for v in val]
