@@ -146,7 +146,18 @@ class GDSLoader:
             for polygon in cell.polygons:
                 layers.add((polygon.layer, polygon.datatype))
             for path in cell.paths:
-                layers.add((path.layer, path.datatype))
+                # FlexPath/RobustPath have layers/datatypes arrays
+                path_layers = getattr(path, "layers", None)
+                path_dtypes = getattr(path, "datatypes", None)
+                if path_layers is not None:
+                    for i, layer in enumerate(path_layers):
+                        dtype = path_dtypes[i] if path_dtypes and i < len(path_dtypes) else 0
+                        layers.add((layer, dtype))
+                else:
+                    # Fallback for simple paths
+                    layer = getattr(path, "layer", 0)
+                    dtype = getattr(path, "datatype", 0)
+                    layers.add((layer, dtype))
         return sorted(layers)
 
     def load(
@@ -327,12 +338,11 @@ class GDSLoader:
                 layer_name = _layer_name(polygon.layer, polygon.datatype)
                 result.append((geom, layer_name))
 
-        # Direct paths
+        # Direct paths (FlexPath/RobustPath have layers/datatypes arrays)
         for path in cell.paths:
-            geom = self._convert_path(path, gds_scale)
-            if geom is not None:
-                layer_name = _layer_name(path.layer, path.datatype)
-                result.append((geom, layer_name))
+            geoms_layers = self._convert_path(path, gds_scale)
+            if geoms_layers:
+                result.extend(geoms_layers)
 
         # References (recursive)
         for ref in cell.references:
@@ -689,8 +699,13 @@ class GDSLoader:
         except Exception:
             return None
 
-    def _convert_path(self, path, gds_scale: float) -> Optional[Geometry2D]:
-        """Convert gdstk path to Path2D or Polygon2D.
+    def _convert_path(
+        self, path, gds_scale: float
+    ) -> list[tuple[Geometry2D, str]]:
+        """Convert gdstk path to polygons.
+
+        FlexPath and RobustPath can have multiple layers, so this returns
+        a list of (geometry, layer_name) tuples.
 
         Parameters
         ----------
@@ -701,13 +716,65 @@ class GDSLoader:
 
         Returns
         -------
-        Optional[Geometry2D]
-            Converted geometry, or None if invalid.
+        list[tuple[Geometry2D, str]]
+            List of (geometry, layer_name) tuples.
         """
-        # gdstk paths are complex - safest to convert via polygon
-        # Path2D requires specific spine+width format that gdstk doesn't directly provide
-        # For now, always use polygon conversion for reliability
-        return self._path_to_polygon(path, gds_scale)
+        result = []
+        
+        try:
+            # Get layers and datatypes from path
+            # FlexPath/RobustPath have layers/datatypes arrays
+            layers = getattr(path, "layers", None)
+            datatypes = getattr(path, "datatypes", None)
+            
+            if layers is None:
+                # Fallback for simple paths
+                layer = getattr(path, "layer", 0)
+                dtype = getattr(path, "datatype", 0)
+                layers = [layer]
+                datatypes = [dtype]
+            
+            # Convert path to polygons
+            polygons = path.to_polygons()
+            if not polygons:
+                return result
+            
+            # Each polygon corresponds to a layer
+            # If there are more polygons than layers, they cycle
+            num_layers = len(layers)
+            
+            for i, poly in enumerate(polygons):
+                layer_idx = i % num_layers
+                layer = layers[layer_idx]
+                dtype = datatypes[layer_idx] if datatypes and layer_idx < len(datatypes) else 0
+                
+                points = poly.points if hasattr(poly, "points") else poly
+                if len(points) < 3:
+                    continue
+                
+                vertices = [
+                    (float(p[0]) * gds_scale, float(p[1]) * gds_scale)
+                    for p in points
+                ]
+                
+                # Clean vertices
+                vertices = self._clean_vertices(vertices)
+                if len(vertices) < 3:
+                    continue
+                
+                try:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        geom = Polygon2D(vertices=vertices)
+                    layer_name = _layer_name(layer, dtype)
+                    result.append((geom, layer_name))
+                except Exception:
+                    continue
+        
+        except Exception:
+            pass
+        
+        return result
 
     def _path_to_polygon(self, path, gds_scale: float) -> Optional[Polygon2D]:
         """Convert path to polygon via tessellation.
