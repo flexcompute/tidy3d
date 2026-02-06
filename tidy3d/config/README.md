@@ -50,7 +50,7 @@ flowchart LR
 
 ## Module Reference
 
-- `sections.py` - Pydantic models for built-in sections (logging, simulation, microwave, adjoint, web, local cache, plugin container) registered via `register_section`. The bundled models inherit from the internal `ConfigSection` helper, but external code can use plain `BaseModel` subclasses. Optional handlers perform side effects. Fields mark persistence with `json_schema_extra={"persist": True}`.
+- `sections.py` - Pydantic models for built-in sections (logging, simulation, microwave, adjoint, web, local cache, in-memory batch data cache, plugin container) registered via `register_section`. The bundled models inherit from the internal `ConfigSection` helper, but external code can use plain `BaseModel` subclasses. Optional handlers perform side effects. Fields mark persistence with `json_schema_extra={"persist": True}`.
 - `registry.py` - Stores section and handler registries and notifies the attached manager so new entries appear immediately.
 - `manager.py` - `ConfigManager` caches validated models, tracks runtime overrides per profile, filters persisted fields, exposes helpers such as `plugins`, `profiles`, and `format`. `SectionAccessor` routes attribute access to `update_section`.
 - `loader.py` - Resolves the config directory, loads `config.toml` and `profiles/<name>.toml`, parses environment overrides, and writes atomically through `serializer.build_document`.

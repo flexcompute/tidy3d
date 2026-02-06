@@ -517,6 +517,25 @@ class LocalCacheConfig(ConfigSection):
         return str(value)
 
 
+class BatchDataCacheConfig(ConfigSection):
+    """Settings controlling in-memory caching for batch data."""
+
+    enabled: bool = Field(
+        True,
+        title="Enable batch data cache",
+        description="Cache batch results in memory when files are below the size threshold.",
+    )
+
+    max_total_size_gb: NonNegativeFloat = Field(
+        1.0,
+        title="Maximum total batch data size (GB)",
+        description=(
+            "Cache batch task data only when the combined size of all task data files is at or "
+            "below this threshold. Set to 0 to disable."
+        ),
+    )
+
+
 @register_section("plugins")
 class PluginsContainer(ConfigSection):
     """Container that holds plugin-specific configuration sections."""
@@ -530,10 +549,12 @@ if not WASM_BUILD:
     register_section("web")(WebConfig)
     register_handler("web")(apply_web)
     register_section("local_cache")(LocalCacheConfig)
+    register_section("batch_data_cache")(BatchDataCacheConfig)
 
 
 __all__ = [
     "AdjointConfig",
+    "BatchDataCacheConfig",
     "LocalCacheConfig",
     "LoggingConfig",
     "MicrowaveConfig",

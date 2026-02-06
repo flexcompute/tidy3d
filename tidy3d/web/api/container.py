@@ -18,10 +18,12 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 from pydantic import Field, PositiveInt, PrivateAttr, model_validator
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
+from tidy3d._runtime import WASM_BUILD
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.workflow import WorkflowType
+from tidy3d.config import config
 from tidy3d.exceptions import DataError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api import webapi as web
@@ -629,15 +631,61 @@ class BatchData(Tidy3dBaseModel, Mapping):
         description="Whether the simulation data was downloaded before.",
     )
 
+    _data_cache: dict[TaskName, WorkflowDataType] = PrivateAttr(default_factory=dict)
+    _cache_enabled: Optional[bool] = PrivateAttr(default=None)
+
+    def _should_cache_data(self) -> bool:
+        """Return True when in-memory caching should be enabled for batch data."""
+        if self._cache_enabled is not None:
+            return self._cache_enabled
+
+        self._cache_enabled = False
+        if WASM_BUILD:
+            return False
+
+        try:
+            cache_config = config.batch_data_cache
+        except AttributeError:
+            return False
+        if not cache_config.enabled:
+            return False
+
+        max_bytes = int(cache_config.max_total_size_gb * (1024**3))
+        if max_bytes <= 0:
+            return False
+
+        total_size = 0
+        for task_path in self.task_paths.values():
+            try:
+                file_size = Path(task_path).stat().st_size
+            except FileNotFoundError:  # not downloaded yet
+                self._cache_enabled = None
+                return False
+            total_size += file_size
+            if total_size > max_bytes:
+                return False
+
+        self._cache_enabled = True
+        return True
+
     def load_sim_data(self, task_name: str) -> WorkflowDataType:
-        """Load a simulation data object from file by task name."""
+        """Load a simulation data object from file by task name.
+
+        When ``config.batch_data_cache.enabled`` is ``True`` and the total size of all task
+        files stays under the configured threshold, the loaded object is cached in
+        memory for subsequent accesses.
+        """
+        cache_enabled = self._should_cache_data()
+        if cache_enabled and task_name in self._data_cache:
+            return self._data_cache[task_name]
+
         task_data_path = Path(self.task_paths[task_name])
         task_id = self.task_ids[task_name]
         from_cache = self.cached_tasks[task_name] if self.cached_tasks else False
         if not from_cache:
             web.get_info(task_id)
 
-        return web.load(
+        data = web.load(
             task_id=None if from_cache else task_id,
             path=task_data_path,
             verbose=False,
@@ -645,8 +693,18 @@ class BatchData(Tidy3dBaseModel, Mapping):
             lazy=self.lazy,
         )
 
+        if not cache_enabled and self._cache_enabled is None:
+            cache_enabled = self._should_cache_data()
+        if cache_enabled:
+            self._data_cache[task_name] = data
+        return data
+
     def __getitem__(self, task_name: TaskName) -> WorkflowDataType:
-        """Get the simulation data object for a given ``task_name``."""
+        """Get the simulation data object for a given ``task_name``.
+
+        When ``config.batch_data_cache.enabled`` is `True` and the batch data size is within
+        the configured threshold, the result is cached in memory.
+        """
         return self.load_sim_data(task_name)
 
     def __iter__(self) -> Iterator[TaskName]:
@@ -829,9 +887,11 @@ class Batch(WebContainer):
         >>> for task_name, sim_data in batch_data.items(): # doctest: +SKIP
         ...     # do something with data. # doctest: +SKIP
 
-        ``batch_data`` does not store all of the data objects in memory,
-        rather it iterates over the task names and loads the corresponding
-        data from file one by one. If no file exists for that task, it downloads it.
+        ``batch_data`` iterates over task names and loads the corresponding data
+        from file one by one. If no file exists for that task, it downloads it.
+        When ``config.batch_data_cache.enabled`` is ``True`` and the
+        total size of all task files is below `config.batch_data_cache.max_total_size_gb`,
+        accessed results are cached in memory to avoid repeated loads.
         """
         loaded = [job.load_if_cached for job in self.jobs.values()]
         self._check_path_dir(path_dir)
