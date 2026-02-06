@@ -64,7 +64,13 @@ Optional overrides that tweak solver behavior at runtime.
    * - ``use_local_subpixel``
      - ``None``
      - No
-     - Set to ``True`` to force local subpixel averaging, ``False`` to disable it, or leave ``None`` to keep the solver default.
+     - Controls whether local subpixel averaging is used in ``Simulation.epsilon``,
+       ``ModeSimulation.run_local``, and ``ModeSolver.solve``. Requires the ``tidy3d-extras``
+       package (``pip install "tidy3d[extras]"``). Set to ``True`` to force local subpixel
+       averaging (raises an error if ``tidy3d-extras`` is not installed), ``False`` to disable
+       it and use permittivity staircasing, or leave ``None`` to use subpixel averaging when
+       available and silently fall back to staircasing otherwise.
+       See :doc:`../extras/index` for more details.
 
 
 Microwave (``config.microwave``)

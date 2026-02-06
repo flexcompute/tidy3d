@@ -1709,6 +1709,15 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             For details on xarray DataArray objects,
             refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
 
+        Note
+        ----
+        This method supports local subpixel averaging when the ``tidy3d-extras``
+        package is installed. The behavior is controlled by
+        ``config.simulation.use_local_subpixel``. See
+        :attr:`SimulationConfig.use_local_subpixel \
+<tidy3d.config.sections.SimulationConfig.use_local_subpixel>`
+        for details.
+
         See Also
         --------
 
@@ -1743,12 +1752,22 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         freq : float = None
             The frequency to evaluate the mediums at.
             If not specified, evaluates at infinite frequency.
+
         Returns
         -------
         xarray.DataArray
             Datastructure containing the relative permittivity values and location coordinates.
             For details on xarray DataArray objects,
             refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
+
+        Note
+        ----
+        This method supports local subpixel averaging when the ``tidy3d-extras``
+        package is installed. The behavior is controlled by
+        ``config.simulation.use_local_subpixel``. See
+        :attr:`SimulationConfig.use_local_subpixel \
+<tidy3d.config.sections.SimulationConfig.use_local_subpixel>`
+        for details.
         """
 
         grid_cells = np.prod(grid.num_cells)
