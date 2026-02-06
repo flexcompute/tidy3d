@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added `GeometryArray` class for efficiently representing multiple copies of a base geometry at specified offsets with transformation matrices. Includes a convenience method `geometry.array(offsets=..., transforms=...)` on all geometry objects.
 - Added `ModeSortSpec.keep_modes` which can be set to `"all"` to keep all modes in the mode solver (the default), `"filtered"` to keep only modes passing the filter defined by the `ModeSortSpec`, or an integer `N` to keep only the top `N` modes after filtering and sorting.
 - Added `fill_fraction_box` as a new filtering and sorting key which computes the field-energy fill fraction within a specified bounding box (`ModeSortSpec.bounding_box`).
 - Added `Grid.fine_mesh_info` property to identify and report locations where grid cell sizes are fine for understanding meshing hotspots.

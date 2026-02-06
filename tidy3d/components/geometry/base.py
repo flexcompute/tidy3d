@@ -17,7 +17,13 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
 from tidy3d.components.geometry.float_utils import increment_float
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
-from tidy3d.components.types import Axis, ClipOperationType, MatrixReal4x4, PlanePosition
+from tidy3d.components.types import (
+    Axis,
+    ClipOperationType,
+    Coordinate,
+    MatrixReal4x4,
+    PlanePosition,
+)
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.viz import (
     ARROW_LENGTH,
@@ -60,7 +66,6 @@ if TYPE_CHECKING:
         ArrayFloat3D,
         Ax,
         Bound,
-        Coordinate,
         Coordinate2D,
         LengthUnit,
         Shapely,
@@ -76,6 +81,8 @@ except ImportError:
 POLY_GRID_SIZE = 1e-12
 POLY_TOLERANCE_RATIO = 1e-12
 POLY_DISTANCE_TOLERANCE = 8e-12
+# Tolerance for validating linear-only transforms (no translation)
+LINEAR_TRANSFORM_TOL = 1e-12
 
 
 _shapely_operations = {
@@ -91,6 +98,47 @@ _bit_operations = {
     "difference": lambda a, b: a & ~b,
     "symmetric_difference": lambda a, b: a != b,
 }
+
+
+# Validators for geometry classes (defined here instead of validators.py to avoid circular imports)
+def assert_geometry_finite(field_name: str = "geometry") -> Callable[[type, Geometry], Geometry]:
+    """Validator that ensures a geometry field has finite bounds."""
+
+    @field_validator(field_name)
+    @classmethod
+    def geometry_has_finite_bounds(cls: type, val: Geometry) -> Geometry:
+        """Raise validation error if geometry has non-finite bounds."""
+        if not np.isfinite(val.bounds).all():
+            raise ValidationError(
+                f"'{cls.__name__}' requires a geometry with finite dimensions. "
+                "Try using a large value instead of 'inf' when creating geometries."
+            )
+        return val
+
+    return geometry_has_finite_bounds
+
+
+def check_transform_invertible(transform: MatrixReal4x4, index: Optional[int] = None) -> None:
+    """Check if a transform matrix is invertible.
+
+    Parameters
+    ----------
+    transform : MatrixReal4x4
+        The 4x4 transformation matrix to check.
+    index : Optional[int]
+        If provided, includes the index in the error message (for array of transforms).
+
+    Raises
+    ------
+    ValidationError
+        If the transform matrix is not invertible.
+    """
+    try:
+        _ = np.linalg.inv(transform)
+    except np.linalg.LinAlgError as err:
+        if index is not None:
+            raise ValidationError(f"Transform at index {index} is not invertible.") from err
+        raise ValidationError("Transform matrix is not invertible.") from err
 
 
 class Geometry(Tidy3dBaseModel, ABC):
@@ -1024,6 +1072,62 @@ class Geometry(Tidy3dBaseModel, ABC):
             Reflected copy of this geometry.
         """
         return Transformed(geometry=self, transform=Transformed.reflection(normal))
+
+    def array(
+        self,
+        offsets: Optional[ArrayLike] = None,
+        transforms: Optional[ArrayLike] = None,
+    ) -> GeometryArray:
+        """Return an array of copies of this geometry with optional offsets and/or linear transforms.
+
+        This method creates a :class:`GeometryArray` containing multiple copies of this
+        geometry. When both ``offsets`` and ``transforms`` are provided, transforms are
+        applied to each copy before the translation given by offsets is applied.
+
+        Parameters
+        ----------
+        offsets : Optional[ArrayLike] = None
+            Optional array of offset vectors with shape (N, 3) where N is the number of
+            geometries. Each row specifies the (x, y, z) translation for one geometry
+            (after any transform is applied). If not provided, no additional translation
+            is applied beyond any transforms.
+        transforms : Optional[ArrayLike] = None
+            Optional array of 4x4 linear-only transform matrices with shape (N, 4, 4).
+            Each transform must be a valid homogeneous linear transform
+            (rotation/reflection/scale/shear) with no translation component.
+            Typical transforms can be created using ``Transformed.rotation``,
+            ``Transformed.reflection``, or ``Transformed.scaling``.
+
+        Returns
+        -------
+        :class:`GeometryArray`
+            Array containing N copies of this geometry.
+
+        Notes
+        -----
+        - ``offsets`` represent all per-instance translation.
+        - ``transforms`` represent linear transforms only and must not contain translation.
+        - If both ``offsets`` and ``transforms`` are ``None``, the array contains a single
+          instance of the base geometry.
+        - If both are provided, they must have the same length and transforms are applied
+          before the translation given by offsets.
+        - Adjoint/autodiff is not currently supported for ``GeometryArray``.
+
+        Example
+        -------
+        >>> import tidy3d as td
+        >>> import numpy as np
+        >>> box = td.Box(size=(1, 1, 1))
+        >>> # Create a 2x2 grid of boxes using offsets
+        >>> offsets = [[0, 0, 0], [2, 0, 0], [0, 2, 0], [2, 2, 0]]
+        >>> array = box.array(offsets=offsets)
+        >>> # Create array using linear transforms only (rotation around z-axis)
+        >>> transforms = [np.eye(4), td.Transformed.rotation(np.pi/4, 2)]
+        >>> array = box.array(transforms=transforms)
+        >>> # Both None gives single instance of base geometry
+        >>> array = box.array()
+        """
+        return GeometryArray(geometry=self, offsets=offsets, transforms=transforms)
 
     """ Field and coordinate transformations """
 
@@ -2782,22 +2886,13 @@ class Transformed(Geometry):
         description="Transform matrix applied to the base geometry.",
     )
 
+    _geometry_is_finite = assert_geometry_finite("geometry")
+
     @field_validator("transform")
     @classmethod
     def _transform_is_invertible(cls, val: MatrixReal4x4) -> MatrixReal4x4:
-        # If the transform is not invertible, this will raise an error
-        _ = np.linalg.inv(val)
-        return val
-
-    @field_validator("geometry")
-    @classmethod
-    def _geometry_is_finite(cls, val: GeometryType) -> GeometryType:
-        if not np.isfinite(val.bounds).all():
-            raise ValidationError(
-                "Transformations are only supported on geometries with finite dimensions. "
-                "Try using a large value instead of 'inf' when creating geometries that undergo "
-                "transformations."
-            )
+        """Raise validation error if transform is not invertible."""
+        check_transform_invertible(val)
         return val
 
     @model_validator(mode="after")
@@ -2931,6 +3026,17 @@ class Transformed(Geometry):
         """Returns object's surface area within given bounds."""
         log.warning("Surface area of transformed elements cannot be calculated.")
         return None
+
+    @staticmethod
+    def identity() -> MatrixReal4x4:
+        """Return an identity matrix where no transform is applied.
+
+        Returns
+        -------
+        numpy.ndarray
+            Identity transform matrix with shape (4, 4).
+        """
+        return np.eye(4)
 
     @staticmethod
     def translation(x: float, y: float, z: float) -> MatrixReal4x4:
@@ -3617,6 +3723,368 @@ class GeometryGroup(Geometry):
                 grad_vjps[field_path] = vjp_dict_geo.popitem()[1]
 
         return grad_vjps
+
+
+class GeometryArray(Geometry):
+    """A geometry representing an array of copies of a base geometry, with optional offsets
+    and/or linear transformations applied to each copy.
+
+    This class provides an efficient way to represent arrays of repeated geometries,
+    avoiding the need to create many individual geometry objects.
+
+    The instance pose for each copy is defined as: ``T(offsets[i]) @ L(transforms[i])``,
+    where ``T`` is a translation matrix and ``L`` is the linear transform. In other words,
+    the transform is applied first, then the translation.
+
+    Notes
+    -----
+    - ``offsets`` represent all per-instance translation.
+    - ``transforms`` represent linear transforms only (rotation/reflection/scale/shear)
+      and must not contain translation. Use ``offsets`` for translations.
+    - If both ``offsets`` and ``transforms`` are ``None``, the array contains a single
+      instance of the base geometry at the origin.
+    - If both are provided, they must have the same length.
+    - Adjoint/autodiff is not currently supported for ``GeometryArray``.
+
+    Parameters
+    ----------
+    geometry : GeometryType
+        Base geometry to be repeated in the array. Must have finite bounds.
+    offsets : Optional[tuple[Coordinate, ...]]
+        Optional tuple of 3D coordinate offsets. Each offset translates the base geometry
+        (after any transform is applied) to create a copy. If not provided, no additional
+        translation is applied beyond any transforms.
+    transforms : Optional[tuple[MatrixReal4x4, ...]]
+        Optional tuple of 4x4 linear-only transformation matrices. Each transform must be
+        a valid homogeneous linear transform (rotation/reflection/scale/shear) with no
+        translation component (i.e., ``transform[:3, 3] == 0`` and
+        ``transform[3, :] == [0, 0, 0, 1]``). Typical transforms can be created using
+        ``Transformed.rotation``, ``Transformed.reflection``, or ``Transformed.scaling``.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> import numpy as np
+    >>> box = td.Box(size=(1, 1, 1))
+    >>> # Using offsets only:
+    >>> offsets = [[0, 0, 0], [2, 0, 0], [0, 2, 0], [2, 2, 0]]
+    >>> array = td.GeometryArray(geometry=box, offsets=offsets)
+    >>> # Or use the convenience method:
+    >>> array = box.array(offsets=offsets)
+    >>> # Using linear transforms only (rotation around z-axis):
+    >>> rot_0 = td.Transformed.rotation(0, 2)  # no rotation
+    >>> rot_90 = td.Transformed.rotation(np.pi/2, 2)  # 90 degree rotation
+    >>> array = td.GeometryArray(geometry=box, transforms=[rot_0, rot_90])
+    >>> # Both None gives single instance of base geometry:
+    >>> array = td.GeometryArray(geometry=box)
+    """
+
+    geometry: discriminated_union(GeometryType) = Field(
+        ...,
+        title="Geometry",
+        description="Base geometry to be repeated in the array.",
+    )
+
+    offsets: Optional[tuple[Coordinate, ...]] = Field(
+        None,
+        title="Offsets",
+        description="A tuple of 3D coordinate offsets. Each offset translates the base "
+        "geometry (after any transform is applied) to create a copy. If not provided, no "
+        "additional translation is applied beyond any transforms.",
+    )
+
+    transforms: Optional[tuple[MatrixReal4x4, ...]] = Field(
+        None,
+        title="Transforms",
+        description="A tuple of 4x4 linear-only transformation matrices "
+        "(rotation/reflection/scale/shear, no translation). Typical transforms can be "
+        "created using ``Transformed.rotation``, ``Transformed.reflection``, or ``Transformed.scaling``. "
+        "Each transform is applied to the base geometry before the corresponding offset translation. "
+        "If not provided, only translations from offsets are applied.",
+    )
+
+    _geometry_is_finite = assert_geometry_finite("geometry")
+
+    @field_validator("transforms")
+    @classmethod
+    def _validate_transforms(
+        cls, val: Optional[tuple[MatrixReal4x4, ...]]
+    ) -> Optional[tuple[MatrixReal4x4, ...]]:
+        """Validate that transforms are invertible, linear-only, and non-empty if provided."""
+        if val is None:
+            return val
+
+        # Must not be empty if provided
+        if len(val) < 1:
+            raise ValidationError("'transforms' must have at least one transform when provided.")
+
+        # Check each transform
+        for i, transform in enumerate(val):
+            # Check invertibility
+            check_transform_invertible(transform, index=i)
+
+            # Check linear-only (no translation)
+            transform_array = np.asarray(transform)
+
+            # Check translation column: transform[:3, 3] should be zero
+            translation = transform_array[:3, 3]
+            if not np.allclose(translation, 0, atol=LINEAR_TRANSFORM_TOL):
+                idx_msg = f"at index {i}"
+                raise ValidationError(
+                    f"Transform {idx_msg} contains translation in [:3, 3] = {translation.tolist()}. "
+                    "GeometryArray transforms must be linear-only (rotation/reflection/scale/shear). "
+                    "Use the 'offsets' parameter for translations."
+                )
+
+            # Check bottom row: transform[3, :] should be [0, 0, 0, 1]
+            bottom_row = transform_array[3, :]
+            expected_bottom = np.array([0, 0, 0, 1])
+            if not np.allclose(bottom_row, expected_bottom, atol=LINEAR_TRANSFORM_TOL):
+                idx_msg = f"at index {i}"
+                raise ValidationError(
+                    f"Transform {idx_msg} has invalid homogeneous form: [3, :] = {bottom_row.tolist()}. "
+                    "Expected [0, 0, 0, 1]."
+                )
+
+        return val
+
+    @model_validator(mode="after")
+    def _validate_offsets_and_transforms(self) -> Self:
+        """Validate offsets and transforms are consistent."""
+        offsets = self.offsets
+        transforms = self.transforms
+
+        # If offsets provided, must not be empty
+        if offsets is not None and len(offsets) < 1:
+            raise ValidationError("'offsets' must have at least one offset when provided.")
+
+        # If both provided, lengths must match
+        if offsets is not None and transforms is not None:
+            if len(offsets) != len(transforms):
+                raise ValidationError(
+                    f"Number of transforms ({len(transforms)}) must match "
+                    f"number of offsets ({len(offsets)}) when both are provided."
+                )
+
+        return self
+
+    @cached_property
+    def num_geometries(self) -> int:
+        """Number of geometries in the array."""
+        if self.offsets is not None:
+            return len(self.offsets)
+        if self.transforms is not None:
+            return len(self.transforms)
+        # Both None means single geometry (base geometry at origin)
+        return 1
+
+    @cached_property
+    def _all_transforms(self) -> np.ndarray:
+        """Compute all 4x4 transforms for all geometries in a vectorized way.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape (num_geometries, 4, 4) containing the full transform
+            (rotation/scale + translation) for each geometry in the array.
+        """
+        n = self.num_geometries
+        shape = (n, 4, 4)
+
+        # Get all transforms, defaulting to identity if not provided
+        if self.transforms is not None:
+            transforms = np.array(self.transforms)
+        else:
+            transforms = np.broadcast_to(Transformed.identity(), shape)
+
+        # Build translation matrices for all offsets
+        # translation matrix: [[1,0,0,x], [0,1,0,y], [0,0,1,z], [0,0,0,1]]
+        translations = np.broadcast_to(Transformed.identity(), shape).copy()
+        if self.offsets is not None:
+            translations[:, :3, 3] = self.offsets
+
+        # Apply transform, then translation: result = translation @ transform
+        return np.matmul(translations, transforms)
+
+    def _get_full_transform(self, index: int) -> MatrixReal4x4:
+        """Get the full 4x4 transform for a geometry at given index (transform + translation)."""
+        return self._all_transforms[index]
+
+    @cached_property
+    def _transformed_geometries(self) -> list[Transformed]:
+        """List of transformed geometries in the array."""
+        return [
+            Transformed(geometry=self.geometry, transform=transform)
+            for transform in self._all_transforms
+        ]
+
+    @cached_property
+    def _geometry_group(self) -> GeometryGroup:
+        """Return a GeometryGroup containing all transformed geometries in the array."""
+        return GeometryGroup(geometries=tuple(self._transformed_geometries))
+
+    @cached_property
+    def bounds(self) -> Bound:
+        """Returns bounding box min and max coordinates.
+
+        Returns
+        -------
+        Tuple[float, float, float], Tuple[float, float, float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+        """
+        return self._geometry_group.bounds
+
+    def intersections_tilted_plane(
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
+    ) -> list[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        return self._geometry_group.intersections_tilted_plane(
+            normal, origin, to_2D, cleanup=cleanup, quad_segs=quad_segs
+        )
+
+    def intersections_plane(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        cleanup: bool = True,
+        quad_segs: Optional[int] = None,
+    ) -> list[Shapely]:
+        """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        cleanup : bool = True
+            If True, removes extremely small features from each polygon's boundary.
+        quad_segs : Optional[int] = None
+            Number of segments used to discretize circular shapes. If ``None``, uses
+            high-quality visualization settings.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        return self._geometry_group.intersections_plane(
+            x=x, y=y, z=z, cleanup=cleanup, quad_segs=quad_segs
+        )
+
+    def intersects_axis_position(self, axis: int, position: float) -> bool:
+        """Whether self intersects plane specified by a given position along a normal axis.
+
+        Parameters
+        ----------
+        axis : int = None
+            Axis normal to the plane.
+        position : float = None
+            Position of plane along the normal axis.
+
+        Returns
+        -------
+        bool
+            Whether this geometry intersects the plane.
+        """
+        return self._geometry_group.intersects_axis_position(axis, position)
+
+    def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
+
+        Returns
+        -------
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
+        """
+        return self._geometry_group.inside(x, y, z)
+
+    def _volume(self, bounds: Bound) -> float:
+        """Returns object's volume within given bounds."""
+        return self._geometry_group._volume(bounds)
+
+    def _surface_area(self, bounds: Bound) -> float:
+        """Returns object's surface area within given bounds."""
+        # Surface area cannot be reliably computed when non-trivial transforms are present
+        if self.transforms is not None:
+            log.warning("Surface area of transformed elements cannot be calculated.")
+            return None
+        # For pure translations, sum surface areas using local bounds for base geometry
+        total_area = 0.0
+        for geom in self._transformed_geometries:
+            # Transform bounds to local coordinate system
+            vertices = np.dot(geom.inverse, Transformed._vertices_from_bounds(bounds))[:3]
+            local_bounds = (tuple(vertices.min(axis=1)), tuple(vertices.max(axis=1)))
+            instance_area = self.geometry.surface_area(local_bounds)
+            if instance_area is None:
+                return None
+            total_area += instance_area
+        return total_area
+
+    @cached_property
+    def _normal_2dmaterial(self) -> Axis:
+        """Get the normal to the given geometry, checking that it is a 2D geometry."""
+        return self._geometry_group._normal_2dmaterial
+
+    def _update_from_bounds(self, bounds: tuple[float, float], axis: Axis) -> GeometryGroup:
+        """Returns an updated geometry which has been transformed to fit within ``bounds``
+        along the ``axis`` direction."""
+        return self._geometry_group._update_from_bounds(bounds=bounds, axis=axis)
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object.
+
+        Raises
+        ------
+        NotImplementedError
+            Adjoint/autodiff is not currently supported for GeometryArray.
+        """
+        raise NotImplementedError(
+            "Adjoint is not currently supported for 'GeometryArray'.",
+        )
 
 
 def cleanup_shapely_object(obj: Shapely, tolerance_ratio: float = POLY_TOLERANCE_RATIO) -> Shapely:
