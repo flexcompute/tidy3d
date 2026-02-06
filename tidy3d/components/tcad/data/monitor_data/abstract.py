@@ -130,7 +130,7 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
             if isinstance(new_property, SpatialDataArray):
                 new_property = new_property.sel_inside(clip_bounds)
             else:
-                new_property = new_property.box_clip(bounds=clip_bounds)
+                new_property = new_property.sel_inside(bounds=clip_bounds)
 
         return new_property
 
