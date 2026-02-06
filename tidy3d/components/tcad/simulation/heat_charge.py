@@ -125,10 +125,72 @@ AnalysisSpecType = Union[ElectricalAnalysisType, UnsteadyHeatAnalysis]
 # define some limits for transient heat simulations
 TRANSIENT_HEAT_MAX_STEPS = 1000
 
-# OpenCASCADE minimum tolerance for cylinder radii
-OPENCASCADE_CYLINDER_RADIUS_TOL = 1e-6
+# Minimum tolerance for cylinder radii
+CYLINDER_RADIUS_TOL = 1e-6
 # Minimum radius as fraction of the larger radius (for tapered cylinders)
 MIN_CYLINDER_RADIUS_FRACTION = 0.01
+
+
+def _get_cylinder_radii_with_meshing_tol(
+    geometry: Cylinder, min_mesh_size: float = 0
+) -> tuple[float, float]:
+    """Get cylinder radii clamped to the minimum meshing tolerance.
+
+    This function clamps small or negative values to a small positive value to ensure
+    valid geometry that can be meshed. The minimum is set relative to the
+    larger radius to ensure meshability while still creating a reasonably sharp
+    tip for tapered cylinders. If ``min_mesh_size`` is provided, radii are also
+    clamped to that value.
+
+    Parameters
+    ----------
+    geometry : Cylinder
+        The cylinder geometry to get radii from.
+    min_mesh_size : float, optional
+        Minimum mesh size from the grid specification. When positive, radii are
+        additionally clamped to this value.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(r1, r2)`` -- bottom and top radii, clamped to the minimum allowed radius.
+    """
+    r_bottom = geometry.radius_bottom
+    r_top = geometry.radius_top
+    is_tapered = not np.isclose(r_bottom, r_top)
+
+    min_radius = max(
+        CYLINDER_RADIUS_TOL,
+        MIN_CYLINDER_RADIUS_FRACTION * max(abs(r_bottom), abs(r_top)),
+    )
+    if min_mesh_size > 0:
+        min_radius = max(min_radius, min_mesh_size)
+
+    r1 = max(r_bottom, min_radius)
+    r2 = max(r_top, min_radius)
+
+    if is_tapered:
+        if r1 > r_bottom:
+            log.warning(
+                f"Cylinder 'radius_bottom' ({r_bottom:.3e}) is below the minimum "
+                f"radius for meshing ({r1:.3e}). The sidewall angle may be "
+                f"too steep. Will be clamped to {r1:.3e}."
+            )
+        if r2 > r_top:
+            log.warning(
+                f"Cylinder 'radius_top' ({r_top:.3e}) is below the minimum "
+                f"radius for meshing ({r2:.3e}). The sidewall angle may be "
+                f"too steep. Will be clamped to {r2:.3e}."
+            )
+    else:
+        if r1 > r_bottom:
+            log.warning(
+                f"Cylinder 'radius' ({r_bottom:.3e}) is below the minimum "
+                f"radius for meshing ({r1:.3e}). "
+                f"Will be clamped to {r1:.3e}."
+            )
+
+    return r1, r2
 
 
 class TCADAnalysisTypes(str, Enum):
@@ -372,37 +434,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 # Unwrap Transformed to get the base geometry
                 base_geometry = geometry.geometry if isinstance(geometry, Transformed) else geometry
                 if isinstance(base_geometry, Cylinder):
-                    r_bottom = base_geometry.radius_bottom
-                    r_top = base_geometry.radius_top
-                    is_tapered = not np.isclose(r_bottom, r_top)
-
-                    # Compute minimum allowed radius (matches backend heat_mesh.py logic)
-                    min_radius = max(
-                        OPENCASCADE_CYLINDER_RADIUS_TOL,
-                        MIN_CYLINDER_RADIUS_FRACTION * max(abs(r_bottom), abs(r_top)),
-                    )
-
-                    # Warn if radii are below minimum
-                    if is_tapered:
-                        if r_bottom < min_radius:
-                            log.warning(
-                                f"Cylinder 'radius_bottom' ({r_bottom:.3e}) is below the minimum "
-                                f"radius for meshing ({min_radius:.3e}). The sidewall angle may be "
-                                f"too steep. Will be clamped to minimum radius or mesh size, whichever is larger."
-                            )
-                        if r_top < min_radius:
-                            log.warning(
-                                f"Cylinder 'radius_top' ({r_top:.3e}) is below the minimum "
-                                f"radius for meshing ({min_radius:.3e}). The sidewall angle may be "
-                                f"too steep. Will be clamped to minimum radius or mesh size, whichever is larger."
-                            )
-                    else:
-                        if r_bottom < min_radius:
-                            log.warning(
-                                f"Cylinder 'radius' ({r_bottom:.3e}) is below the minimum "
-                                f"radius for meshing ({min_radius:.3e}). "
-                                f"Will be clamped to minimum radius or mesh size, whichever is larger."
-                            )
+                    _get_cylinder_radii_with_meshing_tol(base_geometry)
         return val
 
     def _check_cross_solids(self, objs: tuple[Box, ...]) -> tuple[int, ...]:

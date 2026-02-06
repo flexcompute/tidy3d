@@ -1310,6 +1310,37 @@ def test_grid_spec_validation(grid_specs):
         distance_grid.updated_copy(distance_interface=2, distance_bulk=1)
 
 
+def test_min_mesh_size(grid_specs):
+    """Tests the min_mesh_size property for unstructured grids."""
+    # UniformUnstructuredGrid: min_mesh_size is simply dl
+    uniform_grid = grid_specs["uniform"]
+    assert uniform_grid.min_mesh_size == uniform_grid.dl
+
+    # DistanceUnstructuredGrid without refinements: min_mesh_size is dl_interface
+    distance_grid = grid_specs["distance"]
+    assert distance_grid.min_mesh_size == distance_grid.dl_interface
+
+    # DistanceUnstructuredGrid with refinement region smaller than dl_interface
+    region = td.GridRefinementRegion(
+        center=(0, 0, 0),
+        size=(1, 1, 1),
+        dl_internal=0.01,
+        transition_thickness=0.5,
+    )
+    grid_with_region = distance_grid.updated_copy(mesh_refinements=[region])
+    assert grid_with_region.min_mesh_size == region.dl_internal
+
+    # DistanceUnstructuredGrid with refinement region larger than dl_interface
+    large_region = td.GridRefinementRegion(
+        center=(0, 0, 0),
+        size=(1, 1, 1),
+        dl_internal=0.5,
+        transition_thickness=0.5,
+    )
+    grid_with_large_region = distance_grid.updated_copy(mesh_refinements=[large_region])
+    assert grid_with_large_region.min_mesh_size == distance_grid.dl_interface
+
+
 def test_device_characteristics():
     C = [0, 1, 4]
     V = [-1, -0.5, 0]
