@@ -269,7 +269,20 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     @supports_local_subpixel
     def run_local(self) -> ModeSimulationData:
-        """Run locally."""
+        """Run the mode simulation locally and return the results.
+
+        If the ``tidy3d-extras`` package is installed and
+        ``config.simulation.use_local_subpixel`` is not ``False``, subpixel
+        averaging will be used for improved accuracy. See
+        :attr:`SimulationConfig.use_local_subpixel \
+<tidy3d.config.sections.SimulationConfig.use_local_subpixel>`
+        for details.
+
+        Returns
+        -------
+        ModeSimulationData
+            :class:`.ModeSimulationData` containing the mode solver results.
+        """
 
         if tidy3d_extras["use_local_subpixel"]:
             subpixel_sim = tidy3d_extras["mod"].SubpixelModeSimulation.from_mode_simulation(self)
@@ -282,7 +295,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
                     "for accurate local 'PermittivityMonitor' and 'MediumMonitor' handling. "
                     "Please install this package using, for example, "
                     "'pip install tidy3d[extras]', and ensure "
-                    "'config.use_local_subpixel' is not 'False'. "
+                    "'config.simulation.use_local_subpixel' is not 'False'. "
                     "Alternatively, 'ModeSimulation.epsilon' may be "
                     "used to obtain the non-subpixel-averaged "
                     "permittivity."

@@ -51,9 +51,13 @@ Currently, ``tidy3d-extras`` provides the following features:
 - More accurate local mode solver with subpixel averaging.
 
 By default, these features are automatically enabled if the ``tidy3d-extras``
-package is installed. Thus to obtain subpixel-averaged permittivity, you can
-use functions like ``Simulation.epsilon``. And the more accurate mode solver
-with subpixel averaging is used whenever the mode solver is run locally.
+package is installed. The following functions benefit from local subpixel
+averaging:
+
+- ``Simulation.epsilon`` — returns subpixel-averaged permittivity.
+- ``ModeSimulation.run_local`` — runs the mode simulation locally with
+  subpixel averaging for improved accuracy.
+- ``ModeSolver.solve`` — runs the local mode solver with subpixel averaging.
 
 Sometimes, you may want to change this behavior, for example to speed up
 permittivity computation. In this case, you can temporarily disable these

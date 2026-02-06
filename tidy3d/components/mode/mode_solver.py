@@ -493,6 +493,7 @@ class ModeSolver(Tidy3dBaseModel):
         and will thus be creating :class:`.MicrowaveModeSolverData`."""
         return isinstance(self.mode_spec, MicrowaveModeSpec)
 
+    @supports_local_subpixel
     def solve(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index data.
 
@@ -500,12 +501,26 @@ class ModeSolver(Tidy3dBaseModel):
         -------
         ModeSolverData
             :class:`.ModeSolverData` object containing the effective index and mode fields.
+
+        Note
+        ----
+        By default, this method does not use subpixel averaging, which may reduce accuracy.
+        For better accuracy, either use the remote mode solver via ``tidy3d.web.run(...)``
+        or install ``tidy3d-extras`` (``pip install tidy3d[extras]``) and set
+        ``config.simulation.use_local_subpixel = True``. See
+        :attr:`SimulationConfig.use_local_subpixel \
+<tidy3d.config.sections.SimulationConfig.use_local_subpixel>`
+        for details.
         """
-        log.warning(
-            "Use the remote mode solver with subpixel averaging for better accuracy through "
-            "'tidy3d.web.run(...)' or the deprecated 'tidy3d.plugins.mode.web.run(...)'.",
-            log_once=True,
-        )
+        # only warn if tidy3d-extras local subpixel is not enabled
+        if not tidy3d_extras["use_local_subpixel"]:
+            log.warning(
+                "Use the remote mode solver with subpixel averaging for better accuracy through "
+                "'tidy3d.web.run(...)' or the deprecated 'tidy3d.plugins.mode.web.run(...)'. "
+                "Alternatively, you can install the package 'tidy3d-extras' using "
+                r"'pip install tidy3d\[extras]' and set 'config.simulation.use_local_subpixel=True'.",
+                log_once=True,
+            )
         return self.data
 
     def _freqs_for_group_index(self, freqs: FreqArray) -> FreqArray:

@@ -194,5 +194,73 @@ def test_supports_local_subpixel_no_error_logged_when_optional(monkeypatch, capl
         reload_config(profile="default")
 
 
+def test_solve_warning_suppressed_when_subpixel_enabled():
+    """The accuracy warning in ModeSolver.solve() should not fire when local subpixel is active."""
+    from tidy3d.log import log
+
+    _LogCapture = type("_LogCapture", (), {"records": [], "handle": lambda s, *a: s.records.append(a)})
+    handler = _LogCapture()
+    log.handlers["_test_capture"] = handler
+
+    tidy3d_extras["use_local_subpixel"] = True
+    try:
+        @supports_local_subpixel
+        def _guarded():
+            from tidy3d.packaging import tidy3d_extras as _te
+            # Mimics the warning guard in ModeSolver.solve()
+            if not _te["use_local_subpixel"]:
+                log.warning("remote mode solver", log_once=True)
+
+        _guarded()
+        assert not any("remote mode solver" in str(r) for r in handler.records), (
+            "Accuracy warning should be suppressed when local subpixel is enabled"
+        )
+    finally:
+        tidy3d_extras["use_local_subpixel"] = None
+        del log.handlers["_test_capture"]
+
+
+def test_solve_warning_emitted_when_subpixel_disabled(monkeypatch):
+    """The accuracy warning in ModeSolver.solve() should fire when local subpixel is off."""
+    from tidy3d.log import log
+
+    reload_config(profile="default")
+    tidy3d_extras["mod"] = None
+    tidy3d_extras["use_local_subpixel"] = None
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "tidy3d_extras":
+            raise ImportError("forced failure")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    _LogCapture = type("_LogCapture", (), {"records": [], "handle": lambda s, *a: s.records.append(a)})
+    handler = _LogCapture()
+    log.handlers["_test_capture"] = handler
+
+    try:
+        config.update_section("simulation", use_local_subpixel=None)
+
+        @supports_local_subpixel
+        def _guarded():
+            from tidy3d.packaging import tidy3d_extras as _te
+            # Mimics the warning guard in ModeSolver.solve()
+            if not _te["use_local_subpixel"]:
+                log.warning("remote mode solver", log_once=True)
+
+        _guarded()
+        assert any("remote mode solver" in str(r) for r in handler.records), (
+            "Accuracy warning should be emitted when local subpixel is unavailable"
+        )
+    finally:
+        tidy3d_extras["mod"] = None
+        tidy3d_extras["use_local_subpixel"] = None
+        del log.handlers["_test_capture"]
+        reload_config(profile="default")
+
+
 if __name__ == "__main__":
     pytest.main()
