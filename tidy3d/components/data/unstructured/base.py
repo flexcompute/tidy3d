@@ -729,6 +729,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     f" of grid points ({num_points})."
                 )
 
+            # copy=True is required because vtk_to_numpy may return a view into VTK's
+            # internal memory buffer, which can be invalidated when the VTK object is
+            # modified or garbage collected, causing data corruption.
             values_numpy = np.array(vtk["vtk_to_numpy"](array_vtk), copy=True)
             values_name = array_vtk.GetName()
 
