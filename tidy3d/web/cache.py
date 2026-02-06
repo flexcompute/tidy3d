@@ -651,6 +651,11 @@ class LocalCache:
             else:
                 simulation_obj = getattr(stub_data, "simulation", None)
                 if simulation_obj is None:
+                    # ComponentModelerData types use 'modeler' instead of 'simulation'
+                    modeler = getattr(stub_data, "modeler", None)
+                    if modeler is not None:
+                        simulation_obj = modeler
+                if simulation_obj is None:
                     log.debug(
                         "Failed storing local cache entry: Could not find simulation data in stub_data."
                     )

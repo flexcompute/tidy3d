@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced computation time of `adaptive_vjp_spacing` for `GeometryGroup` by allowing permittivity based spacing value to be cached.
 
 ### Fixed
+- Fixed local cache not storing results for `ModalComponentModeler` (and `TerminalComponentModeler`) runs, causing cache misses on repeated `web.run()` calls.
 - Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.
 - Fixed frequency accumulation of gradients for custom dispersive media.
 - Fixed `snap_box_to_grid` producing zero-size boxes when using `Expand` behavior with very small intervals centered on a grid point.
