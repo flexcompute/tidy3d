@@ -799,6 +799,7 @@ class Batch(WebContainer):
         self,
         path_dir: PathLike = DEFAULT_DATA_DIR,
         priority: Optional[int] = None,
+        replace_existing: bool = False,
     ) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
 
@@ -809,6 +810,9 @@ class Batch(WebContainer):
         priority: int = None
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
             It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
+        replace_existing : bool = False
+            Downloads the data even if path exists (overwriting the existing). Applies when
+            downloading cached results or when `download_on_success=True`.
         Returns
         ------
         :class:`BatchData`
@@ -838,12 +842,16 @@ class Batch(WebContainer):
                 self.start()
             else:
                 self.start(priority=priority)
-            self.monitor(path_dir=path_dir, download_on_success=True)
+            self.monitor(
+                path_dir=path_dir,
+                download_on_success=True,
+                replace_existing=replace_existing,
+            )
         else:
             if self.verbose:
                 console = get_logging_console()
                 console.log("Found all simulations in cache.")
-            self.download(path_dir=path_dir)  # moves cache files
+            self.download(path_dir=path_dir, replace_existing=replace_existing)  # moves cache files
         return self.load(path_dir=path_dir, skip_download=True)
 
     @cached_property
@@ -1258,10 +1266,10 @@ class Batch(WebContainer):
             )
             if num_existing > 0:
                 files_plural = "files have" if num_existing > 1 else "file has"
-                log.warning(
-                    f"{num_existing} {files_plural} already been downloaded "
-                    f"and will be skipped. To forcibly overwrite existing files, invoke "
-                    "the load or download function with `replace_existing=True`.",
+                log.info(
+                    f"{num_existing} {files_plural} already been downloaded and will be skipped. "
+                    "To forcibly overwrite existing files, invoke the run, load, or download "
+                    "function with `replace_existing=True`.",
                     log_once=True,
                 )
 
@@ -1276,9 +1284,9 @@ class Batch(WebContainer):
 
             if job_path.exists():
                 if replace_existing:
-                    log.info(f"File '{job_path}' already exists. Overwriting.")
+                    log.debug(f"File '{job_path}' already exists. Overwriting.")
                 else:
-                    log.info(f"File '{job_path}' already exists. Skipping.")
+                    log.debug(f"File '{job_path}' already exists. Skipping.")
                     continue
 
             if job.load_if_cached:
