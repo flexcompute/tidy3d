@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced computation time of `adaptive_vjp_spacing` for `GeometryGroup` by allowing permittivity based spacing value to be cached.
 - Added warning in `LayerRefinementSpec` when `dl_min_from_gaps` (derived from automatic gap refinement) is very small relative to the lateral grid size for identifying cases where excessive grid refinement may occur due to very small detected gaps.
 - Added `custom_vjp` and new custom run functions that provide hooks into adjoint for custom gradient calculations.
+- Changed default `num_points` in `EMEModeSpec.interp_spec` from 3 to 5 for improved accuracy of frequency interpolation.
 
 ### Fixed
 - Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.
