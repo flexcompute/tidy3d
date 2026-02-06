@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Union
 
 import numpy as np
@@ -34,6 +34,11 @@ class UnstructuredGrid(Tidy3dBaseModel, ABC):
         title="Remove Fragments",
         description="Whether to remove fragments before meshing. This is useful when overlapping structures generate internal boundaries that can lead to very small cell volumes.",
     )
+
+    @property
+    @abstractmethod
+    def min_mesh_size(self) -> float:
+        """Minimum mesh size used by this grid specification."""
 
 
 class UniformUnstructuredGrid(UnstructuredGrid):
@@ -70,6 +75,11 @@ class UniformUnstructuredGrid(UnstructuredGrid):
         description="List of structures for which ``min_edges_per_circumference`` and "
         "``min_edges_per_side`` will not be enforced. The original ``dl`` is used instead.",
     )
+
+    @property
+    def min_mesh_size(self) -> float:
+        """Minimum mesh size used by this grid specification."""
+        return self.dl
 
 
 class GridRefinementRegion(Box):
@@ -220,6 +230,17 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
             raise ValidationError("'distance_bulk' cannot be smaller than 'distance_interface'.")
 
         return self
+
+    @property
+    def min_mesh_size(self) -> float:
+        """Minimum mesh size used by this grid specification."""
+        dl_array = [self.dl_interface]
+        for ref in self.mesh_refinements:
+            if isinstance(ref, GridRefinementRegion):
+                dl_array.append(ref.dl_internal)
+            elif isinstance(ref, GridRefinementLine):
+                dl_array.append(ref.dl_near)
+        return min(dl_array)
 
 
 UnstructuredGridType = Union[UniformUnstructuredGrid, DistanceUnstructuredGrid]
