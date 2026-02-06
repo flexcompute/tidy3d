@@ -24,7 +24,7 @@ def test_batch_data_caches_small_files(monkeypatch, tmp_path):
     monkeypatch.setattr(td.config.batch_data_cache, "enabled", True)
     monkeypatch.setattr(td.config.batch_data_cache, "max_total_size_gb", 1.0)
 
-    calls = {"load": 0, "info": 0}
+    calls = {"load": 0}
     sentinels = [object(), object()]
 
     def fake_load(*args, **kwargs):
@@ -32,12 +32,7 @@ def test_batch_data_caches_small_files(monkeypatch, tmp_path):
         calls["load"] += 1
         return result
 
-    def fake_get_info(*args, **kwargs):
-        calls["info"] += 1
-        return None
-
     monkeypatch.setattr(web_container.web, "load", fake_load)
-    monkeypatch.setattr(web_container.web, "get_info", fake_get_info)
 
     batch_data = td.web.BatchData(
         task_paths=task_paths,
@@ -50,7 +45,6 @@ def test_batch_data_caches_small_files(monkeypatch, tmp_path):
 
     assert first is second
     assert calls["load"] == 1
-    assert calls["info"] == 1
 
 
 def test_batch_data_skips_cache_when_any_file_is_large(monkeypatch, tmp_path):
@@ -66,7 +60,7 @@ def test_batch_data_skips_cache_when_any_file_is_large(monkeypatch, tmp_path):
     monkeypatch.setattr(td.config.batch_data_cache, "enabled", True)
     monkeypatch.setattr(td.config.batch_data_cache, "max_total_size_gb", threshold_gb)
 
-    calls = {"load": 0, "info": 0}
+    calls = {"load": 0}
     sentinels = [object(), object()]
 
     def fake_load(*args, **kwargs):
@@ -74,12 +68,7 @@ def test_batch_data_skips_cache_when_any_file_is_large(monkeypatch, tmp_path):
         calls["load"] += 1
         return result
 
-    def fake_get_info(*args, **kwargs):
-        calls["info"] += 1
-        return None
-
     monkeypatch.setattr(web_container.web, "load", fake_load)
-    monkeypatch.setattr(web_container.web, "get_info", fake_get_info)
 
     batch_data = td.web.BatchData(
         task_paths=task_paths,
@@ -92,4 +81,3 @@ def test_batch_data_skips_cache_when_any_file_is_large(monkeypatch, tmp_path):
 
     assert first is not second
     assert calls["load"] == 2
-    assert calls["info"] == 2

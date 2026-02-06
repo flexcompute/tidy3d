@@ -790,8 +790,8 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
     """
 
     # Batch/modeler monitoring path
-    task = TaskFactory.get(task_id)
-    if isinstance(task, BatchTask):
+    task_kind = TaskFactory.get_kind(task_id)
+    if task_kind is BatchTask:
         return _monitor_modeler_batch(task_id, verbose=verbose)
 
     console = get_logging_console() if verbose else None
@@ -1147,32 +1147,26 @@ def load(
         Object containing simulation data.
     """
     path = Path(path)
-    task = TaskFactory.get(task_id) if task_id else None
+    from_cache = task_id is None  # for readability
     # For component modeler batches, default to a clearer filename if the default was used.
-    if (
-        task_id
-        and isinstance(task, BatchTask)
-        and path.name in {"simulation_data.hdf5", "simulation_data.hdf5.gz"}
-    ):
-        path = path.with_name(path.name.replace("simulation", "cm"))
+    if not from_cache and path.name in {"simulation_data.hdf5", "simulation_data.hdf5.gz"}:
+        if TaskFactory.get_kind(task_id) is BatchTask:
+            path = path.with_name(path.name.replace("simulation", "cm"))
 
-    if task_id is None:
+    if from_cache:
         if not path.exists():
             raise FileNotFoundError("Cached file not found.")
     elif not path.exists() or replace_existing:
         download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
 
-    if verbose and task_id is not None:
+    if verbose and not from_cache:
         console = get_logging_console()
-        if isinstance(task, BatchTask):
-            console.log(f"Loading component modeler data from {path}")
-        else:
-            console.log(f"Loading simulation from {path}")
+        console.log(f"Loading results from {path}")
 
     stub_data = Tidy3dStubData.postprocess(path, lazy=lazy)
 
     simulation_cache = resolve_local_cache()
-    if simulation_cache is not None and task_id is not None:
+    if simulation_cache is not None and not from_cache:
         info = get_info(task_id, verbose=False)
         workflow_type = getattr(info, "taskType", None)
         if (
