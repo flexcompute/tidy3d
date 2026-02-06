@@ -963,7 +963,7 @@ class BatchTask(WebTask):
 class TaskFactory:
     """Factory for obtaining the correct task subclass."""
 
-    _REGISTRY: dict[str, str] = {}
+    _REGISTRY: dict[str, type[WebTask]] = {}
 
     @classmethod
     def reset(cls) -> None:
@@ -971,21 +971,35 @@ class TaskFactory:
         cls._REGISTRY.clear()
 
     @classmethod
-    def register(cls, task_id: str, kind: str) -> None:
+    def register(cls, task_id: str, kind: type[WebTask]) -> None:
         cls._REGISTRY[task_id] = kind
+
+    @classmethod
+    def get_kind(cls, task_id: str, verbose: bool = True) -> type[WebTask]:
+        """Return cached task class, fetching and caching if needed."""
+        kind = cls._REGISTRY.get(task_id)
+        if kind:
+            return kind
+        if WebTask.is_batch(task_id):
+            cls.register(task_id, BatchTask)
+            return BatchTask
+        task = SimulationTask.get(task_id, verbose=verbose)
+        if task:
+            cls.register(task_id, SimulationTask)
+        return SimulationTask
 
     @classmethod
     def get(cls, task_id: str, verbose: bool = True) -> WebTask:
         kind = cls._REGISTRY.get(task_id)
-        if kind == "batch":
+        if kind is BatchTask:
             return BatchTask.get(task_id, verbose=verbose)
-        if kind == "simulation":
+        if kind is SimulationTask:
             task = SimulationTask.get(task_id, verbose=verbose)
             return task
         if WebTask.is_batch(task_id):
-            cls.register(task_id, "batch")
+            cls.register(task_id, BatchTask)
             return BatchTask.get(task_id, verbose=verbose)
         task = SimulationTask.get(task_id, verbose=verbose)
         if task:
-            cls.register(task_id, "simulation")
+            cls.register(task_id, SimulationTask)
         return task

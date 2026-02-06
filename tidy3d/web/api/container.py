@@ -682,8 +682,6 @@ class BatchData(Tidy3dBaseModel, Mapping):
         task_data_path = Path(self.task_paths[task_name])
         task_id = self.task_ids[task_name]
         from_cache = self.cached_tasks[task_name] if self.cached_tasks else False
-        if not from_cache:
-            web.get_info(task_id)
 
         data = web.load(
             task_id=None if from_cache else task_id,

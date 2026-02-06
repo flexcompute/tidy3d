@@ -28,7 +28,7 @@ from tidy3d.components.source.time import GaussianPulse
 from tidy3d.exceptions import SetupError
 from tidy3d.web import common
 from tidy3d.web.api.asynchronous import run_async
-from tidy3d.web.api.container import Batch, Job, WebContainer
+from tidy3d.web.api.container import Batch, BatchData, Job, WebContainer
 from tidy3d.web.api.run import _collect_by_hash, run
 from tidy3d.web.api.tidy3d_stub import Tidy3dStubData, task_type_name_of
 from tidy3d.web.api.webapi import (
@@ -433,6 +433,30 @@ def _test_load(mock_load, mock_get_info, tmp_path):
 
     monkeypatch.setattr(f"{task_core_path}.download_file", mock_download)
     load(TASK_ID, str(tmp_path / "monitor_data.hdf5"))
+
+
+def test_batch_load_sim_data_skips_task_lookup(monkeypatch, tmp_path):
+    data_path = tmp_path / "batch_results.hdf5"
+    data_path.write_text("stub")
+    batch_data = BatchData(
+        task_paths={"task_1": str(data_path)},
+        task_ids={"task_1": TASK_ID},
+        cached_tasks={"task_1": False},
+        is_downloaded=True,
+    )
+
+    def _raise(*args, **kwargs):
+        raise AssertionError("Unexpected web lookup during batch load.")
+
+    monkeypatch.setattr(f"{api_path}.get_info", _raise)
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get", _raise)
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get_kind", _raise)
+    monkeypatch.setattr(f"{api_path}.resolve_local_cache", lambda: None)
+    monkeypatch.setattr(
+        f"{api_path}.Tidy3dStubData.postprocess", lambda *args, **kwargs: "stub_data"
+    )
+
+    assert batch_data.load_sim_data("task_1") == "stub_data"
 
 
 @responses.activate
