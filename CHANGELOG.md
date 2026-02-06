@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
 - Added flag `remove_fragments` to the base `UnstructuredGrid` to remove fragments in unstructured grids. This can ease meshing by eliminating internal boundaries in overlapping structures.
 - Added deprecation warning for `conformal` in TCAD heat/charge monitors when explicitly set; this option is ignored (treated as `False`) when meshing with `remove_fragments=True`.
+- Added in-memory caching for downloaded batch results, configurable via ``config.batch_data_cache``.
 
 ### Breaking Changes
 - Added optional automatic extrusion of structures at the simulation boundaries into/through PML/Absorber layers via `extrude_structures` field in class `AbsorberSpec`.
