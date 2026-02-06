@@ -5,11 +5,11 @@ from __future__ import annotations
 import functools
 import pathlib
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import autograd.numpy as np
 import shapely
-from pydantic import Field, NonNegativeFloat, field_validator, model_validator
+from pydantic import Field, NonNegativeFloat, PrivateAttr, field_validator, model_validator
 
 from tidy3d.compat import _package_is_older_than
 from tidy3d.components.autograd import TracedCoordinate, TracedFloat, TracedSize, get_static
@@ -34,6 +34,7 @@ from tidy3d.components.viz import (
     polygon_patch,
     set_default_labels_and_title,
 )
+from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, RADIAN, fp_eps, inf
 from tidy3d.exceptions import (
     SetupError,
@@ -58,6 +59,7 @@ if TYPE_CHECKING:
     from pydantic import NonNegativeInt, PositiveFloat
     from typing_extensions import Self
 
+    from tidy3d import TriangleMesh
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.types import (
@@ -1577,9 +1579,22 @@ class Geometry(Tidy3dBaseModel, ABC):
         fname.parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(
+        self,
+        derivative_info: DerivativeInfo,
+    ) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
         raise NotImplementedError(f"Can't compute derivative for 'Geometry': '{type(self)}'.")
+
+    def _compute_derivatives_via_mesh(
+        self,
+        derivative_info: DerivativeInfo,
+        clip_operation: Optional[ClipOperationContext] = None,
+    ) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object."""
+        raise NotImplementedError(
+            f"Can't compute derivative for clipped 'Geometry': '{type(self)}'."
+        )
 
     def _as_union(self) -> list[Geometry]:
         """Return a list of geometries that, united, make up the given geometry."""
@@ -2017,6 +2032,50 @@ class Circular(Geometry):
 """Primitive classes"""
 
 
+def _default_box_faces() -> NDArray:
+    """Return the canonical triangle indices for a cube with CCW winding."""
+
+    # faces ordered as: bottom, top, y-, y+, x+, x-
+    return np.asarray(
+        [
+            (0, 2, 1),
+            (0, 3, 2),
+            (4, 5, 6),
+            (4, 6, 7),
+            (0, 5, 4),
+            (0, 1, 5),
+            (2, 7, 6),
+            (2, 3, 7),
+            (1, 6, 5),
+            (1, 2, 6),
+            (0, 7, 3),
+            (0, 4, 7),
+        ],
+        dtype=int,
+    )
+
+
+_BOX_VERTEX_SIGNS = np.asarray(
+    [
+        (-1.0, -1.0, -1.0),
+        (1.0, -1.0, -1.0),
+        (1.0, 1.0, -1.0),
+        (-1.0, 1.0, -1.0),
+        (-1.0, -1.0, 1.0),
+        (1.0, -1.0, 1.0),
+        (1.0, 1.0, 1.0),
+        (-1.0, 1.0, 1.0),
+    ],
+    dtype=float,
+)
+
+_BOX_FACE_VERTEX_INDICES = {
+    0: ((0, 3, 7, 4), (1, 2, 6, 5)),
+    1: ((0, 4, 5, 1), (3, 7, 6, 2)),
+    2: ((0, 1, 2, 3), (4, 5, 6, 7)),
+}
+
+
 class Box(SimplePlaneIntersection, Centered):
     """Rectangular prism.
        Also base class for :class:`.Simulation`, :class:`Monitor`, and :class:`Source`.
@@ -2031,6 +2090,9 @@ class Box(SimplePlaneIntersection, Centered):
         description="Size in x, y, and z directions.",
         json_schema_extra={"units": MICROMETER},
     )
+
+    _triangle_faces: NDArray[np.int_] = PrivateAttr(default_factory=_default_box_faces)
+    _triangle_mesh_cache: Optional[TriangleMesh] = PrivateAttr(default=None)
 
     @classmethod
     def from_bounds(cls, rmin: Coordinate, rmax: Coordinate, **kwargs: Any) -> Self:
@@ -2651,6 +2713,78 @@ class Box(SimplePlaneIntersection, Centered):
 
     """ Autograd code """
 
+    def _box_vertices_array(self, dtype: np.dtype | None = None) -> NDArray:
+        dtype = dtype or config.adjoint.gradient_dtype_float
+        center = np.asarray(self.center, dtype=dtype)
+        half_size = 0.5 * np.asarray(self.size, dtype=dtype)
+        return center + half_size * _BOX_VERTEX_SIGNS.astype(dtype)
+
+    def to_triangle_mesh(self) -> TriangleMesh:
+        """Return (and lazily construct) the triangle mesh representation."""
+
+        if self._triangle_mesh_cache is None:
+            from .mesh import TriangleMesh
+
+            vertices = self._box_vertices_array()
+            self._triangle_mesh_cache = TriangleMesh.from_vertices_faces(
+                vertices, self._triangle_faces
+            )
+        return self._triangle_mesh_cache
+
+    def _accumulate_vertex_gradients(self, triangle_grads: NDArray) -> NDArray:
+        """Aggregate per-triangle gradients into unique vertex gradients."""
+
+        num_vertices = _BOX_VERTEX_SIGNS.shape[0]
+        vertex_grads = np.zeros((num_vertices, 3), dtype=triangle_grads.dtype)
+        for face_index, face in enumerate(self._triangle_faces):
+            for local_idx, vertex_idx in enumerate(face):
+                vertex_grads[vertex_idx] += triangle_grads[face_index, local_idx]
+        return vertex_grads
+
+    def _compute_derivatives_via_mesh(
+        self,
+        derivative_info: DerivativeInfo,
+        clip_operation: Optional[ClipOperationContext] = None,
+    ) -> AutogradFieldMap:
+        """Compute the adjoint derivatives using the ``TriangleMesh`` surface sampling."""
+
+        mesh = self.to_triangle_mesh()
+        original_paths = derivative_info.paths
+        derivative_info.paths = [("mesh_dataset", "surface_mesh")]
+        try:
+            mesh_vjps = mesh._compute_derivatives(derivative_info, clip_operation=clip_operation)
+        finally:
+            derivative_info.paths = original_paths
+        gradient_key = ("mesh_dataset", "surface_mesh")
+        if gradient_key not in mesh_vjps:
+            return {}
+
+        triangle_grads = mesh_vjps[gradient_key]
+        vertex_grads = np.asarray(self._accumulate_vertex_gradients(triangle_grads), dtype=float)
+        vjps_faces = np.zeros((2, 3), dtype=vertex_grads.dtype)
+
+        for axis in range(3):
+            for min_max_index, indices in enumerate(_BOX_FACE_VERTEX_INDICES[axis]):
+                direction = -1.0 if min_max_index == 0 else 1.0
+                vjps_faces[min_max_index, axis] = direction * float(
+                    np.sum(vertex_grads[np.asarray(indices), axis])
+                )
+
+        vjps_center_size = self._derivatives_center_size(vjps_faces)
+
+        derivative_map: AutogradFieldMap = {}
+        for field_path in derivative_info.paths:
+            field_name, *index = field_path
+
+            if field_name in vjps_center_size:
+                if index and len(index) == 1:
+                    idx = int(index[0])
+                    derivative_map[field_path] = vjps_center_size[field_name][idx]
+                else:
+                    derivative_map[field_path] = vjps_center_size[field_name]
+
+        return derivative_map
+
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
@@ -3194,18 +3328,6 @@ class ClipOperation(Geometry):
         description="Second operand for the set operation. It can also be any geometry type.",
     )
 
-    @field_validator("geometry_a", "geometry_b")
-    @classmethod
-    def _geometries_untraced(cls, val: GeometryType) -> GeometryType:
-        """Make sure that ``ClipOperation`` geometries do not contain tracers."""
-        traced = val._strip_traced_fields()
-        if traced:
-            raise ValidationError(
-                f"{val.type} contains traced fields {list(traced.keys())}. Note that "
-                "'ClipOperation' does not currently support automatic differentiation."
-            )
-        return val
-
     @staticmethod
     def to_polygon_list(base_geometry: Shapely, cleanup: bool = False) -> list[Shapely]:
         """Return a list of valid polygons from a shapely geometry, discarding points, lines, and
@@ -3270,6 +3392,102 @@ class ClipOperation(Geometry):
                 "'symmetric_difference'."
             )
         return result
+
+    def _geometry_from_key(self, which: ClipGeometryKey) -> Geometry:
+        """Return the geometry referenced by ``which``."""
+        if which == "geometry_a":
+            return self.geometry_a
+        if which == "geometry_b":
+            return self.geometry_b
+        raise ValueError(f"Unsupported geometry key '{which}'.")
+
+    def _other_geometry(self, which: ClipGeometryKey) -> Geometry:
+        """Return the opposing geometry for ``which``."""
+        return self.geometry_b if which == "geometry_a" else self.geometry_a
+
+    @staticmethod
+    def _points_to_array(points: ArrayLike) -> tuple[np.ndarray, bool]:
+        """Convert sample points to a 2D array and track whether input was a single point."""
+        arr = np.asarray(points, dtype=float)
+        single_point = arr.ndim == 1
+        if arr.size == 0:
+            arr = arr.reshape((0, 3))
+        else:
+            arr = arr.reshape((-1, 3))
+        return arr, single_point
+
+    @staticmethod
+    def _clip_use_mask(
+        operation: ClipOperationType, which: ClipGeometryKey, inside_mask: np.ndarray
+    ) -> np.ndarray:
+        """Return the inclusion mask for the requested clip operation."""
+
+        mask = np.asarray(inside_mask, dtype=bool)
+        if operation == "intersection":
+            return mask.copy()
+        if operation == "union":
+            return ~mask
+        if operation == "difference":
+            return (~mask) if which == "geometry_a" else mask.copy()
+        if operation == "symmetric_difference":
+            return np.ones_like(mask, dtype=bool)
+        raise ValueError(f"Unsupported clip operation '{operation}'.")
+
+    @staticmethod
+    def _clip_flip_mask(
+        operation: ClipOperationType, which: ClipGeometryKey, inside_mask: np.ndarray
+    ) -> np.ndarray:
+        """Return the normal flip mask for the requested clip operation."""
+
+        mask = np.asarray(inside_mask, dtype=bool)
+        if operation == "difference":
+            if which == "geometry_b":
+                return mask.copy()
+            return np.zeros_like(mask, dtype=bool)
+        if operation == "symmetric_difference":
+            return mask.copy()
+        return np.zeros_like(mask, dtype=bool)
+
+    def _clip_masks_from_inside(
+        self, which: ClipGeometryKey, inside_mask: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return (use_mask, flip_mask) from a precomputed inside mask."""
+
+        use_mask = self._clip_use_mask(self.operation, which, inside_mask)
+        flip_mask = self._clip_flip_mask(self.operation, which, inside_mask)
+        return use_mask, flip_mask
+
+    def _clip_masks_for_points(
+        self, which: ClipGeometryKey, points: ArrayLike
+    ) -> tuple[np.ndarray, np.ndarray, bool]:
+        """Return (use_mask, flip_mask, single_point) for sample points."""
+
+        points_arr, single_point = self._points_to_array(points)
+        if points_arr.size == 0:
+            empty = np.zeros(0, dtype=bool)
+            return empty, empty, single_point
+
+        other = self._other_geometry(which)
+        inside_other = np.asarray(
+            other.inside(points_arr[:, 0], points_arr[:, 1], points_arr[:, 2]), dtype=bool
+        )
+
+        use_mask, flip_mask = self._clip_masks_from_inside(which, inside_other)
+        return use_mask, flip_mask, single_point
+
+    def sample_points_should_use(
+        self, which: ClipGeometryKey, points: ArrayLike
+    ) -> Union[bool, NDArray[np.bool_]]:
+        """Return a mask indicating which samples contribute to the gradient."""
+        use_mask, _, single_point = self._clip_masks_for_points(which, points)
+        return bool(use_mask[0]) if single_point else use_mask
+
+    def sample_normals_should_flip(
+        self, which: ClipGeometryKey, points: ArrayLike
+    ) -> Union[bool, NDArray[np.bool_]]:
+        """Return a mask indicating which sample normals require flipping."""
+        _, flip_mask, single_point = self._clip_masks_for_points(which, points)
+        return bool(flip_mask[0]) if single_point else flip_mask
 
     def intersections_tilted_plane(
         self,
@@ -3471,6 +3689,61 @@ class ClipOperation(Geometry):
         new_geom_a = self.geometry_a._update_from_bounds(bounds=bounds, axis=axis)
         new_geom_b = self.geometry_b._update_from_bounds(bounds=bounds, axis=axis)
         return self.updated_copy(geometry_a=new_geom_a, geometry_b=new_geom_b)
+
+    def _compute_derivatives(
+        self,
+        derivative_info: DerivativeInfo,
+        clip_operation: Optional[ClipOperationContext] = None,
+    ) -> AutogradFieldMap:
+        """Compute adjoint gradients for both operands in the clip operation."""
+
+        grad_vjps: AutogradFieldMap = {}
+        interpolators = derivative_info.interpolators or derivative_info.create_interpolators()
+
+        for field_path in derivative_info.paths:
+            if not field_path:
+                continue
+            which, *geo_path = field_path
+            if which not in ("geometry_a", "geometry_b"):
+                raise ValueError(
+                    "ClipOperation derivatives are only defined for 'geometry_a' or 'geometry_b'."
+                )
+            if not geo_path:
+                raise ValueError("ClipOperation derivative path must specify a geometry field.")
+            geometry = self._geometry_from_key(which)
+            geo_info = derivative_info.updated_copy(
+                paths=[tuple(geo_path)],
+                bounds=geometry.bounds,
+                bounds_intersect=self.bounds_intersection(
+                    geometry.bounds, derivative_info.simulation_bounds
+                ),
+                deep=False,
+                interpolators=interpolators,
+            )
+            context = (self, which)
+            if clip_operation is None:
+                clip_context = context
+            else:
+                clip_context = (context, clip_operation)
+            vjps_geo = geometry._compute_derivatives_via_mesh(geo_info, clip_operation=clip_context)
+            if len(vjps_geo) != 1:
+                raise AssertionError("Expected a single gradient value for each geometry field.")
+            grad_vjps[field_path] = vjps_geo.popitem()[1]
+
+        return grad_vjps
+
+    def _compute_derivatives_via_mesh(
+        self,
+        derivative_info: DerivativeInfo,
+        clip_operation: Optional[ClipOperationContext] = None,
+    ) -> AutogradFieldMap:
+        """Compute adjoint gradients for clipped geometries (mesh-based path)."""
+
+        return self._compute_derivatives(derivative_info, clip_operation=clip_operation)
+
+
+ClipGeometryKey = Literal["geometry_a", "geometry_b"]
+ClipOperationContext = tuple[ClipOperation, ClipGeometryKey]
 
 
 class GeometryGroup(Geometry):
@@ -3684,7 +3957,18 @@ class GeometryGroup(Geometry):
         )
         return self.updated_copy(geometries=new_geometries)
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives_via_mesh(
+        self,
+        derivative_info: DerivativeInfo,
+        clip_operation: Optional[ClipOperationContext] = None,
+    ) -> AutogradFieldMap:
+        return self._compute_derivatives(derivative_info, clip_operation=clip_operation)
+
+    def _compute_derivatives(
+        self,
+        derivative_info: DerivativeInfo,
+        clip_operation: Optional[ClipOperationContext] = None,
+    ) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         grad_vjps = {}
@@ -3707,8 +3991,12 @@ class GeometryGroup(Geometry):
                     deep=False,
                     interpolators=interpolators,
                 )
-
-                vjp_dict_geo = geo._compute_derivatives(geo_info)
+                if clip_operation is not None:
+                    vjp_dict_geo = geo._compute_derivatives_via_mesh(
+                        geo_info, clip_operation=clip_operation
+                    )
+                else:
+                    vjp_dict_geo = geo._compute_derivatives(geo_info)
 
                 if len(vjp_dict_geo) != 1:
                     raise AssertionError("Got multiple gradients for single geometry field.")

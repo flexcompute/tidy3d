@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as np
 import shapely
+from autograd.core import make_vjp
 from autograd.tracer import getval
+from numpy._typing import NDArray
 from numpy.polynomial.legendre import leggauss as _leggauss
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, PrivateAttr, field_validator, model_validator
 
 from tidy3d.components.autograd import TracedArrayFloat2D, get_static
 from tidy3d.components.autograd.types import TracedFloat
@@ -103,6 +105,8 @@ class PolySlab(base.Planar):
         "the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
         json_schema_extra={"units": MICROMETER},
     )
+
+    _mesh_faces: Optional[tuple[NDArray[np.int_], dict[str, slice]]] = PrivateAttr(default=None)
 
     @staticmethod
     def make_shapely_polygon(vertices: ArrayLike) -> shapely.Polygon:
@@ -1464,6 +1468,74 @@ class PolySlab(base.Planar):
 
     """ Autograd code """
 
+    def _compute_derivatives_via_mesh(
+        self,
+        derivative_info: DerivativeInfo,
+        clip_operation: Optional[base.ClipOperationContext] = None,
+    ) -> AutogradFieldMap:
+        """Compute adjoint derivatives via mesh-based sampling."""
+
+        if not self._mesh_derivatives_supported():
+            return self._zero_derivative_map(derivative_info)
+
+        dtype = config.adjoint.gradient_dtype_float
+        vertices_arr = np.asarray(self.vertices, dtype=dtype)
+        slab_bounds_arr = np.asarray(self.slab_bounds, dtype=dtype)
+        sidewall_angle_val = np.array(self.sidewall_angle, dtype=dtype)
+
+        if vertices_arr.shape[0] < 3:
+            return self._zero_derivative_map(derivative_info)
+
+        mesh_vertices, base_polygon, top_polygon = self._mesh_vertex_positions(
+            vertices=vertices_arr,
+            slab_bounds=slab_bounds_arr,
+            sidewall_angle=sidewall_angle_val,
+        )
+
+        faces, partitions = self._ensure_mesh_faces(base_polygon, top_polygon)
+
+        if mesh_vertices.size == 0 or faces.size == 0:
+            return self._zero_derivative_map(derivative_info)
+
+        from .mesh import TriangleMesh
+
+        mesh = TriangleMesh.from_vertices_faces(mesh_vertices, faces)
+
+        original_paths = derivative_info.paths
+        derivative_info.paths = [("mesh_dataset", "surface_mesh")]
+        try:
+            mesh_vjps = mesh._compute_derivatives(derivative_info, clip_operation=clip_operation)
+        finally:
+            derivative_info.paths = original_paths
+        gradient_key = ("mesh_dataset", "surface_mesh")
+        if gradient_key not in mesh_vjps:
+            return self._zero_derivative_map(derivative_info)
+
+        triangle_grads = mesh_vjps[gradient_key]
+        num_vertices = mesh_vertices.shape[0]
+        base_slice = partitions["base"]
+        top_slice = partitions["top"]
+        side_slice = partitions["side"]
+
+        vertex_grads_side = self._accumulate_vertex_gradients(
+            triangle_grads[side_slice], faces[side_slice], num_vertices=num_vertices
+        )
+        vertex_grads_base = self._accumulate_vertex_gradients(
+            triangle_grads[base_slice], faces[base_slice], num_vertices=num_vertices
+        )
+        vertex_grads_top = self._accumulate_vertex_gradients(
+            triangle_grads[top_slice], faces[top_slice], num_vertices=num_vertices
+        )
+        vertex_grads_caps = vertex_grads_base + vertex_grads_top
+        return self._map_mesh_vjps_to_fields(
+            vertex_grads_side,
+            vertex_grads_caps,
+            derivative_info,
+            vertices_arr,
+            slab_bounds_arr,
+            sidewall_angle_val,
+        )
+
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """
         Return VJPs while handling several edge-cases:
@@ -1532,6 +1604,269 @@ class PolySlab(base.Planar):
                 raise ValueError(f"No derivative defined w.r.t. 'PolySlab' field '{path}'.")
 
         return vjps
+
+    def _mesh_derivatives_supported(self) -> bool:
+        """Return ``True`` if we can evaluate mesh-based derivatives."""
+
+        return True
+
+    def _mesh_vertex_positions(
+        self,
+        vertices: NDArray,
+        slab_bounds: NDArray,
+        sidewall_angle: NDArray,
+        *,
+        return_numpy: bool = True,
+    ) -> tuple[NDArray, NDArray, NDArray]:
+        """Return stacked vertex coordinates for the PolySlab mesh."""
+
+        dtype = config.adjoint.gradient_dtype_float
+
+        def empty_result() -> tuple[NDArray, NDArray, NDArray]:
+            verts3d = np.zeros((0, 3), dtype=dtype)
+            polys = np.zeros((0, 2), dtype=dtype)
+            return verts3d, polys, polys
+
+        reference_polygon = PolySlab._proper_vertices(vertices)
+        if reference_polygon.shape[0] < 3:
+            return empty_result()
+
+        bounds_vals = np.array([getval(slab_bounds[0]), getval(slab_bounds[1])], dtype=float)
+        length_val = bounds_vals[1] - bounds_vals[0]
+        if length_val <= fp_eps:
+            return empty_result()
+
+        zmin = np.maximum(slab_bounds[0], -LARGE_NUMBER)
+        zmax = np.minimum(slab_bounds[1], LARGE_NUMBER)
+        finite_length = zmax - zmin
+        half_length = finite_length / 2.0
+
+        tan_val = np.tan(sidewall_angle)
+        offset = np.where(np.isclose(tan_val, 0.0), 0.0, -half_length * tan_val)
+
+        if self.reference_plane == "bottom":
+            middle_polygon = PolySlab._shift_vertices(reference_polygon, offset)[0]
+        elif self.reference_plane == "top":
+            middle_polygon = PolySlab._shift_vertices(reference_polygon, -offset)[0]
+        else:
+            middle_polygon = reference_polygon
+
+        if self.reference_plane == "bottom":
+            base_polygon = reference_polygon
+        else:
+            base_polygon = PolySlab._shift_vertices(middle_polygon, -offset)[0]
+
+        if self.reference_plane == "top":
+            top_polygon = reference_polygon
+        else:
+            top_polygon = PolySlab._shift_vertices(middle_polygon, offset)[0]
+
+        planar = np.vstack((base_polygon, top_polygon))
+        axis_vals = np.concatenate(
+            (
+                np.full(base_polygon.shape[0], zmin),
+                np.full(top_polygon.shape[0], zmax),
+            )
+        )
+        coords = np.vstack(self.unpop_axis(axis_vals, (planar[:, 0], planar[:, 1]), self.axis))
+        vertices3d = coords.T
+        if return_numpy:
+            return (
+                np.asarray(vertices3d, dtype=dtype),
+                np.asarray(base_polygon, dtype=dtype),
+                np.asarray(top_polygon, dtype=dtype),
+            )
+        return vertices3d, base_polygon, top_polygon
+
+    def _ensure_mesh_faces(
+        self, base_polygon: NDArray, top_polygon: NDArray
+    ) -> tuple[NDArray[np.int_], dict[str, slice]]:
+        """Construct (and cache) the triangle indices for the PolySlab mesh."""
+
+        if self._mesh_faces is not None:
+            return self._mesh_faces
+
+        def empty_faces() -> tuple[NDArray[np.int_], dict[str, slice]]:
+            faces = np.zeros((0, 3), dtype=int)
+            empty = slice(0, 0)
+            partitions = {"base": empty, "top": empty, "side": empty}
+            self._mesh_faces = (faces, partitions)
+            return self._mesh_faces
+
+        n_base = int(base_polygon.shape[0])
+        n_top = int(top_polygon.shape[0])
+        if n_base < 3 or n_top < 3 or n_base != n_top:
+            return empty_faces()
+
+        try:
+            base_triangles = triangulation.triangulate(base_polygon)
+            if math.isclose(self.sidewall_angle, 0):
+                top_triangles = base_triangles
+            else:
+                top_triangles = triangulation.triangulate(top_polygon)
+        except Exception as exc:
+            log.debug("Failed to triangulate 'PolySlab' mesh faces: %s", exc)
+            return empty_faces()
+
+        base_faces = [[a, b, c] for c, b, a in base_triangles]
+        top_shift = n_base
+        top_faces = [[top_shift + a, top_shift + b, top_shift + c] for a, b, c in top_triangles]
+        side_faces = [(i, (i + 1) % n_base, n_base + i) for i in range(n_base)] + [
+            ((i + 1) % n_base, n_base + ((i + 1) % n_base), n_base + i) for i in range(n_base)
+        ]
+
+        faces = np.asarray(base_faces + top_faces + side_faces, dtype=int)
+        partitions = {
+            "base": slice(0, len(base_faces)),
+            "top": slice(len(base_faces), len(base_faces) + len(top_faces)),
+            "side": slice(len(base_faces) + len(top_faces), faces.shape[0]),
+        }
+
+        self._mesh_faces = (faces, partitions)
+        return self._mesh_faces
+
+    @staticmethod
+    def _accumulate_vertex_gradients(
+        triangle_grads: NDArray, faces: NDArray, *, num_vertices: Optional[int] = None
+    ) -> NDArray:
+        """Aggregate per-triangle gradients into per-vertex values."""
+
+        if triangle_grads.size == 0 or faces.size == 0:
+            length = int(num_vertices or 0)
+            return np.zeros((length, 3), dtype=triangle_grads.dtype)
+
+        if num_vertices is None:
+            num_vertices = int(faces.max() + 1)
+
+        vertex_grads = np.zeros((num_vertices, 3), dtype=triangle_grads.dtype)
+        for face_index, face in enumerate(faces):
+            for local_idx, vertex_idx in enumerate(face):
+                vertex_grads[vertex_idx] += triangle_grads[face_index, local_idx]
+        return vertex_grads
+
+    def _map_mesh_vjps_to_fields(
+        self,
+        vertex_grads_side: NDArray,
+        vertex_grads_caps: NDArray,
+        derivative_info: DerivativeInfo,
+        vertices: NDArray,
+        slab_bounds: NDArray,
+        sidewall_angle: NDArray,
+    ) -> AutogradFieldMap:
+        """Convert mesh vertex gradients into PolySlab field derivatives."""
+
+        grad_vertices_side, _, grad_angle_side = self._mesh_parameter_gradients(
+            vertex_grads_side, vertices, slab_bounds, sidewall_angle
+        )
+        grad_vertices_caps, grad_bounds, grad_angle_caps = self._mesh_parameter_gradients(
+            vertex_grads_caps, vertices, slab_bounds, sidewall_angle
+        )
+        grad_vertices = grad_vertices_side + grad_vertices_caps
+        grad_vertices *= self._planar_orientation_sign()
+        grad_bounds *= self._planar_orientation_sign()
+        if self._is_2d_slice(derivative_info):
+            slab_thickness = float(getval(slab_bounds[1]) - getval(slab_bounds[0]))
+            if not np.isfinite(slab_thickness) or slab_thickness <= fp_eps:
+                thickness = 1.0
+            else:
+                thickness = slab_thickness
+            grad_vertices /= thickness
+
+        sim_min, sim_max = map(np.asarray, derivative_info.simulation_bounds)
+        intersect_min, intersect_max = map(np.asarray, derivative_info.bounds_intersect)
+        is_2d = np.isclose(intersect_max[self.axis] - intersect_min[self.axis], 0.0)
+        if is_2d:
+            grad_bounds = np.zeros_like(grad_bounds)
+        interpolators = derivative_info.interpolators or derivative_info.create_interpolators(
+            dtype=config.adjoint.gradient_dtype_float
+        )
+        grad_angle_exact = self._compute_derivative_sidewall_angle(
+            derivative_info,
+            sim_min,
+            sim_max,
+            is_2d=is_2d,
+            interpolators=interpolators,
+        )
+
+        results: AutogradFieldMap = {}
+        for path in derivative_info.paths:
+            if path == ("vertices",):
+                results[path] = grad_vertices
+            elif path == ("sidewall_angle",):
+                results[path] = float(grad_angle_exact)
+            elif path[0] == "slab_bounds":
+                idx = int(path[1])
+                results[path] = float(grad_bounds[idx])
+            else:
+                raise ValueError(f"No derivative defined w.r.t. 'PolySlab' field '{path}'.")
+
+        return results
+
+    def _planar_orientation_sign(self) -> float:
+        """Return +1 or -1 based on (plane_axes, axis) permutation parity."""
+
+        plane_axes = [idx for idx in range(3) if idx != self.axis]
+        perm = (*plane_axes, self.axis)
+        even_perms = {(0, 1, 2), (1, 2, 0), (2, 0, 1)}
+        return 1.0 if perm in even_perms else -1.0
+
+    def _is_2d_slice(self, derivative_info: DerivativeInfo) -> bool:
+        """Return True if the intersection bounds collapse along the extrusion axis."""
+
+        intersect_min, intersect_max = derivative_info.bounds_intersect
+        axis_extent = intersect_max[self.axis] - intersect_min[self.axis]
+        return np.isclose(axis_extent, 0.0)
+
+    def _zero_derivative_map(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Return a zero-valued derivative map for requested fields."""
+
+        result: AutogradFieldMap = {}
+        for path in derivative_info.paths:
+            if path == ("vertices",):
+                result[path] = np.zeros_like(self.vertices)
+            elif path == ("sidewall_angle",):
+                result[path] = 0.0
+            elif path[0] == "slab_bounds":
+                result[path] = 0.0
+            else:
+                raise ValueError(f"No derivative defined w.r.t. 'PolySlab' field '{path}'.")
+        return result
+
+    def _mesh_parameter_gradients(
+        self,
+        vertex_grads: NDArray,
+        vertices: NDArray,
+        slab_bounds: NDArray,
+        sidewall_angle: NDArray,
+    ) -> tuple[NDArray, NDArray, float]:
+        """Return gradients w.r.t. (vertices, slab_bounds, sidewall_angle) parameters."""
+
+        dtype = config.adjoint.gradient_dtype_float
+        flattened = np.asarray(vertex_grads, dtype=dtype).reshape(-1)
+
+        vertex_flat = np.asarray(vertices, dtype=dtype).reshape(-1)
+        bounds_flat = np.asarray(slab_bounds, dtype=dtype)
+        angle_flat = np.array([sidewall_angle], dtype=dtype)
+        param = np.concatenate((vertex_flat, bounds_flat, angle_flat))
+
+        num_vertex_params = vertex_flat.size
+        bounds_offset = num_vertex_params
+        angle_offset = num_vertex_params + 2
+
+        def param_builder(packed: Any) -> Any:
+            verts = packed[:num_vertex_params].reshape(vertices.shape)
+            bounds = packed[bounds_offset : bounds_offset + 2]
+            angle = packed[angle_offset]
+            coords, _, _ = self._mesh_vertex_positions(verts, bounds, angle, return_numpy=False)
+            return coords.reshape(-1)
+
+        vjp_fn, _ = make_vjp(param_builder, param)
+        grad_param = np.asarray(vjp_fn(flattened))
+
+        grad_vertices = grad_param[:num_vertex_params].reshape(vertices.shape)
+        grad_bounds = grad_param[bounds_offset : bounds_offset + 2]
+        grad_angle = grad_param[angle_offset]
+        return grad_vertices, grad_bounds, float(grad_angle)
 
     # ---- Shared helpers for VJP surface integrations ----
     def _z_slices(

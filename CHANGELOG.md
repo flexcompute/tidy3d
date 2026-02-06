@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.11.0.dev0] - 2026-02-19
 
 ### Added
+- Added `ModeSortSpec.keep_modes` which can be set to `"all"` to keep all modes in the mode solver (the default), `"filtered"` to keep only modes passing the filter defined by the `ModeSortSpec`, or an integer `N` to keep only the top `N` modes after filtering and sorting.
+- Added `fill_fraction_box` as a new filtering and sorting key which computes the field-energy fill fraction within a specified bounding box (`ModeSortSpec.bounding_box`).
+- Added `Grid.fine_mesh_info` property to identify and report locations where grid cell sizes are fine for understanding meshing hotspots.
+- Added visualization of finest grid regions in `Simulation.plot_grid()` with shaded regions highlighting areas of fine meshing.
+- Added autograd support for `Sphere`.
+- Added validation warning in `HeatChargeSimulation` for very small `Cylinder` radii to help users avoid meshing and numerical issues.
+- Added `GaussianOverlapMonitor` and `AstigmaticGaussianOverlapMonitor` for decomposing electromagnetic fields onto Gaussian beam profiles.
+- Added `GaussianPort` and `AstigmaticGaussianPort` for S-matrix calculations using Gaussian beam sources and overlap monitors.
+- Added `symmetric_pseudo` option for `s_param_def` in `TerminalComponentModeler` which applies a scaling factor that ensures the S-matrix is symmetric in reciprocal systems.
+- Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
+- Added flag `remove_fragments` to the base `UnstructuredGrid` to remove fragments in unstructured grids. This can ease meshing by eliminating internal boundaries in overlapping structures.
+- Added deprecation warning for `conformal` in TCAD heat/charge monitors when explicitly set; this option is ignored (treated as `False`) when meshing with `remove_fragments=True`.
+- Added in-memory caching for downloaded batch results, configurable via ``config.batch_data_cache``.
+- Added autograd support for `ClipOperation` geometries like unions or intersections of geometries.
 
 - Added `ModeSortSpec.keep_modes` which can be set to `"all"` to keep all modes in the mode solver (the default), `"filtered"` to keep only modes passing the filter defined by the `ModeSortSpec`, or an integer `N` to keep only the top `N` modes after filtering and sorting.
 - Added `Grid.fine_mesh_info` property to identify and report locations where grid cell sizes are fine for understanding meshing hotspots.

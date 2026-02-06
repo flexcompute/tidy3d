@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.geometry.base import ClipOperationContext
     from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 
 # for sampling conical frustum in visualization
@@ -336,8 +337,9 @@ class Sphere(base.Centered, base.Circular):
         )
         return unit_tris
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute adjoint derivatives using smooth sphere surface samples."""
+    def _validate_derivative_paths(self, derivative_info: DerivativeInfo) -> None:
+        """Validate derivative paths for Sphere."""
+
         valid_paths = {("radius",), *{("center", i) for i in range(3)}}
         for path in derivative_info.paths:
             if path not in valid_paths:
@@ -345,6 +347,81 @@ class Sphere(base.Centered, base.Circular):
                     f"No derivative defined w.r.t. 'Sphere' field '{path}'. "
                     "Supported fields are 'radius' and 'center'."
                 )
+
+    @staticmethod
+    def _zero_derivative_map(derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Return a zero-valued derivative map for requested fields."""
+
+        return dict.fromkeys(derivative_info.paths, 0.0)
+
+    def _compute_derivatives_via_mesh(
+        self,
+        derivative_info: DerivativeInfo,
+        clip_operation: Optional[ClipOperationContext] = None,
+    ) -> AutogradFieldMap:
+        """Compute adjoint derivatives using a triangle-mesh surface representation."""
+
+        self._validate_derivative_paths(derivative_info)
+
+        if not derivative_info.paths:
+            return {}
+
+        radius = float(get_static(self.radius))
+        if radius == 0.0:
+            log.warning(
+                "Sphere gradients cannot be computed for zero radius; gradients are zero.",
+                log_once=True,
+            )
+            return self._zero_derivative_map(derivative_info)
+
+        grid_cfg = config.adjoint
+        wvl_mat = discretization_wavelength(derivative_info, "sphere")
+        target_edge = max(wvl_mat / grid_cfg.points_per_wavelength, np.finfo(float).eps)
+        triangles, _ = self._triangulated_surface(max_edge_length=target_edge)
+        triangles = np.asarray(triangles, dtype=grid_cfg.gradient_dtype_float)
+        if triangles.size == 0:
+            return self._zero_derivative_map(derivative_info)
+
+        mesh = TriangleMesh.from_triangles(triangles)
+        original_paths = derivative_info.paths
+        derivative_info.paths = [("mesh_dataset", "surface_mesh")]
+        try:
+            mesh_vjps = mesh._compute_derivatives(derivative_info, clip_operation=clip_operation)
+        finally:
+            derivative_info.paths = original_paths
+
+        gradient_key = ("mesh_dataset", "surface_mesh")
+        if gradient_key not in mesh_vjps:
+            return self._zero_derivative_map(derivative_info)
+
+        triangle_grads = np.asarray(mesh_vjps[gradient_key], dtype=float)
+        if triangle_grads.size == 0:
+            return self._zero_derivative_map(derivative_info)
+
+        center = np.asarray(self.center, dtype=float)
+        relative = triangles - center
+        norms = np.linalg.norm(relative, axis=2, keepdims=True)
+        norms = np.where(norms == 0.0, 1.0, norms)
+        unit = relative / norms
+
+        grad_center = np.sum(triangle_grads, axis=(0, 1))
+        grad_radius = float(np.sum(triangle_grads * unit))
+
+        result: AutogradFieldMap = {}
+        for path in derivative_info.paths:
+            if path == ("radius",):
+                result[path] = grad_radius
+            elif path[0] == "center":
+                idx = int(path[1])
+                result[path] = float(grad_center[idx])
+            else:
+                raise ValueError(f"No derivative defined w.r.t. 'Sphere' field '{path}'.")
+
+        return result
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute adjoint derivatives using smooth sphere surface samples."""
+        self._validate_derivative_paths(derivative_info)
 
         if not derivative_info.paths:
             return {}
@@ -356,7 +433,7 @@ class Sphere(base.Centered, base.Circular):
                 "Sphere gradients cannot be computed for zero radius; gradients are zero.",
                 log_once=True,
             )
-            return dict.fromkeys(derivative_info.paths, 0.0)
+            return self._zero_derivative_map(derivative_info)
 
         wvl_mat = discretization_wavelength(derivative_info, "sphere")
         target_edge = max(wvl_mat / grid_cfg.points_per_wavelength, np.finfo(float).eps)
@@ -373,7 +450,7 @@ class Sphere(base.Centered, base.Circular):
         collapsed_indices = np.flatnonzero(np.isclose(sim_extents, 0.0, atol=tol))
         if collapsed_indices.size:
             if collapsed_indices.size > 1:
-                return dict.fromkeys(derivative_info.paths, 0.0)
+                return self._zero_derivative_map(derivative_info)
             axis_idx = int(collapsed_indices[0])
             plane_value = float(sim_min[axis_idx])
             return self._compute_derivatives_collapsed_axis(
@@ -391,7 +468,7 @@ class Sphere(base.Centered, base.Circular):
         normals = verts_centered / norms
 
         if vertices.size == 0:
-            return dict.fromkeys(derivative_info.paths, 0.0)
+            return self._zero_derivative_map(derivative_info)
 
         # get vertex weights
         faces = np.asarray(trimesh_obj.faces, dtype=int)
@@ -409,7 +486,7 @@ class Sphere(base.Centered, base.Circular):
         ) & np.all(vertices[:, valid_axes] <= (sim_max + tol)[valid_axes], axis=1)
 
         if not np.any(inside_mask):
-            return dict.fromkeys(derivative_info.paths, 0.0)
+            return self._zero_derivative_map(derivative_info)
 
         points = vertices[inside_mask]
         normals_sel = normals[inside_mask]
@@ -753,7 +830,20 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         ys = np.sin(angles)
         return np.stack((xs, ys), axis=0)
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives_via_mesh(
+        self,
+        derivative_info: DerivativeInfo,
+        clip_operation: base.Optional[ClipOperationContext] = None,
+    ) -> AutogradFieldMap:
+        return self._compute_derivatives(
+            derivative_info=derivative_info, clip_operation=clip_operation
+        )
+
+    def _compute_derivatives(
+        self,
+        derivative_info: DerivativeInfo,
+        clip_operation: Optional[base.ClipOperationContext] = None,
+    ) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         # compute circumference discretization
@@ -795,7 +885,12 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             update_kwargs["interpolators"] = derivative_info.interpolators
 
         derivative_info_polyslab = derivative_info.updated_copy(**update_kwargs)
-        vjps_polyslab = polyslab._compute_derivatives(derivative_info_polyslab)
+        if clip_operation is not None:
+            vjps_polyslab = polyslab._compute_derivatives_via_mesh(
+                derivative_info_polyslab, clip_operation=clip_operation
+            )
+        else:
+            vjps_polyslab = polyslab._compute_derivatives(derivative_info_polyslab)
 
         vjps = {}
         for path in derivative_info.paths:

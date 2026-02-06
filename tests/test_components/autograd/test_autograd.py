@@ -3682,8 +3682,8 @@ def test_sim_traced_center_size(use_emulated_run):
         grad = ag.grad(objective, argnum=1)(base_sim.center, base_sim.size)
 
 
-def test_error_clip(use_emulated_run):
-    """Make sure proper error raised if differentiating a ``ClipOperation``."""
+def test_clip_operation_autograd(use_emulated_run):
+    """Ensure ``ClipOperation`` geometries support differentiation."""
 
     def objective(x):
         box1 = td.Box(center=(0, 0, 0), size=(x, x, x))
@@ -3699,8 +3699,8 @@ def test_error_clip(use_emulated_run):
         data = run(sim, task_name="clip_error")
         return anp.sum(data["field"].intensity.item())
 
-    with pytest.raises(ValueError):
-        g = ag.grad(objective)(1.0)
+    grad_val = ag.grad(objective)(1.0)
+    assert anp.all(grad_val != 0.0)
 
 
 def test_custom_medium_conductivity_only_gradient(rng, use_emulated_run, tmp_path):

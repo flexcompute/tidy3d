@@ -241,12 +241,12 @@ class MaterialItemUniaxial(MaterialItem):
 
 
 LiNbO3_Zelmon1997 = VariantItemUniaxial(
-    ordinary=Sellmeier(
+    ordinary=Sellmeier(  # type: ignore[has-type]
         coeffs=((2.6734, 0.01764), (1.2290, 0.05914), (12.614, 474.60)),
         frequency_range=(59958491600000.0, 749481145000000.0),
         name="LiNbO3_Zelmon1997",
     ).pole_residue,
-    extraordinary=Sellmeier(
+    extraordinary=Sellmeier(  # type: ignore[has-type]
         coeffs=((2.9804, 0.02047), (0.5981, 0.0666), (8.9543, 416.08)),
         frequency_range=(59958491600000.0, 749481145000000.0),
         name="LiNbO3_Zelmon1997",
