@@ -22,7 +22,43 @@ from tidy3d.exceptions import ValidationError
 
 
 class EMESMatrixDataset(Dataset):
-    """Dataset storing S matrix."""
+    """Dataset storing the scattering matrix of an EME simulation.
+
+    Notes
+    -----
+        The S matrix relates incoming and outgoing mode amplitudes at the two ports
+        of the EME device. Port 1 is at the beginning and port 2 is at the end of
+        the propagation axis.
+
+        Convention:
+
+        - ``S11``: reflection at port 1 (input at port 1, output at port 1).
+        - ``S21``: transmission from port 1 to port 2.
+        - ``S12``: transmission from port 2 to port 1.
+        - ``S22``: reflection at port 2 (input at port 2, output at port 2).
+
+        Each element is indexed by ``(f, mode_index_out, mode_index_in)`` and
+        optionally ``sweep_index`` when a sweep is used.
+
+    See Also
+    --------
+        :class:`.EMESimulationData` :
+            Simulation data containing the S matrix.
+
+    Example
+    -------
+    >>> from tidy3d import EMESMatrixDataArray
+    >>> f = [2e14]
+    >>> sweep_index = [0]
+    >>> mode_index_in = [0, 1]
+    >>> mode_index_out = [0, 1]
+    >>> coords = dict(
+    ...     f=f, sweep_index=sweep_index,
+    ...     mode_index_out=mode_index_out, mode_index_in=mode_index_in,
+    ... )
+    >>> S = EMESMatrixDataArray((1+1j) * np.random.random((1, 1, 2, 2)), coords=coords)
+    >>> smatrix = EMESMatrixDataset(S11=S, S12=S, S21=S, S22=S)
+    """
 
     S11: EMESMatrixDataArray = Field(
         title="S11 matrix",
@@ -105,6 +141,23 @@ class EMECoefficientDataset(Dataset):
 
         The ``interface_Sij`` fields store the S matrices associated with the interfaces
         between EME cells.
+
+    Example
+    -------
+    >>> from tidy3d import EMECoefficientDataArray
+    >>> f = [2e14]
+    >>> sweep_index = [0]
+    >>> eme_port_index = [0, 1]
+    >>> eme_cell_index = [0, 1, 2]
+    >>> mode_index_out = [0, 1]
+    >>> mode_index_in = [0, 1]
+    >>> coords = dict(
+    ...     f=f, sweep_index=sweep_index, eme_port_index=eme_port_index,
+    ...     eme_cell_index=eme_cell_index,
+    ...     mode_index_out=mode_index_out, mode_index_in=mode_index_in,
+    ... )
+    >>> A = EMECoefficientDataArray((1+1j) * np.random.random((1, 1, 2, 3, 2, 2)), coords=coords)
+    >>> data = EMECoefficientDataset(A=A, B=A)
     """
 
     A: Optional[EMECoefficientDataArray] = Field(
@@ -143,9 +196,20 @@ class EMECoefficientDataset(Dataset):
 
     @cached_property
     def normalized_copy(self) -> EMECoefficientDataset:
-        """Return a copy of the ``EMECoefficientDataset`` where
-        the ``A`` and ``B`` coefficients as well as the ``interface_smatrices``
-        are normalized by flux."""
+        """Return a flux-normalized copy of this dataset.
+
+        The ``A`` and ``B`` coefficients as well as the ``interface_smatrices``
+        are multiplied by the square root of the mode flux, so that the
+        forward and backward power of each mode are given directly by
+        ``|A|^2`` and ``|B|^2``, respectively, without additional
+        normalization by flux.
+
+        Returns
+        -------
+        :class:`.EMECoefficientDataset`
+            A new dataset with flux-normalized coefficients. The ``flux`` field
+            is set to ``None`` to prevent double normalization.
+        """
         if self.flux is None:
             raise ValidationError(
                 "The 'flux' field of the 'EMECoefficientDataset' is 'None', "
@@ -179,7 +243,32 @@ class EMECoefficientDataset(Dataset):
 
 
 class EMEFieldDataset(ElectromagneticFieldDataset):
-    """Dataset storing scalar components of E and H fields as a function of freq, mode_index, and port_index."""
+    """Dataset storing scalar components of E and H fields from EME propagation.
+
+    Notes
+    -----
+        Each field component is an :class:`.EMEScalarFieldDataArray` with coordinates
+        ``(x, y, z, f, sweep_index, eme_port_index, mode_index)``, where
+        ``eme_port_index`` indicates which port is excited and ``mode_index``
+        indicates which mode at that port is excited.
+
+    Example
+    -------
+    >>> from tidy3d import EMEScalarFieldDataArray
+    >>> x = [0, 1]
+    >>> y = [0, 1, 2]
+    >>> z = [0]
+    >>> f = [2e14]
+    >>> sweep_index = [0]
+    >>> eme_port_index = [0, 1]
+    >>> mode_index = [0, 1]
+    >>> coords = dict(
+    ...     x=x, y=y, z=z, f=f, sweep_index=sweep_index,
+    ...     eme_port_index=eme_port_index, mode_index=mode_index,
+    ... )
+    >>> field = EMEScalarFieldDataArray((1+1j) * np.random.random((2,3,1,1,1,2,2)), coords=coords)
+    >>> data = EMEFieldDataset(Ex=field, Hy=field)
+    """
 
     Ex: Optional[EMEScalarFieldDataArray] = Field(
         None,
@@ -214,11 +303,44 @@ class EMEFieldDataset(ElectromagneticFieldDataset):
 
 
 class EMEModeSolverDataset(ElectromagneticFieldDataset):
-    """Dataset storing EME modes as a function of freq, mode_index, and cell_index."""
+    """Dataset storing the eigenmodes computed at each EME cell.
+
+    Notes
+    -----
+        Each field component is an :class:`.EMEScalarModeFieldDataArray` with coordinates
+        ``(x, y, z, f, eme_cell_index, mode_index)`` and optionally ``sweep_index``
+        when a frequency sweep is used. Also stores the complex propagation index
+        ``n_complex`` for each mode.
+
+    Example
+    -------
+    >>> from tidy3d import EMEScalarModeFieldDataArray, EMEModeIndexDataArray
+    >>> x = [0, 1]
+    >>> y = [0, 1, 2]
+    >>> z = [0]
+    >>> f = [2e14]
+    >>> sweep_index = [0]
+    >>> eme_cell_index = [0, 1, 2]
+    >>> mode_index = [0, 1]
+    >>> field_coords = dict(
+    ...     x=x, y=y, z=z, f=f, sweep_index=sweep_index,
+    ...     eme_cell_index=eme_cell_index, mode_index=mode_index,
+    ... )
+    >>> field = EMEScalarModeFieldDataArray(
+    ...     (1+1j) * np.random.random((2,3,1,1,1,3,2)), coords=field_coords
+    ... )
+    >>> index_coords = dict(
+    ...     f=f, sweep_index=sweep_index, eme_cell_index=eme_cell_index, mode_index=mode_index,
+    ... )
+    >>> n_complex = EMEModeIndexDataArray((1+0.01j) * np.ones((1,1,3,2)), coords=index_coords)
+    >>> data = EMEModeSolverDataset(
+    ...     n_complex=n_complex, Ex=field, Ey=field, Ez=field, Hx=field, Hy=field, Hz=field,
+    ... )
+    """
 
     n_complex: EMEModeIndexDataArray = Field(
         title="Propagation Index",
-        description="Complex-valued effective propagation constants associated with the mode.",
+        description="Complex-valued effective propagation indices associated with the mode.",
     )
 
     Ex: EMEScalarModeFieldDataArray = Field(

@@ -5200,7 +5200,7 @@
             "reduce_data": true,
             "sampling_spec": {
               "attrs": {},
-              "num_points": 3,
+              "num_points": 5,
               "type": "ChebSampling"
             },
             "type": "ModeInterpSpec"

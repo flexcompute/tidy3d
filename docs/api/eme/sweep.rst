@@ -9,3 +9,6 @@ Propagation Sweeps
 
    tidy3d.EMELengthSweep
    tidy3d.EMEModeSweep
+   tidy3d.EMEPeriodicitySweep
+   tidy3d.EMEFreqSweep
+
