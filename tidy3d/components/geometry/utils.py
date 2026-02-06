@@ -47,6 +47,7 @@ GeometryType = Union[
     base.Transformed,
     base.ClipOperation,
     base.GeometryGroup,
+    base.GeometryArray,
     primitives.Sphere,
     primitives.Cylinder,
     polyslab.PolySlab,
@@ -196,6 +197,7 @@ def flatten_groups(
     *geometries: GeometryType,
     flatten_nonunion_type: bool = False,
     flatten_transformed: bool = False,
+    flatten_array: bool = False,
     transform: Optional[MatrixReal4x4] = None,
 ) -> GeometryType:
     """Iterates over all geometries, flattening groups and unions.
@@ -209,6 +211,8 @@ def flatten_groups(
         all clip operations.
     flatten_transformed : bool = False
         If ``True``, ``Transformed`` groups are flattened into individual transformed geometries.
+    flatten_array : bool = False
+        If ``True``, ``GeometryArray`` is flattened into its individual transformed geometries.
     transform : Optional[MatrixReal4x4]
         Accumulated transform from parents. Only used when ``flatten_transformed`` is ``True``.
 
@@ -223,6 +227,7 @@ def flatten_groups(
                 *geometry.geometries,
                 flatten_nonunion_type=flatten_nonunion_type,
                 flatten_transformed=flatten_transformed,
+                flatten_array=flatten_array,
                 transform=transform,
             )
         elif isinstance(geometry, base.ClipOperation) and (
@@ -233,6 +238,7 @@ def flatten_groups(
                 geometry.geometry_b,
                 flatten_nonunion_type=flatten_nonunion_type,
                 flatten_transformed=flatten_transformed,
+                flatten_array=flatten_array,
                 transform=transform,
             )
         elif flatten_transformed and isinstance(geometry, base.Transformed):
@@ -243,7 +249,16 @@ def flatten_groups(
                 geometry.geometry,
                 flatten_nonunion_type=flatten_nonunion_type,
                 flatten_transformed=flatten_transformed,
+                flatten_array=flatten_array,
                 transform=new_transform,
+            )
+        elif flatten_array and isinstance(geometry, base.GeometryArray):
+            yield from flatten_groups(
+                *geometry._transformed_geometries,
+                flatten_nonunion_type=flatten_nonunion_type,
+                flatten_transformed=flatten_transformed,
+                flatten_array=flatten_array,
+                transform=transform,
             )
         elif flatten_transformed and transform is not None:
             yield base.Transformed(geometry=geometry, transform=transform)
@@ -272,6 +287,8 @@ def traverse_geometries(geometry: GeometryType) -> GeometryType:
     elif isinstance(geometry, base.ClipOperation):
         yield from traverse_geometries(geometry.geometry_a)
         yield from traverse_geometries(geometry.geometry_b)
+    elif isinstance(geometry, base.GeometryArray):
+        yield from traverse_geometries(geometry.geometry)
     yield geometry
 
 
@@ -402,6 +419,11 @@ def validate_no_transformed_polyslabs(
     elif isinstance(geometry, base.ClipOperation):
         validate_no_transformed_polyslabs(geometry.geometry_a, transform)
         validate_no_transformed_polyslabs(geometry.geometry_b, transform)
+    elif isinstance(geometry, base.GeometryArray):
+        # For GeometryArray, check each instance's transform combined with the base geometry
+        for i in range(geometry.num_geometries):
+            instance_transform = np.dot(transform, geometry._get_full_transform(i))
+            validate_no_transformed_polyslabs(geometry.geometry, instance_transform)
 
 
 class SnapLocation(Enum):

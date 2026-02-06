@@ -244,6 +244,43 @@ When working with a large number of geometry objects belonging to the same ``tid
 
 ~~~~
 
+Geometry Arrays
+---------------
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.GeometryArray
+   tidy3d.Geometry.array
+
+``GeometryArray`` provides a memory-efficient way to represent arrays of repeated geometries
+by storing a single base geometry along with per-instance transformations. Each instance can
+be positioned using ``offsets`` (translations) and/or ``transforms`` (linear transformations
+such as rotation, reflection, or scale). When both are provided, the transform is
+applied first, then the translation.
+
+**Notes:** The base geometry must have finite bounds. Transforms must be linear-only with no
+translation component—use ``offsets`` for translations.
+
+.. code-block:: python
+
+   # create a grid of boxes using GeometryArray
+   offsets = [[2*i, 2*j, 0] for i in range(5) for j in range(5)]
+   my_geom_array = GeometryArray(geometry=Box(size=(1,1,1)), offsets=offsets)
+   my_structure = Structure(geometry=my_geom_array, medium=my_medium)
+
+   # alternatively, use the convenience method on any geometry
+   my_box = Box(size=(1,1,1))
+   my_geom_array = my_box.array(offsets=offsets)
+
+   # optionally apply per-instance transforms before translation
+   transforms = [Transformed.rotation(i * np.pi/12, axis=2) for i in range(25)]
+   my_geom_array = my_box.array(offsets=offsets, transforms=transforms)
+
+
+~~~~
+
 Working with GDS
 -------------------
 
