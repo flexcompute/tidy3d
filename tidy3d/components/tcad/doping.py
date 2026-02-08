@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import TYPE_CHECKING, Literal, Union
 
 import numpy as np
-import pydantic.v1 as pd
 import xarray as xr
+from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
 
 from tidy3d.components.autograd import TracedSize
 from tidy3d.components.base import cached_property
@@ -14,20 +14,33 @@ from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.geometry.base import Box
 from tidy3d.constants import MICROMETER, PERCMCUBE, inf
 from tidy3d.exceptions import SetupError
+from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike, NDArray
+
+    from tidy3d.compat import Self
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike, NDArray
+
+    from tidy3d.compat import Self
 
 
 class AbstractDopingBox(Box):
     """Derived class from Box to deal with dopings"""
 
     # Override size so that we can set default values
-    size: TracedSize = pd.Field(
+    size: TracedSize = Field(
         (inf, inf, inf),
         title="Size",
         description="Size in x, y, and z directions.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    def _get_indices_in_box(self, coords: dict, meshgrid: bool = True):
+    def _get_indices_in_box(
+        self, coords: dict[str, ArrayLike], meshgrid: bool = True
+    ) -> tuple[NDArray[np.bool_], NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
         """Returns locations inside box"""
 
         # work out whether x,y, and z are present
@@ -59,12 +72,14 @@ class AbstractDopingBox(Box):
 
         return indices_in_box, X, Y, Z
 
-    def _post_init_validators(self) -> None:
+    @model_validator(mode="after")
+    def _post_init_validators(self) -> Self:
         # check the doping box is 3D
         if len(self.zero_dims) > 0:
             raise SetupError(
                 "The doping box must be 3D. If you want a 2D doping box, please set one of the dimensions to a large or infinite size."
             )
+        return self
 
 
 class ConstantDoping(AbstractDopingBox):
@@ -83,14 +98,14 @@ class ConstantDoping(AbstractDopingBox):
     >>> constant_box2 = td.ConstantDoping.from_bounds(rmin=box_coords[0], rmax=box_coords[1], concentration=1e18)
     """
 
-    concentration: pd.NonNegativeFloat = pd.Field(
+    concentration: NonNegativeFloat = Field(
         default=0,
         title="Doping concentration density.",
         description="Doping concentration density.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
-    def _get_contrib(self, coords: dict, meshgrid: bool = True):
+    def _get_contrib(self, coords: dict, meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
         indices_in_box, X, _, _ = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
@@ -150,28 +165,28 @@ class GaussianDoping(AbstractDopingBox):
     ... )
     """
 
-    ref_con: pd.PositiveFloat = pd.Field(
+    ref_con: PositiveFloat = Field(
         title="Reference concentration.",
         description="Reference concentration. This is the minimum concentration in the box "
         "and it is attained at the edges/faces of the box.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
-    concentration: pd.PositiveFloat = pd.Field(
+    concentration: PositiveFloat = Field(
         title="Concentration",
         description="The concentration at the center of the box.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
-    width: pd.PositiveFloat = pd.Field(
+    width: PositiveFloat = Field(
         title="Width of the gaussian.",
         description="Width of the gaussian. The concentration will transition from "
         "``concentration`` at the center of the box to ``ref_con`` at the edge/face "
         "of the box in a distance equal to ``width``. ",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    source: str = pd.Field(
+    source: Literal["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"] = Field(
         "xmin",
         title="Source face",
         description="Specifies the side of the box acting as the source, i.e., "
@@ -180,12 +195,39 @@ class GaussianDoping(AbstractDopingBox):
         "are [``xmin``, ``xmax``, ``ymin``, ``ymax``, ``zmin``, ``zmax``]",
     )
 
+    @model_validator(mode="after")
+    def _validate_ref_con_less_than_concentration(self: Self) -> Self:
+        """Ensure ref_con < concentration to avoid negative sqrt in sigma calculation."""
+        val = self.concentration
+        if self.ref_con >= val:
+            raise ValueError(
+                f"'ref_con' ({self.ref_con}) must be less than 'concentration' ({val}) "
+                "for GaussianDoping. The reference concentration at the edges must be lower "
+                "than the peak concentration at the center."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_width_vs_size(self: Self) -> Self:
+        """Warn if box size may be too small for the specified transition width."""
+        val = self.width
+        size = self.size
+        for i, s in enumerate(size):
+            if not np.isinf(s) and s < 2 * val:
+                dim_name = ["x", "y", "z"][i]
+                log.warning(
+                    f"Box size in '{dim_name}' direction ({s} μm) is less than "
+                    f"'2*width' ({2 * val} μm) for 'GaussianDoping'. "
+                    "This may result in unexpected behavior in the transition region."
+                )
+        return self
+
     @cached_property
-    def sigma(self):
+    def sigma(self) -> float:
         """The sigma parameter of the pseudo-gaussian"""
         return np.sqrt(-self.width * self.width / 2 / np.log(self.ref_con / self.concentration))
 
-    def _get_contrib(self, coords: dict, meshgrid: bool = True):
+    def _get_contrib(self, coords: dict[str, ArrayLike], meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
         indices_in_box, X, Y, Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)
@@ -304,14 +346,13 @@ class CustomDoping(AbstractDopingBox):
     ... )
     """
 
-    concentration: SpatialDataArray = pd.Field(
-        ...,
+    concentration: SpatialDataArray = Field(
         title="Doping concentration data array.",
         description="Doping concentration data array.",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
-    def _get_contrib(self, coords: dict, meshgrid: bool = True):
+    def _get_contrib(self, coords: dict, meshgrid: bool = True) -> NDArray:
         """Returns the contribution to the doping a the locations specified in coords"""
 
         indices_in_box, X, Y, Z = self._get_indices_in_box(coords=coords, meshgrid=meshgrid)

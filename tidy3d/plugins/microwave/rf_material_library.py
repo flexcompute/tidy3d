@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat, model_validator
 
 from tidy3d.components.medium import (
     LossyMetalMedium,
@@ -14,7 +14,11 @@ from tidy3d.components.medium import (
     SurfaceImpedanceFitterParam,
     SurfaceRoughnessType,
 )
-from tidy3d.components.types import FreqBound
+from tidy3d.constants import (
+    CONDUCTIVITY,
+    MICROMETER,
+    HERTZ,
+)
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 from tidy3d.material_library.material_library import (
@@ -24,11 +28,14 @@ from tidy3d.material_library.material_library import (
 )
 from tidy3d.plugins.dispersion.fit_fast import FastDispersionFitter
 
+if TYPE_CHECKING:
+    from tidy3d.components.types import FreqBound
+
 from .rf_material_reference import rf_material_refs
 
 
-class VariantItemFreqRange(AbstractVariantItem, ABC):
-    """:class:`.VariantItemFreqRange` is an abstract base class for frequency-range parametrized variant items.
+class AbstractVariantItemFreqRange(AbstractVariantItem, ABC):
+    """:class:`.AbstractVariantItemFreqRange` is an abstract base class for frequency-range parametrized variant items.
 
     This class defines the interface for variant items that allow for an optional ``frequency_range``
     parameter to generate their medium model. Concrete implementations handle either
@@ -54,16 +61,14 @@ class VariantItemFreqRange(AbstractVariantItem, ABC):
         Union[PoleResidue, LossyMetalMedium]
             The medium model with the specified frequency range.
         """
-        pass
 
     @property
     @abstractmethod
     def summarize_mediums(self) -> dict[str, Union[PoleResidue, LossyMetalMedium]]:
         """Summarize the mediums in this variant."""
-        pass
 
 
-class VariantItemFreqRangeDielectric(VariantItemFreqRange):
+class VariantItemFreqRangeDielectric(AbstractVariantItemFreqRange):
     """:class:`.VariantItemFreqRangeDielectric` is a frequency-range parametrized variant item
     for lossy dielectric materials.
 
@@ -71,71 +76,99 @@ class VariantItemFreqRangeDielectric(VariantItemFreqRange):
     updates the ``frequency_range`` attribute for the requested range.
     """
 
-    loss_tangent: Union[float, List[float]] = pd.Field(
+    loss_tangent: Union[float, list[float]] = Field(
         ...,
         title="Loss Tangent",
-        description="Loss tangent for lossy dielectric materials.",
+        description="Loss tangent for lossy dielectric materials. "
+        "If the desired frequency range is outside of the default frequency range, "
+        "averaged loss tangent data is used to fit a new pole residue medium model.",
     )
 
-    eps_real: Union[float, List[float]] = pd.Field(
+    eps_real: Union[float, list[float]] = Field(
         ...,
         title="Real Permittivity",
-        description="Real permittivity for lossy dielectric materials.",
+        description="Real permittivity for lossy dielectric materials. "
+        "If the desired frequency range is outside of the default frequency range, "
+        "averaged real permittivity data is used to fit a new pole residue medium model.",
     )
 
-    measurement_frequencies: Union[float, List[float]] = pd.Field(
+    measurement_frequencies: Union[float, list[float]] = Field(
         ...,
         title="Measurement Frequencies",
         description="Frequencies at which the material properties were measured.",
+        json_schema_extra={"units": HERTZ},
     )
 
-    pole_residue: PoleResidue = pd.Field(
+    prefitted_medium: PoleResidue = Field(
         ...,
         title="Pole-Residue Model",
         description="Pole-residue model for lossy dielectric materials.",
     )
 
+    @model_validator(mode="after")
+    def _validate_paired_field_lengths(self) -> "VariantItemFreqRangeDielectric":
+        """Validate that paired fields (``loss_tangent``, ``eps_real``, ``measurement_frequencies``) all have the same length."""
+        # Get length of each field (single values have length 1, lists/tuples/arrays have their actual length)
+        field_lengths = {}
+        for name in ["loss_tangent", "eps_real", "measurement_frequencies"]:
+            value = getattr(self, name)
+            if isinstance(value, (list, tuple, np.ndarray)):
+                field_lengths[name] = len(value)
+            else:
+                field_lengths[name] = 1  # Single value has implicit length 1
+
+        # All fields must have the same length
+        unique_lengths = set(field_lengths.values())
+        if len(unique_lengths) > 1:
+            raise ValidationError(
+                f"Mismatched lengths for paired fields: "
+                f"{', '.join(f'{name}={length}' for name, length in field_lengths.items())}. "
+                f"All fields must have the same length (single values count as length 1)."
+            )
+
+        return self
+
     def medium(self, frequency_range: Optional[FreqBound] = None) -> PoleResidue:
         """
         Generate ``PoleResidue`` medium with specified ``frequency_range``.
-        If ``frequency_range`` is not provided, returns the original ``PoleResidue`` model.
+        If ``frequency_range`` is not provided, returns the original prefitted material model.
 
         Parameters
         ----------
         frequency_range : Optional[FreqBound],
             Frequency range of validity for the medium, specified as (f_min, f_max) in Hz.
-            If not provided, uses the original frequency_range from the stored pole_residue model.
+            If not provided, uses the original frequency_range from the stored prefitted model.
 
         Returns
         -------
         PoleResidue
             The ``PoleResidue`` model with updated ``frequency_range`` attribute (if provided),
-            or the original ``pole_residue`` model (if ``frequency_range`` is None).
+            or the original ``prefitted_medium`` model (if ``frequency_range`` is None).
 
         Notes
         -----
-        If ``frequency_range`` is provided and is within the stored ``pole_residue.frequency_range``,
-        returns the stored model with updated ``frequency_range`` metadata.
+        If ``frequency_range`` is provided and is within the stored ``prefitted_medium.frequency_range``,
+        returns the prefitted model.
 
-        If ``frequency_range`` is provided but is outside the stored ``pole_residue.frequency_range``,
+        If ``frequency_range`` is provided but is outside the stored ``prefitted_medium.frequency_range``,
         a warning is issued and a new ``PoleResidue`` model is created using the constant loss tangent
         fitter with averaged ``eps_real`` and ``loss_tangent`` values.
 
-        If ``frequency_range`` is not provided, returns the stored ``pole_residue`` model as-is.
+        If ``frequency_range`` is not provided, returns the stored ``prefitted_medium`` model as-is.
         """
         if frequency_range is None:
-            return self.pole_residue
+            return self.prefitted_medium
 
-        # Check if requested frequency_range is within the stored pole_residue frequency_range
-        stored_freq_range = self.pole_residue.frequency_range
+        # Check if requested frequency_range is within the stored prefitted_medium frequency_range
+        stored_freq_range = self.prefitted_medium.frequency_range
         if stored_freq_range is not None:
             f_min_stored, f_max_stored = stored_freq_range
             f_min_requested, f_max_requested = frequency_range
 
             # Check if requested range is within stored range
             if f_min_requested >= f_min_stored and f_max_requested <= f_max_stored:
-                # Within range: return stored model with updated frequency_range
-                return self.pole_residue
+                # Within range: return stored model
+                return self.prefitted_medium
 
         # Outside range (or stored_freq_range is None): create new model using constant loss tangent fitter
         # Calculate average values
@@ -152,12 +185,13 @@ class VariantItemFreqRangeDielectric(VariantItemFreqRange):
 
         log.warning(
             f"Requested frequency_range {frequency_range} is outside the stored "
-            f"pole_residue frequency_range {stored_freq_range}. "
+            f"prefitted_medium frequency_range {stored_freq_range}. "
             f"The RF material library does not have measurements for loss_tangent and eps_real "
             f"in the desired frequency range. A new PoleResidue model will be created using "
             f"the constant loss tangent fitter with averaged material properties "
             f"(eps_real={eps_real_avg:.6f}, loss_tangent={loss_tangent_avg:.6f}). "
-            f"The resulting fit may be less accurate."
+            f"The resulting fit may be less accurate. For more accurate results, "
+            f"consider calling the fast fitter directly with frequency-dependent data."
         )
 
         # Create new model using constant loss tangent fitter
@@ -179,62 +213,93 @@ class VariantItemFreqRangeDielectric(VariantItemFreqRange):
     @property
     def summarize_mediums(self) -> dict[str, PoleResidue]:
         """Summarize the mediums in this variant."""
-        return {"medium": self.pole_residue}
+        return {"medium": self.prefitted_medium}
 
 
-class VariantItemFreqRangeMetal(VariantItemFreqRange):
+class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
     """Frequency-range parametrized variant item for lossy metal materials.
+
     This class stores conductivity and optional parameters for creating a ``LossyMetalMedium``.
+
+    The optional ``roughness`` parameter applies a frequency-dependent scaling factor to the
+    surface impedance, accounting for surface roughness effects that increase losses at higher
+    frequencies. The roughness correction is computed based on the skin depth at each frequency.
+
+    The optional ``thickness`` parameter is used when the conductor thickness is not much greater
+    than the skin depth. In this case, a 1D transmission line model is applied to compute the
+    surface impedance of the thin conductor, accounting for the finite thickness effects.
+
+    The optional ``fit_param`` parameter controls the pole-residue fitting process used to model
+    the scaled surface impedance (surface impedance divided by -1j * omega) over the frequency range.
+    It specifies the maximum number of poles, fitting tolerance, number of sampling frequencies,
+    and whether to use logarithmic or linear frequency sampling.
     """
 
-    conductivity: pd.PositiveFloat = pd.Field(
+    conductivity: PositiveFloat = Field(
         ...,
-        title="Conductivity, S/μm",
-        description="Electrical conductivity for lossy metal materials (S/μm).",
+        title="Conductivity",
+        description="Electric conductivity for lossy metal materials.",
+        json_schema_extra={"units": CONDUCTIVITY},
     )
 
-    roughness: Optional[SurfaceRoughnessType] = pd.Field(
+    roughness: Optional[SurfaceRoughnessType] = Field(
         None,
         title="Surface Roughness Model",
-        description="Surface roughness model for lossy metal.",
+        description="Surface roughness model that applies a frequency-dependent scaling "
+        "factor to surface impedance, accounting for increased losses at higher frequencies "
+        "due to surface roughness effects.",
     )
 
-    thickness: Optional[pd.PositiveFloat] = pd.Field(
+    thickness: Optional[PositiveFloat] = Field(
         None,
         title="Conductor Thickness",
-        description="Conductor thickness for lossy metal (μm).",
-        units="μm",
+        description="When the thickness is not much greater than the skin depth, "
+        "a 1D transmission line model is applied to compute the surface impedance of the thin conductor, "
+        "accounting for finite thickness effects.",
+        json_schema_extra={"units": MICROMETER},
     )
 
-    fit_param: Optional[SurfaceImpedanceFitterParam] = pd.Field(
+    fit_param: Optional[SurfaceImpedanceFitterParam] = Field(
         None,
         title="Fitting Parameters For Surface Impedance",
-        description="Fitting parameters for lossy metal surface impedance.",
+        description="Parameters controlling the pole-residue fitting process for the scaled "
+        "surface impedance (surface impedance divided by -1j * omega) over the frequency range. "
+        "Includes maximum number of poles, RMS tolerance, number of sampling frequencies, "
+        "and logarithmic vs linear frequency sampling.",
     )
 
-    def medium(self, frequency_range: FreqBound) -> LossyMetalMedium:
+    def medium(self, frequency_range: Optional[FreqBound] = None) -> LossyMetalMedium:
         """
         Generate ``LossyMetalMedium`` with specified ``frequency_range``.
 
         Parameters
         ----------
-        frequency_range : FreqBound
+        frequency_range : Optional[FreqBound]
             Frequency range of validity for the medium, specified as (f_min, f_max) in Hz.
-            Required for LossyMetalMedium.
+            Required for lossy metals. If None, raises ValueError.
 
         Returns
         -------
         LossyMetalMedium
             A LossyMetalMedium fitted for the specified frequency range.
 
+        Raises
+        ------
+        ValueError
+            If ``frequency_range`` is None.
+
         Notes
         -----
-        The ``LossyMetalMedium`` internally fits a pole-residue model for the surface impedance
-        over the specified frequency range. This fitting happens on-the-fly when the medium
-        is created, ensuring accuracy for the requested frequency range.
+        The ``LossyMetalMedium`` internally fits a pole-residue model for the scaled surface
+        impedance over the specified frequency range. This fitting happens lazily when the
+        ``scaled_surface_impedance_model`` property is first accessed, ensuring accuracy for
+        the requested frequency range.
         """
         if frequency_range is None:
-            raise ValueError("frequency_range is required for LossyMetalMedium")
+            raise ValueError(
+                "frequency_range is required for VariantItemFreqRangeMetal.medium(). "
+                "Please provide a frequency_range as (f_min, f_max) in Hz."
+            )
         kwargs = {
             "conductivity": self.conductivity,
             "frequency_range": frequency_range,
@@ -260,16 +325,57 @@ class VariantItemFreqRangeMetal(VariantItemFreqRange):
 class MaterialItemFreqRange(MaterialItem):
     """A material that includes several frequency-range parametrized variants."""
 
-    variants: dict[str, VariantItemFreqRange] = pd.Field(
+    variants: dict[str, AbstractVariantItemFreqRange] = Field(
         ...,
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
         "that maps from a key to the variant model.",
     )
 
-    def __getitem__(self, variant_name: str) -> VariantItemFreqRange:
+    def __getitem__(self, variant_name: str) -> AbstractVariantItemFreqRange:
         """Helper function to easily access a variant."""
         return self.variants[variant_name]
+
+    @property
+    def medium(self) -> Union[PoleResidue, LossyMetalMedium]:
+        """The default medium for the default variant.
+
+        Returns the medium for the default variant using its default frequency range.
+        For dielectrics, this returns the stored PoleResidue model (equivalent to calling
+        ``variant.medium()`` without arguments).
+        For metals, raises ValueError as frequency_range is required.
+
+        To get a medium for a different frequency range:
+        1. Access the variant: ``variant = material['variant_name']``
+        2. Call medium with frequency_range: ``variant.medium(frequency_range)``
+
+        Examples
+        --------
+        >>> # Get default medium for default variant
+        >>> default_medium = rf_material_library["RT_duroid5880"].medium
+        >>>
+        >>> # Get medium for a specific frequency range
+        >>> variant = rf_material_library["RT_duroid5880"]["standard"]
+        >>> custom_medium = variant.medium(frequency_range=(5e9, 10e9))
+        """
+        variant = self.variants[self.default]
+        if isinstance(variant, VariantItemFreqRangeDielectric):
+            # For dielectrics, call medium() without arguments to get stored model
+            return variant.medium()
+        elif isinstance(variant, VariantItemFreqRangeMetal):
+            # For metals, frequency_range is required
+            raise ValueError(
+                f"frequency_range is required for {variant.__class__.__name__}.medium(). "
+                f"Please use {self.name}['{self.default}'].medium(frequency_range) instead, "
+                "where frequency_range is a tuple (f_min, f_max) in Hz."
+            )
+        else:
+            # Unsupported variant type
+            raise ValueError(
+                f"The variant type '{variant.__class__.__name__}' for material '{self.name}' "
+                f"is currently not supported by 'MaterialItemFreqRange.medium' property. "
+                f"Supported types are: 'VariantItemFreqRangeDielectric' and 'VariantItemFreqRangeMetal'."
+            )
 
 
 Rogers3003_design = VariantItem(
@@ -471,7 +577,7 @@ RT_duroid5880 = VariantItemFreqRangeDielectric(
     loss_tangent=[0.0004, 0.0009],
     eps_real=[2.2, 2.2],
     measurement_frequencies=[1e6, 1e10],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=2.194082487374544,
         poles=[
             ((-184481509383.02472 + 0j), (521794132.04005456 - 0j)),
@@ -486,7 +592,7 @@ RT_duroid_6035HTC_process = VariantItemFreqRangeDielectric(
     loss_tangent=[0.0013],
     eps_real=[3.5],
     measurement_frequencies=[1e10],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=1.6050854545822404,
         poles=[((-62801402532552.52 + 0j), (59501988627702.53 - 0j))],
         frequency_range=(8e9, 4e10),
@@ -497,7 +603,7 @@ RT_duroid_6035HTC_design = VariantItemFreqRangeDielectric(
     loss_tangent=[0.0013],
     eps_real=[3.6],
     measurement_frequencies=[1e10],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=1.0,
         poles=[
             ((-7.797810011903168e16 + 0j), (617754938994122.2 - 0j)),
@@ -511,7 +617,7 @@ PTFE_solid = VariantItemFreqRangeDielectric(
     loss_tangent=[0.00022],
     eps_real=[2.02],
     measurement_frequencies=[1e10],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=2.019212989211342,
         poles=[
             ((-881114136668.1382 + 0j), (306501347.27997166 - 0j)),
@@ -528,13 +634,13 @@ PTFE_lowloss_low_density = VariantItemFreqRangeDielectric(
     loss_tangent=[0.00005],
     eps_real=[1.7],
     measurement_frequencies=[1e10],
-    pole_residue=PoleResidue(
-        eps_inf=2.019212989211342,
+    prefitted_medium=PoleResidue(
+        eps_inf=1.699848219980485,
         poles=[
-            ((-881114136668.1382 + 0j), (306501347.27997166 - 0j)),
-            ((-55285601084.21439 + 0j), (9937348.543665012 - 0j)),
-            ((-164820074.0670714 + 0j), (1195084.7305780055 - 0j)),
-            ((-133999177246.56708 + 0j), (27607743.236883767 - 0j)),
+            ((-896218342448.8458 + 0j), (59882766.40053672 - 0j)),
+            ((-56239216907.10459 + 0j), (1920302.8987695205 - 0j)),
+            ((-228136100.7830333 + 0j), (229444.6174920688 - 0j)),
+            ((-134957679158.1368 + 0j), (5327222.369718695 - 0j)),
         ],
         frequency_range=(1e9, 1e11),
     ),
@@ -545,13 +651,13 @@ PTFE_microporous_expanded = VariantItemFreqRangeDielectric(
     loss_tangent=[0.00005],
     eps_real=[1.4],
     measurement_frequencies=[1e10],
-    pole_residue=PoleResidue(
-        eps_inf=2.019212989211342,
+    prefitted_medium=PoleResidue(
+        eps_inf=1.3789744018143326,
         poles=[
-            ((-881114136668.1382 + 0j), (306501347.27997166 - 0j)),
-            ((-55285601084.21439 + 0j), (9937348.543665012 - 0j)),
-            ((-164820074.0670714 + 0j), (1195084.7305780055 - 0j)),
-            ((-133999177246.56708 + 0j), (27607743.236883767 - 0j)),
+            ((-256475000600153.2 + 0j), (2692008343604.1704 - 0j)),
+            ((-167090647925.4567 + 0j), (-571258184.9031196 + 0j)),
+            ((-166247334068.52448 + 0j), (578153720.1028228 - 0j)),
+            ((-5777451.652730278 + 0j), (201150.21508024278 - 0j)),
         ],
         frequency_range=(1e9, 1e11),
     ),
@@ -562,7 +668,7 @@ Alumina_AO700 = VariantItemFreqRangeDielectric(
     loss_tangent=[0.0006, 0.0006],
     eps_real=[9.4, 9.2],
     measurement_frequencies=[1e6, 2e9],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=9.28118974994868,
         poles=[
             ((-87564768.67254353 + 0j), (3467649.9365641726 - 0j)),
@@ -578,7 +684,7 @@ Alumina_AO800 = VariantItemFreqRangeDielectric(
     loss_tangent=[0.0004, 0.0013],
     eps_real=[9.4, 9.4],
     measurement_frequencies=[1e6, 2e9],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=9.364674283611748,
         poles=[
             ((-34555426073.01337 + 0j), (603806525.3554897 - 0j)),
@@ -594,7 +700,7 @@ Alumina_AO479U = VariantItemFreqRangeDielectric(
     loss_tangent=[0.0002],
     eps_real=[9.9],
     measurement_frequencies=[2e9],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=1.0,
         poles=[((-600143194825769.9 + 0j), (2670637215123859 - 0j))],
         frequency_range=(1e6, 8.5e9),
@@ -606,7 +712,7 @@ Getek = VariantItemFreqRangeDielectric(
     loss_tangent=[0.011, 0.01, 0.009, 0.009, 0.01],
     eps_real=[3.81, 3.78, 3.6, 3.5, 3.5],
     measurement_frequencies=[1e8, 1e9, 2e9, 5e9, 1e10],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=3.5704492926597595,
         poles=[
             ((-773949794.5259495 + 0j), (28994776.99291547 - 0j)),
@@ -622,7 +728,7 @@ Isola_370HR = VariantItemFreqRangeDielectric(
     loss_tangent=[0.015, 0.0161, 0.021, 0.025, 0.025],
     eps_real=[4.24, 4.17, 4.04, 3.92, 3.92],
     measurement_frequencies=[1e8, 1e9, 2e9, 5e9, 1e10],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=3.864530563354492,
         poles=[
             ((-947400350.5182724 + 0j), (57081197.755207635 - 0j)),
@@ -638,7 +744,7 @@ Isola_FR406 = VariantItemFreqRangeDielectric(
     loss_tangent=[0.013, 0.0161, 0.0167, 0.0172, 0.0172],
     eps_real=[4.0, 3.95, 3.93, 3.92, 3.92],
     measurement_frequencies=[1e8, 1e9, 2e9, 5e9, 1e10],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=3.8135552406311035,
         poles=[
             ((-783656308.9300861 + 0j), (35283399.27609267 - 0j)),
@@ -653,7 +759,7 @@ Isola_FR408 = VariantItemFreqRangeDielectric(
     loss_tangent=[0.0094, 0.0117, 0.012, 0.0127, 0.0125],
     eps_real=[3.69, 3.66, 3.67, 3.66, 3.65],
     measurement_frequencies=[1e8, 1e9, 2e9, 5e9, 1e10],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=3.5799712240695953,
         poles=[
             ((-716927602.6966791 + 0j), (20903514.826920874 - 0j)),
@@ -668,7 +774,7 @@ Megtron6_R5775_KG = VariantItemFreqRangeDielectric(
     loss_tangent=[0.002, 0.002, 0.003, 0.003, 0.004, 0.004],
     eps_real=[3.65, 3.58, 3.57, 3.56, 3.56, 3.55],
     measurement_frequencies=[1e9, 2e9, 4e9, 6e9, 8e9, 1e10],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=3.535348117351532,
         poles=[
             ((-214434721057.43317 + 0j), (3446127217.699701 - 0j)),
@@ -681,66 +787,57 @@ Megtron6_R5775_KG = VariantItemFreqRangeDielectric(
 )
 Megtron6_R5670_KG = VariantItemFreqRangeDielectric(
     loss_tangent=[0.002, 0.002, 0.003, 0.003, 0.004, 0.004],
-    eps_real=[3.47, 3.40, 3.39, 3.39, 3.39, 3.58],
+    eps_real=[3.47, 3.40, 3.39, 3.39, 3.39, 3.38],
     measurement_frequencies=[1e9, 2e9, 4e9, 6e9, 8e9, 1e10],
-    pole_residue=PoleResidue(
-        eps_inf=3.014923095703125,
+    prefitted_medium=PoleResidue(
+        eps_inf=3.3726682662963867,
         poles=[
-            ((-2640531970.3678226 - 132793576566.7545j), (-6513383.795061068 + 24533953770.37767j)),
-            (
-                (-4523774632.300637 - 31949263209.255642j),
-                (1766127.5406975108 - 2023567.7745701852j),
-            ),
-            (
-                (-25161091901.745766 - 3359786740.934802j),
-                (130260064.80755003 + 364684745.84531015j),
-            ),
+            ((-6250234872.067123 + 0j), (26175668.546415854 - 0j)),
+            ((-104949883789.25421 + 0j), (1486989807.389693 - 0j)),
+            ((-23076386432.036922 + 0j), (21245804.24735235 - 0j)),
         ],
         frequency_range=(1e9, 1e10),
     ),
     reference=[rf_material_refs["Megtron6_R5775_R5670(KG)"]],
 )
 Megtron6_R5775_N = VariantItemFreqRangeDielectric(
-    loss_tangent=[0.002, 0.002, 0.003, 0.003, 0.004, 0.004],
-    eps_real=[3.47, 3.40, 3.39, 3.39, 3.39, 3.58],
-    measurement_frequencies=[1e9, 2e9, 4e9, 6e9, 8e9, 1e10],
-    pole_residue=PoleResidue(
-        eps_inf=3.014923095703125,
-        poles=[
-            ((-2640531970.3678226 - 132793576566.7545j), (-6513383.795061068 + 24533953770.37767j)),
-            (
-                (-4523774632.300637 - 31949263209.255642j),
-                (1766127.5406975108 - 2023567.7745701852j),
-            ),
-            (
-                (-25161091901.745766 - 3359786740.934802j),
-                (130260064.80755003 + 364684745.84531015j),
-            ),
-        ],
-        frequency_range=(1e9, 1e10),
-    ),
-    reference=[rf_material_refs["Megtron6_R5775_R5670(N)"]],
-)
-Megtron6_R5670_N = VariantItemFreqRangeDielectric(
-    loss_tangent=[0.002, 0.003, 0.004, 0.004, 0.004, 0.005, 0.005, 0.005, 0.005, 0.005],
-    eps_real=[3.47, 3.40, 3.39, 3.39, 3.39, 3.58, 3.58, 3.58, 3.58, 3.58],
+    loss_tangent=[0.002, 0.003, 0.004, 0.004, 0.004, 0.004, 0.004, 0.005, 0.005, 0.005],
+    eps_real=[3.40, 3.37, 3.35, 3.35, 3.34, 3.34, 3.34, 3.34, 3.34, 3.34],
     measurement_frequencies=[1e9, 6e9, 12e9, 18e9, 23e9, 29e9, 34e9, 40e9, 45e9, 50e9],
-    pole_residue=PoleResidue(
-        eps_inf=3.46403369307518,
+    prefitted_medium=PoleResidue(
+        eps_inf=3.307225823402405,
         poles=[
-            ((-5507280267.455864 + 0j), (29404180.35270952 - 0j)),
-            ((-45495273725.213745 + 0j), (215091127.9038013 - 0j)),
-            ((-310545539038.57117 + 0j), (5041666247.777941 - 0j)),
+            ((-773353257706.6769 + 0j), (15432797221.92099 - 0j)),
+            ((-51917915632.41483 + 0j), (540455950.6398327 - 0j)),
+            ((-11738278467.08503 - 4376627321.665409j), (-36521596.20551511 + 168696656.94222957j)),
         ],
         frequency_range=(1e9, 5e10),
     ),
     reference=[rf_material_refs["Megtron6_R5775_R5670(N)"]],
 )
-Neclo_N4000_6 = VariantItemFreqRangeDielectric(
+Megtron6_R5670_N = VariantItemFreqRangeDielectric(
+    loss_tangent=[0.002, 0.003, 0.004, 0.004, 0.004, 0.005, 0.005, 0.005, 0.005, 0.005],
+    eps_real=[3.22, 3.20, 3.19, 3.18, 3.18, 3.18, 3.18, 3.18, 3.18, 3.18],
+    measurement_frequencies=[1e9, 6e9, 12e9, 18e9, 23e9, 29e9, 34e9, 40e9, 45e9, 50e9],
+    prefitted_medium=PoleResidue(
+        eps_inf=3.1631745100021362,
+        poles=[
+            ((-273723888684.53394 + 0j), (3897758154.7457604 - 0j)),
+            ((-37414521622.92833 + 0j), (204797365.53446326 - 0j)),
+            (
+                (-10861609286.292263 - 4534672035.728212j),
+                (-440659.91379824624 + 84936797.08916609j),
+            ),
+        ],
+        frequency_range=(1e9, 5e10),
+    ),
+    reference=[rf_material_refs["Megtron6_R5775_R5670(N)"]],
+)
+Nelco_N4000_6 = VariantItemFreqRangeDielectric(
     loss_tangent=[0.023, 0.022],
     eps_real=[4.3, 4.0],
     measurement_frequencies=[1e6, 2.5e9],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=4.005315810441971,
         poles=[
             ((-682861.6156659126 + 0j), (312924.199044801 - 0j)),
@@ -749,14 +846,14 @@ Neclo_N4000_6 = VariantItemFreqRangeDielectric(
         ],
         frequency_range=(1e6, 2.5e9),
     ),
-    reference=[rf_material_refs["Neclo_N4000-6"]],
+    reference=[rf_material_refs["Nelco_N4000-6"]],
 )
 
-Neclo_N4000_13EP = VariantItemFreqRangeDielectric(
+Nelco_N4000_13EP = VariantItemFreqRangeDielectric(
     loss_tangent=[0.009, 0.008],
     eps_real=[3.7, 3.7],
     measurement_frequencies=[2.5e9, 1e10],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=3.6493919491767883,
         poles=[
             ((-153615421425.48874 + 0j), (3075430659.8732424 - 0j)),
@@ -765,14 +862,14 @@ Neclo_N4000_13EP = VariantItemFreqRangeDielectric(
         ],
         frequency_range=(1e9, 1e10),
     ),
-    reference=[rf_material_refs["Neclo_N4000-13"]],
+    reference=[rf_material_refs["Nelco_N4000-13"]],
 )
 
-Neclo_N4000_13EP_SI = VariantItemFreqRangeDielectric(
+Nelco_N4000_13EP_SI = VariantItemFreqRangeDielectric(
     loss_tangent=[0.008, 0.008],
     eps_real=[3.2, 3.3],
     measurement_frequencies=[2.5e9, 1e10],
-    pole_residue=PoleResidue(
+    prefitted_medium=PoleResidue(
         eps_inf=2.372894287109375,
         poles=[
             ((-1024113482003.5793 + 0j), (643330783807.0553 - 0j)),
@@ -781,7 +878,7 @@ Neclo_N4000_13EP_SI = VariantItemFreqRangeDielectric(
         ],
         frequency_range=(1e9, 1e10),
     ),
-    reference=[rf_material_refs["Neclo_N4000-13"]],
+    reference=[rf_material_refs["Nelco_N4000-13"]],
 )
 
 # Metals
@@ -823,8 +920,8 @@ Brass_C26000 = VariantItemFreqRangeMetal(
 )
 
 Cobalt = VariantItemFreqRangeMetal(
-    conductivity=16.03,
-    reference=[rf_material_refs["Cobalt"]],
+    conductivity=17,
+    reference=[rf_material_refs["CRC_Handbook"]],
 )
 
 Tin = VariantItemFreqRangeMetal(
@@ -1016,51 +1113,51 @@ rf_material_library = {
         default="standard",
     ),
     "Megtron6_R5775_KG": MaterialItemFreqRange(
-        name="Megtron6 R5775_R5670(KG)",
+        name="Megtron6 R5775_KG",
         variants={
             "standard": Megtron6_R5775_KG,
         },
         default="standard",
     ),
     "Megtron6_R5670_KG": MaterialItemFreqRange(
-        name="Megtron6 R5775_R5670(KG)",
+        name="Megtron6 R5670_KG",
         variants={
             "standard": Megtron6_R5670_KG,
         },
         default="standard",
     ),
     "Megtron6_R5775_N": MaterialItemFreqRange(
-        name="Megtron6 R5775_R5670(N)",
+        name="Megtron6 R5775_N",
         variants={
             "standard": Megtron6_R5775_N,
         },
         default="standard",
     ),
     "Megtron6_R5670_N": MaterialItemFreqRange(
-        name="Megtron6 R5775_R5670(N)",
+        name="Megtron6 R5670_N",
         variants={
             "standard": Megtron6_R5670_N,
         },
         default="standard",
     ),
-    "Neclo_N4000_6": MaterialItemFreqRange(
-        name="Neclo N4000-6",
+    "Nelco_N4000_6": MaterialItemFreqRange(
+        name="Nelco N4000-6",
         variants={
-            "standard": Neclo_N4000_6,
+            "standard": Nelco_N4000_6,
         },
         default="standard",
     ),
-    "Neclo_N4000_13EP": MaterialItemFreqRange(
-        name="Neclo N4000-13",
+    "Nelco_N4000_13EP": MaterialItemFreqRange(
+        name="Nelco N4000-13 EP",
         variants={
-            "standard": Neclo_N4000_13EP,
+            "standard": Nelco_N4000_13EP,
         },
         default="standard",
     ),
-    "Neclo_N4000_13EP_SI": MaterialItemFreqRange(
-        name="Neclo N4000-13",
+    "Nelco_N4000_13EP_SI": MaterialItemFreqRange(
+        name="Nelco N4000-13 EP SI",
         variants={
-            "SI": Neclo_N4000_13EP_SI,
+            "SI": Nelco_N4000_13EP_SI,
         },
         default="SI",
     ),

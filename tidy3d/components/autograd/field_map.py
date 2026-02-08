@@ -3,37 +3,39 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Union
 
-import pydantic.v1 as pydantic
+from pydantic import Field
 
-from tidy3d.components.autograd.types import AutogradFieldMap, dict_ag
+from tidy3d.components.autograd.types import TracedArrayLike, TracedComplex, TracedFloat
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import ArrayLike, tidycomplex
+
+if TYPE_CHECKING:
+    from typing import Callable
+
+    from tidy3d.components.autograd.types import AutogradFieldMap
 
 
 class Tracer(Tidy3dBaseModel):
     """Representation of a single traced element within a model."""
 
-    path: tuple[Any, ...] = pydantic.Field(
-        ...,
+    path: tuple[Any, ...] = Field(
         title="Path to the traced object in the model dictionary.",
     )
-    data: float | tidycomplex | ArrayLike = pydantic.Field(..., title="Tracing data")
+    data: Union[TracedFloat, TracedComplex, TracedArrayLike] = Field(title="Tracing data")
 
 
 class FieldMap(Tidy3dBaseModel):
     """Collection of traced elements."""
 
-    tracers: tuple[Tracer, ...] = pydantic.Field(
-        ...,
+    tracers: tuple[Tracer, ...] = Field(
         title="Collection of Tracers.",
     )
 
     @property
     def to_autograd_field_map(self) -> AutogradFieldMap:
         """Convert to ``AutogradFieldMap`` autograd dictionary."""
-        return dict_ag({tracer.path: tracer.data for tracer in self.tracers})
+        return {tracer.path: tracer.data for tracer in self.tracers}
 
     @classmethod
     def from_autograd_field_map(cls, autograd_field_map: AutogradFieldMap) -> FieldMap:
@@ -52,8 +54,7 @@ def _encoded_path(path: tuple[Any, ...]) -> str:
 class TracerKeys(Tidy3dBaseModel):
     """Collection of traced field paths."""
 
-    keys: tuple[tuple[Any, ...], ...] = pydantic.Field(
-        ...,
+    keys: tuple[tuple[Any, ...], ...] = Field(
         title="Collection of tracer keys.",
     )
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import collections.abc
 
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 from tidy3d import SimulationDataMap
 
@@ -42,8 +42,14 @@ def test_simulation_data_map_creation():
 def test_simulation_data_map_invalid_type_raises_error():
     """Tests that a ValidationError is raised for incorrect value types."""
     invalid_data = {"data_A": "not simulation data"}
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         SimulationDataMap(keys=tuple(invalid_data.keys()), values=tuple(invalid_data.values()))
+
+
+def test_simulation_data_map_mismatched_lengths_raises_error():
+    """Tests that a ValidationError is raised for mismatched keys and values lengths."""
+    with pytest.raises(ValidationError, match="Length of 'keys' and 'values' must be the same"):
+        SimulationDataMap(keys=("data_A",), values=tuple(SIM_DATA_MAP_DATA.values()))
 
 
 def test_simulation_data_map_getitem_success():

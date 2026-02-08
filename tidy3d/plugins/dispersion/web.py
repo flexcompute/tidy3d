@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import ssl
 from enum import Enum
-from typing import Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
-import pydantic.v1 as pydantic
 import requests
-from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
+from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, model_validator
 
-from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.medium import PoleResidue
 from tidy3d.components.types import Undefined
 from tidy3d.config import config
@@ -20,6 +19,9 @@ from tidy3d.log import log
 from tidy3d.web.core.http_util import get_headers
 
 from .fit import DispersionFitter
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 BOUND_MAX_FACTOR = 10
 
@@ -40,28 +42,28 @@ class ExceptionCodes(Enum):
 class AdvancedFitterParam(Tidy3dBaseModel):
     """Advanced fitter parameters"""
 
-    bound_amp: NonNegativeFloat = Field(
+    bound_amp: Optional[NonNegativeFloat] = Field(
         None,
         title="Upper bound of oscillator strength",
         description="Upper bound of real and imagniary part of oscillator "
         "strength ``c`` in the model :class:`.PoleResidue` (The default 'None' will trigger "
         "automatic setup based on the frequency range of interest).",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
-    bound_f: NonNegativeFloat = Field(
+    bound_f: Optional[NonNegativeFloat] = Field(
         None,
         title="Upper bound of pole frequency",
         description="Upper bound of real and imaginary part of ``a`` that corresponds to pole "
         "damping rate and frequency in the model :class:`.PoleResidue` (The default 'None' "
         "will trigger automatic setup based on the frequency range of interest).",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
     bound_f_lower: NonNegativeFloat = Field(
         0.0,
         title="Lower bound of pole frequency",
         description="Lower bound of imaginary part of ``a`` that corresponds to pole "
         "frequency in the model :class:`.PoleResidue`.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
     bound_eps_inf: float = Field(
         10.0,
@@ -96,38 +98,37 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         lt=2**32,
     )
 
-    @validator("bound_f_lower", always=True)
-    @skip_if_fields_missing(["bound_f"])
-    def _validate_lower_frequency_bound(cls, val, values):
+    @model_validator(mode="after")
+    def _validate_lower_frequency_bound(self) -> Self:
         """bound_f_lower cannot be larger than bound_f."""
-        if values["bound_f"] is not None and val > values["bound_f"]:
+        if self.bound_f is not None and self.bound_f_lower > self.bound_f:
             raise SetupError(
                 "The upper bound 'bound_f' cannot be smaller than the lower bound 'bound_f_lower'."
             )
-        return val
+        return self
 
 
 class FitterData(AdvancedFitterParam):
     """Data class for request body of Fitter where dipsersion data is input through tuple."""
 
     wvl_um: tuple[float, ...] = Field(
-        ...,
         title="Wavelengths",
         description="A set of wavelengths for dispersion data.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
     n_data: tuple[float, ...] = Field(
-        ...,
         title="Index of refraction",
         description="Real part of the complex index of refraction at each wavelength.",
     )
-    k_data: tuple[float, ...] = Field(
+    k_data: Optional[tuple[float, ...]] = Field(
         None,
         title="Extinction coefficient",
         description="Imaginary part of the complex index of refraction at each wavelength.",
     )
     num_poles: PositiveInt = Field(
-        1, title="Number of poles", description="Number of poles in model."
+        1,
+        title="Number of poles",
+        description="Number of poles in model.",
     )
     num_tries: PositiveInt = Field(
         50,
@@ -143,13 +144,13 @@ class FitterData(AdvancedFitterParam):
         100.0,
         title="Upper bound of oscillator strength",
         description="Upper bound of oscillator strength in the model.",
-        units="eV",
+        json_schema_extra={"units": "eV"},
     )
     bound_f: PositiveFloat = Field(
         100.0,
         title="Upper bound of pole frequency",
         description="Upper bound of pole frequency in the model.",
-        units="eV",
+        json_schema_extra={"units": "eV"},
     )
 
     @staticmethod
@@ -217,7 +218,7 @@ class FitterData(AdvancedFitterParam):
         return task
 
     @staticmethod
-    def _set_url(config_env: Literal["default", "dev", "prod", "local"] = "default"):
+    def _set_url(config_env: Literal["default", "dev", "prod", "local"] = "default") -> str:
         """Set the url of python web service
 
         Parameters
@@ -262,7 +263,7 @@ class FitterData(AdvancedFitterParam):
 
         Returns
         -------
-        Tuple[:class:`.PoleResidue`, float]
+        tuple[:class:`.PoleResidue`, float]
             Best results of multiple fits: (dispersive medium, RMS error).
         """
 
@@ -272,7 +273,7 @@ class FitterData(AdvancedFitterParam):
         resp = requests.post(
             f"{url_server}/dispersion/fit",
             headers=headers,
-            data=self.json(),
+            data=self.model_dump_json(),
             verify=ssl_verify,
         )
 
@@ -299,7 +300,7 @@ class FitterData(AdvancedFitterParam):
             ) from e
 
         run_result = resp.json()
-        best_medium = PoleResidue.parse_raw(run_result["message"])
+        best_medium = PoleResidue.model_validate_json(run_result["message"])
         best_rms = float(run_result["rms"])
 
         if best_rms < self.tolerance_rms:
@@ -337,7 +338,7 @@ def run(
 
     Returns
     -------
-    Tuple[:class:`.PoleResidue`, float]
+    tuple[:class:`.PoleResidue`, float]
         Best results of multiple fits: (dispersive medium, RMS error).
     """
     if advanced_param is Undefined:
@@ -349,13 +350,14 @@ def run(
 class StableDispersionFitter(DispersionFitter):
     """Deprecated."""
 
-    @pydantic.root_validator()
-    def _deprecate_stable_fitter(cls, values):
+    @model_validator(mode="before")
+    @classmethod
+    def _deprecate_stable_fitter(cls, data: dict[str, Any]) -> dict[str, Any]:
         log.warning(
             "'StableDispersionFitter' has been deprecated. Use 'DispersionFitter' with "
             "'tidy3d.plugins.dispersion.web.run' to access the stable fitter from the web server."
         )
-        return values
+        return data
 
     def fit(
         self,

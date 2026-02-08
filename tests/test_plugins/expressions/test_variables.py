@@ -20,7 +20,7 @@ def test_constant_evaluate(value):
 def test_constant_type(value):
     constant = Constant(value)
     result = constant.evaluate()
-    assert isinstance(result, type(value))
+    assert isinstance(result, type(value)), f"{type(value)}, {type(result)}"
 
 
 def test_variable_evaluate_positional(value):

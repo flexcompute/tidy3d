@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import reduce
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
-import xarray as xr
+from numpy.typing import NDArray
 
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
 from tidy3d.components.data.utils import _zeros_like
-from tidy3d.components.types import ArrayLike, Bound, xyz
+from tidy3d.components.types import ArrayLike, Bound
 from tidy3d.config import config
 from tidy3d.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
 from tidy3d.log import log
@@ -19,20 +20,31 @@ from tidy3d.log import log
 from .types import PathType
 from .utils import get_static
 
-FieldData = dict[str, ScalarFieldDataArray]
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from typing import Callable, Union
+
+    import xarray as xr
+
+    from tidy3d.compat import Self
+    from tidy3d.components.types import xyz
+
+FieldDataDict = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
 EpsType = FreqDataArray
+ArrayFloat = NDArray[np.floating]
+ArrayComplex = NDArray[np.complexfloating]
 
 
 class LazyInterpolator:
     """Lazy wrapper for interpolators that creates them on first access."""
 
-    def __init__(self, creator_func: Callable) -> None:
+    def __init__(self, creator_func: Callable[[], Callable[[ArrayFloat], ArrayComplex]]) -> None:
         """Initialize with a function that creates the interpolator when called."""
         self.creator_func = creator_func
-        self._interpolator = None
+        self._interpolator: Optional[Callable[[ArrayFloat], ArrayComplex]] = None
 
-    def __call__(self, *args: Any, **kwargs: Any):
+    def __call__(self, *args: Any, **kwargs: Any) -> ArrayComplex:
         """Create interpolator on first call and delegate to it."""
         if self._interpolator is None:
             self._interpolator = self.creator_func()
@@ -51,35 +63,35 @@ class DerivativeInfo:
     paths: list[PathType]
     """List of paths to the traced fields that need derivatives calculated."""
 
-    E_der_map: FieldData
+    E_der_map: FieldDataDict
     """Electric field gradient map.
     Dataset where the field components ("Ex", "Ey", "Ez") store the multiplication
     of the forward and adjoint electric fields. The tangential components of this
     dataset are used when computing adjoint gradients for shifting boundaries.
     All components are used when computing volume-based gradients."""
 
-    D_der_map: FieldData
+    D_der_map: FieldDataDict
     """Displacement field gradient map.
     Dataset where the field components ("Ex", "Ey", "Ez") store the multiplication
     of the forward and adjoint displacement fields. The normal component of this
     dataset is used when computing adjoint gradients for shifting boundaries."""
 
-    E_fwd: FieldData
+    E_fwd: FieldDataDict
     """Forward electric fields.
     Dataset where the field components ("Ex", "Ey", "Ez") represent the forward
     electric fields used for computing gradients for a given structure."""
 
-    E_adj: FieldData
+    E_adj: FieldDataDict
     """Adjoint electric fields.
     Dataset where the field components ("Ex", "Ey", "Ez") represent the adjoint
     electric fields used for computing gradients for a given structure."""
 
-    D_fwd: FieldData
+    D_fwd: FieldDataDict
     """Forward displacement fields.
     Dataset where the field components ("Ex", "Ey", "Ez") represent the forward
     displacement fields used for computing gradients for a given structure."""
 
-    D_adj: FieldData
+    D_adj: FieldDataDict
     """Adjoint displacement fields.
     Dataset where the field components ("Ex", "Ey", "Ez") represent the adjoint
     displacement fields used for computing gradients for a given structure."""
@@ -89,15 +101,18 @@ class DerivativeInfo:
     Dataset of relative permittivity values along all three dimensions.
     Used for automatically computing permittivity inside or outside of a simple geometry."""
 
-    eps_in: EpsType
+    eps_in: EpsType | None
     """Permittivity inside the Structure.
-    Typically computed from Structure.medium.eps_model.
-    Used when it cannot be computed from eps_data or when eps_approx=True."""
+    Computed only when structure.medium.is_custom is False. Contains the simulation
+    permittivity inside the structure when the simulation background medium is set to
+    the structure medium and all structures after the current structure are kept. Should
+    be used as the inside permittivity for shape derivative computations."""
 
     eps_out: EpsType
     """Permittivity outside the Structure.
-    Typically computed from Simulation.medium.eps_model.
-    Used when it cannot be computed from eps_data or when eps_approx=True."""
+    Contains the simulation permittivity outside the structure when the current structure
+    is removed from the structure list. Should be used as the outside permittivity for
+    shape derivative computations."""
 
     bounds: Bound
     """Geometry bounds.
@@ -119,19 +134,19 @@ class DerivativeInfo:
 
     # Optional fields with defaults
 
-    H_der_map: Optional[FieldData] = None
+    H_der_map: Optional[FieldDataDict] = None
     """Magnetic field gradient map.
     Dataset where the field components ("Hx", "Hy", "Hz") store the multiplication
     of the forward and adjoint magnetic fields. The tangential component of this
     dataset is used when computing adjoint gradients for shifting boundaries of
     structures composed of PEC mediums."""
 
-    H_fwd: Optional[FieldData] = None
+    H_fwd: Optional[FieldDataDict] = None
     """Forward magnetic fields.
     Dataset where the field components ("Hx", "Hy", "Hz") represent the forward
     magnetic fields used for computing gradients for a given structure."""
 
-    H_adj: Optional[FieldData] = None
+    H_adj: Optional[FieldDataDict] = None
     """Adjoint magnetic fields.
     Dataset where the field components ("Hx", "Hy", "Hz") represent the adjoint
     magnetic fields used for computing gradients for a given structure."""
@@ -152,17 +167,23 @@ class DerivativeInfo:
     sharing the same field data. This significantly improves performance for
     GeometryGroup processing."""
 
+    cached_min_spacing_from_permittivity: Optional[float] = None
+    """Cached `min_spacing_from_permittivity` to be used for objects like GeometryGroup
+    to avoid recomputing this value multiple times in `adaptive_vjp_spacing`."""
+
     # private cache for interpolators
     _interpolators_cache: dict = field(default_factory=dict, init=False, repr=False)
 
-    def updated_copy(self, **kwargs: Any):
+    def updated_copy(self, **kwargs: Any) -> Self:
         """Create a copy with updated fields."""
         kwargs.pop("deep", None)
         kwargs.pop("validate", None)
         return replace(self, **kwargs)
 
     @staticmethod
-    def _nan_to_num_if_needed(coords: np.ndarray) -> np.ndarray:
+    def _nan_to_num_if_needed(
+        coords: Union[ArrayFloat, ArrayComplex],
+    ) -> Union[ArrayFloat, ArrayComplex]:
         """Convert NaN and infinite values to finite numbers, optimized for finite inputs."""
         # skip check for small arrays
         if coords.size < 1000:
@@ -174,8 +195,9 @@ class DerivativeInfo:
 
     @staticmethod
     def _evaluate_with_interpolators(
-        interpolators: dict, coords: np.ndarray
-    ) -> dict[str, np.ndarray]:
+        interpolators: dict[str, Callable[[ArrayFloat], ArrayComplex]],
+        coords: ArrayFloat,
+    ) -> dict[str, ArrayComplex]:
         """Evaluate field components at coordinates using cached interpolators.
 
         Parameters
@@ -199,17 +221,18 @@ class DerivativeInfo:
             coords = coords.astype(float_dtype, copy=False)
         return {name: interp(coords) for name, interp in interpolators.items()}
 
-    def create_interpolators(self, dtype: Optional[np.dtype] = None) -> dict:
+    def create_interpolators(self, dtype: Optional[np.dtype[Any]] = None) -> dict[str, Any]:
         """Create interpolators for field components and permittivity data.
 
         Creates and caches ``RegularGridInterpolator`` objects for all field components
-        (E_fwd, E_adj, D_fwd, D_adj) and permittivity data (eps_inf, eps_no).
+        (E_fwd, E_adj, D_fwd, D_adj) and permittivity data (eps_in, eps_out, eps_data).
+        Contains (H_fwd, H_adj) field components when relevant for certain material types.
         This caching strategy significantly improves performance by avoiding
         repeated interpolator construction in gradient evaluation loops.
 
         Parameters
         ----------
-        dtype : np.dtype, optional
+        dtype : np.dtype[Any], optional = None
             Data type for interpolation coordinates and values. Defaults to the
             current ``config.adjoint.gradient_dtype_float``.
 
@@ -218,7 +241,7 @@ class DerivativeInfo:
         dict
             Nested dictionary structure:
             - Field data: {"E_fwd": {"Ex": interpolator, ...}, ...}
-            - Permittivity: {"eps_inf": interpolator, "eps_no": interpolator}
+            - Permittivity: {"eps_in": interpolator, "eps_out": interpolator, "eps_data": interpolator}
         """
         from scipy.interpolate import RegularGridInterpolator
 
@@ -235,9 +258,14 @@ class DerivativeInfo:
         coord_cache = {}
 
         def _make_lazy_interpolator_group(
-            field_data_dict, group_key, is_field_group=True, override_method: Optional[str] = None
+            field_data_dict: Optional[FieldDataDict],
+            group_key: Optional[str],
+            is_field_group: bool = True,
+            override_method: Optional[str] = None,
         ) -> None:
             """Helper to create a group of lazy interpolators."""
+            if not field_data_dict:
+                return
             if is_field_group:
                 interpolators[group_key] = {}
 
@@ -249,7 +277,10 @@ class DerivativeInfo:
                     coord_cache[arr_id] = points
                 points = coord_cache[arr_id]
 
-                def creator_func(arr=arr, points=points):
+                def creator_func(
+                    arr: ScalarFieldDataArray = arr,
+                    points: tuple[np.ndarray, ...] = points,
+                ) -> Callable[[ArrayFloat], ArrayComplex]:
                     data = arr.data.astype(
                         complex_dtype if np.iscomplexobj(arr.data) else dtype, copy=False
                     )
@@ -285,7 +316,7 @@ class DerivativeInfo:
                         points_with_freq, data, method=method, bounds_error=False, fill_value=None
                     )
 
-                    def interpolator(coords):
+                    def interpolator(coords: ArrayFloat) -> ArrayComplex:
                         # coords: (N, 3) spatial points
                         n_points = coords.shape[0]
                         n_freqs = len(freq_coords)
@@ -313,7 +344,7 @@ class DerivativeInfo:
             ("D_adj", self.D_adj),
         ]
         if self.is_medium_pec or self.background_medium_is_pec:
-            interpolator_groups += [("H_fwd", self.H_fwd), ("H_adj", self.H_adj)]
+            interpolator_groups += [("H_fwd", self.H_fwd), ("H_adj", self.H_adj)]  # type: ignore[list-item]
         for group_key, data_dict in interpolator_groups:
             _make_lazy_interpolator_group(
                 data_dict, f"{group_key}_linear", is_field_group=True, override_method="linear"
@@ -456,14 +487,14 @@ class DerivativeInfo:
 
     def _evaluate_dielectric_gradient_at_points(
         self,
-        spatial_coords: np.ndarray,
-        normals: np.ndarray,
-        perps1: np.ndarray,
-        perps2: np.ndarray,
-        interpolators: dict,
+        spatial_coords: ArrayFloat,
+        normals: ArrayFloat,
+        perps1: ArrayFloat,
+        perps2: ArrayFloat,
+        interpolators: dict[str, dict[str, Callable[[ArrayFloat], ArrayComplex]]],
         eps_in_data: ScalarFieldDataArray,
         eps_out_data: ScalarFieldDataArray,
-    ) -> np.ndarray:
+    ) -> ArrayComplex:
         eps_out_coords = self._snap_spatial_coords_boundary(
             spatial_coords,
             normals,
@@ -517,8 +548,8 @@ class DerivativeInfo:
 
     def _snap_spatial_coords_boundary(
         self,
-        spatial_coords: np.ndarray,
-        normals: np.ndarray,
+        spatial_coords: ArrayFloat,
+        normals: ArrayFloat,
         is_outside: bool,
         data_array: ScalarFieldDataArray,
     ) -> np.ndarray:
@@ -657,8 +688,8 @@ class DerivativeInfo:
         eps_data: ScalarFieldDataArray,
         interpolator: LazyInterpolator,
         is_outside: bool,
-    ):
-        def _detect_pec(eps_mask):
+    ) -> np.ndarray:
+        def _detect_pec(eps_mask: np.ndarray) -> np.ndarray:
             return 1.0 * (eps_mask < config.adjoint.pec_detection_threshold)
 
         adjusted_coords = self._snap_spatial_coords_boundary(
@@ -688,13 +719,15 @@ class DerivativeInfo:
     ) -> np.ndarray:
         eps_dielectric_key, eps_dielectric_data = eps_dielectric
 
-        def _snap_coordinate_outside(field_components: FieldData):
+        def _snap_coordinate_outside(
+            field_components: FieldDataDict,
+        ) -> dict[str, dict[str, ArrayFloat]]:
             """Helper function to perform coordinate adjustment and compute edge distance for each
             component in `field_components`.
 
             Parameters
             ----------
-            field_components: FieldData
+            field_components: FieldDataDict
                 The field components (i.e - Ex, Ey, Ez, Hx, Hy, Hz) that we would like to sample just
                 outside the PEC surface using nearest interpolation.
 
@@ -730,7 +763,9 @@ class DerivativeInfo:
 
             return adjustment
 
-        def _interpolate_field_components(interp_coords, field_name):
+        def _interpolate_field_components(
+            interp_coords: dict[str, dict[str, ArrayFloat]], field_name: str
+        ) -> dict[str, ArrayComplex]:
             return {
                 name: interp(interp_coords[name]["coords"])
                 for name, interp in interpolators[field_name].items()
@@ -777,7 +812,9 @@ class DerivativeInfo:
         # on of the H field integration components and apply singularity correction
         pec_line_integration = is_flat_perp_dim1 or is_flat_perp_dim2
 
-        def _compute_singularity_correction(adjustment_: dict[str, dict[str, np.ndarray]]):
+        def _compute_singularity_correction(
+            adjustment_: dict[str, dict[str, ArrayFloat]],
+        ) -> ArrayFloat:
             """
             Given the `adjustment_` which contains the distance from the PEC edge each field
             component is nearest interpolated at, computes the singularity correction when
@@ -915,6 +952,54 @@ class DerivativeInfo:
                 projected[key] = field_map[key]
         return projected
 
+    @property
+    def min_spacing_from_permittivity(self) -> float:
+        if self.cached_min_spacing_from_permittivity is not None:
+            return self.cached_min_spacing_from_permittivity
+
+        def spacing_by_permittivity(eps_array: ScalarFieldDataArray) -> float:
+            eps_real = np.asarray(eps_array.values, dtype=np.complex128).real
+
+            dx_candidates = []
+            max_frequency = np.max(self.frequencies)
+
+            # wavelength-based sampling for dielectrics
+            if np.any(eps_real > 0):
+                eps_max = eps_real[eps_real > 0].max()
+                lambda_min = self.wavelength_min / np.sqrt(eps_max)
+                dx_candidates.append(lambda_min)
+
+            # skin depth sampling for metals
+            if np.any(eps_real <= 0):
+                omega = 2 * np.pi * max_frequency
+                eps_neg = eps_real[eps_real <= 0]
+                delta_min = C_0 / (omega * np.sqrt(np.abs(eps_neg).max()))
+                dx_candidates.append(delta_min)
+
+            computed_spacing = min(dx_candidates)
+
+            return computed_spacing
+
+        eps_spacings = [
+            spacing_by_permittivity(eps_array) for _, eps_array in self.eps_data.items()
+        ]
+        min_spacing = np.min(eps_spacings)
+
+        return min_spacing
+
+    @contextmanager
+    def cache_min_spacing_from_permittivity(self) -> Iterator[None]:
+        """
+        Cache min_spacing_from_permittivity for the duration of the block. Cache
+        is always cleared on exit.
+        """
+
+        self.cached_min_spacing_from_permittivity = self.min_spacing_from_permittivity
+        try:
+            yield
+        finally:
+            self.cached_min_spacing_from_permittivity = None
+
     def adaptive_vjp_spacing(
         self,
         wl_fraction: Optional[float] = None,
@@ -948,33 +1033,7 @@ class DerivativeInfo:
             if min_allowed_spacing_fraction is None:
                 min_allowed_spacing_fraction = config.adjoint.minimum_spacing_fraction
 
-        def spacing_by_permittivity(eps_array):
-            eps_real = np.asarray(eps_array.values, dtype=np.complex128).real
-
-            dx_candidates = []
-            max_frequency = np.max(self.frequencies)
-
-            # wavelength-based sampling for dielectrics
-            if np.any(eps_real > 0):
-                eps_max = eps_real[eps_real > 0].max()
-                lambda_min = self.wavelength_min / np.sqrt(eps_max)
-                dx_candidates.append(wl_fraction * lambda_min)
-
-            # skin depth sampling for metals
-            if np.any(eps_real <= 0):
-                omega = 2 * np.pi * max_frequency
-                eps_neg = eps_real[eps_real <= 0]
-                delta_min = C_0 / (omega * np.sqrt(np.abs(eps_neg).max()))
-                dx_candidates.append(wl_fraction * delta_min)
-
-            computed_spacing = min(dx_candidates)
-
-            return computed_spacing
-
-        eps_spacings = [
-            spacing_by_permittivity(eps_array) for _, eps_array in self.eps_data.items()
-        ]
-        computed_spacing = np.min(eps_spacings)
+        computed_spacing = wl_fraction * self.min_spacing_from_permittivity
 
         min_allowed_spacing = self.wavelength_min * min_allowed_spacing_fraction
 

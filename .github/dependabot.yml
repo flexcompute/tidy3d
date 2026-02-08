@@ -1,6 +1,7 @@
 version: 2
 
 updates:
+
   - package-ecosystem: "pip"
     directory: "/"   # folder containing pyproject.toml + poetry.lock
     schedule:
@@ -16,5 +17,22 @@ updates:
       - "python"
     groups:
       python:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      # Minimum age (in days) required for any new dependency release before Dependabot will open an update PR.
+      # Security updates are not delayed by cooldown.
+      default-days: 7
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      github-actions:
         patterns:
           - "*"

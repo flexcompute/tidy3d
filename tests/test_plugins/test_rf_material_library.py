@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 from tidy3d.components.medium import LossyMetalMedium, PoleResidue, SurfaceImpedanceFitterParam
-from tidy3d.exceptions import ValidationError
 from tidy3d.material_library.material_library import MaterialItem, ReferenceData, VariantItem
 from tidy3d.plugins.microwave.rf_material_library import (
+    AbstractVariantItemFreqRange,
+    MaterialItemFreqRange,
     VariantItemFreqRangeDielectric,
     VariantItemFreqRangeMetal,
     rf_material_library,
@@ -26,19 +27,19 @@ def test_VariantItemFreqRangeDielectric():
         frequency_range=(1e9, 10e9),
     )
     variant = VariantItemFreqRangeDielectric(
-        pole_residue=pole_res,
-        loss_tangent=0.001,
-        eps_real=2.5,
+        prefitted_medium=pole_res,
+        loss_tangent=[0.001, 0.001],
+        eps_real=[2.5, 2.5],
         measurement_frequencies=[1e9, 10e9],
         reference=[ReferenceData(doi="etc.com", journal="paper", url="www")],
     )
-    assert variant.pole_residue == pole_res
+    assert variant.prefitted_medium == pole_res
 
 
 def test_VariantItemFreqRangeDielectric_validation():
     """Test validation for VariantItemFreqRangeDielectric."""
-    # Should fail without pole_residue
-    with pytest.raises((ValidationError, pydantic.ValidationError)):
+    # Should fail without prefitted_medium
+    with pytest.raises(ValidationError):
         _ = VariantItemFreqRangeDielectric(
             reference=[ReferenceData(doi="etc.com", journal="paper", url="www")],
         )
@@ -52,23 +53,23 @@ def test_VariantItemFreqRangeDielectric_medium():
         frequency_range=(1e9, 10e9),
     )
     variant = VariantItemFreqRangeDielectric(
-        pole_residue=pole_res,
-        loss_tangent=0.001,
-        eps_real=2.5,
+        prefitted_medium=pole_res,
+        loss_tangent=[0.001, 0.001],
+        eps_real=[2.5, 2.5],
         measurement_frequencies=[1e9, 10e9],
     )
 
     # Test without frequency_range - should return original
     medium1 = variant.medium()
-    assert medium1 is variant.pole_residue
+    assert medium1 is variant.prefitted_medium
     assert medium1.frequency_range == (1e9, 10e9)
 
     # Test with frequency_range inside stored range - should return copy with updated range
     new_freq_range = (3e9, 7e9)  # Inside (1e9, 10e9)
     medium2 = variant.medium(new_freq_range)
-    assert medium2 is variant.pole_residue  # Should be the same pole
-    assert medium2.eps_inf == variant.pole_residue.eps_inf
-    assert medium2.poles == variant.pole_residue.poles  # Poles unchanged
+    assert medium2 is variant.prefitted_medium  # Should be the same pole
+    assert medium2.eps_inf == variant.prefitted_medium.eps_inf
+    assert medium2.poles == variant.prefitted_medium.poles  # Poles unchanged
 
     # Test that epsilon calculation is the same (poles unchanged)
     test_freq = 5e9
@@ -85,7 +86,7 @@ def test_VariantItemFreqRangeDielectric_medium_frequency_range_cases():
         frequency_range=(1e9, 10e9),
     )
     variant = VariantItemFreqRangeDielectric(
-        pole_residue=pole_res,
+        prefitted_medium=pole_res,
         loss_tangent=[0.001, 0.0015],
         eps_real=[2.5, 2.6],
         measurement_frequencies=[1e9, 10e9],
@@ -97,10 +98,10 @@ def test_VariantItemFreqRangeDielectric_medium_frequency_range_cases():
         inside_range = (3e9, 7e9)  # Completely inside (1e9, 10e9)
         medium_inside = variant.medium(inside_range)
 
-        assert medium_inside is variant.pole_residue
-        assert np.isclose(medium_inside.eps_inf, variant.pole_residue.eps_inf)
+        assert medium_inside is variant.prefitted_medium
+        assert np.isclose(medium_inside.eps_inf, variant.prefitted_medium.eps_inf)
         assert np.allclose(
-            medium_inside.poles, variant.pole_residue.poles
+            medium_inside.poles, variant.prefitted_medium.poles
         )  # Original poles preserved
 
     # Case 2: Requested range is OUTSIDE stored range
@@ -109,7 +110,7 @@ def test_VariantItemFreqRangeDielectric_medium_frequency_range_cases():
         outside_range = (20e9, 30e9)  # Completely outside (1e9, 10e9)
         medium_outside = variant.medium(outside_range)
 
-        assert medium_outside is not variant.pole_residue  # Should be a new model
+        assert medium_outside is not variant.prefitted_medium  # Should be a new model
         assert np.allclose(medium_outside.frequency_range, outside_range)
         # New model should be a valid PoleResidue (may have different poles fitted for new range)
         assert isinstance(medium_outside, PoleResidue)
@@ -121,14 +122,14 @@ def test_VariantItemFreqRangeDielectric_medium_frequency_range_cases():
         overlap_range_high = (5e9, 15e9)  # Overlaps but extends beyond upper bound
         medium_overlap_high = variant.medium(overlap_range_high)
 
-        assert medium_overlap_high is not variant.pole_residue  # Should be a new model
+        assert medium_overlap_high is not variant.prefitted_medium  # Should be a new model
         assert medium_overlap_high.frequency_range == overlap_range_high
 
     with AssertLogLevel("WARNING", contains_str="outside"):
         overlap_range_low = (0.5e9, 5e9)  # Overlaps but extends beyond lower bound
         medium_overlap_low = variant.medium(overlap_range_low)
 
-        assert medium_overlap_low is not variant.pole_residue  # Should be a new model
+        assert medium_overlap_low is not variant.prefitted_medium  # Should be a new model
         assert np.allclose(medium_overlap_low.frequency_range, overlap_range_low)
 
     # Case 4: Requested range exactly matches stored range
@@ -137,18 +138,18 @@ def test_VariantItemFreqRangeDielectric_medium_frequency_range_cases():
         exact_range = (1e9, 10e9)  # Exactly matches stored range
         medium_exact = variant.medium(exact_range)
 
-        assert medium_exact is variant.pole_residue  # Should be the same pole
+        assert medium_exact is variant.prefitted_medium  # Should be the same pole
 
 
 def test_VariantItemFreqRangeDielectric_medium_none_frequency_range():
-    """Test VariantItemFreqRangeDielectric.medium() when pole_residue.frequency_range is None."""
+    """Test VariantItemFreqRangeDielectric.medium() when prefitted_medium.frequency_range is None."""
     pole_res = PoleResidue(
         eps_inf=2.5,
         poles=[((-1e10 + 1e11j), (1e10 + 0j))],
         frequency_range=None,  # No frequency range specified
     )
     variant = VariantItemFreqRangeDielectric(
-        pole_residue=pole_res,
+        prefitted_medium=pole_res,
         loss_tangent=[0.001, 0.0015],
         eps_real=[2.5, 2.6],
         measurement_frequencies=[1e9, 10e9],
@@ -159,7 +160,7 @@ def test_VariantItemFreqRangeDielectric_medium_none_frequency_range():
         requested_range = (5e9, 15e9)
         medium = variant.medium(requested_range)
 
-    assert medium is not variant.pole_residue  # Should be a new model
+    assert medium is not variant.prefitted_medium  # Should be a new model
     assert medium.frequency_range == requested_range
     assert isinstance(medium, PoleResidue)
 
@@ -178,7 +179,7 @@ def test_VariantItemFreqRangeDielectric_medium_averaged_values():
     measurement_freqs = [1e9, 5e9, 10e9]
 
     variant = VariantItemFreqRangeDielectric(
-        pole_residue=pole_res,
+        prefitted_medium=pole_res,
         loss_tangent=loss_tangent_values,
         eps_real=eps_real_values,
         measurement_frequencies=measurement_freqs,
@@ -189,9 +190,150 @@ def test_VariantItemFreqRangeDielectric_medium_averaged_values():
     expected_eps_real_avg = np.mean(eps_real_values)
 
     # Verify warning mentions averaged values and contains the averaged values
-    with AssertLogLevel("WARNING", contains_str="averaged"):
+    with AssertLogLevel("WARNING", contains_str="averaged") as ctx:
         outside_range = (20e9, 30e9)
         medium_outside = variant.medium(outside_range)
+
+    # Check that warning contains the averaged values (with some tolerance for formatting)
+    # Records are tuples of (level, message)
+    warning_msg = " ".join([record[1] for record in ctx.records])
+    assert (
+        f"{expected_loss_tan_avg:.6f}" in warning_msg
+        or f"{expected_loss_tan_avg:.5f}" in warning_msg
+    )
+    assert (
+        f"{expected_eps_real_avg:.6f}" in warning_msg
+        or f"{expected_eps_real_avg:.5f}" in warning_msg
+    )
+
+
+def test_VariantItemFreqRangeDielectric_medium_single_float_values():
+    """Test that single float values (not lists) work correctly for averaging."""
+    pole_res = PoleResidue(
+        eps_inf=2.5,
+        poles=[((-1e10 + 1e11j), (1e10 + 0j))],
+        frequency_range=(1e9, 10e9),
+    )
+
+    # Use single float values (not lists) - all must be same length
+    variant = VariantItemFreqRangeDielectric(
+        prefitted_medium=pole_res,
+        loss_tangent=0.0015,  # Single float, length 1
+        eps_real=2.6,  # Single float, length 1
+        measurement_frequencies=1e9,  # Single float, length 1
+    )
+
+    # Request range outside stored range - should use single float values directly
+    with AssertLogLevel("WARNING", contains_str="outside"):
+        outside_range = (20e9, 30e9)
+        medium_outside = variant.medium(outside_range)
+
+    assert isinstance(medium_outside, PoleResidue)
+    assert medium_outside.frequency_range == outside_range
+
+
+def test_VariantItemFreqRangeDielectric_paired_field_lengths():
+    """Test validation for matching lengths of paired fields (all must have same length)."""
+    pole_res = PoleResidue(
+        eps_inf=2.5,
+        poles=[((-1e10 + 1e11j), (1e10 + 0j))],
+        frequency_range=(1e9, 10e9),
+    )
+    reference = [ReferenceData(doi="test.com", journal="test", url="test")]
+
+    # Test case 1: All single values (all length 1) - should pass
+    variant1 = VariantItemFreqRangeDielectric(
+        prefitted_medium=pole_res,
+        loss_tangent=0.001,
+        eps_real=2.5,
+        measurement_frequencies=1e9,
+        reference=reference,
+    )
+    assert variant1.loss_tangent == 0.001
+    assert variant1.eps_real == 2.5
+
+    # Test case 2: All lists with matching lengths - should pass
+    variant2 = VariantItemFreqRangeDielectric(
+        prefitted_medium=pole_res,
+        loss_tangent=[0.001, 0.002],
+        eps_real=[2.5, 2.6],
+        measurement_frequencies=[1e9, 2e9],
+        reference=reference,
+    )
+    assert len(variant2.loss_tangent) == 2
+    assert len(variant2.eps_real) == 2
+
+    # Test case 3: All lists of length 1 (equivalent to single values) - should pass
+    variant3 = VariantItemFreqRangeDielectric(
+        prefitted_medium=pole_res,
+        loss_tangent=[0.001],
+        eps_real=[2.5],
+        measurement_frequencies=[1e9],
+        reference=reference,
+    )
+    assert isinstance(variant3.loss_tangent, list)
+    assert len(variant3.loss_tangent) == 1
+
+    # Test case 4: Mix of single values and length-1 lists - should pass (all length 1)
+    variant4 = VariantItemFreqRangeDielectric(
+        prefitted_medium=pole_res,
+        loss_tangent=[0.001],  # length 1
+        eps_real=2.5,  # length 1 (single value)
+        measurement_frequencies=1e9,  # length 1 (single value)
+        reference=reference,
+    )
+    assert len(variant4.loss_tangent) == 1
+
+    # Test case 5: Mix of single value and list of length > 1 - should raise ValidationError
+    with pytest.raises(ValidationError, match="Mismatched lengths"):
+        _ = VariantItemFreqRangeDielectric(
+            prefitted_medium=pole_res,
+            loss_tangent=[0.001, 0.002],  # length 2
+            eps_real=2.5,  # length 1 (single value)
+            measurement_frequencies=1e9,  # length 1 (single value)
+            reference=reference,
+        )
+
+    # Test case 6: All lists with mismatched lengths - should raise ValidationError
+    with pytest.raises(ValidationError, match="Mismatched lengths"):
+        _ = VariantItemFreqRangeDielectric(
+            prefitted_medium=pole_res,
+            loss_tangent=[0.001, 0.002],  # length 2
+            eps_real=[2.5],  # length 1
+            measurement_frequencies=[1e9, 2e9],  # length 2
+            reference=reference,
+        )
+
+    # Test case 7: Two lists with mismatched lengths - should raise ValidationError
+    with pytest.raises(ValidationError, match="Mismatched lengths"):
+        _ = VariantItemFreqRangeDielectric(
+            prefitted_medium=pole_res,
+            loss_tangent=[0.001, 0.002, 0.003],  # length 3
+            eps_real=[2.5, 2.6],  # length 2
+            measurement_frequencies=1e9,  # length 1 (single value)
+            reference=reference,
+        )
+
+    # Test case 8: Tuple and numpy array with matching lengths - should pass
+    variant8 = VariantItemFreqRangeDielectric(
+        prefitted_medium=pole_res,
+        loss_tangent=(0.001, 0.002),  # tuple, length 2
+        eps_real=np.array([2.5, 2.6]),  # numpy array, length 2
+        measurement_frequencies=[1e9, 2e9],  # list, length 2
+        reference=reference,
+    )
+    assert len(variant8.loss_tangent) == 2
+    assert len(variant8.eps_real) == 2
+
+    # Test case 9: Tuple and list with mismatched lengths - should raise ValidationError
+    with pytest.raises(ValidationError, match="Mismatched lengths"):
+        _ = VariantItemFreqRangeDielectric(
+            prefitted_medium=pole_res,
+            loss_tangent=(0.001, 0.002),  # length 2
+            eps_real=np.array([2.5]),  # length 1
+            measurement_frequencies=[1e9, 2e9],  # length 2
+            reference=reference,
+        )
 
 
 def test_VariantItemFreqRangeDielectric_summarize_mediums():
@@ -202,9 +344,9 @@ def test_VariantItemFreqRangeDielectric_summarize_mediums():
         frequency_range=(1e9, 10e9),
     )
     variant = VariantItemFreqRangeDielectric(
-        pole_residue=pole_res,
-        loss_tangent=0.001,
-        eps_real=2.5,
+        prefitted_medium=pole_res,
+        loss_tangent=[0.001, 0.001],
+        eps_real=[2.5, 2.5],
         measurement_frequencies=[1e9, 10e9],
     )
     mediums = variant.summarize_mediums
@@ -225,17 +367,17 @@ def test_VariantItemFreqRangeMetal():
 def test_VariantItemFreqRangeMetal_validation():
     """Test validation for VariantItemFreqRangeMetal."""
     # Should fail without conductivity
-    with pytest.raises((ValidationError, pydantic.ValidationError)):
+    with pytest.raises(ValidationError):
         _ = VariantItemFreqRangeMetal(
             reference=[ReferenceData(doi="etc.com", journal="paper", url="www")],
         )
 
     # Should fail with negative conductivity
-    with pytest.raises((ValidationError, pydantic.ValidationError)):
+    with pytest.raises(ValidationError):
         _ = VariantItemFreqRangeMetal(conductivity=-1.0)
 
     # Should fail with zero conductivity
-    with pytest.raises((ValidationError, pydantic.ValidationError)):
+    with pytest.raises(ValidationError):
         _ = VariantItemFreqRangeMetal(conductivity=0.0)
 
 
@@ -248,6 +390,19 @@ def test_VariantItemFreqRangeMetal_medium():
     assert isinstance(medium, LossyMetalMedium)
     assert medium.conductivity == 60.0
     assert medium.frequency_range == frequency_range
+
+
+def test_VariantItemFreqRangeMetal_medium_none_frequency_range():
+    """Test that VariantItemFreqRangeMetal.medium() raises ValueError when frequency_range is None."""
+    variant = VariantItemFreqRangeMetal(conductivity=60.0)
+
+    # Should raise ValueError when called without frequency_range
+    with pytest.raises(ValueError, match="frequency_range is required"):
+        _ = variant.medium(None)
+
+    # Should also raise ValueError when called without arguments (defaults to None)
+    with pytest.raises(ValueError, match="frequency_range is required"):
+        _ = variant.medium()
 
 
 def test_VariantItemFreqRangeMetal_with_optional_params():
@@ -303,7 +458,7 @@ def test_rf_material_library_VariantItemFreqRangeDielectric():
     # Test medium() without frequency_range
     medium1 = rt_duroid_variant.medium()
     assert isinstance(medium1, PoleResidue)
-    assert medium1.frequency_range == rt_duroid_variant.pole_residue.frequency_range
+    assert medium1.frequency_range == rt_duroid_variant.prefitted_medium.frequency_range
 
     # Test medium() with frequency_range
     new_freq_range = (5e9, 20e9)
@@ -329,6 +484,69 @@ def test_rf_material_library_VariantItemFreqRangeMetal():
     assert np.allclose(medium.frequency_range, frequency_range)
 
 
+def test_MaterialItemFreqRange_medium_property():
+    """Test MaterialItemFreqRange.medium property."""
+    # Test with dielectric material
+    rt_duroid = rf_material_library["RT_duroid5880"]
+    assert isinstance(rt_duroid, MaterialItemFreqRange)
+
+    # Should return PoleResidue for dielectric
+    default_medium = rt_duroid.medium
+    assert isinstance(default_medium, PoleResidue)
+    assert default_medium == rt_duroid.variants[rt_duroid.default].medium()
+
+    # Test with metal material - should raise ValueError
+    copper_material = rf_material_library["Copper_Matula"]
+    assert isinstance(copper_material, MaterialItemFreqRange)
+
+    with pytest.raises(ValueError, match="frequency_range is required"):
+        _ = copper_material.medium
+
+
+def test_MaterialItemFreqRange_medium_unsupported_variant():
+    """Test MaterialItemFreqRange.medium property raises error for unsupported variant types."""
+
+    # Create a custom variant class that inherits from AbstractVariantItemFreqRange
+    # but isn't one of the two supported types (VariantItemFreqRangeDielectric or VariantItemFreqRangeMetal)
+    class UnsupportedVariant(AbstractVariantItemFreqRange):
+        """An unsupported variant type for testing."""
+
+        def medium(self, frequency_range=None):
+            """Dummy implementation."""
+            return PoleResidue(
+                eps_inf=1.0,
+                poles=[],
+                frequency_range=(1e9, 10e9),
+            )
+
+        @property
+        def summarize_mediums(self):
+            """Dummy implementation."""
+            return {}
+
+    # Create a MaterialItemFreqRange with the unsupported variant
+    unsupported_variant = UnsupportedVariant(
+        reference=[ReferenceData(doi="test.com", journal="test", url="test")]
+    )
+    material = MaterialItemFreqRange(
+        name="TestMaterial",
+        variants={"standard": unsupported_variant},
+        default="standard",
+    )
+
+    # Accessing .medium should raise ValueError with appropriate message
+    with pytest.raises(ValueError) as exc_info:
+        _ = material.medium
+
+    # Verify the error message contains expected information
+    error_message = str(exc_info.value)
+    assert "UnsupportedVariant" in error_message
+    assert "TestMaterial" in error_message
+    assert "MaterialItemFreqRange.medium" in error_message
+    assert "VariantItemFreqRangeDielectric" in error_message
+    assert "VariantItemFreqRangeMetal" in error_message
+
+
 def test_rf_material_library_eps_model():
     """Test that all materials in RF library can evaluate eps_model correctly."""
     for material_name, material in rf_material_library.items():
@@ -351,7 +569,7 @@ def test_rf_material_library_eps_model():
 
             elif isinstance(variant, VariantItemFreqRangeDielectric):
                 # VariantItemFreqRangeDielectric - need to call medium()
-                original_range = variant.pole_residue.frequency_range
+                original_range = variant.prefitted_medium.frequency_range
                 fmin, fmax = original_range
                 freqs = np.linspace(fmin, fmax, 11)
 
@@ -398,7 +616,7 @@ def test_rf_material_library_material_item():
 def test_rf_material_library_frequency_range_consistency():
     """Test that frequency_range updates don't change epsilon calculations."""
     variant = rf_material_library["RT_duroid5880"].variants["standard"]
-    original_range = variant.pole_residue.frequency_range
+    original_range = variant.prefitted_medium.frequency_range
 
     # Get mediums with different frequency_ranges
     medium1 = variant.medium(original_range)

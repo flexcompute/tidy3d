@@ -87,7 +87,7 @@ rf_material_refs = {
     ),
     "Megtron6_R5775_R5670(KG)": ReferenceData(
         manufacturer="Panasonic Industry",
-        datasheet_title="Ultra-low transmission loss Highly heat resistant Multi-layer circuit board materials"
+        datasheet_title="Ultra-low transmission loss Highly heat resistant "
         "Multi-layer circuit board materials",
         url="https://api.pim.na.industrial.panasonic.com/file_stream/main/fileversion/261273",
     ),
@@ -96,12 +96,12 @@ rf_material_refs = {
         datasheet_title="High Speed, Low Loss Multi-layer Materials",
         url="https://api.pim.na.industrial.panasonic.com/file_stream/main/fileversion/244766",
     ),
-    "Neclo_N4000-6": ReferenceData(
+    "Nelco_N4000-6": ReferenceData(
         manufacturer="Park Electrochemical Corp.",
         datasheet_title="Park Electrochemical Nelco® N4000-6 FC Multifunctional Epoxy Laminate and Prepreg",
         url="https://www.lookpolymers.com/pdf/Park-Electrochemical-Nelco-N4000-6-FC-Multifunctional-Epoxy-Laminate-and-Prepreg.pdf",
     ),
-    "Neclo_N4000-13": ReferenceData(
+    "Nelco_N4000-13": ReferenceData(
         manufacturer="Park Electrochemical Corp.",
         datasheet_title="High-Speed Multifunctional Epoxy Laminate & Prepreg",
         url="https://www.cirexx.com/wp-content/uploads/n4000-13ep-1.pdf",
@@ -116,7 +116,7 @@ rf_material_refs = {
         url="https://archive.org/details/copperwiretables31unituoft/page/10/mode/2up",
     ),
     "Alum_293K": ReferenceData(
-        journal="P.D. Desai, H.M. James, and C.Y. Ho. Electrical Resistivity of Aluminum and Manganese,"
+        journal="P.D. Desai, H.M. James, and C.Y. Ho. Electrical Resistivity of Aluminum and Manganese, "
         "Journal of Physical and Chemical Reference Data, Vol. 13, No. 4 (1984)",
         url="https://srd.nist.gov/JPCRD/jpcrd260.pdf",
     ),
@@ -126,27 +126,21 @@ rf_material_refs = {
         url="https://www.copper.org/applications/industrial/DesignGuide/selection/conductbrass02.html",
     ),
     "Zinc": ReferenceData(
-        journal="P.D. Desai, Electrical Resistivity of Selected Elements.,"
+        journal="P.D. Desai, Electrical Resistivity of Selected Elements., "
         "Journal of Physical and Chemical Reference Data, Vol. 13, No. 4 (1984).",
         url="https://pubs.aip.org/aip/jpr/article-abstract/13/4/1069/241360/Electrical-Resistivity-of-Selected-Elements",
-    ),
-    "Cobalt": ReferenceData(
-        journal="Benon H. J. Bielski, et al.,"
-        "Reactivity of HO₂/O Radicals in Aqueous Solution,"
-        "Journal of Physical and Chemical Reference Data, Vol. 14, No. 4, (1985)",
-        url="https://srd.nist.gov/JPCRD/jpcrd285.pdf",
     ),
     "CRC_Handbook": ReferenceData(
         journal="Rumble, J. R. (Ed.). (2024), CRC Handbook of Chemistry and Physics (105th ed.)., CRC Press",
         url="https://www.engineeringtoolbox.com/conductors-d_1381.html",
     ),
     "Raymond_Serway": ReferenceData(
-        journal="Raymond A. Serway (1998)., Principles of Physics,"
+        journal="Raymond A. Serway (1998)., Principles of Physics, "
         "Fort Worth, Texas; London: Saunders College Pub. p. 602",
         url="https://archive.org/details/principlesofphys00serw/page/602/mode/2up",
     ),
     "AISI_1008": ReferenceData(
-        journal="Oberg, E., Jones, F. D., Horton, H. L., & Ryffel, H. H. (2020).,"
+        journal="Oberg, E., Jones, F. D., Horton, H. L., & Ryffel, H. H. (2020)., "
         "Machinery's Handbook (31st ed.). Industrial Press."
     ),
 }

@@ -7,22 +7,19 @@ from abc import ABC, abstractmethod
 from typing import Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
-from tidy3d.components.data.data_array import (
-    SpatialDataArray,
-)
+from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
-from tidy3d.components.tcad.types import (
-    HeatChargeMonitorType,
-)
-from tidy3d.components.types import Coordinate, ScalarSymmetry, annotate_type
+from tidy3d.components.tcad.types import HeatChargeMonitorType
+from tidy3d.components.types import Coordinate, ScalarSymmetry
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import MICROMETER
 from tidy3d.log import log
 
 FieldDataset = Union[
-    SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
+    SpatialDataArray, discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset])
 ]
 UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
 
@@ -30,23 +27,22 @@ UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
 class HeatChargeMonitorData(AbstractMonitorData, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`HeatChargeMonitor`."""
 
-    monitor: HeatChargeMonitorType = pd.Field(
-        ...,
+    monitor: HeatChargeMonitorType = Field(
         title="Monitor",
         description="Monitor associated with the data.",
     )
 
-    symmetry: tuple[ScalarSymmetry, ScalarSymmetry, ScalarSymmetry] = pd.Field(
+    symmetry: tuple[ScalarSymmetry, ScalarSymmetry, ScalarSymmetry] = Field(
         (0, 0, 0),
         title="Symmetry",
         description="Symmetry of the original simulation in x, y, and z.",
     )
 
-    symmetry_center: Coordinate = pd.Field(
+    symmetry_center: Coordinate = Field(
         (0, 0, 0),
         title="Symmetry Center",
         description="Symmetry center of the original simulation in x, y, and z.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
     @abstractmethod

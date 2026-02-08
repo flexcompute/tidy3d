@@ -5,8 +5,8 @@ from __future__ import annotations
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pd
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 import tidy3d.components.scene as scene_mod
@@ -52,7 +52,7 @@ def test_scene_init():
 
 
 def test_validate_components_none():
-    assert SCENE._validate_mediums(val=None) is None
+    assert type(SCENE)._validate_mediums(val=None) is None
 
 
 def test_plot_eps():
@@ -121,7 +121,7 @@ def test_structure_alpha():
     new_structs = [
         td.Structure(geometry=s.geometry, medium=SCENE_FULL.medium) for s in SCENE_FULL.structures
     ]
-    S2 = SCENE_FULL.copy(update={"structures": new_structs})
+    S2 = SCENE_FULL.copy(update={"structures": tuple(new_structs)})
     _ = S2.plot_structures_eps(x=0, alpha=0.5)
     plt.close()
 
@@ -146,7 +146,7 @@ def test_get_structure_plot_params():
     pp = SCENE_FULL._get_structure_eps_plot_params(
         medium=SCENE_FULL.medium, freq=1, eps_min=1, eps_max=2
     )
-    expected_color = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP)(0.0)
+    expected_color = plt.get_cmap(STRUCTURE_EPS_CMAP)(0.0)
     assert np.allclose(pp.facecolor, expected_color)
     pp = SCENE_FULL._get_structure_eps_plot_params(medium=td.PEC, freq=1, eps_min=1, eps_max=2)
     assert pp.facecolor == "gold"
@@ -165,7 +165,7 @@ def test_structure_eps_color_mapping():
         norm=norm,
         reverse=False,
     )
-    expected_min = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP)(norm(1.0))
+    expected_min = plt.get_cmap(STRUCTURE_EPS_CMAP)(norm(1.0))
     assert np.allclose(pp_min.facecolor, expected_min)
 
     pp_max = SCENE_FULL._get_structure_eps_plot_params(
@@ -176,7 +176,7 @@ def test_structure_eps_color_mapping():
         norm=norm,
         reverse=False,
     )
-    expected_max = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP)(norm(5.0))
+    expected_max = plt.get_cmap(STRUCTURE_EPS_CMAP)(norm(5.0))
     assert np.allclose(pp_max.facecolor, expected_max)
 
     pp_min_reverse = SCENE_FULL._get_structure_eps_plot_params(
@@ -187,7 +187,7 @@ def test_structure_eps_color_mapping():
         norm=norm,
         reverse=True,
     )
-    expected_min_reverse = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP_R)(norm(1.0))
+    expected_min_reverse = plt.get_cmap(STRUCTURE_EPS_CMAP_R)(norm(1.0))
     assert np.allclose(pp_min_reverse.facecolor, expected_min_reverse)
 
     pp_max_reverse = SCENE_FULL._get_structure_eps_plot_params(
@@ -198,7 +198,7 @@ def test_structure_eps_color_mapping():
         norm=norm,
         reverse=True,
     )
-    expected_max_reverse = mpl.cm.get_cmap(STRUCTURE_EPS_CMAP_R)(norm(5.0))
+    expected_max_reverse = plt.get_cmap(STRUCTURE_EPS_CMAP_R)(norm(5.0))
     assert np.allclose(pp_max_reverse.facecolor, expected_max_reverse)
 
 
@@ -253,7 +253,7 @@ def test_num_mediums(monkeypatch):
         structures=structures,
     )
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 2))
         )
@@ -289,7 +289,7 @@ def _test_names_default():
 
 
 def test_names_unique():
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.Scene(
             structures=[
                 td.Structure(
@@ -403,7 +403,7 @@ def test_perturbed_mediums_copy(unstructured, z):
 #             medium=td.Medium(permittivity=2.0),
 #         ),
 #     ]
-#     with pytest.raises(pd.ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
+#     with pytest.raises(ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
 #         _ = td.Scene(structures=not_fine)
 
 

@@ -4,17 +4,22 @@ Tool for generating an S matrix automatically from a Tidy3d simulation and lumpe
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from tidy3d.plugins.smatrix.data.data_array import ModalPortDataArray
-from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
+
+if TYPE_CHECKING:
+    from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 
 
 def modal_construct_smatrix(modeler_data: ModalComponentModelerData) -> ModalPortDataArray:
     """Constructs the S-matrix from the data of a :class:`.ModalComponentModeler`.
 
     This function post-processes the :class:`.SimulationData` from a series of
-    simulations to compute the scattering matrix (S-matrix).
+    simulations to compute the scattering matrix (S-matrix). Supports both modal
+    ports (ModeMonitor/ModeData) and Gaussian ports (GaussianOverlapMonitor/FieldOverlapData).
 
     Parameters
     ----------
@@ -65,11 +70,17 @@ def modal_construct_smatrix(modeler_data: ModalComponentModelerData) -> ModalPor
             port_name_out, mode_index_out = row_index
             port_out = modeler_data.modeler.get_port_by_name(port_name=port_name_out)
 
-            # directly compute the element
-            mode_amps_data = sim_data[port_out.name].copy().amps
+            # Read overlap amplitudes from either ModeData or FieldOverlapData.
+            # Both expose '.amps' over coords ('direction', 'f', 'mode_index').
+            overlap_amps = sim_data[port_out.name].copy().amps
+
+            # Outgoing direction at the output port: flip the "input" convention.
             dir_out = "-" if port_out.direction == "+" else "+"
-            amp = mode_amps_data.sel(f=coords["f"], direction=dir_out, mode_index=mode_index_out)
+            amp = overlap_amps.sel(f=coords["f"], direction=dir_out, mode_index=mode_index_out)
+
+            # Normalization provided by modeler (handles both modal and gaussian runs).
             source_norm = modeler_data.modeler._normalization_factor(port_in, sim_data)
+
             s_matrix_elements = np.array(amp.data) / np.array(source_norm)
             coords_set = {
                 "port_in": port_name_in,

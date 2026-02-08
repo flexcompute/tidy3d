@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.utils import (
     SnapBehavior,
@@ -9,15 +11,17 @@ from tidy3d.components.geometry.utils import (
     SnappingSpec,
     snap_box_to_grid,
 )
-from tidy3d.components.grid.grid import Grid
-from tidy3d.components.lumped_element import LinearLumpedElement
 from tidy3d.components.microwave.path_integrals.integrals.current import (
     AxisAlignedCurrentIntegral,
 )
 from tidy3d.components.microwave.path_integrals.integrals.voltage import (
     AxisAlignedVoltageIntegral,
 )
-from tidy3d.components.types import Direction
+
+if TYPE_CHECKING:
+    from tidy3d.components.grid.grid import Grid
+    from tidy3d.components.lumped_element import LinearLumpedElement
+    from tidy3d.components.types import Direction
 
 
 def path_integrals_from_lumped_element(

@@ -4,18 +4,18 @@ from typing import get_args
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
+import pydantic as pd
 import pytest
 import responses
 
 import tidy3d as td
 import tidy3d.plugins.mode.web as msweb
-from tidy3d import ScalarFieldDataArray
+from tidy3d import Coords, Grid, ModeIndexDataArray, ScalarFieldDataArray, ScalarModeFieldDataArray
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.components.mode.solver import TOL_DEGENERATE_CANDIDATE, EigSolver, compute_modes
 from tidy3d.components.mode_spec import MODE_DATA_KEYS
-from tidy3d.exceptions import DataError, SetupError
+from tidy3d.exceptions import DataError, SetupError, ValidationError
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.web.core.environment import Env
@@ -38,6 +38,69 @@ TASK_ID = "Task-ID"
 SOLVER_ID = "Solver-ID"
 
 
+def make_fill_fraction_mode_data():
+    freq = np.array([2e14])
+    mode_spec = td.ModeSpec(num_modes=2)
+    monitor = td.ModeSolverMonitor(
+        size=(3.0, 0.0, 3.0),
+        center=(0.0, 0.0, 0.0),
+        freqs=freq,
+        mode_spec=mode_spec,
+        name="fill_fraction",
+    )
+
+    grid = Grid(
+        boundaries=Coords(
+            x=np.array([-1.5, -0.5, 0.5, 1.5]),
+            y=np.array([-0.5, 0.5]),
+            z=np.array([-1.5, -0.5, 0.5, 1.5]),
+        )
+    )
+
+    coords = {
+        "x": np.array([-1.0, 0.0, 1.0]),
+        "y": np.array([0.0]),
+        "z": np.array([-1.0, 0.0, 1.0]),
+        "f": freq,
+        "mode_index": np.arange(2),
+    }
+    shape = (3, 1, 3, 1, 2)
+
+    ex_data = np.zeros(shape, dtype=complex)
+    ex_data[1, 0, 1, 0, 0] = 2.0
+    for ix in (0, 2):
+        for iz in (0, 2):
+            ex_data[ix, 0, iz, 0, 1] = 1.0
+
+    zero_data = np.zeros(shape, dtype=complex)
+
+    fields = {
+        "Ex": ScalarModeFieldDataArray(ex_data, coords=coords),
+        "Ey": ScalarModeFieldDataArray(np.copy(zero_data), coords=coords),
+        "Ez": ScalarModeFieldDataArray(np.copy(zero_data), coords=coords),
+        "Hx": ScalarModeFieldDataArray(np.copy(zero_data), coords=coords),
+        "Hy": ScalarModeFieldDataArray(np.copy(zero_data), coords=coords),
+        "Hz": ScalarModeFieldDataArray(np.copy(zero_data), coords=coords),
+    }
+
+    n_complex = ModeIndexDataArray(
+        np.array([[1.6 + 0.0j, 1.3 + 0.0j]]),
+        coords={"f": freq, "mode_index": np.arange(2)},
+    )
+
+    data = ModeSolverData(
+        monitor=monitor,
+        symmetry=(0, 0, 0),
+        symmetry_center=(0.0, 0.0, 0.0),
+        grid_expanded=grid,
+        n_complex=n_complex,
+        **fields,
+    )
+
+    bounding_box = td.Box(center=(0.0, 0.0, 0.0), size=(1.0, 2.0, 1.0))
+    return data, bounding_box
+
+
 @pytest.fixture
 def mock_remote_api(monkeypatch):
     def void(*args, **kwargs):
@@ -47,11 +110,11 @@ def mock_remote_api(monkeypatch):
         simulation = td.Simulation(
             size=SIM_SIZE,
             grid_spec=td.GridSpec(wavelength=1.0),
-            structures=[WAVEGUIDE],
+            structures=(WAVEGUIDE,),
             run_time=1e-12,
             symmetry=(1, 0, -1),
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-            sources=[SRC],
+            sources=(SRC,),
         )
         mode_spec = td.ModeSpec(
             num_modes=3,
@@ -273,7 +336,7 @@ def test_mode_solver_validation():
     )
 
     # frequency is too low
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         ms = ModeSolver(
             simulation=simulation,
             plane=PLANE,
@@ -293,7 +356,7 @@ def test_mode_solver_validation():
 
     # num of modes * plane grid points too large
     # 1) number of modes too big
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         ms = ModeSolver(
             simulation=simulation,
             plane=PLANE,
@@ -302,7 +365,7 @@ def test_mode_solver_validation():
             direction="+",
         )
     # 2) number of grid points too big
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         ms = ModeSolver(
             simulation=simulation.updated_copy(grid_spec=td.GridSpec.uniform(dl=0.0001)),
             plane=PLANE,
@@ -356,9 +419,7 @@ def test_mode_solver_fields():
         grid_spec=td.GridSpec(wavelength=1.0),
         run_time=1e-12,
     )
-    mode_spec = td.ModeSpec(
-        num_modes=1,
-    )
+    mode_spec = td.ModeSpec(num_modes=1)
     ms = ModeSolver(
         simulation=simulation,
         plane=PLANE,
@@ -390,11 +451,11 @@ def test_mode_solver_simple(mock_remote_api, local, tmp_path):
     simulation = td.Simulation(
         size=SIM_SIZE,
         grid_spec=td.GridSpec(wavelength=1.0),
-        structures=[WAVEGUIDE],
+        structures=(WAVEGUIDE,),
         run_time=1e-12,
         symmetry=(0, 0, 1),
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
+        sources=(SRC,),
     )
     mode_spec = td.ModeSpec(
         num_modes=3,
@@ -444,11 +505,11 @@ def test_mode_solver_remote_after_local(mock_remote_api, tmp_path):
     simulation = td.Simulation(
         size=SIM_SIZE,
         grid_spec=td.GridSpec(wavelength=1.0),
-        structures=[WAVEGUIDE],
+        structures=(WAVEGUIDE,),
         run_time=1e-12,
         symmetry=(0, 0, 1),
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
+        sources=(SRC,),
     )
     mode_spec = td.ModeSpec(
         num_modes=3,
@@ -495,7 +556,7 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
     simulation = td.Simulation(
         size=(2, 2, 2),
         grid_spec=td.GridSpec(wavelength=1.0),
-        structures=[waveguide],
+        structures=(waveguide,),
         run_time=1e-12,
     )
     mode_spec = td.ModeSpec(
@@ -569,7 +630,7 @@ def test_mode_solver_unstructured_custom_medium(nx, cond_factor, interp, tol, tm
         simulation = td.Simulation(
             size=(2, 2, 2),
             grid_spec=td.GridSpec(wavelength=1.0),
-            structures=[waveguide],
+            structures=(waveguide,),
             run_time=1e-12,
         )
         mode_spec = td.ModeSpec(num_modes=1)
@@ -605,11 +666,11 @@ def test_mode_solver_straight_vs_angled():
     simulation = td.Simulation(
         size=SIM_SIZE,
         grid_spec=td.GridSpec.auto(wavelength=1.0, min_steps_per_wvl=16),
-        structures=[WAVEGUIDE],
+        structures=(WAVEGUIDE,),
         run_time=1e-12,
         symmetry=(0, 0, 1),
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
+        sources=(SRC,),
     )
     mode_spec = td.ModeSpec(num_modes=5, group_index_step=True)
     freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
@@ -679,11 +740,11 @@ def test_mode_solver_angle_bend():
     simulation = td.Simulation(
         size=SIM_SIZE,
         grid_spec=td.GridSpec(wavelength=1.0),
-        structures=[WAVEGUIDE],
+        structures=(WAVEGUIDE,),
         run_time=1e-12,
         symmetry=(-1, 0, 1),
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
+        sources=(SRC,),
     )
     mode_spec = td.ModeSpec(
         num_modes=3,
@@ -726,7 +787,7 @@ def test_mode_bend_radius():
         size=(10, 10, 10),
         grid_spec=td.GridSpec(wavelength=1.0),
         # grid_spec=td.GridSpec.uniform(dl=0.04),
-        structures=[WAVEGUIDE],
+        structures=(WAVEGUIDE,),
         run_time=1e-12,
     )
     mode_spec1 = td.ModeSpec(
@@ -780,10 +841,10 @@ def test_mode_solver_2D():
     simulation = td.Simulation(
         size=(0, SIM_SIZE[1], SIM_SIZE[2]),
         grid_spec=td.GridSpec(wavelength=1.0),
-        structures=[WAVEGUIDE],
+        structures=(WAVEGUIDE,),
         run_time=1e-12,
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
+        sources=(SRC,),
     )
     ms = ModeSolver(
         simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="-"
@@ -803,10 +864,10 @@ def test_mode_solver_2D():
     simulation = td.Simulation(
         size=(SIM_SIZE[0], SIM_SIZE[1], 0),
         grid_spec=td.GridSpec(wavelength=1.0),
-        structures=[WAVEGUIDE],
+        structures=(WAVEGUIDE,),
         run_time=1e-12,
         boundary_spec=td.BoundarySpec.pml(z=False),
-        sources=[SRC],
+        sources=(SRC,),
     )
     ms = ModeSolver(
         simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="+"
@@ -822,7 +883,7 @@ def test_mode_solver_2D():
         grid_spec=td.GridSpec(wavelength=1.0),
         run_time=1e-12,
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
+        sources=(SRC,),
     )
     ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
     compare_colocation(ms)
@@ -839,15 +900,15 @@ def test_group_index(mock_remote_api, local, tmp_path):
     simulation = td.Simulation(
         size=(5, 5, 1),
         grid_spec=td.GridSpec(wavelength=1.55),
-        structures=[
+        structures=(
             td.Structure(
                 geometry=td.Box(size=(0.5, 0.22, td.inf)), medium=td.Medium(permittivity=3.48**2)
-            )
-        ],
+            ),
+        ),
         medium=td.Medium(permittivity=1.44**2),
         run_time=1e-12,
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
+        sources=(SRC,),
     )
     mode_spec = td.ModeSpec(
         num_modes=2,
@@ -936,11 +997,11 @@ def test_mode_solver_nan_pol_fraction():
         medium=td.Medium(permittivity=2),
         size=SIM_SIZE,
         grid_spec=td.GridSpec.auto(wavelength=1.55, min_steps_per_wvl=15),
-        structures=[wg],
+        structures=(wg,),
         run_time=1e-12,
         symmetry=(0, 0, 1),
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
+        sources=(SRC,),
     )
 
     mode_spec = td.ModeSpec(
@@ -986,7 +1047,7 @@ def test_mode_solver_method_defaults():
         run_time=1e-12,
         symmetry=(0, 0, 1),
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
+        sources=(SRC,),
     )
 
     mode_spec = td.ModeSpec(
@@ -1043,7 +1104,7 @@ def test_mode_solver_web_run_batch(mock_remote_api, tmp_path):
     simulation = td.Simulation(
         size=SIM_SIZE,
         grid_spec=td.GridSpec(wavelength=wav),
-        structures=[WAVEGUIDE],
+        structures=(WAVEGUIDE,),
         run_time=1e-12,
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
     )
@@ -1083,11 +1144,11 @@ def test_mode_solver_relative():
     simulation = td.Simulation(
         size=SIM_SIZE,
         grid_spec=td.GridSpec(wavelength=1.0),
-        structures=[WAVEGUIDE],
+        structures=(WAVEGUIDE,),
         run_time=1e-12,
         symmetry=(0, 0, 1),
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
+        sources=(SRC,),
     )
     mode_spec = td.ModeSpec(
         num_modes=3,
@@ -1117,11 +1178,11 @@ def test_mode_solver_plot():
     simulation = td.Simulation(
         size=SIM_SIZE,
         grid_spec=td.GridSpec(wavelength=1.0),
-        structures=[WAVEGUIDE],
+        structures=(WAVEGUIDE,),
         run_time=1e-12,
         symmetry=(0, 0, 1),
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-        sources=[SRC],
+        sources=(SRC,),
     )
     mode_spec = td.ModeSpec(
         num_modes=3,
@@ -1229,7 +1290,7 @@ def make_high_order_mode_solver(sign, dim=3):
         grid_spec=td.GridSpec.auto(
             min_steps_per_wvl=20, wavelength=1.55, override_structures=[refine_box]
         ),
-        structures=[waveguide],
+        structures=(waveguide,),
         medium=td.Medium(permittivity=1.44**2),
         boundary_spec=td.BoundarySpec(x=pml, y=pml, z=pml if dim == 3 else periodic),
         run_time=1e-12,
@@ -1290,7 +1351,7 @@ def test_translated_dot():
     grid_spec = td.GridSpec.auto(wavelength=lambda0, min_steps_per_wvl=20)
 
     sim = td.Simulation(
-        size=sim_size, medium=sio2, structures=[wg], grid_spec=grid_spec, run_time=1e-30
+        size=sim_size, medium=sio2, structures=(wg,), grid_spec=grid_spec, run_time=1e-30
     )
     mode_plane = td.Box(size=(3, 3, 0))
     mode_solver = ModeSolver(simulation=sim, plane=mode_plane, mode_spec=mode_spec, freqs=[freq0])
@@ -1323,8 +1384,17 @@ def test_translated_dot():
 
 def test_mode_spec_filter_pol_sort_spec_exclusive():
     """Ensure ModeSpec errors when both filter_pol and sort_spec are set."""
-    with pytest.raises(pydantic.ValidationError, match="simultaneously"):
-        _ = td.ModeSpec(num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(sort_key="n_eff"))
+    # Using a non-default sort_key triggers the exclusivity check
+    with pytest.raises(pd.ValidationError, match="simultaneously"):
+        _ = td.ModeSpec(num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(sort_key="k_eff"))
+    # Using a sort_reference also triggers the exclusivity check
+    with pytest.raises(pd.ValidationError, match="simultaneously"):
+        _ = td.ModeSpec(num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(sort_reference=1.5))
+    # Using a filter_key also triggers the exclusivity check
+    with pytest.raises(pd.ValidationError, match="simultaneously"):
+        _ = td.ModeSpec(
+            num_modes=1, filter_pol="te", sort_spec=td.ModeSortSpec(filter_key="TE_fraction")
+        )
 
 
 def test_modes_filter_sort():
@@ -1360,21 +1430,43 @@ def test_modes_filter_sort():
     for key in get_args(MODE_DATA_KEYS):
         print(key)
         # Test ascending
-        sort_spec = td.ModeSortSpec(sort_key=key, sort_order="ascending", track_freq=None)
+        sort_kwargs = {
+            "sort_key": key,
+            "sort_order": "ascending",
+            "track_freq": None,
+        }
+        if key == "fill_fraction_box":
+            sort_kwargs["bounding_box"] = td.Box(center=PLANE.center, size=(5.0, 4.0, 5.0))
+        sort_spec = td.ModeSortSpec(**sort_kwargs)
+        # just check it works without sort_spec
+        _ = modes.sort_modes(track_freq="central")
         modes = modes.sort_modes(sort_spec)
         metric = getattr(modes, key)
         assert np.all(metric.diff(dim="mode_index") >= 0)
 
         # Test descending
-        sort_spec = td.ModeSortSpec(sort_key=key, sort_order="descending", track_freq=None)
+        sort_kwargs = {
+            "sort_key": key,
+            "sort_order": "descending",
+            "track_freq": None,
+        }
+        if key == "fill_fraction_box":
+            sort_kwargs["bounding_box"] = td.Box(center=PLANE.center, size=(5.0, 4.0, 5.0))
+        sort_spec = td.ModeSortSpec(**sort_kwargs)
         modes = modes.sort_modes(sort_spec)
         metric = getattr(modes, key)
         assert np.all(metric.diff(dim="mode_index") <= 0)
 
         # Test descending with a large reference value should be the same as ascending
-        sort_spec = td.ModeSortSpec(
-            sort_key=key, sort_order="descending", sort_reference=100, track_freq=None
-        )
+        sort_kwargs = {
+            "sort_key": key,
+            "sort_order": "descending",
+            "sort_reference": 100,
+            "track_freq": None,
+        }
+        if key == "fill_fraction_box":
+            sort_kwargs["bounding_box"] = td.Box(center=PLANE.center, size=(5.0, 4.0, 5.0))
+        sort_spec = td.ModeSortSpec(**sort_kwargs)
         modes = modes.sort_modes(sort_spec)
         metric = getattr(modes, key)
         assert np.all(metric.diff(dim="mode_index") >= 0)
@@ -1569,3 +1661,165 @@ def test_degenerate_mode_processing():
     msg = f"Found {len(indices)} off-diagonal values > {threshold}:\n"
     msg += "\n".join(f"  |S[{i},{j}]| = {np.abs(S[i, j]):.4e}" for i, j in indices)
     assert not np.any(problem_mask), msg
+
+
+def test_mode_sort_spec_drop_modes_reduces_modes():
+    freqs = np.array([2e14, 4e14])
+    mode_spec = td.ModeSpec(num_modes=3)
+    monitor = td.ModeSolverMonitor(
+        size=(1.0, 0.0, 1.0),
+        center=(0.0, 0.0, 0.0),
+        freqs=freqs,
+        mode_spec=mode_spec,
+        name="drop_modes",
+    )
+    n_complex = ModeIndexDataArray(
+        np.array(
+            [
+                [1.6 + 0.6j, 1.5 + 0.2j, 1.1 + 0.5j],
+                [1.7 + 0.4j, 1.4 + 0.3j, 1.0 + 0.1j],
+            ]
+        ),
+        coords={"f": freqs, "mode_index": np.arange(3)},
+    )
+    data = ModeSolverData(monitor=monitor, n_complex=n_complex)
+
+    sort_spec = td.ModeSortSpec(
+        filter_key="n_eff",
+        filter_reference=1.3,
+        filter_order="over",
+        sort_key="k_eff",
+        sort_order="ascending",
+        keep_modes="filtered",
+    )
+
+    sorted_data = data.sort_modes(sort_spec)
+
+    assert sorted_data.n_eff.sizes["mode_index"] == 2
+    assert np.allclose(sorted_data.n_eff.isel(f=0).values, [1.5, 1.6])
+    assert np.allclose(sorted_data.n_eff.isel(f=1).values, [1.4, 1.7])
+    assert sorted_data.monitor.mode_spec.num_modes == 2
+    assert sorted_data.monitor.mode_spec.sort_spec.keep_modes == "filtered"
+
+
+@pytest.mark.parametrize("keep_modes", (1, 3))
+def test_mode_sort_spec_keep_modes_integer(keep_modes):
+    freqs = np.array([2e14, 4e14])
+    mode_spec = td.ModeSpec(num_modes=4)
+    monitor = td.ModeSolverMonitor(
+        size=(1.0, 0.0, 1.0),
+        center=(0.0, 0.0, 0.0),
+        freqs=freqs,
+        mode_spec=mode_spec,
+        name="drop_modes",
+    )
+    n_complex = ModeIndexDataArray(
+        np.array(
+            [
+                [1.6 + 0.6j, 1.5 + 0.2j, 1.1 + 0.5j, 1.05 + 0.2j],
+                [1.7 + 0.4j, 1.4 + 0.3j, 1.07 + 0.1j, 1.02 + 0.3j],
+            ]
+        ),
+        coords={"f": freqs, "mode_index": np.arange(4)},
+    )
+    data = ModeSolverData(monitor=monitor, n_complex=n_complex)
+
+    sort_spec = td.ModeSortSpec(
+        filter_key="n_eff",
+        filter_reference=1.3,
+        filter_order="over",
+        sort_key="k_eff",
+        sort_order="ascending",
+        keep_modes=keep_modes,
+    )
+
+    if keep_modes == 1:
+        with AssertLogLevel(None):
+            sorted_data = data.sort_modes(sort_spec)
+    else:
+        with AssertLogLevel("WARNING", contains_str="filter"):
+            sorted_data = data.sort_modes(sort_spec)
+
+    assert sorted_data.n_eff.sizes["mode_index"] == keep_modes
+    if keep_modes == 1:
+        assert np.allclose(sorted_data.n_eff.isel(f=0).values, [1.5])
+        assert np.allclose(sorted_data.n_eff.isel(f=1).values, [1.4])
+    else:
+        assert np.allclose(sorted_data.n_eff.isel(f=0).values, [1.5, 1.6, 1.05])
+        assert np.allclose(sorted_data.n_eff.isel(f=1).values, [1.4, 1.7, 1.07])
+    assert sorted_data.monitor.mode_spec.num_modes == keep_modes
+    assert sorted_data.monitor.mode_spec.sort_spec.keep_modes == keep_modes
+
+
+def test_mode_sort_spec_drop_modes_all_filtered():
+    freqs = np.array([2e14, 4e14])
+    mode_spec = td.ModeSpec(num_modes=3)
+    monitor = td.ModeSolverMonitor(
+        size=(1.0, 0.0, 1.0),
+        center=(0.0, 0.0, 0.0),
+        freqs=freqs,
+        mode_spec=mode_spec,
+        name="drop_all",
+    )
+    n_complex = ModeIndexDataArray(
+        np.array(
+            [
+                [1.1 + 0.1j, 1.05 + 0.05j, 1.0 + 0.01j],
+                [1.1 + 0.1j, 1.05 + 0.05j, 1.0 + 0.01j],
+            ]
+        ),
+        coords={"f": freqs, "mode_index": np.arange(3)},
+    )
+    data = ModeSolverData(monitor=monitor, n_complex=n_complex)
+
+    sort_spec = td.ModeSortSpec(
+        filter_key="n_eff",
+        filter_reference=2.0,
+        keep_modes="filtered",
+    )
+
+    with pytest.raises(ValidationError):
+        _ = data.sort_modes(sort_spec)
+
+
+def test_mode_sort_spec_drop_modes_requires_filter():
+    with pytest.raises(pd.ValidationError):
+        td.ModeSortSpec(keep_modes="filtered")
+
+
+def test_mode_sort_spec_keep_modes_at_most_num_modes():
+    sort_spec = td.ModeSortSpec(keep_modes=4)
+    with pytest.raises(pd.ValidationError):
+        _ = td.ModeSpec(num_modes=2, sort_spec=sort_spec)
+
+
+def test_mode_sort_spec_fill_fraction_box_filter_drops_modes():
+    data, bounding_box = make_fill_fraction_mode_data()
+
+    sort_spec = td.ModeSortSpec(
+        filter_key="fill_fraction_box",
+        filter_reference=0.5,
+        filter_order="over",
+        keep_modes="filtered",
+        bounding_box=bounding_box,
+    )
+
+    filtered = data.sort_modes(sort_spec)
+
+    assert filtered.n_eff.sizes["mode_index"] == 1
+    assert filtered.monitor.mode_spec.num_modes == 1
+
+    fills = data.fill_fraction(bounding_box)
+    assert np.isclose(fills.isel(mode_index=0, f=0).item(), 1.0)
+    assert np.isclose(fills.isel(mode_index=1, f=0).item(), 0.0)
+
+
+def test_mode_sort_spec_fill_fraction_box_requires_bounding_box():
+    with pytest.raises(pd.ValidationError):
+        td.ModeSortSpec(filter_key="fill_fraction_box")
+
+
+def test_mode_data_fill_fraction_box_requires_intersection():
+    data, _ = make_fill_fraction_mode_data()
+    with pytest.raises(ValidationError):
+        data.fill_fraction(td.Box(center=(0.0, 2.0, 0.0), size=(1.0, 1.0, 1.0)))

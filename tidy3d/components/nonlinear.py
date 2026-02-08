@@ -6,7 +6,7 @@ from abc import ABC
 from typing import TYPE_CHECKING, Optional, Union
 
 import autograd.numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, field_validator
 
 from tidy3d.constants import MICROMETER, SECOND, VOLT, WATT
 from tidy3d.exceptions import SetupError, ValidationError
@@ -54,7 +54,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
     def _validate_medium(self, medium: AbstractMedium) -> None:
         """Any additional validation that depends on the medium"""
 
-    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]) -> None:
+    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: list[PositiveFloat]) -> None:
         """Any additional validation that depends on the central frequencies of the sources."""
 
     @property
@@ -103,14 +103,14 @@ class NonlinearSusceptibility(NonlinearModel):
     >>> nonlinear_susceptibility = NonlinearSusceptibility(chi3=1)
     """
 
-    chi3: float = pd.Field(
+    chi3: float = Field(
         0,
         title="Chi3",
         description=":math:`\\chi_3` nonlinear susceptibility.",
-        units=f"{MICROMETER}^2 / {VOLT}^2",
+        json_schema_extra={"units": f"{MICROMETER}^2 / {VOLT}^2"},
     )
 
-    numiters: pd.PositiveInt = pd.Field(
+    numiters: Optional[PositiveInt] = Field(
         None,
         title="Number of iterations",
         description="Deprecated. The old usage ``nonlinear_spec=model`` with ``model.numiters`` "
@@ -119,8 +119,9 @@ class NonlinearSusceptibility(NonlinearModel):
         "usage, this parameter is ignored, and ``NonlinearSpec.num_iters`` is used instead.",
     )
 
-    @pd.validator("numiters", always=True)
-    def _validate_numiters(cls, val):
+    @field_validator("numiters")
+    @classmethod
+    def _validate_numiters(cls, val: Optional[PositiveInt]) -> Optional[PositiveInt]:
         """Check that numiters is not too large."""
         if val is None:
             return val
@@ -183,51 +184,51 @@ class TwoPhotonAbsorption(NonlinearModel):
     >>> tpa_model = TwoPhotonAbsorption(beta=1)
     """
 
-    beta: float = pd.Field(
+    beta: float = Field(
         0,
         title="TPA coefficient",
         description="Coefficient for two-photon absorption (TPA).",
-        units=f"{MICROMETER} / {WATT}",
+        json_schema_extra={"units": f"{MICROMETER} / {WATT}"},
     )
 
-    tau: pd.NonNegativeFloat = pd.Field(
+    tau: NonNegativeFloat = Field(
         0,
         title="Carrier lifetime",
         description="Lifetime for the free carriers created by two-photon absorption (TPA).",
-        units=f"{SECOND}",
+        json_schema_extra={"units": f"{SECOND}"},
     )
 
-    sigma: pd.NonNegativeFloat = pd.Field(
+    sigma: NonNegativeFloat = Field(
         0,
         title="FCA cross section",
         description="Total cross section for free-carrier absorption (FCA). "
         "Contains contributions from electrons and from holes.",
-        units=f"{MICROMETER}^2",
+        json_schema_extra={"units": f"{MICROMETER}^2"},
     )
-    e_e: pd.NonNegativeFloat = pd.Field(
+    e_e: NonNegativeFloat = Field(
         1,
         title="Electron exponent",
         description="Exponent for the free electron refractive index shift in the free-carrier plasma dispersion (FCPD).",
     )
-    e_h: pd.NonNegativeFloat = pd.Field(
+    e_h: NonNegativeFloat = Field(
         1,
         title="Hole exponent",
         description="Exponent for the free hole refractive index shift in the free-carrier plasma dispersion (FCPD).",
     )
-    c_e: float = pd.Field(
+    c_e: float = Field(
         0,
         title="Electron coefficient",
         description="Coefficient for the free electron refractive index shift in the free-carrier plasma dispersion (FCPD).",
-        units=f"{MICROMETER}^(3 e_e)",
+        json_schema_extra={"units": f"{MICROMETER}^(3 e_e)"},
     )
-    c_h: float = pd.Field(
+    c_h: float = Field(
         0,
         title="Hole coefficient",
         description="Coefficient for the free hole refractive index shift in the free-carrier plasma dispersion (FCPD).",
-        units=f"{MICROMETER}^(3 e_h)",
+        json_schema_extra={"units": f"{MICROMETER}^(3 e_h)"},
     )
 
-    n0: Optional[float] = pd.Field(
+    n0: Optional[float] = Field(
         None,
         title="Linear refractive index",
         description="Real linear refractive index of the medium, computed for instance using "
@@ -235,7 +236,7 @@ class TwoPhotonAbsorption(NonlinearModel):
         "frequencies of the simulation sources (as long as these are all equal).",
     )
 
-    freq0: Optional[pd.PositiveFloat] = pd.Field(
+    freq0: Optional[PositiveFloat] = Field(
         None,
         title="Central frequency",
         description="Central frequency, used to calculate the energy of the free-carriers "
@@ -311,14 +312,14 @@ class KerrNonlinearity(NonlinearModel):
     >>> kerr_model = KerrNonlinearity(n2=1)
     """
 
-    n2: float = pd.Field(
+    n2: float = Field(
         0,
         title="Nonlinear refractive index",
         description="Nonlinear refractive index in the Kerr nonlinearity.",
-        units=f"{MICROMETER}^2 / {WATT}",
+        json_schema_extra={"units": f"{MICROMETER}^2 / {WATT}"},
     )
 
-    n0: Optional[float] = pd.Field(
+    n0: Optional[float] = Field(
         None,
         title="Complex linear refractive index",
         description="Complex linear refractive index of the medium, computed for instance using "
@@ -346,7 +347,7 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
     >>> medium = Medium(permittivity=2, nonlinear_spec=nonlinear_spec)
     """
 
-    models: tuple[NonlinearModelType, ...] = pd.Field(
+    models: tuple[NonlinearModelType, ...] = Field(
         (),
         title="Nonlinear models",
         description="The nonlinear models present in this nonlinear spec. "
@@ -354,14 +355,17 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
         "Multiple nonlinear models of the same type are not allowed.",
     )
 
-    num_iters: pd.PositiveInt = pd.Field(
+    num_iters: PositiveInt = Field(
         NONLINEAR_DEFAULT_NUM_ITERS,
         title="Number of iterations",
         description="Number of iterations for solving nonlinear constitutive relation.",
     )
 
-    @pd.validator("models", always=True)
-    def _no_duplicate_models(cls, val):
+    @field_validator("models")
+    @classmethod
+    def _no_duplicate_models(
+        cls, val: Optional[tuple[NonlinearModelType, ...]]
+    ) -> Optional[tuple[NonlinearModelType, ...]]:
         """Ensure each type of model appears at most once."""
         if val is None:
             return val
@@ -375,8 +379,9 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
             )
         return val
 
-    @pd.validator("num_iters", always=True)
-    def _validate_num_iters(cls, val, values):
+    @field_validator("num_iters")
+    @classmethod
+    def _validate_num_iters(cls, val: PositiveInt) -> PositiveInt:
         """Check that num_iters is not too large."""
         if val > NONLINEAR_MAX_NUM_ITERS:
             raise ValidationError(
@@ -393,8 +398,11 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
             fields += model.aux_fields
         return fields
 
-    @pd.validator("models", always=True)
-    def _consistent_models(cls, val):
+    @field_validator("models")
+    @classmethod
+    def _consistent_models(
+        cls, val: Optional[tuple[NonlinearModelType, ...]]
+    ) -> Optional[tuple[NonlinearModelType, ...]]:
         """Ensure that parameters shared between models are consistent."""
         if val is None:
             return val

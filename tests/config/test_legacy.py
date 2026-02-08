@@ -9,7 +9,11 @@ from tidy3d.config.__init__ import get_manager, reload_config
 
 def test_legacy_logging_level(config_manager):
     cfg = reload_config(profile=config_manager.profile)
-    cfg.logging_level = "DEBUG"
+    with pytest.warns(
+        DeprecationWarning,
+        match=r"config\.logging_level.*deprecated",
+    ):
+        cfg.logging_level = "DEBUG"
     manager = get_manager()
     assert manager.get_section("logging").level == "DEBUG"
 

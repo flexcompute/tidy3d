@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 import tempfile
 import time
-from os import PathLike
 from pathlib import Path
-from typing import Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING
 
 from requests import HTTPError
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
@@ -15,7 +14,6 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, T
 from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.mode.simulation import ModeSimulation
-from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.config import config
 from tidy3d.exceptions import WebError
 from tidy3d.log import get_logging_console, log
@@ -27,7 +25,7 @@ from tidy3d.web.api.states import (
     STATE_PROGRESS_PERCENTAGE,
     status_to_stage,
 )
-from tidy3d.web.cache import CacheEntry, _store_mode_solver_in_cache, resolve_local_cache
+from tidy3d.web.cache import _store_mode_solver_in_cache, resolve_local_cache
 from tidy3d.web.core.account import Account
 from tidy3d.web.core.constants import (
     CM_DATA_HDF5_GZ,
@@ -37,21 +35,22 @@ from tidy3d.web.core.constants import (
     SIM_FILE_HDF5,
     SIM_FILE_HDF5_GZ,
     SIMULATION_DATA_HDF5_GZ,
-    TaskId,
 )
-from tidy3d.web.core.task_core import (
-    BatchDetail,
-    BatchTask,
-    Folder,
-    SimulationTask,
-    TaskFactory,
-    WebTask,
-)
+from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask, TaskFactory, WebTask
 from tidy3d.web.core.task_info import ChargeType, TaskInfo
 from tidy3d.web.core.types import PayType, TaskType
 
 from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
 from .tidy3d_stub import Tidy3dStub, Tidy3dStubData
+
+if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Callable, Literal, Optional, Union
+
+    from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+    from tidy3d.web.cache import CacheEntry
+    from tidy3d.web.core.constants import TaskId
+    from tidy3d.web.core.task_core import BatchDetail
 
 # time between checking run status
 RUN_REFRESH_TIME = 1.0
@@ -480,7 +479,7 @@ def upload(
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     simulation_type : str = "tidy3d"
         Type of simulation being uploaded.
-    parent_tasks : List[str]
+    parent_tasks : list[str]
         List of related task ids.
     source_required: bool = True
         If ``True``, simulations without sources will raise an error before being uploaded.
@@ -791,8 +790,8 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
     """
 
     # Batch/modeler monitoring path
-    task = TaskFactory.get(task_id)
-    if isinstance(task, BatchTask):
+    task_kind = TaskFactory.get_kind(task_id)
+    if task_kind is BatchTask:
         return _monitor_modeler_batch(task_id, verbose=verbose)
 
     console = get_logging_console() if verbose else None
@@ -962,7 +961,7 @@ def abort(task_id: TaskId) -> Optional[TaskInfo]:
         f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
     )
     return TaskInfo(
-        **{"taskId": task_id, "taskType": getattr(task, "task_type", None), **task.dict()}
+        **{"taskId": task_id, "taskType": getattr(task, "task_type", None), **task.model_dump()}
     )
 
 
@@ -1148,32 +1147,26 @@ def load(
         Object containing simulation data.
     """
     path = Path(path)
-    task = TaskFactory.get(task_id) if task_id else None
+    from_cache = task_id is None  # for readability
     # For component modeler batches, default to a clearer filename if the default was used.
-    if (
-        task_id
-        and isinstance(task, BatchTask)
-        and path.name in {"simulation_data.hdf5", "simulation_data.hdf5.gz"}
-    ):
-        path = path.with_name(path.name.replace("simulation", "cm"))
+    if not from_cache and path.name in {"simulation_data.hdf5", "simulation_data.hdf5.gz"}:
+        if TaskFactory.get_kind(task_id) is BatchTask:
+            path = path.with_name(path.name.replace("simulation", "cm"))
 
-    if task_id is None:
+    if from_cache:
         if not path.exists():
             raise FileNotFoundError("Cached file not found.")
     elif not path.exists() or replace_existing:
         download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
 
-    if verbose and task_id is not None:
+    if verbose and not from_cache:
         console = get_logging_console()
-        if isinstance(task, BatchTask):
-            console.log(f"Loading component modeler data from {path}")
-        else:
-            console.log(f"Loading simulation from {path}")
+        console.log(f"Loading results from {path}")
 
     stub_data = Tidy3dStubData.postprocess(path, lazy=lazy)
 
     simulation_cache = resolve_local_cache()
-    if simulation_cache is not None and task_id is not None:
+    if simulation_cache is not None and not from_cache:
         info = get_info(task_id, verbose=False)
         workflow_type = getattr(info, "taskType", None)
         if (
@@ -1338,7 +1331,7 @@ def delete(task_id: TaskId, versions: bool = False) -> TaskInfo:
         raise ValueError("Task id not found.")
     task = TaskFactory.get(task_id, verbose=False)
     task.delete(versions)
-    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
+    return TaskInfo(**{"taskId": task.task_id, **task.model_dump()})
 
 
 @wait_for_connection
@@ -1394,7 +1387,7 @@ def get_tasks(
 
     Returns
     -------
-    List[Dict]
+    list[dict]
         List of dictionaries storing the information for each of the tasks last ``num_tasks`` tasks.
     """
     folder = Folder.get(folder, create=True)
@@ -1407,7 +1400,7 @@ def get_tasks(
         tasks = sorted(tasks, key=lambda t: t.created_at)
     if num_tasks is not None:
         tasks = tasks[:num_tasks]
-    return [task.dict() for task in tasks]
+    return [task.model_dump() for task in tasks]
 
 
 @wait_for_connection

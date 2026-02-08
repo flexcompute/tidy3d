@@ -3,27 +3,33 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import autograd.numpy as anp
 import numpy as np
-import pydantic.v1 as pydantic
 import shapely
-from pydantic.v1 import PrivateAttr
-from shapely.geometry.base import BaseGeometry
+from pydantic import Field, PrivateAttr, model_validator
 
-from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
-from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.autograd import TracedSize1D, get_static
+from tidy3d.components.base import cached_property
 from tidy3d.components.geometry import base
 from tidy3d.components.geometry.mesh import TriangleMesh
 from tidy3d.components.geometry.polyslab import PolySlab
-from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from shapely.geometry.base import BaseGeometry
+
+    from tidy3d.compat import Self
+    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
@@ -90,6 +96,25 @@ def _base_icosahedron() -> tuple[np.ndarray, np.ndarray]:
 _ICOSAHEDRON_VERTS, _ICOSAHEDRON_FACES = _base_icosahedron()
 
 
+def discretization_wavelength(derivative_info: DerivativeInfo, geometry_label: str) -> float:
+    """Choose reference wavelength for surface discretization."""
+    wvl0_min = derivative_info.wavelength_min
+    wvl_mat = wvl0_min / np.max([1.0, np.max(np.sqrt(abs(derivative_info.eps_in)))])
+
+    grid_cfg = config.adjoint
+
+    min_wvl_mat = grid_cfg.min_wvl_fraction * wvl0_min
+    if wvl_mat < min_wvl_mat:
+        log.warning(
+            f"The minimum wavelength inside the {geometry_label} material is {wvl_mat:.3e} μm, which would "
+            f"create a large number of discretization points for computing the gradient. "
+            f"To prevent performance degradation, the discretization wavelength has "
+            f"been clipped to {min_wvl_mat:.3e} μm.",
+            log_once=True,
+        )
+    return max(wvl_mat, min_wvl_mat)
+
+
 class Sphere(base.Centered, base.Circular):
     """Spherical geometry.
 
@@ -98,7 +123,40 @@ class Sphere(base.Centered, base.Circular):
     >>> b = Sphere(center=(1,2,3), radius=2)
     """
 
+    radius: TracedSize1D = Field(
+        title="Radius",
+        description="Radius of geometry.",
+        json_schema_extra={"units": MICROMETER},
+    )
+
     _icosphere_cache: dict[int, tuple[np.ndarray, float]] = PrivateAttr(default_factory=dict)
+
+    @verify_packages_import(["trimesh"])
+    def to_triangle_mesh(
+        self,
+        *,
+        max_edge_length: Optional[float] = None,
+        subdivisions: Optional[int] = None,
+    ) -> TriangleMesh:
+        """Approximate the sphere surface with a ``TriangleMesh``.
+
+        Parameters
+        ----------
+        max_edge_length : float = None
+            Maximum edge length for triangulation in micrometers.
+        subdivisions : int = None
+            Number of subdivisions for icosphere generation.
+
+        Returns
+        -------
+        TriangleMesh
+            Triangle mesh approximation of the sphere surface.
+        """
+
+        triangles, _ = self._triangulated_surface(
+            max_edge_length=max_edge_length, subdivisions=subdivisions
+        )
+        return TriangleMesh.from_triangles(triangles)
 
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
@@ -154,7 +212,7 @@ class Sphere(base.Centered, base.Circular):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -208,7 +266,7 @@ class Sphere(base.Centered, base.Circular):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>``.
@@ -278,6 +336,226 @@ class Sphere(base.Centered, base.Circular):
         )
         return unit_tris
 
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute adjoint derivatives using smooth sphere surface samples."""
+        valid_paths = {("radius",), *{("center", i) for i in range(3)}}
+        for path in derivative_info.paths:
+            if path not in valid_paths:
+                raise ValueError(
+                    f"No derivative defined w.r.t. 'Sphere' field '{path}'. "
+                    "Supported fields are 'radius' and 'center'."
+                )
+
+        if not derivative_info.paths:
+            return {}
+
+        grid_cfg = config.adjoint
+        radius = float(get_static(self.radius))
+        if radius == 0.0:
+            log.warning(
+                "Sphere gradients cannot be computed for zero radius; gradients are zero.",
+                log_once=True,
+            )
+            return dict.fromkeys(derivative_info.paths, 0.0)
+
+        wvl_mat = discretization_wavelength(derivative_info, "sphere")
+        target_edge = max(wvl_mat / grid_cfg.points_per_wavelength, np.finfo(float).eps)
+        triangles, _ = self._triangulated_surface(max_edge_length=target_edge)
+        triangles = triangles.astype(grid_cfg.gradient_dtype_float, copy=False)
+
+        sim_min, sim_max = (
+            np.asarray(arr, dtype=grid_cfg.gradient_dtype_float)
+            for arr in derivative_info.simulation_bounds
+        )
+        tol = config.adjoint.edge_clip_tolerance
+
+        sim_extents = sim_max - sim_min
+        collapsed_indices = np.flatnonzero(np.isclose(sim_extents, 0.0, atol=tol))
+        if collapsed_indices.size:
+            if collapsed_indices.size > 1:
+                return dict.fromkeys(derivative_info.paths, 0.0)
+            axis_idx = int(collapsed_indices[0])
+            plane_value = float(sim_min[axis_idx])
+            return self._compute_derivatives_collapsed_axis(
+                derivative_info=derivative_info,
+                axis_idx=axis_idx,
+                plane_value=plane_value,
+            )
+
+        trimesh_obj = TriangleMesh._triangles_to_trimesh(triangles)
+        vertices = np.asarray(trimesh_obj.vertices, dtype=grid_cfg.gradient_dtype_float)
+        center = np.asarray(self.center, dtype=grid_cfg.gradient_dtype_float)
+        verts_centered = vertices - center
+        norms = np.linalg.norm(verts_centered, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1, norms)
+        normals = verts_centered / norms
+
+        if vertices.size == 0:
+            return dict.fromkeys(derivative_info.paths, 0.0)
+
+        # get vertex weights
+        faces = np.asarray(trimesh_obj.faces, dtype=int)
+        face_areas = np.asarray(trimesh_obj.area_faces, dtype=grid_cfg.gradient_dtype_float)
+        weights = np.zeros(len(vertices), dtype=grid_cfg.gradient_dtype_float)
+        np.add.at(weights, faces[:, 0], face_areas / 3.0)
+        np.add.at(weights, faces[:, 1], face_areas / 3.0)
+        np.add.at(weights, faces[:, 2], face_areas / 3.0)
+
+        perp1, perp2 = self._tangent_basis_from_normals(normals)
+
+        valid_axes = np.abs(sim_max - sim_min) > tol
+        inside_mask = np.all(
+            vertices[:, valid_axes] >= (sim_min - tol)[valid_axes], axis=1
+        ) & np.all(vertices[:, valid_axes] <= (sim_max + tol)[valid_axes], axis=1)
+
+        if not np.any(inside_mask):
+            return dict.fromkeys(derivative_info.paths, 0.0)
+
+        points = vertices[inside_mask]
+        normals_sel = normals[inside_mask]
+        perp1_sel = perp1[inside_mask]
+        perp2_sel = perp2[inside_mask]
+        weights_sel = weights[inside_mask]
+
+        interpolators = derivative_info.interpolators
+        if interpolators is None:
+            interpolators = derivative_info.create_interpolators(
+                dtype=grid_cfg.gradient_dtype_float
+            )
+
+        g = derivative_info.evaluate_gradient_at_points(
+            points,
+            normals_sel,
+            perp1_sel,
+            perp2_sel,
+            interpolators,
+        )
+
+        weighted = (weights_sel * g).real
+        grad_center = np.sum(weighted[:, None] * normals_sel, axis=0)
+        grad_radius = np.sum(weighted)
+
+        vjps: AutogradFieldMap = {}
+        for path in derivative_info.paths:
+            if path == ("radius",):
+                vjps[path] = float(grad_radius)
+            else:
+                _, idx = path
+                vjps[path] = float(grad_center[idx])
+
+        return vjps
+
+    def _compute_derivatives_collapsed_axis(
+        self,
+        derivative_info: DerivativeInfo,
+        axis_idx: int,
+        plane_value: float,
+    ) -> AutogradFieldMap:
+        """Delegate collapsed-axis gradients to a Cylinder cross section."""
+        tol = config.adjoint.edge_clip_tolerance
+        radius = float(self.radius)
+        center = np.asarray(self.center, dtype=float)
+        delta = plane_value - center[axis_idx]
+        radius_sq = radius**2 - delta**2
+        if radius_sq <= tol**2:
+            return dict.fromkeys(derivative_info.paths, 0.0)
+
+        radius_plane = float(np.sqrt(max(radius_sq, 0.0)))
+        if radius_plane <= tol:
+            return dict.fromkeys(derivative_info.paths, 0.0)
+
+        cyl_paths: set[tuple[str, int | None]] = set()
+        need_radius = False
+        for path in derivative_info.paths:
+            if path == ("radius",) or path == ("center", axis_idx):
+                cyl_paths.add(("radius",))
+                need_radius = True
+            elif path[0] == "center" and path[1] != axis_idx:
+                cyl_paths.add(("center", path[1]))
+
+        if not cyl_paths:
+            return dict.fromkeys(derivative_info.paths, 0.0)
+
+        cyl_center = center.copy()
+        cyl_center[axis_idx] = plane_value
+        cylinder = Cylinder(
+            center=tuple(cyl_center),
+            radius=radius_plane,
+            length=discretization_wavelength(derivative_info, "sphere") * 2.0,
+            axis=axis_idx,
+        )
+
+        bounds_min = list(cyl_center)
+        bounds_max = list(cyl_center)
+        for dim in range(3):
+            if dim == axis_idx:
+                continue
+            bounds_min[dim] = center[dim] - radius_plane
+            bounds_max[dim] = center[dim] + radius_plane
+
+        bounds = (tuple(bounds_min), tuple(bounds_max))
+        sim_min_arr, sim_max_arr = (
+            np.asarray(arr, dtype=float) for arr in derivative_info.simulation_bounds
+        )
+        intersect_min = tuple(max(bounds[0][i], sim_min_arr[i]) for i in range(3))
+        intersect_max = tuple(min(bounds[1][i], sim_max_arr[i]) for i in range(3))
+        if any(lo > hi for lo, hi in zip(intersect_min, intersect_max)):
+            return dict.fromkeys(derivative_info.paths, 0.0)
+
+        derivative_info_cyl = derivative_info.updated_copy(
+            paths=list(cyl_paths),
+            bounds=bounds,
+            bounds_intersect=(intersect_min, intersect_max),
+        )
+
+        vjps_cyl = cylinder._compute_derivatives(derivative_info_cyl)
+        result = dict.fromkeys(derivative_info.paths, 0.0)
+        vjp_radius = float(vjps_cyl.get(("radius",), 0.0)) if need_radius else 0.0
+
+        for path in derivative_info.paths:
+            if path == ("radius",):
+                result[path] = vjp_radius * (radius / radius_plane)
+            elif path == ("center", axis_idx):
+                result[path] = vjp_radius * (delta / radius_plane)
+            elif path[0] == "center" and path[1] != axis_idx:
+                result[path] = float(vjps_cyl.get(("center", path[1]), 0.0))
+
+        return result
+
+    def _edge_length_on_unit_sphere(
+        self, max_edge_length: Optional[float] = _DEFAULT_EDGE_FRACTION
+    ) -> Optional[float]:
+        """Convert ``max_edge_length`` in μm to unit-sphere coordinates."""
+        max_edge_length = _DEFAULT_EDGE_FRACTION if max_edge_length is None else max_edge_length
+        radius = float(self.radius)
+        if radius <= 0.0:
+            return None
+        return max_edge_length / radius
+
+    def _triangulated_surface(
+        self,
+        *,
+        max_edge_length: Optional[float] = None,
+        subdivisions: Optional[int] = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return physical and unit triangles for the surface discretization. Pass either max_edge_length or subdivisions."""
+        max_edge_length_unit = None
+        if subdivisions is None:
+            max_edge_length_unit = self._edge_length_on_unit_sphere(max_edge_length)
+
+        unit_tris = self._unit_sphere_triangles(
+            target_edge_length=max_edge_length_unit,
+            subdivisions=subdivisions,
+            copy_result=False,
+        )
+
+        radius = float(get_static(self.radius))
+        center = np.asarray(self.center, dtype=float)
+        dtype = config.adjoint.gradient_dtype_float
+
+        physical = radius * unit_tris + center
+        return physical.astype(dtype, copy=False), unit_tris.astype(dtype, copy=False)
+
     def _unit_sphere_triangles(
         self,
         *,
@@ -285,7 +563,7 @@ class Sphere(base.Centered, base.Circular):
         subdivisions: Optional[int] = None,
         copy_result: bool = True,
     ) -> np.ndarray:
-        """Return cached unit-sphere triangles with optional copying."""
+        """Return cached unit-sphere triangles with optional copying. Pass either target_edge_length or subdivisions."""
         if target_edge_length is not None and subdivisions is not None:
             raise ValueError("Specify either target_edge_length OR subdivisions, not both.")
 
@@ -311,6 +589,32 @@ class Sphere(base.Centered, base.Circular):
             log_once=True,
         )
         return _MAX_ICOSPHERE_SUBDIVISIONS
+
+    @staticmethod
+    def _tangent_basis_from_normals(normals: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Construct orthonormal tangential bases for each normal vector (vectorized)."""
+
+        dtype = normals.dtype
+        tol = np.finfo(dtype).eps
+
+        # Normalize normals (in case they are not perfectly unit length).
+        n_norm = np.linalg.norm(normals, axis=1)
+        n = normals / np.maximum(n_norm, tol)[:, None]
+
+        # Pick a reference axis least aligned with each normal: argmin(|nx|,|ny|,|nz|).
+        ref_idx = np.argmin(np.abs(n), axis=1)
+        ref = np.zeros_like(n)
+        ref[np.arange(n.shape[0]), ref_idx] = 1.0
+
+        basis1 = np.cross(n, ref)
+        b1_norm = np.linalg.norm(basis1, axis=1)
+        basis1 = basis1 / np.maximum(b1_norm, tol)[:, None]
+
+        basis2 = np.cross(n, basis1)
+        b2_norm = np.linalg.norm(basis2, axis=1)
+        basis2 = basis2 / np.maximum(b2_norm, tol)[:, None]
+
+        return basis1, basis2
 
     def _icosphere_data(self, subdivisions: int) -> tuple[np.ndarray, float]:
         cache = self._icosphere_cache
@@ -370,37 +674,32 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     """
 
     # Provide more explanations on where radius is defined
-    radius: TracedSize1D = pydantic.Field(
-        ...,
+    radius: TracedSize1D = Field(
         title="Radius",
         description="Radius of geometry at the ``reference_plane``.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    length: TracedSize1D = pydantic.Field(
-        ...,
+    length: TracedSize1D = Field(
         title="Length",
         description="Defines thickness of cylinder along axis dimension.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
-    @pydantic.validator("length", always=True)
-    @skip_if_fields_missing(["sidewall_angle", "reference_plane"])
-    def _only_middle_for_infinite_length_slanted_cylinder(
-        cls, val: float, values: dict[str, Any]
-    ) -> float:
+    @model_validator(mode="after")
+    def _only_middle_for_infinite_length_slanted_cylinder(self: Self) -> Self:
         """For a slanted cylinder of infinite length, ``reference_plane`` can only
         be ``middle``; otherwise, the radius at ``center`` is either td.inf or 0.
         """
-        if isclose(values["sidewall_angle"], 0) or not np.isinf(val):
-            return val
-        if values["reference_plane"] != "middle":
+        if isclose(self.sidewall_angle, 0) or not np.isinf(self.length):
+            return self
+        if self.reference_plane != "middle":
             raise SetupError(
                 "For a slanted cylinder here is of infinite length, "
                 "defining the reference_plane other than 'middle' "
                 "leads to undefined cylinder behaviors near 'center'."
             )
-        return val
+        return self
 
     def to_polyslab(
         self, num_pts_circumference: int = _N_PTS_CYLINDER_POLYSLAB, **kwargs: Any
@@ -454,31 +753,11 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         ys = np.sin(angles)
         return np.stack((xs, ys), axis=0)
 
-    def _discretization_wavelength(self, derivative_info: DerivativeInfo) -> float:
-        """Choose a reference wavelength for discretizing the cylinder into a `PolySlab`."""
-        wvl0_min = derivative_info.wavelength_min
-        wvl_mat = wvl0_min / np.max([1.0, np.max(np.sqrt(abs(derivative_info.eps_in)))])
-
-        grid_cfg = config.adjoint
-
-        min_wvl_mat = grid_cfg.min_wvl_fraction * wvl0_min
-        if wvl_mat < min_wvl_mat:
-            log.warning(
-                f"The minimum wavelength inside the cylinder material is {wvl_mat:.3e} μm, which would "
-                f"create a large number of discretization points for computing the gradient. "
-                f"To prevent performance degradation, the discretization wavelength has "
-                f"been clipped to {min_wvl_mat:.3e} μm.",
-                log_once=True,
-            )
-        wvl_mat = max(wvl_mat, min_wvl_mat)
-
-        return wvl_mat
-
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         # compute circumference discretization
-        wvl_mat = self._discretization_wavelength(derivative_info=derivative_info)
+        wvl_mat = discretization_wavelength(derivative_info, "cylinder")
 
         circumference = 2 * np.pi * self.radius
         wvls_in_circumference = circumference / wvl_mat
@@ -598,7 +877,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         new_center = list(self.center)
         new_center[axis] = (bounds[0] + bounds[1]) / 2
         new_length = bounds[1] - bounds[0]
-        return self.updated_copy(center=new_center, length=new_length)
+        return self.updated_copy(center=tuple(new_center), length=new_length)
 
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
@@ -624,7 +903,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -722,7 +1001,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -756,7 +1035,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -991,7 +1270,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         ----------
         axis : int
             Integer index into 'xyz' (0, 1, 2).
-        coords : List[float, float]
+        coords : list[float, float]
             The value in the planar coordinate.
 
         Returns

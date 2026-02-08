@@ -162,7 +162,7 @@ You can now postprocess simulation data using the same python session, or view t
    :class: tip
 
    Repeated runs of the same simulation can reuse solver results by enabling the
-   local cache: ``td.config.local_cache.enabled = True``. You may configure the cache directory
+   local cache with ``td.config.local_cache.enabled = True`` which is the default. You may configure the cache directory
    with ``local_cache.directory``. If the number of entries (``local_cache.max_entries``) or the storage size
    (``local_cache.max_size_gb``) is exceeded, cache entries are evicted by least-recently-used (LRU) order.
    You can clear all stored artifacts with ``td.web.cache.clear()``.

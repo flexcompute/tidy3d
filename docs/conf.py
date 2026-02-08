@@ -132,7 +132,10 @@ language = "en"
 latex_documents = [
     (master_doc, "main.tex", "tidy3d Documentation", "Flexcompute", "manual"),
 ]
-html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"  # for sphinx-sitemap
+html_baseurl = os.environ.get(
+    "READTHEDOCS_CANONICAL_URL",
+    "https://docs.flexcompute.com/projects/tidy3d/en/latest/",
+)  # for sphinx-sitemap
 html_css_files = [
     "css/custom.css",
 ]

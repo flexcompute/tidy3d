@@ -1,7 +1,7 @@
 # Defines specifications for how long to run a simulation
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat
 
 from .base import Tidy3dBaseModel
 
@@ -26,15 +26,14 @@ class RunTimeSpec(Tidy3dBaseModel):
 
     """
 
-    quality_factor: pd.PositiveFloat = pd.Field(
-        ...,
+    quality_factor: PositiveFloat = Field(
         title="Quality Factor",
         description="Quality factor expected in the device. This determines how long the "
         "simulation will run as it assumes a field decay time that scales proportionally to "
         "this value.",
     )
 
-    source_factor: pd.PositiveFloat = pd.Field(
+    source_factor: PositiveFloat = Field(
         3,
         title="Source Factor",
         description="The contribution to the ``run_time`` from the longest source is computed from "

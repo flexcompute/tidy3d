@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pydantic
+from pydantic import Field, PositiveFloat, field_validator, model_validator
 from pyroots import Brentq
 
 from tidy3d.components.base import cached_property
@@ -15,13 +15,16 @@ from tidy3d.components.data.data_array import TimeDataArray
 from tidy3d.components.data.dataset import TimeDataset
 from tidy3d.components.data.validators import validate_no_nans
 from tidy3d.components.time import AbstractTimeDependence
-from tidy3d.components.types import ArrayComplex1D, ArrayFloat1D, Ax, FreqBound, PlotVal
+from tidy3d.components.types import FreqBound
 from tidy3d.components.validators import warn_if_dataset_none
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import check_tidy3d_extras_licensed_feature, tidy3d_extras
+
+if TYPE_CHECKING:
+    from tidy3d.components.types import ArrayComplex1D, ArrayFloat1D, Ax, PlotVal
 
 # how many units of ``twidth`` from the ``offset`` until a gaussian pulse is considered "off"
 END_TIME_FACTOR_GAUSSIAN = 10
@@ -104,17 +107,18 @@ class SourceTime(AbstractTimeDependence):
 class Pulse(SourceTime, ABC):
     """A source time that ramps up with some ``fwidth`` and oscillates at ``freq0``."""
 
-    freq0: pydantic.PositiveFloat = pydantic.Field(
-        ..., title="Central Frequency", description="Central frequency of the pulse.", units=HERTZ
+    freq0: PositiveFloat = Field(
+        title="Central Frequency",
+        description="Central frequency of the pulse.",
+        json_schema_extra={"units": HERTZ},
     )
-    fwidth: pydantic.PositiveFloat = pydantic.Field(
-        ...,
+    fwidth: PositiveFloat = Field(
         title="",
         description="Standard deviation of the frequency content of the pulse.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
 
-    offset: float = pydantic.Field(
+    offset: float = Field(
         5.0,
         title="Offset",
         description="Time delay of the maximum value of the "
@@ -166,7 +170,7 @@ class GaussianPulse(Pulse):
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     """
 
-    remove_dc_component: bool = pydantic.Field(
+    remove_dc_component: bool = Field(
         True,
         title="Remove DC Component",
         description="Whether to remove the DC component in the Gaussian pulse spectrum. "
@@ -271,7 +275,7 @@ class GaussianPulse(Pulse):
             return self.frequency_range(num_fwidth=sigma)
 
         # With dc removed, we'll need to solve for the transcendental equation to find the frequency range
-        def equation_for_sigma_frequency(freq):
+        def equation_for_sigma_frequency(freq: float) -> float:
             """computes A / A_p - exp(-sigma)"""
             return np.abs(self._rel_amp_freq(freq)) - np.exp(-(sigma**2) / 2)
 
@@ -342,9 +346,9 @@ class GaussianPulse(Pulse):
     @classmethod
     def from_frequency_range(
         cls,
-        fmin: pydantic.PositiveFloat,
-        fmax: pydantic.PositiveFloat,
-        minimum_source_bandwidth: pydantic.PositiveFloat = None,
+        fmin: PositiveFloat,
+        fmax: PositiveFloat,
+        minimum_source_bandwidth: Optional[PositiveFloat] = None,
         **kwargs: Any,
     ) -> GaussianPulse:
         """Create a ``GaussianPulse`` that maximizes its amplitude in the frequency range [fmin, fmax].
@@ -389,8 +393,8 @@ class GaussianPulse(Pulse):
         pulse = cls(freq0=freq0, fwidth=fwidth, **kwargs)
         if np.abs(pulse._rel_amp_freq(fmin)) < WARN_SOURCE_AMPLITUDE:
             log.warning(
-                "Source amplitude is not sufficiently large throughout the specified frequency range, "
-                "which can result in inaccurate simulation results. Please decrease the frequency range.",
+                "Default source time profile is less accurate for the specified broadband frequency range. "
+                "For more accurate results, consider reducing the frequency range or using a 'BroadbandSource'.",
             )
         return pulse
 
@@ -462,14 +466,14 @@ class CustomSourceTime(Pulse):
 
     """
 
-    offset: float = pydantic.Field(
+    offset: float = Field(
         0.0,
         title="Offset",
         description="Time delay of the envelope in units of 1 / (``2pi * fwidth``).",
     )
 
-    source_time_dataset: Optional[TimeDataset] = pydantic.Field(
-        ...,
+    source_time_dataset: Optional[TimeDataset] = Field(
+        None,
         title="Source time dataset",
         description="Dataset for storing the envelope of the custom source time. "
         "This envelope will be modulated by a complex exponential at frequency ``freq0``.",
@@ -478,8 +482,9 @@ class CustomSourceTime(Pulse):
     _no_nans_dataset = validate_no_nans("source_time_dataset")
     _source_time_dataset_none_warning = warn_if_dataset_none("source_time_dataset")
 
-    @pydantic.validator("source_time_dataset", always=True)
-    def _more_than_one_time(cls, val):
+    @field_validator("source_time_dataset")
+    @classmethod
+    def _more_than_one_time(cls, val: Optional[TimeDataset]) -> Optional[TimeDataset]:
         """Must have more than one time to interpolate."""
         if val is None:
             return val
@@ -609,20 +614,19 @@ class CustomSourceTime(Pulse):
 class BroadbandPulse(SourceTime):
     """A source time injecting significant energy in the entire custom frequency range."""
 
-    freq_range: FreqBound = pydantic.Field(
-        ...,
+    freq_range: FreqBound = Field(
         title="Frequency Range",
         description="Frequency range where the pulse should have significant energy.",
-        units=HERTZ,
+        json_schema_extra={"units": HERTZ},
     )
-    minimum_amplitude: float = pydantic.Field(
+    minimum_amplitude: float = Field(
         0.3,
         title="Minimum Amplitude",
         description="Minimum amplitude of the pulse relative to the peak amplitude in the frequency range.",
         gt=0.05,
         lt=0.5,
     )
-    offset: float = pydantic.Field(
+    offset: float = Field(
         0.0,
         title="Offset",
         description="An automatic time delay of the peak value of the pulse has been applied under the hood "
@@ -630,8 +634,9 @@ class BroadbandPulse(SourceTime):
         "in units of 1 / [``2pi * (freq_range[1] - freq_range[0])``].",
     )
 
-    @pydantic.validator("freq_range", always=True)
-    def _validate_freq_range(cls, val):
+    @field_validator("freq_range")
+    @classmethod
+    def _validate_freq_range(cls, val: FreqBound) -> FreqBound:
         """Validate that freq_range is positive and properly ordered."""
         if val[0] <= 0 or val[1] <= 0:
             raise ValidationError("Both elements of 'freq_range' must be positive.")
@@ -641,14 +646,15 @@ class BroadbandPulse(SourceTime):
             )
         return val
 
-    @pydantic.root_validator()
-    def _check_broadband_pulse_available(cls, values):
+    @model_validator(mode="before")
+    @classmethod
+    def _check_broadband_pulse_available(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Check if BroadbandPulse is available."""
         check_tidy3d_extras_licensed_feature("BroadbandPulse")
         return values
 
     @cached_property
-    def _source(self):
+    def _source(self) -> Any:
         """Implementation of broadband pulse."""
         return tidy3d_extras["mod"].extension.BroadbandPulse(
             fmin=self.freq_range[0],

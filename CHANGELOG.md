@@ -5,10 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added   
+- Added `ModeSortSpec.keep_modes` which can be set to `"all"` to keep all modes in the mode solver (the default), `"filtered"` to keep only modes passing the filter defined by the `ModeSortSpec`, or an integer `N` to keep only the top `N` modes after filtering and sorting.
+- Added `fill_fraction_box` as a new filtering and sorting key which computes the field-energy fill fraction within a specified bounding box (`ModeSortSpec.bounding_box`).
+- Added `Grid.fine_mesh_info` property to identify and report locations where grid cell sizes are fine for understanding meshing hotspots.
+- Added visualization of finest grid regions in `Simulation.plot_grid()` with shaded regions highlighting areas of fine meshing.
+- Added autograd support for `Sphere`.
+- Added validation warning in `HeatChargeSimulation` for very small `Cylinder` radii to help users avoid meshing and numerical issues.
+- Added `GaussianOverlapMonitor` and `AstigmaticGaussianOverlapMonitor` for decomposing electromagnetic fields onto Gaussian beam profiles.
+- Added `GaussianPort` and `AstigmaticGaussianPort` for S-matrix calculations using Gaussian beam sources and overlap monitors.
+- Added `symmetric_pseudo` option for `s_param_def` in `TerminalComponentModeler` which applies a scaling factor that ensures the S-matrix is symmetric in reciprocal systems.
+- Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
+- Added flag `remove_fragments` to the base `UnstructuredGrid` to remove fragments in unstructured grids. This can ease meshing by eliminating internal boundaries in overlapping structures.
+- Added deprecation warning for `conformal` in TCAD heat/charge monitors when explicitly set; this option is ignored (treated as `False`) when meshing with `remove_fragments=True`.
+- Added in-memory caching for downloaded batch results, configurable via ``config.batch_data_cache``.
+- Added frequency-parametrized lossy dielectrics and lossy metals to the RF material library. User can choose between the material fit for the default frequency range via ``medium()`` or get a fit for the desired frequency range via ``medium(frequency_range)``. When the specified range is outside the default one, a new model is created with averaged properties and a warning is issued.
+
+### Breaking Changes
+- Added optional automatic extrusion of structures at the simulation boundaries into/through PML/Absorber layers via `extrude_structures` field in class `AbsorberSpec`.
+- Added `structure_priority_mode` for `TerminalComponentModeler` and default to `"conductor"` to ensure metal structures override dielectrics regardless of structure order, preventing order-dependent results in RF simulations.
+- 1D lumped elements (with zero lateral extent) are no longer allowed. Use a small finite lateral extent (e.g., `1e-6`) instead.
+- `ModeSortSpec.sort_key` is now required with a default of `"n_eff"` (previously optional with `None` default). `ModeSortSpec.sort_order` is now optional with a default of `None`, which automatically selects the natural order based on `sort_key` and `sort_reference`: ascending when a reference is provided (closest first), otherwise descending for `n_eff` and polarization fractions (higher values first), ascending for `k_eff` and `mode_area` (lower values first).
+- Changed the interpretation of `waist_distance` and `waist_distances` for backward-propagating Gaussian beams (`GaussianBeam`, `AstigmaticGaussianBeam`, `GaussianBeamProfile`, `AstigmaticGaussianBeamProfile`). Previously, the waist position was interpreted relative to the directed propagation axis, meaning switching `direction` from `+` to `-` would also flip the waist position in the global reference frame. Now, the waist position is defined consistently for both directions: a positive `waist_distance` always places the beam waist behind the source/monitor plane (toward the negative normal axis), regardless of propagation direction. This ensures reciprocity between Gaussian sources and overlap monitors used in port-based S-matrix calculations. Users with existing simulations using backward-propagating Gaussian beams with non-zero waist distances may need to adjust their values.
+
+### Changed
+- `ModeSortSpec.sort_key` is now required with a default of `"n_eff"` (previously optional with `None` default). `ModeSortSpec.sort_order` is now optional with a default of `None`, which automatically selects the natural order based on `sort_key` and `sort_reference`: ascending when a reference is provided (closest first), otherwise descending for `n_eff` and polarization fractions (higher values first), ascending for `k_eff` and `mode_area` (lower values first).
+- Added `symmetric_pseudo` option for `s_param_def` in `TerminalComponentModeler` which applies a scaling factor that ensures the S-matrix is symmetric in reciprocal systems.
+- Added deprecation warning for `TemperatureMonitor` and `SteadyPotentialMonitor` when `unstructured` parameter is not explicitly set. The default value of `unstructured` will change from `False` to `True` in the next release.
+- Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
+- Added validation to `GaussianDoping` to ensure `ref_con < concentration`, validate `source` face identifier, and warn the user when the box size is not sufficient for the specified transition width.
+- Local caching is now enabled by default (set `td.config.local_cache.enabled=False` to opt out).
+- Reduced computation time of `adaptive_vjp_spacing` for `GeometryGroup` by allowing permittivity based spacing value to be cached.
+
+### Fixed
+- Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.
+- Fixed frequency accumulation of gradients for custom dispersive media.
+- Fixed `snap_box_to_grid` producing zero-size boxes when using `Expand` behavior with very small intervals centered on a grid point.
+- Fixed sliver polygon artifacts in 2D material subdivision by filtering polygons based on grid cell size, preventing numerical issues with large-coordinate geometries.
+- Fixed `CustomMedium` gradient calculation when field coordinates exactly align with boundaries.
+- Fixed adjoint simulation `grid_spec` to align exactly with forward simulation for correct `FieldData` adjoint source power.
+- Fixed redundant logging when `Batch.download()` skips existing files, and added `replace_existing` to `Batch.run()` so overwrite behavior can be controlled directly.
+- Fixed redundant server lookups when loading simulation results.
+- Updated docstrings for `DerivativeInfo` to more accurately reflect dataclass fields.
+
 ## [2.10.2] - 2026-01-21
 
 ### Added
 - Added `warn_once` option to logging configuration (`td.config.logging.warn_once`) that causes each unique warning message to be shown only once per process, reducing noise from repeated validation warnings.
+- `EMECoefficientMonitor` now supports all of the same fields as `EMESimulationData.coeffs`, with the benefit of downsampling. The fields can be selected via the `EMECoefficientMonitor.fields` property.
 
 ### Changed
 - Unified inside/outside permittivity handling for all geometries when computing shape gradients.
@@ -37,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - For `HeatChargeSimulation` objects, the `plot` function now adds the simulation boundary conditions.
+- Improved memory performance in `postprocess_adj` by using `isel` instead of `sel` for xarray slicing.
 
 ### Fixed
 - Fixed `AutoImpedanceSpec` validation to check path intersections against all conductors, not just filtered ones, as well as the mode plane bounds.

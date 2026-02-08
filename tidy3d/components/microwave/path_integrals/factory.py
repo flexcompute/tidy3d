@@ -2,13 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING
 
-from tidy3d.components.microwave.impedance_calculator import (
-    CurrentIntegralType,
-    VoltageIntegralType,
-)
-from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.microwave.path_integrals.integrals.current import (
     AxisAlignedCurrentIntegral,
     CompositeCurrentIntegral,
@@ -23,19 +18,26 @@ from tidy3d.components.microwave.path_integrals.specs.current import (
     CompositeCurrentIntegralSpec,
     Custom2DCurrentIntegralSpec,
 )
-from tidy3d.components.microwave.path_integrals.specs.impedance import (
-    AutoImpedanceSpec,
-    CustomImpedanceSpec,
-)
+from tidy3d.components.microwave.path_integrals.specs.impedance import AutoImpedanceSpec
 from tidy3d.components.microwave.path_integrals.specs.voltage import (
     AxisAlignedVoltageIntegralSpec,
     Custom2DVoltageIntegralSpec,
 )
-from tidy3d.components.microwave.path_integrals.types import (
-    CurrentPathSpecType,
-    VoltagePathSpecType,
-)
 from tidy3d.exceptions import SetupError, ValidationError
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from tidy3d.components.microwave.impedance_calculator import (
+        CurrentIntegralType,
+        VoltageIntegralType,
+    )
+    from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
+    from tidy3d.components.microwave.path_integrals.specs.impedance import CustomImpedanceSpec
+    from tidy3d.components.microwave.path_integrals.types import (
+        CurrentPathSpecType,
+        VoltagePathSpecType,
+    )
 
 
 def make_voltage_integral(path_spec: VoltagePathSpecType) -> VoltageIntegralType:
@@ -54,9 +56,9 @@ def make_voltage_integral(path_spec: VoltagePathSpecType) -> VoltageIntegralType
     """
     v_integral = None
     if isinstance(path_spec, AxisAlignedVoltageIntegralSpec):
-        v_integral = AxisAlignedVoltageIntegral(**path_spec.dict(exclude={"type"}))
+        v_integral = AxisAlignedVoltageIntegral(**path_spec.model_dump(exclude={"type"}))
     elif isinstance(path_spec, Custom2DVoltageIntegralSpec):
-        v_integral = Custom2DVoltageIntegral(**path_spec.dict(exclude={"type"}))
+        v_integral = Custom2DVoltageIntegral(**path_spec.model_dump(exclude={"type"}))
     else:
         raise ValidationError(f"Unsupported voltage path specification type: {type(path_spec)}")
     return v_integral
@@ -78,11 +80,11 @@ def make_current_integral(path_spec: CurrentPathSpecType) -> CurrentIntegralType
     """
     i_integral = None
     if isinstance(path_spec, AxisAlignedCurrentIntegralSpec):
-        i_integral = AxisAlignedCurrentIntegral(**path_spec.dict(exclude={"type"}))
+        i_integral = AxisAlignedCurrentIntegral(**path_spec.model_dump(exclude={"type"}))
     elif isinstance(path_spec, Custom2DCurrentIntegralSpec):
-        i_integral = Custom2DCurrentIntegral(**path_spec.dict(exclude={"type"}))
+        i_integral = Custom2DCurrentIntegral(**path_spec.model_dump(exclude={"type"}))
     elif isinstance(path_spec, CompositeCurrentIntegralSpec):
-        i_integral = CompositeCurrentIntegral(**path_spec.dict(exclude={"type"}))
+        i_integral = CompositeCurrentIntegral(**path_spec.model_dump(exclude={"type"}))
     else:
         raise ValidationError(f"Unsupported current path specification type: {type(path_spec)}")
     return i_integral

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pd
+import pydantic as pd
 import pytest
 from matplotlib import pyplot as plt
 
@@ -91,11 +91,11 @@ def make_eme_sim():
 
 def test_sim_version_update():
     sim = make_eme_sim()
-    sim_dict = sim.dict()
+    sim_dict = sim.model_dump()
     sim_dict["version"] = "ancient_version"
 
     with AssertLogLevel("WARNING"):
-        sim_new = td.EMESimulation.parse_obj(sim_dict)
+        sim_new = td.EMESimulation.model_validate(sim_dict)
 
     assert sim_new.version == td.__version__
 
@@ -278,9 +278,531 @@ def test_eme_monitor():
         colocate=False,
         name="eme_field",
     )
-    _ = td.EMECoefficientMonitor(
+    # test default fields
+    monitor_default = td.EMECoefficientMonitor(
         center=(1, 2, 3), size=(2, 2, 2), freqs=[300e12], num_modes=2, name="eme_coeffs"
     )
+    assert monitor_default.fields == (
+        "A",
+        "B",
+    )
+
+    # test custom fields subset
+    monitor_subset = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        fields=["A", "B", "overlaps"],
+        name="eme_coeffs_subset",
+    )
+    assert monitor_subset.fields == ("A", "B", "overlaps")
+
+    # test storage_size varies with fields
+    num_cells, num_transverse, num_eme_cells, num_virtual_eme_cells = 100, 50, 5, 5
+    num_freqs, num_modes = 2, 3
+    size_default = monitor_default.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_subset = monitor_subset.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    assert size_subset > size_default
+    assert size_subset > 0
+
+    # test empty fields gives zero storage
+    monitor_empty = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        fields=[],
+        name="eme_coeffs_empty",
+    )
+    size_empty = monitor_empty.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    assert size_empty == 0
+
+
+def test_eme_monitor_storage_size_with_sweep_spec():
+    """Test that storage_size correctly handles different sweep_spec types."""
+    import numpy as np
+
+    num_cells, num_transverse, num_eme_cells, num_virtual_eme_cells = 100, 50, 5, 5
+    num_freqs, num_modes = 2, 3
+    num_sweep = 10
+
+    # Create sweep specs
+    length_sweep = td.EMELengthSweep(scale_factors=np.linspace(0.5, 1.5, num_sweep))
+    mode_sweep = td.EMEModeSweep(num_modes=np.arange(1, num_sweep + 1))
+    freq_sweep = td.EMEFreqSweep(freq_scale_factors=np.linspace(0.9, 1.1, num_sweep))
+
+    # Verify sweep_spec properties
+    assert length_sweep.sweep_modes is False
+    assert length_sweep.sweep_interfaces is False
+    assert length_sweep.sweep_cells is True
+
+    assert mode_sweep.sweep_modes is False
+    assert mode_sweep.sweep_interfaces is True
+    assert mode_sweep.sweep_cells is True
+
+    assert freq_sweep.sweep_modes is True
+    assert freq_sweep.sweep_interfaces is True
+    assert freq_sweep.sweep_cells is True
+
+    # Monitor with only A and B fields (uses full sweep)
+    monitor_ab = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        fields=["A", "B"],
+        name="eme_coeffs_ab",
+    )
+
+    # Monitor with only n_complex and flux (uses sweep_modes)
+    monitor_nf = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        fields=["n_complex", "flux"],
+        name="eme_coeffs_nf",
+    )
+
+    # Monitor with only interface_smatrices (uses sweep_interfaces)
+    monitor_is = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        fields=["interface_smatrices"],
+        name="eme_coeffs_is",
+    )
+
+    # Monitor with overlaps (uses sweep_modes)
+    monitor_ov = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        fields=["overlaps"],
+        name="eme_coeffs_ov",
+    )
+    monitor_ab_limited = td.EMECoefficientMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=3,
+        fields=["A", "B"],
+        name="eme_coeffs_ab_limited",
+    )
+
+    # Get storage sizes with no sweep (baseline)
+    size_ab_none = monitor_ab.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_nf_none = monitor_nf.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_is_none = monitor_is.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_ov_none = monitor_ov.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+
+    # Test EMELengthSweep: only A, B should scale with sweep
+    size_ab_length = monitor_ab.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+    size_nf_length = monitor_nf.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+    size_is_length = monitor_is.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+    size_ov_length = monitor_ov.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+
+    # A, B should scale by num_sweep
+    assert size_ab_length == size_ab_none * num_sweep
+    # n_complex, flux should NOT scale (sweep_modes=False)
+    assert size_nf_length == size_nf_none
+    # interface_smatrices should NOT scale (sweep_interfaces=False)
+    assert size_is_length == size_is_none
+    # overlaps should NOT scale (sweep_modes=False)
+    assert size_ov_length == size_ov_none
+
+    # Test EMEModeSweep: A, B, interface_smatrices should scale
+    size_ab_mode = monitor_ab.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    size_nf_mode = monitor_nf.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    size_is_mode = monitor_is.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    size_ov_mode = monitor_ov.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+
+    # A, B should scale by num_sweep
+    assert size_ab_mode == size_ab_none * num_sweep
+    # n_complex, flux should NOT scale (sweep_modes=False)
+    assert size_nf_mode == size_nf_none
+    # interface_smatrices SHOULD scale (sweep_interfaces=True)
+    assert size_is_mode == size_is_none * num_sweep
+    # overlaps should NOT scale (sweep_modes=False)
+    assert size_ov_mode == size_ov_none
+    # monitor.num_sweep limits scaling
+    size_ab_mode_limited = monitor_ab_limited.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    assert size_ab_mode_limited == size_ab_none * 3
+
+    # Test EMEFreqSweep: everything should scale
+    size_ab_freq = monitor_ab.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+    size_nf_freq = monitor_nf.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+    size_is_freq = monitor_is.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+    size_ov_freq = monitor_ov.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+
+    # All fields should scale by num_sweep
+    assert size_ab_freq == size_ab_none * num_sweep
+    assert size_nf_freq == size_nf_none * num_sweep
+    assert size_is_freq == size_is_none * num_sweep
+    assert size_ov_freq == size_ov_none * num_sweep
+
+    # Test EMEModeSolverMonitor with sweep_spec
+    mode_solver_monitor = td.EMEModeSolverMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        name="eme_mode_solver",
+    )
+    mode_solver_monitor_limited = td.EMEModeSolverMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 2),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=4,
+        name="eme_mode_solver_limited",
+    )
+
+    size_ms_none = mode_solver_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_ms_length = mode_solver_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+    size_ms_mode = mode_solver_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    size_ms_freq = mode_solver_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+
+    # EMEModeSolverMonitor only scales with sweep_modes (EMEFreqSweep)
+    assert size_ms_length == size_ms_none
+    assert size_ms_mode == size_ms_none
+    assert size_ms_freq == size_ms_none * num_sweep
+    size_ms_freq_limited = mode_solver_monitor_limited.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+    assert size_ms_freq_limited == size_ms_none * 4
+
+    # Test EMEFieldMonitor with sweep_spec (uses full sweep)
+    field_monitor = td.EMEFieldMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 0),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=None,
+        name="eme_field",
+    )
+    field_monitor_limited = td.EMEFieldMonitor(
+        center=(1, 2, 3),
+        size=(2, 2, 0),
+        freqs=[300e12],
+        num_modes=2,
+        num_sweep=2,
+        name="eme_field_limited",
+    )
+
+    size_fm_none = field_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=None,
+    )
+    size_fm_length = field_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=length_sweep,
+    )
+    size_fm_mode = field_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=mode_sweep,
+    )
+    size_fm_freq = field_monitor.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+
+    # EMEFieldMonitor uses full sweep for all sweep types
+    assert size_fm_length == size_fm_none * num_sweep
+    assert size_fm_mode == size_fm_none * num_sweep
+    assert size_fm_freq == size_fm_none * num_sweep
+    size_fm_freq_limited = field_monitor_limited.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=freq_sweep,
+    )
+    assert size_fm_freq_limited == size_fm_none * 2
+
+    # Test EMEPeriodicitySweep: all sweep properties are False, so only A, B scale
+    periodicity_sweep = td.EMEPeriodicitySweep(
+        num_reps=[{"unit_cell": i} for i in range(1, num_sweep + 1)]
+    )
+
+    assert periodicity_sweep.sweep_modes is False
+    assert periodicity_sweep.sweep_interfaces is False
+    assert periodicity_sweep.sweep_cells is False
+
+    size_ab_period = monitor_ab.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=periodicity_sweep,
+    )
+    size_nf_period = monitor_nf.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=periodicity_sweep,
+    )
+    size_is_period = monitor_is.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=periodicity_sweep,
+    )
+    size_ov_period = monitor_ov.storage_size(
+        num_cells,
+        num_transverse,
+        num_eme_cells,
+        num_virtual_eme_cells,
+        num_freqs,
+        num_modes,
+        sweep_spec=periodicity_sweep,
+    )
+
+    # A, B should scale by num_sweep (full sweep)
+    assert size_ab_period == size_ab_none * num_sweep
+    # n_complex, flux should NOT scale
+    assert size_nf_period == size_nf_none
+    # interface_smatrices should NOT scale
+    assert size_is_period == size_is_none
+    # overlaps should NOT scale
+    assert size_ov_period == size_ov_none
 
 
 def test_eme_simulation():
@@ -309,7 +831,7 @@ def test_eme_simulation():
         _ = sim.updated_copy(freqs=None)
 
     # no symmetry in propagation direction
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(symmetry=(0, 0, 1))
 
     # test warning for not providing wavelength in autogrid
@@ -327,8 +849,8 @@ def test_eme_simulation():
         )
 
     # test port offsets
-    with pytest.raises(ValidationError):
-        _ = sim.updated_copy(port_offsets=[sim.size[sim.axis] * 2 / 3, sim.size[sim.axis] * 2 / 3])
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(port_offsets=(sim.size[sim.axis] * 2 / 3, sim.size[sim.axis] * 2 / 3))
 
     # test duplicate freqs
     with pytest.raises(pd.ValidationError):
@@ -347,7 +869,7 @@ def test_eme_simulation():
     med = td.FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
     struct = sim.structures[0].updated_copy(medium=med)
     with pytest.raises(pd.ValidationError):
-        _ = sim.updated_copy(structures=[struct])
+        _ = sim.updated_copy(structures=(struct,))
     # warn for time modulated
     FREQ_MODULATE = 1e12
     AMP_TIME = 1.1
@@ -364,7 +886,7 @@ def test_eme_simulation():
         _ = td.EMESimulation(
             size=sim.size,
             monitors=sim.monitors,
-            structures=[struct],
+            structures=(struct,),
             grid_spec=grid_spec,
             axis=sim.axis,
             eme_grid_spec=sim.eme_grid_spec,
@@ -372,7 +894,8 @@ def test_eme_simulation():
         )
     # warn for nonlinear
     nonlinear = td.Medium(
-        permittivity=2, nonlinear_spec=td.NonlinearSpec(models=[td.NonlinearSusceptibility(chi3=1)])
+        permittivity=2,
+        nonlinear_spec=td.NonlinearSpec(models=(td.NonlinearSusceptibility(chi3=1),)),
     )
     struct = sim.structures[0].updated_copy(medium=nonlinear)
     with AssertLogLevel("WARNING"):
@@ -397,28 +920,28 @@ def test_eme_simulation():
 
     # test monitor setup
     monitor = sim.monitors[0].updated_copy(freqs=[sim.freqs[0], sim.freqs[0]])
-    with pytest.raises(SetupError):
-        _ = sim.updated_copy(monitors=[monitor])
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(monitors=(monitor,))
     monitor = sim.monitors[0].updated_copy(freqs=[5e10])
-    with pytest.raises(SetupError):
-        _ = sim.updated_copy(monitors=[monitor])
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(monitors=(monitor,))
     monitor = sim.monitors[0].updated_copy(num_modes=1000)
-    with pytest.raises(SetupError):
-        _ = sim.updated_copy(monitors=[monitor])
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(monitors=(monitor,))
     monitor = sim.monitors[2].updated_copy(num_modes=6)
-    with pytest.raises(SetupError):
-        _ = sim.updated_copy(monitors=[monitor])
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(monitors=(monitor,))
 
     # test monitor at simulation bounds
     monitor = sim.monitors[-1].updated_copy(center=[0, 0, -sim.size[2] / 2])
     with pytest.raises(pd.ValidationError):
-        _ = sim.updated_copy(monitors=[monitor])
+        _ = sim.updated_copy(monitors=(monitor,))
 
     # test max sim size and freqs
     sim_bad = sim.updated_copy(size=(150, 150, 3))
     with pytest.raises(SetupError):
         sim_bad.validate_pre_upload()
-    sim_bad = sim.updated_copy(size=(50, 50, 3), monitors=[])
+    sim_bad = sim.updated_copy(size=(50, 50, 3), monitors=())
     with AssertLogLevel("WARNING", "slow-down"):
         sim_bad.validate_pre_upload()
 
@@ -451,13 +974,13 @@ def test_eme_simulation():
     large_monitor = sim.monitors[2].updated_copy(size=(td.inf, td.inf, td.inf))
     _ = sim.updated_copy(
         size=(10, 10, 10),
-        monitors=[large_monitor],
+        monitors=(large_monitor,),
         freqs=list(1e14 * np.linspace(1, 2, 1)),
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
     sim_bad = sim.updated_copy(
         size=(10, 10, 10),
-        monitors=[large_monitor],
+        monitors=(large_monitor,),
         freqs=list(1e14 * np.linspace(1, 2, 5)),
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
@@ -474,9 +997,20 @@ def test_eme_simulation():
     )
     with AssertLogLevel("WARNING", contains_str="store_coeffs"):
         sim_bad.updated_copy(store_coeffs=True).validate_pre_upload()
+    # port_modes warning
     sim_bad = sim.updated_copy(
         size=(10, 10, 10),
-        monitors=[large_monitor],
+        monitors=[],
+        store_coeffs=False,
+        freqs=list(1e14 * np.linspace(1, 2, 100)),
+        eme_grid_spec=td.EMEUniformGrid(mode_spec=td.EMEModeSpec(num_modes=100), num_cells=100),
+        grid_spec=sim.grid_spec.updated_copy(wavelength=1),
+    )
+    with AssertLogLevel("WARNING", contains_str="store_port_modes"):
+        sim_bad.updated_copy(store_port_modes=True).validate_pre_upload()
+    sim_bad = sim.updated_copy(
+        size=(10, 10, 10),
+        monitors=(large_monitor,),
         freqs=list(1e14 * np.linspace(1, 2, 20)),
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
@@ -484,7 +1018,7 @@ def test_eme_simulation():
         sim_bad.validate_pre_upload()
     sim_bad = sim.updated_copy(
         size=(10, 10, 10),
-        monitors=[large_monitor, large_monitor.updated_copy(name="lmon2")],
+        monitors=(large_monitor, large_monitor.updated_copy(name="lmon2")),
         freqs=list(1e14 * np.linspace(1, 2, 5)),
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
@@ -497,25 +1031,25 @@ def test_eme_simulation():
         center=(0, 0, -1.5),
         name="modes",
     )
-    with pytest.raises(SetupError):
-        _ = sim.updated_copy(monitors=[mode_monitor], port_offsets=(0.5, 0.5))
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(monitors=(mode_monitor,), port_offsets=(0.5, 0.5))
     # test eme cell interval space
     mode_monitor = mode_monitor.updated_copy(
         size=(td.inf, td.inf, td.inf), eme_cell_interval_space=8
     )
-    sim2 = sim.updated_copy(monitors=[mode_monitor])
+    sim2 = sim.updated_copy(monitors=(mode_monitor,))
     assert sim2._monitor_num_eme_cells(monitor=mode_monitor) == 2
 
     # test monitor num modes
-    sim_tmp = sim.updated_copy(monitors=[sim.monitors[0].updated_copy(num_modes=1)])
+    sim_tmp = sim.updated_copy(monitors=(sim.monitors[0].updated_copy(num_modes=1),))
     assert sim_tmp._monitor_num_modes_cell(monitor=sim_tmp.monitors[0], cell_index=0) == 1
 
     # test monitor num freqs
-    sim_tmp = sim.updated_copy(monitors=[sim.monitors[0].updated_copy(freqs=[sim.freqs[0]])])
+    sim_tmp = sim.updated_copy(monitors=(sim.monitors[0].updated_copy(freqs=[sim.freqs[0]]),))
     assert sim_tmp._monitor_num_freqs(monitor=sim_tmp.monitors[0]) == 1
 
     # test sweep
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(
             sweep_spec=td.EMELengthSweep(scale_factors=list(np.linspace(1, 2, 10)))
         )
@@ -535,9 +1069,9 @@ def test_eme_simulation():
             scale_factors=np.stack((np.linspace(1, 2, 7), np.linspace(1, 2, 7)))
         ),
     )
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim_no_field.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[]))
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim_no_field.updated_copy(
             sweep_spec=td.EMELengthSweep(
                 scale_factors=np.stack(
@@ -549,13 +1083,13 @@ def test_eme_simulation():
             )
         )
     # second shape of length sweep must equal number of cells
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim_no_field.updated_copy(
             sweep_spec=td.EMELengthSweep(scale_factors=np.array([[1, 2], [3, 4]]))
         )
     _ = sim.updated_copy(sweep_spec=td.EMEModeSweep(num_modes=list(np.arange(1, 5))))
     # test sweep size limit
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim_no_field.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[]))
     sim_bad = sim_no_field.updated_copy(
         sweep_spec=td.EMELengthSweep(scale_factors=list(np.linspace(1, 2, 200)))
@@ -563,7 +1097,7 @@ def test_eme_simulation():
     with pytest.raises(SetupError):
         sim_bad.validate_pre_upload()
     # can't exceed max num modes
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(sweep_spec=td.EMEModeSweep(num_modes=list(np.arange(150, 200))))
 
     # don't warn in these two cases
@@ -592,6 +1126,17 @@ def test_eme_simulation():
 
     _ = sim.port_modes_monitor
 
+    # test coeffs_full_monitor
+    coeffs_monitor = sim.coeffs_full_monitor
+    assert isinstance(coeffs_monitor, td.EMECoefficientMonitor)
+    assert coeffs_monitor.name == "_eme_coeffs_full_monitor"
+    # coeffs monitor is included in _monitors_full when store_coeffs=True
+    sim_with_coeffs = sim.updated_copy(store_coeffs=True, monitors=[])
+    assert any(m.name == "_eme_coeffs_full_monitor" for m in sim_with_coeffs._monitors_full)
+    # coeffs monitor is not included when store_coeffs=False
+    sim_no_coeffs = sim.updated_copy(store_coeffs=False, monitors=[])
+    assert not any(m.name == "_eme_coeffs_full_monitor" for m in sim_no_coeffs._monitors_full)
+
     # test freq sweep
     sim = sim.updated_copy(sweep_spec=None)
     assert sim._num_sweep == 1
@@ -604,38 +1149,38 @@ def test_eme_simulation():
     assert sim._sweep_modes
     assert sim._num_sweep == 2
     assert sim._monitor_num_sweep(sim.monitors[0]) == 1
-    sim = sim.updated_copy(monitors=[sim.monitors[0].updated_copy(num_sweep=None)])
+    sim = sim.updated_copy(monitors=(sim.monitors[0].updated_copy(num_sweep=None),))
     assert sim._monitor_num_sweep(sim.monitors[0]) == 2
-    with pytest.raises(SetupError):
-        _ = sim.updated_copy(monitors=[sim.monitors[0].updated_copy(num_sweep=4)])
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(monitors=(sim.monitors[0].updated_copy(num_sweep=4),))
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(sweep_spec=td.EMEFreqSweep(freq_scale_factors=[1e-10, 2]))
 
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(
             eme_grid_spec=td.EMEExplicitGrid(
-                boundaries=[-sim.size[2] / 2 + 0.001],
-                mode_specs=[td.EMEModeSpec(), td.EMEModeSpec()],
+                boundaries=(-sim.size[2] / 2 + 0.001,),
+                mode_specs=(td.EMEModeSpec(), td.EMEModeSpec()),
             )
         )
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(
             eme_grid_spec=td.EMEExplicitGrid(
-                boundaries=[sim.size[2] / 2 - 0.001],
-                mode_specs=[td.EMEModeSpec(), td.EMEModeSpec()],
+                boundaries=(sim.size[2] / 2 - 0.001,),
+                mode_specs=(td.EMEModeSpec(), td.EMEModeSpec()),
             )
         )
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(
-            monitors=[
+            monitors=(
                 td.ModeSolverMonitor(
-                    center=[0, 0, sim.size[2] / 2 - 0.001],
-                    size=[td.inf, td.inf, 0],
+                    center=(0, 0, sim.size[2] / 2 - 0.001),
+                    size=(td.inf, td.inf, 0),
                     name="modes",
                     freqs=sim.freqs,
                     mode_spec=td.ModeSpec(),
-                )
-            ]
+                ),
+            )
         )
 
 
@@ -1344,7 +1889,7 @@ def test_eme_sim_data():
         ],
         subgrid_boundaries=[0],
     )
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         sim_interp_test = sim.updated_copy(eme_grid_spec=eme_grid_spec_inconsistent)
 
     # test _validate_interp_specs no error for consistent interp_specs
@@ -1405,7 +1950,7 @@ def test_eme_sim_data():
     # test field in basis with freq sweep
     field_monitor_data = _get_eme_field_data(num_sweep=10)
     data[2] = field_monitor_data
-    sim_data = sim_data.updated_copy(data=data)
+    sim_data = sim_data.updated_copy(data=tuple(data))
     field_in_basis = sim_data.field_in_basis(field=sim_data["field"], port_index=0)
     assert len(field_in_basis.Ex.sweep_index) == 10
     assert "mode_index" in field_in_basis.Ex.coords
@@ -1449,7 +1994,7 @@ def test_eme_periodicity():
 
     # directly give it num_reps
     # can't have field monitor
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(num_reps=2, path="eme_grid_spec/subgrids/1")
 
     # EMEPeriodicitySweep validation
@@ -1457,25 +2002,25 @@ def test_eme_periodicity():
         _ = td.EMEPeriodicitySweep(num_reps=[{"a": n} for n in range(150000, 150003)])
     sweep_spec = td.EMEPeriodicitySweep(num_reps=[{"a": n} for n in range(1, 4)])
     # still can't have field monitor
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(sweep_spec=sweep_spec)
 
     # remove the field monitor, now it passes
     desired_cell_index_pairs = set([(i, i + 1) for i in range(6)] + [(5, 1)])
     sim = sim.updated_copy(
-        monitors=[m for m in sim.monitors if not isinstance(m, td.EMEFieldMonitor)]
+        monitors=tuple(m for m in sim.monitors if not isinstance(m, td.EMEFieldMonitor))
     )
     sim2 = sim.updated_copy(num_reps=2, path="eme_grid_spec/subgrids/1")
     assert set(sim2._cell_index_pairs) == desired_cell_index_pairs
     # sweep can't have coeff monitor
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(sweep_spec=sweep_spec)
-    with pytest.raises(SetupError):
+    with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(sweep_spec=sweep_spec, store_coeffs=True, monitors=[])
     # remove coeff monitor too, now it passes
     with AssertLogLevel(None):
         sim = sim.updated_copy(
-            monitors=[m for m in sim.monitors if not isinstance(m, td.EMECoefficientMonitor)]
+            monitors=tuple(m for m in sim.monitors if not isinstance(m, td.EMECoefficientMonitor))
         )
         sim2 = sim.updated_copy(sweep_spec=sweep_spec)
         assert set(sim2._cell_index_pairs) == desired_cell_index_pairs
@@ -1494,10 +2039,10 @@ def test_eme_grid_from_structures():
         names=[None, "wg", None],
         num_reps=[1, 2, 1],
     )
-    sim = sim.updated_copy(eme_grid_spec=eme_grid_spec, monitors=[])
+    sim = sim.updated_copy(eme_grid_spec=eme_grid_spec, monitors=())
     with pytest.raises(ValidationError):
         _ = td.EMECompositeGrid.from_structure_groups(
-            structure_groups=[],
+            structure_groups=(),
             axis=2,
             mode_specs=[],
             names=[None, "wg", None],
@@ -1505,7 +2050,7 @@ def test_eme_grid_from_structures():
         )
     with pytest.raises(ValidationError):
         _ = td.EMECompositeGrid.from_structure_groups(
-            structure_groups=[[], [td.Box(center=(0, 0, 0), size=(1, 1, 1))], []],
+            structure_groups=[([], [td.Box(center=(0, 0, 0), size=(1, 1, 1))], [])],
             axis=2,
             mode_specs=[td.EMEModeSpec(num_modes=1)] * 2,
             names=[None, "wg", None],
@@ -1570,6 +2115,6 @@ def test_eme_sim_2d():
         axis=2,
         freqs=[freq0],
         eme_grid_spec=eme_grid_spec,
-        monitors=[monitor],
+        monitors=(monitor,),
         port_offsets=(0.5, 0),
     )

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components.source.field import CHEB_GRID_WIDTH, DirectionalSource
@@ -133,7 +133,7 @@ def test_gaussian_from_frequency_range():
     g2 = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax)
     assert g2.remove_dc_component
 
-    with AssertLogLevel("WARNING", contains_str="not sufficiently large"):
+    with AssertLogLevel("WARNING", contains_str="broadband"):
         g_small = td.GaussianPulse.from_frequency_range(
             fmin=fmin, fmax=60e9, remove_dc_component=True
         )
@@ -214,14 +214,14 @@ def test_dipole():
     # p.plot(y=2)
     # plt.close()
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.PointDipole(size=(1, 1, 1), source_time=g, center=(1, 2, 3), polarization="Ex")
 
 
 def test_dipole_sources_from_angles():
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.PointDipole.sources_from_angles(
             size=(1, 1, 1),
             source_time=g,
@@ -311,11 +311,11 @@ def test_FieldSource():
     # plt.close()
 
     # test that non-planar geometry crashes plane wave and gaussian beams
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.PlaneWave(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.GaussianBeam(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.AstigmaticGaussianBeam(
             size=(1, 1, 1),
             source_time=g,
@@ -324,14 +324,14 @@ def test_FieldSource():
             waist_sizes=(0.2, 0.4),
             waist_distances=(0.1, 0.3),
         )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.ModeSource(size=(1, 1, 1), source_time=g, mode_spec=mode_spec)
 
     tfsf = td.TFSF(size=(1, 1, 1), direction="+", source_time=g, injection_axis=2)
     _ = tfsf.injection_plane_center
 
     # assert that TFSF must be volumetric
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.TFSF(size=(1, 1, 0), direction="+", source_time=g, injection_axis=2)
 
     # s.plot(z=0)
@@ -481,11 +481,11 @@ def test_broadband_source():
     check_freq_grid(freq_grid, num_freqs)
 
     # check validators for num_freqs
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         s = td.GaussianBeam(
             size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+", num_freqs=200
         )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         s = td.AstigmaticGaussianBeam(
             size=(0, 1, 1),
             source_time=g,
@@ -495,7 +495,7 @@ def test_broadband_source():
             waist_distances=(0.1, 0.3),
             num_freqs=100,
         )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         s = td.ModeSource(
             size=(0, 1, 1),
             direction="+",
@@ -541,7 +541,7 @@ def test_custom_source_time():
     )
     cst = td.CustomSourceTime.from_values(freq0=freq0, fwidth=0.1e12, values=[0, 1], dt=sim.dt)
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
-    sim = sim.updated_copy(sources=[source])
+    sim = sim.updated_copy(sources=(source,))
     assert np.allclose(cst.amp_time(sim.tmesh[0]), [0], rtol=0, atol=ATOL)
     assert np.allclose(
         cst.amp_time(sim.tmesh[1:]),
@@ -560,7 +560,7 @@ def test_custom_source_time():
     cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
     with AssertLogLevel("WARNING", contains_str="defined over a time range"):
-        sim = sim.updated_copy(sources=[source])
+        sim = sim.updated_copy(sources=(source,))
 
     # test normalization warning
     with AssertLogLevel("WARNING"):
@@ -568,10 +568,10 @@ def test_custom_source_time():
 
     with AssertLogLevel("WARNING"):
         source = source.updated_copy(source_time=td.ContinuousWave(freq0=freq0, fwidth=0.1e12))
-        sim = sim.updated_copy(sources=[source])
+        sim = sim.updated_copy(sources=(source,))
 
     # test single value validation error
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         vals = td.components.data.data_array.TimeDataArray([1], coords={"t": [0]})
         dataset = td.components.data.dataset.TimeDataset(values=vals)
         cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
@@ -597,7 +597,7 @@ def test_custom_field_source():
     with AssertLogLevel(None):
         make_custom_field_source(field_dataset)
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         # repeat some entries so data cannot be interpolated
         X2 = [X[0], *list(X)]
         n_data2 = np.vstack((n_data[0, :, :, :].reshape(1, Ny, Nz, Nf), n_data))
@@ -724,7 +724,7 @@ def test_broadband_angled_gaussian_warning():
 def test_source_frame():
     _ = td.PECFrame()
     _ = td.PECFrame(length=4)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.PECFrame(length=0)
 
     _ = td.ModeSource(

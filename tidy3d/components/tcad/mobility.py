@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeFloat, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import PERCMCUBE
@@ -15,8 +15,10 @@ class ConstantMobilityModel(Tidy3dBaseModel):
     >>> mobility_model = td.ConstantMobilityModel(mu=1500)
     """
 
-    mu: pd.NonNegativeFloat = pd.Field(
-        ..., title="Mobility", description="Mobility", units="cm²/V-s"
+    mu: NonNegativeFloat = Field(
+        title="Mobility",
+        description="Mobility",
+        json_schema_extra={"units": "cm²/V-s"},
     )
 
 
@@ -115,55 +117,48 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
     """
 
     # mobilities
-    mu_min: pd.PositiveFloat = pd.Field(
-        ...,
+    mu_min: PositiveFloat = Field(
         title="Minimum electron mobility",
         description="Minimum electron mobility  :math:`\\mu_{\\text{min}}`  at reference temperature (300K).",
-        units="cm^2/V-s",
+        json_schema_extra={"units": "cm^2/V-s"},
     )
 
-    mu: pd.PositiveFloat = pd.Field(
-        ...,
+    mu: PositiveFloat = Field(
         title="Reference mobility",
         description="Reference mobility at reference temperature (300K).",
-        units="cm^2/V-s",
+        json_schema_extra={"units": "cm^2/V-s"},
     )
 
     # thermal exponent for reference mobility
-    exp_2: float = pd.Field(
-        ..., title="Exponent for temperature dependent behavior of reference mobility"
+    exp_2: float = Field(
+        title="Exponent for temperature dependent behavior of reference mobility",
     )
 
     # doping exponent
-    exp_N: pd.PositiveFloat = pd.Field(
-        ...,
+    exp_N: PositiveFloat = Field(
         title="Exponent for doping dependence of mobility.",
         description="Exponent for doping dependence of mobility at reference temperature (300K).",
     )
 
     # reference doping
-    ref_N: pd.PositiveFloat = pd.Field(
-        ...,
+    ref_N: PositiveFloat = Field(
         title="Reference doping",
         description="Reference doping at reference temperature (300K).",
-        units=PERCMCUBE,
+        json_schema_extra={"units": PERCMCUBE},
     )
 
     # temperature exponent
-    exp_1: float = pd.Field(
-        ...,
+    exp_1: float = Field(
         title="Exponent of thermal dependence of minimum mobility.",
         description="Exponent of thermal dependence of minimum mobility.",
     )
 
-    exp_3: float = pd.Field(
-        ...,
+    exp_3: float = Field(
         title="Exponent of thermal dependence of reference doping.",
         description="Exponent of thermal dependence of reference doping.",
     )
 
-    exp_4: float = pd.Field(
-        ...,
+    exp_4: float = Field(
         title="Exponent of thermal dependence of the doping exponent effect.",
         description="Exponent of thermal dependence of the doping exponent effect.",
     )

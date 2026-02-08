@@ -1,12 +1,11 @@
 # convenient container for the output of the inverse design (specifically the history)
 from __future__ import annotations
 
-import typing
-from typing import Any
+from typing import Any, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, field_validator
 
 import tidy3d as td
 from tidy3d.components.types import ArrayLike
@@ -20,56 +19,58 @@ from .design import InverseDesignType
 class InverseDesignResult(InvdesBaseModel):
     """Container for the result of an ``InverseDesign.run()`` call."""
 
-    design: InverseDesignType = pd.Field(
-        ...,
+    design: InverseDesignType = Field(
         title="Inverse Design Specification",
         description="Specification describing the inverse design problem we wish to optimize.",
     )
 
-    params: tuple[ArrayLike, ...] = pd.Field(
+    params: tuple[ArrayLike, ...] = Field(
         (),
         title="Parameter History",
         description="History of parameter arrays throughout the optimization.",
     )
 
-    objective_fn_val: tuple[float, ...] = pd.Field(
+    objective_fn_val: tuple[float, ...] = Field(
         (),
         title="Objective Function History",
         description="History of objective function values throughout the optimization.",
     )
 
-    grad: tuple[ArrayLike, ...] = pd.Field(
+    grad: tuple[ArrayLike, ...] = Field(
         (),
         title="Gradient History",
         description="History of objective function gradient arrays throughout the optimization.",
     )
 
-    penalty: tuple[float, ...] = pd.Field(
+    penalty: tuple[float, ...] = Field(
         (),
         title="Penalty History",
         description="History of weighted sum of penalties throughout the optimization.",
     )
 
-    post_process_val: tuple[float, ...] = pd.Field(
+    post_process_val: tuple[float, ...] = Field(
         (),
         title="Post-Process Function History",
         description="History of return values from ``post_process_fn`` throughout the optimization.",
     )
 
-    simulation: tuple[td.Simulation, ...] = pd.Field(
+    simulation: tuple[td.Simulation, ...] = Field(
         (),
         title="Simulation History",
         description="History of ``td.Simulation`` instances throughout the optimization.",
     )
 
-    opt_state: tuple[dict, ...] = pd.Field(
+    opt_state: tuple[dict[str, Union[int, ArrayLike]], ...] = Field(
         (),
         title="Optimizer State History",
         description="History of optimizer states throughout the optimization.",
     )
 
-    @pd.validator("params", pre=False, allow_reuse=True)
-    def _validate_and_clip_params(cls, params_tuple):
+    @field_validator("params")
+    @classmethod
+    def _validate_and_clip_params(
+        cls, params_tuple: tuple[ArrayLike, ...]
+    ) -> tuple[ArrayLike, ...]:
         """Ensure all parameters in history are within [0,1] bounds, clipping if necessary."""
         if not params_tuple:
             return params_tuple
@@ -121,11 +122,11 @@ class InverseDesignResult(InvdesBaseModel):
         return list(self.history.keys())
 
     @property
-    def last(self) -> dict[str, typing.Any]:
+    def last(self) -> dict[str, Any]:
         """Dictionary of last values in ``self.history``."""
         return {key: value[-1] for key, value in self.history.items()}
 
-    def get(self, key: str, index: int = -1) -> typing.Any:
+    def get(self, key: str, index: int = -1) -> Any:
         """Get the value from the history at a certain index (-1 means last)."""
         if key not in self.keys:
             raise KeyError(f"'{key}' not present in 'Result.history' dict with: {self.keys}.")
@@ -134,24 +135,24 @@ class InverseDesignResult(InvdesBaseModel):
             raise ValueError(f"Can't get the last value of '{key}' as there is no history present.")
         return values[index]
 
-    def get_last(self, key: str) -> typing.Any:
+    def get_last(self, key: str) -> Any:
         """Get the last value from the history."""
         return self.get(key=key, index=-1)
 
-    def get_sim(self, index: int = -1) -> typing.Union[td.Simulation, list[td.Simulation]]:
+    def get_sim(self, index: int = -1) -> Union[td.Simulation, list[td.Simulation]]:
         """Get the simulation at a specific index in the history (list of sims if multi)."""
         params = np.array(self.get(key="params", index=index))
         return self.design.to_simulation(params=params)
 
     def get_sim_data(
         self, index: int = -1, **kwargs: Any
-    ) -> typing.Union[td.SimulationData, list[td.SimulationData]]:
+    ) -> Union[td.SimulationData, list[td.SimulationData]]:
         """Get the simulation data at a specific index in the history (list of simdata if multi)."""
         params = np.array(self.get(key="params", index=index))
         return self.design.to_simulation_data(params=params, **kwargs)
 
     @property
-    def sim_last(self) -> typing.Union[td.Simulation, list[td.Simulation]]:
+    def sim_last(self) -> Union[td.Simulation, list[td.Simulation]]:
         """The last simulation."""
         return self.get_sim(index=-1)
 

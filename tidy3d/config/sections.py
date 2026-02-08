@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import os
-from os import PathLike
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 from urllib.parse import urlparse
 
 import numpy as np
@@ -35,6 +34,9 @@ from tidy3d.log import (
 
 from .registry import get_manager as _get_attached_manager
 from .registry import register_handler, register_section
+
+if TYPE_CHECKING:
+    from os import PathLike
 
 TLS_VERSION_CHOICES = {"TLSv1", "TLSv1_1", "TLSv1_2", "TLSv1_3"}
 
@@ -474,7 +476,7 @@ class LocalCacheConfig(ConfigSection):
     """Settings controlling the optional local simulation cache."""
 
     enabled: bool = Field(
-        False,
+        True,
         title="Enable cache",
         description="Enable or disable the local simulation cache.",
         json_schema_extra={"persist": True},
@@ -502,6 +504,7 @@ class LocalCacheConfig(ConfigSection):
     )
 
     @field_validator("directory", mode="before")
+    @classmethod
     def _ensure_directory_exists(cls, v: PathLike) -> Path:
         """Expand ~, resolve path, and create directory if missing before DirectoryPath validation."""
         p = Path(v).expanduser().resolve()
@@ -512,6 +515,25 @@ class LocalCacheConfig(ConfigSection):
     def _serialize_directory(self, value: Path) -> str:
         """Persist directory as strings."""
         return str(value)
+
+
+class BatchDataCacheConfig(ConfigSection):
+    """Settings controlling in-memory caching for batch data."""
+
+    enabled: bool = Field(
+        True,
+        title="Enable batch data cache",
+        description="Cache batch results in memory when files are below the size threshold.",
+    )
+
+    max_total_size_gb: NonNegativeFloat = Field(
+        1.0,
+        title="Maximum total batch data size (GB)",
+        description=(
+            "Cache batch task data only when the combined size of all task data files is at or "
+            "below this threshold. Set to 0 to disable."
+        ),
+    )
 
 
 @register_section("plugins")
@@ -527,10 +549,12 @@ if not WASM_BUILD:
     register_section("web")(WebConfig)
     register_handler("web")(apply_web)
     register_section("local_cache")(LocalCacheConfig)
+    register_section("batch_data_cache")(BatchDataCacheConfig)
 
 
 __all__ = [
     "AdjointConfig",
+    "BatchDataCacheConfig",
     "LocalCacheConfig",
     "LoggingConfig",
     "MicrowaveConfig",

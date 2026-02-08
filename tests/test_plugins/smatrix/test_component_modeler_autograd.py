@@ -28,7 +28,7 @@ def _run_emulated_minimal(simulation: td.Simulation, path=None, **kwargs) -> td.
 
     def _coords_for_monitor(sim: td.Simulation, mnt: td.Monitor):
         grid = sim.discretize_monitor(mnt)
-        bounds = grid.boundaries.dict()
+        bounds = grid.boundaries.model_dump()
 
         def centers(arr):
             arr = np.asarray(arr)
@@ -215,8 +215,8 @@ def build_terminal_modeler(scale: float) -> TerminalComponentModeler:
 
 
 def test_component_modeler_autograd_tracing(patch_web_autograd_emulator, tmp_path):
-    td.config.logging_level = "ERROR"
-    td.config.log_suppression = True
+    td.config.logging.level = "ERROR"
+    td.config.logging.suppression = True
 
     def objective(scale: float) -> float:
         modeler = build_modal_modeler(scale)
@@ -240,8 +240,8 @@ def test_component_modeler_autograd_error_with_element_mappings(
     patch_web_autograd_emulator, tmp_path
 ):
     """Verify that we get the expected error when running a component modeler with `element_mappings` in autograd."""
-    td.config.logging_level = "ERROR"
-    td.config.log_suppression = True
+    td.config.logging.level = "ERROR"
+    td.config.logging.suppression = True
 
     def objective(scale: float) -> float:
         modeler = build_modal_modeler(scale)
@@ -250,7 +250,7 @@ def test_component_modeler_autograd_error_with_element_mappings(
         right = ("p2", 0)
 
         element_mappings = [
-            ((left, right), (right, left), 1.0),
+            ((left, right), (right, left), 1.0 + 0j),
         ]
 
         modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
@@ -266,8 +266,8 @@ def test_component_modeler_autograd_error_with_element_mappings(
 
 
 def test_component_modeler_autograd_tracing_modeler_run(patch_web_autograd_emulator, tmp_path):
-    td.config.logging_level = "ERROR"
-    td.config.log_suppression = True
+    td.config.logging.level = "ERROR"
+    td.config.logging.suppression = True
 
     def objective(scale: float) -> float:
         modeler = build_modal_modeler(scale)
@@ -295,8 +295,8 @@ def test_terminal_component_modeler_autograd_tracing_stubbed(
     a stub to keep the test fast and robust.
     """
 
-    td.config.logging_level = "ERROR"
-    td.config.log_suppression = True
+    td.config.logging.level = "ERROR"
+    td.config.logging.suppression = True
 
     # Minimal stub: reduce first available FieldData per port over space (keep f), place on diagonal
     def _fake_terminal_construct_smatrix(
@@ -359,8 +359,8 @@ def test_terminal_component_modeler_autograd_tracing_modeler_run_stubbed(
 ):
     """Same as terminal autograd test, but running via modeler.run()."""
 
-    td.config.logging_level = "ERROR"
-    td.config.log_suppression = True
+    td.config.logging.level = "ERROR"
+    td.config.logging.suppression = True
 
     def _fake_terminal_construct_smatrix(
         modeler_data, assume_ideal_excitation=False, s_param_def="pseudo"

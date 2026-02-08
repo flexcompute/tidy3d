@@ -8,7 +8,7 @@ import warnings
 import gdstk
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
+import pydantic as pd
 import pytest
 import shapely
 import trimesh
@@ -23,7 +23,7 @@ from shapely.geometry import (
 )
 
 import tidy3d as td
-from tidy3d.compat import _shapely_is_older_than
+from tidy3d.compat import _package_is_older_than
 from tidy3d.components.geometry.base import cleanup_shapely_object
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
 from tidy3d.components.geometry.utils import (
@@ -35,7 +35,7 @@ from tidy3d.components.geometry.utils import (
     snap_box_to_grid,
     traverse_geometries,
 )
-from tidy3d.components.geometry.utils_2d import subdivide
+from tidy3d.components.geometry.utils_2d import _is_sliver_polygon, subdivide
 from tidy3d.constants import LARGE_NUMBER, fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 
@@ -50,10 +50,10 @@ SPHERE = td.Sphere(radius=1)
 CYLINDER = td.Cylinder(axis=2, length=1, radius=1)
 
 GROUP = td.GeometryGroup(
-    geometries=[
+    geometries=(
         td.Box(center=(-0.25, 0, 0), size=(0.5, 1, 1)),
         td.Box(center=(0.25, 0, 0), size=(0.5, 1, 1)),
-    ]
+    )
 )
 UNION = td.ClipOperation(
     operation="union",
@@ -266,16 +266,16 @@ def test_intersections_plane_quad_segs(component, quad_segs):
 
 
 def test_center_not_inf_validate():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Box(center=(td.inf, 0, 0))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Box(center=(-td.inf, 0, 0))
 
 
 def test_radius_not_inf_validate():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Sphere(radius=td.inf)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(radius=td.inf, center=(0, 0, 0), axis=1, length=1)
 
 
@@ -292,7 +292,7 @@ def test_slanted_cylinder_infinite_length_validate():
         sidewall_angle=0.1,
         reference_plane="middle",
     )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(
             radius=1,
             center=(0, 0, 0),
@@ -301,7 +301,7 @@ def test_slanted_cylinder_infinite_length_validate():
             sidewall_angle=0.1,
             reference_plane="top",
         )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(
             radius=1,
             center=(0, 0, 0),
@@ -362,7 +362,7 @@ def test_polyslab_inf_bounds(lower_bound, upper_bound):
 
 
 def test_polyslab_bounds():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         td.PolySlab(vertices=((0, 0), (1, 0), (1, 1)), slab_bounds=(0.5, -0.5), axis=2)
 
 
@@ -398,15 +398,15 @@ def test_polyslab_inf_to_finite_bounds(axis):
 
 
 def test_validate_polyslab_vertices_valid():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         POLYSLAB.copy(update={"vertices": (1, 2, 3)})
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         crossing_verts = ((0, 0), (1, 1), (0, 1), (1, 0))
         POLYSLAB.copy(update={"vertices": crossing_verts})
 
 
 def test_sidewall_failed_validation():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         POLYSLAB.copy(update={"sidewall_angle": 1000})
 
 
@@ -440,7 +440,7 @@ def test_gdstk_cell():
 
 def make_geo_group():
     """Make a generic Geometry Group."""
-    boxes = [td.Box(size=(1, 1, 1), center=(i, 0, 0)) for i in range(-5, 5)]
+    boxes = tuple(td.Box(size=(1, 1, 1), center=(i, 0, 0)) for i in range(-5, 5))
     return td.GeometryGroup(geometries=boxes)
 
 
@@ -468,8 +468,8 @@ def test_geo_group_methods():
 
 def test_geo_group_empty():
     """dont allow empty geometry list."""
-    with pytest.raises(pydantic.ValidationError):
-        _ = td.GeometryGroup(geometries=[])
+    with pytest.raises(pd.ValidationError):
+        _ = td.GeometryGroup(geometries=())
 
 
 def test_geo_group_volume():
@@ -644,22 +644,22 @@ def test_flattening():
     flat = list(
         flatten_groups(
             td.GeometryGroup(
-                geometries=[
+                geometries=(
                     td.Box(size=(1, 1, 1)),
                     td.Box(size=(0, 1, 0)),
                     td.ClipOperation(
                         operation="union",
                         geometry_a=td.Box(size=(0, 0, 1)),
                         geometry_b=td.GeometryGroup(
-                            geometries=[
+                            geometries=(
                                 td.Box(size=(2, 2, 2)),
                                 td.GeometryGroup(
-                                    geometries=[td.Box(size=(3, 3, 3)), td.Box(size=(3, 0, 3))]
+                                    geometries=(td.Box(size=(3, 3, 3)), td.Box(size=(3, 0, 3)))
                                 ),
-                            ]
+                            )
                         ),
                     ),
-                ]
+                )
             )
         )
     )
@@ -669,22 +669,22 @@ def test_flattening():
     flat = list(
         flatten_groups(
             td.GeometryGroup(
-                geometries=[
+                geometries=(
                     td.Box(size=(1, 1, 1)),
                     td.Box(size=(0, 1, 0)),
                     td.ClipOperation(
                         operation="intersection",
                         geometry_a=td.Box(size=(0, 0, 1)),
                         geometry_b=td.GeometryGroup(
-                            geometries=[
+                            geometries=(
                                 td.Box(size=(2, 2, 2)),
                                 td.GeometryGroup(
-                                    geometries=[td.Box(size=(3, 3, 3)), td.Box(size=(3, 0, 3))]
+                                    geometries=(td.Box(size=(3, 3, 3)), td.Box(size=(3, 0, 3)))
                                 ),
-                            ]
+                            )
                         ),
                     ),
-                ]
+                )
             )
         )
     )
@@ -727,15 +727,15 @@ def test_geometry_traversal():
     assert len(geometries) == 1
 
     geo_tree = td.GeometryGroup(
-        geometries=[
+        geometries=(
             td.Box(size=(1, 0, 0)),
             td.ClipOperation(
                 operation="intersection",
                 geometry_a=td.GeometryGroup(
-                    geometries=[
+                    geometries=(
                         td.Box(size=(5, 0, 0)),
                         td.Box(size=(6, 0, 0)),
-                    ]
+                    )
                 ),
                 geometry_b=td.ClipOperation(
                     operation="difference",
@@ -744,13 +744,13 @@ def test_geometry_traversal():
                 ),
             ),
             td.GeometryGroup(
-                geometries=[
+                geometries=(
                     td.Box(size=(3, 0, 0)),
                     td.Box(size=(4, 0, 0)),
-                ]
+                )
             ),
             td.Box(size=(2, 0, 0)),
-        ]
+        )
     )
     geometries = list(traverse_geometries(geo_tree))
     assert len(geometries) == 13
@@ -768,34 +768,34 @@ def test_geometry():
     # _ = PolySlab(vertices=vertices_np, slab_bounds=(-1, 1), axis=1)
 
     # make sure wrong axis arguments error
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=-1, length=1)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.PolySlab(radius=1, center=(0, 0, 0), axis=-1, slab_bounds=(-0.5, 0.5))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=3, length=1)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.PolySlab(radius=1, center=(0, 0, 0), axis=3, slab_bounds=(-0.5, 0.5))
 
     # make sure negative values error
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Sphere(radius=-1, center=(0, 0, 0))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(radius=-1, center=(0, 0, 0), axis=3, length=1)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=3, length=-1)
 
 
 def test_geometry_sizes():
     # negative in size kwargs errors
     for size in (-1, 1, 1), (1, -1, 1), (1, 1, -1):
-        with pytest.raises(pydantic.ValidationError):
+        with pytest.raises(pd.ValidationError):
             _ = td.Box(size=size, center=(0, 0, 0))
-        with pytest.raises(pydantic.ValidationError):
+        with pytest.raises(pd.ValidationError):
             _ = td.Simulation(size=size, run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
 
     # negative grid sizes error?
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.uniform(dl=-1.0), run_time=1e-12)
 
 
@@ -936,7 +936,7 @@ def test_polyslab_intersection_inf_bounds():
     assert poly.intersections_plane(x=0)[0] == shapely.box(-1, 0.0, 1, LARGE_NUMBER)
 
     # 2) [-inf, 0]
-    poly = poly.updated_copy(slab_bounds=[-td.inf, 0])
+    poly = poly.updated_copy(slab_bounds=(-td.inf, 0))
     assert len(poly.intersections_plane(x=0)) == 1
     assert poly.intersections_plane(x=0)[0] == shapely.box(-1, -LARGE_NUMBER, 1, 0)
 
@@ -1192,7 +1192,7 @@ def test_triangle_mesh_to_stl_roundtrip(tmp_path, binary):
 def test_geo_group_sim():
     geo_grp = td.TriangleMesh.from_stl("tests/data/two_boxes_separate.stl")
     geos_orig = list(geo_grp.geometries)
-    geo_grp_full = geo_grp.updated_copy(geometries=[*geos_orig, td.Box(size=(1, 1, 1))])
+    geo_grp_full = geo_grp.updated_copy(geometries=(*geos_orig, td.Box(size=(1, 1, 1))))
 
     sim = td.Simulation(
         size=(10, 10, 10),
@@ -1209,7 +1209,7 @@ def test_geo_group_sim():
 
 
 def test_finite_geometry_transformation():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Box(size=(td.inf, 0, 1)).scaled(1, 1, 1)
 
 
@@ -1268,7 +1268,7 @@ def test_subdivide():
     overlapping_boxes = td.GeometryGroup(geometries=(box, overlap_box))
 
     background_structure = td.Structure(medium=td.Medium(), geometry=td.Box(size=(10, 10, 10)))
-    subdivisions = subdivide(geom=overlapping_boxes, structures=[background_structure])
+    subdivisions = subdivide(geom=overlapping_boxes, structures=(background_structure,))
     assert len(subdivisions) == 1
 
     # Test that when a small sliver is created during subdivide
@@ -1276,7 +1276,115 @@ def test_subdivide():
     box_sliver = td.Structure(
         medium=td.Medium(), geometry=td.Box(size=(1, 1, 1), center=(1 - fp_eps, 0, 0))
     )
-    subdivisions = subdivide(geom=overlapping_boxes, structures=[background_structure, box_sliver])
+    subdivisions = subdivide(geom=overlapping_boxes, structures=(background_structure, box_sliver))
+
+
+def test_subdivide_large_geometry_sliver_filter():
+    """Test that sliver polygons are filtered based on grid cell size for large geometries.
+
+    When geometries have large coordinates, floating-point precision can create thin
+    "sliver" polygons during boolean operations. These should be filtered out when
+    their dimensions are much smaller than the grid cell size.
+    """
+    # Create a 2D geometry at large coordinates (similar to real-world case)
+    large_offset = 7000.0
+    geom = td.Box(size=(100, 35, 0), center=(0, large_offset, 0))
+
+    # Create background structure that covers the geometry
+    background = td.Structure(
+        medium=td.Medium(), geometry=td.Box(size=(200, 200, 200), center=(0, large_offset, 0))
+    )
+
+    # Create a structure that partially overlaps the 2D geometry.
+    # Position it so that boolean operations produce a tiny sliver at the edge
+    # due to floating-point precision at large coordinates.
+    # The sliver width will be on the order of fp_eps * coordinate_value ~ 1e-7 * 7000 ~ 0.001
+    sliver_offset = fp_eps * large_offset * 10  # ~0.001
+    overlapping_box = td.Structure(
+        medium=td.Medium(permittivity=2.0),
+        geometry=td.Box(
+            size=(50, 35 + sliver_offset, 100),
+            center=(25, large_offset + sliver_offset / 2, 50),
+        ),
+    )
+
+    # Create a grid with cell sizes much larger than the sliver
+    # Grid cell size of 1.0 means sliver with dim < 0.0001 should be filtered
+    # (threshold = 1.0 * _SLIVER_DIM_RTOL where _SLIVER_DIM_RTOL = 1e-4)
+    x_coords = np.linspace(-100, 100, 201)  # dx = 1.0
+    y_coords = np.linspace(large_offset - 50, large_offset + 50, 101)  # dy = 1.0
+    z_coords = np.linspace(-50, 50, 101)  # dz = 1.0
+    grid = td.Grid(boundaries=td.Coords(x=x_coords, y=y_coords, z=z_coords))
+
+    # Without grid-based filtering, this might create multiple subdivisions including slivers
+    # With grid-based filtering, slivers should be removed
+    subdivisions = subdivide(geom=geom, structures=[background, overlapping_box], grid=grid)
+
+    # Should have at most 2 subdivisions (the main regions, not slivers)
+    # In practice, for this setup we expect the subdivisions to be clean
+    # and not contain tiny sliver artifacts
+    assert len(subdivisions) == 2
+
+    # Verify that no subdivision has a dimension smaller than the sliver threshold
+    for subdivision in subdivisions:
+        subdiv_geom = subdivision[0]
+        bounds = subdiv_geom.bounds
+        for dim in range(3):
+            dim_size = bounds[1][dim] - bounds[0][dim]
+            if dim_size > 0:  # Skip zero-thickness dimensions (the 2D plane normal)
+                # The dimension should be at least comparable to grid cell size
+                # (not a tiny sliver)
+                assert dim_size >= 0.01, f"Found sliver with dimension {dim_size} in axis {dim}"
+
+
+def test_is_sliver_polygon_grid_based_filtering():
+    """Test _is_sliver_polygon function with grid-based relative thresholds.
+
+    This tests both the area-based and dimension-based sliver detection when a grid
+    is provided.
+    """
+    # Create a grid with cell size 1.0 in x and y directions
+    # For axis=2 (z-normal plane), tangential axes are x and y
+    x_coords = np.linspace(0, 10, 11)  # dx = 1.0
+    y_coords = np.linspace(0, 10, 11)  # dy = 1.0
+    z_coords = np.linspace(0, 10, 11)  # dz = 1.0
+    grid = td.Grid(boundaries=td.Coords(x=x_coords, y=y_coords, z=z_coords))
+
+    # With cell size 1.0:
+    # - Area threshold = 1.0 * 1.0 * 1e-4 = 1e-4
+    # - Dimension threshold = 1.0 * 1e-4 = 1e-4
+
+    # Test 1: Polygon with area below relative threshold (hits line 130)
+    # Small square polygon with sides 0.005 -> area = 2.5e-5 < 1e-4
+    # Both dimensions (0.005) are > 1e-4, so it won't be caught by dimension check
+    small_area_polygon = shapely.Polygon([(0, 0), (0.005, 0), (0.005, 0.005), (0, 0.005)])
+    assert small_area_polygon.area < 1e-4  # Verify area is below threshold
+    assert _is_sliver_polygon(small_area_polygon, axis=2, grid=grid) is True
+
+    # Test 2: Thin polygon with one dimension below relative threshold (hits line 138)
+    # Very thin but long polygon: 0.00005 x 10 -> area = 0.0005 >= 1e-4
+    # But one dimension (0.00005) is < 1e-4
+    thin_polygon = shapely.Polygon([(0, 0), (10, 0), (10, 0.00005), (0, 0.00005)])
+    assert thin_polygon.area >= 1e-4  # Area is above threshold
+    assert _is_sliver_polygon(thin_polygon, axis=2, grid=grid) is True
+
+    # Test 3: Normal polygon that should NOT be filtered
+    # Square polygon with sides 1.0 -> area = 1.0, both dims = 1.0
+    normal_polygon = shapely.Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    assert _is_sliver_polygon(normal_polygon, axis=2, grid=grid) is False
+
+    # Test 4: Without grid, only absolute threshold applies
+    # The small_area_polygon has area 2.5e-5, which may be above _MIN_POLYGON_AREA
+    # depending on its value, so let's test with a polygon that's definitely small
+    # but above absolute minimum
+    medium_polygon = shapely.Polygon([(0, 0), (0.01, 0), (0.01, 0.01), (0, 0.01)])
+    # Without grid, this should NOT be filtered (area 1e-4 is above absolute minimum)
+    assert _is_sliver_polygon(medium_polygon, axis=2, grid=None) is False
+    # With grid, this should be filtered (area 1e-4 = threshold, but < due to floating point)
+    # Actually 1e-4 == 1e-4, so it won't be filtered. Let's use slightly smaller.
+    smaller_polygon = shapely.Polygon([(0, 0), (0.009, 0), (0.009, 0.009), (0, 0.009)])
+    # Area = 8.1e-5 < 1e-4, so should be filtered with grid
+    assert _is_sliver_polygon(smaller_polygon, axis=2, grid=grid) is True
 
 
 def test_subdivide_geometry_group_with_polygon_holes():
@@ -1539,7 +1647,7 @@ def test_triangle_mesh_from_height():
 
 
 def test_cleanup_shapely_object():
-    if _shapely_is_older_than("2.1"):
+    if _package_is_older_than("shapely", "2.1"):
         # (Old versions of shapely don't support `shapely.make_valid()` with the correct arguments.
         # However older alternatives like `.buffer(0)` are not as robust.  `.buffer(0)` is likely
         # to generate polygons which look correct, but have extra vertices, causing test to fail.

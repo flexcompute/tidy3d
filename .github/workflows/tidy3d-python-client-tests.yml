@@ -101,6 +101,9 @@ on:
 permissions:
   contents: read
 
+env:
+  VERIFICATIONS_PY_VERSION: '3.11'
+
 jobs:
   determine-test-scope:
     runs-on: ubuntu-latest
@@ -223,6 +226,39 @@ jobs:
           echo "version_match_tests=$version_match_tests"
           echo "extras_integration_tests=$extras_integration_tests"
           echo "test_type=$test_type"
+      
+
+  move-type-imports:
+    name: move-type-imports
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout-branch
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: setup-python
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
+        with:
+          python-version: ${{ env.VERIFICATIONS_PY_VERSION }}
+
+      - name: install-dependencies
+        run: |
+          set -euo pipefail
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install libcst
+
+      - name: verify-type-import-guards
+        run: |
+          set -euo pipefail
+          source .venv/bin/activate
+          python scripts/move_type_imports.py --mode check_on_change
 
   lint:
     needs: determine-test-scope
@@ -231,7 +267,7 @@ jobs:
     runs-on: ubuntu-latest 
     container: ghcr.io/astral-sh/uv:debian
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 1
           submodules: false
@@ -250,16 +286,16 @@ jobs:
     if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 1
           submodules: false
           persist-credentials: false
 
-      - name: set-python-3.10
-        uses: actions/setup-python@v4
+      - name: setup-python-${{ env.VERIFICATIONS_PY_VERSION }}
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
         with:
-          python-version: '3.10'
+          python-version: ${{ env.VERIFICATIONS_PY_VERSION }}
 
       - name: Install mypy
         run: |
@@ -287,7 +323,7 @@ jobs:
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
 
       - name: Run zizmor 🌈
-        run: uvx zizmor==1.19.0 .github/workflows/*.y* --format=sarif . > results.sarif
+        run: uvx zizmor .github/workflows/*.y* --format=sarif . > results.sarif
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
 
@@ -298,7 +334,7 @@ jobs:
           category: zizmor
       
       - name: run zizmor directly  # this gets a success or fail result
-        run: uvx zizmor==1.19.0  .github/workflows/*.y*
+        run: uvx zizmor  .github/workflows/*.y*
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
   
@@ -374,13 +410,13 @@ jobs:
     continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Check out source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0  # fetch all commits in the PR
           persist-credentials: false
 
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: lts/*
 
@@ -428,7 +464,7 @@ jobs:
         shell: bash
     steps:
       - name: checkout-branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -442,7 +478,7 @@ jobs:
       
       - name: install-depedencies
         run: |
-          uv venv $GITHUB_WORKSPACE/.venv -p 3.11
+          uv venv $GITHUB_WORKSPACE/.venv -p "$VERIFICATIONS_PY_VERSION"
           source $GITHUB_WORKSPACE/.venv/bin/activate
           uv pip install -e "$GITHUB_WORKSPACE"
       
@@ -577,10 +613,10 @@ jobs:
           set -e
           base_version="${BASE_VERSION}"
           base_ref="${BASE_REF}"
-          if [[ "$base_version" == *rc* ]]; then
-            echo "✅ Passing: Schema changed on a release candidate version ($base_version) in base branch '${base_ref}', which is permitted."
+          if [[ "$base_version" == *rc* ]] || [[ "$base_version" == *dev* ]]; then
+            echo "✅ Passing: Schema changed on a pre-release version ($base_version) in base branch '${base_ref}', which is permitted."
           else
-            echo "❌ Failing: Schema changed on a non-rc release version ($base_version) in base branch '${base_ref}'."
+            echo "❌ Failing: Schema changed on a non-pre-release version ($base_version) in base branch '${base_ref}'."
             exit 1
           fi
            
@@ -608,7 +644,7 @@ jobs:
     steps:
     - name: checkout-head
       if: ${{ !env.RELEASE_TAG }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       with:
         fetch-depth: 0
         submodules: false
@@ -616,7 +652,7 @@ jobs:
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       with:
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 0
@@ -671,7 +707,7 @@ jobs:
           --compare-branch origin/${GITHUB_EVENT_PULL_REQUEST_BASE_REF} \
           --format markdown:diff-coverage.md
 
-    - uses: actions/github-script@v7
+    - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
       if: >- 
         matrix.python-version == '3.13' &&
         github.event_name == 'pull_request' &&
@@ -733,7 +769,7 @@ jobs:
     steps:
     - name: checkout-head
       if: ${{ !env.RELEASE_TAG }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       with:
         fetch-depth: 1
         submodules: false
@@ -741,7 +777,7 @@ jobs:
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
-      uses: actions/checkout@v4
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       with:
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 1
@@ -752,33 +788,64 @@ jobs:
       uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a  # v1.4.1
       with:
         version: 2.1.1
-        virtualenvs-create: true
+        virtualenvs-create: false
         virtualenvs-in-project: true
 
     - name: set-python-${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
       with:
         python-version: ${{ matrix.python-version }}
+
+    - name: configure-aws-credentials
+      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_CODEARTIFACT_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_CODEARTIFACT_ACCESS_SECRET }}
+        aws-region: us-east-1
+
+    - name: configure-codeartifact-authentication
+      run: |
+        set -e
+        echo "Getting CodeArtifact token..."
+        CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token \
+          --domain flexcompute \
+          --domain-owner 625554095313 \
+          --query authorizationToken \
+          --output text)
+
+        echo "Configuring Poetry with CodeArtifact credentials..."
+        poetry config http-basic.codeartifact aws $CODEARTIFACT_AUTH_TOKEN
+        echo "✅ CodeArtifact authentication configured"
+
+    - name: update-tidy3d-extras-lockfile
+      run: |
+        set -e
+        echo "Updating tidy3d-extras in poetry.lock..."
+        poetry update tidy3d-extras --lock
+        echo "✅ tidy3d-extras updated in lockfile"
 
     - name: install-project
       shell: bash
       run: |
         poetry --version
         python --version
-        python -m venv .venv
+        rm -rf .venv
         if [[ "${{ runner.os }}" == "Windows" ]]; then
+          python -m venv .venv
           source .venv/Scripts/activate
-          python --version
         else
+          echo "DEBUG: pythonLocation=$pythonLocation"
+          "$pythonLocation/bin/python" -m venv .venv
           source .venv/bin/activate
-          which python
+          echo "DEBUG: .venv/bin/python --version = $(.venv/bin/python --version)"
+          ls -la .venv/bin/python*
         fi
-        poetry env use python
+        poetry config virtualenvs.create false --local
         poetry env info
         poetry run pip install --upgrade pip wheel setuptools
         poetry run pip install gdstk --only-binary gdstk
         poetry install -E dev
-    
+
     - name: run-doctests
       run: |
         poetry run pytest -rF --tb=short tidy3d
@@ -824,7 +891,7 @@ jobs:
     if: needs.determine-test-scope.outputs.version_match_tests == 'true'
     steps:
       - name: checkout-code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag) || github.ref }}
           persist-credentials: false
@@ -894,7 +961,7 @@ jobs:
     steps:
       - name: checkout-head
         if: ${{ !env.RELEASE_TAG }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           submodules: 'recursive'
           fetch-depth: 0
@@ -902,7 +969,7 @@ jobs:
 
       - name: checkout-tag
         if: ${{ env.RELEASE_TAG }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: ${{ env.RELEASE_TAG }}
           submodules: 'recursive'
@@ -994,6 +1061,7 @@ jobs:
       - determine-test-scope
       - local-tests
       - remote-tests
+      - move-type-imports
       - lint
       - mypy
       - verify-schema-change
@@ -1006,6 +1074,12 @@ jobs:
       - extras-integration-tests
     runs-on: ubuntu-latest
     steps:
+      - name: move-type-imports
+        if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.move-type-imports.result != 'success' && needs.move-type-imports.result != 'skipped' }}
+        run: |
+          echo "❌ Found imports used only for typing that are not guarded by if TYPE_CHECKING."
+          exit 1
+
       - name: check-linting-result
         if: ${{ needs.determine-test-scope.outputs.code_quality_tests == 'true' && needs.lint.result != 'success' && needs.lint.result != 'skipped' }}
         run: |

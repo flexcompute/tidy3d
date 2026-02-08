@@ -12,7 +12,11 @@ import tidy3d as td
 import tidy3d.web as web
 from tidy3d.components.autograd import get_static
 
-td.config.local_cache.enabled = True
+
+@pytest.fixture(autouse=True)
+def _enable_local_cache(monkeypatch):
+    monkeypatch.setattr(td.config.local_cache, "enabled", True)
+
 
 SIM_SIZE_SCALE = (4, 3, 4)
 BOX_SIZE_SCALE = (1, 1, 1)
@@ -250,7 +254,7 @@ def _run_simulation(
 
 @pytest.mark.numerical
 @pytest.mark.parametrize("case", TEST_CASES, ids=lambda c: c["name"])
-def test_medium_grads_match_fd(case, numerical_case_dir, tmp_path):
+def test_medium_grads_match_fd(case, numerical_case_dir, tmp_path, _enable_local_cache):
     base_sim, monitor_name, freq0 = _build_base_sim(case)
     box_geom = _box_geometry(case)
     params0 = anp.array(case["permittivities"])
@@ -309,7 +313,7 @@ def test_medium_grads_match_fd(case, numerical_case_dir, tmp_path):
 
 @pytest.mark.skip
 @pytest.mark.parametrize("case", TEST_CASES, ids=lambda c: c["name"])
-def test_medium_fd_step_sweep(case, numerical_case_dir, tmp_path):
+def test_medium_fd_step_sweep(case, numerical_case_dir, tmp_path, _enable_local_cache):
     base_sim, monitor_name, freq0 = _build_base_sim(case)
     box_geom = _box_geometry(case)
     params0 = anp.array(case["permittivities"])

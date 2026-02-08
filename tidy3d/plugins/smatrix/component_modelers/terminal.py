@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeInt, field_validator, model_validator
 
 from tidy3d import ClipOperation, GeometryGroup, GridSpec, PolySlab
-from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.frequency_extrapolation import (
     AbstractLowFrequencySmoothingSpec,
@@ -21,10 +21,9 @@ from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.monitor import DirectivityMonitor, ModeMonitor
-from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Ax, Complex, Coordinate
-from tidy3d.components.types.base import annotate_type
+from tidy3d.components.types import Complex, Coordinate
+from tidy3d.components.types.base import PriorityMode, discriminated_union
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, MICROMETER, OHM, fp_eps, inf
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
@@ -33,13 +32,18 @@ from tidy3d.plugins.smatrix.component_modelers.base import (
     FWIDTH_FRAC,
     AbstractComponentModeler,
 )
-from tidy3d.plugins.smatrix.data.data_array import PortDataArray
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
-from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
-from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.plugins.smatrix.types import NetworkElement, NetworkIndex, SParamDef
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
+    from tidy3d.components.simulation import Simulation
+    from tidy3d.components.types import Ax
+    from tidy3d.plugins.smatrix.data.data_array import PortDataArray
+    from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
+    from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 
 AUTO_RADIATION_MONITOR_NAME = "radiation"
 AUTO_RADIATION_MONITOR_BUFFER = 2
@@ -70,47 +74,47 @@ class DirectivityMonitorSpec(MicrowaveBaseModel):
     ... )
     """
 
-    name: Optional[str] = pd.Field(
+    name: Optional[str] = Field(
         None,
         title="Monitor Name",
         description=f"Optional name for the auto-generated monitor. "
         f"If not provided, defaults to '{AUTO_RADIATION_MONITOR_NAME}_' + index of the monitor in the list of radiation monitors.",
     )
 
-    freqs: Optional[tuple[pd.NonNegativeInt, ...]] = pd.Field(
+    freqs: Optional[tuple[NonNegativeInt, ...]] = Field(
         None,
         title="Frequencies",
         description="Frequencies to obtain fields at. If not provided, uses all frequencies "
         "from the :class:`.TerminalComponentModeler`. Must be a subset of modeler frequencies if provided.",
     )
 
-    buffer: pd.NonNegativeInt = pd.Field(
+    buffer: NonNegativeInt = Field(
         AUTO_RADIATION_MONITOR_BUFFER,
         title="Buffer Distance",
         description="Number of grid cells to maintain between monitor and PML/domain boundaries. "
         f"Default: {AUTO_RADIATION_MONITOR_BUFFER} cells.",
     )
 
-    num_theta_points: pd.NonNegativeInt = pd.Field(
+    num_theta_points: NonNegativeInt = Field(
         AUTO_RADIATION_MONITOR_NUM_POINTS_THETA,
         title="Elevation Angle Points",
         description="Number of elevation angle (theta) sample points from 0 to π. "
         f"Default: {AUTO_RADIATION_MONITOR_NUM_POINTS_THETA}.",
     )
 
-    num_phi_points: pd.NonNegativeInt = pd.Field(
+    num_phi_points: NonNegativeInt = Field(
         AUTO_RADIATION_MONITOR_NUM_POINTS_PHI,
         title="Azimuthal Angle Points",
         description="Number of azimuthal angle (phi) sample points from -π to π. "
         f"Default: {AUTO_RADIATION_MONITOR_NUM_POINTS_PHI}.",
     )
 
-    custom_origin: Optional[Coordinate] = pd.Field(
+    custom_origin: Optional[Coordinate] = Field(
         (0, 0, 0),
         title="Local Origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
         "monitor's center.",
-        units=MICROMETER,
+        json_schema_extra={"units": MICROMETER},
     )
 
 
@@ -141,6 +145,25 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     Notes
     -----
 
+    **S-Parameter Definitions**
+
+    The ``s_param_def`` parameter controls which wave definition is used to compute scattering
+    parameters. Three definitions are supported:
+
+    - ``"pseudo"`` (default): Pseudo-waves as defined by Marks and Williams [1]. Uses scaling
+      factor :math:`F = \\sqrt{\\text{Re}(Z)} / (2|Z|)`. Wave amplitudes are :math:`a = F(V + ZI)`
+      and :math:`b = F(V - ZI)`.
+
+    - ``"power"``: Power waves as defined by Kurokawa [3] and described in Pozar [2]. Uses
+      scaling factor :math:`F = 1 / (2\\sqrt{\\text{Re}(Z)})`. Wave amplitudes are
+      :math:`a = F(V + ZI)` and :math:`b = F(V - Z^*I)` where :math:`Z^*` is the complex
+      conjugate. Ensures :math:`|a|^2 - |b|^2` represents actual power flow.
+
+    - ``"symmetric_pseudo"``: Equivalent to pseudo-waves except for the scaling factor. Uses
+      :math:`F = 1 / (2\\sqrt{Z})` where the square root is complex. This choice of scaling
+      factor ensures the S-matrix will be symmetric when the simulated device is reciprocal.
+
+
     **References**
 
     .. [1]  R. B. Marks and D. F. Williams, "A general waveguide circuit theory,"
@@ -148,16 +171,19 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     .. [2]  D. M. Pozar, Microwave Engineering, 4th ed. Hoboken, NJ, USA:
             John Wiley & Sons, 2012.
+
+    .. [3]  K. Kurokawa, "Power Waves and the Scattering Matrix," IEEE Trans.
+            Microwave Theory Tech., vol. 13, no. 2, pp. 194-202, March 1965.
     """
 
-    ports: tuple[TerminalPortType, ...] = pd.Field(
+    ports: tuple[TerminalPortType, ...] = Field(
         (),
         title="Terminal Ports",
         description="Collection of lumped and wave ports associated with the network. "
         "For each port, one simulation will be run with a source that is associated with the port.",
     )
 
-    run_only: Optional[tuple[NetworkIndex, ...]] = pd.Field(
+    run_only: Optional[tuple[NetworkIndex, ...]] = Field(
         None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
@@ -165,7 +191,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         "If a tuple is given, simulations will be run only for the given matrix indices.",
     )
 
-    element_mappings: tuple[tuple[NetworkElement, NetworkElement, Complex], ...] = pd.Field(
+    element_mappings: tuple[tuple[NetworkElement, NetworkElement, Complex], ...] = Field(
         (),
         title="Element Mappings",
         description="Tuple of S matrix element mappings, each described by a tuple of "
@@ -176,8 +202,8 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     )
 
     radiation_monitors: tuple[
-        annotate_type(Union[DirectivityMonitor, DirectivityMonitorSpec]), ...
-    ] = pd.Field(
+        discriminated_union(Union[DirectivityMonitor, DirectivityMonitorSpec]), ...
+    ] = Field(
         (),
         title="Radiation Monitors",
         description="Facilitates the calculation of figures-of-merit for antennas. "
@@ -186,7 +212,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         "objects for automatic generation.",
     )
 
-    assume_ideal_excitation: bool = pd.Field(
+    assume_ideal_excitation: bool = Field(
         False,
         title="Assume Ideal Excitation",
         description="If ``True``, only the excited port is assumed to have a nonzero incident wave "
@@ -197,16 +223,26 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         "reflections from simulation boundaries. ",
     )
 
-    s_param_def: SParamDef = pd.Field(
+    s_param_def: SParamDef = Field(
         "pseudo",
         title="Scattering Parameter Definition",
-        description="Whether to compute scattering parameters using the 'pseudo' or 'power' wave definitions.",
+        description="Wave definition: 'pseudo', 'power', or 'symmetric_pseudo'. Default is 'pseudo'.",
     )
 
-    low_freq_smoothing: Optional[ModelerLowFrequencySmoothingSpec] = pd.Field(
+    low_freq_smoothing: Optional[ModelerLowFrequencySmoothingSpec] = Field(
         None,
         title="Low Frequency Smoothing",
         description="The low frequency smoothing parameters for the terminal component simulation.",
+    )
+
+    structure_priority_mode: Optional[PriorityMode] = Field(
+        "conductor",
+        title="Structure Priority Setting",
+        description="If not `None`, override the structure priority mode in the simulation. "
+        "This field only affects structures of `priority=None`. "
+        "If `equal`, the priority of those structures is set to 0; if `conductor`, "
+        "the priority of structures made of :class:`LossyMetalMedium` is set to 90, "
+        ":class:`PECMedium` to 100, and others to 0.",
     )
 
     @property
@@ -387,7 +423,8 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     @cached_property
     def _base_sim_no_radiation_monitors(self) -> Simulation:
-        """The intermediate base simulation with all grid refinement options, port loads (if present), and monitors added,
+        """The intermediate base simulation with all grid refinement options, structure priority mode,
+        port loads (if present), and monitors added,
         which is only missing the source excitations and radiation monitors.
         """
         # internal mesh override and snapping points are automatically generated from lumped elements.
@@ -400,11 +437,15 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                 "wavelength": C_0 / np.max(self.freqs),
             }
         )
-
+        update_dict = {
+            "grid_spec": grid_spec,
+            "lumped_elements": lumped_resistors,
+        }
+        if self.structure_priority_mode is not None:
+            update_dict["structure_priority_mode"] = self.structure_priority_mode
         # Make an initial simulation with new grid_spec to determine where LumpedPorts are snapped
         sim_wo_source = self.simulation.updated_copy(
-            grid_spec=grid_spec,
-            lumped_elements=lumped_resistors,
+            **update_dict,
             validate=False,
             deep=False,
         )
@@ -717,7 +758,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         )
 
     @cached_property
-    def _source_time(self):
+    def _source_time(self) -> GaussianPulse:
         """Helper to create a time domain pulse for the frequency range of interest."""
         if self.custom_source_time is not None:
             return self.custom_source_time
@@ -734,8 +775,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             minimum_source_bandwidth=FWIDTH_FRAC,
         )
 
-    @pd.validator("simulation")
-    def _validate_3d_simulation(cls, val):
+    @field_validator("simulation")
+    @classmethod
+    def _validate_3d_simulation(cls, val: Simulation) -> Simulation:
         """Error if :class:`.Simulation` is not a 3D simulation"""
 
         if val.size.count(0.0) > 0:
@@ -744,17 +786,17 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             )
         return val
 
-    @pd.validator("ports")
-    @skip_if_fields_missing(["simulation"])
-    def _validate_port_refinement_usage(cls, val, values):
+    @model_validator(mode="after")
+    def _validate_port_refinement_usage(self) -> Self:
         """Warn if port refinement options are enabled, but the supplied simulation
         does not contain a grid type that will make use of them."""
+        val = self.ports
 
-        sim: Simulation = values.get("simulation")
+        sim: Simulation = self.simulation
         # If grid spec is using AutoGrid
         # then set up is acceptable
         if sim.grid_spec.auto_grid_used:
-            return val
+            return self
 
         for port in val:
             if port._is_using_mesh_refinement:
@@ -767,18 +809,20 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                     "the 'enable_snapping_points=False' and 'num_grid_cells=None' for lumped ports."
                 )
 
-        return val
+        return self
 
-    @pd.validator("radiation_monitors")
-    @skip_if_fields_missing(["freqs"])
-    def _validate_radiation_monitors(cls, val, values):
+    @model_validator(mode="after")
+    def _validate_radiation_monitors(self) -> Self:
         """Validate radiation monitors configuration.
 
         Validates that:
         - DirectivityMonitor frequencies are a subset of modeler frequencies
         - DirectivityMonitorSpec frequencies (if provided) are a subset of modeler frequencies
         """
-        modeler_freqs = set(values.get("freqs", []))
+        val = self.radiation_monitors
+        if self.freqs is None:
+            return self
+        modeler_freqs = set(self.freqs)
 
         for index, rad_mon in enumerate(val):
             # Only validate freqs if explicitly provided
@@ -792,10 +836,10 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                     mon_name = rad_mon.name or f"{AUTO_RADIATION_MONITOR_NAME}_{index}"
                     raise ValidationError(
                         f"The frequencies in the radiation monitor '{mon_name}' "
-                        f"must be equal to or a subset of the frequencies in the '{cls.__name__}'."
+                        f"must be equal to or a subset of the frequencies in the '{self.__class__.__name__}'."
                     )
 
-        return val
+        return self
 
     @staticmethod
     def _check_grid_size_at_ports(
@@ -997,4 +1041,4 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         return sim
 
 
-TerminalComponentModeler.update_forward_refs()
+TerminalComponentModeler.model_rebuild()

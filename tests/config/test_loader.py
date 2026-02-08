@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pathlib
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -198,3 +199,49 @@ def test_migrate_legacy_config_promotes_structured_config(tmp_path, monkeypatch)
     assert extra_file.exists()
     assert extra_file.read_text(encoding="utf-8") == "keep"
     assert legacy_dir.exists()
+
+
+def test_is_writable_ignores_file_not_found_cleanup(tmp_path, monkeypatch):
+    original_unlink = pathlib.Path.unlink
+
+    def flaky_unlink(self, *args, **kwargs):
+        if self.name.startswith(".tidy3d_write_test_"):
+            raise FileNotFoundError
+        return original_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(pathlib.Path, "unlink", flaky_unlink)
+    assert config_loader._is_writable(tmp_path)
+
+
+def test_resolve_config_directory_prefers_existing_canonical_dir(tmp_path, monkeypatch):
+    canonical_dir = tmp_path / "xdg" / "tidy3d"
+    canonical_dir.mkdir(parents=True)
+    legacy_dir = tmp_path / "legacy"
+    legacy_dir.mkdir()
+
+    monkeypatch.setattr(config_loader, "canonical_config_directory", lambda: canonical_dir)
+    monkeypatch.setattr(config_loader, "legacy_config_directory", lambda: legacy_dir)
+
+    def _boom(_):
+        raise AssertionError(
+            "_is_writable should not be called when canonical config directory exists"
+        )
+
+    monkeypatch.setattr(config_loader, "_is_writable", _boom)
+
+    assert config_loader.resolve_config_directory() == canonical_dir
+
+
+def test_resolve_config_directory_prefers_existing_base_dir(tmp_path, monkeypatch):
+    base_dir = tmp_path / "base"
+    config_dir = base_dir / "config"
+    config_dir.mkdir(parents=True)
+
+    monkeypatch.setenv("TIDY3D_BASE_DIR", str(base_dir))
+
+    def _boom(_):
+        raise AssertionError("_is_writable should not be called when base config directory exists")
+
+    monkeypatch.setattr(config_loader, "_is_writable", _boom)
+
+    assert config_loader.resolve_config_directory() == config_dir

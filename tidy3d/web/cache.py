@@ -8,24 +8,27 @@ import os
 import shutil
 import tempfile
 import threading
-from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 
 from tidy3d import config
-from tidy3d.components.mode.mode_solver import ModeSolver
-from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.log import log
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
-from tidy3d.web.core.constants import TaskId
 from tidy3d.web.core.http_util import get_version as _get_protocol_version
 from tidy3d.web.core.types import TaskType
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from tidy3d.components.mode.mode_solver import ModeSolver
+    from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
+    from tidy3d.web.core.constants import TaskId
 
 CACHE_ARTIFACT_NAME = "simulation_data.hdf5"
 CACHE_METADATA_NAME = "metadata.json"
@@ -35,6 +38,18 @@ TMP_PREFIX = "tidy3d-cache-"
 TMP_BATCH_PREFIX = "tmp_batch"
 
 _CACHE: Optional[LocalCache] = None
+
+
+def _remove_cache_dir(path: os.PathLike, *, recreate: bool) -> None:
+    """Remove a cache directory and optionally recreate it."""
+    cache_path = Path(path)
+    if cache_path.exists():
+        try:
+            shutil.rmtree(cache_path)
+        except (FileNotFoundError, OSError):
+            return
+    if recreate:
+        cache_path.mkdir(parents=True, exist_ok=True)
 
 
 def get_cache_entry_dir(root: os.PathLike, key: str) -> Path:
@@ -304,13 +319,7 @@ class LocalCache:
     def clear(self, hard: bool = False) -> None:
         """Remove all cache contents. If set to hard, root directory is removed."""
         with self._with_lock():
-            if self._root.exists():
-                try:
-                    shutil.rmtree(self._root)
-                    if not hard:
-                        self._root.mkdir(parents=True, exist_ok=True)
-                except (FileNotFoundError, OSError):
-                    pass
+            _remove_cache_dir(self._root, recreate=not hard)
             if not hard:
                 self._write_stats(CacheStats())
 
@@ -598,6 +607,7 @@ class LocalCache:
             return entry
         except Exception as e:
             log.error("Failed to fetch cache results: " + str(e))
+        return None
 
     def store_result(
         self,
@@ -851,7 +861,7 @@ def resolve_local_cache(use_cache: Optional[bool] = None) -> Optional[LocalCache
                 shutil.move(old_root, new_root)
         except Exception as e:
             log.warning(f"Failed to move cache directory: {e}. Delete old cache.")
-            shutil.rmtree(old_root)
+            _remove_cache_dir(old_root, recreate=False)
 
     _CACHE = LocalCache(
         directory=config.local_cache.directory,

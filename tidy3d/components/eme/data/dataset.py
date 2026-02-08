@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
@@ -24,23 +24,19 @@ from tidy3d.exceptions import ValidationError
 class EMESMatrixDataset(Dataset):
     """Dataset storing S matrix."""
 
-    S11: EMESMatrixDataArray = pd.Field(
-        ...,
+    S11: EMESMatrixDataArray = Field(
         title="S11 matrix",
         description="S matrix relating output modes at port 1 to input modes at port 1.",
     )
-    S12: EMESMatrixDataArray = pd.Field(
-        ...,
+    S12: EMESMatrixDataArray = Field(
         title="S12 matrix",
         description="S matrix relating output modes at port 1 to input modes at port 2.",
     )
-    S21: EMESMatrixDataArray = pd.Field(
-        ...,
+    S21: EMESMatrixDataArray = Field(
         title="S21 matrix",
         description="S matrix relating output modes at port 2 to input modes at port 1.",
     )
-    S22: EMESMatrixDataArray = pd.Field(
-        ...,
+    S22: EMESMatrixDataArray = Field(
         title="S22 matrix",
         description="S matrix relating output modes at port 2 to input modes at port 2.",
     )
@@ -49,23 +45,19 @@ class EMESMatrixDataset(Dataset):
 class EMEInterfaceSMatrixDataset(Dataset):
     """Dataset storing S matrices associated with EME cell interfaces."""
 
-    S11: EMEInterfaceSMatrixDataArray = pd.Field(
-        ...,
+    S11: EMEInterfaceSMatrixDataArray = Field(
         title="S11 matrix",
         description="S matrix relating output modes at port 1 to input modes at port 1.",
     )
-    S12: EMEInterfaceSMatrixDataArray = pd.Field(
-        ...,
+    S12: EMEInterfaceSMatrixDataArray = Field(
         title="S12 matrix",
         description="S matrix relating output modes at port 1 to input modes at port 2.",
     )
-    S21: EMEInterfaceSMatrixDataArray = pd.Field(
-        ...,
+    S21: EMEInterfaceSMatrixDataArray = Field(
         title="S21 matrix",
         description="S matrix relating output modes at port 2 to input modes at port 1.",
     )
-    S22: EMEInterfaceSMatrixDataArray = pd.Field(
-        ...,
+    S22: EMEInterfaceSMatrixDataArray = Field(
         title="S22 matrix",
         description="S matrix relating output modes at port 2 to input modes at port 2.",
     )
@@ -83,18 +75,15 @@ class EMEOverlapDataset(Dataset):
         in cell ``i``, and ``mode_index_in`` refers to the mode index in cell ``j``.
     """
 
-    O11: EMEInterfaceSMatrixDataArray = pd.Field(
-        ...,
+    O11: EMEInterfaceSMatrixDataArray = Field(
         title="O11 matrix",
         description="Overlap integral between E field and H field in the same cell.",
     )
-    O12: EMEInterfaceSMatrixDataArray = pd.Field(
-        ...,
+    O12: EMEInterfaceSMatrixDataArray = Field(
         title="O12 matrix",
         description="Overlap integral between E field on side 1 and H field on side 2.",
     )
-    O21: EMEInterfaceSMatrixDataArray = pd.Field(
-        ...,
+    O21: EMEInterfaceSMatrixDataArray = Field(
         title="O21 matrix",
         description="Overlap integral between E field on side 2 and H field on side 1.",
     )
@@ -118,37 +107,37 @@ class EMECoefficientDataset(Dataset):
         between EME cells.
     """
 
-    A: Optional[EMECoefficientDataArray] = pd.Field(
+    A: Optional[EMECoefficientDataArray] = Field(
         None,
         title="A coefficient",
         description="Coefficient for forward mode in this cell.",
     )
 
-    B: Optional[EMECoefficientDataArray] = pd.Field(
+    B: Optional[EMECoefficientDataArray] = Field(
         None,
         title="B coefficient",
         description="Coefficient for backward mode in this cell.",
     )
 
-    n_complex: Optional[EMEModeIndexDataArray] = pd.Field(
+    n_complex: Optional[EMEModeIndexDataArray] = Field(
         None,
         title="Propagation Index",
         description="Complex-valued effective propagation indices associated with the EME modes.",
     )
 
-    flux: Optional[EMEFluxDataArray] = pd.Field(
+    flux: Optional[EMEFluxDataArray] = Field(
         None,
         title="Flux",
         description="Power flux of the EME modes.",
     )
 
-    interface_smatrices: Optional[EMEInterfaceSMatrixDataset] = pd.Field(
+    interface_smatrices: Optional[EMEInterfaceSMatrixDataset] = Field(
         None,
         title="Interface S Matrices",
         description="S matrices associated with the interfaces between EME cells.",
     )
 
-    overlaps: Optional[EMEOverlapDataset] = pd.Field(
+    overlaps: Optional[EMEOverlapDataset] = Field(
         None, title="Overlaps", description="Overlaps between EME modes."
     )
 
@@ -192,32 +181,32 @@ class EMECoefficientDataset(Dataset):
 class EMEFieldDataset(ElectromagneticFieldDataset):
     """Dataset storing scalar components of E and H fields as a function of freq, mode_index, and port_index."""
 
-    Ex: EMEScalarFieldDataArray = pd.Field(
+    Ex: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
-    Ey: EMEScalarFieldDataArray = pd.Field(
+    Ey: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
-    Ez: EMEScalarFieldDataArray = pd.Field(
+    Ez: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
-    Hx: EMEScalarFieldDataArray = pd.Field(
+    Hx: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
-    Hy: EMEScalarFieldDataArray = pd.Field(
+    Hy: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
-    Hz: EMEScalarFieldDataArray = pd.Field(
+    Hz: Optional[EMEScalarFieldDataArray] = Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
@@ -227,39 +216,32 @@ class EMEFieldDataset(ElectromagneticFieldDataset):
 class EMEModeSolverDataset(ElectromagneticFieldDataset):
     """Dataset storing EME modes as a function of freq, mode_index, and cell_index."""
 
-    n_complex: EMEModeIndexDataArray = pd.Field(
-        ...,
+    n_complex: EMEModeIndexDataArray = Field(
         title="Propagation Index",
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    Ex: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Ex: EMEScalarModeFieldDataArray = Field(
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
-    Ey: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Ey: EMEScalarModeFieldDataArray = Field(
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
-    Ez: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Ez: EMEScalarModeFieldDataArray = Field(
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
-    Hx: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Hx: EMEScalarModeFieldDataArray = Field(
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
-    Hy: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Hy: EMEScalarModeFieldDataArray = Field(
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
-    Hz: EMEScalarModeFieldDataArray = pd.Field(
-        ...,
+    Hz: EMEScalarModeFieldDataArray = Field(
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
     )

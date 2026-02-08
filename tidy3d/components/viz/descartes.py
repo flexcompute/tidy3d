@@ -15,7 +15,11 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+    from shapely.geometry.base import BaseGeometry
 
 try:
     from matplotlib.patches import PathPatch
@@ -28,14 +32,14 @@ from numpy import array, concatenate, ones
 class Polygon:
     """Adapt Shapely polygons to a common interface"""
 
-    def __init__(self, context) -> None:
+    def __init__(self, context: dict[str, Any]) -> None:
         if isinstance(context, dict):
             self.context = context["coordinates"]
         else:
             self.context = context
 
     @property
-    def exterior(self):
+    def exterior(self) -> Any:
         """Get polygon exterior."""
         value = getattr(self.context, "exterior", None)
         if value is None:
@@ -43,7 +47,7 @@ class Polygon:
         return value
 
     @property
-    def interiors(self):
+    def interiors(self) -> Any:
         """Get polygon interiors."""
         value = getattr(self.context, "interiors", None)
         if value is None:
@@ -51,11 +55,11 @@ class Polygon:
         return value
 
 
-def polygon_path(polygon):
+def polygon_path(polygon: BaseGeometry) -> Path:
     """Constructs a compound matplotlib path from a Shapely or GeoJSON-like
     geometric object"""
 
-    def coding(obj):
+    def coding(obj: Any) -> NDArray:
         # The codes will be all "LINETO" commands, except for "MOVETO"s at the
         # beginning of each subpath
         crds = getattr(obj, "coords", None)
@@ -88,7 +92,7 @@ def polygon_path(polygon):
     return Path(vertices, codes)
 
 
-def polygon_patch(polygon, **kwargs: Any):
+def polygon_patch(polygon: BaseGeometry, **kwargs: Any) -> PathPatch:
     """Constructs a matplotlib patch from a geometric object
 
     The ``polygon`` may be a Shapely or GeoJSON-like object with or without holes.

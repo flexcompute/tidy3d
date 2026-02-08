@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import toml
 import tomlkit
@@ -16,6 +16,9 @@ from tidy3d.log import log
 
 from .profiles import BUILTIN_PROFILES
 from .serializer import build_document, collect_descriptions
+
+if TYPE_CHECKING:
+    from typing import Optional
 
 
 class ConfigLoader:
@@ -322,6 +325,16 @@ def canonical_config_directory() -> Path:
     return _xdg_config_home() / "tidy3d"
 
 
+def _warn_legacy_dir_ignored(*, canonical_dir: Path, legacy_dir: Path) -> None:
+    if legacy_dir.exists():
+        log.warning(
+            f"Using canonical configuration directory at '{canonical_dir}'. "
+            "Found legacy directory at '~/.tidy3d', which will be ignored. "
+            "Remove it manually or run 'tidy3d config migrate --delete-legacy' to clean up.",
+            log_once=True,
+        )
+
+
 def resolve_config_directory() -> Path:
     """Determine the directory used to store tidy3d configuration files."""
 
@@ -329,6 +342,8 @@ def resolve_config_directory() -> Path:
     if base_override:
         base_path = Path(base_override).expanduser().resolve()
         path = base_path / "config"
+        if path.is_dir():
+            return path
         if _is_writable(path.parent):
             return path
         log.warning(
@@ -337,18 +352,14 @@ def resolve_config_directory() -> Path:
         return _temporary_config_dir()
 
     canonical_dir = canonical_config_directory()
+    legacy_dir = legacy_config_directory()
+    if canonical_dir.is_dir():
+        _warn_legacy_dir_ignored(canonical_dir=canonical_dir, legacy_dir=legacy_dir)
+        return canonical_dir
     if _is_writable(canonical_dir.parent):
-        legacy_dir = legacy_config_directory()
-        if legacy_dir.exists():
-            log.warning(
-                f"Using canonical configuration directory at '{canonical_dir}'. "
-                "Found legacy directory at '~/.tidy3d', which will be ignored. "
-                "Remove it manually or run 'tidy3d config migrate --delete-legacy' to clean up.",
-                log_once=True,
-            )
+        _warn_legacy_dir_ignored(canonical_dir=canonical_dir, legacy_dir=legacy_dir)
         return canonical_dir
 
-    legacy_dir = legacy_config_directory()
     if legacy_dir.exists():
         log.warning(
             "Configuration found in legacy location '~/.tidy3d'. Consider running 'tidy3d config migrate'.",
@@ -376,10 +387,12 @@ def _temporary_config_dir() -> Path:
 def _is_writable(path: Path) -> bool:
     try:
         path.mkdir(parents=True, exist_ok=True)
-        test_file = path / ".tidy3d_write_test"
-        with open(test_file, "w", encoding="utf-8"):
+        fd, test_path = tempfile.mkstemp(dir=path, prefix=".tidy3d_write_test_")
+        os.close(fd)
+        try:
+            Path(test_path).unlink()
+        except FileNotFoundError:
             pass
-        test_file.unlink()
         return True
     except Exception:
         return False

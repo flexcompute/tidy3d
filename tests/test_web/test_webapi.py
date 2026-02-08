@@ -16,7 +16,7 @@ from responses import matchers
 
 import tidy3d as td
 from tests.test_web.test_tidy3d_stub import is_lazy_object
-from tidy3d import Simulation
+from tidy3d import Simulation, config
 from tidy3d.__main__ import main
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.monitor_data import FieldData
@@ -28,7 +28,7 @@ from tidy3d.components.source.time import GaussianPulse
 from tidy3d.exceptions import SetupError
 from tidy3d.web import common
 from tidy3d.web.api.asynchronous import run_async
-from tidy3d.web.api.container import Batch, Job, WebContainer
+from tidy3d.web.api.container import Batch, BatchData, Job, WebContainer
 from tidy3d.web.api.run import _collect_by_hash, run
 from tidy3d.web.api.tidy3d_stub import Tidy3dStubData, task_type_name_of
 from tidy3d.web.api.webapi import (
@@ -67,7 +67,7 @@ INVALID_TASK_ID = "INVALID_TASK_ID"
 task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
 
-Env.dev.active()
+config.switch_profile("dev")
 
 
 class FakeJob:
@@ -358,7 +358,7 @@ def mock_webapi(
 
 @responses.activate
 def test_source_validation(monkeypatch, mock_upload, mock_get_info, mock_metadata):
-    sim = make_sim().copy(update={"sources": []})
+    sim = make_sim().copy(update={"sources": ()})
 
     assert upload(sim, TASK_NAME, PROJECT_NAME, source_required=False)
     with pytest.raises(SetupError):
@@ -435,6 +435,30 @@ def _test_load(mock_load, mock_get_info, tmp_path):
     load(TASK_ID, str(tmp_path / "monitor_data.hdf5"))
 
 
+def test_batch_load_sim_data_skips_task_lookup(monkeypatch, tmp_path):
+    data_path = tmp_path / "batch_results.hdf5"
+    data_path.write_text("stub")
+    batch_data = BatchData(
+        task_paths={"task_1": str(data_path)},
+        task_ids={"task_1": TASK_ID},
+        cached_tasks={"task_1": False},
+        is_downloaded=True,
+    )
+
+    def _raise(*args, **kwargs):
+        raise AssertionError("Unexpected web lookup during batch load.")
+
+    monkeypatch.setattr(f"{api_path}.get_info", _raise)
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get", _raise)
+    monkeypatch.setattr(f"{task_core_path}.TaskFactory.get_kind", _raise)
+    monkeypatch.setattr(f"{api_path}.resolve_local_cache", lambda: None)
+    monkeypatch.setattr(
+        f"{api_path}.Tidy3dStubData.postprocess", lambda *args, **kwargs: "stub_data"
+    )
+
+    assert batch_data.load_sim_data("task_1") == "stub_data"
+
+
 @responses.activate
 def test_delete(set_api_key, mock_get_info):
     responses.add(
@@ -498,7 +522,7 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
         pass
 
     def get_str(*args, **kwargs):
-        return sim.json().encode("utf-8")
+        return sim.model_dump_json().encode("utf-8")
 
     monkeypatch.setattr(f"{task_core_path}.download_gz_file", mock_download)
     monkeypatch.setattr(f"{task_core_path}.read_simulation_from_hdf5", get_str)

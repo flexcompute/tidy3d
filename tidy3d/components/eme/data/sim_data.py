@@ -2,50 +2,59 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import EMEScalarFieldDataArray, EMESMatrixDataArray
-from tidy3d.components.data.monitor_data import FieldData, ModeData, ModeSolverData
+from tidy3d.components.data.monitor_data import ModeData, ModeSolverData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.types import annotate_type
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
 from .dataset import EMECoefficientDataset, EMESMatrixDataset
-from .monitor_data import EMEFieldData, EMEModeSolverData, EMEMonitorDataType
+from .monitor_data import EMECoefficientData, EMEModeSolverData, EMEMonitorDataType
+
+if TYPE_CHECKING:
+    from typing import Literal
+
+    from tidy3d.components.data.monitor_data import FieldData
+
+    from .monitor_data import EMEFieldData
 
 
 class EMESimulationData(AbstractYeeGridSimulationData):
     """Data associated with an EME simulation."""
 
-    simulation: EMESimulation = pd.Field(
-        ..., title="EME simulation", description="EME simulation associated with this data."
+    simulation: EMESimulation = Field(
+        title="EME simulation",
+        description="EME simulation associated with this data.",
     )
 
-    data: tuple[annotate_type(EMEMonitorDataType), ...] = pd.Field(
-        ...,
+    data: tuple[discriminated_union(EMEMonitorDataType), ...] = Field(
         title="Monitor Data",
         description="List of EME monitor data "
         "associated with the monitors of the original :class:`.EMESimulation`.",
     )
 
-    smatrix: Optional[EMESMatrixDataset] = pd.Field(
-        None, title="S Matrix", description="Scattering matrix of the EME simulation."
+    smatrix: Optional[EMESMatrixDataset] = Field(
+        None,
+        title="S Matrix",
+        description="Scattering matrix of the EME simulation.",
     )
 
-    coeffs: Optional[EMECoefficientDataset] = pd.Field(
+    coeffs: Optional[Union[EMECoefficientData, EMECoefficientDataset]] = Field(
         None,
         title="Coefficients",
         description="Coefficients from the EME simulation. Useful for debugging and optimization.",
     )
 
-    port_modes_raw: Optional[EMEModeSolverData] = pd.Field(
+    port_modes_raw: Optional[EMEModeSolverData] = Field(
         None,
         title="Port Modes",
         description="Modes associated with the two ports of the EME device. "
@@ -54,7 +63,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
     )
 
     @cached_property
-    def port_modes(self):
+    def port_modes(self) -> Optional[EMEModeSolverData]:
         """Modes associated with the two ports of the EME device.
         The scattering matrix is expressed in this basis.
         Note: these modes are symmetry expanded."""

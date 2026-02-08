@@ -5,6 +5,7 @@ import copy
 import cProfile
 import typing
 import warnings
+from contextlib import nullcontext
 from dataclasses import dataclass
 from importlib import reload
 from os.path import join
@@ -28,6 +29,7 @@ from tidy3d.components.autograd.field_map import FieldMap
 from tidy3d.components.autograd.utils import get_static, is_tidy_box
 from tidy3d.components.base import TRACED_FIELD_KEYS_ATTR
 from tidy3d.components.data.data_array import DataArray
+from tidy3d.components.geometry.primitives import discretization_wavelength
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
 from tidy3d.plugins.polyslab import ComplexPolySlab
@@ -72,13 +74,18 @@ CALL_OBJECTIVE = False
 
 
 # --- helpers for custom dispersive tests ---
-def _patch_cmp_to_const(monkeypatch, cls, dJ_const):
-    """Monkeypatch `_derivative_field_cmp` to return a constant split across xyz."""
-    monkeypatch.setattr(
-        cls,
-        "_derivative_field_cmp",
-        lambda self, E_der_map, spatial_data, dim: dJ_const / 3.0,
-    )
+def _patch_cmp_custom_to_const(monkeypatch, cls, dJ_const):
+    """Monkeypatch `_derivative_field_cmp_custom` to return a constant split across xyz."""
+
+    def _fake(self, E_der_map, spatial_data, dim, sum_over_freqs=True, **kwargs):
+        if sum_over_freqs:
+            if dJ_const.ndim > 3:
+                return dJ_const.sum(axis=-1) / 3.0
+            return dJ_const / 3.0
+        dJ_with_freq = dJ_const[..., None]
+        return dJ_with_freq / 3.0
+
+    monkeypatch.setattr(cls, "_derivative_field_cmp_custom", _fake)
 
 
 def _make_di(paths, freq):
@@ -169,8 +176,8 @@ PLANE_WAVE = td.PlaneWave(
 SIM_BASE = td.Simulation(
     size=(LX, 3.15, LZ),
     run_time=200 / FWIDTH,
-    sources=[PLANE_WAVE],
-    structures=[
+    sources=(PLANE_WAVE,),
+    structures=(
         td.Structure(
             geometry=td.Box(
                 size=(0.5, 0.5, LZ / 2),
@@ -179,16 +186,16 @@ SIM_BASE = td.Simulation(
             .rotated(ROT_ANGLE_WG, axis=0)
             .translated(x=0, y=-np.tan(ROT_ANGLE_WG) * MODE_FIELD_SPC, z=LZ / 2),
             medium=td.Medium(permittivity=2.0),
-        )
-    ],
-    monitors=[
+        ),
+    ),
+    monitors=(
         td.FieldMonitor(
             center=(0, 0, 0),
             size=(0, 0, 0),
             freqs=[FREQ0],
             name="extraneous",
-        )
-    ],
+        ),
+    ),
     boundary_spec=td.BoundarySpec.pml(x=PML_X, y=True, z=True),
     grid_spec=td.GridSpec.uniform(dl=0.01 * td.C_0 / FREQ0),
 )
@@ -564,6 +571,14 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         medium=td.Medium(permittivity=mesh_eps),
     )
 
+    # use first 4 params for radius/center, rest for eps
+    cx, cy, cz = params[1:4]
+    sphere_geom = td.Sphere(radius=params[0] + 1, center=(cx, cy, cz))
+    sphere = td.Structure(
+        geometry=sphere_geom,
+        medium=td.Medium(permittivity=anp.mean(params[4:]) + 2),
+    )
+
     return {
         "medium": medium,
         "center_list": center_list,
@@ -579,6 +594,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         "custom_pole_res": custom_pole_res,
         "cylinder": cylinder,
         "triangle_mesh": triangle_mesh,
+        "sphere": sphere,
     }
 
 
@@ -677,6 +693,7 @@ structure_keys_ = (
     "custom_pole_res",
     "cylinder",
     "triangle_mesh",
+    "sphere",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 
@@ -1060,8 +1077,8 @@ def test_autograd_speed_num_structures(use_emulated_run):
 
     def make_sim(*args):
         structure = make_structures(*args)[structure_key]
-        structures = num_structures_test * [structure]
-        return SIM_BASE.updated_copy(structures=structures, monitors=[monitor])
+        structures = tuple(num_structures_test * [structure])
+        return SIM_BASE.updated_copy(structures=structures, monitors=(monitor,))
 
     def objective(*args):
         """Objective function."""
@@ -1117,7 +1134,7 @@ def test_autograd_polyslab_cylinder(use_emulated_run, monitor_key):
         geo = geo_maker(*params)
         structure = td.Structure(geometry=geo, medium=td.Medium(permittivity=2))
 
-        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
+        return SIM_BASE.updated_copy(structures=(structure,), monitors=(monitor,))
 
     p0 = [1.0, 0.0, 0.0, t0]
 
@@ -1194,7 +1211,7 @@ def test_sim_full_ops(structure_key):
     def objective(*params):
         s = make_structures(*params)[structure_key]
         s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
-        sim_full_traced = SIM_FULL.updated_copy(structures=[*list(SIM_FULL.structures), s])
+        sim_full_traced = SIM_FULL.updated_copy(structures=(*SIM_FULL.structures, s))
 
         sim_full_static = sim_full_traced.to_static()
 
@@ -1338,7 +1355,7 @@ def test_sim_traced_override_structures():
             geometry=td.Box(center=(0, 0, 0), size=(1, 1, x)),
             dl=[1, 1, 1],
         )
-        sim = SIM_FULL.updated_copy(override_structures=[override_structure], path="grid_spec")
+        sim = SIM_FULL.updated_copy(override_structures=(override_structure,), path="grid_spec")
         return sim.grid_spec.override_structures[0].geometry.size[2]
 
     with AssertLogLevel("WARNING", contains_str="override structures"):
@@ -1351,7 +1368,7 @@ def test_sim_fields_io(structure_key, tmp_path):
     from file, and then converting back, returns the same object."""
     s = make_structures(params0)[structure_key]
     s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
-    sim_full_traced = SIM_FULL.updated_copy(structures=[*list(SIM_FULL.structures), s])
+    sim_full_traced = SIM_FULL.updated_copy(structures=(*SIM_FULL.structures, s))
     sim_fields = sim_full_traced._strip_traced_fields()
 
     field_map = FieldMap.from_autograd_field_map(sim_fields)
@@ -1407,8 +1424,8 @@ def test_too_many_traced_structures(monkeypatch, use_emulated_run):
     def make_sim(*args):
         structure = make_structures(*args)[structure_key]
         return SIM_BASE.updated_copy(
-            structures=(config.adjoint.max_traced_structures + 1) * [structure],
-            monitors=[monitor],
+            structures=(config.adjoint.max_traced_structures + 1) * (structure,),
+            monitors=(monitor,),
         )
 
     def objective(*args):
@@ -1434,7 +1451,7 @@ def test_no_freq_adjoint(monkeypatch, use_emulated_run):
 
         sim = SIM_BASE.updated_copy(
             structures=structures,
-            monitors=[td.FieldTimeMonitor(size=(0, 0, 0), name="time_monitor_only")],
+            monitors=(td.FieldTimeMonitor(size=(0, 0, 0), name="time_monitor_only"),),
         )
         # doesn't need to be a valid objective since this should error when calling web.run
         return web.run(sim, task_name="autograd_test", verbose=False)
@@ -1653,7 +1670,7 @@ def test_interp_objectives(use_emulated_run, colocate, objtype):
         for structure_key in structure_keys_:
             structures.append(structures_traced_dict[structure_key])
 
-        sim = SIM_BASE.updated_copy(monitors=[monitor], structures=structures)
+        sim = SIM_BASE.updated_copy(monitors=(monitor,), structures=tuple(structures))
         data = run(sim, task_name="autograd_test", verbose=False)
 
         if objtype == "flux":
@@ -1722,7 +1739,7 @@ class TestFieldProjection:
                 name="far_field",
             )
 
-        sim = SIM_BASE.updated_copy(monitors=[monitor])
+        sim = SIM_BASE.updated_copy(monitors=(monitor,))
 
         if sim_2d and IS_3D:
             sim = sim.updated_copy(size=(0, *sim.size[1:]))
@@ -1756,7 +1773,7 @@ class TestFieldProjection:
             for structure_key in structure_keys_:
                 structures.append(structures_traced_dict[structure_key])
 
-            sim = sim_base.updated_copy(structures=structures)
+            sim = sim_base.updated_copy(structures=tuple(structures))
             sim_data = run(sim, task_name="field_projection_test")
 
             return self.objective(sim_data, monitor_far)
@@ -1784,14 +1801,14 @@ class TestFieldProjection:
         """Using a far field monitor directly should error"""
         # build a projection‐only monitor sim
         sim_base, monitor_far = self.setup(far_field_approx, projection_type, sim_2d)
-        sim_base = sim_base.updated_copy(monitors=[monitor_far])
+        sim_base = sim_base.updated_copy(monitors=(monitor_far,))
 
         def objective(args):
             structures_traced_dict = make_structures(args)
             structures = list(SIM_BASE.structures)
             for structure_key in structure_keys_:
                 structures.append(structures_traced_dict[structure_key])
-            sim = sim_base.updated_copy(structures=structures)
+            sim = sim_base.updated_copy(structures=tuple(structures))
             sim_data = run(sim, task_name="field_projection_test")
             return sim_data["far_field"].power.sum().item()
 
@@ -1951,6 +1968,96 @@ def test_adaptive_spacing(eps_real):
         assert np.isclose(expected_vjp_spacing, vjp_spacing), "Unexpected adaptive vjp spacing!"
 
 
+def test_adaptive_spacing_cache(rng, redirect_stdout_to_stderr, monkeypatch):
+    """Ensure the cache is not affecting `GeometryGroup` results or persisting after derivative computation."""
+    x_geom = [-0.5, 0.5]
+    y_geom = [-0.5, 0.5]
+
+    radius = 0.3
+
+    geometries = []
+    for x_center in x_geom:
+        for y_center in y_geom:
+            geometries.append(
+                td.Cylinder(center=(x_center, y_center, 0.0), length=0.5, radius=radius)
+            )
+
+    field_paths = []
+    for idx in range(len(geometries)):
+        field_paths.append(("geometries", idx, "radius"))
+
+    geometry = td.GeometryGroup(geometries=geometries)
+
+    eps_keys = ["eps_xx", "eps_yy", "eps_zz"]
+
+    N = 20
+    xcoord = np.linspace(-1, 1, N)
+    ycoord = np.linspace(-1, 1, N)
+    zcoord = np.linspace(-1, 1, N)
+
+    eps_out_data = rng.uniform(1, 2, (N, N, N, 1))
+    eps_in_data = rng.uniform(1, 2, (N, N, N, 1))
+
+    freq = 1.94e14
+
+    def random_scalar_data_array():
+        return td.ScalarFieldDataArray(
+            rng.uniform(1, 2, (N, N, N, 1)),
+            coords={"x": xcoord, "y": ycoord, "z": zcoord, "f": [freq]},
+        )
+
+    E_fwd = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+    E_adj = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+    D_fwd = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+    D_adj = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+    E_der_map = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+    D_der_map = {key: random_scalar_data_array() for key in ["Ex", "Ey", "Ez"]}
+
+    derivative_info = DerivativeInfo(
+        paths=tuple(field_paths),
+        E_der_map=E_der_map,
+        D_der_map=D_der_map,
+        E_fwd=E_fwd,
+        D_fwd=D_fwd,
+        E_adj=E_adj,
+        D_adj=D_adj,
+        eps_data={
+            key: td.ScalarFieldDataArray(
+                rng.uniform(1, 2, (N, N, N, 1)),
+                coords={"x": xcoord, "y": ycoord, "z": zcoord, "f": [freq]},
+            )
+            for key in eps_keys
+        },
+        frequencies=[freq],
+        bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_out=td.ScalarFieldDataArray(
+            eps_out_data, coords={"x": xcoord, "y": ycoord, "z": zcoord, "f": [freq]}
+        ),
+        eps_in=td.ScalarFieldDataArray(
+            eps_in_data, coords={"x": xcoord, "y": ycoord, "z": zcoord, "f": [freq]}
+        ),
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+    )
+
+    vjp_with_cache = geometry._compute_derivatives(derivative_info)
+
+    assert derivative_info.cached_min_spacing_from_permittivity is None, (
+        "Unexpected cached variable persistence."
+    )
+
+    monkeypatch.setattr(
+        derivative_info, "cache_min_spacing_from_permittivity", lambda: nullcontext()
+    )
+
+    vjp_without_cache = geometry._compute_derivatives(derivative_info)
+
+    for k, v in vjp_with_cache.items():
+        assert v == vjp_without_cache[k], (
+            "Geometry group computation changed when running with cache."
+        )
+
+
 @pytest.mark.parametrize("eps_real", [1e6, -1e8])
 def test_cylinder_discretization(eps_real):
     freq = 5e9
@@ -1986,10 +2093,8 @@ def test_cylinder_discretization(eps_real):
     with AssertLogLevel(
         "WARNING", contains_str="The minimum wavelength inside the cylinder material"
     ):
-        cylinder = td.Cylinder(axis=2, length=info.wavelength_min, radius=2 * info.wavelength_min)
-
         expected_wvl_mat = info.wavelength_min * config.adjoint.min_wvl_fraction
-        wvl_mat = cylinder._discretization_wavelength(derivative_info=info)
+        wvl_mat = discretization_wavelength(info, "cylinder")
 
         assert np.isclose(expected_wvl_mat, wvl_mat), (
             "Unexpected wavelength for discretizing cylinder!"
@@ -2025,22 +2130,11 @@ def test_custom_pole_residue(monkeypatch):
 
     dJ_deps = np.conj(ag.holomorphic_grad(J)(eps0))
 
-    monkeypatch.setattr(
-        td.CustomPoleResidue,
-        "_derivative_field_cmp_custom",
-        lambda self,
-        E_der_map,
-        spatial_data,
-        dim,
-        freqs,
-        bounds=None,
-        component="real",
-        interp_method=None: dJ_deps / 3.0,
-    )
-
     import importlib
 
     importlib.reload(td)
+
+    _patch_cmp_custom_to_const(monkeypatch, td.CustomPoleResidue, dJ_deps)
 
     pr = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
     field_paths = [("eps_inf",)]
@@ -2163,10 +2257,10 @@ def test_custom_sellmeier(monkeypatch):
     def eps_from(B, C):
         return 1.0 + B * lam2 / (lam2 - C)
 
-    eps_arr = eps_from(B1.values, C1.values) + eps_from(B2.values, C2.values)
+    eps_arr = eps_from(B1.values, C1.values) + eps_from(B2.values, C2.values) + 0j
     dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
 
-    _patch_cmp_to_const(monkeypatch, td.CustomSellmeier, dJ)
+    _patch_cmp_custom_to_const(monkeypatch, td.CustomSellmeier, dJ)
 
     di = _make_di(
         paths=[("coeffs", 0, 0), ("coeffs", 0, 1), ("coeffs", 1, 0), ("coeffs", 1, 1)],
@@ -2220,7 +2314,7 @@ def test_custom_lorentz(monkeypatch):
     )
     dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
 
-    _patch_cmp_to_const(monkeypatch, td.CustomLorentz, dJ)
+    _patch_cmp_custom_to_const(monkeypatch, td.CustomLorentz, dJ)
 
     di = _make_di(
         paths=[
@@ -2300,7 +2394,7 @@ def test_custom_drude(monkeypatch):
     eps_arr = eps_inf.values + term(fp1.values, dl1.values) + term(fp2.values, dl2.values)
     dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
 
-    _patch_cmp_to_const(monkeypatch, td.CustomDrude, dJ)
+    _patch_cmp_custom_to_const(monkeypatch, td.CustomDrude, dJ)
 
     di = _make_di(
         paths=[
@@ -2368,7 +2462,7 @@ def test_custom_debye(monkeypatch):
     eps_arr = eps_inf.values + term(de1.values, tau1.values) + term(de2.values, tau2.values)
     dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
 
-    _patch_cmp_to_const(monkeypatch, td.CustomDebye, dJ)
+    _patch_cmp_custom_to_const(monkeypatch, td.CustomDebye, dJ)
 
     di = _make_di(
         paths=[
@@ -2500,8 +2594,8 @@ def make_objective(postprocess_fn: typing.Callable, structure_key: str) -> typin
     def objective(params):
         structure_traced = make_structures(params)[structure_key]
         sim = SIM_BASE.updated_copy(
-            structures=[structure_traced],
-            monitors=[*list(SIM_BASE.monitors), mnt_single, mnt_multi],
+            structures=(structure_traced,),
+            monitors=(*SIM_BASE.monitors, mnt_single, mnt_multi),
         )
         data = run(sim, task_name="multifreq_test")
         return postprocess_fn(data)
@@ -2628,8 +2722,8 @@ def test_multi_freq_edge_cases(use_emulated_run, structure_key, label, check_fn,
     def objective(params):
         structure_traced = make_structures(params)[structure_key]
         sim = SIM_BASE.updated_copy(
-            structures=[structure_traced],
-            monitors=[*list(SIM_BASE.monitors), mnt_single, mnt_multi],
+            structures=(structure_traced,),
+            monitors=(*SIM_BASE.monitors, mnt_single, mnt_multi),
         )
         data = run(sim, task_name="multifreq_test")
         return postprocess_fn(data)
@@ -2652,8 +2746,8 @@ def test_multi_frequency_equivalence(use_emulated_run, structure_key):
         for f in mnt_multi.freqs:
             structure_traced = make_structures(params)[structure_key]
             sim = SIM_BASE.updated_copy(
-                structures=[structure_traced],
-                monitors=[*list(SIM_BASE.monitors), mnt_multi],
+                structures=(structure_traced,),
+                monitors=(*SIM_BASE.monitors, mnt_multi),
             )
 
             sim_data = web.run(sim, task_name="multifreq_test")
@@ -2666,8 +2760,8 @@ def test_multi_frequency_equivalence(use_emulated_run, structure_key):
     def objective_multi(params, structure_key) -> float:
         structure_traced = make_structures(params)[structure_key]
         sim = SIM_BASE.updated_copy(
-            structures=[structure_traced],
-            monitors=[*list(SIM_BASE.monitors), mnt_multi],
+            structures=(structure_traced,),
+            monitors=(*SIM_BASE.monitors, mnt_multi),
         )
         sim_data = web.run(sim, task_name="multifreq_test")
         amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
@@ -2693,11 +2787,11 @@ def test_error_flux(use_emulated_run):
     def objective(params):
         structure_traced = make_structures(params)["medium"]
         sim = SIM_BASE.updated_copy(
-            structures=[structure_traced],
-            monitors=[
+            structures=(structure_traced,),
+            monitors=(
                 td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="flux"),
                 td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
-            ],
+            ),
         )
         data = run(sim, task_name="flux_error")
         return anp.sum(data["flux"].flux.values)
@@ -2714,8 +2808,8 @@ def test_extraneous_field(use_emulated_run):
     def objective(params):
         structure_traced = make_structures(params)["medium"]
         sim = SIM_BASE.updated_copy(
-            structures=[structure_traced],
-            monitors=[
+            structures=(structure_traced,),
+            monitors=(
                 SIM_BASE.monitors[0],
                 td.ModeMonitor(
                     size=(1, 1, 0),
@@ -2724,7 +2818,7 @@ def test_extraneous_field(use_emulated_run):
                     freqs=[FREQ0 * 0.9, FREQ0 * 1.1],
                     name="mode",
                 ),
-            ],
+            ),
         )
         data = run(sim, task_name="extra_field")
         amp = data["mode"].amps.sel(direction="+", f=FREQ0 * 0.9, mode_index=0).values
@@ -2960,21 +3054,26 @@ def test_flux_monitor_freq_exclusion(use_emulated_run):
     """Checks if we are excluding flux monitor frequencies from the adjoint frequencies since
     we cannot differentiate through flux data."""
 
-    monitors_just_field = [
-        td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field")
-    ]
+    monitors_just_field = (
+        td.FieldMonitor(
+            size=(1, 1, 0),
+            center=(0, 0, 0),
+            freqs=[FREQ0],
+            name="field",
+        ),
+    )
 
-    monitors_with_flux = [
+    monitors_with_flux = (
         td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
         td.FluxMonitor(
             size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0 - FWIDTH, FREQ0 + FWIDTH], name="flux"
         ),
-    ]
+    )
 
     def objective_with_monitors(monitors):
         def objective(params):
             structure_traced = make_structures(params)["medium"]
-            sim = SIM_BASE.updated_copy(structures=[structure_traced], monitors=monitors)
+            sim = SIM_BASE.updated_copy(structures=(structure_traced,), monitors=monitors)
             data = run(sim, task_name="adjoint_freq_test")
             assert data.simulation._freqs_adjoint == [FREQ0]
             return anp.sum(data["field"].flux.values)
@@ -2996,7 +3095,7 @@ def test_dispersive_no_inf(use_emulated_run):
 
     def objective(args):
         structure_traced = make_structures(args)["polyslab_dispersive"]
-        sim = make_sim(args).updated_copy(structures=[structure_traced])
+        sim = make_sim(args).updated_copy(structures=(structure_traced,))
         sim_data = run(sim, task_name="adjoint_test", verbose=False)
         return postprocess(sim_data)
 
@@ -3039,10 +3138,10 @@ def test_error_clip(use_emulated_run):
         union = td.ClipOperation(operation="union", geometry_a=box1, geometry_b=box2)
         structure = td.Structure(geometry=union, medium=td.Medium(permittivity=2))
         sim = SIM_BASE.updated_copy(
-            structures=[structure],
-            monitors=[
+            structures=(structure,),
+            monitors=(
                 td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
-            ],
+            ),
         )
         data = run(sim, task_name="clip_error")
         return anp.sum(data["field"].intensity.item())
@@ -3235,22 +3334,15 @@ def test_frequency_coordinate_alignment():
     field_data = {"Ex": data, "Ey": data, "Ez": data}
 
     # Test 1: Exact match should work
-    freqs_exact = np.array([freq])
-    result = _slice_field_data(field_data, freqs_exact)
+    result = _slice_field_data(field_data, slice(0, 1))
     assert len(result) == 3
     assert all(k in result for k in ["Ex", "Ey", "Ez"])
 
-    # Test 2: Tiny FP drift (within typical precision) should fail with KeyError
-    # This demonstrates the original bug - even 0.1 Hz difference causes failure
-    freqs_drifted = np.array([freq + 0.1])  # 0.1 Hz drift at 2e14 Hz scale
-    with pytest.raises(KeyError):
-        _slice_field_data(field_data, freqs_drifted)
-
-    # Test 3: Component indicator filtering works
-    result_e_only = _slice_field_data(field_data, freqs_exact, component_indicator="E")
+    # Test 2: Component indicator filtering works
+    result_e_only = _slice_field_data(field_data, slice(0, 1), component_indicator="E")
     assert len(result_e_only) == 3
 
-    # Test 4: Multiple frequencies
+    # Test 3: Multiple frequencies
     freqs_multi = [1e14, 2e14, 3e14]
     data_multi = xr.DataArray(
         np.array([1.0, 2.0, 3.0]),
@@ -3260,12 +3352,17 @@ def test_frequency_coordinate_alignment():
     field_data_multi = {"Ex": data_multi}
 
     # Selecting subset should work
-    result_subset = _slice_field_data(field_data_multi, np.array([2e14]))
+    result_subset = _slice_field_data(
+        field_data_multi, slice(freqs_multi.index(2e14), 1 + freqs_multi.index(2e14))
+    )
     assert result_subset["Ex"].sizes["f"] == 1
 
     # Selecting non-existent frequency should fail
-    with pytest.raises(KeyError):
-        _slice_field_data(field_data_multi, np.array([1.5e14]))
+    with pytest.raises(IndexError):
+        _slice_field_data(field_data_multi, slice(len(freqs_multi), len(freqs_multi) + 1))
+
+    with pytest.raises(IndexError):
+        _slice_field_data(field_data_multi, slice(-1, len(freqs_multi)))
 
 
 def test_geometry_group_passes_intersected_bounds_to_children():
@@ -3278,6 +3375,18 @@ def test_geometry_group_passes_intersected_bounds_to_children():
         bounds_intersect: tuple
         simulation_bounds: tuple
         interpolators: dict | None = None
+        cached_min_spacing_from_permittivity: float | None = None
+        eps_data = {
+            key: td.ScalarFieldDataArray(
+                [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [200e12]}
+            )
+            for key in ["eps_xx", "eps_yy", "eps_zz"]
+        }
+        frequencies = [200e12]
+
+        cache_min_spacing_from_permittivity = DerivativeInfo.cache_min_spacing_from_permittivity
+        min_spacing_from_permittivity = DerivativeInfo.min_spacing_from_permittivity
+        wavelength_min = property(lambda self: DerivativeInfo.wavelength_min.fget(self))
 
         def create_interpolators(self, dtype: float = float):
             return self.interpolators or {}
@@ -3289,6 +3398,7 @@ def test_geometry_group_passes_intersected_bounds_to_children():
                 "bounds_intersect": self.bounds_intersect,
                 "simulation_bounds": self.simulation_bounds,
                 "interpolators": self.interpolators,
+                "cached_min_spacing_from_permittivity": self.cached_min_spacing_from_permittivity,
             }
             data.update({k: v for k, v in kwargs.items() if k in data})
             return SimpleDerivativeInfo(**data)
@@ -3342,3 +3452,33 @@ def test_geometry_group_passes_intersected_bounds_to_children():
     assert object.__getattribute__(big_box, "recorded_bounds_intersect") == group.bounds, (
         f"got {object.__getattribute__(big_box, 'recorded_bounds_intersect')} and {group.bounds}"
     )
+
+
+@pytest.mark.parametrize("monitor_key", ("mode",))
+def test_autograd_sphere_0_radius(use_emulated_run, monitor_key):
+    """Integration test that Sphere gradients are non-zero (mirrors cylinder check)."""
+
+    monitor, postprocess = make_monitors()[monitor_key]
+
+    def make_sphere(radius, x0, y0, z0):
+        return td.Sphere(center=(x0, y0, z0), radius=radius)
+
+    def make_sim(params):
+        geometry = make_sphere(*params)
+        structure = td.Structure(geometry=geometry, medium=td.Medium(permittivity=2))
+        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
+
+    p0 = [0.0, 0.0, 0.0, 0.0]
+
+    def objective(params):
+        sim = make_sim(params)
+        if PLOT_SIM:
+            plot_sim(sim, plot_eps=True)
+        data = run(sim, task_name="autograd_test", verbose=False)
+        return anp.sum(anp.abs(data[monitor.name].amps)).item()
+
+    with AssertLogLevel("WARNING", contains_str="cannot be computed"):
+        val_sphere, grad_sphere = ag.value_and_grad(objective)(p0)
+    # first 4 parameters are related to the geometry
+    geom_grad = np.asarray(get_static(grad_sphere[:4]), dtype=float)
+    assert np.allclose(geom_grad, 0.0)

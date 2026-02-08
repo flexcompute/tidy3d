@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+import warnings
+
 import gdstk
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d import SimulationDataMap
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
-from tidy3d.plugins.smatrix import ModalComponentModeler, ModalComponentModelerData, Port
+from tidy3d.plugins.smatrix import (
+    AstigmaticGaussianPort,
+    GaussianPort,
+    ModalComponentModeler,
+    ModalComponentModelerData,
+    Port,
+)
 from tidy3d.web.api.container import Batch
 
 from ...utils import AssertLogStr, run_emulated
@@ -127,7 +135,7 @@ def make_coupler():
 
     # in-plane field monitor (optional, increases required data storage)
     domain_monitor = td.FieldMonitor(
-        center=[0, 0, wg_height / 2], size=[td.inf, td.inf, 0], freqs=freqs, name="field"
+        center=(0, 0, wg_height / 2), size=(td.inf, td.inf, 0), freqs=freqs, name="field"
     )
 
     # initialize the simulation
@@ -144,6 +152,7 @@ def make_coupler():
 
 def make_ports():
     sim = make_coupler()
+
     # source
     src_pos = sim.size[0] / 2 - straight_wg_length / 2
 
@@ -179,7 +188,28 @@ def make_ports():
         name="left_bot",
     )
 
-    return [port_right_top, port_right_bot, port_left_top, port_left_bot]
+    # Gaussian ports on top and bottom
+    port_z_bot = AstigmaticGaussianPort(
+        center=[0, 0, wg_height + 0.1],
+        size=(10, 10, 0),
+        direction="-",
+        name="z_top",
+        angle_theta=0.0,
+        angle_phi=0.0,
+        pol_angle=0.0,
+    )
+
+    port_z_top = GaussianPort(
+        center=[0, 0, -0.1],
+        size=(10, 10, 0),
+        direction="+",
+        name="z_bot",
+        angle_theta=0.0,
+        angle_phi=0.0,
+        pol_angle=0.0,
+    )
+
+    return [port_right_top, port_right_bot, port_left_top, port_left_bot, port_z_bot, port_z_top]
 
 
 def make_component_modeler(**kwargs):
@@ -213,13 +243,13 @@ def test_validate_no_sources():
         source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14), polarization="Ex"
     )
     sim_w_source = modeler.simulation.copy(update={"sources": (source,)})
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = modeler.copy(update={"simulation": sim_w_source})
 
 
 def test_element_mappings_none():
     modeler = make_component_modeler()
-    modeler = modeler.updated_copy(ports=[], element_mappings=())
+    modeler = modeler.updated_copy(ports=(), element_mappings=())
     _ = modeler.matrix_indices_run_sim
 
 
@@ -283,13 +313,12 @@ def test_run_component_modeler(monkeypatch):
     s_matrix = modeler_data.smatrix()
 
     for port_in in modeler.ports:
-        for mode_index_in in range(port_in.mode_spec.num_modes):
+        for mode_index_in in range(port_in.num_modes):
             for port_out in modeler.ports:
-                for mode_index_out in range(port_out.mode_spec.num_modes):
+                for mode_index_out in range(port_out.num_modes):
                     coords_in = {"port_in": port_in.name, "mode_index_in": mode_index_in}
                     coords_out = {"port_out": port_out.name, "mode_index_out": mode_index_out}
-
-                    assert np.all(s_matrix.sel(**coords_in) != 0), (
+                    assert np.all(s_matrix.sel(**coords_in).sel(mode_index_out=0) != 0), (
                         "source index not present in S matrix"
                     )
                     assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
@@ -301,7 +330,7 @@ def test_component_modeler_run_only(monkeypatch):
     _ = make_coupler()
     _ = make_ports()
     ONLY_SOURCE = (port_run_only, mode_index_run_only) = ("right_bot", 0)
-    run_only = [ONLY_SOURCE]
+    run_only = (ONLY_SOURCE,)
     modeler = make_component_modeler(run_only=run_only)
     modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
     s_matrix = modeler_data.smatrix()
@@ -309,16 +338,22 @@ def test_component_modeler_run_only(monkeypatch):
     coords_in_run_only = {"port_in": port_run_only, "mode_index_in": mode_index_run_only}
 
     # make sure the run only mappings are non-zero
-    assert np.all(s_matrix.sel(**coords_in_run_only) != 0)
+    assert np.all(s_matrix.sel(**coords_in_run_only).sel(mode_index_out=0) != 0)
 
     # make sure if we zero out the run_only mappings, everythging is zero
     s_matrix.loc[coords_in_run_only] = 0
     assert np.all(s_matrix.values == 0.0)
 
     # make sure lists are correctly converted into tuples
-    run_only = [list(ONLY_SOURCE)]
-    modeler = modeler.updated_copy(run_only=run_only)
-    assert ONLY_SOURCE in modeler.matrix_indices_run_sim
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"(?s)Pydantic serializer warnings:.*field_name='run_only'.*",
+            category=UserWarning,
+        )
+        run_only = [list(ONLY_SOURCE)]
+        modeler = modeler.updated_copy(run_only=run_only)
+        assert ONLY_SOURCE in modeler.matrix_indices_run_sim
 
 
 def _test_mappings(element_mappings, s_matrix):
@@ -370,7 +405,7 @@ def test_mapping_exclusion(monkeypatch):
 
     # add a mapping to each element in the row of EXCLUDE_INDEX
     for port in ports:
-        for mode_index in range(port.mode_spec.num_modes):
+        for mode_index in range(port.num_modes):
             row_index = (port.name, mode_index)
             if row_index != EXCLUDE_INDEX:
                 mapping = ((row_index, row_index), (row_index, EXCLUDE_INDEX), +1)
@@ -380,14 +415,14 @@ def test_mapping_exclusion(monkeypatch):
     mapping = ((("right_bot", 1), ("right_bot", 1)), (EXCLUDE_INDEX, EXCLUDE_INDEX), +1)
     element_mappings.append(mapping)
 
-    modeler = make_component_modeler(element_mappings=element_mappings)
+    modeler = make_component_modeler(element_mappings=tuple(element_mappings))
     modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
     s_matrix = modeler_data.smatrix()
 
     run_sim_indices = modeler.matrix_indices_run_sim
     assert EXCLUDE_INDEX not in run_sim_indices, "mapping didnt exclude row properly"
 
-    _test_mappings(element_mappings, s_matrix)
+    _test_mappings(tuple(element_mappings), s_matrix)
 
 
 def test_mapping_with_run_only():
@@ -400,7 +435,7 @@ def test_mapping_with_run_only():
     run_only = []
     # add a mapping to each element in the row of EXCLUDE_INDEX
     for port in ports:
-        for mode_index in range(port.mode_spec.num_modes):
+        for mode_index in range(port.num_modes):
             # Test that providing a list is properly handled
             row_index = [port.name, mode_index]
             run_only.append(row_index)
@@ -416,7 +451,7 @@ def test_mapping_with_run_only():
     _ = make_component_modeler(element_mappings=element_mappings, run_only=run_only)
 
     run_only.remove(EXCLUDE_INDEX)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = make_component_modeler(element_mappings=element_mappings, run_only=run_only)
 
 
@@ -482,7 +517,7 @@ def test_validate_run_only_uniqueness_modal():
     port1_idx = (modeler.ports[1].name, 0)
 
     # Test with duplicate entries - should raise ValidationError
-    with pytest.raises(pydantic.ValidationError, match="duplicate entries"):
+    with pytest.raises(ValidationError, match="duplicate entries"):
         modeler.updated_copy(run_only=(port0_idx, port0_idx, port1_idx))
 
 
@@ -491,11 +526,11 @@ def test_validate_run_only_membership_modal():
     modeler = make_component_modeler()
 
     # Test with invalid port name
-    with pytest.raises(pydantic.ValidationError, match="not present in"):
+    with pytest.raises(ValidationError, match="not present in"):
         modeler.updated_copy(run_only=(("invalid_port", 0),))
 
     # Test with invalid mode index
     port0_name = modeler.ports[0].name
     invalid_mode = modeler.ports[0].mode_spec.num_modes + 1
-    with pytest.raises(pydantic.ValidationError, match="not present in"):
+    with pytest.raises(ValidationError, match="not present in"):
         modeler.updated_copy(run_only=((port0_name, invalid_mode),))

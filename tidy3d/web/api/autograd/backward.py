@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
 
 import tidy3d as td
-from tidy3d import Medium
-from tidy3d.components.autograd import AutogradFieldMap, get_static
+from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.config import config
@@ -15,6 +15,12 @@ from tidy3d.exceptions import AdjointError
 from tidy3d.packaging import disable_local_subpixel
 
 from .utils import E_to_D, get_derivative_maps
+
+if TYPE_CHECKING:
+    from typing import Union
+
+    from tidy3d import Medium
+    from tidy3d.components.autograd import AutogradFieldMap
 
 
 def setup_adj(
@@ -94,13 +100,30 @@ def _compute_eps_array(medium: Medium, frequencies: list[float]) -> DataArray:
 
 
 def _slice_field_data(
-    field_data: dict, freqs: np.ndarray, component_indicator: str | None = None
+    field_data: dict, freq_indices: slice, component_indicator: str | None = None
 ) -> dict:
-    """Slice field data dictionary along frequency dimension."""
-    if component_indicator:
-        return {k: v.sel(f=freqs) for k, v in field_data.items() if component_indicator in k}
-    else:
-        return {k: v.sel(f=freqs) for k, v in field_data.items()}
+    """
+    Slice field data dictionary along frequency dimension using `isel`
+    and freq_indices.
+    """
+    sliced_data = {}
+
+    # filter keys first to avoid unnecessary looping
+    keys_to_process = (
+        k for k in field_data.keys() if component_indicator is None or component_indicator in k
+    )
+
+    num_freqs = next(iter(field_data.values())).sizes["f"]
+
+    start = freq_indices.start
+    stop = freq_indices.stop
+    if (start < 0) or (start >= num_freqs):
+        raise IndexError(f"Frequency slice ({start}, {stop}) is out of bounds for size {num_freqs}")
+
+    for k in keys_to_process:
+        sliced_data[k] = field_data[k].isel(f=freq_indices)
+
+    return sliced_data
 
 
 @disable_local_subpixel
@@ -127,6 +150,23 @@ def postprocess_adj(
         fld_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="fld")
         eps_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="eps")
 
+        def sort_by_freq_ascending(
+            dataset: Union[td.PermittivityData, td.FieldData],
+        ) -> Union[td.PermittivityData, td.FieldData]:
+            dataset_sort = {}
+            for key, val in dataset.field_components.items():
+                dataset_sort[key] = val.sortby("f", ascending=True)
+
+            return dataset.updated_copy(**dataset_sort)
+
+        # sort data by ascending frequency value to ensure data ordering is consistent
+        fld_fwd = sort_by_freq_ascending(fld_fwd)
+        eps_fwd = sort_by_freq_ascending(eps_fwd)
+        fld_adj = sort_by_freq_ascending(fld_adj)
+        eps_adj = sort_by_freq_ascending(eps_adj)
+
+        freqs_adj = np.array(fld_adj.monitor.freqs)
+
         # post normalize the adjoint fields if a single, broadband source
         fwd_flds_adj_normed = {}
         for key, val in fld_adj.field_components.items():
@@ -146,6 +186,18 @@ def postprocess_adj(
         H_der_map = der_maps["H"]
 
         H_info_exists = H_der_map is not None
+
+        def filter_adj_freq(
+            dataset: Union[td.PermittivityData, td.FieldData], filter_freqs: np.ndarray
+        ) -> Union[td.PermittivityData, td.FieldData]:
+            dataset_filter_freq = {}
+            for key, val in dataset.field_components.items():
+                dataset_filter_freq[key] = val.sel(f=filter_freqs)
+
+            return dataset.updated_copy(**dataset_filter_freq)
+
+        fld_fwd = filter_adj_freq(fld_fwd, freqs_adj)
+        eps_fwd = filter_adj_freq(eps_fwd, freqs_adj)
 
         D_fwd = E_to_D(fld_fwd, eps_fwd)
         D_adj = E_to_D(fld_adj, eps_fwd)
@@ -266,43 +318,37 @@ def postprocess_adj(
             select_adjoint_freqs = adjoint_frequencies[freq_slice]
 
             # slice field data for current chunk
-            E_der_map_chunk = _slice_field_data(E_der_map.field_components, select_adjoint_freqs)
-            D_der_map_chunk = _slice_field_data(D_der_map.field_components, select_adjoint_freqs)
+            E_der_map_chunk = _slice_field_data(E_der_map.field_components, freq_slice)
+            D_der_map_chunk = _slice_field_data(D_der_map.field_components, freq_slice)
             E_fwd_chunk = _slice_field_data(
-                fld_fwd.field_components, select_adjoint_freqs, component_indicator="E"
+                fld_fwd.field_components, freq_slice, component_indicator="E"
             )
             E_adj_chunk = _slice_field_data(
-                fld_adj.field_components, select_adjoint_freqs, component_indicator="E"
+                fld_adj.field_components, freq_slice, component_indicator="E"
             )
-            D_fwd_chunk = _slice_field_data(D_fwd.field_components, select_adjoint_freqs)
-            D_adj_chunk = _slice_field_data(D_adj.field_components, select_adjoint_freqs)
-            eps_data_chunk = _slice_field_data(eps_fwd.field_components, select_adjoint_freqs)
+            D_fwd_chunk = _slice_field_data(D_fwd.field_components, freq_slice)
+            D_adj_chunk = _slice_field_data(D_adj.field_components, freq_slice)
+            eps_data_chunk = _slice_field_data(eps_fwd.field_components, freq_slice)
 
             H_der_map_chunk = None
             H_fwd_chunk = None
             H_adj_chunk = None
 
             if H_info_exists:
-                H_der_map_chunk = _slice_field_data(
-                    H_der_map.field_components, select_adjoint_freqs
-                )
+                H_der_map_chunk = _slice_field_data(H_der_map.field_components, freq_slice)
                 H_fwd_chunk = _slice_field_data(
-                    fld_fwd.field_components, select_adjoint_freqs, component_indicator="H"
+                    fld_fwd.field_components, freq_slice, component_indicator="H"
                 )
                 H_adj_chunk = _slice_field_data(
-                    fld_adj.field_components, select_adjoint_freqs, component_indicator="H"
+                    fld_adj.field_components, freq_slice, component_indicator="H"
                 )
 
             # slice epsilon arrays
             eps_no_structure_chunk = (
-                eps_no_structure.sel(f=select_adjoint_freqs)
-                if eps_no_structure is not None
-                else None
+                eps_no_structure.isel(f=freq_slice) if eps_no_structure is not None else None
             )
             eps_inf_structure_chunk = (
-                eps_inf_structure.sel(f=select_adjoint_freqs)
-                if eps_inf_structure is not None
-                else None
+                eps_inf_structure.isel(f=freq_slice) if eps_inf_structure is not None else None
             )
 
             # create derivative info with sliced data

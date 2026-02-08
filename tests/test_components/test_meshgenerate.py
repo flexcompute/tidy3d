@@ -505,7 +505,7 @@ def test_mesh_direct_override():
         assert np.isclose(sizes[len(sizes) // 2], 0.05)
 
     # default override has no effect when coarser than enclosing structure
-    override_coarse = override_fine.copy(update={"dl": [0.2] * 3})
+    override_coarse = override_fine.copy(update={"dl": (0.2,) * 3})
     sim = td.Simulation(
         size=(3, 3, 3),
         grid_spec=td.GridSpec.auto(
@@ -678,13 +678,13 @@ def test_small_structure_size():
     # Warning not raised if structure is higher index
     box2 = box.updated_copy(medium=td.Medium(permittivity=300))
     with AssertLogLevel(None):
-        sim.updated_copy(structures=[box2])
+        sim.updated_copy(structures=(box2,))
 
     # Warning not raised if structure is covered by an override structure
     override = td.MeshOverrideStructure(geometry=box.geometry, dl=(box_size, td.inf, td.inf))
     with AssertLogLevel(None):
         sim3 = sim.updated_copy(
-            grid_spec=sim.grid_spec.updated_copy(override_structures=[override])
+            grid_spec=sim.grid_spec.updated_copy(override_structures=(override,))
         )
     # Also check that the structure boundaries are in the grid
     ind_mid_cell = int(sim3.grid.num_cells[0] // 2)
@@ -696,7 +696,7 @@ def test_small_structure_size():
         geometry=td.Box(center=(box_size, 0, 0), size=(box_size, td.inf, td.inf)), medium=medium
     )
     with AssertLogLevel("WARNING"):
-        sim.updated_copy(structures=[box3, box])
+        sim.updated_copy(structures=(box3, box))
 
 
 def test_shapely_strtree_warnings():

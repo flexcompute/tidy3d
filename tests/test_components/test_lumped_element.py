@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
+from tidy3d.components.geometry.utils import SnapBehavior, SnapLocation
 from tidy3d.components.lumped_element import network_complex_permittivity
 
 
@@ -36,7 +37,7 @@ def test_lumped_resistor():
     assert monitor.name == resistor.monitor_name
 
     # error if voltage axis is not in plane with the resistor
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.LumpedResistor(
             resistance=50.0,
             center=[0, 0, 0],
@@ -46,7 +47,7 @@ def test_lumped_resistor():
         )
 
     # error if not planar
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.LumpedResistor(
             resistance=50.0,
             center=[0, 0, 0],
@@ -54,7 +55,7 @@ def test_lumped_resistor():
             voltage_axis=2,
             name="R",
         )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.LumpedResistor(
             resistance=50.0,
             center=[0, 0, 0],
@@ -89,7 +90,7 @@ def test_lumped_resistor_snapping():
 
     # snapped version
     resistor_snapped = resistor.updated_copy(enable_snapping_points=True)
-    sim_snapped = sim.updated_copy(lumped_elements=[resistor_snapped])
+    sim_snapped = sim.updated_copy(lumped_elements=(resistor_snapped,))
     # whether lumped element is snapped along normal axis
     assert not any(np.isclose(sim.grid.boundaries.z, 0.1))
     assert any(np.isclose(sim_snapped.grid.boundaries.z, 0.1))
@@ -127,7 +128,7 @@ def test_coaxial_lumped_resistor_snapping():
 
     # snapped version
     resistor_snapped = resistor.updated_copy(enable_snapping_points=True)
-    sim_snapped = sim.updated_copy(lumped_elements=[resistor_snapped])
+    sim_snapped = sim.updated_copy(lumped_elements=(resistor_snapped,))
     # whether lumped element is snapped along normal axis
     assert not any(np.isclose(sim.grid.boundaries.z, 0.1))
     assert any(np.isclose(sim_snapped.grid.boundaries.z, 0.1))
@@ -156,7 +157,7 @@ def test_coaxial_lumped_resistor():
     _ = resistor.to_snapping_points()
 
     # error if inner diameter is larger
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.CoaxialLumpedResistor(
             resistance=50.0,
             center=[0, 0, 0],
@@ -166,7 +167,7 @@ def test_coaxial_lumped_resistor():
             name="R",
         )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.CoaxialLumpedResistor(
             resistance=50.0,
             center=[0, 0, np.inf],
@@ -180,11 +181,11 @@ def test_coaxial_lumped_resistor():
 def test_validators_RLC_network():
     """Test that ``RLCNetwork`` is validated correctly."""
     # Must have a defined value for R,L,or C
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.RLCNetwork()
 
     # Must have a valid topology
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.RLCNetwork(
             capacitance=0.2e-12,
             network_topology="left",
@@ -193,13 +194,13 @@ def test_validators_RLC_network():
 
 def test_validators_admittance_network():
     """Test that ``AdmittanceNetwork`` is validated correctly."""
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.AdmittanceNetwork()
 
     a = (0, -1, 2)
     b = (1, 1, 2)
     # non negative a and b
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.AdmittanceNetwork(
             a=a,
             b=b,
@@ -208,7 +209,7 @@ def test_validators_admittance_network():
     a = (0, complex(1, 2), 2)
     b = (1, 1, 2)
     # real a and b
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.AdmittanceNetwork(
             a=a,
             b=b,
@@ -268,17 +269,12 @@ def test_RLC_and_lumped_network_agreement(Rval, Lval, Cval, topology):
     if configuration_includes_parallel_inductor:
         return
 
-    network = td.AdmittanceNetwork(
-        a=a,
-        b=b,
-    )
+    network = td.AdmittanceNetwork(a=a, b=b)
 
     (a, b) = network._as_admittance_function
     med_network = network._to_medium(sf)
     # Check conversion to geometry and to structure
-    linear_element = linear_element.updated_copy(
-        network=network,
-    )
+    linear_element = linear_element.updated_copy(network=network)
     _ = linear_element.to_geometry()
     assert np.allclose(med_RLC.eps_model(freqs), med_network.eps_model(freqs), rtol=rtol)
 
@@ -336,9 +332,68 @@ def test_impedance_admittance_calculation():
     assert np.allclose(Y_expected, Y_calc)
 
 
+def test_1d_lumped_element_not_allowed():
+    """Test that 1D lumped elements (two zero-size dimensions) are not allowed.
+
+    Users must provide a finite width along the lateral axis. This ensures the
+    normal axis can be properly determined for the underlying 2D material.
+    """
+    RLC = td.RLCNetwork(resistance=50)
+
+    # Attempting to create a 1D lumped element should raise a validation error
+    with pytest.raises(ValidationError):
+        td.LinearLumpedElement(
+            center=[0, 0, 0],
+            size=[1, 0, 0],  # 1D element: only x has non-zero size (invalid)
+            voltage_axis=0,
+            network=RLC,
+            name="1D_RLC",
+        )
+
+    # Other 1D configurations should also fail
+    with pytest.raises(ValidationError):
+        td.LinearLumpedElement(
+            center=[0, 0, 0],
+            size=[0, 1, 0],  # 1D element: only y has non-zero size (invalid)
+            voltage_axis=1,
+            network=RLC,
+            name="1D_RLC",
+        )
+
+    with pytest.raises(ValidationError):
+        td.LinearLumpedElement(
+            center=[0, 0, 0],
+            size=[0, 0, 1],  # 1D element: only z has non-zero size (invalid)
+            voltage_axis=2,
+            network=RLC,
+            name="1D_RLC",
+        )
+
+    # Planar elements (one zero-size dimension) should still work
+    element_2d = td.LinearLumpedElement(
+        center=[0, 0, 0],
+        size=[1, 0, 1],  # 2D element: x and z have non-zero size (valid)
+        voltage_axis=0,
+        network=RLC,
+        name="2D_RLC",
+    )
+    assert element_2d.normal_axis == 1
+    assert element_2d.size[element_2d.lateral_axis] != 0
+
+    # Verify snapping behavior for planar elements
+    snap_spec = element_2d._snapping_spec
+    assert snap_spec.location[element_2d.lateral_axis] == SnapLocation.Center
+    assert snap_spec.behavior[element_2d.lateral_axis] == SnapBehavior.Expand
+
+
 @pytest.mark.parametrize("dist_type", ["off", "laterally_only", "on"])
-@pytest.mark.parametrize("width", [0, 5])
+@pytest.mark.parametrize("width", [1e-6, 5])
 def test_distribution_variants(dist_type, width):
+    """Test different distribution types with varying widths.
+
+    Note: width=0 is no longer allowed (1D elements are not supported).
+    Use a small finite width (e.g., 1e-6 mm) for narrow elements.
+    """
     mm = 1e3
     RLC = td.RLCNetwork(
         resistance=50,
@@ -381,3 +436,47 @@ def test_distribution_variants(dist_type, width):
     network = linear_element.to_structure(grid)
     L, C = linear_element.estimate_parasitic_elements(grid)
     assert C >= 0
+
+
+def test_very_small_lateral_width_snapping():
+    """Test that very small lateral width doesn't cause zero-size after snapping.
+
+    When the user-specified lateral width is much smaller than the grid spacing,
+    the snapping should auto-expand to at least one grid cell to avoid division
+    by zero errors in the admittance scaling calculation.
+
+    The bug occurs when the element center is exactly on a grid center and the
+    lateral width is tiny - both bounds snap to the same grid center, resulting
+    in zero size.
+    """
+    mm = 1e3  # 1 mm = 1000 um
+    RLC = td.RLCNetwork(resistance=50)
+
+    # Create grid first - with specific cell size
+    cell_size = 1000
+    grid_x = np.arange(-5000, 10000, cell_size)
+    grid_y = np.arange(-5000, 5000, cell_size)
+    grid_z = np.arange(-3000, 3000, cell_size)
+    coords = td.Coords(x=grid_x, y=grid_y, z=grid_z)
+    grid = td.Grid(boundaries=coords)
+
+    # Grid centers along x are at -4500, -3500, ..., 1500, 2500, ...
+    # Place element center exactly on a grid center (1500)
+    port_width = 1e-5  # Much smaller than grid cell size
+    element = td.LinearLumpedElement(
+        center=[1500, 0, 0],
+        size=[port_width, 0, 1 * mm],  # lateral_axis=0 has very small width
+        voltage_axis=2,
+        network=RLC,
+        name="small_RLC",
+    )
+
+    # Before fix: this would fail with division by zero because
+    # cell_box.size[lateral_axis] would be 0
+    cell_box = element._create_box_for_network(grid)
+    assert cell_box.size[element.lateral_axis] > 0, (
+        "Cell box lateral size should be non-zero after snapping"
+    )
+
+    # Should not raise division by zero error
+    structure = element.to_structure(grid)

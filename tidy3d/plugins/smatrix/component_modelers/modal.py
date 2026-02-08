@@ -2,23 +2,34 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import autograd.numpy as np
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.index import SimulationMap
-from tidy3d.components.monitor import ModeMonitor
-from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Ax, Complex
+from tidy3d.components.types import Complex
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.plugins.smatrix.ports.modal import Port
+from tidy3d.constants import GLANCING_CUTOFF
+from tidy3d.exceptions import SetupError
+from tidy3d.plugins.smatrix.ports.modal import (
+    AbstractGaussianPort,
+    GaussianPort,
+    ModalPortType,
+)
 from tidy3d.plugins.smatrix.types import Element, MatrixIndex
 
 from .base import FWIDTH_FRAC, AbstractComponentModeler
+
+if TYPE_CHECKING:
+    from tidy3d.components.data.sim_data import SimulationData
+    from tidy3d.components.monitor import AbstractOverlapMonitor
+    from tidy3d.components.simulation import Simulation
+    from tidy3d.components.source.field import DirectionalSource
+    from tidy3d.components.types import Ax
+    from tidy3d.plugins.smatrix.ports.modal import Port
 
 
 class ModalComponentModeler(AbstractComponentModeler):
@@ -28,7 +39,7 @@ class ModalComponentModeler(AbstractComponentModeler):
     -----
         This class orchestrates the process of running multiple simulations to
         derive the scattering matrix (S-matrix) of a component. It uses modal
-        sources and monitors defined by a set of ports.
+        or Gaussian sources and monitors defined by a set of ports.
 
     See Also
     --------
@@ -36,14 +47,14 @@ class ModalComponentModeler(AbstractComponentModeler):
         * `Computing the scattering matrix of a device <../../notebooks/SMatrix.html>`_
     """
 
-    ports: tuple[Port, ...] = pd.Field(
+    ports: tuple[ModalPortType, ...] = Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
         "For each input mode, one simulation will be run with a modal source.",
     )
 
-    run_only: Optional[tuple[MatrixIndex, ...]] = pd.Field(
+    run_only: Optional[tuple[MatrixIndex, ...]] = Field(
         None,
         title="Run Only",
         description="Set of matrix indices that define the simulations to run. "
@@ -51,7 +62,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         "If a tuple is given, simulations will be run only for the given matrix indices.",
     )
 
-    element_mappings: tuple[tuple[Element, Element, Complex], ...] = pd.Field(
+    element_mappings: tuple[tuple[Element, Element, Complex], ...] = Field(
         (),
         title="Element Mappings",
         description="Tuple of S matrix element mappings, each described by a tuple of "
@@ -62,7 +73,7 @@ class ModalComponentModeler(AbstractComponentModeler):
     )
 
     @property
-    def base_sim(self):
+    def base_sim(self) -> Simulation:
         """The base simulation."""
         return self.simulation
 
@@ -95,7 +106,9 @@ class ModalComponentModeler(AbstractComponentModeler):
         return SimulationMap(keys=tuple(sim_dict.keys()), values=tuple(sim_dict.values()))
 
     @staticmethod
-    def _construct_matrix_indices_monitor(ports: tuple[Port, ...]) -> tuple[MatrixIndex, ...]:
+    def _construct_matrix_indices_monitor(
+        ports: tuple[ModalPortType, ...],
+    ) -> tuple[MatrixIndex, ...]:
         """Construct matrix indices for monitoring from modal ports.
 
         Parameters
@@ -110,7 +123,7 @@ class ModalComponentModeler(AbstractComponentModeler):
         """
         matrix_indices = []
         for port in ports:
-            for mode_index in range(port.mode_spec.num_modes):
+            for mode_index in range(port.num_modes):
                 matrix_indices.append((port.name, mode_index))
         return tuple(matrix_indices)
 
@@ -162,70 +175,35 @@ class ModalComponentModeler(AbstractComponentModeler):
 
         return port_names_out, port_names_in
 
-    def to_monitor(self, port: Port) -> ModeMonitor:
-        """Creates a mode monitor from a given port.
-
-        This monitor is used to measure the mode amplitudes at the port.
-
-        Parameters
-        ----------
-        port : Port
-            The port to convert into a monitor.
-
-        Returns
-        -------
-        ModeMonitor
-            A :class:`.ModeMonitor` configured to match the port's
-            properties.
-        """
-        return ModeMonitor(
-            center=port.center,
-            size=port.size,
-            freqs=self.freqs,
-            mode_spec=port.mode_spec,
-            name=port.name,
-        )
+    def to_monitor(self, port: ModalPortType) -> AbstractOverlapMonitor:
+        """Creates an overlap monitor from a given port (modal or gaussian)."""
+        return port.to_monitor(freqs=self.freqs)
 
     def to_source(
-        self, port: Port, mode_index: int, num_freqs: int = 1, **kwargs: Any
-    ) -> list[ModeSource]:
-        """Creates a mode source from a given port.
-
-        This source is used to excite a specific mode at the port.
-
-        Parameters
-        ----------
-        port : Port
-            The port to convert into a source.
-        mode_index : int
-            The index of the mode to excite.
-        num_freqs : int, optional
-            The number of frequency points for the source, by default 1.
-
-        Returns
-        -------
-        List[ModeSource]
-            A list containing a single :class:`.ModeSource` configured to
-            excite the specified mode at the port.
-        """
-        freq0 = np.mean(self.freqs)
-        fdiff = max(self.freqs) - min(self.freqs)
+        self, port: ModalPortType, mode_index: int, num_freqs: int = 1, **kwargs: Any
+    ) -> DirectionalSource:
+        """Creates a source from a given port (modal or gaussian)."""
+        freqs = self.freqs
+        freq0 = 0.5 * (max(freqs) + min(freqs))
+        fdiff = max(freqs) - min(freqs)
         fwidth = max(fdiff, freq0 * FWIDTH_FRAC)
-        return ModeSource(
-            center=port.center,
-            size=port.size,
-            source_time=self.custom_source_time
-            if self.custom_source_time is not None
-            else GaussianPulse(freq0=freq0, fwidth=fwidth),
-            mode_spec=port.mode_spec,
+        source_time = self.custom_source_time
+        if source_time is None:
+            source_time = GaussianPulse(
+                freq0=freq0,
+                fwidth=fwidth,
+                remove_dc_component=self.remove_dc_component,
+            )
+        return port.to_source(
+            freq0=freq0,
+            fwidth=fwidth,
             mode_index=mode_index,
-            direction=port.direction,
-            name=port.name,
             num_freqs=num_freqs,
+            source_time=source_time,
             **kwargs,
         )
 
-    def shift_port(self, port: Port) -> Port:
+    def shift_port(self, port: ModalPortType) -> ModalPortType:
         """Generates a new port shifted slightly in the normal direction.
 
         This is to ensure that the source is placed just inside the
@@ -244,8 +222,30 @@ class ModalComponentModeler(AbstractComponentModeler):
 
         shift_value = self._shift_value_signed(port=port)
         center_shifted = list(port.center)
-        center_shifted[port.size.index(0.0)] += shift_value
-        port_shifted = port.copy(update={"center": center_shifted})
+        normal_dim, plane_dims = port.pop_axis([0, 1, 2], port.size.index(0.0))
+        center_shifted[normal_dim] += shift_value
+        update = {}
+        if isinstance(port, AbstractGaussianPort):
+            theta = port.angle_theta
+            phi = port.angle_phi
+            cos_theta = np.cos(theta)
+            if np.abs(cos_theta) < GLANCING_CUTOFF:
+                raise SetupError(
+                    "Cannot shift Gaussian port at glancing incidence. "
+                    "Adjust angle_theta or use a different injection axis."
+                )
+            tan_theta = np.sin(theta) / cos_theta
+            center_shifted[plane_dims[0]] += shift_value * tan_theta * np.cos(phi)
+            center_shifted[plane_dims[1]] += shift_value * tan_theta * np.sin(phi)
+            if isinstance(port, GaussianPort):
+                waist_distance = port.waist_distance + shift_value / cos_theta
+                update["waist_distance"] = waist_distance
+            else:
+                waist_distances = list(port.waist_distances)
+                waist_distances[0] = waist_distances[0] + shift_value / cos_theta
+                waist_distances[1] = waist_distances[1] + shift_value / cos_theta
+                update["waist_distances"] = waist_distances
+        port_shifted = port.updated_copy(center=center_shifted, **update)
         return port_shifted
 
     @equal_aspect
@@ -281,9 +281,10 @@ class ModalComponentModeler(AbstractComponentModeler):
 
         plot_sources = []
         for port_source in self.ports:
-            mode_source_0 = self.to_source(port=port_source, mode_index=0)
-            plot_sources.append(mode_source_0)
-        sim_plot = self.simulation.copy(update={"sources": plot_sources})
+            # for plotting, use mode_index=0 (gaussian ignores it)
+            src0 = self.to_source(port=port_source, mode_index=0)
+            plot_sources.append(src0)
+        sim_plot = self.simulation.copy(update={"sources": tuple(plot_sources)})
         return sim_plot.plot(x=x, y=y, z=z, ax=ax)
 
     @equal_aspect
@@ -322,9 +323,9 @@ class ModalComponentModeler(AbstractComponentModeler):
 
         plot_sources = []
         for port_source in self.ports:
-            mode_source_0 = self.to_source(port=port_source, mode_index=0)
-            plot_sources.append(mode_source_0)
-        sim_plot = self.simulation.copy(update={"sources": plot_sources})
+            src0 = self.to_source(port=port_source, mode_index=0)
+            plot_sources.append(src0)
+        sim_plot = self.simulation.copy(update={"sources": tuple(plot_sources)})
         return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
     def _normalization_factor(self, port_source: Port, sim_data: SimulationData) -> complex:
@@ -346,8 +347,9 @@ class ModalComponentModeler(AbstractComponentModeler):
         """
 
         port_monitor_data = sim_data[port_source.name]
-        mode_index = sim_data.simulation.sources[0].mode_index
-
+        # some sources (GaussianBeam) don't have 'mode_index'; default to 0
+        src = sim_data.simulation.sources[0]
+        mode_index = getattr(src, "mode_index", 0)
         normalize_amps = port_monitor_data.amps.sel(
             f=np.array(self.freqs),
             direction=port_source.direction,

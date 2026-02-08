@@ -3,21 +3,18 @@
 from __future__ import annotations
 
 from abc import ABC
-from os import PathLike
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
-import pydantic.v1 as pydantic
 from autograd import numpy as anp
 from numpy.typing import NDArray
+from pydantic import Field, PrivateAttr, field_validator, model_validator
 
-from tidy3d.components.autograd import AutogradFieldMap, get_static
-from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd import get_static
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
 from tidy3d.components.data.dataset import TriangleMeshDataset
 from tidy3d.components.data.validators import validate_no_nans
-from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.config import config
 from tidy3d.constants import fp_eps, inf
@@ -28,7 +25,14 @@ from tidy3d.packaging import verify_packages_import
 from . import base
 
 if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Callable, Literal, Union
+
     from trimesh import Trimesh
+
+    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 
 AREA_SIZE_THRESHOLD = 1e-36
 
@@ -43,22 +47,24 @@ class TriangleMesh(base.Geometry, ABC):
     >>> stl_geom = TriangleMesh.from_vertices_faces(vertices, faces)
     """
 
-    mesh_dataset: Optional[TriangleMeshDataset] = pydantic.Field(
-        ...,
+    mesh_dataset: Optional[TriangleMeshDataset] = Field(
+        None,
         title="Surface mesh data",
         description="Surface mesh data.",
     )
 
     _no_nans_mesh = validate_no_nans("mesh_dataset")
-    _barycentric_samples: dict[int, NDArray] = pydantic.PrivateAttr(default_factory=dict)
+    _barycentric_samples: dict[int, NDArray] = PrivateAttr(default_factory=dict)
 
-    @pydantic.root_validator(pre=True)
     @verify_packages_import(["trimesh"])
-    def _validate_trimesh_library(cls, values: dict[str, Any]) -> dict[str, Any]:
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_trimesh_library(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Check if the trimesh package is imported as a validator."""
-        return values
+        return data
 
-    @pydantic.validator("mesh_dataset", pre=True, always=True)
+    @field_validator("mesh_dataset", mode="before")
+    @classmethod
     def _warn_if_none(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
         """Warn if the Dataset fails to load."""
         if isinstance(val, dict):
@@ -67,8 +73,8 @@ class TriangleMesh(base.Geometry, ABC):
                 return None
         return val
 
-    @pydantic.validator("mesh_dataset", always=True)
-    @verify_packages_import(["trimesh"])
+    @field_validator("mesh_dataset")
+    @classmethod
     def _check_mesh(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
         """Check that the mesh is valid."""
         if val is None:
@@ -181,7 +187,7 @@ class TriangleMesh(base.Geometry, ABC):
             The length scale for the loaded geometry (um).
             For example, a scale of 10.0 means that a vertex (1, 0, 0) will be placed at
             x = 10 um.
-        origin : Tuple[float, float, float] = (0, 0, 0)
+        origin : tuple[float, float, float] = (0, 0, 0)
             The origin of the loaded geometry, in units of ``scale``.
             Translates from (0, 0, 0) to this point after applying the scaling.
         solid_index : int = None
@@ -249,7 +255,7 @@ class TriangleMesh(base.Geometry, ABC):
 
     @classmethod
     @verify_packages_import(["trimesh"])
-    def from_trimesh(cls, mesh: trimesh.Trimesh) -> TriangleMesh:
+    def from_trimesh(cls, mesh: Trimesh) -> TriangleMesh:
         """Create a :class:`.TriangleMesh` from a ``trimesh.Trimesh`` object.
 
         Parameters
@@ -557,7 +563,7 @@ class TriangleMesh(base.Geometry, ABC):
 
         Returns
         -------
-        Tuple[float, float, float], Tuple[float, float float]
+        tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
         if self.mesh_dataset is None:
@@ -589,7 +595,7 @@ class TriangleMesh(base.Geometry, ABC):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -625,7 +631,7 @@ class TriangleMesh(base.Geometry, ABC):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.

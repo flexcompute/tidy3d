@@ -3,22 +3,25 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.types import ArrayFloat1D, Axis, Numpy
 from tidy3d.components.validators import _warn_unsupported_traced_argument
-from tidy3d.components.viz import PlotParams, plot_params_monitor
+from tidy3d.components.viz import plot_params_monitor
+
+if TYPE_CHECKING:
+    from tidy3d.components.types import ArrayFloat1D, Axis
+    from tidy3d.components.viz import PlotParams
 
 
 class AbstractMonitor(Box, ABC):
     """Abstract base class for steady-state monitors."""
 
-    name: str = pd.Field(
-        ...,
+    name: str = Field(
         title="Name",
         description="Unique name for monitor.",
         min_length=1,
@@ -60,20 +63,20 @@ class AbstractMonitor(Box, ABC):
             Number of bytes to be stored in monitor.
         """
 
-    def downsample(self, arr: Numpy, axis: Axis) -> Numpy:
+    def downsample(self, arr: np.ndarray, axis: Axis) -> np.ndarray:
         """Downsample a 1D array making sure to keep the first and last entries, based on the
         spatial interval defined for the ``axis``.
 
         Parameters
         ----------
-        arr : Numpy
+        arr : np.ndarray
             A 1D array of arbitrary type.
         axis : Axis
             Axis for which to select the interval_space defined for the monitor.
 
         Returns
         -------
-        Numpy
+        np.ndarray
             Downsampled array.
         """
 

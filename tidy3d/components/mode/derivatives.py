@@ -2,12 +2,24 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
+from numpy.typing import NDArray
 
 from tidy3d.constants import EPSILON_0, ETA_0
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Literal
 
-def make_dxf(dls, shape, pmc):
+    from scipy import sparse as sp
+
+ArrayFloat = NDArray[np.floating]
+ArrayComplex = NDArray[np.complexfloating]
+
+
+def make_dxf(dls: ArrayFloat, shape: tuple[int, int], pmc: bool) -> sp.csr_matrix:
     """Forward derivative in x."""
     import scipy.sparse as sp
 
@@ -22,7 +34,7 @@ def make_dxf(dls, shape, pmc):
     return dxf
 
 
-def make_dxb(dls, shape, pmc):
+def make_dxb(dls: ArrayFloat, shape: tuple[int, int], pmc: bool) -> sp.csr_matrix:
     """Backward derivative in x."""
     import scipy.sparse as sp
 
@@ -39,7 +51,7 @@ def make_dxb(dls, shape, pmc):
     return dxb
 
 
-def make_dyf(dls, shape, pmc):
+def make_dyf(dls: ArrayFloat, shape: tuple[int, int], pmc: bool) -> sp.csr_matrix:
     """Forward derivative in y."""
     import scipy.sparse as sp
 
@@ -54,7 +66,7 @@ def make_dyf(dls, shape, pmc):
     return dyf
 
 
-def make_dyb(dls, shape, pmc):
+def make_dyb(dls: ArrayFloat, shape: tuple[int, int], pmc: bool) -> sp.csr_matrix:
     """Backward derivative in y."""
     import scipy.sparse as sp
 
@@ -71,7 +83,11 @@ def make_dyb(dls, shape, pmc):
     return dyb
 
 
-def create_d_matrices(shape, dls, dmin_pmc=(False, False)):
+def create_d_matrices(
+    shape: tuple[int, int],
+    dls: tuple[Sequence[ArrayFloat], Sequence[ArrayFloat]],
+    dmin_pmc: tuple[bool, bool] = (False, False),
+) -> tuple[sp.csr_matrix, sp.csr_matrix, sp.csr_matrix, sp.csr_matrix]:
     """Make the derivative matrices without PML. If dmin_pmc is True, the
     'backward' derivative in that dimension will be set to implement PMC
     boundary, otherwise it will be set to PEC."""
@@ -85,7 +101,15 @@ def create_d_matrices(shape, dls, dmin_pmc=(False, False)):
     return (dxf, dxb, dyf, dyb)
 
 
-def create_s_matrices(omega, shape, npml, dls, eps_tensor, mu_tensor, dmin_pml=(True, True)):
+def create_s_matrices(
+    omega: float,
+    shape: tuple[int, int],
+    npml: tuple[int, int],
+    dls: tuple[Sequence[ArrayFloat], Sequence[ArrayFloat]],
+    eps_tensor: ArrayComplex,
+    mu_tensor: ArrayComplex,
+    dmin_pml: tuple[bool, bool] = (True, True),
+) -> tuple[sp.csr_matrix, sp.csr_matrix, sp.csr_matrix, sp.csr_matrix]:
     """Makes the 'S-matrices'. When dotted with derivative matrices, they add
     PML. If dmin_pml is set to False, PML will not be applied on the "bottom"
     side of the domain."""
@@ -136,17 +160,23 @@ def create_s_matrices(omega, shape, npml, dls, eps_tensor, mu_tensor, dmin_pml=(
     return sx_f, sx_b, sy_f, sy_b
 
 
-def average_relative_speed(Nx, Ny, npml, eps_tensor, mu_tensor):
+def average_relative_speed(
+    Nx: int,
+    Ny: int,
+    npml: tuple[int, int],
+    eps_tensor: ArrayComplex,
+    mu_tensor: ArrayComplex,
+) -> ArrayFloat:
     """Compute the relative speed of light in the four pml regions by averaging the diagonal
     elements of the relative epsilon and mu within the pml region."""
 
-    def relative_mean(tensor):
+    def relative_mean(tensor: ArrayComplex) -> float:
         """Mean for relative parameters. If an empty array just return 1."""
         if tensor.size == 0:
             return 1.0
         return np.mean(tensor)
 
-    def pml_average_allsides(tensor):
+    def pml_average_allsides(tensor: ArrayComplex) -> ArrayFloat:
         """Average ``tensor`` in the PML regions on all four sides. Returns the average values in
         order (xminus, xplus, yminus, yplus)."""
 
@@ -165,7 +195,15 @@ def average_relative_speed(Nx, Ny, npml, eps_tensor, mu_tensor):
     return 1 / np.sqrt(eps_avg * mu_avg)
 
 
-def create_sfactor(direction, omega, dls, N, n_pml, dmin_pml, avg_speed):
+def create_sfactor(
+    direction: Literal["f", "b"],
+    omega: float,
+    dls: ArrayFloat,
+    N: int,
+    n_pml: int,
+    dmin_pml: bool,
+    avg_speed: Sequence[float],
+) -> ArrayComplex:
     """Creates the S-factor cross section needed in the S-matrices"""
 
     # For no PNL, this should just be identity matrix.
@@ -181,7 +219,14 @@ def create_sfactor(direction, omega, dls, N, n_pml, dmin_pml, avg_speed):
     raise ValueError(f"Direction value {direction} not recognized")
 
 
-def create_sfactor_f(omega, dls, N, n_pml, dmin_pml, avg_speed=(1, 1)):
+def create_sfactor_f(
+    omega: float,
+    dls: ArrayFloat,
+    N: int,
+    n_pml: int,
+    dmin_pml: bool,
+    avg_speed: Sequence[float] = (1, 1),
+) -> ArrayComplex:
     """S-factor profile applied after forward derivative matrix, i.e. applied to H-field
     locations."""
     sfactor_array = np.ones(N, dtype=np.complex128)
@@ -195,7 +240,14 @@ def create_sfactor_f(omega, dls, N, n_pml, dmin_pml, avg_speed=(1, 1)):
     return sfactor_array
 
 
-def create_sfactor_b(omega, dls, N, n_pml, dmin_pml, avg_speed=(1, 1)):
+def create_sfactor_b(
+    omega: float,
+    dls: ArrayFloat,
+    N: int,
+    n_pml: int,
+    dmin_pml: bool,
+    avg_speed: Sequence[float] = (1, 1),
+) -> ArrayComplex:
     """S-factor profile applied after backward derivative matrix, i.e. applied to E-field
     locations."""
     sfactor_array = np.ones(N, dtype=np.complex128)
@@ -209,14 +261,14 @@ def create_sfactor_b(omega, dls, N, n_pml, dmin_pml, avg_speed=(1, 1)):
 
 def s_value(
     dl: float,
-    step: int,
+    step: float,
     omega: float,
     avg_speed: float,
     sigma_max: float = 2,
     kappa_min: float = 1,
     kappa_max: float = 3,
     order: int = 3,
-):
+) -> complex:
     """S-value to use in the S-matrices.
     We use coordinate stretching formulation such that
         s(x) = kappa(x) + 1j * sigma(x) / (omega * EPSILON_0)

@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING
 
 from autograd.builtins import tuple as atuple
 from autograd.core import make_vjp
 from autograd.extend import vspace
 from autograd.wrap_util import unary_to_nary
-from numpy.typing import ArrayLike
 
 from .utilities import scalar_objective
+
+if TYPE_CHECKING:
+    from typing import Callable
+
+    from numpy.typing import ArrayLike
 
 __all__ = [
     "grad",

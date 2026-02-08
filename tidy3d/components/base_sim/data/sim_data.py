@@ -4,21 +4,27 @@ from __future__ import annotations
 
 import pathlib
 from abc import ABC
-from os import PathLike
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
-import pydantic.v1 as pd
-import xarray as xr
+from pydantic import Field, field_validator, model_validator
 
-from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.base_sim.simulation import AbstractSimulation
-from tidy3d.components.data.utils import UnstructuredGridDatasetType
 from tidy3d.components.file_util import replace_values
-from tidy3d.components.monitor import AbstractMonitor
-from tidy3d.components.types import FieldVal
 from tidy3d.exceptions import DataError, FileError, Tidy3dKeyError, ValidationError
+
+if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Union
+
+    import xarray as xr
+
+    from tidy3d.compat import Self
+    from tidy3d.components.data.utils import UnstructuredGridDatasetType
+    from tidy3d.components.monitor import AbstractMonitor
+    from tidy3d.components.types import FieldVal
 
 
 class AbstractSimulationData(Tidy3dBaseModel, ABC):
@@ -26,20 +32,18 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
     a :class:`AbstractSimulation`.
     """
 
-    simulation: AbstractSimulation = pd.Field(
-        ...,
+    simulation: AbstractSimulation = Field(
         title="Simulation",
         description="Original :class:`AbstractSimulation` associated with the data.",
     )
 
-    data: tuple[AbstractMonitorData, ...] = pd.Field(
-        ...,
+    data: tuple[AbstractMonitorData, ...] = Field(
         title="Monitor Data",
         description="List of :class:`AbstractMonitorData` instances "
         "associated with the monitors of the original :class:`AbstractSimulation`.",
     )
 
-    log: str = pd.Field(
+    log: Optional[str] = Field(
         None,
         title="Solver Log",
         description="A string containing the log information from the simulation run.",
@@ -55,15 +59,14 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         """Dictionary mapping monitor name to its associated :class:`AbstractMonitorData`."""
         return {monitor_data.monitor.name: monitor_data for monitor_data in self.data}
 
-    @pd.root_validator(skip_on_failure=True)
-    def data_monitors_match_sim(cls, values):
+    @model_validator(mode="after")
+    def data_monitors_match_sim(self) -> Self:
         """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
         ``.simulation``.
         """
-        sim = values.get("simulation")
-        data = values.get("data")
+        sim = self.simulation
 
-        for mnt_data in data:
+        for mnt_data in self.data:
             try:
                 monitor_name = mnt_data.monitor.name
                 sim.get_monitor_by_name(monitor_name)
@@ -72,11 +75,13 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
                     f"Data with monitor name '{monitor_name}' supplied "
                     f"but not found in the original '{sim.type}'."
                 ) from exc
-        return values
+        return self
 
-    @pd.validator("data", always=True)
-    @skip_if_fields_missing(["simulation"])
-    def validate_no_ambiguity(cls, val, values):
+    @field_validator("data")
+    @classmethod
+    def validate_no_ambiguity(
+        cls, val: tuple[AbstractMonitorData, ...]
+    ) -> tuple[AbstractMonitorData, ...]:
         """Ensure all :class:`AbstractMonitorData` entries in ``.data`` correspond to different
         monitors in ``.simulation``.
         """
@@ -198,7 +203,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
             )
 
         # Get SimData object as dictionary
-        sim_dict = self.dict()
+        sim_dict = self.model_dump()
 
         # set long field names true by default, otherwise it wont save fields with > 31 characters
         if "long_field_names" not in kwargs:

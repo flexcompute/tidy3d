@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pydantic as pd
-import pydantic.v1 as pydantic
-from numpy.typing import NDArray
+from pydantic import Field, PositiveFloat, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.constants import C_0
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from tidy3d.compat import Self
 
 O_BAND = (1.260, 1.360)
 E_BAND = (1.360, 1.460)
@@ -24,7 +27,7 @@ U_BAND = (1.625, 1.675)
 class FrequencyUtils(Tidy3dBaseModel):
     """Utilities for classifying frequencies/wavelengths and generating samples for standard optical bands."""
 
-    use_wavelength: bool = pd.Field(
+    use_wavelength: bool = Field(
         False,
         title="Use wavelength",
         description="Indicate whether to use wavelengths instead of frequencies for the return "
@@ -272,30 +275,28 @@ class FreqRange(Tidy3dBaseModel):
     >>> source = freq_range.to_gaussian_pulse()
     """
 
-    freq0: pydantic.PositiveFloat = pydantic.Field(
+    freq0: PositiveFloat = Field(
         ...,
         title="Central frequency",
         description="Real-valued positive central frequency.",
-        units="Hz",
+        json_schema_extra={"units": "Hz"},
     )
 
-    fwidth: pydantic.PositiveFloat = pydantic.Field(
+    fwidth: PositiveFloat = Field(
         ...,
         title="Frequency bandwidth",
         description="Real-valued positive width of the frequency range (bandwidth).",
-        units="Hz",
+        json_schema_extra={"units": "Hz"},
     )
 
-    @pydantic.root_validator
-    def check_half_fwidth_less_than_freq0(cls, values):
-        freq0 = values.get("freq0")
-        fwidth = values.get("fwidth")
-        if freq0 is not None and fwidth is not None:
-            if (fwidth / 2) >= freq0:
+    @model_validator(mode="after")
+    def check_half_fwidth_less_than_freq0(self) -> Self:
+        if self.freq0 is not None and self.fwidth is not None:
+            if (self.fwidth / 2) >= self.freq0:
                 raise ValueError(
                     "Frequency bandwidth `fwidth` must be strictly less than `2 * freq0`."
                 )
-        return values
+        return self
 
     @property
     def fmin(self) -> float:
