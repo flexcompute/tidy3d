@@ -2747,9 +2747,26 @@ class ModeSolver(Tidy3dBaseModel):
                 "frequencies or modes."
             )
 
+    def _validate_auto_impedance_spec(self) -> None:
+        """Raise error if the microwave mode specification with ``AutoImpedanceSpec`` will
+        fail to instantiate."""
+        if not self._has_microwave_mode_spec:
+            return
+        self.mode_spec._validate_auto_impedance_setup(
+            center=self.plane.center,
+            size=self.plane.size,
+            colocate=self.colocate,
+            volumetric_structures=self.simulation.volumetric_structures,
+            grid=self.simulation.grid,
+            symmetry=self.simulation.symmetry,
+            simulation_geometry=self.simulation.simulation_geometry,
+            label=" for mode solver",
+        )
+
     def validate_pre_upload(self) -> None:
         """Validate the fully initialized mode solver is ok for upload to our servers."""
         self._validate_modes_size()
+        self._validate_auto_impedance_spec()
 
     @cached_property
     def reduced_simulation_copy(self) -> Self:

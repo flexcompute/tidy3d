@@ -75,7 +75,6 @@ from .medium import (
     PECMedium,
 )
 from .microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
-from .microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from .monitor import (
     AbstractFieldProjectionMonitor,
     AbstractModeMonitor,
@@ -4895,21 +4894,16 @@ class Simulation(AbstractYeeGridSimulation):
             if not isinstance(monitor, (MicrowaveModeMonitor, MicrowaveModeSolverMonitor)):
                 continue
 
-            if monitor.mode_spec._using_auto_current_spec:
-                mode_plane_analyzer = ModePlaneAnalyzer(
-                    center=monitor.center, size=monitor.size, field_data_colocated=monitor.colocate
-                )
-                try:
-                    _ = mode_plane_analyzer.get_conductor_bounding_boxes(
-                        self.volumetric_structures,
-                        self.grid,
-                        self.symmetry,
-                        self.simulation_geometry,
-                    )
-                except SetupError as e:
-                    raise SetupError(
-                        f"Failed to setup auto impedance specification for monitor '{monitor.name}'. {e!s}"
-                    ) from e
+            monitor.mode_spec._validate_auto_impedance_setup(
+                center=monitor.center,
+                size=monitor.size,
+                colocate=monitor.colocate,
+                volumetric_structures=self.volumetric_structures,
+                grid=self.grid,
+                symmetry=self.symmetry,
+                simulation_geometry=self.simulation_geometry,
+                label=f" for monitor '{monitor.name}'",
+            )
 
     @cached_property
     def monitors_data_size(self) -> dict[str, float]:
