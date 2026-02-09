@@ -72,6 +72,7 @@ tox = { version = "^4.33.0", optional = true }
 diff-cover = { version = "^10.1.0", optional = true }
 zizmor = { version = "^1.20.0", optional = true }
 mypy = { version = "1.13.0", optional = true }
+libcst = { version = "^1.5.0", optional = true }
 
 # gdstk
 gdstk = { version = ">=0.9.49,<0.10.0", optional = true }
