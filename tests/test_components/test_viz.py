@@ -224,7 +224,9 @@ def plot_with_multi_viz_spec(alphas, facecolors, edgecolors, rng, use_viz_spec=T
 
 def test_no_matlab_install(monkeypatch):
     """Test that the `VisualizationSpec` only throws a warning on validation if matplotlib is not installed."""
-    monkeypatch.setattr("tidy3d.components.viz.visualization_spec.MATPLOTLIB_IMPORTED", False)
+    monkeypatch.setattr(
+        "tidy3d._common.components.viz.visualization_spec.MATPLOTLIB_IMPORTED", False
+    )
 
     EXPECTED_WARNING_MSG_PIECE = (
         "matplotlib was not successfully imported, but is required to validate colors"

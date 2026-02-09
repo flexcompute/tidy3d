@@ -1,57 +1,42 @@
-"""Defines various validation functions that get used to ensure inputs are legit"""
+"""Compatibility shim for :mod:`tidy3d._common.components.validators`."""
+
+# ruff: noqa: F401 - ignore unused imports, imports ensure compatibility
+
+# marked as migrated to _common
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, TypeVar, Union
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import field_validator, model_validator
 
+from tidy3d._common.components.validators import (
+    MIN_FREQUENCY,
+    FloatArray,
+    _assert_min_freq,
+    _warn_unsupported_traced_argument,
+    validate_name_str,
+    warn_if_dataset_none,
+)
+from tidy3d.components.data.data_array import DATA_ARRAY_MAP
+from tidy3d.components.geometry.base import Box
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
-from .autograd.utils import get_static, hasbox
-from .base import DATA_ARRAY_MAP
-from .geometry.base import Box
-
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from typing import Callable, Optional
 
     from pydantic import FieldValidationInfo
 
     from tidy3d import Simulation
+    from tidy3d._common.components.validators import T
     from tidy3d.components.base_sim.simulation import AbstractSimulation
     from tidy3d.components.data.monitor_data import AbstractFieldData
     from tidy3d.components.types import FreqArray
     from tidy3d.plugins.smatrix import AbstractComponentModeler
-
-
-T = TypeVar("T")
-
-"""Explanation of Pydantic validators (v2).
-
-    Validators are class methods that validate and coerce model inputs. This module defines
-    reusable validator factories that are shared across tidy3d components.
-
-    In Pydantic v2 we use:
-    - ``@field_validator("field_name")`` for field-local checks/coercions. It can access
-      already-validated fields via ``info.data``, but ``info.data`` only contains fields
-      validated earlier, so avoid order-dependent cross-field logic.
-    - ``@model_validator(mode="after")`` for cross-field constraints that need the full model.
-
-    To attach a validator from this file to a Pydantic model, assign the factory result in the
-    class body, e.g. ``_plane_validator = assert_plane()``. Avoid reusing the same attribute
-    name for multiple validators, or earlier validators may be overwritten.
-
-    For more details: `Pydantic validators <https://docs.pydantic.dev/latest/concepts/validators/>`_
-"""
-
-# Lowest frequency supported (Hz)
-MIN_FREQUENCY = 1e5
-
-FloatArray = Union[Sequence[float], NDArray]
 
 
 def named_obj_descr(obj: Any, field_name: str, position_index: int) -> str:
@@ -122,21 +107,6 @@ def assert_volumetric() -> Callable[[type, tuple[float, ...]], tuple[float, ...]
         return val
 
     return is_volumetric
-
-
-# FIXME: this validator doesn't do anything
-def validate_name_str() -> Callable[[type, Optional[str]], Optional[str]]:
-    """make sure the name does not include [, ] (used for default names)"""
-
-    @field_validator("name")
-    @classmethod
-    def field_has_unique_names(cls: type, val: Optional[str]) -> Optional[str]:
-        """raise exception if '[' or ']' in name"""
-        # if val and ('[' in val or ']' in val):
-        #     raise SetupError(f"'[' or ']' not allowed in name: {val} (used for defaults)")
-        return val
-
-    return field_has_unique_names
 
 
 def validate_unique(
@@ -309,30 +279,12 @@ def required_if_symmetry_present(field_name: str) -> Callable[[T], T]:
     return _make_required
 
 
-def warn_if_dataset_none(
-    field_name: str,
-) -> Callable[[type, Optional[dict[str, Any]]], Optional[dict[str, Any]]]:
-    """Warn if a Dataset field has None in its dictionary."""
-
-    @field_validator(field_name, mode="before")
-    @classmethod
-    def _warn_if_none(cls: type, val: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
-        """Warn if the DataArrays fail to load."""
-        if isinstance(val, dict):
-            if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
-                log.warning(f"Loading {field_name} without data.", custom_loc=[field_name])
-                return None
-        return val
-
-    return _warn_if_none
-
-
 def warn_backward_waist_distance(field_name: str) -> Callable[[T], T]:
-    """Warn about changed waist distance behavior for backward-propagating beams."""
+    """Warn if a backward-propagating beam uses a non-zero waist distance."""
 
     @model_validator(mode="after")
     def _warn_backward_nonzero(self: T) -> T:
-        """Emit warning about changed waist distance interpretation."""
+        """Emit deprecation warning for backward propagation with non-zero waist."""
         direction = self.direction
         if direction != "-":
             return self
@@ -340,15 +292,12 @@ def warn_backward_waist_distance(field_name: str) -> Callable[[T], T]:
         waist_array = np.atleast_1d(waist_value)
         if not np.all(np.isclose(waist_array, 0.0)):
             log.warning(
-                f"Starting in version 2.11, the behavior of {self.__class__.__name__} with direction '-' "
-                f"and non-zero '{field_name}' has changed. The waist position is now defined "
-                "consistently for both forward- and backward-propagating beams: a positive "
-                f"'{field_name}' always places the beam waist behind the source/monitor plane "
-                "(toward the negative normal axis). This ensures reciprocity between Gaussian "
-                "sources and overlap monitors used for port-based S-matrix calculations. "
-                "If your simulation relied on the previous behavior (where the waist position "
-                "flipped with direction), you may need to adjust your waist distance values.",
-                log_once=True,
+                f"Behavior of {self.__class__.__name__} with direction '-' and non-zero '{field_name}' will "
+                "change in version 2.11 to be consistent with upcoming beam overlap monitors and "
+                "ports. Currently, the waist distance is interpreted w.r.t. the directed "
+                "propagation axis, so switching 'direction' also switches the position of the "
+                "waist in the global reference frame. In the future, the waist position will be "
+                "defined such that it is the same for backward- and forward-propagating beams.",
             )
         return self
 
@@ -424,15 +373,6 @@ def validate_parameter_perturbation(
     return _check_perturbed_val
 
 
-def _assert_min_freq(freqs: FloatArray, msg_start: str) -> None:
-    """Check if all ``freqs`` are above the minimum frequency."""
-    if np.min(freqs) < MIN_FREQUENCY:
-        raise ValidationError(
-            f"{msg_start} must be no lower than {MIN_FREQUENCY:.0e} Hz. "
-            "Note that the unit of frequency is 'Hz'."
-        )
-
-
 def validate_freqs_min() -> Callable[[type, FreqArray], FreqArray]:
     """Validate lower bound for monitor, and mode solver frequencies."""
 
@@ -472,24 +412,3 @@ def validate_freqs_unique() -> Callable[[AbstractComponentModeler, FreqArray], F
         return val
 
     return freqs_unique
-
-
-def _warn_unsupported_traced_argument(
-    *names: str,
-) -> Callable[[type, Any, FieldValidationInfo], Any]:
-    @field_validator(*names)
-    @classmethod
-    def _warn_traced_arg(cls: type, val: Any, info: FieldValidationInfo) -> Any:
-        if hasbox(val):
-            log.warning(
-                f"Field '{info.field_name}' of '{cls.__name__}' received an autograd tracer "
-                f"(i.e., a value being tracked for automatic differentiation). "
-                f"Automatic differentiation through this field is unsupported, "
-                f"so the tracer has been converted to its static value. "
-                f"If you want to avoid this warning, you manually unbox the value "
-                f"using the 'autograd.tracer.getval' function before passing it to Tidy3D."
-            )
-            return get_static(val)
-        return val
-
-    return _warn_traced_arg

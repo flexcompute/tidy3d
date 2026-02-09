@@ -1,0 +1,27 @@
+"""Custom Tidy3D exceptions"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from tidy3d._common.web.core.core_config import get_logger
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+
+class WebError(Exception):
+    """Any error in tidy3d"""
+
+    def __init__(self, message: Optional[str] = None) -> None:
+        """Log just the error message and then raise the Exception."""
+        log = get_logger()
+        super().__init__(message)
+        log.error(message)
+
+
+class WebNotFoundError(WebError):
+    """A generic error indicating an HTTP 404 (resource not found)."""

@@ -15,7 +15,8 @@ import yaml
 
 import tidy3d as td
 from tidy3d import __version__
-from tidy3d.components.base import DATA_ARRAY_MAP, Tidy3dBaseModel
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.data.data_array import DATA_ARRAY_MAP
 from tidy3d.components.data.sim_data import DATA_TYPE_MAP
 
 from ..test_data.test_monitor_data import make_flux_data

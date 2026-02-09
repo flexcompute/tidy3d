@@ -1,6 +1,11 @@
-"""Local caches."""
+"""Compatibility shim for :mod:`tidy3d._common.web.core.cache`."""
 
+# ruff: noqa: F401 - ignore unused imports, imports ensure compatibility
+
+# marked as migrated to _common
 from __future__ import annotations
 
-FOLDER_CACHE = {}
-S3_STS_TOKENS = {}
+from tidy3d._common.web.core.cache import (
+    FOLDER_CACHE,
+    S3_STS_TOKENS,
+)

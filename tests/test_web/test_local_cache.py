@@ -56,7 +56,7 @@ PATH_TO_SIM: dict[str, td.Simulation] = {}  # artifact path -> Simulation
 @pytest.fixture(autouse=True)
 def _isolate_local_cache(tmp_path, monkeypatch):
     """Keep cache operations in a temp dir and avoid moving/deleting real cache."""
-    import tidy3d.web.cache as cache_mod
+    import tidy3d._common.web.cache as cache_mod
     from tidy3d.config import get_manager
 
     real_remove_cache_dir = cache_mod._remove_cache_dir
@@ -611,13 +611,13 @@ def test_cache_eviction_by_entries(monkeypatch, tmp_path_factory, basic_simulati
 
     file1 = tmp_path_factory.mktemp("art1") / CACHE_ARTIFACT_NAME
     file1.write_text("a")
-    cache.store_result(_FakeStubData(basic_simulation), MOCK_TASK_ID, str(file1), "FDTD")
+    cache.store_result(MOCK_TASK_ID, str(file1), "FDTD", simulation=basic_simulation)
     assert len(cache) == 1
 
     sim2 = basic_simulation.updated_copy(shutoff=1e-4)
     file2 = tmp_path_factory.mktemp("art2") / CACHE_ARTIFACT_NAME
     file2.write_text("b")
-    cache.store_result(_FakeStubData(sim2), MOCK_TASK_ID, str(file2), "FDTD")
+    cache.store_result(MOCK_TASK_ID, str(file2), "FDTD", simulation=sim2)
 
     entries = cache.list()
     assert len(entries) == 1
@@ -631,13 +631,13 @@ def test_cache_eviction_by_size(monkeypatch, tmp_path_factory, basic_simulation)
 
     file1 = tmp_path_factory.mktemp("art1") / CACHE_ARTIFACT_NAME
     file1.write_text("a" * 8_000)
-    cache.store_result(_FakeStubData(basic_simulation), MOCK_TASK_ID, str(file1), "FDTD")
+    cache.store_result(MOCK_TASK_ID, str(file1), "FDTD", simulation=basic_simulation)
     assert len(cache) == 1
 
     sim2 = basic_simulation.updated_copy(shutoff=1e-4)
     file2 = tmp_path_factory.mktemp("art2") / CACHE_ARTIFACT_NAME
     file2.write_text("b" * 8_000)
-    cache.store_result(_FakeStubData(sim2), MOCK_TASK_ID, str(file2), "FDTD")
+    cache.store_result(MOCK_TASK_ID, str(file2), "FDTD", simulation=sim2)
 
     entries = cache.list()
     assert len(cache) == 1
@@ -653,7 +653,7 @@ def test_cache_stats_tracking(monkeypatch, tmp_path_factory, basic_simulation):
     payload = "stats-payload"
     artifact.write_text(payload)
 
-    cache.store_result(_FakeStubData(basic_simulation), MOCK_TASK_ID, str(artifact), "FDTD")
+    cache.store_result(MOCK_TASK_ID, str(artifact), "FDTD", simulation=basic_simulation)
 
     stats_path = cache.root / CACHE_STATS_NAME
     assert stats_path.exists()
@@ -692,12 +692,12 @@ def test_cache_stats_sync(monkeypatch, tmp_path_factory, basic_simulation):
     artifact1 = tmp_path_factory.mktemp("artifact_sync1") / CACHE_ARTIFACT_NAME
     payload1 = "sync-one"
     artifact1.write_text(payload1)
-    cache.store_result(_FakeStubData(sim1), f"{MOCK_TASK_ID}-1", str(artifact1), "FDTD")
+    cache.store_result(f"{MOCK_TASK_ID}-1", str(artifact1), "FDTD", simulation=sim1)
 
     artifact2 = tmp_path_factory.mktemp("artifact_sync2") / CACHE_ARTIFACT_NAME
     payload2 = "sync-two"
     artifact2.write_text(payload2)
-    cache.store_result(_FakeStubData(sim2), f"{MOCK_TASK_ID}-2", str(artifact2), "FDTD")
+    cache.store_result(f"{MOCK_TASK_ID}-2", str(artifact2), "FDTD", simulation=sim2)
 
     stats_path = cache.root / CACHE_STATS_NAME
     assert stats_path.exists()
@@ -734,7 +734,7 @@ def test_store_and_fetch_do_not_iterate(monkeypatch, tmp_path, basic_simulation)
     artifact = tmp_path / "iter_guard.hdf5"
     artifact.write_text("payload")
 
-    cache.store_result(_FakeStubData(basic_simulation), MOCK_TASK_ID, str(artifact), "FDTD")
+    cache.store_result(MOCK_TASK_ID, str(artifact), "FDTD", simulation=basic_simulation)
     assert iter_calls["count"] == 0
 
     entry_dirs = []
@@ -809,9 +809,7 @@ def test_cache_cli_commands(monkeypatch, tmp_path_factory, basic_simulation, tmp
 
     artifact = artifact_dir / CACHE_ARTIFACT_NAME
     artifact.write_text("payload_cli")
-    cache.store_result(
-        _FakeStubData(basic_simulation), f"{MOCK_TASK_ID}-cli", str(artifact), "FDTD"
-    )
+    cache.store_result(f"{MOCK_TASK_ID}-cli", str(artifact), "FDTD", simulation=basic_simulation)
 
     info_result = runner.invoke(tidy3d_cli, ["cache", "info"])
     assert info_result.exit_code == 0

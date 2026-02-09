@@ -10,7 +10,12 @@ from pydantic import Field, model_validator
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import SemiconductorMedium
-from tidy3d.components.medium import AnisotropicMedium, Medium2D, PoleResidue, Sellmeier
+from tidy3d.components.medium import (
+    AnisotropicMedium,
+    Medium2D,
+    PoleResidue,
+    Sellmeier,
+)
 from tidy3d.components.tcad.bandgap_energy import ConstantEnergyBandGap
 from tidy3d.components.tcad.types import (
     AugerRecombination,

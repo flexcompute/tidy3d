@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     import autograd.numpy as anp
 
     from tidy3d.compat import Self
+    from tidy3d.web import BatchData
 
 PostProcessFnType = Callable[[td.SimulationData], float]
 
@@ -109,7 +110,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         kwargs.setdefault("task_name", self.task_name)
         return run(simulation, **kwargs)
 
-    def run_async(self, simulations: dict[str, td.Simulation], **kwargs: Any) -> td.web.BatchData:
+    def run_async(self, simulations: dict[str, td.Simulation], **kwargs: Any) -> BatchData:  # type-
         """Run a batch of tidy3d simulations."""
         from tidy3d.web import run_async
 
@@ -333,7 +334,7 @@ class InverseDesignMulti(AbstractInverseDesign):
         simulation_list = [design.to_simulation(params) for design in self.designs]
         return dict(zip(self.task_names, simulation_list))
 
-    def to_simulation_data(self, params: anp.ndarray, **kwargs: Any) -> td.web.BatchData:
+    def to_simulation_data(self, params: anp.ndarray, **kwargs: Any) -> BatchData:
         """Convert the ``InverseDesignMulti`` to a set of ``td.Simulation``s and run async."""
         simulations = self.to_simulation(params)
         return self.run_async(simulations, **kwargs)

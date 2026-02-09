@@ -21,6 +21,7 @@ from pydantic import (
 
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
 from tidy3d.components.types.base import discriminated_union
+from tidy3d.components.viz import plot_params_min_grid_size
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
 from tidy3d.exceptions import (
     AdjointError,
@@ -127,7 +128,6 @@ from .viz import (
     equal_aspect,
     plot_params_abc,
     plot_params_bloch,
-    plot_params_min_grid_size,
     plot_params_override_structures,
     plot_params_pec,
     plot_params_pmc,

@@ -53,7 +53,6 @@ def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
             with tempfile.NamedTemporaryFile(suffix=".hdf5") as tmp_file:
                 simulation = load_simulation(task_id_adj, path=tmp_file.name, verbose=False)
             simulation_cache.store_result(
-                stub_data=field_map,
                 task_id=task_id_adj,
                 path=fname,
                 workflow_type=workflow_type,

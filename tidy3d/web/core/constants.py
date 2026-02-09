@@ -1,38 +1,34 @@
-"""Defines constants for core."""
+"""Compatibility shim for :mod:`tidy3d._common.web.core.constants`."""
 
-# HTTP Header key and value
+# ruff: noqa: F401 - ignore unused imports, imports ensure compatibility
+
+# marked as migrated to _common
 from __future__ import annotations
 
-HEADER_APIKEY = "simcloud-api-key"
-HEADER_VERSION = "tidy3d-python-version"
-HEADER_SOURCE = "source"
-HEADER_SOURCE_VALUE = "Python"
-HEADER_USER_AGENT = "User-Agent"
-HEADER_APPLICATION = "Application"
-HEADER_APPLICATION_VALUE = "TIDY3D"
-
-
-SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
-KEY_APIKEY = "apikey"
-JSON_TAG = "JSON_STRING"
-# type of the task_id
-TaskId = str
-# type of task_name
-TaskName = str
-
-
-SIMULATION_JSON = "simulation.json"
-SIMULATION_DATA_HDF5 = "output/monitor_data.hdf5"
-SIMULATION_DATA_HDF5_GZ = "output/simulation_data.hdf5.gz"
-RUNNING_INFO = "output/solver_progress.csv"
-SIM_LOG_FILE = "output/tidy3d.log"
-SIM_FILE_HDF5 = "simulation.hdf5"
-SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
-MODE_FILE_HDF5_GZ = "mode_solver.hdf5.gz"
-MODE_DATA_HDF5_GZ = "output/mode_solver_data.hdf5.gz"
-SIM_ERROR_FILE = "output/tidy3d_error.json"
-SIM_VALIDATION_FILE = "output/tidy3d_validation.json"
-
-# Component modeler specific artifacts
-MODELER_FILE_HDF5_GZ = "modeler.hdf5.gz"
-CM_DATA_HDF5_GZ = "output/cm_data.hdf5.gz"
+from tidy3d._common.web.core.constants import (
+    CM_DATA_HDF5_GZ,
+    HEADER_APIKEY,
+    HEADER_APPLICATION,
+    HEADER_APPLICATION_VALUE,
+    HEADER_SOURCE,
+    HEADER_SOURCE_VALUE,
+    HEADER_USER_AGENT,
+    HEADER_VERSION,
+    JSON_TAG,
+    KEY_APIKEY,
+    MODE_DATA_HDF5_GZ,
+    MODE_FILE_HDF5_GZ,
+    MODELER_FILE_HDF5_GZ,
+    RUNNING_INFO,
+    SIM_ERROR_FILE,
+    SIM_FILE_HDF5,
+    SIM_FILE_HDF5_GZ,
+    SIM_LOG_FILE,
+    SIM_VALIDATION_FILE,
+    SIMCLOUD_APIKEY,
+    SIMULATION_DATA_HDF5,
+    SIMULATION_DATA_HDF5_GZ,
+    SIMULATION_JSON,
+    TaskId,
+    TaskName,
+)

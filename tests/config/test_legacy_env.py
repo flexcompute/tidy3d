@@ -93,11 +93,9 @@ def test_env_vars_follow_profile_switch(
 
 def test_web_core_environment_reexports():
     """Legacy `tidy3d.web.core.environment` exports remain available via config shim."""
-
-    import tidy3d.web as web
+    from tidy3d._common.web.core import environment
     from tidy3d.config import Env as ConfigEnv
 
-    environment = web.core.environment
     assert environment.Env is ConfigEnv
 
     with warnings.catch_warnings(record=True) as caught:

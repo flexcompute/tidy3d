@@ -1,12 +1,10 @@
-"""Runtime environment detection for tidy3d.
+"""Compatibility shim for :mod:`tidy3d._common._runtime`."""
 
-This module must have ZERO dependencies on other tidy3d modules to avoid
-circular imports. It is imported very early in the initialization chain.
-"""
+# ruff: noqa: F401 - ignore unused imports, imports ensure compatibility
 
+# marked as migrated to _common
 from __future__ import annotations
 
-import sys
-
-# Detect WASM/Pyodide environment where web and filesystem features are unavailable
-WASM_BUILD = "pyodide" in sys.modules or sys.platform == "emscripten"
+from tidy3d._common._runtime import (
+    WASM_BUILD,
+)
