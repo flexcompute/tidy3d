@@ -14,6 +14,7 @@ from tidy3d.components.data.monitor_data import (
     AuxFieldTimeData,
     DiffractionData,
     DirectivityData,
+    ElectromagneticFieldData,
     FieldData,
     FieldOverlapData,
     FieldTimeData,
@@ -879,6 +880,73 @@ def test_outer_dot():
 
     dot_ordered = field_data_full.outer_dot(field_data_reordered)
     assert np.array_equal(dot_ordered.f.values, field_data_full.Ex.f.values)
+
+
+def test_outer_dot_streaming_preserved_dims():
+    """Ensure the streaming outer-dot kernel keeps preserved dims and values."""
+    rng = np.random.default_rng(1)
+
+    tan_dims = ("x", "z")
+    e_1 = "E" + tan_dims[0]
+    e_2 = "E" + tan_dims[1]
+    h_1 = "H" + tan_dims[0]
+    h_2 = "H" + tan_dims[1]
+    field_components = (e_1, e_2, h_1, h_2)
+
+    coords_base = {
+        "x": np.linspace(-1, 1, 6),
+        "z": np.linspace(-2, 2, 5),
+        "f": np.array([2.5e14, 2.8e14]),
+        "sweep_index": np.arange(3),
+        "eme_cell_index": np.arange(2),
+    }
+    coords_1 = {**coords_base, "mode_index_0": np.arange(4)}
+    coords_2 = {**coords_base, "mode_index_1": np.arange(3)}
+
+    dims_1 = ("x", "z", "f", "sweep_index", "eme_cell_index", "mode_index_0")
+    dims_2 = ("x", "z", "f", "sweep_index", "eme_cell_index", "mode_index_1")
+    shape_1 = tuple(len(coords_1[dim]) for dim in dims_1)
+    shape_2 = tuple(len(coords_2[dim]) for dim in dims_2)
+
+    def random_complex(shape):
+        return rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+
+    fields_1 = {
+        comp: xr.DataArray(random_complex(shape_1), coords=coords_1, dims=dims_1)
+        for comp in field_components
+    }
+    fields_2 = {
+        comp: xr.DataArray(random_complex(shape_2), coords=coords_2, dims=dims_2)
+        for comp in field_components
+    }
+
+    d_area = np.abs(rng.standard_normal((len(coords_base["x"]), len(coords_base["z"]))))
+    d_area_da = xr.DataArray(d_area, dims=tan_dims)
+    d_area_da = d_area_da.expand_dims(dim={"f": coords_base["f"]}, axis=2)
+
+    expected = 0.25 * (
+        fields_1[e_1] * fields_2[h_2]
+        - fields_1[e_2] * fields_2[h_1]
+        - fields_1[h_1] * fields_2[e_2]
+        + fields_1[h_2] * fields_2[e_1]
+    )
+    expected = (expected * d_area_da).sum(dim=list(tan_dims))
+
+    result = ElectromagneticFieldData._outer_dot_numpy_kernel_streaming(
+        fields_1=fields_1,
+        fields_2=fields_2,
+        outer_dim_1="mode_index_0",
+        outer_dim_2="mode_index_1",
+        tangential_dims=tan_dims,
+        e_1=e_1,
+        e_2=e_2,
+        h_1=h_1,
+        h_2=h_2,
+        d_area=d_area,
+    )
+
+    assert result.dims == ("f", "sweep_index", "eme_cell_index", "mode_index_0", "mode_index_1")
+    np.testing.assert_allclose(result.values, expected.transpose(*result.dims).values)
 
 
 def test_translated_copy():

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import struct
 import warnings
 from abc import ABC
@@ -1043,34 +1044,49 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                     dim={"mode_index_1": [0]}, axis=len(fields_other[key].shape)
                 )
 
-        d_area = self._diff_area.expand_dims(dim={"f": f}, axis=2).to_numpy()
+        try:
+            result = self._outer_dot_numpy_kernel_streaming(
+                fields_1=fields_self,
+                fields_2=fields_other,
+                outer_dim_1="mode_index_0",
+                outer_dim_2="mode_index_1",
+                tangential_dims=tuple(tan_dims),
+                e_1=e_1,
+                e_2=e_2,
+                h_1=h_1,
+                h_2=h_2,
+                d_area=self._diff_area.to_numpy(),
+            )
+        except (IndexError, KeyError, ValueError):
+            # Internal fallback for parity/debugging on unexpected dim layouts.
+            d_area = self._diff_area.expand_dims(dim={"f": f}, axis=2).to_numpy()
 
-        # function to apply at each pair of mode indices before integrating
-        def fn(fields_1: dict[str, NDArray], fields_2: dict[str, NDArray]) -> NDArray:
-            e_self_1 = fields_1[e_1]
-            e_self_2 = fields_1[e_2]
-            h_self_1 = fields_1[h_1]
-            h_self_2 = fields_1[h_2]
-            e_other_1 = fields_2[e_1]
-            e_other_2 = fields_2[e_2]
-            h_other_1 = fields_2[h_1]
-            h_other_2 = fields_2[h_2]
+            # function to apply at each pair of mode indices before integrating
+            def fn(fields_1: dict[str, NDArray], fields_2: dict[str, NDArray]) -> NDArray:
+                e_self_1 = fields_1[e_1]
+                e_self_2 = fields_1[e_2]
+                h_self_1 = fields_1[h_1]
+                h_self_2 = fields_1[h_2]
+                e_other_1 = fields_2[e_1]
+                e_other_2 = fields_2[e_2]
+                h_other_1 = fields_2[h_1]
+                h_other_2 = fields_2[h_2]
 
-            # Cross products of fields
-            e_self_x_h_other = e_self_1 * h_other_2 - e_self_2 * h_other_1
-            h_self_x_e_other = h_self_1 * e_other_2 - h_self_2 * e_other_1
+                # Cross products of fields
+                e_self_x_h_other = e_self_1 * h_other_2 - e_self_2 * h_other_1
+                h_self_x_e_other = h_self_1 * e_other_2 - h_self_2 * e_other_1
 
-            summand = 0.25 * (e_self_x_h_other - h_self_x_e_other) * d_area
-            return summand
+                summand = 0.25 * (e_self_x_h_other - h_self_x_e_other) * d_area
+                return summand
 
-        result = self._outer_fn_summation(
-            fields_1=fields_self,
-            fields_2=fields_other,
-            outer_dim_1="mode_index_0",
-            outer_dim_2="mode_index_1",
-            sum_dims=tan_dims,
-            fn=fn,
-        )
+            result = self._outer_fn_summation(
+                fields_1=fields_self,
+                fields_2=fields_other,
+                outer_dim_1="mode_index_0",
+                outer_dim_2="mode_index_1",
+                sum_dims=tan_dims,
+                fn=fn,
+            )
 
         # Remove mode index coordinate if the input did not have it
         if not modes_in_self:
@@ -1079,6 +1095,170 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             result = result.isel(mode_index_1=0, drop=True)
 
         return result
+
+    @staticmethod
+    def _slice_mode_xy_matrix(
+        arr: NDArray,
+        dims: tuple[str, ...],
+        *,
+        preserve_dims: tuple[str, ...],
+        preserve_index: tuple[int, ...],
+        freq_dim: str,
+        freq_index: int,
+        mode_dim: str,
+        tangential_dims: tuple[str, str],
+    ) -> NDArray:
+        """Slice one preserve/frequency point and return ``(mode, xy)`` matrix."""
+        dim_to_axis = {dim: axis for axis, dim in enumerate(dims)}
+        idx = [slice(None)] * arr.ndim
+        indexed_dims = set()
+
+        for dim, ind in zip(preserve_dims, preserve_index):
+            axis = dim_to_axis.get(dim)
+            if axis is None:
+                continue
+            indexed_dims.add(dim)
+            axis_size = arr.shape[axis]
+            if axis_size == 1:
+                idx[axis] = 0
+            elif ind < axis_size:
+                idx[axis] = ind
+            else:
+                raise ValueError(
+                    "Cannot broadcast preserve dimension in streaming outer_dot kernel."
+                )
+
+        freq_axis = dim_to_axis.get(freq_dim)
+        if freq_axis is None:
+            raise ValueError("Frequency dimension missing in streaming outer_dot kernel.")
+        indexed_dims.add(freq_dim)
+        if arr.shape[freq_axis] == 1:
+            idx[freq_axis] = 0
+        else:
+            idx[freq_axis] = freq_index
+
+        sliced = arr[tuple(idx)]
+        remaining_dims = [dim for dim in dims if dim not in indexed_dims]
+        required_dims = {mode_dim, tangential_dims[0], tangential_dims[1]}
+        if len(remaining_dims) != 3 or set(remaining_dims) != required_dims:
+            raise ValueError("Unexpected dimensions in streaming outer_dot kernel.")
+
+        axes = (
+            remaining_dims.index(mode_dim),
+            remaining_dims.index(tangential_dims[0]),
+            remaining_dims.index(tangential_dims[1]),
+        )
+        mode_xy = np.transpose(sliced, axes)
+        return mode_xy.reshape((mode_xy.shape[0], -1))
+
+    @staticmethod
+    def _outer_dot_numpy_kernel_streaming(
+        fields_1: dict[str, xr.DataArray],
+        fields_2: dict[str, xr.DataArray],
+        outer_dim_1: str,
+        outer_dim_2: str,
+        tangential_dims: tuple[str, str],
+        e_1: str,
+        e_2: str,
+        h_1: str,
+        h_2: str,
+        d_area: NDArray,
+    ) -> DataArray:
+        """Streaming outer-dot kernel that avoids mode-pair broadcasting in memory."""
+        data_array_temp_1 = list(fields_1.values())[0]
+        data_array_temp_2 = list(fields_2.values())[0]
+
+        coords = {key: val.to_numpy() for key, val in data_array_temp_1.coords.items()}
+        for dim in tangential_dims:
+            coords.pop(dim)
+        coords.pop(outer_dim_1)
+        coords[outer_dim_1] = data_array_temp_1.coords[outer_dim_1].to_numpy()
+        coords[outer_dim_2] = data_array_temp_2.coords[outer_dim_2].to_numpy()
+        coords = {key: val for key, val in coords.items() if len(val.shape) != 0}
+
+        if "f" not in coords:
+            raise ValueError("Frequency coordinate missing in streaming outer_dot kernel.")
+
+        dims = tuple(coords.keys())
+        shape = [len(val) for val in coords.values()]
+        dtype = np.result_type(
+            np.asarray(fields_1[e_1].data).dtype,
+            np.asarray(fields_1[e_2].data).dtype,
+            np.asarray(fields_1[h_1].data).dtype,
+            np.asarray(fields_1[h_2].data).dtype,
+            np.asarray(fields_2[e_1].data).dtype,
+            np.asarray(fields_2[e_2].data).dtype,
+            np.asarray(fields_2[h_1].data).dtype,
+            np.asarray(fields_2[h_2].data).dtype,
+            np.asarray(d_area).dtype,
+        )
+        data = np.zeros(shape, dtype=dtype)
+
+        preserve_dims = tuple(dim for dim in dims if dim not in {"f", outer_dim_1, outer_dim_2})
+        preserve_sizes = [len(coords[dim]) for dim in preserve_dims]
+        preserve_indices = (
+            itertools.product(*[range(size) for size in preserve_sizes]) if preserve_sizes else [()]
+        )
+
+        dim_to_data_axis = {dim: axis for axis, dim in enumerate(dims)}
+        n_freq = len(coords["f"])
+        d_area = np.asarray(d_area).reshape(-1)
+
+        field_components = (e_1, e_2, h_1, h_2)
+        left_meta = {
+            comp: (np.asarray(fields_1[comp].data), tuple(fields_1[comp].dims))
+            for comp in field_components
+        }
+        right_meta = {
+            comp: (np.asarray(fields_2[comp].data), tuple(fields_2[comp].dims))
+            for comp in field_components
+        }
+
+        for preserve_index in preserve_indices:
+            for freq_index in range(n_freq):
+                left_mats = {}
+                right_mats = {}
+                for comp in field_components:
+                    left_mats[comp] = ElectromagneticFieldData._slice_mode_xy_matrix(
+                        left_meta[comp][0],
+                        left_meta[comp][1],
+                        preserve_dims=preserve_dims,
+                        preserve_index=preserve_index,
+                        freq_dim="f",
+                        freq_index=freq_index,
+                        mode_dim=outer_dim_1,
+                        tangential_dims=tangential_dims,
+                    )
+                    right_mats[comp] = ElectromagneticFieldData._slice_mode_xy_matrix(
+                        right_meta[comp][0],
+                        right_meta[comp][1],
+                        preserve_dims=preserve_dims,
+                        preserve_index=preserve_index,
+                        freq_dim="f",
+                        freq_index=freq_index,
+                        mode_dim=outer_dim_2,
+                        tangential_dims=tangential_dims,
+                    )
+
+                if left_mats[e_1].shape[1] != d_area.size:
+                    raise ValueError(
+                        "Tangential area shape mismatch in streaming outer_dot kernel."
+                    )
+
+                out = 0.25 * (
+                    left_mats[e_1] @ (right_mats[h_2] * d_area).T
+                    - left_mats[e_2] @ (right_mats[h_1] * d_area).T
+                    - left_mats[h_1] @ (right_mats[e_2] * d_area).T
+                    + left_mats[h_2] @ (right_mats[e_1] * d_area).T
+                )
+
+                idx_data = [slice(None)] * len(dims)
+                for dim, ind in zip(preserve_dims, preserve_index):
+                    idx_data[dim_to_data_axis[dim]] = ind
+                idx_data[dim_to_data_axis["f"]] = freq_index
+                data[tuple(idx_data)] = out
+
+        return DataArray(data, coords=coords)
 
     @staticmethod
     def _outer_fn_summation(
