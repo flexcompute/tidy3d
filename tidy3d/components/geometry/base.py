@@ -29,7 +29,6 @@ from tidy3d.components.viz import (
     ARROW_LENGTH,
     PLOT_BUFFER,
     add_ax_if_none,
-    arrow_style,
     equal_aspect,
     plot_params_geometry,
     polygon_patch,
@@ -72,11 +71,6 @@ if TYPE_CHECKING:
         Size,
     )
     from tidy3d.components.viz import PlotParams, VisualizationSpec
-
-try:
-    from matplotlib import patches
-except ImportError:
-    pass
 
 POLY_GRID_SIZE = 1e-12
 POLY_TOLERANCE_RATIO = 1e-12
@@ -2512,6 +2506,9 @@ class Box(SimplePlaneIntersection, Centered):
         matplotlib.axes._subplots.Axes
             The matplotlib axes with the arrow added.
         """
+        from matplotlib import patches
+
+        from tidy3d.components.viz.styles import arrow_style
 
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
@@ -2546,7 +2543,7 @@ class Box(SimplePlaneIntersection, Centered):
                 arrow = patches.FancyArrowPatch(
                     (x0, y0),
                     (x0 + v_x, y0 + v_y),
-                    arrowstyle=arrow_style,
+                    arrowstyle=arrow_style(),
                     color=color,
                     alpha=alpha,
                     zorder=np.inf,
@@ -2574,6 +2571,8 @@ class Box(SimplePlaneIntersection, Centered):
         sign: float,
         bend_radius: float | None,
     ) -> Callable[[Event], None]:
+        from matplotlib import patches
+
         def _cb(event: Event) -> None:
             # We only want to set the shape once, so we disconnect ourselves
             event.canvas.mpl_disconnect(arrow.set_shape_cb[0])

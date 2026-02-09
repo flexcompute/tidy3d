@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional
 
 import autograd.numpy as np
+from pydantic import Field, field_validator
 
 if TYPE_CHECKING:
     from typing import Literal, Union
@@ -27,14 +28,6 @@ if TYPE_CHECKING:
         Size,
     )
     from .viz import PlotParams
-
-try:
-    import matplotlib as mpl
-    import matplotlib.pylab as plt
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-except ImportError:
-    mpl = None
-from pydantic import Field, field_validator
 
 from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
@@ -87,12 +80,14 @@ from .viz import (
     polygon_path,
 )
 
-try:
-    import matplotlib as mpl
-    import matplotlib.pylab as plt
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-except ImportError:
-    pass
+# Sentinel to indicate matplotlib hasn't been loaded yet
+_MPL_NOT_LOADED = object()
+
+# Module-level mpl reference for lazy loading and test mocking
+# - _MPL_NOT_LOADED: not yet imported (will import on first use)
+# - None: explicitly unavailable (for testing fallback behavior)
+# - module: matplotlib module when successfully imported
+mpl: Any = _MPL_NOT_LOADED
 
 # maximum number of mediums supported
 MAX_NUM_MEDIUMS = 65530
@@ -664,9 +659,13 @@ class Scene(Tidy3dBaseModel):
         label: str,
         cmap: str,
         ax: Ax = None,
-        norm: mpl.colors.Normalize = None,
+        norm: mpl.colors.Normalize | None = None,
     ) -> None:
         """Add a colorbar to plot."""
+        import matplotlib as mpl
+        import matplotlib.pylab as plt
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.15)
         if norm is None:
@@ -1039,6 +1038,7 @@ class Scene(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        import matplotlib as mpl
 
         structures = self.sorted_structures
 
@@ -1218,7 +1218,7 @@ class Scene(Tidy3dBaseModel):
         eps_max: float,
         ax: Ax = None,
         reverse: bool = False,
-        norm: Optional[mpl.colors.Normalize] = None,
+        norm: mpl.colors.Normalize | None = None,
     ) -> None:
         """Add a permittivity colorbar to plot."""
         Scene._add_cbar(
@@ -1289,7 +1289,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax,
         grid: Grid,
         eps_component: Optional[PermittivityComponent] = None,
-        norm: mpl.colors.Normalize = None,
+        norm: mpl.colors.Normalize | None = None,
     ) -> None:
         """
         Plot shape made of custom medium with ``pcolormesh``.
@@ -1441,9 +1441,17 @@ class Scene(Tidy3dBaseModel):
         reverse: bool = False,
         alpha: Optional[float] = None,
         eps_component: Optional[PermittivityComponent] = None,
-        norm: Optional[mpl.colors.Normalize] = None,
+        norm: mpl.colors.Normalize | None = None,
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in scene.plot_eps()."""
+        global mpl
+        if mpl is _MPL_NOT_LOADED:
+            try:
+                import matplotlib as _mpl
+
+                mpl = _mpl
+            except ImportError:
+                mpl = None  # Triggers grayscale fallback
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
         if isinstance(medium, AbstractMedium):
@@ -1469,22 +1477,24 @@ class Scene(Tidy3dBaseModel):
             eps_medium = medium._eps_plot(frequency=freq, eps_component=eps_component)
             if norm is not None:
                 color_value = float(norm(eps_medium))
-            elif mpl is not None:
-                active_norm = mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
-                color_value = float(active_norm(eps_medium))
+            elif eps_min == eps_max:
+                # Avoid division by zero; use midpoint
+                color_value = 0.5
             else:
-                if eps_max == eps_min:
-                    color_value = 0.5
-                else:
-                    color_value = (eps_medium - eps_min) / (eps_max - eps_min)
+                color_value = (eps_medium - eps_min) / (eps_max - eps_min)
             color_value = min(1.0, max(0.0, color_value))
+
+            # Use matplotlib colormap if available, otherwise fallback to grayscale
             if mpl is not None:
                 cmap_name = _get_colormap(reverse=reverse)
-                cmap = plt.get_cmap(cmap_name)
+                cmap = mpl.colormaps[cmap_name]
                 rgba = tuple(float(component) for component in cmap(color_value))
             else:
-                gray_value = color_value if reverse else 1.0 - color_value
-                rgba = (gray_value, gray_value, gray_value, 1.0)
+                # Grayscale fallback when matplotlib is unavailable
+                # Forward (Greys): 0 -> white, 1 -> black
+                # Reverse (Greys_r): 0 -> black, 1 -> white
+                grayscale = color_value if reverse else (1.0 - color_value)
+                rgba = (grayscale, grayscale, grayscale, 1.0)
             plot_params = plot_params.copy(update={"facecolor": rgba})
 
         return plot_params
@@ -1500,7 +1510,7 @@ class Scene(Tidy3dBaseModel):
         reverse: bool = False,
         alpha: Optional[float] = None,
         eps_component: Optional[PermittivityComponent] = None,
-        norm: Optional[mpl.colors.Normalize] = None,
+        norm: mpl.colors.Normalize | None = None,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
         plot_params = self._get_structure_eps_plot_params(

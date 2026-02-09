@@ -96,11 +96,6 @@ if TYPE_CHECKING:
     from tidy3d.components.types.base import ArrayFloat1D
     from tidy3d.components.viz import PlotParams
 
-try:
-    from matplotlib import colormaps
-except ImportError:
-    pass
-
 HEAT_CHARGE_BACK_STRUCTURE_STR = "<<<HEAT_CHARGE_BACKGROUND_STRUCTURE>>>"
 
 HeatBCTypes = (TemperatureBC, HeatFluxBC, ConvectionBC)
@@ -1960,6 +1955,8 @@ class HeatChargeSimulation(AbstractSimulation):
         if isinstance(source, HeatSource):
             rate = np.mean(source.rate)
             if rate is not None:
+                from matplotlib import colormaps
+
                 delta_rate = rate - source_min
                 delta_rate_max = source_max - source_min + 1e-5
                 rate_fraction = delta_rate / delta_rate_max

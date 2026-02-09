@@ -162,11 +162,6 @@ if TYPE_CHECKING:
     )
 
 try:
-    import matplotlib as mpl
-except ImportError:
-    pass
-
-try:
     gdstk_available = True
     import gdstk
 except ImportError:
@@ -1177,6 +1172,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        import matplotlib as mpl
+
         kwargs.setdefault("linewidth", 0.2)
         kwargs.setdefault("colors", "black")
         kwargs.setdefault("colors_internal", "darkmagenta")
@@ -1348,6 +1345,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        import matplotlib as mpl
 
         def set_plot_params(
             boundary_edge: Union[ABCBoundary, ModeABCBoundary, BoundaryEdgeType],

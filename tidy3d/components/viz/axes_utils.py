@@ -111,6 +111,10 @@ def _create_unit_aware_locator() -> ticker.Locator:
 
 def make_ax() -> Ax:
     """makes an empty ``ax``."""
+    from tidy3d.components.viz import _ensure_tidy3d_style
+
+    _ensure_tidy3d_style()
+
     import matplotlib.pyplot as plt
 
     _, ax = plt.subplots(1, 1, tight_layout=True)
@@ -120,11 +124,16 @@ def make_ax() -> Ax:
 def add_ax_if_none(plot: T) -> T:
     """Decorates ``plot(*args, **kwargs, ax=None)`` function.
     if ax=None in the function call, creates an ax and feeds it to rest of function.
+    Also ensures tidy3d matplotlib style is applied.
     """
 
     @wraps(plot)
     def _plot(*args: P.args, **kwargs: P.kwargs) -> Axes:
         """New plot function using a generated ax if None."""
+        from tidy3d.components.viz import _ensure_tidy3d_style
+
+        _ensure_tidy3d_style()
+
         if kwargs.get("ax") is None:
             ax = make_ax()
             kwargs["ax"] = ax

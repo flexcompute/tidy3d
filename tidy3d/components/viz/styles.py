@@ -1,11 +1,19 @@
 from __future__ import annotations
 
-try:
-    from matplotlib.patches import ArrowStyle
+from typing import Any
 
-    arrow_style = ArrowStyle.Simple(head_length=11, head_width=9, tail_width=4)
-except ImportError:
-    arrow_style = None
+_arrow_style = None
+
+
+def arrow_style() -> Any:
+    """Lazily create arrow style to avoid importing matplotlib at module load."""
+    global _arrow_style
+    if _arrow_style is None:
+        from matplotlib.patches import ArrowStyle
+
+        _arrow_style = ArrowStyle.Simple(head_length=11, head_width=9, tail_width=4)
+    return _arrow_style
+
 
 FLEXCOMPUTE_COLORS = {
     "brand_green": "#00643C",

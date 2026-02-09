@@ -21,9 +21,10 @@ from pydantic.json_schema import WithJsonSchema
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-try:
+if TYPE_CHECKING:
     from matplotlib.axes import Axes
-except ImportError:
+else:
+    # At runtime, Axes is just Any to avoid importing matplotlib
     Axes = None
 
 from shapely.geometry.base import BaseGeometry
