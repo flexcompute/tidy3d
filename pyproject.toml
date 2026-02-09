@@ -49,6 +49,7 @@ click = "^8.1.0"
 responses = "^0.25.8"
 joblib = "^1.5.3"
 typing-extensions = "^4.15.0"
+filelock = "^3.20.1"
 ### END NOT CORE
 
 ### Optional dependencies ###

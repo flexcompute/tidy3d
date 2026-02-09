@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed redundant logging when `Batch.download()` skips existing files, and added `replace_existing` to `Batch.run()` so overwrite behavior can be controlled directly.
 - Fixed redundant server lookups when loading simulation results.
 - Updated docstrings for `DerivativeInfo` to more accurately reflect dataclass fields.
+- Fixed local cache race conditions causing `FileNotFoundError`.
 
 ## [2.10.2] - 2026-01-21
 
