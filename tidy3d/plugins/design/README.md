@@ -50,6 +50,8 @@ def transmission_split(n: int, r: float) -> float:
 
 Putting it in this form is useful as it allows the `Design` plugin to automate parallelization through `Batch` objects, although it is not necessary.
 
+`DesignSpace.run` supports any runnable workflow, including `Simulation`, `HeatSimulation`, `EMESimulation`, `ModeSimulation`, `ModeSolver`, `VolumeMesher`, and component modelers (modal or terminal). These can be returned directly, or wrapped in lists or dicts, and the plugin will batch and run them for you.
+
 ##  Parameters
 
 Now, we could query our transmission function directly to construct a parameter scan, but it would be more convenient to simply **define** our parameter scan as a specification and have the `Tidy3D` wrapper do the accounting for us.

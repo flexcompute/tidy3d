@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import inspect
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, get_args
 
 from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
-from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.simulation import Simulation
 from tidy3d.components.types import TYPE_TAG_STR
+from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api.container import Batch, BatchData, Job
 
@@ -28,6 +27,9 @@ if TYPE_CHECKING:
     from typing import Callable, Union
 
     from tidy3d.log import Console
+
+WORKFLOW_TYPES = get_args(WorkflowType)
+WORKFLOW_DATA_TYPES = get_args(WorkflowDataType)
 
 
 class DesignSpace(Tidy3dBaseModel):
@@ -87,7 +89,7 @@ class DesignSpace(Tidy3dBaseModel):
         "",
         title="Task Name",
         description="Task name assigned to tasks along with a simulation counter in the form of {task_name}_{sim_index}_{counter} where ``sim_index`` is "
-        "the index of the ``Simulation`` from the pre function output. "
+        "the index of the workflow/simulation object from the pre function output. "
         "If the pre function outputs a dictionary the key will be included in the task name as {task_name}_{dict_key}_{counter}. "
         "Only used when pre-post functions are supplied.",
     )
@@ -171,9 +173,9 @@ class DesignSpace(Tidy3dBaseModel):
         The ``fn`` function must take a dictionary input - this can be stored a dictionary ``def example_fn(**params)``
         or left as keyword arguments ``def example_fn(arg1, arg2)`` where the keywords correspond to the ``name`` of the parameters in the design space.
 
-        If used as a pre function, the output of ``fn`` must be a float, ``Simulation``, ``Batch``, list, or dict. Supplied ``Batch`` objects are
-        run without modification and are run in series. A list or dict of ``Simulation`` objects is flattened into a single ``Batch`` to enable
-        parallel computation on the cloud. The original structure is then restored for output; all ``Simulation`` objects are replaced by ``SimulationData`` objects.
+        If used as a pre function, the output of ``fn`` must be a float, a ``WorkflowType`` (for example ``Simulation``, ``ModeSimulation``, ``EMESimulation``),
+        a ``Batch``, list, or dict. Supplied ``Batch`` objects are run without modification and are run in series. A list or dict of workflow objects is flattened
+        into a single ``Batch`` to enable parallel computation on the cloud. The original structure is then restored for output; all workflow objects are replaced by their corresponding data objects.
         Example pre return formats and associated post inputs can be seen in the table below.
 
         .. list-table:: Pre return formats and post input formats
@@ -337,7 +339,7 @@ class DesignSpace(Tidy3dBaseModel):
                 sim_dict = {str(idx): fn_pre(**arg_list) for idx, arg_list in enumerate(args_list)}
 
                 if not all(
-                    isinstance(val, (int, float, Simulation, Batch, list, dict))
+                    isinstance(val, (int, float, *WORKFLOW_TYPES, Batch, list, dict))
                     for val in sim_dict.values()
                 ):
                     raise ValueError(
@@ -416,7 +418,7 @@ class DesignSpace(Tidy3dBaseModel):
         batches = {}
         naming_keys = {}
 
-        _find_and_map(pre_out, Simulation, simulations, naming_keys)
+        _find_and_map(pre_out, WORKFLOW_TYPES, simulations, naming_keys)
         _find_and_map(pre_out, Batch, batches, naming_keys)
 
         # Exit fn_mid here if no td computation is required
@@ -490,7 +492,7 @@ class DesignSpace(Tidy3dBaseModel):
                     new_dict[key] = new_sub_dict
 
                 else:
-                    if isinstance(value, SimulationData):
+                    if isinstance(value, WORKFLOW_DATA_TYPES):
                         new_dict[key] = value.attrs[attr_name]
 
                     elif isinstance(value, BatchData):
@@ -519,9 +521,9 @@ class DesignSpace(Tidy3dBaseModel):
 
     def run_batch(
         self,
-        fn_pre: Callable[Any, Union[Simulation, list[Simulation], dict[str, Simulation]]],
+        fn_pre: Callable[Any, Union[WorkflowType, list[WorkflowType], dict[str, WorkflowType]]],
         fn_post: Callable[
-            Union[SimulationData, list[SimulationData], dict[str, SimulationData]], Any
+            Union[WorkflowDataType, list[WorkflowDataType], dict[str, WorkflowDataType]], Any
         ],
         path_dir: str = ".",
         priority: Optional[int] = None,
@@ -549,7 +551,7 @@ class DesignSpace(Tidy3dBaseModel):
     def estimate_cost(self, fn_pre: Callable) -> float:
         """Compute the maximum FlexCredit charge for the ``DesignSpace.run`` computation.
 
-        Require a pre function that should return a ``Simulation`` object, a ``Batch`` object, or collection of either.
+        Require a pre function that should return a ``WorkflowType`` object, a ``Batch`` object, or collection of either.
         The pre function is called to estimate the cost - complicated pre functions may cause long runtimes. The cost per
         iteration is multiplied by the theoretical maximum number of iterations to give the maximum cost.
 
@@ -557,7 +559,7 @@ class DesignSpace(Tidy3dBaseModel):
         ----------
         fn_pre : Callable
             Function accepting arguments that correspond to the ``name`` fields
-            of the ``DesignSpace.parameters``. Should return a ``Simulation`` or ``Batch`` object, or a
+            of the ``DesignSpace.parameters``. Should return a ``WorkflowType`` or ``Batch`` object, or a
             ``list`` / ``dict`` of these objects.
 
         Returns
@@ -574,15 +576,15 @@ class DesignSpace(Tidy3dBaseModel):
         # Compute fn_pre
         pre_out = fn_pre(**arg_dict)
 
-        def _estimate_sim_cost(sim: Simulation) -> float:
-            job = Job(simulation=sim, task_name="estimate_cost")
+        def _estimate_sim_cost(workflow: WorkflowType) -> float:
+            job = Job(simulation=workflow, task_name="estimate_cost")
 
             estimate = job.estimate_cost()
             job.delete()  # Deleted as only a test with initial parameters
 
             return estimate
 
-        if isinstance(pre_out, Simulation):
+        if isinstance(pre_out, WORKFLOW_TYPES):
             per_run_estimate = _estimate_sim_cost(pre_out)
 
         elif isinstance(pre_out, Batch):
@@ -599,7 +601,7 @@ class DesignSpace(Tidy3dBaseModel):
             sims = []
             batches = []
             for value in pre_out:
-                if isinstance(value, Simulation):
+                if isinstance(value, WORKFLOW_TYPES):
                     sims.append(value)
                 elif isinstance(value, Batch):
                     batches.append(value)
