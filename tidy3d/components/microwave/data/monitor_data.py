@@ -390,24 +390,13 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
 
         # Get differential area elements (handles both colocated and non-colocated)
         dS_E1H2, dS_E2H1, _, _ = self._diff_area
-        # Add coordinates from field arrays for proper xarray broadcasting
-        e1_coords = fields["E" + dim1].coords
-        e2_coords = fields["E" + dim2].coords
-        dS_E1 = xr.DataArray(
-            dS_E1H2.values,
-            coords={dim1: e1_coords[dim1], dim2: e1_coords[dim2]},
-        )
-        dS_E2 = xr.DataArray(
-            dS_E2H1.values,
-            coords={dim1: e2_coords[dim1], dim2: e2_coords[dim2]},
-        )
 
         e1 = fields["E" + dim1]
         e2 = fields["E" + dim2]
 
         # Integrate |E|² with proper area elements at each Yee location
-        intensity_E1 = (np.abs(e1) ** 2 * dS_E1).sum(dim=self._tangential_dims)
-        intensity_E2 = (np.abs(e2) ** 2 * dS_E2).sum(dim=self._tangential_dims)
+        intensity_E1 = (np.abs(e1) ** 2 * dS_E1H2).sum(dim=self._tangential_dims)
+        intensity_E2 = (np.abs(e2) ** 2 * dS_E2H1).sum(dim=self._tangential_dims)
         tangential_intensity = intensity_E1 + intensity_E2
 
         direction = self.monitor.store_fields_direction

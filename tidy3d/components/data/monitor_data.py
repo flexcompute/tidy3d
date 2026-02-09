@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Union, get_args
 
 import autograd.numpy as np
 import xarray as xr
-from pandas import DataFrame,Index
 from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
@@ -76,6 +75,7 @@ from .data_array import (
     FreqDataArray,
     FreqModeDataArray,
     GroupIndexDataArray,
+    MixedModeDataArray,
     ModeAmpsDataArray,
     ModeDispersionDataArray,
     ScalarFieldDataArray,
@@ -115,7 +115,7 @@ if TYPE_CHECKING:
         TrackFreq,
     )
 
-    from .data_array import MixedModeDataArray, ModeIndexDataArray, ScalarFieldTimeDataArray
+    from .data_array import ModeIndexDataArray, ScalarFieldTimeDataArray
     from .dataset import Dataset
 
 Coords1D = ArrayFloat1D
@@ -1051,7 +1051,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         self._validate_bounding_box_intersection(bounding_box)
 
         intensity = self.intensity
-        area = self._diff_area
+        area = self._diff_area_at_boundaries()[0]
         mask = self._bounding_box_mask(bounding_box)
 
         weighted_total = (intensity * area).sum(dim=area.dims)
@@ -1123,7 +1123,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         else:
             m_sel_self, m_sel_other, final_modes = None, None, None
 
-        def get_axis_info(dims: list[str], has_mode: bool):
+        def get_axis_info(
+            dims: list[str], has_mode: bool
+        ) -> tuple[int, Optional[int], Optional[int], int, int, int]:
             """Get axis indices for a given dimension list."""
             f_axis = dims.index("f")
             normal_axis = dims.index(normal_dim) if normal_dim in dims else None
@@ -1133,7 +1135,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             return f_axis, normal_axis, mode_axis, u_axis, v_axis, len(dims)
 
         def prepare_numpy(
-            arr: np.ndarray, f_sel, m_sel, has_mode: bool, axis_info: tuple
+            arr: np.ndarray,
+            f_sel: np.ndarray,
+            m_sel: Optional[np.ndarray],
+            has_mode: bool,
+            axis_info: tuple,
         ) -> np.ndarray:
             """Prepare numpy array: select, squeeze, expand dims, transpose to (f, m, u, v)."""
             f_axis, normal_axis, mode_axis, u_axis, v_axis, ndims = axis_info
@@ -1152,7 +1158,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 arr = np.squeeze(arr, axis=normal_axis)
 
             # Compute working axes after potential normal squeeze
-            def adjust_axis(ax):
+            def adjust_axis(ax: Optional[int]) -> Optional[int]:
                 if normal_axis is None or ax is None:
                     return ax
                 return ax if ax < normal_axis else ax - 1
@@ -1367,7 +1373,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             self_coords["f"].values, other_coords["f"].values
         )
 
-        def get_axis_info(dims: list[str], has_mode: bool):
+        def get_axis_info(
+            dims: list[str], has_mode: bool
+        ) -> tuple[int, Optional[int], Optional[int], int, int, int]:
             """Get axis indices for a given dimension list."""
             f_axis = dims.index("f")
             normal_axis = dims.index(normal_dim) if normal_dim in dims else None
@@ -1376,7 +1384,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             v_axis = dims.index(tangential_dims[1])
             return f_axis, normal_axis, mode_axis, u_axis, v_axis, len(dims)
 
-        def prepare_numpy(arr: np.ndarray, f_sel, has_mode: bool, axis_info: tuple) -> np.ndarray:
+        def prepare_numpy(
+            arr: np.ndarray, f_sel: np.ndarray, has_mode: bool, axis_info: tuple
+        ) -> np.ndarray:
             """Prepare numpy array: select freq, squeeze normal, expand dims, transpose."""
             f_axis, normal_axis, mode_axis, u_axis, v_axis, ndims = axis_info
 
@@ -1390,7 +1400,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 arr = np.squeeze(arr, axis=normal_axis)
 
             # Compute working axes after potential normal squeeze
-            def adjust_axis(ax):
+            def adjust_axis(ax: Optional[int]) -> Optional[int]:
                 if normal_axis is None or ax is None:
                     return ax
                 return ax if ax < normal_axis else ax - 1

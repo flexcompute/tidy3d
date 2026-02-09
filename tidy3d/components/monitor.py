@@ -877,7 +877,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
         description="Surfaces to exclude in the integration, if a volume monitor.",
     )
 
-    colocate: bool = pydantic.Field(
+    colocate: bool = Field(
         True,
         title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
