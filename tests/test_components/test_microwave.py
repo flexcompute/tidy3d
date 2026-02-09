@@ -1281,6 +1281,57 @@ def test_mode_solver_with_microwave_mode_spec():
     )
 
 
+def test_mode_solver_validate_auto_impedance_spec():
+    """Test that ModeSolver.validate_pre_upload catches invalid AutoImpedanceSpec geometry."""
+    freq0 = 10e9
+    sim_size = (10 * mm, 10 * mm, 10 * mm)
+    plane_size = (0, 8 * mm, 8 * mm)
+
+    # Coaxial structure: axis-aligned bounding boxes of conductors overlap,
+    # which causes AutoImpedanceSpec setup to fail
+    coaxial = td.Structure(
+        geometry=td.GeometryGroup(
+            geometries=(
+                td.ClipOperation(
+                    operation="difference",
+                    geometry_a=td.Cylinder(
+                        axis=0, radius=2.5 * mm, center=(0, 0, 0), length=td.inf
+                    ),
+                    geometry_b=td.Cylinder(
+                        axis=0, radius=1.3 * mm, center=(0, 0, 0), length=td.inf
+                    ),
+                ),
+                td.Cylinder(axis=0, radius=1 * mm, center=(0, 0, 0), length=td.inf),
+            )
+        ),
+        medium=td.PEC,
+    )
+
+    mode_spec = td.MicrowaveModeSpec(
+        num_modes=2,
+        target_neff=1.8,
+        impedance_specs=(td.AutoImpedanceSpec(), td.AutoImpedanceSpec()),
+    )
+
+    sim = td.Simulation(
+        run_time=1e-9,
+        size=sim_size,
+        sources=[],
+        structures=[coaxial],
+        grid_spec=td.GridSpec.uniform(dl=0.1 * mm),
+    )
+
+    mode_solver = ModeSolver(
+        simulation=sim,
+        plane=td.Box(center=(0, 0, 0), size=plane_size),
+        mode_spec=mode_spec,
+        freqs=[freq0],
+    )
+
+    with pytest.raises(SetupError):
+        mode_solver.validate_pre_upload()
+
+
 def test_mode_solver_with_microwave_group_index():
     """Test that group_index calculation with MicrowaveModeSpec correctly filters frequencies."""
 
