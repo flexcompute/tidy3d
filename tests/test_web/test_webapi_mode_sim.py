@@ -417,7 +417,7 @@ def test_batch(mock_webapi, mock_job_status, tmp_path, unique_project_name):
 
 
 @responses.activate
-def test_async(mock_webapi, mock_job_status, tmp_path):
+def test_async(mock_webapi, mock_job_status, tmp_path, unique_project_name):
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
     sims = {TASK_NAME: make_mode_sim()}
-    _ = run_async(sims, folder_name=PROJECT_NAME, path_dir=str(tmp_path))
+    _ = run_async(sims, folder_name=unique_project_name, path_dir=str(tmp_path))
