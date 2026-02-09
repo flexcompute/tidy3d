@@ -15,6 +15,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
+from filelock import FileLock
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 
 from tidy3d import config
@@ -176,6 +177,10 @@ class LocalCache:
         self._lock = threading.RLock()
         self._syncing_stats = False
         self._sync_pending = False
+        lock_name = f".{self._root.name}.lock" if self._root.name else ".cache.lock"
+        self._lock_path = self._root.parent / lock_name
+        self._file_lock = FileLock(self._lock_path)
+        self._file_lock_state = threading.local()
 
     @property
     def _stats_path(self) -> Path:
@@ -190,10 +195,32 @@ class LocalCache:
             self.sync_stats()
 
     @contextmanager
-    def _with_lock(self) -> Iterator[None]:
+    def _with_interprocess_lock(self) -> Iterator[None]:
+        depth = getattr(self._file_lock_state, "depth", 0)
+        if depth > 0:
+            self._file_lock_state.depth = depth + 1
+            try:
+                yield
+            finally:
+                self._file_lock_state.depth -= 1
+            return
+
+        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+        self._root.mkdir(parents=True, exist_ok=True)
+        with self._file_lock:
+            self._file_lock_state.depth = 1
+            try:
+                yield
+            finally:
+                self._file_lock_state.depth = 0
+
+    @contextmanager
+    def _with_cache_state_lock(self) -> Iterator[None]:
+        """Lock boundary for entry-point operations; helpers assume this is held."""
         self._run_pending_sync()
         with self._lock:
-            yield
+            with self._with_interprocess_lock():
+                yield
         self._run_pending_sync()
 
     def _write_stats(self, stats: CacheStats) -> CacheStats:
@@ -288,7 +315,7 @@ class LocalCache:
                 self._evict_by_size(entries_map, bytes_to_free, exclude_keys=set())
 
     def sync_stats(self) -> CacheStats:
-        with self._lock:
+        with self._with_cache_state_lock():
             self._syncing_stats = True
             log.debug("Syncing stats.json of local cache")
             try:
@@ -312,20 +339,20 @@ class LocalCache:
 
     def list(self) -> list[dict[str, Any]]:
         """Return metadata for all cache entries."""
-        with self._with_lock():
+        with self._with_cache_state_lock():
             entries = [entry.metadata.model_dump(mode="json") for entry in self._iter_entries()]
         return entries
 
     def clear(self, hard: bool = False) -> None:
         """Remove all cache contents. If set to hard, root directory is removed."""
-        with self._with_lock():
+        with self._with_cache_state_lock():
             _remove_cache_dir(self._root, recreate=not hard)
             if not hard:
                 self._write_stats(CacheStats())
 
     def _fetch(self, key: str) -> Optional[CacheEntry]:
         """Retrieve an entry by key, verifying checksum."""
-        with self._with_lock():
+        with self._with_cache_state_lock():
             entry = self._load_entry(key)
             if not entry or not entry.exists():
                 return None
@@ -337,7 +364,7 @@ class LocalCache:
 
     def __len__(self) -> int:
         """Return number of valid cache entries."""
-        with self._with_lock():
+        with self._with_cache_state_lock():
             count = self._load_stats().total_entries
         return count
 
@@ -379,7 +406,7 @@ class LocalCache:
         _write_metadata(tmp_meta, metadata)
         entry: Optional[CacheEntry] = None
         try:
-            with self._with_lock():
+            with self._with_cache_state_lock():
                 self._root.mkdir(parents=True, exist_ok=True)
                 existing_entry = self._load_entry(key)
                 previous_size = (
@@ -413,7 +440,7 @@ class LocalCache:
         return entry
 
     def invalidate(self, key: str) -> None:
-        with self._with_lock():
+        with self._with_cache_state_lock():
             entry = self._load_entry(key)
             if entry:
                 self._remove_entry(entry)
@@ -727,7 +754,7 @@ def _copy_and_hash(
 
 
 def _write_metadata(path: Path, metadata: CacheEntryMetadata | dict[str, Any]) -> None:
-    tmp_path = path.with_suffix(".tmp")
+    tmp_path = path.with_suffix(f".{os.getpid()}.{_timestamp_suffix()}.tmp")
     payload: dict[str, Any]
     if isinstance(metadata, CacheEntryMetadata):
         payload = metadata.model_dump(mode="json")
