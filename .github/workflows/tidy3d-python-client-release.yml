@@ -426,6 +426,7 @@ jobs:
       version_match_tests: true
       extras_integration_tests: ${{ needs.determine-workflow-scope.outputs.run_extras_integration_tests == 'true' }}
       test_type: full
+      test_selection: full
     secrets: inherit # zizmor: ignore[secrets-inherit]
   
   compile-tests-results:
