@@ -10,6 +10,7 @@ from pydantic import Field, model_validator
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.bound_ops import bounds_contains
 from tidy3d.components.microwave.base import MicrowaveBaseModel
+from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from tidy3d.components.microwave.path_integrals.specs.impedance import (
     AutoImpedanceSpec,
     ImpedanceSpecType,
@@ -21,6 +22,9 @@ from tidy3d.exceptions import SetupError
 if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.geometry.base import Box
+    from tidy3d.components.grid.grid import Grid
+    from tidy3d.components.structure import Structure
+    from tidy3d.components.types import Coordinate, Size, Symmetry
 
 TEM_POLARIZATION_THRESHOLD = 0.995
 QTEM_POLARIZATION_THRESHOLD = 0.95
@@ -170,3 +174,32 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
                         f"'{impedance_ind}' was provided with a {spec_type} path specification with bounds "
                         f"'{spec.bounds}', but the mode plane bounds are '{box.bounds}'."
                     )
+
+    def _validate_auto_impedance_setup(
+        self,
+        center: Coordinate,
+        size: Size,
+        colocate: bool,
+        volumetric_structures: list[Structure],
+        grid: Grid,
+        symmetry: tuple[Symmetry, Symmetry, Symmetry],
+        simulation_geometry: Box,
+        label: str = "",
+    ) -> None:
+        """Validate that auto impedance specification can be set up for the given mode plane."""
+        if not self._using_auto_current_spec:
+            return
+        mode_plane_analyzer = ModePlaneAnalyzer(
+            center=center,
+            size=size,
+            field_data_colocated=colocate,
+        )
+        try:
+            mode_plane_analyzer.get_conductor_bounding_boxes(
+                volumetric_structures,
+                grid,
+                symmetry,
+                simulation_geometry,
+            )
+        except SetupError as e:
+            raise SetupError(f"Failed to setup auto impedance specification{label}. {e!s}") from e
