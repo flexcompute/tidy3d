@@ -720,10 +720,30 @@ jobs:
       uses: actions/cache/restore@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
       with:
         path: .testmondata
-        key: testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        key: testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
         restore-keys: |
-          testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch }}-
-          testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
+          testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
+          testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-
+          testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-
+
+    - name: telemetry-cache-exact-hit
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-hit == 'true'
+      run: echo "testmon cache exact hit"
+
+    - name: telemetry-cache-fallback-hit
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-hit != 'true' &&
+        steps.testmon-cache-restore.outputs.cache-matched-key != ''
+      run: echo "testmon cache fallback hit"
+
+    - name: telemetry-cache-miss
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-matched-key == ''
+      run: echo "testmon cache miss"
 
     - name: install-project
       env:
@@ -753,14 +773,29 @@ jobs:
       run: |
         if [[ "${TEST_SELECTION}" == "testmon" ]]; then
           echo "flags=--testmon --testmon-forceselect" >> "$GITHUB_OUTPUT"
+          echo "mode=testmon_forceselect" >> "$GITHUB_OUTPUT"
           echo "Using pytest testmon selection mode."
         elif [[ "${TEST_SELECTION}" == "full" && "${EVENT_NAME}" == "merge_group" ]]; then
           echo "flags=--testmon-noselect" >> "$GITHUB_OUTPUT"
+          echo "mode=full_with_testmon_collection" >> "$GITHUB_OUTPUT"
           echo "Using full test execution with testmon collection mode."
         else
           echo "flags=--no-testmon" >> "$GITHUB_OUTPUT"
+          echo "mode=full_no_testmon" >> "$GITHUB_OUTPUT"
           echo "Using full pytest execution mode."
         fi
+
+    - name: telemetry-selection-testmon
+      if: steps.pytest-selection-flags.outputs.mode == 'testmon_forceselect'
+      run: echo "pytest selection testmon forceselect"
+
+    - name: telemetry-selection-full-with-testmon-collection
+      if: steps.pytest-selection-flags.outputs.mode == 'full_with_testmon_collection'
+      run: echo "pytest selection full with testmon collection"
+
+    - name: telemetry-selection-full-no-testmon
+      if: steps.pytest-selection-flags.outputs.mode == 'full_no_testmon'
+      run: echo "pytest selection full no testmon"
 
     - name: run-tests-coverage
       env:
@@ -781,7 +816,7 @@ jobs:
       uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
       with:
         path: .testmondata
-        key: testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        key: testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
 
     - name: diff-coverage-report
       if: >- 
@@ -911,10 +946,30 @@ jobs:
       uses: actions/cache/restore@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
       with:
         path: .testmondata
-        key: testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        key: testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
         restore-keys: |
-          testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch }}-
-          testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
+          testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
+          testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-
+          testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-
+
+    - name: telemetry-cache-exact-hit
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-hit == 'true'
+      run: echo "testmon cache exact hit"
+
+    - name: telemetry-cache-fallback-hit
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-hit != 'true' &&
+        steps.testmon-cache-restore.outputs.cache-matched-key != ''
+      run: echo "testmon cache fallback hit"
+
+    - name: telemetry-cache-miss
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-matched-key == ''
+      run: echo "testmon cache miss"
 
     - name: install-poetry
       uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a  # v1.4.1
@@ -985,14 +1040,29 @@ jobs:
       run: |
         if [[ "${TEST_SELECTION}" == "testmon" ]]; then
           echo "flags=--testmon --testmon-forceselect" >> "$GITHUB_OUTPUT"
+          echo "mode=testmon_forceselect" >> "$GITHUB_OUTPUT"
           echo "Using pytest testmon selection mode."
         elif [[ "${TEST_SELECTION}" == "full" && "${EVENT_NAME}" == "merge_group" ]]; then
           echo "flags=--testmon-noselect" >> "$GITHUB_OUTPUT"
+          echo "mode=full_with_testmon_collection" >> "$GITHUB_OUTPUT"
           echo "Using full test execution with testmon collection mode."
         else
           echo "flags=--no-testmon" >> "$GITHUB_OUTPUT"
+          echo "mode=full_no_testmon" >> "$GITHUB_OUTPUT"
           echo "Using full pytest execution mode."
         fi
+
+    - name: telemetry-selection-testmon
+      if: steps.pytest-selection-flags.outputs.mode == 'testmon_forceselect'
+      run: echo "pytest selection testmon forceselect"
+
+    - name: telemetry-selection-full-with-testmon-collection
+      if: steps.pytest-selection-flags.outputs.mode == 'full_with_testmon_collection'
+      run: echo "pytest selection full with testmon collection"
+
+    - name: telemetry-selection-full-no-testmon
+      if: steps.pytest-selection-flags.outputs.mode == 'full_no_testmon'
+      run: echo "pytest selection full no testmon"
 
     - name: run-doctests
       env:
@@ -1017,7 +1087,7 @@ jobs:
       uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
       with:
         path: .testmondata
-        key: testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        key: testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
 
     - name: create-badge
       if: ${{ github.ref == 'refs/heads/develop' }}
