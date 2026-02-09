@@ -51,11 +51,6 @@ if TYPE_CHECKING:
 
     from .grid import EMEGrid, EMEGridSpec
 
-try:
-    import matplotlib as mpl
-except ImportError:
-    pass
-
 # maximum numbers of simulation parameters
 WARN_MONITOR_DATA_SIZE_GB = 10
 MAX_MONITOR_INTERNAL_DATA_SIZE_GB = 50
@@ -340,6 +335,8 @@ class EMESimulation(AbstractYeeGridSimulation):
         **kwargs: Any,
     ) -> Ax:
         """Plot the EME ports."""
+        import matplotlib as mpl
+
         kwargs.setdefault("linewidth", 0.4)
         kwargs.setdefault("colors", "black")
         rmin = self.geometry.bounds[0][self.axis]
@@ -387,6 +384,8 @@ class EMESimulation(AbstractYeeGridSimulation):
         Does nothing if ``eme_grid_spec`` is not :class:`.EMECompositeGrid`.
         Operates recursively on subgrids.
         """
+        import matplotlib as mpl
+
         if not isinstance(eme_grid_spec, EMECompositeGrid):
             return ax
         kwargs.setdefault("linewidth", 0.4)
@@ -436,6 +435,8 @@ class EMESimulation(AbstractYeeGridSimulation):
         **kwargs: Any,
     ) -> Ax:
         """Plot the EME grid."""
+        import matplotlib as mpl
+
         kwargs.setdefault("linewidth", 0.2)
         kwargs.setdefault("colors", "black")
         cell_boundaries = self.eme_grid.boundaries

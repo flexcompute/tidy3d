@@ -38,11 +38,21 @@ from .styles import (
     STRUCTURE_EPS_CMAP,
     STRUCTURE_EPS_CMAP_R,
     STRUCTURE_HEAT_COND_CMAP,
-    arrow_style,
 )
 from .visualization_spec import MATPLOTLIB_IMPORTED, VisualizationSpec
 
-apply_tidy3d_params()
+# Note: apply_tidy3d_params() is no longer called at import time to reduce import overhead.
+# It will be called automatically when matplotlib is first used for plotting.
+_tidy3d_style_applied = False
+
+
+def _ensure_tidy3d_style() -> None:
+    """Apply tidy3d matplotlib style if not already applied."""
+    global _tidy3d_style_applied
+    if not _tidy3d_style_applied:
+        apply_tidy3d_params()
+        _tidy3d_style_applied = True
+
 
 __all__ = [
     "ARROW_ALPHA",
@@ -64,7 +74,6 @@ __all__ = [
     "Polygon",
     "VisualizationSpec",
     "add_ax_if_none",
-    "arrow_style",
     "equal_aspect",
     "make_ax",
     "plot_params_abc",

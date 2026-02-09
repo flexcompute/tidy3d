@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib.util import find_spec
 from typing import TYPE_CHECKING
 
 from pydantic import Field, field_validator
@@ -10,23 +11,40 @@ from tidy3d.log import log
 if TYPE_CHECKING:
     from pydantic import ValidationInfo
 
-MATPLOTLIB_IMPORTED = True
-try:
-    from matplotlib.colors import is_color_like
-except ImportError:
-    is_color_like = None
-    MATPLOTLIB_IMPORTED = False
+# Cached reference to is_color_like, set on first use
+_is_color_like = None
+
+# Check if matplotlib is available without importing it
+MATPLOTLIB_IMPORTED = find_spec("matplotlib") is not None
 
 
 def is_valid_color(value: str) -> str:
+    global _is_color_like
+    # Check MATPLOTLIB_IMPORTED first to allow test mocking
     if not MATPLOTLIB_IMPORTED:
         log.warning(
             "matplotlib was not successfully imported, but is required "
             "to validate colors in the VisualizationSpec. The specified colors "
             "have not been validated."
         )
+        return value
+
+    if _is_color_like is None:
+        try:
+            from matplotlib.colors import is_color_like
+
+            _is_color_like = is_color_like
+        except ImportError:
+            _is_color_like = False  # Sentinel to indicate import failed
+
+    if _is_color_like is False:
+        log.warning(
+            "matplotlib was not successfully imported, but is required "
+            "to validate colors in the VisualizationSpec. The specified colors "
+            "have not been validated."
+        )
     else:
-        if is_color_like is not None and not is_color_like(value):
+        if not _is_color_like(value):
             raise ValueError(f"{value} is not a valid plotting color")
 
     return value

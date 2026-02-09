@@ -18,14 +18,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from matplotlib.patches import PathPatch
+    from matplotlib.path import Path
     from numpy.typing import NDArray
     from shapely.geometry.base import BaseGeometry
 
-try:
-    from matplotlib.patches import PathPatch
-    from matplotlib.path import Path
-except ImportError:
-    pass
 from numpy import array, concatenate, ones
 
 
@@ -58,6 +55,7 @@ class Polygon:
 def polygon_path(polygon: BaseGeometry) -> Path:
     """Constructs a compound matplotlib path from a Shapely or GeoJSON-like
     geometric object"""
+    from matplotlib.path import Path
 
     def coding(obj: Any) -> NDArray:
         # The codes will be all "LINETO" commands, except for "MOVETO"s at the
@@ -106,6 +104,8 @@ def polygon_patch(polygon: BaseGeometry, **kwargs: Any) -> PathPatch:
     >>> axis.add_patch(patch) # doctest: +SKIP
 
     """
+    from matplotlib.patches import PathPatch
+
     return PathPatch(polygon_path(polygon), **kwargs)
 
 
