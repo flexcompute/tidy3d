@@ -1281,6 +1281,8 @@ jobs:
     permissions:
       actions: write
       contents: read
+    with:
+      source_event: ${{ github.event_name }}
     uses: ./.github/workflows/tidy3d-testmon-cache-promote.yml
 
   workflow-validation:
