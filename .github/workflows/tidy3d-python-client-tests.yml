@@ -776,6 +776,36 @@ jobs:
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
 
+    - name: stage-testmon-cache-candidate
+      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      env:
+        CACHE_KEY: testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+      run: |
+        set -euo pipefail
+        candidate_dir="$RUNNER_TEMP/testmon-cache-candidate-local-py${{ matrix.python-version }}"
+        rm -rf "$candidate_dir"
+        mkdir -p "$candidate_dir"
+        cp -R .testmondata "$candidate_dir/.testmondata"
+        cat > "$candidate_dir/metadata.json" <<EOF
+        {
+          "cache_key": "${CACHE_KEY}",
+          "job_class": "local",
+          "runner_os": "${{ runner.os }}",
+          "python_version": "${{ matrix.python-version }}",
+          "source_workflow": "${{ github.workflow }}",
+          "source_run_id": "${{ github.run_id }}",
+          "source_run_attempt": "${{ github.run_attempt }}"
+        }
+        EOF
+
+    - name: upload-testmon-cache-candidate
+      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: testmon-cache-candidate-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/testmon-cache-candidate-local-py${{ matrix.python-version }}
+        retention-days: 1
+
     - name: save-testmon-cache
       if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
       uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
@@ -1011,6 +1041,36 @@ jobs:
         TOTAL_COVERAGE=$(poetry run coverage report --format=total)
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
+
+    - name: stage-testmon-cache-candidate
+      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      env:
+        CACHE_KEY: testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+      run: |
+        set -euo pipefail
+        candidate_dir="$RUNNER_TEMP/testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}"
+        rm -rf "$candidate_dir"
+        mkdir -p "$candidate_dir"
+        cp -R .testmondata "$candidate_dir/.testmondata"
+        cat > "$candidate_dir/metadata.json" <<EOF
+        {
+          "cache_key": "${CACHE_KEY}",
+          "job_class": "remote",
+          "platform": "${{ matrix.platform }}",
+          "python_version": "${{ matrix.python-version }}",
+          "source_workflow": "${{ github.workflow }}",
+          "source_run_id": "${{ github.run_id }}",
+          "source_run_attempt": "${{ github.run_attempt }}"
+        }
+        EOF
+
+    - name: upload-testmon-cache-candidate
+      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}
+        retention-days: 1
 
     - name: save-testmon-cache
       if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
