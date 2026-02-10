@@ -949,8 +949,8 @@ def test_outer_dot_streaming_preserved_dims():
     np.testing.assert_allclose(result.values, expected.transpose(*result.dims).values)
 
 
-def test_outer_dot_streaming_blocked_parity():
-    """Blocked and unblocked streaming kernels should agree."""
+def test_outer_dot_streaming_mode_axis_middle():
+    """Streaming kernel should match expected values with middle mode axes."""
     rng = np.random.default_rng(2)
 
     tan_dims = ("x", "z")
@@ -968,8 +968,8 @@ def test_outer_dot_streaming_blocked_parity():
     coords_1 = {**coords_base, "mode_index_0": np.arange(11)}
     coords_2 = {**coords_base, "mode_index_1": np.arange(10)}
 
-    dims_1 = ("x", "z", "f", "mode_index_0")
-    dims_2 = ("x", "z", "f", "mode_index_1")
+    dims_1 = ("x", "mode_index_0", "z", "f")
+    dims_2 = ("x", "mode_index_1", "z", "f")
     shape_1 = tuple(len(coords_1[dim]) for dim in dims_1)
     shape_2 = tuple(len(coords_2[dim]) for dim in dims_2)
 
@@ -986,8 +986,18 @@ def test_outer_dot_streaming_blocked_parity():
     }
 
     d_area = np.abs(rng.standard_normal((len(coords_base["x"]), len(coords_base["z"]))))
+    d_area_da = xr.DataArray(d_area, dims=tan_dims)
+    d_area_da = d_area_da.expand_dims(dim={"f": coords_base["f"]}, axis=2)
 
-    unblocked = ElectromagneticFieldData._outer_dot_numpy_kernel_streaming_unblocked(
+    expected = 0.25 * (
+        fields_1[e_1] * fields_2[h_2]
+        - fields_1[e_2] * fields_2[h_1]
+        - fields_1[h_1] * fields_2[e_2]
+        + fields_1[h_2] * fields_2[e_1]
+    )
+    expected = (expected * d_area_da).sum(dim=list(tan_dims))
+
+    result = ElectromagneticFieldData._outer_dot_numpy_kernel_streaming(
         fields_1=fields_1,
         fields_2=fields_2,
         outer_dim_1="mode_index_0",
@@ -999,22 +1009,9 @@ def test_outer_dot_streaming_blocked_parity():
         h_2=h_2,
         d_area=d_area,
     )
-    blocked = ElectromagneticFieldData._outer_dot_numpy_kernel_streaming_blocked(
-        fields_1=fields_1,
-        fields_2=fields_2,
-        outer_dim_1="mode_index_0",
-        outer_dim_2="mode_index_1",
-        tangential_dims=tan_dims,
-        e_1=e_1,
-        e_2=e_2,
-        h_1=h_1,
-        h_2=h_2,
-        d_area=d_area,
-        block_size=3,
-    )
 
-    assert blocked.dims == unblocked.dims
-    np.testing.assert_allclose(blocked.values, unblocked.values)
+    assert result.dims == ("f", "mode_index_0", "mode_index_1")
+    np.testing.assert_allclose(result.values, expected.transpose(*result.dims).values)
 
 
 def test_translated_copy():
