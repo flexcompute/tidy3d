@@ -1887,6 +1887,10 @@ def _make_lazy_proxy(
                 if pvt is not None:
                     object.__setattr__(self, "__pydantic_private__", pvt)
 
+                object.__setattr__(
+                    self, "__pydantic_extra__", getattr(target, "__pydantic_extra__", None)
+                )
+
                 if on_load is not None:
                     on_load(self)
 
