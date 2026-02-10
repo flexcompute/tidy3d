@@ -649,12 +649,14 @@ class LocalCache:
             if simulation is not None:
                 simulation_obj = simulation
             else:
-                simulation_obj = getattr(stub_data, "simulation", None)
-                if simulation_obj is None:
+                workflow_name = (
+                    workflow_type.value if isinstance(workflow_type, TaskType) else workflow_type
+                )
+                if workflow_name in {TaskType.MODAL_CM.value, TaskType.TERMINAL_CM.value}:
                     # ComponentModelerData types use 'modeler' instead of 'simulation'
-                    modeler = getattr(stub_data, "modeler", None)
-                    if modeler is not None:
-                        simulation_obj = modeler
+                    simulation_obj = getattr(stub_data, "modeler", None)
+                else:
+                    simulation_obj = getattr(stub_data, "simulation", None)
                 if simulation_obj is None:
                     log.debug(
                         "Failed storing local cache entry: Could not find simulation data in stub_data."

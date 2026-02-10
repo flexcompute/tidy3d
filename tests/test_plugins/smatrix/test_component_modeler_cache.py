@@ -2,26 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from types import SimpleNamespace
-
-import pytest
-
-import tidy3d as td
 from tests.test_plugins.smatrix.test_component_modeler import make_component_modeler
+from tests.test_web.test_local_cache import (
+    _isolate_local_cache,  # noqa: F401
+    _patch_run_pipeline,
+    _reset_counters,
+)
 from tests.utils import run_emulated
-from tidy3d.config import get_manager
+from tidy3d import SimulationDataMap
+from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.web.api import webapi as web
-from tidy3d.web.api.container import WebContainer
-from tidy3d.web.api.tidy3d_stub import Tidy3dStubData
 from tidy3d.web.cache import resolve_local_cache
-from tidy3d.web.core.task_core import BatchTask, SimulationTask
-
-MOCK_TASK_ID = "task-modeler-cache"
-
-# --- Fake pipeline maps ---
-TASK_TO_SIM: dict[str, td.Simulation] = {}
-PATH_TO_SIM: dict[str, td.Simulation] = {}
 
 
 class _FakeModelerStubData:
@@ -34,9 +25,6 @@ class _FakeModelerStubData:
     """
 
     def __init__(self, modeler):
-        from tidy3d import SimulationDataMap
-        from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
-
         sim_dict = modeler.sim_dict
         batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
         port_data = SimulationDataMap(
@@ -54,117 +42,18 @@ class _FakeModelerStubData:
         return getattr(self._modeler_data, name)
 
 
-@pytest.fixture(autouse=True)
-def _isolate_local_cache(tmp_path, monkeypatch):
-    """Keep cache operations in a temp dir and avoid moving/deleting real cache."""
-    import tidy3d.web.cache as cache_mod
-    from tidy3d.config import get_manager
-
-    real_remove_cache_dir = cache_mod._remove_cache_dir
-    temp_cache_dir = (tmp_path / "cache").resolve()
-
-    def _safe_remove_cache_dir(path, *, recreate):
-        target = Path(path).resolve()
-        allowed_root = tmp_path.resolve().parent
-        try:
-            target.relative_to(allowed_root)
-        except ValueError:
-            return
-        real_remove_cache_dir(target, recreate=recreate)
-
-    monkeypatch.setattr(cache_mod, "_CACHE", None)
-    monkeypatch.setenv("TIDY3D_LOCAL_CACHE__ENABLED", "true")
-    monkeypatch.setenv("TIDY3D_LOCAL_CACHE__DIRECTORY", str(temp_cache_dir))
-    manager = get_manager()
-    manager._runtime_overrides.clear()
-    manager._reload()
-    monkeypatch.setattr(cache_mod, "_remove_cache_dir", _safe_remove_cache_dir)
-    yield
-    cache_mod.LocalCache(
-        directory=temp_cache_dir,
-        max_entries=td.config.local_cache.max_entries,
-        max_size_gb=td.config.local_cache.max_size_gb,
-    ).clear(hard=True)
-    cache_mod._CACHE = None
-
-
-def _reset_fake_maps():
-    TASK_TO_SIM.clear()
-    PATH_TO_SIM.clear()
-
-
-def _patch_run_pipeline(monkeypatch, modeler):
-    """Patch upload, start, monitor, download, and postprocess for modeler runs."""
-    counters = {"upload": 0, "start": 0, "monitor": 0, "download": 0}
-    _reset_fake_maps()
-
-    fake_stub = _FakeModelerStubData(modeler)
-
-    def _fake_upload(**kwargs):
-        counters["upload"] += 1
-        task_id = f"{MOCK_TASK_ID}-{counters['upload']}"
-        sim = kwargs.get("simulation")
-        if sim is not None:
-            TASK_TO_SIM[task_id] = sim
-        return task_id
-
-    def _fake_start(task_id, **kwargs):
-        counters["start"] += 1
-
-    def _fake_monitor(task_id, verbose=True):
-        counters["monitor"] += 1
-
-    def _fake_download(*, task_id, path, **kwargs):
-        counters["download"] += 1
-        Path(path).write_text(f"payload:{task_id}")
-
-    def _fake_postprocess(path, lazy=False):
-        return fake_stub
-
-    def _fake__check_folder(*args, **kwargs):
-        pass
-
-    def _fake_status(self):
-        return "success"
-
-    monkeypatch.setattr(WebContainer, "_check_folder", _fake__check_folder)
-    monkeypatch.setattr(web, "upload", _fake_upload)
-    monkeypatch.setattr(web, "start", _fake_start)
-    monkeypatch.setattr(web, "monitor", _fake_monitor)
-    monkeypatch.setattr(web, "download", _fake_download)
-    monkeypatch.setattr(web, "estimate_cost", lambda *args, **kwargs: 0.0)
-    monkeypatch.setattr(Tidy3dStubData, "postprocess", staticmethod(_fake_postprocess))
-    monkeypatch.setattr(
-        web,
-        "get_info",
-        lambda task_id, verbose=True: SimpleNamespace(
-            solverVersion="solver-1", taskType="MODAL_CM"
-        ),
-    )
-    monkeypatch.setattr(
-        web,
-        "load_simulation",
-        lambda task_id, *args, **kwargs: modeler,
-    )
-    monkeypatch.setattr(
-        SimulationTask, "get", lambda *args, **kwargs: SimpleNamespace(taskType="MODAL_CM")
-    )
-    monkeypatch.setattr(
-        BatchTask, "detail", lambda *args, **kwargs: SimpleNamespace(status="success")
-    )
-    return counters
-
-
-def _reset_counters(counters):
-    for key in counters:
-        counters[key] = 0
-
-
 def test_modal_component_modeler_cache_hit(monkeypatch, tmp_path):
     """Test that running a ModalComponentModeler via web.run stores results in cache
     and that a second identical run gets a cache hit (no upload/start/monitor/download)."""
     modeler = make_component_modeler()
-    counters = _patch_run_pipeline(monkeypatch, modeler)
+    fake_stub = _FakeModelerStubData(modeler)
+    counters = _patch_run_pipeline(
+        monkeypatch,
+        task_type="MODAL_CM",
+        postprocess=lambda path, lazy=False: fake_stub,
+        load_simulation_fn=lambda task_id, path="simulation.json", verbose=True: modeler,
+        patch_autograd=False,
+    )
     cache = resolve_local_cache(use_cache=True)
     cache.clear()
 
