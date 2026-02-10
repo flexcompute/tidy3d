@@ -181,4 +181,6 @@ jobs:
 
       - name: report-existing-cache
         if: steps.cache-lookup.outputs.cache-hit == 'true'
-        run: echo "Cache already present for key '${{ matrix.candidate.cache_key }}'; skipping save."
+        env:
+          CACHE_KEY: ${{ matrix.candidate.cache_key }}
+        run: echo "Cache already present for key '$CACHE_KEY'; skipping save."
