@@ -1,12 +1,7 @@
 name: "public/tidy3d/promote-testmon-cache"
 
 on:
-  workflow_dispatch:
-    inputs:
-      source_run_id:
-        description: "Source merge_group run id from python-client-tests workflow"
-        required: true
-        type: string
+  workflow_call:
 
 permissions:
   contents: read
@@ -17,71 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       candidates: ${{ steps.build-candidates.outputs.candidates }}
-      source_run_id: ${{ steps.verify-source-run.outputs.source_run_id }}
     steps:
-      - name: verify-source-run
-        id: verify-source-run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          INPUT_SOURCE_RUN_ID: ${{ github.event.inputs.source_run_id }}
-        run: |
-          set -euo pipefail
-          if ! [[ "$INPUT_SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
-            echo "::error::source_run_id must be numeric."
-            exit 1
-          fi
-          run_json=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${INPUT_SOURCE_RUN_ID}")
-          run_event=$(jq -r '.event // ""' <<< "$run_json")
-          run_status=$(jq -r '.status // ""' <<< "$run_json")
-          run_workflow_path=$(jq -r '.path // ""' <<< "$run_json")
-          if [[ "$run_event" != "merge_group" ]]; then
-            echo "::error::Source run ${INPUT_SOURCE_RUN_ID} event is '$run_event'; expected 'merge_group'."
-            exit 1
-          fi
-          if [[ "$run_workflow_path" != ".github/workflows/tidy3d-python-client-tests.yml" ]]; then
-            echo "::error::Source run ${INPUT_SOURCE_RUN_ID} path '$run_workflow_path' is not tidy3d-python-client-tests.yml."
-            exit 1
-          fi
-          max_attempts=40
-          poll_sleep_seconds=15
-          attempts=0
-          while [[ "$run_status" != "completed" && "$attempts" -lt "$max_attempts" ]]; do
-            attempts=$((attempts + 1))
-            echo "Source run ${INPUT_SOURCE_RUN_ID} status is '$run_status'; waiting for completion (${attempts}/${max_attempts})."
-            sleep "$poll_sleep_seconds"
-            run_json=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${INPUT_SOURCE_RUN_ID}")
-            run_status=$(jq -r '.status // ""' <<< "$run_json")
-          done
-          if [[ "$run_status" != "completed" ]]; then
-            echo "::error::Source run ${INPUT_SOURCE_RUN_ID} did not complete before timeout."
-            exit 1
-          fi
-          run_conclusion=$(jq -r '.conclusion // ""' <<< "$run_json")
-          if [[ "$run_conclusion" != "success" ]]; then
-            echo "::error::Source run ${INPUT_SOURCE_RUN_ID} conclusion is '$run_conclusion'; expected 'success'."
-            exit 1
-          fi
-          echo "source_run_id=$INPUT_SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
-
-      - name: list-cache-candidate-artifacts
-        id: list-artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_RUN_ID: ${{ steps.verify-source-run.outputs.source_run_id }}
-        run: |
-          set -euo pipefail
-          artifact_json=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100")
-          count=$(jq '[.artifacts[] | select(.expired == false and (.name | startswith("testmon-cache-candidate-")))] | length' <<< "$artifact_json")
-          echo "count=${count}" >> "$GITHUB_OUTPUT"
-          echo "Discovered ${count} cache candidate artifacts."
-
       - name: download-cache-candidate-artifacts
-        if: steps.list-artifacts.outputs.count != '0'
+        id: download-artifacts
+        continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.verify-source-run.outputs.source_run_id }}
           pattern: testmon-cache-candidate-*
           path: cache-candidates
           merge-multiple: false
@@ -89,10 +25,11 @@ jobs:
       - name: build-cache-candidate-matrix
         id: build-candidates
         env:
-          LIST_COUNT: ${{ steps.list-artifacts.outputs.count }}
+          DOWNLOAD_OUTCOME: ${{ steps.download-artifacts.outcome }}
         run: |
           set -euo pipefail
-          if [[ "$LIST_COUNT" == "0" ]]; then
+          if [[ "$DOWNLOAD_OUTCOME" != "success" ]]; then
+            echo "No testmon cache candidate artifacts found in this run."
             echo "candidates=[]" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -138,9 +75,6 @@ jobs:
       - name: download-cache-candidate
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ needs.discover-cache-candidates.outputs.source_run_id }}
           name: ${{ matrix.candidate.artifact_name }}
           path: cache-candidate
 

@@ -1266,8 +1266,8 @@ jobs:
       test_type: ${{ needs.determine-test-scope.outputs.test_type }}
     secrets: inherit # zizmor: ignore[secrets-inherit]
 
-  dispatch-testmon-cache-promotion:
-    name: dispatch-testmon-cache-promotion
+  promote-testmon-cache:
+    name: promote-testmon-cache
     needs:
       - determine-test-scope
       - local-tests
@@ -1278,20 +1278,10 @@ jobs:
       github.event_name == 'merge_group' &&
       needs.local-tests.result == 'success' &&
       needs.remote-tests.result == 'success'
-    runs-on: ubuntu-latest
     permissions:
       actions: write
       contents: read
-    steps:
-      - name: trigger-cache-promotion-workflow
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh workflow run tidy3d-testmon-cache-promote.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            -f source_run_id="$GITHUB_RUN_ID"
-          echo "Triggered testmon cache promotion for run $GITHUB_RUN_ID."
+    uses: ./.github/workflows/tidy3d-testmon-cache-promote.yml
 
   workflow-validation:
     name: workflow-validation
@@ -1311,7 +1301,7 @@ jobs:
       - verify-version-consistency
       - test-submodules
       - extras-integration-tests
-      - dispatch-testmon-cache-promotion
+      - promote-testmon-cache
     runs-on: ubuntu-latest
     steps:
       - name: move-type-imports
@@ -1392,10 +1382,10 @@ jobs:
           echo "❌ tidy3d-extras integration tests failed."
           exit 1
 
-      - name: check-testmon-cache-promotion-dispatch
-        if: ${{ github.event_name == 'merge_group' && needs.dispatch-testmon-cache-promotion.result != 'success' && needs.dispatch-testmon-cache-promotion.result != 'skipped' }}
+      - name: check-testmon-cache-promotion
+        if: ${{ github.event_name == 'merge_group' && needs.promote-testmon-cache.result != 'success' && needs.promote-testmon-cache.result != 'skipped' }}
         run: |
-          echo "❌ Failed to dispatch testmon cache promotion workflow."
+          echo "❌ Testmon cache promotion workflow failed."
           exit 1
 
       - name: all-checks-passed
