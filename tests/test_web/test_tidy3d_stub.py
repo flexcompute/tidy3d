@@ -164,6 +164,27 @@ def test_stub_data_lazy_loading(tmp_path):
         td.log.set_capture(False)
 
 
+@responses.activate
+def test_sim_data_lazy_materialize_then_copy(tmp_path):
+    """Regression test for copying lazily loaded SimulationData after materialization."""
+    sim_data = make_sim_data()
+    file_path = os.path.join(tmp_path, "test_lazy_copy.hdf5")
+    sim_data.to_file(file_path)
+
+    sim_data_lazy = SimulationData.from_file(file_path, lazy=True)
+    assert is_lazy_object(sim_data_lazy)
+
+    # Materialize the proxy first, then verify regular copy semantics work.
+    _ = sim_data_lazy.data
+    assert isinstance(sim_data_lazy, SimulationData)
+    assert hasattr(sim_data_lazy, "__pydantic_extra__")
+
+    sim_data_copy = sim_data_lazy.copy(deep=False)
+    assert isinstance(sim_data_copy, SimulationData)
+    assert sim_data_copy.simulation == sim_data_lazy.simulation
+    assert len(sim_data_copy.data) == len(sim_data_lazy.data)
+
+
 @pytest.mark.parametrize(
     "path_builder",
     (
