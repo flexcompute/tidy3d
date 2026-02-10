@@ -32,18 +32,33 @@ jobs:
           fi
           run_json=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${INPUT_SOURCE_RUN_ID}")
           run_event=$(jq -r '.event // ""' <<< "$run_json")
-          run_conclusion=$(jq -r '.conclusion // ""' <<< "$run_json")
+          run_status=$(jq -r '.status // ""' <<< "$run_json")
           run_workflow_path=$(jq -r '.path // ""' <<< "$run_json")
           if [[ "$run_event" != "merge_group" ]]; then
             echo "::error::Source run ${INPUT_SOURCE_RUN_ID} event is '$run_event'; expected 'merge_group'."
             exit 1
           fi
-          if [[ "$run_conclusion" != "success" ]]; then
-            echo "::error::Source run ${INPUT_SOURCE_RUN_ID} conclusion is '$run_conclusion'; expected 'success'."
-            exit 1
-          fi
           if [[ "$run_workflow_path" != ".github/workflows/tidy3d-python-client-tests.yml" ]]; then
             echo "::error::Source run ${INPUT_SOURCE_RUN_ID} path '$run_workflow_path' is not tidy3d-python-client-tests.yml."
+            exit 1
+          fi
+          max_attempts=40
+          poll_sleep_seconds=15
+          attempts=0
+          while [[ "$run_status" != "completed" && "$attempts" -lt "$max_attempts" ]]; do
+            attempts=$((attempts + 1))
+            echo "Source run ${INPUT_SOURCE_RUN_ID} status is '$run_status'; waiting for completion (${attempts}/${max_attempts})."
+            sleep "$poll_sleep_seconds"
+            run_json=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${INPUT_SOURCE_RUN_ID}")
+            run_status=$(jq -r '.status // ""' <<< "$run_json")
+          done
+          if [[ "$run_status" != "completed" ]]; then
+            echo "::error::Source run ${INPUT_SOURCE_RUN_ID} did not complete before timeout."
+            exit 1
+          fi
+          run_conclusion=$(jq -r '.conclusion // ""' <<< "$run_json")
+          if [[ "$run_conclusion" != "success" ]]; then
+            echo "::error::Source run ${INPUT_SOURCE_RUN_ID} conclusion is '$run_conclusion'; expected 'success'."
             exit 1
           fi
           echo "source_run_id=$INPUT_SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
@@ -136,7 +151,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f cache-candidate/metadata.json
-          test -d cache-candidate/.testmondata
+          test -f cache-candidate/.testmondata
           actual_cache_key=$(jq -r '.cache_key // empty' cache-candidate/metadata.json)
           if [[ -z "$actual_cache_key" ]]; then
             echo "::error::Missing cache_key in metadata for $ARTIFACT_NAME."
