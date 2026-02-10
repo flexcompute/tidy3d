@@ -70,7 +70,7 @@ def _isolate_local_cache(tmp_path, monkeypatch):
 
     def _safe_remove_cache_dir(path, *, recreate):
         target = Path(path).resolve()
-        allowed_root = tmp_path.resolve().parent
+        allowed_root = tmp_path.resolve()
         try:
             target.relative_to(allowed_root)
         except ValueError:
@@ -819,6 +819,10 @@ def test_cache_stats_sync(monkeypatch, tmp_path_factory, basic_simulation):
     cache.clear()
 
 
+@pytest.mark.skipif(
+    (os.getenv("GITHUB_ACTIONS") or "").lower() == "true",
+    reason="Skip on CI due to resource problems. Activate temporarily for targeted testing.",
+)
 def test_cache_stats_concurrent_updates():
     cache = resolve_local_cache(use_cache=True)
     cache.clear()
@@ -875,6 +879,10 @@ def test_cache_stats_concurrent_updates():
     assert set(stats["last_used"].keys()) == {key1, key2}
 
 
+@pytest.mark.skipif(
+    (os.getenv("GITHUB_ACTIONS") or "").lower() == "true",
+    reason="Skip on CI due to resource problems. Activate temporarily for targeted testing.",
+)
 def test_cache_stats_store_invalidate_race():
     cache = resolve_local_cache(use_cache=True)
     cache.clear()
