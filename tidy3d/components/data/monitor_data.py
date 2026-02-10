@@ -1081,7 +1081,14 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         tangential_dims: tuple[str, str],
         mode_slice: slice = SLICE_ALL,
     ) -> NDArray:
-        """Slice one preserve/frequency point and return ``(mode, xy)`` matrix."""
+        """Return a ``(mode, xy)`` view for one preserve/frequency point.
+
+        This helper is intentionally strict about expected remaining dimensions:
+        after indexing preserved dims and frequency, the data must reduce to
+        ``(mode_dim, tangential_dim_0, tangential_dim_1)`` in any order.
+        Singleton preserved/frequency axes are accepted to support alignment-
+        generated broadcast dimensions.
+        """
         dim_to_axis = {dim: axis for axis, dim in enumerate(dims)}
         idx = [slice(None)] * arr.ndim
         indexed_dims = set()
@@ -1142,10 +1149,17 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         h_2: str,
         d_area: NDArray,
     ) -> DataArray:
-        """Blocked streaming kernel for outer-dot mode overlaps."""
+        """Compute ``outer_dot`` with frequency/preserve streaming and mode blocking.
+
+        The kernel avoids materializing mode-pair broadcast tensors of shape
+        ``(mode_left, mode_right, x, y)`` by iterating over frequency/preserved
+        indices and accumulating blockwise matrix products over mode chunks.
+        """
         data_array_temp_1 = list(fields_1.values())[0]
         data_array_temp_2 = list(fields_2.values())[0]
 
+        # Keep output coord ordering consistent with the existing outer_dot contract:
+        # preserved dims + ``f`` from fields_1, then ``mode_index_0`` and ``mode_index_1``.
         coords = {key: val.to_numpy() for key, val in data_array_temp_1.coords.items()}
         for dim in tangential_dims:
             coords.pop(dim)
@@ -1196,6 +1210,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         num_grid_points = d_area.size
         itemsize = np.dtype(np.result_type(fields_1[e_1].dtype, fields_2[e_1].dtype)).itemsize
+        # Heuristic: choose a mode block size that targets bounded temporary allocations,
+        # then clamp to practical limits to avoid tiny or overly large chunks.
         if num_grid_points == 0:
             block_size = OUTER_DOT_BLOCK_MAX_SIZE
         else:
@@ -1203,6 +1219,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             block_size = max(OUTER_DOT_BLOCK_MIN_SIZE, block_size)
             block_size = min(OUTER_DOT_BLOCK_MAX_SIZE, block_size)
 
+        # Decompose:
+        # 0.25 * (E1 x H2 - E2 x H1 - H1 x E2 + H2 x E1)
+        # into signed matrix products that can be accumulated blockwise.
         term_specs = (
             (1.0, e_1, h_2),
             (-1.0, e_2, h_1),
