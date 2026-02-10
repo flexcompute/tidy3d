@@ -121,6 +121,11 @@ MIN_ANGULAR_SAMPLES_SPHERE = 10
 # Threshold for cos(theta) to avoid unphysically large amplitudes near grazing angles
 COS_THETA_THRESH = 1e-5
 MODE_INTERP_EXTRAPOLATION_TOLERANCE = 1e-2
+OUTER_DOT_UNBLOCKED_MAX_BYTES = 128 * 1024**2
+OUTER_DOT_BLOCK_TARGET_BYTES = 64 * 1024**2
+OUTER_DOT_BLOCK_MIN_SIZE = 8
+OUTER_DOT_BLOCK_MAX_SIZE = 64
+SLICE_ALL = slice(None)
 
 GRID_CORRECTION_TYPE = Union[
     float,
@@ -1018,7 +1023,6 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         freq_self = Index(coords[0]["f"].values)
         freq_other = Index(coords[1]["f"].values)
         common_freqs = freq_self.intersection(freq_other, sort=False)
-        f = common_freqs.to_numpy()
         # Keep frequency order consistent with the current data while aligning the other dataset.
         isel1 = freq_self.get_indexer(common_freqs)
         isel2 = freq_other.get_indexer(common_freqs)
@@ -1044,49 +1048,18 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                     dim={"mode_index_1": [0]}, axis=len(fields_other[key].shape)
                 )
 
-        try:
-            result = self._outer_dot_numpy_kernel_streaming(
-                fields_1=fields_self,
-                fields_2=fields_other,
-                outer_dim_1="mode_index_0",
-                outer_dim_2="mode_index_1",
-                tangential_dims=tuple(tan_dims),
-                e_1=e_1,
-                e_2=e_2,
-                h_1=h_1,
-                h_2=h_2,
-                d_area=self._diff_area.to_numpy(),
-            )
-        except (IndexError, KeyError, ValueError):
-            # Internal fallback for parity/debugging on unexpected dim layouts.
-            d_area = self._diff_area.expand_dims(dim={"f": f}, axis=2).to_numpy()
-
-            # function to apply at each pair of mode indices before integrating
-            def fn(fields_1: dict[str, NDArray], fields_2: dict[str, NDArray]) -> NDArray:
-                e_self_1 = fields_1[e_1]
-                e_self_2 = fields_1[e_2]
-                h_self_1 = fields_1[h_1]
-                h_self_2 = fields_1[h_2]
-                e_other_1 = fields_2[e_1]
-                e_other_2 = fields_2[e_2]
-                h_other_1 = fields_2[h_1]
-                h_other_2 = fields_2[h_2]
-
-                # Cross products of fields
-                e_self_x_h_other = e_self_1 * h_other_2 - e_self_2 * h_other_1
-                h_self_x_e_other = h_self_1 * e_other_2 - h_self_2 * e_other_1
-
-                summand = 0.25 * (e_self_x_h_other - h_self_x_e_other) * d_area
-                return summand
-
-            result = self._outer_fn_summation(
-                fields_1=fields_self,
-                fields_2=fields_other,
-                outer_dim_1="mode_index_0",
-                outer_dim_2="mode_index_1",
-                sum_dims=tan_dims,
-                fn=fn,
-            )
+        result = self._outer_dot_numpy_kernel_streaming(
+            fields_1=fields_self,
+            fields_2=fields_other,
+            outer_dim_1="mode_index_0",
+            outer_dim_2="mode_index_1",
+            tangential_dims=tuple(tan_dims),
+            e_1=e_1,
+            e_2=e_2,
+            h_1=h_1,
+            h_2=h_2,
+            d_area=self._diff_area.to_numpy(),
+        )
 
         # Remove mode index coordinate if the input did not have it
         if not modes_in_self:
@@ -1107,6 +1080,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         freq_index: int,
         mode_dim: str,
         tangential_dims: tuple[str, str],
+        mode_slice: slice = SLICE_ALL,
     ) -> NDArray:
         """Slice one preserve/frequency point and return ``(mode, xy)`` matrix."""
         dim_to_axis = {dim: axis for axis, dim in enumerate(dims)}
@@ -1137,6 +1111,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         else:
             idx[freq_axis] = freq_index
 
+        mode_axis = dim_to_axis.get(mode_dim)
+        if mode_axis is None:
+            raise ValueError("Mode dimension missing in streaming outer_dot kernel.")
+        idx[mode_axis] = mode_slice
+
         sliced = arr[tuple(idx)]
         remaining_dims = [dim for dim in dims if dim not in indexed_dims]
         required_dims = {mode_dim, tangential_dims[0], tangential_dims[1]}
@@ -1152,7 +1131,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return mode_xy.reshape((mode_xy.shape[0], -1))
 
     @staticmethod
-    def _outer_dot_numpy_kernel_streaming(
+    def _outer_dot_numpy_kernel_streaming_unblocked(
         fields_1: dict[str, xr.DataArray],
         fields_2: dict[str, xr.DataArray],
         outer_dim_1: str,
@@ -1164,7 +1143,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         h_2: str,
         d_area: NDArray,
     ) -> DataArray:
-        """Streaming outer-dot kernel that avoids mode-pair broadcasting in memory."""
+        """Unblocked frequency-streaming outer-dot kernel."""
         data_array_temp_1 = list(fields_1.values())[0]
         data_array_temp_2 = list(fields_2.values())[0]
 
@@ -1228,6 +1207,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                         freq_index=freq_index,
                         mode_dim=outer_dim_1,
                         tangential_dims=tangential_dims,
+                        mode_slice=slice(None),
                     )
                     right_mats[comp] = ElectromagneticFieldData._slice_mode_xy_matrix(
                         right_meta[comp][0],
@@ -1238,6 +1218,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                         freq_index=freq_index,
                         mode_dim=outer_dim_2,
                         tangential_dims=tangential_dims,
+                        mode_slice=slice(None),
                     )
 
                 if left_mats[e_1].shape[1] != d_area.size:
@@ -1259,6 +1240,186 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 data[tuple(idx_data)] = out
 
         return DataArray(data, coords=coords)
+
+    @staticmethod
+    def _outer_dot_numpy_kernel_streaming_blocked(
+        fields_1: dict[str, xr.DataArray],
+        fields_2: dict[str, xr.DataArray],
+        outer_dim_1: str,
+        outer_dim_2: str,
+        tangential_dims: tuple[str, str],
+        e_1: str,
+        e_2: str,
+        h_1: str,
+        h_2: str,
+        d_area: NDArray,
+        block_size: int,
+    ) -> DataArray:
+        """Blocked streaming kernel to cap peak memory at ``O(block_size * S)``."""
+        data_array_temp_1 = list(fields_1.values())[0]
+        data_array_temp_2 = list(fields_2.values())[0]
+
+        coords = {key: val.to_numpy() for key, val in data_array_temp_1.coords.items()}
+        for dim in tangential_dims:
+            coords.pop(dim)
+        coords.pop(outer_dim_1)
+        coords[outer_dim_1] = data_array_temp_1.coords[outer_dim_1].to_numpy()
+        coords[outer_dim_2] = data_array_temp_2.coords[outer_dim_2].to_numpy()
+        coords = {key: val for key, val in coords.items() if len(val.shape) != 0}
+
+        if "f" not in coords:
+            raise ValueError("Frequency coordinate missing in streaming outer_dot kernel.")
+
+        dims = tuple(coords.keys())
+        shape = [len(val) for val in coords.values()]
+        dtype = np.result_type(
+            np.asarray(fields_1[e_1].data).dtype,
+            np.asarray(fields_1[e_2].data).dtype,
+            np.asarray(fields_1[h_1].data).dtype,
+            np.asarray(fields_1[h_2].data).dtype,
+            np.asarray(fields_2[e_1].data).dtype,
+            np.asarray(fields_2[e_2].data).dtype,
+            np.asarray(fields_2[h_1].data).dtype,
+            np.asarray(fields_2[h_2].data).dtype,
+            np.asarray(d_area).dtype,
+        )
+        data = np.zeros(shape, dtype=dtype)
+
+        preserve_dims = tuple(dim for dim in dims if dim not in {"f", outer_dim_1, outer_dim_2})
+        preserve_sizes = [len(coords[dim]) for dim in preserve_dims]
+        preserve_indices = (
+            itertools.product(*[range(size) for size in preserve_sizes]) if preserve_sizes else [()]
+        )
+
+        dim_to_data_axis = {dim: axis for axis, dim in enumerate(dims)}
+        n_freq = len(coords["f"])
+        d_area = np.asarray(d_area).reshape(-1)
+        num_modes_left = len(coords[outer_dim_1])
+        num_modes_right = len(coords[outer_dim_2])
+
+        field_components = (e_1, e_2, h_1, h_2)
+        left_meta = {
+            comp: (np.asarray(fields_1[comp].data), tuple(fields_1[comp].dims))
+            for comp in field_components
+        }
+        right_meta = {
+            comp: (np.asarray(fields_2[comp].data), tuple(fields_2[comp].dims))
+            for comp in field_components
+        }
+
+        term_specs = (
+            (1.0, e_1, h_2),
+            (-1.0, e_2, h_1),
+            (-1.0, h_1, e_2),
+            (1.0, h_2, e_1),
+        )
+
+        block_size_left = min(num_modes_left, block_size)
+        block_size_right = min(num_modes_right, block_size)
+
+        for preserve_index in preserve_indices:
+            for freq_index in range(n_freq):
+                out = np.zeros((num_modes_left, num_modes_right), dtype=dtype)
+
+                for sign, left_comp, right_comp in term_specs:
+                    for i0 in range(0, num_modes_left, block_size_left):
+                        i0_end = min(i0 + block_size_left, num_modes_left)
+                        left_block = ElectromagneticFieldData._slice_mode_xy_matrix(
+                            left_meta[left_comp][0],
+                            left_meta[left_comp][1],
+                            preserve_dims=preserve_dims,
+                            preserve_index=preserve_index,
+                            freq_dim="f",
+                            freq_index=freq_index,
+                            mode_dim=outer_dim_1,
+                            tangential_dims=tangential_dims,
+                            mode_slice=slice(i0, i0_end),
+                        )
+
+                        if left_block.shape[1] != d_area.size:
+                            raise ValueError(
+                                "Tangential area shape mismatch in streaming outer_dot kernel."
+                            )
+
+                        for i1 in range(0, num_modes_right, block_size_right):
+                            i1_end = min(i1 + block_size_right, num_modes_right)
+                            right_block = ElectromagneticFieldData._slice_mode_xy_matrix(
+                                right_meta[right_comp][0],
+                                right_meta[right_comp][1],
+                                preserve_dims=preserve_dims,
+                                preserve_index=preserve_index,
+                                freq_dim="f",
+                                freq_index=freq_index,
+                                mode_dim=outer_dim_2,
+                                tangential_dims=tangential_dims,
+                                mode_slice=slice(i1, i1_end),
+                            )
+                            weighted_right = right_block * d_area
+                            out[i0:i0_end, i1:i1_end] += sign * (left_block @ weighted_right.T)
+
+                idx_data = [slice(None)] * len(dims)
+                for dim, ind in zip(preserve_dims, preserve_index):
+                    idx_data[dim_to_data_axis[dim]] = ind
+                idx_data[dim_to_data_axis["f"]] = freq_index
+                data[tuple(idx_data)] = 0.25 * out
+
+        return DataArray(data, coords=coords)
+
+    @staticmethod
+    def _outer_dot_numpy_kernel_streaming(
+        fields_1: dict[str, xr.DataArray],
+        fields_2: dict[str, xr.DataArray],
+        outer_dim_1: str,
+        outer_dim_2: str,
+        tangential_dims: tuple[str, str],
+        e_1: str,
+        e_2: str,
+        h_1: str,
+        h_2: str,
+        d_area: NDArray,
+    ) -> DataArray:
+        """Adaptive streaming kernel: unblocked for small working sets, blocked for large ones."""
+        num_modes_left = fields_1[e_1].sizes[outer_dim_1]
+        num_modes_right = fields_2[e_1].sizes[outer_dim_2]
+        num_grid_points = int(np.size(d_area))
+        itemsize = np.dtype(np.result_type(fields_1[e_1].dtype, fields_2[e_1].dtype)).itemsize
+
+        # Unblocked kernel keeps four left and four right mode-by-grid matrices in memory.
+        unblocked_bytes = 4 * (num_modes_left + num_modes_right) * num_grid_points * itemsize
+        if unblocked_bytes <= OUTER_DOT_UNBLOCKED_MAX_BYTES:
+            return ElectromagneticFieldData._outer_dot_numpy_kernel_streaming_unblocked(
+                fields_1=fields_1,
+                fields_2=fields_2,
+                outer_dim_1=outer_dim_1,
+                outer_dim_2=outer_dim_2,
+                tangential_dims=tangential_dims,
+                e_1=e_1,
+                e_2=e_2,
+                h_1=h_1,
+                h_2=h_2,
+                d_area=d_area,
+            )
+
+        if num_grid_points == 0:
+            block_size = OUTER_DOT_BLOCK_MAX_SIZE
+        else:
+            block_size = int(OUTER_DOT_BLOCK_TARGET_BYTES // (num_grid_points * itemsize))
+            block_size = max(OUTER_DOT_BLOCK_MIN_SIZE, block_size)
+            block_size = min(OUTER_DOT_BLOCK_MAX_SIZE, block_size)
+
+        return ElectromagneticFieldData._outer_dot_numpy_kernel_streaming_blocked(
+            fields_1=fields_1,
+            fields_2=fields_2,
+            outer_dim_1=outer_dim_1,
+            outer_dim_2=outer_dim_2,
+            tangential_dims=tangential_dims,
+            e_1=e_1,
+            e_2=e_2,
+            h_1=h_1,
+            h_2=h_2,
+            d_area=d_area,
+            block_size=block_size,
+        )
 
     @staticmethod
     def _outer_fn_summation(

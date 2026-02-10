@@ -949,6 +949,74 @@ def test_outer_dot_streaming_preserved_dims():
     np.testing.assert_allclose(result.values, expected.transpose(*result.dims).values)
 
 
+def test_outer_dot_streaming_blocked_parity():
+    """Blocked and unblocked streaming kernels should agree."""
+    rng = np.random.default_rng(2)
+
+    tan_dims = ("x", "z")
+    e_1 = "E" + tan_dims[0]
+    e_2 = "E" + tan_dims[1]
+    h_1 = "H" + tan_dims[0]
+    h_2 = "H" + tan_dims[1]
+    field_components = (e_1, e_2, h_1, h_2)
+
+    coords_base = {
+        "x": np.linspace(-1, 1, 9),
+        "z": np.linspace(-2, 2, 7),
+        "f": np.array([2.2e14, 2.5e14]),
+    }
+    coords_1 = {**coords_base, "mode_index_0": np.arange(11)}
+    coords_2 = {**coords_base, "mode_index_1": np.arange(10)}
+
+    dims_1 = ("x", "z", "f", "mode_index_0")
+    dims_2 = ("x", "z", "f", "mode_index_1")
+    shape_1 = tuple(len(coords_1[dim]) for dim in dims_1)
+    shape_2 = tuple(len(coords_2[dim]) for dim in dims_2)
+
+    def random_complex(shape):
+        return rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+
+    fields_1 = {
+        comp: xr.DataArray(random_complex(shape_1), coords=coords_1, dims=dims_1)
+        for comp in field_components
+    }
+    fields_2 = {
+        comp: xr.DataArray(random_complex(shape_2), coords=coords_2, dims=dims_2)
+        for comp in field_components
+    }
+
+    d_area = np.abs(rng.standard_normal((len(coords_base["x"]), len(coords_base["z"]))))
+
+    unblocked = ElectromagneticFieldData._outer_dot_numpy_kernel_streaming_unblocked(
+        fields_1=fields_1,
+        fields_2=fields_2,
+        outer_dim_1="mode_index_0",
+        outer_dim_2="mode_index_1",
+        tangential_dims=tan_dims,
+        e_1=e_1,
+        e_2=e_2,
+        h_1=h_1,
+        h_2=h_2,
+        d_area=d_area,
+    )
+    blocked = ElectromagneticFieldData._outer_dot_numpy_kernel_streaming_blocked(
+        fields_1=fields_1,
+        fields_2=fields_2,
+        outer_dim_1="mode_index_0",
+        outer_dim_2="mode_index_1",
+        tangential_dims=tan_dims,
+        e_1=e_1,
+        e_2=e_2,
+        h_1=h_1,
+        h_2=h_2,
+        d_area=d_area,
+        block_size=3,
+    )
+
+    assert blocked.dims == unblocked.dims
+    np.testing.assert_allclose(blocked.values, unblocked.values)
+
+
 def test_translated_copy():
     mode_data = make_mode_data_with_fields()
     field_data = make_field_data_2d()
