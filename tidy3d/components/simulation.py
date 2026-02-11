@@ -3095,6 +3095,9 @@ class Simulation(AbstractYeeGridSimulation):
             _ = val.wavelength_from_sources(sources=self.sources)
         return self
 
+    # Must run before validators that trigger grid computation
+    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
+
     _sources_in_bounds = assert_objects_in_sim_bounds("sources", strict_inequality=True)
     _lumped_elements_in_bounds = assert_objects_contained_in_sim_bounds(
         "lumped_elements", error=False, strict_inequality=False, strict_for_zero_size_dim=True
@@ -6045,8 +6048,6 @@ class Simulation(AbstractYeeGridSimulation):
             medium=scene.medium,
             **kwargs,
         )
-
-    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
 
     def padded_copy(
         self,
