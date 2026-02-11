@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -176,6 +177,19 @@ def _copy_simulation_data_from_cache_entry(entry: CacheEntry, path: PathLike) ->
         except Exception:
             return False
     return False
+
+
+def _load_simulation_via_tempfile(task_id: TaskId) -> Optional[WorkflowType]:
+    """Load a simulation into a temp file for cache bookkeeping (Windows-safe)."""
+    handle, fname = tempfile.mkstemp(suffix=".hdf5")
+    os.close(handle)
+    try:
+        return load_simulation(task_id, path=fname, verbose=False)
+    finally:
+        try:
+            os.unlink(fname)
+        except FileNotFoundError:
+            pass
 
 
 def restore_simulation_if_cached(
@@ -1175,8 +1189,7 @@ def load(
             simulation = None
             if lazy:  # get simulation via web to avoid unpacking of lazy object in store_result
                 try:
-                    with tempfile.NamedTemporaryFile(suffix=".hdf5") as tmp_file:
-                        simulation = load_simulation(task_id, path=tmp_file.name, verbose=False)
+                    simulation = _load_simulation_via_tempfile(task_id)
                 except Exception as e:
                     log.info(f"Failed to load simulation for storing results: {e}.")
                     return stub_data

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import tidy3d as td
 from tidy3d.components.autograd.field_map import FieldMap, TracerKeys
-from tidy3d.web.api.webapi import get_info, load_simulation
+from tidy3d.web.api.webapi import _load_simulation_via_tempfile, get_info
 from tidy3d.web.cache import resolve_local_cache
 from tidy3d.web.core.s3utils import download_file, upload_file  # type: ignore
 
@@ -14,6 +14,23 @@ from .constants import SIM_FIELDS_KEYS_FILE, SIM_VJP_FILE
 
 if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
+
+
+def _store_vjp_cache_entry(task_id_adj: str, field_map: FieldMap, *, artifact_path: str) -> None:
+    """Store adjoint VJP fields in the local cache when available."""
+    simulation_cache = resolve_local_cache()
+    if simulation_cache is None:
+        return
+    info = get_info(task_id_adj, verbose=False)
+    workflow_type = getattr(info, "taskType", None)
+    simulation = _load_simulation_via_tempfile(task_id_adj)
+    simulation_cache.store_result(
+        stub_data=field_map,
+        task_id=task_id_adj,
+        path=artifact_path,
+        workflow_type=workflow_type,
+        simulation=simulation,
+    )
 
 
 def upload_sim_fields_keys(
@@ -44,21 +61,7 @@ def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
     try:
         download_file(task_id_adj, SIM_VJP_FILE, to_file=fname, verbose=verbose)
         field_map = FieldMap.from_file(fname)
-
-        simulation_cache = resolve_local_cache()
-        if simulation_cache is not None:
-            info = get_info(task_id_adj, verbose=False)
-            workflow_type = getattr(info, "taskType", None)
-            simulation = None
-            with tempfile.NamedTemporaryFile(suffix=".hdf5") as tmp_file:
-                simulation = load_simulation(task_id_adj, path=tmp_file.name, verbose=False)
-            simulation_cache.store_result(
-                stub_data=field_map,
-                task_id=task_id_adj,
-                path=fname,
-                workflow_type=workflow_type,
-                simulation=simulation,
-            )
+        _store_vjp_cache_entry(task_id_adj, field_map, artifact_path=fname)
     except Exception as e:
         td.log.error(f"Error occurred while getting VJP traced fields: {e}")
         raise e

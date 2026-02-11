@@ -365,7 +365,12 @@ class LocalCache:
     def __len__(self) -> int:
         """Return number of valid cache entries."""
         with self._with_cache_state_lock():
-            count = self._load_stats().total_entries
+            stats = self._load_stats()
+            count = stats.total_entries
+            actual = sum(1 for _ in self._iter_entries())
+            if actual != count:
+                self._schedule_sync()
+                count = actual
         return count
 
     def _store(
@@ -676,7 +681,14 @@ class LocalCache:
             if simulation is not None:
                 simulation_obj = simulation
             else:
-                simulation_obj = getattr(stub_data, "simulation", None)
+                workflow_name = (
+                    workflow_type.value if isinstance(workflow_type, TaskType) else workflow_type
+                )
+                if workflow_name in {TaskType.MODAL_CM.value, TaskType.TERMINAL_CM.value}:
+                    # ComponentModelerData types use 'modeler' instead of 'simulation'
+                    simulation_obj = getattr(stub_data, "modeler", None)
+                else:
+                    simulation_obj = getattr(stub_data, "simulation", None)
                 if simulation_obj is None:
                     log.debug(
                         "Failed storing local cache entry: Could not find simulation data in stub_data."
