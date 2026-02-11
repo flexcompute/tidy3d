@@ -9,7 +9,6 @@ on:
       - synchronize
 
 permissions:
-  members: read
   pull-requests: write
 
 jobs:
@@ -20,6 +19,7 @@ jobs:
       - name: Request @flexcompute/core team review
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GH_PAT || github.token }}
           script: |
             const { owner, repo } = context.repo;
             const pull_number = context.payload.pull_request.number;
