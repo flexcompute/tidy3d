@@ -107,8 +107,6 @@ on:
       - develop
       - 'pre/*'
     types: ['opened', 'reopened', 'synchronize', 'ready_for_review', 'edited']
-  pull_request_review:
-    types: [submitted]
 
 permissions:
   contents: read

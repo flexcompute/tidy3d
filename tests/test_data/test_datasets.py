@@ -766,3 +766,38 @@ def test_from_vtk():
 
     with pytest.raises(DataError):
         _ = td.TriangularGridDataset.from_vtk("tests/data/gmsh_2d.vtk")
+
+
+def test_tetrahedral_from_vtk_obj_without_cell_types_array():
+    """Regression test for VTK objects with missing ``GetCellTypesArray`` output."""
+    pytest.importorskip("vtk")
+    import tidy3d as td
+
+    tet_grid = td.TetrahedralGridDataset(
+        points=td.PointDataArray(
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            dims=("index", "axis"),
+        ),
+        cells=td.CellDataArray([[0, 1, 2, 3]], dims=("cell_index", "vertex_index")),
+        values=td.IndexedDataArray([1.0, 2.0, 3.0, 4.0], dims=("index")),
+    )
+
+    class VtkObjWithoutCellTypesArray:
+        """Proxy object that mimics a VTK grid with no cell-types array."""
+
+        def __init__(self, vtk_obj):
+            self._vtk_obj = vtk_obj
+
+        def __getattr__(self, name):
+            return getattr(self._vtk_obj, name)
+
+        def GetCellTypesArray(self):
+            return None
+
+    converted = tet_grid._from_vtk_obj_internal(
+        VtkObjWithoutCellTypesArray(tet_grid._vtk_obj),
+        remove_degenerate_cells=False,
+        remove_unused_points=False,
+    )
+
+    assert converted == tet_grid
