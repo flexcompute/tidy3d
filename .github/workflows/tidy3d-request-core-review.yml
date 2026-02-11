@@ -6,8 +6,10 @@ on:
       - opened
       - reopened
       - ready_for_review
+      - synchronize
 
 permissions:
+  members: read
   pull-requests: write
 
 jobs:
