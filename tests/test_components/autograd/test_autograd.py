@@ -283,7 +283,6 @@ def use_emulated_run(monkeypatch):
                 sim_data_orig=sim_data_orig,
                 sim_data_fwd=sim_data_fwd,
                 sim_fields_keys=sim_fields_keys,
-                custom_vjp=None,
             )
 
             return traced_fields_vjp

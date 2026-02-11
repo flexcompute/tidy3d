@@ -1331,7 +1331,7 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
-    custom_vjp: tuple[CustomVJPConfig, ...],
+    custom_vjp: Optional[tuple[CustomVJPConfig, ...]] = None,
 ) -> AutogradFieldMap:
     """Postprocess adjoint results into VJPs (delegated)."""
     return _postprocess_adj_impl(
