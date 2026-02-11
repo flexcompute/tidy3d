@@ -252,7 +252,13 @@ def fake_data(monkeypatch, basic_simulation):
     return calls
 
 
-def _patch_run_pipeline(monkeypatch):
+def _patch_run_pipeline(
+    monkeypatch,
+    task_type: str = "FDTD",
+    postprocess=None,
+    load_simulation_fn=None,
+    patch_autograd: bool = True,
+):
     """Patch upload, start, monitor, and download to avoid network calls and map sims."""
     counters = {"upload": 0, "start": 0, "monitor": 0, "download": 0}
     _reset_fake_maps()  # isolate between tests
@@ -275,8 +281,11 @@ def _patch_run_pipeline(monkeypatch):
 
     def _fake_upload(**kwargs):
         counters["upload"] += 1
-        task_id = f"{MOCK_TASK_ID}{kwargs['simulation']._hash_self()}"
         sim = _extract_simulation(kwargs)
+        if sim is not None:
+            task_id = f"{MOCK_TASK_ID}{sim._hash_self()}"
+        else:
+            task_id = f"{MOCK_TASK_ID}-{counters['upload']}"
         if sim is not None:
             TASK_TO_SIM[task_id] = sim
         return task_id
@@ -296,6 +305,8 @@ def _patch_run_pipeline(monkeypatch):
             PATH_TO_SIM[str(Path(path))] = sim
 
     def _fake_load_simulation(task_id, path="simulation.json", verbose=True):
+        if load_simulation_fn is not None:
+            return load_simulation_fn(task_id=task_id, path=path, verbose=verbose)
         sim = TASK_TO_SIM.get(task_id)
         if sim is None:
             sim = next(iter(PATH_TO_SIM.values()), None)
@@ -344,10 +355,11 @@ def _patch_run_pipeline(monkeypatch):
     def _fake_field_map_from_file(*args, **kwargs):
         return FieldMap(tracers=())
 
-    monkeypatch.setattr(io_utils, "download_file", _fake_download_file)
-    monkeypatch.setattr(autograd, "postprocess_fwd", _fake_postprocess_fwd)
-    monkeypatch.setattr(autograd, "postprocess_adj", _fake_postprocess_adj)
-    monkeypatch.setattr(FieldMap, "from_file", _fake_field_map_from_file)
+    if patch_autograd:
+        monkeypatch.setattr(io_utils, "download_file", _fake_download_file)
+        monkeypatch.setattr(autograd, "postprocess_fwd", _fake_postprocess_fwd)
+        monkeypatch.setattr(autograd, "postprocess_adj", _fake_postprocess_adj)
+        monkeypatch.setattr(FieldMap, "from_file", _fake_field_map_from_file)
     monkeypatch.setattr(WebContainer, "_check_folder", _fake__check_folder)
     monkeypatch.setattr(web, "upload", _fake_upload)
     monkeypatch.setattr(web, "start", _fake_start)
@@ -356,29 +368,27 @@ def _patch_run_pipeline(monkeypatch):
     monkeypatch.setattr(web, "load_simulation", _fake_load_simulation)
     monkeypatch.setattr(web, "estimate_cost", lambda *args, **kwargs: 0.0)
     monkeypatch.setattr(Job, "status", property(_fake_status))
-    monkeypatch.setattr(engine, "upload_sim_fields_keys", lambda *args, **kwargs: None)
+    if patch_autograd:
+        monkeypatch.setattr(engine, "upload_sim_fields_keys", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         web,
         "get_info",
         lambda task_id, verbose=True: type(
-            "_Info", (), {"solverVersion": "solver-1", "taskType": "FDTD"}
+            "_Info", (), {"solverVersion": "solver-1", "taskType": task_type}
         )(),
     )
+    if patch_autograd:
+        monkeypatch.setattr(
+            io_utils,
+            "get_info",
+            lambda task_id, verbose=True: type(
+                "_Info", (), {"solverVersion": "solver-1", "taskType": task_type}
+            )(),
+        )
+    if postprocess is not None:
+        monkeypatch.setattr(web.Tidy3dStubData, "postprocess", staticmethod(postprocess))
     monkeypatch.setattr(
-        io_utils,
-        "get_info",
-        lambda task_id, verbose=True: type(
-            "_Info", (), {"solverVersion": "solver-1", "taskType": "FDTD"}
-        )(),
-    )
-    monkeypatch.setattr(
-        web, "load_simulation", lambda task_id, *args, **kwargs: TASK_TO_SIM[task_id]
-    )
-    monkeypatch.setattr(
-        io_utils, "load_simulation", lambda task_id, *args, **kwargs: TASK_TO_SIM[task_id]
-    )
-    monkeypatch.setattr(
-        SimulationTask, "get", lambda *args, **kwargs: SimpleNamespace(taskType="FDTD")
+        SimulationTask, "get", lambda *args, **kwargs: SimpleNamespace(taskType=task_type)
     )
     monkeypatch.setattr(
         BatchTask, "detail", lambda *args, **kwargs: SimpleNamespace(status="success")
