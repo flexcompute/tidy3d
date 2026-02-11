@@ -374,7 +374,7 @@ def _patch_run_pipeline(
         web,
         "get_info",
         lambda task_id, verbose=True: type(
-            "_Info", (), {"solverVersion": "solver-1", "taskType": task_type}
+            "_Info", (), {"solverVersion": "solver-1", "taskType": task_type, "status": "success"}
         )(),
     )
     if patch_autograd:
@@ -382,7 +382,9 @@ def _patch_run_pipeline(
             io_utils,
             "get_info",
             lambda task_id, verbose=True: type(
-                "_Info", (), {"solverVersion": "solver-1", "taskType": task_type}
+                "_Info",
+                (),
+                {"solverVersion": "solver-1", "taskType": task_type, "status": "success"},
             )(),
         )
     if postprocess is not None:

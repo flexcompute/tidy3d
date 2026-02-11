@@ -39,10 +39,11 @@ from tidy3d.web.api.states import (
     STATE_PROGRESS_PERCENTAGE,
 )
 from tidy3d.web.api.tidy3d_stub import Tidy3dStub
-from tidy3d.web.api.webapi import restore_simulation_if_cached
+from tidy3d.web.api.webapi import _batch_detail_progress, restore_simulation_if_cached
 from tidy3d.web.cache import _store_mode_solver_in_cache
 from tidy3d.web.core.constants import TaskId, TaskName
 from tidy3d.web.core.task_core import Folder
+from tidy3d.web.core.task_info import BatchDetail
 from tidy3d.web.core.types import PayType
 
 if TYPE_CHECKING:
@@ -1210,8 +1211,16 @@ class Batch(WebContainer):
                 for task_name, job in self.jobs.items():
                     schedule_download(job)
                     if self.verbose:
-                        status = job.status
-                        completed = STATE_PROGRESS_PERCENTAGE.get(status, 0)
+                        if job.load_if_cached:
+                            status = "success"
+                            completed = COMPLETED_PERCENT
+                        else:
+                            info = job.get_info()
+                            status = info.status
+                            if isinstance(info, BatchDetail):
+                                status, _, completed = _batch_detail_progress(info)
+                            else:
+                                completed = STATE_PROGRESS_PERCENTAGE.get(status, 0)
                         desc = pbar_description(task_name, status, max_name_length, 0)
                         pbar_tasks[task_name] = progress.add_task(
                             desc, total=COMPLETED_PERCENT, completed=completed
@@ -1219,13 +1228,18 @@ class Batch(WebContainer):
 
                 while any(check_continue_condition(job) for job in self.jobs.values()):
                     for task_name, job in self.jobs.items():
-                        status = job.status
+                        if job.load_if_cached:
+                            continue
+                        info = job.get_info()
+                        status = info.status
 
                         schedule_download(job)
 
                         if self.verbose:
                             # choose display status & percent
-                            if status != "run_success":
+                            if isinstance(info, BatchDetail):
+                                display_status, _, pct = _batch_detail_progress(info)
+                            elif status != "run_success":
                                 display_status = status
                                 pct = STATE_PROGRESS_PERCENTAGE.get(status, 0)
                             else:
@@ -1251,20 +1265,27 @@ class Batch(WebContainer):
                     schedule_download(job)
 
                     if self.verbose:
-                        status = job.status
-                        if status != "run_success":
-                            display_status = status
-                            pct = STATE_PROGRESS_PERCENTAGE.get(status, COMPLETED_PERCENT)
+                        if job.load_if_cached:
+                            display_status = "success"
+                            pct = COMPLETED_PERCENT
                         else:
-                            post_st = getattr(job, "postprocess_status", None)
-                            if post_st in END_STATES:
-                                display_status = post_st
-                                pct = STATE_PROGRESS_PERCENTAGE.get(post_st, COMPLETED_PERCENT)
+                            info = job.get_info()
+                            status = info.status
+                            if isinstance(info, BatchDetail):
+                                display_status, _, pct = _batch_detail_progress(info)
+                            elif status != "run_success":
+                                display_status = status
+                                pct = STATE_PROGRESS_PERCENTAGE.get(status, COMPLETED_PERCENT)
                             else:
-                                display_status = "postprocess"
-                                pct = STATE_PROGRESS_PERCENTAGE.get(
-                                    "postprocess", COMPLETED_PERCENT
-                                )
+                                post_st = getattr(job, "postprocess_status", None)
+                                if post_st in END_STATES:
+                                    display_status = post_st
+                                    pct = STATE_PROGRESS_PERCENTAGE.get(post_st, COMPLETED_PERCENT)
+                                else:
+                                    display_status = "postprocess"
+                                    pct = STATE_PROGRESS_PERCENTAGE.get(
+                                        "postprocess", COMPLETED_PERCENT
+                                    )
 
                         pbar = pbar_tasks[task_name]
                         desc = pbar_description(task_name, display_status, max_name_length, 0)
