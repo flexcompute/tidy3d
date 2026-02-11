@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.simulation import SimulationType
 
 if TYPE_CHECKING:
@@ -200,7 +201,7 @@ class SimulationMap(ValueMap, Mapping[str, SimulationType]):
     keys_tuple: tuple[str, ...] = Field(
         description="A tuple of unique string identifiers for each simulation.", alias="keys"
     )
-    values_tuple: tuple[SimulationType, ...] = Field(
+    values_tuple: tuple[discriminated_union(SimulationType), ...] = Field(
         description=(
             "A tuple of `Simulation` objects, each corresponding to a key at the same index."
         ),
