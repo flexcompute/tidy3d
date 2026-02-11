@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved `ModeSolver.solve()` to suppress the accuracy warning when local subpixel averaging is enabled via `tidy3d-extras`, and expanded docstrings for `ModeSolver.solve()`, `ModeSimulation.run_local()`, `Simulation.epsilon()`, and `Simulation.epsilon_on_grid()` to document the `config.simulation.use_local_subpixel` option.
 - Fixed `ModeSolver.validate_pre_upload` not validating `MicrowaveModeSpec` with `AutoImpedanceSpec`, causing cryptic server-side errors for invalid conductor geometries.
 - Fixed local cache not storing results for `ModalComponentModeler` (and `TerminalComponentModeler`) runs, causing cache misses on repeated `web.run()` calls.
+- Fixed spurious `ModeSimulation` error logs during deserialization of `SimulationDataMap` by adding discriminators to `SimulationType` and `SimulationDataType` unions.
 
 ## [2.10.2] - 2026-01-21
 

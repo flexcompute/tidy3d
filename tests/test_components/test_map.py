@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from tidy3d import SimulationMap
 
-from ..utils import SAMPLE_SIMULATIONS
+from ..utils import SAMPLE_SIMULATIONS, AssertLogStr
 
 # Reusable test constants
 SIM_MAP_DATA = {
@@ -55,3 +55,12 @@ def test_simulation_map_getitem_key_error():
     s_map = make_simulation_map()
     with pytest.raises(KeyError):
         _ = s_map["not_a_real_key"]
+
+
+def test_simulation_map_roundtrip_no_spurious_errors():
+    """Regression test for FXC-5469: deserializing SimulationMap should not
+    produce spurious ERROR logs from pydantic trying ModeSimulation validators."""
+    s_map = make_simulation_map()
+
+    with AssertLogStr("ERROR", excludes_str=""):
+        SimulationMap.model_validate(s_map.model_dump())
