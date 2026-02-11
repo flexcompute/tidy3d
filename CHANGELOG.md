@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed sliver polygon artifacts in 2D material subdivision by filtering polygons based on grid cell size, preventing numerical issues with large-coordinate geometries.
 - Fixed `CustomMedium` gradient calculation when field coordinates exactly align with boundaries.
 - Fixed adjoint simulation `grid_spec` to align exactly with forward simulation for correct `FieldData` adjoint source power.
+- Fixed `TerminalComponentModeler` serialization failure with `CustomGridBoundaries` by storing JSON-serializable grid metadata in `GridSpec.attrs`.
 - Fixed redundant logging when `Batch.download()` skips existing files, and added `replace_existing` to `Batch.run()` so overwrite behavior can be controlled directly.
 - Fixed redundant server lookups when loading simulation results.
 - Updated docstrings for `DerivativeInfo` to more accurately reflect dataclass fields.

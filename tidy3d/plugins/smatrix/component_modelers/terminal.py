@@ -565,7 +565,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         base_sim_tmp = self._base_sim_no_radiation_monitors
         mnts_with_radiation = list(base_sim_tmp.monitors) + list(self._finalized_radiation_monitors)
         grid_spec = GridSpec.from_grid(base_sim_tmp.grid)
-        grid_spec.attrs["from_grid_spec"] = base_sim_tmp.grid_spec
+        grid_spec.attrs["from_grid_spec"] = base_sim_tmp.grid_spec.model_dump(mode="json")
         # We skipped validations up to now, here we finally validate the base sim
         return base_sim_tmp.updated_copy(monitors=mnts_with_radiation, grid_spec=grid_spec)
 
