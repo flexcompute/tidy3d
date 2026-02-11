@@ -8,14 +8,14 @@ import numpy as np
 import xarray as xr
 
 import tidy3d as td
-from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
 from tidy3d.packaging import disable_local_subpixel
 
-from .utils import E_to_D, get_derivative_maps
+from .utils import E_to_D, filter_vjp_map, get_derivative_maps
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Optional, Union
@@ -34,27 +34,14 @@ def setup_adj(
     sim_data_orig: td.SimulationData,
     sim_fields_keys: list[tuple],
     max_num_adjoint_per_fwd: int,
+    already_filtered: bool = False,
 ) -> list[td.Simulation]:
     """Construct an adjoint simulation from a set of data_fields for the VJP."""
 
     td.log.info("Running custom vjp (adjoint) pipeline.")
 
-    # filter out any data_fields_vjp with exact all 0's
-    data_fields_vjp_static = {}
-    for k, v in data_fields_vjp.items():
-        v_static = get_static(v)
-        if np.count_nonzero(v_static) == 0:
-            continue
-        data_fields_vjp_static[k] = v_static
-    data_fields_vjp = data_fields_vjp_static
-
-    for k, v in data_fields_vjp.items():
-        if np.any(np.isnan(v)):
-            raise AdjointError(
-                f"NaN values detected for data field {k} in the adjoint pipeline. This may be "
-                f"due to NaN values in the simulation data or the computed value of your "
-                f"objective function."
-            )
+    if not already_filtered:
+        data_fields_vjp = filter_vjp_map(data_fields_vjp)
 
     # if all entries are zero, there is no adjoint sim to run
     if not data_fields_vjp:
@@ -467,17 +454,8 @@ def postprocess_adj(
                 vjp_fns = custom_vjp_lookup.get(structure_index)
                 vjp_chunk = structure._compute_derivatives(derivative_info_struct, vjp_fns=vjp_fns)
 
-                for path, value in vjp_chunk.items():
-                    if path in vjp_value_map:
-                        existing = vjp_value_map[path]
-                        if isinstance(existing, (list, tuple)) and isinstance(value, (list, tuple)):
-                            vjp_value_map[path] = type(existing)(
-                                x + y for x, y in zip(existing, value)
-                            )
-                        else:
-                            vjp_value_map[path] = existing + value
-                    else:
-                        vjp_value_map[path] = value
+            # accumulate results
+            _accumulate_field_map(vjp_value_map, vjp_chunk)
 
         # store vjps in output map
         for structure_path, vjp_value in vjp_value_map.items():

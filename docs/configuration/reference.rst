@@ -131,6 +131,14 @@ remote defaults and emits a warning reminding you to enable local gradients.
      - ``"adjoint_data"``
      - Yes
      - Directory (relative to the working directory) where intermediate gradient artifacts are stored when ``local_gradient`` is enabled.
+   * - ``parallel_all_port``
+     - ``False``
+     - Yes
+     - Launch canonical adjoint simulations for supported monitors in parallel with the forward solve when local gradients are enabled. If any unsupported monitors are present, parallel adjoint is disabled and the sequential adjoint pipeline is used.
+   * - ``parallel_adjoint_mode_direction_policy``
+     - ``"assume_outgoing"``
+     - Yes
+     - Policy for selecting mode directions when launching parallel adjoint simulations. Accepts ``"assume_outgoing"``, ``"run_both_directions"``, or ``"no_parallel"``.
    * - ``gradient_precision``
      - ``"single"``
      - No

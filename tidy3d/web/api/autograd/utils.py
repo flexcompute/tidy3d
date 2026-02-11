@@ -6,9 +6,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 import tidy3d as td
+from tidy3d.components.autograd import get_static
+from tidy3d.exceptions import AdjointError
 
 if TYPE_CHECKING:
     from typing import Optional, Union
+
+    from tidy3d.components.autograd import AutogradFieldMap
 
 """ E and D field gradient map calculation helpers. """
 
@@ -78,3 +82,20 @@ def multiply_field_data(
         mult = cmp_1 * cmp_2
         field_components[key_1] = mult
     return fld_1.updated_copy(**field_components)
+
+
+def filter_vjp_map(data_fields_vjp: AutogradFieldMap) -> AutogradFieldMap:
+    """Filter VJP map to static, nonzero entries and validate NaNs."""
+    data_fields_vjp_static = {}
+    for k, v in data_fields_vjp.items():
+        v_static = get_static(v)
+        if np.count_nonzero(v_static) == 0:
+            continue
+        if np.any(np.isnan(v_static)):
+            raise AdjointError(
+                f"NaN values detected for data field {k} in the adjoint pipeline. "
+                "This may be due to NaN values in the simulation data or the computed "
+                "value of your objective function."
+            )
+        data_fields_vjp_static[k] = v_static
+    return data_fields_vjp_static

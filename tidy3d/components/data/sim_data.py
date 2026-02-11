@@ -1091,8 +1091,6 @@ class SimulationData(AbstractYeeGridSimulationData):
         if not data_vjp_paths:
             return []
 
-        sim_original = self.simulation
-
         # generate the adjoint sources {mnt_name : list[Source]}
         sources_adj_dict = self._make_adjoint_sources(data_vjp_paths=data_vjp_paths)
         if not sources_adj_dict:
@@ -1110,36 +1108,15 @@ class SimulationData(AbstractYeeGridSimulationData):
         if not adjoint_source_infos:
             return []
 
-        # grab boundary conditions with flipped Bloch vectors (for adjoint)
-        bc_adj = sim_original.boundary_spec.flipped_bloch_vecs
-
-        # set the ADJ grid spec to use the same grid as sim_original for consistent meshing
-        grid_spec_adj = GridSpec.from_grid(sim_original.grid)
-
         adj_sims = []
         for adjoint_source_info in adjoint_source_infos:
-            # only include monitors with the same freqs as the adjoint sources
-            monitors = [
-                m.updated_copy(freqs=adjoint_source_info.post_norm.f) for m in adjoint_monitors
-            ]
-
-            # fields to update the 'fwd' simulation with to make it 'adj'
-            sim_adj_update_dict = {
-                "sources": adjoint_source_info.sources,
-                "boundary_spec": bc_adj,
-                "monitors": monitors,
-                "post_norm": adjoint_source_info.post_norm,
-                "grid_spec": grid_spec_adj,
-            }
-
-            if adjoint_source_info.normalize_sim:
-                normalize_index_adj = 0
-            else:
-                normalize_index_adj = None
-
-            sim_adj_update_dict["normalize_index"] = normalize_index_adj
-
-            adj_sims.append(sim_original.updated_copy(**sim_adj_update_dict))
+            adj_sims.append(
+                make_adjoint_simulation(
+                    simulation=self.simulation,
+                    adjoint_source_info=adjoint_source_info,
+                    adjoint_monitors=adjoint_monitors,
+                )
+            )
 
         log.info(f"Created {len(adj_sims)} adjoint simulations.")
 
@@ -1339,3 +1316,40 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         monitor_name = Structure._get_monitor_name(index=structure_index, data_type=data_type)
         return self[monitor_name]
+
+
+def make_adjoint_simulation(
+    simulation: Simulation,
+    adjoint_source_info: AdjointSourceInfo,
+    adjoint_monitors: list[Monitor],
+) -> Simulation:
+    """Construct a single adjoint simulation from processed adjoint source info."""
+
+    sim_original = simulation
+
+    # grab boundary conditions with flipped Bloch vectors (for adjoint)
+    bc_adj = sim_original.boundary_spec.flipped_bloch_vecs
+
+    # set the ADJ grid spec to use the same grid as sim_original for consistent meshing
+    grid_spec_adj = GridSpec.from_grid(sim_original.grid)
+
+    # only include monitors with the same freqs as the adjoint sources
+    monitors = [m.updated_copy(freqs=adjoint_source_info.post_norm.f) for m in adjoint_monitors]
+
+    # fields to update the 'fwd' simulation with to make it 'adj'
+    sim_adj_update_dict = {
+        "sources": adjoint_source_info.sources,
+        "boundary_spec": bc_adj,
+        "monitors": monitors,
+        "post_norm": adjoint_source_info.post_norm,
+        "grid_spec": grid_spec_adj,
+    }
+
+    if adjoint_source_info.normalize_sim:
+        normalize_index_adj = 0
+    else:
+        normalize_index_adj = None
+
+    sim_adj_update_dict["normalize_index"] = normalize_index_adj
+
+    return sim_original.updated_copy(**sim_adj_update_dict)

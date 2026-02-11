@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deprecation warning for `conformal` in TCAD heat/charge monitors when explicitly set; this option is ignored (treated as `False`) when meshing with `remove_fragments=True`.
 - Added in-memory caching for downloaded batch results, configurable via ``config.batch_data_cache``.
 - Added `DesignSpace` support for sweeping `WorkflowType` objects, including mode/EME simulations and component modelers.
+- Added parallel adjoint scheduling (concurrent with forward simulation) for suitable monitors via `config.adjoint.parallel_all_port` (if `local gradient=True`).
 
 ### Breaking Changes
 - Added optional automatic extrusion of structures at the simulation boundaries into/through PML/Absorber layers via `extrude_structures` field in class `AbsorberSpec`.

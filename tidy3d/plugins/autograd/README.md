@@ -51,6 +51,65 @@ Although `autograd` is used internally, we provide wrappers for other automatic 
 
 The usability of `autograd` is extremely similar to `jax` but with a couple of modifications, which we'll outline below.
 
+### Parallel adjoint
+
+#### What it does
+
+When enabled, Tidy3D launches eligible adjoint simulations in parallel with the forward simulation by running a set of canonical "unit" adjoint solves up front. During the backward pass, it reuses those precomputed results and scales them with the actual VJP coefficients from your objective.
+
+Net effect: reduced gradient wall-clock time (often close to ~2x faster in the "many deterministic adjoints" regime), at the cost of sometimes running adjoint solves that your objective ultimately does not use.
+
+#### How to enable it
+
+- Configuration flag: `config.adjoint.parallel_all_port = True`
+- Mode direction policy (for mode monitors): `config.adjoint.parallel_adjoint_mode_direction_policy`
+  - `"assume_outgoing"` (default): pick the mode direction based on monitor position relative to the simulation center and flip it for the adjoint.
+  - `"run_both_directions"`: launch parallel adjoint sources for both `+` and `-` directions.
+  - `"no_parallel"`: disable parallel adjoint entirely.
+- Only effective when: `config.adjoint.local_gradient = True`
+- If `local_gradient=False`, the flag is ignored and behavior remains unchanged.
+- If the feature cannot be used safely, Tidy3D falls back automatically to the existing sequential adjoint pipeline.
+
+#### Which monitors benefit (initial supported set)
+
+Parallel adjoint is only used for monitors whose adjoint source profiles are deterministic from monitor metadata (i.e., do not require forward results beyond the VJP coefficient).
+
+Supported (initial rollout):
+- Mode monitor amplitudes (`ModeMonitor` / `ModeData.amps`)
+- Diffraction monitor amplitudes (`DiffractionMonitor` amplitudes)
+- Single-point field sampling (point/zero-extent E/H probes; not planar/volume field grids)
+
+Not supported (remain sequential):
+- Planar/volume field monitors (non-point grids)
+
+If any unsupported monitors are present in a simulation, parallel adjoint is disabled and the
+sequential adjoint pipeline is used for all adjoint solves.
+
+#### Limits and guardrails you should expect
+
+- Hard cap: the feature will not exceed `config.adjoint.max_adjoint_per_fwd`.
+- If enabling parallel adjoint would exceed the cap, the run raises an `AdjointError` and aborts the gradient calculation.
+
+#### How many parallel adjoint simulations run
+
+Parallel adjoint launches canonical adjoint simulations for eligible “bases,” so the total
+count is driven by how many distinct outputs your monitors expose:
+
+- **Mode monitors**: one basis per `(freq, mode_index, direction)`. If
+  `parallel_adjoint_mode_direction_policy="assume_outgoing"`, only the outgoing direction is used;
+  if `"run_both_directions"`, both `+` and `-` are used.
+- **Diffraction monitors**: one basis per `(freq, order_x, order_y, polarization)` after
+  evanescent orders are filtered. Polarization is `s`/`p`, so this typically doubles the count.
+- **Point field monitors**: one basis per `(freq, component)` for `Ex/Ey/Ez/Hx/Hy/Hz` that are
+  included in the monitor.
+
+Parallel adjoint groups bases by port (spatial profile) only; it does not consolidate multiple
+ports at the same frequency the way the sequential adjoint pipeline can once VJP coefficients
+are known.
+
+If any eligible bases fail to build (e.g., unsupported geometry or symmetry requirements),
+they are skipped and the remaining VJP entries fall back to the sequential adjoint pipeline.
+
 ### Migrating from jax to autograd
 
 Like in `jax`, the gradient functions can be imported directly from `autograd`:
@@ -207,6 +266,7 @@ We also support the following high-level features:
 - Enable local gradient processing by setting `local_gradient=True` in the web run functions.
   This will cause the forward and adjoint field monitor data to be downloaded locally.
   Can be useful for inspecting these fields, but will cause significantly more data/bandwidth usage.
+- For supported monitor types, enable parallel canonical adjoint simulations during local gradients via `config.adjoint.parallel_all_port`.
 - We automatically determine the number of adjoint simulations to run from a given forward simulation to maintain gradient accuracy.
   Adjoint sources are automatically grouped by either frequency or spatial port (whichever yields fewer adjoint simulations), and all adjoint simulations are run in a single batch (applies to both `run` and `run_async`).
   The parameter `max_num_adjoint_per_fwd` (default `10`) prevents launching unexpectedly large numbers of adjoint simulations automatically.
@@ -223,12 +283,6 @@ We currently have the following restrictions:
   This can cause unnecessary data usage during the forward pass, especially if the monitors contain many frequencies that are not relevant for the objective function (i.e., they are not being differentiated w.r.t.).
   To avoid this, restrict the frequencies in the monitors only to the ones that are relevant for differentiation during optimization.
 
-### To be supported soon
-
-Next on our roadmap (targeting 2.8 and 2.9, 2025) is to support:
-
-- `TriangleMesh`.
-- `GUI` integration of invdes plugin.
 
 ### Finally
 

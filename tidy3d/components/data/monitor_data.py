@@ -13,6 +13,7 @@ import xarray as xr
 from pandas import Index
 from pydantic import Field, model_validator
 
+from tidy3d.components.autograd.parallel_adjoint_bases import COS_THETA_THRESH
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.grid.grid import Coords, Grid
@@ -37,7 +38,7 @@ from tidy3d.components.monitor import (
     PermittivityMonitor,
 )
 from tidy3d.components.source.current import CustomCurrentSource
-from tidy3d.components.source.field import CustomFieldSource, ModeSource, PlaneWave
+from tidy3d.components.source.field import CustomFieldSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import (
     TYPE_TAG_STR,
@@ -96,6 +97,7 @@ if TYPE_CHECKING:
     from tidy3d.components.mode_spec import ModeSortSpec, ModeSpec
     from tidy3d.components.source.base import Source
     from tidy3d.components.source.current import PointDipole
+    from tidy3d.components.source.field import ModeSource, PlaneWave
     from tidy3d.components.source.time import SourceTimeType
     from tidy3d.components.types import (
         ArrayFloat2D,
@@ -117,8 +119,6 @@ SHIFT_VALUE_ADJ_FLD_SRC = 1e-5
 AXIAL_RATIO_CAP = 100
 # At this sampling rate, the computed area of a sphere is within ~1% of the true value.
 MIN_ANGULAR_SAMPLES_SPHERE = 10
-# Threshold for cos(theta) to avoid unphysically large amplitudes near grazing angles
-COS_THETA_THRESH = 1e-5
 MODE_INTERP_EXTRAPOLATION_TOLERANCE = 1e-2
 
 GRID_CORRECTION_TYPE = Union[
@@ -183,18 +183,6 @@ class MonitorData(AbstractMonitorData, ABC):
         # warn?
 
         return []
-
-    @staticmethod
-    def flip_direction(direction: Union[str, DataArray]) -> str:
-        """Flip the direction of a string ``('+', '-') -> ('-', '+')``."""
-
-        if isinstance(direction, DataArray):
-            direction = str(direction.values)
-
-        if direction not in ("+", "-"):
-            raise ValueError(f"Direction must be in {('+', '-')}, got '{direction}'.")
-
-        return "-" if direction == "+" else "+"
 
     @staticmethod
     def get_amplitude(x: Union[DataArray, SupportsComplex]) -> complex:
@@ -2370,28 +2358,17 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         direction = coords["direction"]
         mode_index = coords["mode_index"]
 
-        # determine the complex amplitude
         amp_complex = self.get_amplitude(amp)
-        k0 = 2 * np.pi * freq0 / C_0
-        grad_const = k0 / 4 / ETA_0
-        src_amp = 1j * grad_const * amp_complex
+        from tidy3d.components.autograd.source_factory import mode_source_from_monitor
 
-        # construct source
-        src_adj = ModeSource(
-            source_time=GaussianPulse(
-                amplitude=abs(src_amp),
-                phase=np.angle(src_amp),
-                freq0=freq0,
-                fwidth=fwidth,
-            ),
-            mode_spec=monitor.mode_spec,
-            size=monitor.size,
-            center=monitor.center,
-            direction=self.flip_direction(direction),
-            mode_index=mode_index,
+        return mode_source_from_monitor(
+            monitor=monitor,
+            freq=float(freq0),
+            direction=direction,
+            mode_index=int(mode_index),
+            coefficient=amp_complex,
+            fwidth=fwidth,
         )
-
-        return src_adj
 
     def _apply_mode_reorder(self, sort_inds_2d: NDArray) -> Self:
         """Apply a mode reordering along mode_index for all frequency indices.
@@ -4167,62 +4144,24 @@ class DiffractionData(AbstractFieldProjectionData):
     def adjoint_source_amp(self, amp: DataArray, fwidth: float) -> PlaneWave:
         """Generate an adjoint ``PlaneWave`` for a single amplitude."""
 
-        monitor = self.monitor
-
-        # grab the coordinates
         coords = amp.coords
         freq0 = coords["f"]
         pol = coords["polarization"]
         order_x = coords["orders_x"]
         order_y = coords["orders_y"]
 
-        # compute the angle corresponding to this amplitude
-        theta_data, phi_data = self.angles
-        angle_sel_kwargs = {"orders_x": int(order_x), "orders_y": int(order_y), "f": float(freq0)}
-        angle_theta = float(theta_data.sel(**angle_sel_kwargs))
-        angle_phi = float(phi_data.sel(**angle_sel_kwargs))
-
-        # if the angle is nan, this amplitude is set to 0 in the fwd pass, so should skip adj
-        if np.isnan(angle_theta):
-            return None
-
-        # get the polarization angle from the data
-        pol_str = str(pol.values)
-        if pol_str not in ("p", "s"):
-            raise ValueError(f"Something went wrong, given pol='{pol_str}' in adjoint source.")
-
-        pol_angle = 0.0 if pol_str == "p" else np.pi / 2
-
-        # compute the source amplitude
         amp_complex = self.get_amplitude(amp)
-        k0 = 2 * np.pi * freq0 / C_0
-        bck_eps = self.medium.eps_model(freq0)
-        grad_const = 0.5 * k0 / np.sqrt(bck_eps) * np.cos(angle_theta)
+        from tidy3d.components.autograd.source_factory import diffraction_source_from_data
 
-        normal_factor = 1.0 if (self.monitor.normal_dir == "+") else -1.0
-        src_amp = 1j * grad_const * amp_complex * normal_factor
-        # the angular direction for sources and monitors when the normal is "-"
-        # differs by a sign, so we need to flip the angle here when the normal
-        # is "-"
-        src_angle_theta = normal_factor * angle_theta
-
-        # construct plane wave source
-        adj_src = PlaneWave(
-            size=self.monitor.size,
-            center=self.monitor.center,
-            source_time=GaussianPulse(
-                amplitude=abs(src_amp),
-                phase=np.angle(src_amp),
-                freq0=freq0,
-                fwidth=fwidth,
-            ),
-            direction=self.flip_direction(monitor.normal_dir),
-            angle_theta=src_angle_theta,
-            angle_phi=angle_phi,
-            pol_angle=pol_angle,
+        return diffraction_source_from_data(
+            diff_data=self,
+            freq=float(freq0),
+            order_x=int(order_x),
+            order_y=int(order_y),
+            polarization=str(pol.values),
+            coefficient=amp_complex,
+            fwidth=fwidth,
         )
-
-        return adj_src
 
 
 class DirectivityData(FieldProjectionAngleData):
