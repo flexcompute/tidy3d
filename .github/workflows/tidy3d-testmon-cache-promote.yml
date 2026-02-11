@@ -1,6 +1,13 @@
 name: "public/tidy3d/promote-testmon-cache"
 
-on:
+on: # zizmor: ignore[dangerous-triggers]
+  workflow_run:
+    workflows:
+      - "public/tidy3d/python-client-tests"
+    types:
+      - completed
+    branches:
+      - "gh-readonly-queue/develop/**"
   workflow_call:
     inputs:
       source_event:
@@ -8,8 +15,8 @@ on:
         required: true
         type: string
       source_run_id:
-        description: "Optional run id for manual/backfill artifact downloads."
-        required: false
+        description: "Run id for artifact downloads."
+        required: true
         type: string
       allow_empty_candidates:
         description: "Allow zero cache candidate artifacts."
@@ -24,8 +31,8 @@ on:
         type: string
         default: merge_group
       source_run_id:
-        description: "Optional run id for manual/backfill artifact downloads."
-        required: false
+        description: "Run id for artifact downloads."
+        required: true
         type: string
       allow_empty_candidates:
         description: "Allow zero cache candidate artifacts."
@@ -39,40 +46,52 @@ permissions:
 
 jobs:
   discover-cache-candidates:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (
+        github.event.workflow_run.event == 'merge_group' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      )
     runs-on: ubuntu-latest
     outputs:
       candidates: ${{ steps.build-candidates.outputs.candidates }}
+      source_run_id: ${{ steps.resolve-caller-context.outputs.source_run_id }}
     steps:
-      - name: verify-caller-context
+      - name: resolve-caller-context
+        id: resolve-caller-context
         env:
-          SOURCE_EVENT: ${{ inputs.source_event }}
-          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          INPUT_SOURCE_EVENT: ${{ inputs.source_event }}
+          INPUT_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          WORKFLOW_RUN_EVENT: ${{ github.event.workflow_run.event }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
-          if [[ "$SOURCE_EVENT" != "merge_group" ]]; then
-            echo "::error::Expected source_event 'merge_group', got '$SOURCE_EVENT'."
-            exit 1
-          fi
-          if [[ -n "$SOURCE_RUN_ID" ]] && ! [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
-            echo "::error::source_run_id must be numeric when provided."
-            exit 1
+          source_event="${INPUT_SOURCE_EVENT:-}"
+          source_run_id="${INPUT_SOURCE_RUN_ID:-}"
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            source_event="${WORKFLOW_RUN_EVENT:-}"
+            source_run_id="${WORKFLOW_RUN_ID:-}"
           fi
 
-      - name: download-cache-candidate-artifacts-current-run
-        if: inputs.source_run_id == ''
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          pattern: testmon-cache-candidate-*
-          path: cache-candidates
-          merge-multiple: false
+          echo "source_event=$source_event"
+          echo "source_run_id=$source_run_id"
+          if [[ "$source_event" != "merge_group" ]]; then
+            echo "::error::Expected source_event 'merge_group', got '$source_event'."
+            exit 1
+          fi
+          if ! [[ "$source_run_id" =~ ^[0-9]+$ ]]; then
+            echo "::error::source_run_id must be numeric."
+            exit 1
+          fi
+          echo "source_run_id=$source_run_id" >> "$GITHUB_OUTPUT"
 
       - name: download-cache-candidate-artifacts-source-run
-        if: inputs.source_run_id != ''
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.source_run_id }}
+          run-id: ${{ steps.resolve-caller-context.outputs.source_run_id }}
           pattern: testmon-cache-candidate-*
           path: cache-candidates
           merge-multiple: false
@@ -81,7 +100,7 @@ jobs:
         id: build-candidates
         env:
           ALLOW_EMPTY_CANDIDATES: ${{ inputs.allow_empty_candidates }}
-          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_RUN_ID: ${{ steps.resolve-caller-context.outputs.source_run_id }}
         run: |
           set -euo pipefail
           mapfile -t metadata_files < <(find cache-candidates -type f -name metadata.json | sort)
@@ -92,11 +111,7 @@ jobs:
               exit 0
             fi
             echo "::error::No cache candidate metadata artifacts found."
-            if [[ -n "$SOURCE_RUN_ID" ]]; then
-              echo "::error::Expected artifacts from source_run_id=$SOURCE_RUN_ID."
-            else
-              echo "::error::Expected artifacts from current workflow run."
-            fi
+            echo "::error::Expected artifacts from source_run_id=$SOURCE_RUN_ID."
             exit 1
           fi
 
@@ -127,7 +142,7 @@ jobs:
 
   promote-testmon-cache:
     needs: discover-cache-candidates
-    if: needs.discover-cache-candidates.outputs.candidates != '[]'
+    if: needs.discover-cache-candidates.result == 'success' && needs.discover-cache-candidates.outputs.candidates != '' && needs.discover-cache-candidates.outputs.candidates != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -135,14 +150,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        candidate: ${{ fromJson(needs.discover-cache-candidates.outputs.candidates) }}
+        candidate: ${{ fromJson(needs.discover-cache-candidates.outputs.candidates || '[]') }}
     steps:
       - name: download-cache-candidate
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.source_run_id || github.run_id }}
+          run-id: ${{ needs.discover-cache-candidates.outputs.source_run_id }}
           name: ${{ matrix.candidate.artifact_name }}
           path: cache-candidate
 
