@@ -334,6 +334,7 @@ jobs:
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
     permissions:
+      contents: read
       security-events: write
     steps:
       - name: Checkout repository
@@ -345,9 +346,9 @@ jobs:
         uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v6.7.0
 
       - name: Run zizmor 🌈
-        run: uvx zizmor .github/workflows/*.y* --format=sarif . > results.sarif
+        run: uvx --from "zizmor==1.19.0" zizmor .github/workflows/*.y* --format=sarif . > results.sarif
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          GH_TOKEN: ${{ github.token }}
 
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@192325c86100d080feab897ff886c34abd4c83a3 # v3.30.3
@@ -356,9 +357,9 @@ jobs:
           category: zizmor
       
       - name: run zizmor directly  # this gets a success or fail result
-        run: uvx zizmor  .github/workflows/*.y*
+        run: uvx --from "zizmor==1.19.0" zizmor .github/workflows/*.y*
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          GH_TOKEN: ${{ github.token }}
   
   lint-branch-name:
     needs: determine-test-scope
@@ -1337,25 +1338,6 @@ jobs:
       test_type: ${{ needs.determine-test-scope.outputs.test_type }}
     secrets: inherit # zizmor: ignore[secrets-inherit]
 
-  promote-testmon-cache:
-    name: promote-testmon-cache
-    needs:
-      - determine-test-scope
-      - local-tests
-      - remote-tests
-    if: >-
-      needs.determine-test-scope.outputs.local_tests == 'true' &&
-      needs.determine-test-scope.outputs.remote_tests == 'true' &&
-      github.event_name == 'merge_group' &&
-      needs.local-tests.result == 'success' &&
-      needs.remote-tests.result == 'success'
-    permissions:
-      actions: write
-      contents: read
-    with:
-      source_event: ${{ github.event_name }}
-    uses: ./.github/workflows/tidy3d-testmon-cache-promote.yml
-
   workflow-validation:
     name: workflow-validation
     if: always()
@@ -1374,7 +1356,6 @@ jobs:
       - verify-version-consistency
       - test-submodules
       - extras-integration-tests
-      - promote-testmon-cache
     runs-on: ubuntu-latest
     steps:
       - name: move-type-imports
@@ -1453,12 +1434,6 @@ jobs:
         if: ${{ needs.determine-test-scope.outputs.extras_integration_tests == 'true' && needs.extras-integration-tests.result != 'success' && needs.extras-integration-tests.result != 'skipped' }}
         run: |
           echo "❌ tidy3d-extras integration tests failed."
-          exit 1
-
-      - name: check-testmon-cache-promotion
-        if: ${{ github.event_name == 'merge_group' && needs.promote-testmon-cache.result != 'success' && needs.promote-testmon-cache.result != 'skipped' }}
-        run: |
-          echo "❌ Testmon cache promotion workflow failed."
           exit 1
 
       - name: all-checks-passed
