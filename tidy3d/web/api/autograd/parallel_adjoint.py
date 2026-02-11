@@ -9,24 +9,36 @@ import numpy as np
 
 import tidy3d as td
 from tidy3d.components.autograd.parallel_adjoint_bases import (
+    COS_THETA_THRESH,
     DiffractionAdjointBasis,
     ModeAdjointBasis,
     ParallelAdjointBasis,
     PointFieldAdjointBasis,
 )
-from tidy3d.components.autograd.source_factory import (
-    adjoint_fwidth_from_simulation,
-    adjoint_source_info_single,
-    diffraction_norm,
-    diffraction_source_from_simulation,
-    mode_source_from_monitor,
-    point_current_source_from_simulation,
-)
 from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
-from tidy3d.components.data.monitor_data import AbstractFieldData, FieldData
+from tidy3d.components.data.data_array import (
+    DataArray,
+    DiffractionDataArray,
+    ModeAmpsDataArray,
+    ModeIndexDataArray,
+    ScalarFieldDataArray,
+)
+from tidy3d.components.data.monitor_data import (
+    AbstractFieldData,
+    DiffractionData,
+    FieldData,
+    ModeData,
+)
 from tidy3d.components.data.sim_data import AdjointSourceInfo, make_adjoint_simulation
-from tidy3d.components.monitor import ModeMonitor
+from tidy3d.components.monitor import (
+    DiffractionMonitor,
+    FieldMonitor,
+    ModeMonitor,
+    bloch_vec_for_axis,
+    diffraction_monitor_medium,
+)
 from tidy3d.config import config
+from tidy3d.constants import ETA_0
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.autograd.backward import postprocess_adj
 from tidy3d.web.api.autograd.constants import (
@@ -55,6 +67,25 @@ def _scale_field_map(field_map: AutogradFieldMap, scale: float) -> AutogradField
 def _outgoing_mode_direction(simulation: td.Simulation, monitor: ModeMonitor) -> str:
     axis = monitor.normal_axis
     return "+" if monitor.center[axis] >= simulation.center[axis] else "-"
+
+
+def _adjoint_fwidth_from_simulation(simulation: td.Simulation) -> float:
+    normalize_index = simulation.normalize_index or 0
+    return simulation.sources[normalize_index].source_time.fwidth
+
+
+def _adjoint_source_info_single(source: td.Source) -> AdjointSourceInfo:
+    source = td.SimulationData._adjoint_src_width_single([source])[0]
+    freq0 = source.source_time._freq0
+    post_norm = DataArray(data=np.array([1 + 0j]), coords={"f": [freq0]})
+    return AdjointSourceInfo(sources=(source,), post_norm=post_norm, normalize_sim=True)
+
+
+def _diffraction_norm(diffraction_data: DiffractionData) -> np.ndarray:
+    theta_data, _ = diffraction_data.angles
+    cos_theta = np.cos(np.nan_to_num(theta_data))
+    cos_theta[cos_theta <= COS_THETA_THRESH] = np.inf
+    return 1.0 / np.sqrt(2.0 * np.asarray(diffraction_data.eta)) / np.sqrt(cos_theta)
 
 
 def collect_parallel_adjoint_bases_from_simulation(
@@ -260,7 +291,7 @@ def _group_parallel_adjoint_bases_by_port(
         src_times = group["src_times"]
         group_sources = [base_src.updated_copy(source_time=src_time) for src_time in src_times]
         if len(group_sources) == 1:
-            adjoint_source_info = adjoint_source_info_single(group_sources[0])
+            adjoint_source_info = _adjoint_source_info_single(group_sources[0])
         else:
             src_broadband = sim_data_stub._make_broadband_source(adj_srcs=group_sources)
             post_norm = td.SimulationData._make_post_norm_amps(adj_srcs=group_sources)
@@ -274,50 +305,188 @@ def _group_parallel_adjoint_bases_by_port(
     return groups_out
 
 
+def _single_source_for_basis(
+    *,
+    basis: ParallelAdjointBasis,
+    sources: list[Any],
+) -> Any:
+    if len(sources) != 1:
+        raise ValueError(
+            f"Expected exactly 1 adjoint source for basis '{basis.monitor_name}', got {len(sources)}."
+        )
+    return sources[0]
+
+
+def _source_from_synthetic_mode_data(
+    simulation: td.Simulation,
+    basis: ModeAdjointBasis,
+    coefficient: complex,
+    fwidth: float,
+) -> Any:
+    monitor = simulation.monitors[basis.monitor_index]
+    if not isinstance(monitor, ModeMonitor):
+        raise ValueError("Mode basis requires a mode monitor.")
+    monitor_synth = monitor.updated_copy(freqs=[basis.freq])
+
+    amp_coords = {
+        "direction": [str(basis.direction)],
+        "f": [float(basis.freq)],
+        "mode_index": [int(basis.mode_index)],
+    }
+    amps = ModeAmpsDataArray(np.array([[[coefficient]]], dtype=complex), coords=amp_coords)
+    idx_coords = {"f": [float(basis.freq)], "mode_index": [int(basis.mode_index)]}
+    n_complex = ModeIndexDataArray(np.zeros((1, 1), dtype=complex), coords=idx_coords)
+    mode_data = ModeData(monitor=monitor_synth, amps=amps, n_complex=n_complex)
+
+    sources = mode_data._make_adjoint_sources(dataset_names=["amps"], fwidth=fwidth)
+    return _single_source_for_basis(basis=basis, sources=sources)
+
+
+def _source_from_synthetic_point_field_data(
+    simulation: td.Simulation,
+    basis: PointFieldAdjointBasis,
+    coefficient: complex,
+    fwidth: float,
+) -> Any:
+    monitor = simulation.monitors[basis.monitor_index]
+    if not isinstance(monitor, FieldMonitor):
+        raise ValueError("Point-field basis requires a field monitor.")
+    monitor_synth = monitor.updated_copy(freqs=[basis.freq], fields=(basis.component,))
+
+    grid = simulation.discretize_monitor(monitor_synth)
+    coords: dict[str, np.ndarray] = {}
+    boundaries = grid.boundaries.dict()
+    for axis, dim in enumerate("xyz"):
+        if monitor_synth.size[axis] == 0:
+            coords[dim] = np.array([monitor_synth.center[axis]])
+        else:
+            coords[dim] = np.array(boundaries[dim][:-1])
+    coords["f"] = np.array([basis.freq], dtype=float)
+
+    values = np.full(
+        (len(coords["x"]), len(coords["y"]), len(coords["z"]), 1),
+        coefficient,
+        dtype=complex,
+    )
+    field_component = ScalarFieldDataArray(values, coords=coords)
+    field_data = FieldData(
+        monitor=monitor_synth,
+        symmetry=simulation.symmetry,
+        symmetry_center=simulation.center,
+        grid_expanded=grid,
+        **{basis.component: field_component},
+    )
+    sources = field_data._make_adjoint_sources(dataset_names=[basis.component], fwidth=fwidth)
+    return _single_source_for_basis(basis=basis, sources=sources)
+
+
+def _source_from_synthetic_diffraction_data(
+    simulation: td.Simulation,
+    basis: DiffractionAdjointBasis,
+    coefficient: complex,
+    fwidth: float,
+) -> Any:
+    monitor = simulation.monitors[basis.monitor_index]
+    if not isinstance(monitor, DiffractionMonitor):
+        raise ValueError("Diffraction basis requires a diffraction monitor.")
+
+    medium = diffraction_monitor_medium(simulation, monitor)
+    monitor_synth = monitor.updated_copy(freqs=[basis.freq])
+
+    axis_names = ("x", "y", "z")
+    normal_axis = monitor.normal_axis
+    transverse_axes = [axis_names[i] for i in range(3) if i != normal_axis]
+    axis_x, axis_y = transverse_axes
+    size_x = simulation.size[axis_names.index(axis_x)]
+    size_y = simulation.size[axis_names.index(axis_y)]
+    bloch_x = bloch_vec_for_axis(simulation, axis_x)
+    bloch_y = bloch_vec_for_axis(simulation, axis_y)
+
+    ux = DiffractionData.reciprocal_coords(
+        orders=np.array([basis.order_x]),
+        size=size_x,
+        bloch_vec=bloch_x,
+        f=basis.freq,
+        medium=medium,
+    )
+    uy = DiffractionData.reciprocal_coords(
+        orders=np.array([basis.order_y]),
+        size=size_y,
+        bloch_vec=bloch_y,
+        f=basis.freq,
+        medium=medium,
+    )
+    theta_vals, _ = DiffractionData.compute_angles((ux, uy))
+    angle_theta = float(theta_vals[0, 0, 0])
+    if np.isnan(angle_theta) or np.cos(angle_theta) <= COS_THETA_THRESH:
+        raise ValueError("Adjoint source not available for evanescent diffraction order.")
+
+    eta = ETA_0 / np.sqrt(medium.eps_model(float(basis.freq)))
+    norm = 1.0 / np.sqrt(2.0 * eta) / np.sqrt(np.cos(angle_theta))
+    coords = {
+        "orders_x": [int(basis.order_x)],
+        "orders_y": [int(basis.order_y)],
+        "f": [float(basis.freq)],
+    }
+    e_theta = np.zeros((1, 1, 1), dtype=complex)
+    e_phi = np.zeros((1, 1, 1), dtype=complex)
+    if basis.polarization == "p":
+        e_theta[0, 0, 0] = coefficient / norm
+    elif basis.polarization == "s":
+        e_phi[0, 0, 0] = coefficient / norm
+    else:
+        raise ValueError(f"Invalid diffraction polarization '{basis.polarization}'.")
+
+    zero = np.zeros((1, 1, 1), dtype=complex)
+    diff_data = DiffractionData(
+        monitor=monitor_synth,
+        Er=DiffractionDataArray(zero.copy(), coords=coords),
+        Etheta=DiffractionDataArray(e_theta, coords=coords),
+        Ephi=DiffractionDataArray(e_phi, coords=coords),
+        Hr=DiffractionDataArray(zero.copy(), coords=coords),
+        Htheta=DiffractionDataArray(zero.copy(), coords=coords),
+        Hphi=DiffractionDataArray(zero.copy(), coords=coords),
+        sim_size=(size_x, size_y),
+        bloch_vecs=(bloch_x, bloch_y),
+        medium=medium,
+    )
+    sources = diff_data._make_adjoint_sources(dataset_names=["amps"], fwidth=fwidth)
+    return _single_source_for_basis(basis=basis, sources=sources)
+
+
 def make_source_info_from_simulation(
     simulation: td.Simulation,
     basis: ParallelAdjointBasis,
     coefficient: complex,
 ) -> AdjointSourceInfo:
-    monitor = simulation.monitors[basis.monitor_index]
-    fwidth = adjoint_fwidth_from_simulation(simulation)
+    fwidth = _adjoint_fwidth_from_simulation(simulation)
 
     if isinstance(basis, DiffractionAdjointBasis):
-        source = diffraction_source_from_simulation(
+        source = _source_from_synthetic_diffraction_data(
             simulation=simulation,
-            monitor=monitor,
-            freq=basis.freq,
-            order_x=basis.order_x,
-            order_y=basis.order_y,
-            polarization=basis.polarization,
+            basis=basis,
             coefficient=coefficient,
             fwidth=fwidth,
         )
-        return adjoint_source_info_single(source)
+        return _adjoint_source_info_single(source)
 
     if isinstance(basis, ModeAdjointBasis):
-        source = mode_source_from_monitor(
-            monitor=monitor,
-            freq=basis.freq,
-            direction=basis.direction,
-            mode_index=basis.mode_index,
+        source = _source_from_synthetic_mode_data(
+            simulation=simulation,
+            basis=basis,
             coefficient=coefficient,
             fwidth=fwidth,
         )
-        return adjoint_source_info_single(source)
+        return _adjoint_source_info_single(source)
 
     if isinstance(basis, PointFieldAdjointBasis):
-        source = point_current_source_from_simulation(
+        source = _source_from_synthetic_point_field_data(
             simulation=simulation,
-            monitor=monitor,
-            component=basis.component,
-            freq=basis.freq,
+            basis=basis,
             coefficient=coefficient,
             fwidth=fwidth,
         )
-        if source is None:
-            raise ValueError("Adjoint point source has zero amplitude.")
-        return adjoint_source_info_single(source)
+        return _adjoint_source_info_single(source)
 
     raise ValueError("Unsupported parallel adjoint basis.")
 
@@ -492,7 +661,7 @@ def apply_parallel_adjoint(
             norm = norm_cache.get(basis.monitor_index)
             if norm is None:
                 diff_data = sim_data_orig.data[basis.monitor_index]
-                norm = diffraction_norm(diff_data)
+                norm = _diffraction_norm(diff_data)
                 norm_cache[basis.monitor_index] = norm
             coefficient = basis.vjp_value(data_fields_vjp, sim_data_orig, norm)
         else:

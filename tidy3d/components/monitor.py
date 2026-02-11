@@ -96,6 +96,40 @@ def _compute_angles(
     return (thetas, phis)
 
 
+def diffraction_monitor_medium(simulation: Simulation, monitor: DiffractionMonitor) -> MediumType:
+    """Return the homogeneous medium intersecting a diffraction monitor plane."""
+    structures = [simulation.scene.background_structure, *list(simulation.structures or ())]
+    mediums = simulation.scene.intersecting_media(monitor, structures)
+    if len(mediums) != 1:
+        raise ValueError("Diffraction monitor plane must be homogeneous to build adjoint sources.")
+    return list(mediums)[0]
+
+
+def bloch_vec_for_axis(simulation: Simulation, axis_name: str) -> float:
+    """Return Bloch vector for an axis, or 0 for non-Bloch boundaries."""
+    boundary = simulation.boundary_spec[axis_name]
+    plus = boundary.plus
+    if hasattr(plus, "bloch_vec"):
+        return float(plus.bloch_vec)
+    return 0.0
+
+
+def diffraction_order_range(
+    size: float, bloch_vec: float, freq: float, medium: MediumType
+) -> np.ndarray:
+    """Return propagating diffraction orders for a monitor axis."""
+    if size == 0:
+        return np.array([0], dtype=int)
+    eps = medium.eps_model(freq)
+    index = np.real(np.sqrt(eps))
+    limit = abs(index) * freq * size / C_0
+    order_min = int(np.ceil(-limit - bloch_vec))
+    order_max = int(np.floor(limit - bloch_vec))
+    if order_max < order_min:
+        return np.array([], dtype=int)
+    return np.arange(order_min, order_max + 1, dtype=int)
+
+
 def _diffraction_parallel_adjoint_bases(
     monitor: PlanarMonitor,
     simulation: Simulation,
@@ -104,12 +138,6 @@ def _diffraction_parallel_adjoint_bases(
     """Shared helper for diffraction-style parallel adjoint bases."""
     if not isinstance(monitor, DiffractionMonitor):
         raise ValueError("Parallel adjoint diffraction bases require a DiffractionMonitor.")
-    from tidy3d.components.autograd.source_factory import (
-        bloch_vec_for_axis,
-        diffraction_monitor_medium,
-        diffraction_order_range,
-    )
-
     medium = diffraction_monitor_medium(simulation, monitor)
 
     axis_names = ("x", "y", "z")

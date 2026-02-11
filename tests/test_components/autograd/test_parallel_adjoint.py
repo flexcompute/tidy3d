@@ -12,15 +12,12 @@ from tidy3d.components.autograd.parallel_adjoint_bases import (
     ModeAdjointBasis,
     PointFieldAdjointBasis,
 )
-from tidy3d.components.autograd.source_factory import (
-    adjoint_fwidth_from_simulation,
-    point_current_source_from_simulation,
-)
 from tidy3d.config import config
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd.parallel_adjoint import (
     _outgoing_mode_direction,
     apply_parallel_adjoint,
+    make_source_info_from_simulation,
     prepare_parallel_adjoint,
 )
 
@@ -408,22 +405,28 @@ def test_parallel_adjoint_unused_warning(use_emulated_run, monkeypatch):  # noqa
 
 
 def test_point_current_source_from_simulation(use_emulated_run):  # noqa: F811
-    """Ensure point-current adjoint sources can be generated from simulation data."""
+    """Ensure point-current adjoint sources can be generated from point-field bases."""
 
     fn_dict = get_functions("medium", "field_point")
     sim = fn_dict["sim"](params0)
-    monitor = next(m for m in sim.monitors if isinstance(m, td.FieldMonitor))
-    freq = float(monitor.freqs[0])
-    fwidth = adjoint_fwidth_from_simulation(sim)
-
-    source = point_current_source_from_simulation(
-        simulation=sim,
-        monitor=monitor,
-        component="Ex",
-        freq=freq,
-        coefficient=1.0 + 0.5j,
-        fwidth=fwidth,
+    monitor_index, monitor = next(
+        (i, m) for i, m in enumerate(sim.monitors) if isinstance(m, td.FieldMonitor)
     )
+    freq = float(monitor.freqs[0])
+    basis = PointFieldAdjointBasis(
+        monitor_index=monitor_index,
+        monitor_name=monitor.name,
+        freq=freq,
+        component="Ex",
+        data_path=("data", monitor_index, "Ex"),
+    )
+
+    source_info = make_source_info_from_simulation(
+        simulation=sim,
+        basis=basis,
+        coefficient=1.0 + 0.5j,
+    )
+    source = source_info.sources[0]
 
     assert source is not None
     assert source.current_dataset is not None
