@@ -675,6 +675,14 @@ def test_custom_isotropic_medium(unstructured):
     assert mat.is_spatially_uniform
 
 
+def test_custom_medium_validator_order():
+    permittivity = make_spatial_data(value=0)
+    conductivity = make_spatial_data(value=-0.5)
+
+    with pytest.raises(ValidationError, match="'permittivity' must be no less than one."):
+        _ = CustomMedium(permittivity=permittivity, conductivity=conductivity)
+
+
 def verify_custom_dispersive_medium_methods(mat, reduced_fields):
     """Verify that the methods in custom dispersive medium is producing expected results."""
     verify_custom_medium_methods(mat, reduced_fields)

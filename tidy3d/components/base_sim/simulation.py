@@ -18,6 +18,7 @@ from tidy3d.components.validators import (
     _warn_unsupported_traced_argument,
     assert_objects_in_sim_bounds,
     assert_unique_names,
+    call_wrapped_validator,
 )
 from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_symmetry
 from tidy3d.exceptions import Tidy3dKeyError
@@ -150,13 +151,9 @@ class AbstractSimulation(Box, ABC):
     _unique_structure_names = assert_unique_names("structures")
     _unique_source_names = assert_unique_names("sources")
 
-    _monitors_in_bounds = assert_objects_in_sim_bounds("monitors", strict_inequality=True)
-    _structures_in_bounds = assert_objects_in_sim_bounds("structures", error=False)
-
     _warn_traced_center = _warn_unsupported_traced_argument("center")
     _warn_traced_size = _warn_unsupported_traced_argument("size")
 
-    @model_validator(mode="after")
     def _structures_not_at_edges(self) -> Self:
         """Warn if any structures lie at the simulation boundaries."""
         if not self.structures:
@@ -185,6 +182,15 @@ class AbstractSimulation(Box, ABC):
         return self
 
     """ Post-init validators """
+
+    @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        call_wrapped_validator(
+            assert_objects_in_sim_bounds, self, "monitors", strict_inequality=True
+        )
+        call_wrapped_validator(assert_objects_in_sim_bounds, self, "structures", error=False)
+        return self
 
     def _validate_structures_not_at_edges(self) -> None:
         """Warn if any structures lie at the simulation boundaries (post-init check with full field access)."""
@@ -242,7 +248,6 @@ class AbstractSimulation(Box, ABC):
                             custom_loc=["structures", istruct],
                         )
 
-    @model_validator(mode="after")
     def _validate_scene(self) -> Self:
         _ = self.scene
         return self

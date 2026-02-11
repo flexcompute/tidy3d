@@ -81,7 +81,7 @@ from .parameter_perturbation import (
 )
 from .time_modulation import ModulationSpec
 from .types import TYPE_TAG_STR, FreqBound, InterpMethod, TensorReal
-from .validators import validate_name_str, validate_parameter_perturbation
+from .validators import call_wrapped_validator, validate_name_str, validate_parameter_perturbation
 from .viz import VisualizationSpec, add_ax_if_none
 
 if TYPE_CHECKING:
@@ -237,6 +237,13 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     )
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        self._validate_nonlinear_spec()
+        self._check_either_modulation_or_nonlinear_spec()
+        self._validate_modulation_spec_after()
+        return self
+
     def _validate_nonlinear_spec(self) -> Self:
         """Check compatibility with nonlinear_spec."""
         if self.__class__.__name__ == "AnisotropicMedium" and any(
@@ -276,7 +283,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                 )
         return self
 
-    @model_validator(mode="after")
     def _check_either_modulation_or_nonlinear_spec(self) -> Self:
         """Check compatibility with modulation_spec."""
         val = self.modulation_spec
@@ -291,7 +297,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     _name_validator = validate_name_str()
 
-    @model_validator(mode="after")
     def _validate_modulation_spec_after(self) -> Self:
         """Check compatibility with nonlinear_spec."""
         if self.__class__.__name__ == "Medium2D" and any(
@@ -1487,6 +1492,14 @@ class Medium(AbstractMedium):
     )
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._passivity_validation()
+        self._permittivity_modulation_validation()
+        self._passivity_modulation_validation()
+        return self
+
     def _passivity_validation(self) -> Self:
         """Assert passive medium if ``allow_gain`` is False."""
         val = self.conductivity
@@ -1498,7 +1511,6 @@ class Medium(AbstractMedium):
             )
         return self
 
-    @model_validator(mode="after")
     def _permittivity_modulation_validation(self) -> Self:
         """Assert modulated permittivity cannot be <= 0."""
         val = self.permittivity
@@ -1513,7 +1525,6 @@ class Medium(AbstractMedium):
             )
         return self
 
-    @model_validator(mode="after")
     def _passivity_modulation_validation(self) -> Self:
         """Assert passive medium if ``allow_gain`` is False."""
         val = self.conductivity
@@ -1693,6 +1704,17 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         return val
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        # Keep ordering explicit; avoid super() to prevent passivity from running before
+        # conductivity shape checks (and to avoid duplicate passivity calls).
+        AbstractMedium._run_after_validators(self)
+        self._permittivity_modulation_validation()
+        self._passivity_modulation_validation()
+        self._conductivity_real_and_correct_shape()
+        self._passivity_validation()
+        return self
+
     def _conductivity_real_and_correct_shape(self) -> Self:
         """Assert conductivity is real and of right shape."""
         val = self.conductivity
@@ -1707,7 +1729,6 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
             raise SetupError("'permittivity' and 'conductivity' must have the same coordinates.")
         return self
 
-    @model_validator(mode="after")
     def _passivity_validation(self) -> Self:
         """Assert passive medium if ``allow_gain`` is False."""
         val = self.conductivity
@@ -1889,6 +1910,16 @@ class CustomMedium(AbstractCustomMedium):
         return data
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._deprecation_dataset()
+        self._eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive()
+        self._eps_inf_greater_no_less_than_one()
+        self._conductivity_non_negative_correct_shape()
+        self._passivity_modulation_validation()
+        return self
+
     def _deprecation_dataset(self) -> Self:
         """Raise deprecation warning if dataset supplied and convert to dataset."""
 
@@ -1955,7 +1986,6 @@ class CustomMedium(AbstractCustomMedium):
                 )
         return val
 
-    @model_validator(mode="after")
     def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(self) -> Self:
         """Assert any eps_inf must be >=1"""
         val = self.eps_dataset
@@ -2004,7 +2034,6 @@ class CustomMedium(AbstractCustomMedium):
                 )
         return self
 
-    @model_validator(mode="after")
     def _eps_inf_greater_no_less_than_one(self) -> Self:
         """Assert any eps_inf must be >=1"""
         val = self.permittivity
@@ -2028,7 +2057,6 @@ class CustomMedium(AbstractCustomMedium):
 
         return self
 
-    @model_validator(mode="after")
     def _conductivity_non_negative_correct_shape(self) -> Self:
         """Assert conductivity>=0"""
         val = self.conductivity
@@ -2052,7 +2080,6 @@ class CustomMedium(AbstractCustomMedium):
 
         return self
 
-    @model_validator(mode="after")
     def _passivity_modulation_validation(self) -> Self:
         """Assert passive medium at any time during modulation if ``allow_gain`` is False."""
         val = self.conductivity
@@ -2672,6 +2699,15 @@ class DispersiveMedium(AbstractMedium, ABC):
 
         return _validate_conductivity_modulation
 
+    @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        if "eps_inf" in self.model_fields:
+            call_wrapped_validator(DispersiveMedium._permittivity_modulation_validation, self)
+        call_wrapped_validator(DispersiveMedium._conductivity_modulation_validation, self)
+        return self
+
     @abstractmethod
     def _pole_residue_dict(self) -> dict:
         """Dict representation of Medium as a pole-residue model."""
@@ -2967,9 +3003,6 @@ class PoleResidue(DispersiveMedium):
             if np.any(abs(_get_numpy_array(c)) > LARGEST_FP_NUMBER):
                 raise ValidationError("The value of some 'c_i' is too large.")
         return val
-
-    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
-    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     @staticmethod
     def _eps_model(eps_inf: PositiveFloat, poles: PolesAndResidues, frequency: float) -> complex:
@@ -3550,6 +3583,12 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         return val
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._poles_correct_shape()
+        return self
+
     def _poles_correct_shape(self) -> Self:
         """poles must have the same shape."""
         val = self.poles
@@ -3820,6 +3859,13 @@ class Sellmeier(DispersiveMedium):
     )
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        AbstractMedium._run_after_validators(self)
+        self._passivity_validation()
+        call_wrapped_validator(DispersiveMedium._conductivity_modulation_validation, self)
+        return self
+
     def _passivity_validation(self) -> Self:
         """Assert passive medium if `allow_gain` is False."""
         val = self.coeffs
@@ -3851,8 +3897,6 @@ class Sellmeier(DispersiveMedium):
                 "The minimum permittivity value with modulation applied was found to be negative."
             )
         return val
-
-    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     def _n_model(self, frequency: float) -> complex:
         """Complex-valued refractive index as a function of frequency."""
@@ -4056,7 +4100,6 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
                 raise SetupError("'C' must be positive.")
         return val
 
-    @model_validator(mode="after")
     def _passivity_validation(self) -> Self:
         """Assert passive medium if `allow_gain` is False."""
         val = self.coeffs
@@ -4327,6 +4370,13 @@ class Lorentz(DispersiveMedium):
         return val
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._validate_coeffs_shape()
+        self._passivity_validation()
+        return self
+
     def _passivity_validation(self) -> Self:
         """Assert passive medium if ``allow_gain`` is False."""
         val = self.coeffs
@@ -4342,8 +4392,9 @@ class Lorentz(DispersiveMedium):
                 )
         return self
 
-    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
-    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
+    def _validate_coeffs_shape(self) -> Self:
+        """Hook for subclasses that need coeff shape checks."""
+        return self
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -4602,7 +4653,6 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         """
         return val
 
-    @model_validator(mode="after")
     def _coeffs_correct_shape(self) -> Self:
         """coeffs must have consistent shape."""
         val = self.coeffs
@@ -4620,6 +4670,9 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
                 raise SetupError("All terms in 'coeffs' must be real.")
         return self
 
+    def _validate_coeffs_shape(self) -> Self:
+        return self._coeffs_correct_shape()
+
     @field_validator("coeffs")
     @classmethod
     def _coeffs_delta_all_smaller_or_larger_than_fi(
@@ -4636,7 +4689,6 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
                 )
         return val
 
-    @model_validator(mode="after")
     def _passivity_validation(self) -> Self:
         """Assert passive medium if ``allow_gain`` is False."""
         val = self.coeffs
@@ -4842,9 +4894,6 @@ class Drude(DispersiveMedium):
         json_schema_extra={"units": (HERTZ, HERTZ)},
     )
 
-    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
-    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
-
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
@@ -5007,6 +5056,12 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         return val
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._coeffs_correct_shape_and_sign()
+        return self
+
     def _coeffs_correct_shape_and_sign(self) -> Self:
         """coeffs must have consistent shape and sign."""
         val = self.coeffs
@@ -5190,6 +5245,13 @@ class Debye(DispersiveMedium):
     )
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._validate_coeffs_shape()
+        self._passivity_validation()
+        return self
+
     def _passivity_validation(self) -> Self:
         """Assert passive medium if `allow_gain` is False."""
         val = self.coeffs
@@ -5205,8 +5267,9 @@ class Debye(DispersiveMedium):
                 )
         return self
 
-    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
-    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
+    def _validate_coeffs_shape(self) -> Self:
+        """Hook for subclasses that need coeff shape checks."""
+        return self
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -5366,7 +5429,6 @@ class CustomDebye(CustomDispersiveMedium, Debye):
             raise SetupError("'eps_inf' must be positive.")
         return val
 
-    @model_validator(mode="after")
     def _coeffs_correct_shape(self) -> Self:
         """coeffs must have consistent shape."""
         val = self.coeffs
@@ -5381,6 +5443,9 @@ class CustomDebye(CustomDispersiveMedium, Debye):
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((de, tau)):
                 raise SetupError("All terms in 'coeffs' must be real.")
         return self
+
+    def _validate_coeffs_shape(self) -> Self:
+        return self._coeffs_correct_shape()
 
     @field_validator("coeffs")
     @classmethod
@@ -5436,7 +5501,6 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
         return grads
 
-    @model_validator(mode="after")
     def _passivity_validation(self) -> Self:
         """Assert passive medium if ``allow_gain`` is False."""
         val = self.coeffs
@@ -6057,6 +6121,12 @@ class AnisotropicMedium(AbstractMedium):
         return val
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._ignored_fields()
+        return self
+
     def _ignored_fields(self) -> Self:
         """The field is ignored."""
         if self.xx is not None and self.allow_gain is not None:
@@ -6350,7 +6420,14 @@ class FullyAnisotropicMedium(AbstractMedium):
         return val
 
     @model_validator(mode="after")
-    def conductivity_commutes(self) -> Self:
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._conductivity_commutes()
+        self._passivity_validation()
+        return self
+
+    def _conductivity_commutes(self) -> Self:
         """Check that the symmetric part of conductivity tensor commutes with permittivity tensor
         (that is, simultaneously diagonalizable).
         """
@@ -6367,7 +6444,6 @@ class FullyAnisotropicMedium(AbstractMedium):
 
         return self
 
-    @model_validator(mode="after")
     def _passivity_validation(self) -> Self:
         """Assert passive medium if ``allow_gain`` is False."""
         val = self.conductivity
@@ -6641,7 +6717,6 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
             raise SetupError(f"The {info.field_name}-component medium type is not isotropic.")
         return val
 
-    @model_validator(mode="after")
     def _ignored_fields(self) -> Self:
         """The field is ignored."""
         if self.xx is not None:
@@ -6956,6 +7031,12 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
     )
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._check_overdefining()
+        return self
+
     def _check_overdefining(self) -> Self:
         """Check that perturbation model is provided either directly or through
         ``perturbation_spec``, but not both.
@@ -7133,6 +7214,12 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     )
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._check_overdefining()
+        return self
+
     def _check_overdefining(self) -> Self:
         """Check that perturbation model is provided either directly or through
         ``perturbation_spec``, but not both.
@@ -7348,6 +7435,12 @@ class Medium2D(AbstractMedium):
         return val
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        super()._run_after_validators()
+        self._validate_inplane_pec()
+        return self
+
     def _validate_inplane_pec(self) -> Self:
         """ss/tt components must be both PEC or non-PEC."""
         val = self.tt

@@ -26,6 +26,7 @@ from tidy3d.components.source.field import ModeSource
 from tidy3d.components.types import Direction, EMField, FreqArray
 from tidy3d.components.types.base import TYPE_TAG_STR, discriminated_union
 from tidy3d.components.types.mode_spec import ModeSpecType
+from tidy3d.components.validators import call_wrapped_validator
 from tidy3d.constants import C_0
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -126,9 +127,6 @@ class ModeSimulation(AbstractYeeGridSimulation):
     **Lectures:**
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
-
-    # This validator needs to run before others that might access _mode_solver
-    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims(warn_on_change=False)
 
     mode_spec: ModeSpecType = Field(
         title="Mode specification",
@@ -231,7 +229,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     @model_validator(mode="before")
     @classmethod
-    def is_plane(cls, data: dict[str, Any]) -> dict[str, Any]:
+    def _is_plane(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Raise validation error if not planar."""
         if hasattr(data, "get") and data.get("plane") is None:
             val = Box(size=data.get("size"), center=data.get("center"))
@@ -244,19 +242,28 @@ class ModeSimulation(AbstractYeeGridSimulation):
         return data
 
     @model_validator(mode="after")
-    def plane_in_sim_bounds(self) -> Self:
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        call_wrapped_validator(validate_boundaries_for_zero_dims, self, warn_on_change=False)
+        self._structures_not_at_edges()
+        self._validate_scene()
+        super()._run_after_validators()
+        self._plane_in_sim_bounds()
+        self._validate_mode_solver()
+        self._validate_grid()
+        return self
+
+    def _plane_in_sim_bounds(self) -> Self:
         """Check that the plane is at least partially inside the simulation bounds."""
         sim_box = Box(size=self.size, center=self.center)
         if not sim_box.intersects(self.plane):
             raise SetupError("'ModeSimulation.plane' must intersect 'ModeSimulation.geometry.")
         return self
 
-    @model_validator(mode="after")
     def _validate_mode_solver(self) -> Self:
         _ = self._mode_solver
         return self
 
-    @model_validator(mode="after")
     def _validate_grid(self) -> Self:
         _ = self.grid
         return self
