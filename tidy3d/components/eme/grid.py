@@ -30,10 +30,24 @@ MAX_NUM_REPS = 100000
 
 
 class EMEModeSpec(ModeSpec):
-    """Mode spec for EME cells. Overrides some of the defaults and allowed values."""
+    """Mode specification for EME cells.
+
+    Notes
+    -----
+        Inherits from :class:`.ModeSpec` but overrides several defaults and constraints
+        for use in EME simulations:
+
+        - Propagation angles (``angle_theta``, ``angle_phi``) are locked to ``0``.
+          For off-normal injection, use a :class:`.ModeSolverMonitor` together with
+          :meth:`.EMESimulationData.smatrix_in_basis`.
+        - Default precision is ``'auto'`` (double precision for structures with good
+          conductors, single precision otherwise).
+        - Includes an ``interp_spec`` field for frequency interpolation of modes,
+          which can significantly reduce cost for broadband simulations.
+    """
 
     interp_spec: Optional[ModeInterpSpec] = Field(
-        ModeInterpSpec.cheb(num_points=3, reduce_data=True),
+        ModeInterpSpec.cheb(num_points=5, reduce_data=True),
         title="Mode frequency interpolation specification",
         description="Specification for computing modes at a reduced set of frequencies and "
         "interpolating to obtain results at all requested frequencies. This can significantly "

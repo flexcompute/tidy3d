@@ -8,11 +8,8 @@ import numpy as np
 from pydantic import Field
 from xarray import DataArray as XrDataArray
 
-try:
-    from matplotlib import pyplot as plt
+if TYPE_CHECKING:
     from matplotlib.tri import Triangulation
-except ImportError:
-    pass
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
@@ -583,6 +580,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
     @property
     def _triangulation_obj(self) -> Triangulation:
         """Matplotlib triangular representation of the grid to use in plotting."""
+        from matplotlib.tri import Triangulation
+
         return Triangulation(self.points[:, 0], self.points[:, 1], self.cells)
 
     @equal_aspect
@@ -659,6 +658,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
             )
 
             if cbar:
+                from matplotlib import pyplot as plt
+
                 label_kwargs = {}
                 if "label" not in cbar_kwargs:
                     label_kwargs["label"] = self.values.name

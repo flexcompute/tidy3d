@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from tidy3d.components.data.index import SimulationDataMap
+from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
@@ -11,9 +12,12 @@ from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.web import Batch
 
 if TYPE_CHECKING:
+    from typing import Optional, Union
+
     from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
     from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
     from tidy3d.web import BatchData
+    from tidy3d.web.api.autograd.types import CustomVJPConfig
 
 DEFAULT_DATA_DIR = "."
 
@@ -117,6 +121,7 @@ def create_batch(
 def _run_local(
     modeler: ComponentModelerType,
     path_dir: str = DEFAULT_DATA_DIR,
+    custom_vjp: Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig]]] = None,
     **kwargs: Any,
 ) -> ComponentModelerDataType:
     """Execute the full simulation workflow for a given component modeler.
@@ -132,6 +137,9 @@ def _run_local(
         The component modeler defining the simulations to be run.
     path_dir : str, optional
         The directory where the batch file will be saved. Defaults to ".".
+    custom_vjp : Union[CustomVJPConfig, tuple[CustomVJPConfig]] = None
+        Specification of alternate gradient function for certain structures in the simulation.
+        This can be a single vjp configuration or multiple specified in a tuple.
     **kwargs
         Extra keyword arguments propagated to the Batch creation.
 
@@ -144,9 +152,14 @@ def _run_local(
 
     # autograd path if any sim is valid for autograd
     from tidy3d.web.api.autograd import autograd as web_ag
+    from tidy3d.web.api.autograd.autograd import expand_custom_vjp
+    from tidy3d.web.api.autograd.types import CustomVJPConfig
 
     sims = modeler.sim_dict
-    if any(web_ag.is_valid_for_autograd(sim) for sim in sims.values()):
+
+    should_use_autograd = any(web_ag.is_valid_for_autograd(sim) for sim in sims.values())
+
+    if should_use_autograd:
         if len(modeler.element_mappings) > 0:
             log.warning(
                 "Element mappings are used to populate S-matrix values, but autograd gradients "
@@ -162,7 +175,29 @@ def _run_local(
         kwargs.setdefault("simulation_type", "tidy3d_autograd_async")
         kwargs.setdefault("path_dir", path_dir)
 
-        sim_data_map = _run_async(simulations=sims, **kwargs)
+        local_gradient = kwargs.get("local_gradient", True)
+
+        if not local_gradient:
+            if custom_vjp is not None:
+                raise AdjointError("custom_vjp specified for a remote gradient not supported.")
+
+        if isinstance(custom_vjp, CustomVJPConfig):
+            custom_vjp = (custom_vjp,)
+
+        expanded_custom_vjp_dict = None
+        if custom_vjp:
+            custom_vjp = dict.fromkeys(sims, custom_vjp)
+            expanded_custom_vjp_dict = {}
+            for sim_key, custom_vjp_entry in custom_vjp.items():
+                expanded_custom_vjp_dict[sim_key] = expand_custom_vjp(
+                    custom_vjp_entry, sims[sim_key]
+                )
+
+        sim_data_map = _run_async(
+            simulations=sims,
+            custom_vjp=expanded_custom_vjp_dict,
+            **kwargs,
+        )
 
         return compose_modeler_data_from_batch_data(modeler=modeler, batch_data=sim_data_map)
 

@@ -75,7 +75,6 @@ from .medium import (
     PECMedium,
 )
 from .microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
-from .microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from .monitor import (
     AbstractFieldProjectionMonitor,
     AbstractModeMonitor,
@@ -161,11 +160,6 @@ if TYPE_CHECKING:
         InterpMethod,
         Shapely,
     )
-
-try:
-    import matplotlib as mpl
-except ImportError:
-    pass
 
 try:
     gdstk_available = True
@@ -1178,6 +1172,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        import matplotlib as mpl
+
         kwargs.setdefault("linewidth", 0.2)
         kwargs.setdefault("colors", "black")
         kwargs.setdefault("colors_internal", "darkmagenta")
@@ -1349,6 +1345,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        import matplotlib as mpl
 
         def set_plot_params(
             boundary_edge: Union[ABCBoundary, ModeABCBoundary, BoundaryEdgeType],
@@ -1709,6 +1706,15 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             For details on xarray DataArray objects,
             refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
 
+        Note
+        ----
+        This method supports local subpixel averaging when the ``tidy3d-extras``
+        package is installed. The behavior is controlled by
+        ``config.simulation.use_local_subpixel``. See
+        :attr:`SimulationConfig.use_local_subpixel \
+<tidy3d.config.sections.SimulationConfig.use_local_subpixel>`
+        for details.
+
         See Also
         --------
 
@@ -1743,12 +1749,22 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         freq : float = None
             The frequency to evaluate the mediums at.
             If not specified, evaluates at infinite frequency.
+
         Returns
         -------
         xarray.DataArray
             Datastructure containing the relative permittivity values and location coordinates.
             For details on xarray DataArray objects,
             refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
+
+        Note
+        ----
+        This method supports local subpixel averaging when the ``tidy3d-extras``
+        package is installed. The behavior is controlled by
+        ``config.simulation.use_local_subpixel``. See
+        :attr:`SimulationConfig.use_local_subpixel \
+<tidy3d.config.sections.SimulationConfig.use_local_subpixel>`
+        for details.
         """
 
         grid_cells = np.prod(grid.num_cells)
@@ -4876,21 +4892,16 @@ class Simulation(AbstractYeeGridSimulation):
             if not isinstance(monitor, (MicrowaveModeMonitor, MicrowaveModeSolverMonitor)):
                 continue
 
-            if monitor.mode_spec._using_auto_current_spec:
-                mode_plane_analyzer = ModePlaneAnalyzer(
-                    center=monitor.center, size=monitor.size, field_data_colocated=monitor.colocate
-                )
-                try:
-                    _ = mode_plane_analyzer.get_conductor_bounding_boxes(
-                        self.volumetric_structures,
-                        self.grid,
-                        self.symmetry,
-                        self.simulation_geometry,
-                    )
-                except SetupError as e:
-                    raise SetupError(
-                        f"Failed to setup auto impedance specification for monitor '{monitor.name}'. {e!s}"
-                    ) from e
+            monitor.mode_spec._validate_auto_impedance_setup(
+                center=monitor.center,
+                size=monitor.size,
+                colocate=monitor.colocate,
+                volumetric_structures=self.volumetric_structures,
+                grid=self.grid,
+                symmetry=self.symmetry,
+                simulation_geometry=self.simulation_geometry,
+                label=f" for monitor '{monitor.name}'",
+            )
 
     @cached_property
     def monitors_data_size(self) -> dict[str, float]:

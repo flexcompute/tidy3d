@@ -23,7 +23,15 @@ BYTES_COMPLEX = 8
 
 
 class EMEMonitor(AbstractMonitor, ABC):
-    """Abstract EME monitor."""
+    """Abstract base class for EME monitors.
+
+    Notes
+    -----
+        EME monitors record data from the EME eigenmode expansion and propagation.
+        Unlike FDTD monitors, they do not record time-domain data; instead they
+        record modal quantities such as eigenmodes, mode coefficients, and
+        fields reconstructed from the EME basis.
+    """
 
     freqs: Optional[FreqArray] = Field(
         None,
@@ -208,7 +216,15 @@ class EMEModeSolverMonitor(EMEMonitor):
 
 
 class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
-    """EME monitor for propagated field.
+    """EME monitor for propagated electromagnetic field.
+
+    Notes
+    -----
+        Records the E and H fields assembled from EME modes and their propagation
+        coefficients. The field is stored as a function of spatial coordinates,
+        frequency, ``sweep_index``, ``eme_port_index``, and ``mode_index``, where
+        ``eme_port_index`` indicates the excitation port and ``mode_index`` indicates
+        the excited mode at that port.
 
     Example
     -------
@@ -274,9 +290,15 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
 
 
 class EMECoefficientMonitor(EMEMonitor):
-    """EME monitor for mode coefficients.
-    Records the amplitudes of the forward and backward modes in each cell
-    intersecting the monitor geometry.
+    """EME monitor for mode coefficients and related quantities.
+
+    Notes
+    -----
+        Records the amplitudes of the forward (``A``) and backward (``B``) modes
+        in each cell intersecting the monitor geometry. Additional fields can be
+        recorded by including them in the ``fields`` parameter: propagation indices
+        (``n_complex``), power flux (``flux``), interface S matrices
+        (``interface_smatrices``), and mode overlaps (``overlaps``).
 
     Example
     -------

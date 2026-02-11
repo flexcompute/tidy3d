@@ -40,8 +40,69 @@ expected_task_names = {
 }
 
 
+def make_mode_solver_data(freqs, num_modes=1):
+    mode_spec = td.ModeSpec(num_modes=num_modes)
+    monitor = td.ModeSolverMonitor(
+        size=(1.0, 0.0, 1.0),
+        center=(0.0, 0.0, 0.0),
+        freqs=freqs,
+        mode_spec=mode_spec,
+        name="modes",
+    )
+    coords = {
+        "x": np.array([0.0]),
+        "y": np.array([0.0]),
+        "z": np.array([0.0]),
+        "f": np.array(freqs),
+        "mode_index": np.arange(num_modes),
+    }
+    field_values = (1 + 1j) * np.ones((1, 1, 1, len(coords["f"]), num_modes))
+    field = td.ScalarModeFieldDataArray(field_values, coords=coords)
+    n_complex = td.ModeIndexDataArray(
+        (1 + 1j) * np.ones((len(coords["f"]), num_modes)),
+        coords={"f": coords["f"], "mode_index": coords["mode_index"]},
+    )
+    grid = td.Grid(
+        boundaries=td.Coords(
+            x=np.array([-0.5, 0.5]),
+            y=np.array([-0.5, 0.5]),
+            z=np.array([-0.5, 0.5]),
+        )
+    )
+    return td.ModeSolverData(
+        monitor=monitor,
+        symmetry=(0, 0, 0),
+        symmetry_center=(0.0, 0.0, 0.0),
+        grid_expanded=grid,
+        n_complex=n_complex,
+        Ex=field,
+        Ey=field,
+        Ez=field,
+        Hx=field,
+        Hy=field,
+        Hz=field,
+    )
+
+
+def run_emulated_workflow(simulation, path=None, **kwargs):
+    if isinstance(simulation, td.Simulation):
+        return run_emulated(simulation, path=path, **kwargs)
+    if isinstance(simulation, td.ModeSimulation):
+        mode_data = make_mode_solver_data(
+            freqs=simulation.freqs, num_modes=simulation.mode_spec.num_modes
+        )
+        return td.ModeSimulationData(simulation=simulation, modes_raw=mode_data)
+    if isinstance(simulation, td.ModeSolver):
+        return make_mode_solver_data(
+            freqs=simulation.freqs, num_modes=simulation.mode_spec.num_modes
+        )
+    raise TypeError(f"Unsupported workflow type for emulation: {type(simulation).__name__}")
+
+
 def emulated_batch_run(simulations, path_dir: Optional[str] = None, **kwargs):
-    data_dict = {task_name: run_emulated(sim) for task_name, sim in simulations.simulations.items()}
+    data_dict = {
+        task_name: run_emulated_workflow(sim) for task_name, sim in simulations.simulations.items()
+    }
     task_ids = dict(zip(simulations.simulations.keys(), data_dict.keys()))
     task_paths = {key: f"/path/to/{key}" for key in simulations.simulations.keys()}
 
@@ -319,6 +380,26 @@ def scs_post_aux(sim_data):
     )
 
 
+def mode_sim_pre(width: float) -> td.ModeSimulation:
+    mode_spec = td.ModeSpec(num_modes=1)
+    return td.ModeSimulation(
+        size=(width, width, 0.0),
+        freqs=[td.C_0 / 1.55],
+        mode_spec=mode_spec,
+        grid_spec=td.GridSpec(wavelength=1.55),
+    )
+
+
+def mode_sim_post(sim_data: td.ModeSimulationData) -> float:
+    return float(np.real(sim_data.modes_raw.n_complex.values).sum())
+
+
+def mode_sim_combined(width: float) -> float:
+    sim = mode_sim_pre(width=width)
+    sim_data = web.run(sim, task_name="mode_design")
+    return mode_sim_post(sim_data)
+
+
 def init_design_space(sweep_method):
     radius_variable = tdd.ParameterFloat(
         name="radius",
@@ -343,6 +424,21 @@ def init_design_space(sweep_method):
     return design_space
 
 
+def init_mode_design_space():
+    width_variable = tdd.ParameterFloat(
+        name="width",
+        span=(0.5, 1.0),
+        num_points=2,
+    )
+    design_space = tdd.DesignSpace(
+        parameters=[width_variable],
+        method=tdd.MethodGrid(),
+        name="mode sweep",
+        task_name="ModeGrid",
+    )
+    return design_space
+
+
 @pytest.mark.parametrize("sweep_method", SWEEP_METHODS.values())
 @pytest.mark.slow
 def test_sweep(sweep_method, monkeypatch):
@@ -351,7 +447,7 @@ def test_sweep(sweep_method, monkeypatch):
     #   use defines `scs` function to set up and run simulation as function of inputs.
     #   then postprocesses the data to give the SCS.
 
-    monkeypatch.setattr(web, "run", run_emulated)
+    monkeypatch.setattr(web, "run", run_emulated_workflow)
 
     monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
 
@@ -480,6 +576,19 @@ def test_priority_forwarded_to_batch(monkeypatch):
     assert captured_priority["value"] == 7
 
 
+def test_mode_simulation_sweep(monkeypatch):
+    monkeypatch.setattr(web, "run", run_emulated_workflow)
+    monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
+
+    design_space = init_mode_design_space()
+
+    pre_post = design_space.run(mode_sim_pre, mode_sim_post, verbose=False)
+    combined = design_space.run(mode_sim_combined, verbose=False)
+
+    assert np.allclose(pre_post.values, combined.values)
+    assert all("ModeGrid" in name for name in pre_post.task_names)
+
+
 def emulated_estimate_cost_return(self, verbose=True):
     return 0.5
 
@@ -499,7 +608,7 @@ def test_estimate_cost(est_cost_func, sweep_method, monkeypatch):
         pass
 
     # Still need to emulate the run as tests may call tidy3d
-    monkeypatch.setattr(web, "run", run_emulated)
+    monkeypatch.setattr(web, "run", run_emulated_workflow)
 
     monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
 
@@ -545,7 +654,7 @@ def test_estimate_cost(est_cost_func, sweep_method, monkeypatch):
 def test_sample_specific(sweep_method, monkeypatch):
     """Run tests that are only relevant to MethodSample"""
 
-    monkeypatch.setattr(web, "run", run_emulated)
+    monkeypatch.setattr(web, "run", run_emulated_workflow)
 
     monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
 
@@ -579,7 +688,7 @@ method_module_convert = {
 def test_optimize_specific(sweep_method, monkeypatch):
     """Run tests that are only relevant to MethodOptimize"""
 
-    monkeypatch.setattr(web, "run", run_emulated)
+    monkeypatch.setattr(web, "run", run_emulated_workflow)
 
     monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
 

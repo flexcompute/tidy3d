@@ -103,7 +103,18 @@ class SimulationConfig(ConfigSection):
         None,
         title="Use local subpixel",
         description=(
-            "If True, force local subpixel averaging; False disables it; None keeps default behavior."
+            "Controls whether local subpixel averaging is used in "
+            "'Simulation.epsilon', 'ModeSimulation.run_local', and 'ModeSolver.solve'. "
+            "Subpixel averaging improves the accuracy of these computations. "
+            "This feature requires the 'tidy3d-extras' package, which "
+            r"can be installed using 'pip install tidy3d\[extras]'. "
+            "If True, local subpixel averaging is enabled, and these functions will "
+            "raise an error if 'tidy3d-extras' is not installed. "
+            "If False, local subpixel averaging is disabled and these functions "
+            "will use permittivity staircasing instead. "
+            "If None (the default), local subpixel averaging will be used when "
+            "'tidy3d-extras' is installed and will silently fall back "
+            "to permittivity staircasing otherwise."
         ),
     )
 

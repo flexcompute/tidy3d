@@ -63,7 +63,6 @@ from tidy3d.components.types.base import (
     UnitsZBF,
     xyz,
 )
-from tidy3d.components.types.third_party import TrimeshType
 from tidy3d.components.types.utils import _add_schema
 
 __all__ = [
@@ -123,7 +122,6 @@ __all__ = [
     "Symmetry",
     "TensorReal",
     "TrackFreq",
-    "TrimeshType",
     "Undefined",
     "UnitsZBF",
     "_add_schema",

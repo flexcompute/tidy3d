@@ -80,6 +80,11 @@ TRANSFORMED = td.Transformed(
     transform=td.Transformed.rotation(np.pi / 6, 0),
 )
 
+GEOMETRY_ARRAY = td.GeometryArray(
+    geometry=BOX,
+    offsets=[[0, 0, 0], [2, 0, 0], [0, 2, 0]],
+)
+
 
 GEO_TYPES = [
     BOX,
@@ -92,6 +97,7 @@ GEO_TYPES = [
     SYM_DIFFERENCE,
     GROUP,
     TRANSFORMED,
+    GEOMETRY_ARRAY,
 ]
 
 _, AX = plt.subplots()
@@ -1791,3 +1797,225 @@ def test_flatten_shapely_geometries():
     # Test 13: Edge case - single empty geometry
     result = flatten_shapely_geometries(empty_polygon)
     assert len(result) == 0
+
+
+# ======================= GeometryArray Tests =======================
+
+
+def test_geometry_array_basic():
+    """Test GeometryArray creation, bounds, and inside methods."""
+    box = td.Box(size=(1, 1, 1))
+    offsets = [[0, 0, 0], [3, 0, 0]]
+    array = td.GeometryArray(geometry=box, offsets=offsets)
+
+    # Creation
+    assert array.num_geometries == 2
+    assert array.geometry == box
+
+    # Bounds: boxes at (0,0,0) and (3,0,0)
+    np.testing.assert_allclose(array.bounds[0], (-0.5, -0.5, -0.5))
+    np.testing.assert_allclose(array.bounds[1], (3.5, 0.5, 0.5))
+
+    # Inside with scalars
+    assert array.inside(0, 0, 0)
+    assert array.inside(3, 0, 0)
+    assert not array.inside(1.5, 0, 0)
+
+    # Inside with arrays
+    result = array.inside(np.array([0, 1.5, 3]), np.zeros(3), np.zeros(3))
+    np.testing.assert_array_equal(result, [True, False, True])
+
+    # Convenience method
+    array2 = box.array(offsets=offsets)
+    assert isinstance(array2, td.GeometryArray)
+    assert array2.num_geometries == 2
+
+
+def test_geometry_array_with_transforms():
+    """Test GeometryArray with transforms (with and without offsets)."""
+    box = td.Box(size=(2, 1, 1))
+    rotation = td.Transformed.rotation(np.pi / 2, 2)
+
+    # Transforms only (no offsets)
+    array = td.GeometryArray(geometry=box, transforms=[np.eye(4), rotation])
+    assert array.num_geometries == 2
+    assert array.offsets is None
+    assert array.inside(0.5, 0, 0)  # First instance along x
+    assert array.inside(0, 0.8, 0)  # Second instance rotated, long axis now along y
+
+    # Transforms with offsets
+    array = td.GeometryArray(
+        geometry=box, offsets=[[0, 0, 0], [4, 0, 0]], transforms=[np.eye(4), rotation]
+    )
+    assert array.inside(0.5, 0, 0)  # First instance
+    assert array.inside(4, 0.5, 0)  # Second instance rotated and translated
+
+
+def test_geometry_array_both_none():
+    """Test GeometryArray with both offsets and transforms as None."""
+    box = td.Box(size=(1, 1, 1))
+    array = td.GeometryArray(geometry=box)
+
+    assert array.num_geometries == 1
+    assert array.inside(0, 0, 0)
+    assert not array.inside(1, 0, 0)
+    np.testing.assert_allclose(array.bounds[0], (-0.5, -0.5, -0.5))
+
+
+def _transform_with_translation():
+    """Helper to create a transform matrix with translation (invalid for GeometryArray)."""
+    t = np.eye(4)
+    t[:3, 3] = [1, 2, 3]  # Add translation - not allowed in GeometryArray
+    return t
+
+
+def _transform_with_bad_bottom_row():
+    """Helper to create a transform matrix with invalid bottom row."""
+    t = np.eye(4)
+    t[3, :] = [1, 0, 0, 1]  # Invalid bottom row
+    return t
+
+
+@pytest.mark.parametrize(
+    "kwargs,error_match",
+    [
+        ({"offsets": []}, "at least one offset"),
+        ({"transforms": []}, "at least one transform"),
+        ({"offsets": [[0, 0], [2, 0]]}, None),  # Wrong shape
+        ({"offsets": [0, 0, 0]}, None),  # 1D instead of 2D
+        ({"offsets": [[0, 0, 0], [2, 0, 0]], "transforms": [np.eye(4)]}, "must match"),
+        ({"offsets": [[0, 0, 0]], "transforms": [np.zeros((4, 4))]}, "singular"),
+        # Linear-only transform validation
+        ({"transforms": [_transform_with_translation()]}, "contains translation"),
+        ({"transforms": [_transform_with_bad_bottom_row()]}, "invalid homogeneous form"),
+    ],
+)
+def test_geometry_array_validation(kwargs, error_match):
+    """Test GeometryArray validation errors."""
+    box = td.Box(size=(1, 1, 1))
+    with pytest.raises(pd.ValidationError):
+        td.GeometryArray(geometry=box, **kwargs)
+
+
+def test_geometry_array_validation_infinite_geometry():
+    """Test validation rejects infinite geometry."""
+    with pytest.raises(pd.ValidationError):
+        td.GeometryArray(geometry=td.Box(size=(1, 1, td.inf)), offsets=[[0, 0, 0]])
+
+
+def test_geometry_array_geometry_operations():
+    """Test plot, intersections, volume, and surface_area."""
+    box = td.Box(size=(1, 1, 1))
+    offsets = [[0, 0, 0], [3, 0, 0]]
+    array = td.GeometryArray(geometry=box, offsets=offsets)
+
+    # Plot
+    fig, ax = plt.subplots()
+    array.plot(z=0, ax=ax)
+    plt.close(fig)
+
+    # Intersections
+    assert len(array.intersections_plane(z=0)) == 2
+    assert len(array.intersections_plane(z=10)) == 0
+
+    # Volume and surface area
+    assert np.isclose(array.volume(), 2.0)
+    assert np.isclose(array.surface_area(), 12.0)
+
+
+def test_geometry_array_equivalence_with_geometry_group():
+    """Test that GeometryArray matches equivalent GeometryGroup."""
+    box = td.Box(size=(1, 1, 1))
+    offsets = [[0, 0, 0], [2, 0, 0], [0, 2, 0]]
+
+    array = td.GeometryArray(geometry=box, offsets=offsets)
+    group = td.GeometryGroup(
+        geometries=[box.translated(0, 0, 0), box.translated(2, 0, 0), box.translated(0, 2, 0)]
+    )
+
+    # Bounds match
+    np.testing.assert_allclose(array.bounds[0], group.bounds[0], atol=1e-10)
+    np.testing.assert_allclose(array.bounds[1], group.bounds[1], atol=1e-10)
+
+    # Inside matches
+    for point in [(0, 0, 0), (2, 0, 0), (0, 2, 0), (1, 1, 0), (10, 10, 10)]:
+        assert array.inside(*point) == group.inside(*point)
+
+
+def test_geometry_array_with_different_geometries():
+    """Test GeometryArray with Sphere, Cylinder, and PolySlab."""
+    offsets = [[0, 0, 0], [2, 0, 0]]
+
+    for geom in [
+        td.Sphere(radius=0.5),
+        td.Cylinder(radius=0.5, length=1, axis=2),
+    ]:
+        array = td.GeometryArray(geometry=geom, offsets=offsets)
+        assert array.inside(0, 0, 0)
+        assert array.inside(2, 0, 0)
+        assert not array.inside(1, 0, 0)
+
+    # PolySlab
+    polyslab = td.PolySlab(vertices=((0, 0), (1, 0), (1, 1), (0, 1)), slab_bounds=(-0.5, 0.5))
+    array = td.GeometryArray(geometry=polyslab, offsets=offsets)
+    assert array.inside(0.5, 0.5, 0)
+    assert array.inside(2.5, 0.5, 0)
+
+
+def test_geometry_array_adjoint_not_supported():
+    """Test that GeometryArray raises NotImplementedError for adjoint/autodiff."""
+    box = td.Box(size=(1, 1, 1))
+    array = td.GeometryArray(geometry=box, offsets=[[0, 0, 0], [2, 0, 0]])
+
+    with pytest.raises(NotImplementedError):
+        array._compute_derivatives(derivative_info=None)
+
+
+def test_geometry_array_normal_2dmaterial():
+    """Test _normal_2dmaterial for GeometryArray with 2D geometries."""
+    # Zero-thickness box normal to z
+    box_2d = td.Box(center=(0, 0, 0), size=(1, 1, 0))
+    offsets = np.array([[0, 0, 0], [2, 0, 0], [4, 0, 0]])
+    array = td.GeometryArray(geometry=box_2d, offsets=offsets)
+    assert array._normal_2dmaterial == 2
+
+    # Zero-thickness box normal to y
+    box_2d_y = td.Box(center=(0, 0, 0), size=(1, 0, 1))
+    array_y = td.GeometryArray(geometry=box_2d_y, offsets=offsets)
+    assert array_y._normal_2dmaterial == 1
+
+    # 3D geometry should raise
+    box_3d = td.Box(size=(1, 1, 1))
+    array_3d = td.GeometryArray(geometry=box_3d, offsets=offsets)
+    with pytest.raises(ValidationError):
+        _ = array_3d._normal_2dmaterial
+
+
+def test_geometry_array_update_from_bounds():
+    """Test _update_from_bounds for GeometryArray with 2D geometries."""
+    box_2d = td.Box(center=(0, 0, 0), size=(1, 1, 0))
+    offsets = np.array([[0, 0, 0], [2, 0, 0]])
+    array = td.GeometryArray(geometry=box_2d, offsets=offsets)
+
+    new_bounds = (3.2, 6.4)
+    axis = 2
+    updated = array._update_from_bounds(bounds=new_bounds, axis=axis)
+
+    # Result should be a GeometryGroup
+    assert isinstance(updated, td.GeometryGroup)
+
+    # All sub-geometries should have the new bounds along the axis
+    for geom in updated.geometries:
+        geom_bounds = (geom.bounds[0][axis], geom.bounds[1][axis])
+        assert np.isclose(geom_bounds, new_bounds).all()
+
+
+def test_geometry_array_medium2d_structure():
+    """Test that GeometryArray works with Medium2D in a Structure."""
+    box_2d = td.Box(center=(0, 0, 0.5), size=(1, 1, 0))
+    offsets = np.array([[0, 0, 0], [2, 0, 0]])
+    array = td.GeometryArray(geometry=box_2d, offsets=offsets)
+
+    med2d = td.Medium2D(ss=td.Medium(), tt=td.Medium())
+    struct = td.Structure(geometry=array, medium=med2d)
+    assert struct is not None

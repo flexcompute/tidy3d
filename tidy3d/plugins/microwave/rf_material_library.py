@@ -16,8 +16,9 @@ from tidy3d.components.medium import (
 )
 from tidy3d.constants import (
     CONDUCTIVITY,
-    MICROMETER,
     HERTZ,
+    MICROMETER,
+    MICROWAVE_FREQUENCY_RANGE,
 )
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
@@ -106,7 +107,7 @@ class VariantItemFreqRangeDielectric(AbstractVariantItemFreqRange):
     )
 
     @model_validator(mode="after")
-    def _validate_paired_field_lengths(self) -> "VariantItemFreqRangeDielectric":
+    def _validate_paired_field_lengths(self) -> VariantItemFreqRangeDielectric:
         """Validate that paired fields (``loss_tangent``, ``eps_real``, ``measurement_frequencies``) all have the same length."""
         # Get length of each field (single values have length 1, lists/tuples/arrays have their actual length)
         field_lengths = {}
@@ -276,17 +277,12 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
         ----------
         frequency_range : Optional[FreqBound]
             Frequency range of validity for the medium, specified as (f_min, f_max) in Hz.
-            Required for lossy metals. If None, raises ValueError.
+            If None, uses the default microwave frequency range (300 MHz to 300 GHz).
 
         Returns
         -------
         LossyMetalMedium
             A LossyMetalMedium fitted for the specified frequency range.
-
-        Raises
-        ------
-        ValueError
-            If ``frequency_range`` is None.
 
         Notes
         -----
@@ -294,12 +290,26 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
         impedance over the specified frequency range. This fitting happens lazily when the
         ``scaled_surface_impedance_model`` property is first accessed, ensuring accuracy for
         the requested frequency range.
+
+        If ``frequency_range`` is not provided, the default microwave frequency range (300 MHz to 300 GHz)
+        is used, which covers the standard microwave spectrum.
         """
         if frequency_range is None:
-            raise ValueError(
-                "frequency_range is required for VariantItemFreqRangeMetal.medium(). "
-                "Please provide a frequency_range as (f_min, f_max) in Hz."
-            )
+            frequency_range = MICROWAVE_FREQUENCY_RANGE
+            # Use more relaxed fit parameters for the wide default frequency range
+            # to avoid excessive warnings during documentation generation
+            if self.fit_param is None:
+                fit_param = SurfaceImpedanceFitterParam(
+                    max_num_poles=12,  # Increased from default 5
+                    tolerance_rms=1e-3,  # Original default value
+                    frequency_sampling_points=50,  # Increased from default 20
+                )
+            else:
+                # Use provided fit_param but ensure reasonable values for wide range
+                fit_param = self.fit_param
+        else:
+            fit_param = self.fit_param  # Use provided fit_param or default for custom ranges
+
         kwargs = {
             "conductivity": self.conductivity,
             "frequency_range": frequency_range,
@@ -308,18 +318,15 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
             kwargs["roughness"] = self.roughness
         if self.thickness is not None:
             kwargs["thickness"] = self.thickness
-        if self.fit_param is not None:
-            kwargs["fit_param"] = self.fit_param
+        if fit_param is not None:
+            kwargs["fit_param"] = fit_param
 
         return LossyMetalMedium(**kwargs)
 
     @property
     def summarize_mediums(self) -> dict[str, LossyMetalMedium]:
         """Summarize the mediums in this variant."""
-        # For lossy metal, we need a frequency_range to create the medium
-        # Since we don't have a default range, return empty dict
-        # This is consistent with the limitation that LossyMetalMedium requires frequency_range
-        return {}
+        return {"medium": self.medium()}
 
 
 class MaterialItemFreqRange(MaterialItem):
@@ -332,50 +339,56 @@ class MaterialItemFreqRange(MaterialItem):
         "that maps from a key to the variant model.",
     )
 
-    def __getitem__(self, variant_name: str) -> AbstractVariantItemFreqRange:
-        """Helper function to easily access a variant."""
-        return self.variants[variant_name]
+    def __getitem__(self, variant_name: str) -> Union[PoleResidue, LossyMetalMedium]:
+        """Helper function to easily access the medium of a variant."""
+        return self.variants[variant_name].medium()
 
-    @property
-    def medium(self) -> Union[PoleResidue, LossyMetalMedium]:
+    def medium(
+        self, frequency_range: Optional[FreqBound] = None
+    ) -> Union[PoleResidue, LossyMetalMedium]:
         """The default medium for the default variant.
 
-        Returns the medium for the default variant using its default frequency range.
-        For dielectrics, this returns the stored PoleResidue model (equivalent to calling
-        ``variant.medium()`` without arguments).
-        For metals, raises ValueError as frequency_range is required.
+        Returns the medium for the default variant.
+        For dielectrics, if ``frequency_range`` is not provided, returns the stored
+        ``PoleResidue`` model (equivalent to calling ``variant.medium()`` without arguments).
+        If ``frequency_range`` is provided, returns ``variant.medium(frequency_range)``.
+        For metals, if ``frequency_range`` is not provided, uses the default microwave frequency range
+        (300 MHz to 300 GHz). If provided, returns ``variant.medium(frequency_range)``.
 
-        To get a medium for a different frequency range:
-        1. Access the variant: ``variant = material['variant_name']``
-        2. Call medium with frequency_range: ``variant.medium(frequency_range)``
+        Parameters
+        ----------
+        frequency_range : Optional[FreqBound]
+            Frequency range of validity for the medium, specified as (f_min, f_max) in Hz.
+            Optional for both dielectrics and metals. For dielectrics, uses original range if not provided.
+            For metals, uses the default microwave frequency range (300 MHz to 300 GHz) if not provided.
+
+        Returns
+        -------
+        Union[PoleResidue, LossyMetalMedium]
+            The medium model for the default variant with the specified frequency range.
 
         Examples
         --------
-        >>> # Get default medium for default variant
-        >>> default_medium = rf_material_library["RT_duroid5880"].medium
+        >>> # Get default medium for default variant (dielectric)
+        >>> default_medium = rf_material_library["RT_duroid5880"].medium()
         >>>
-        >>> # Get medium for a specific frequency range
-        >>> variant = rf_material_library["RT_duroid5880"]["standard"]
-        >>> custom_medium = variant.medium(frequency_range=(5e9, 10e9))
+        >>> # Get medium for a specific frequency range (dielectric)
+        >>> custom_medium = rf_material_library["RT_duroid5880"].medium(frequency_range=(5e9, 10e9))
+        >>>
+        >>> # Get medium with default RF frequency range (metal)
+        >>> metal_medium = rf_material_library["Aluminum"].medium()
+        >>>
+        >>> # Get medium for a specific frequency range (metal)
+        >>> metal_medium = rf_material_library["Aluminum"].medium(frequency_range=(1e9, 10e9))
         """
         variant = self.variants[self.default]
-        if isinstance(variant, VariantItemFreqRangeDielectric):
-            # For dielectrics, call medium() without arguments to get stored model
-            return variant.medium()
-        elif isinstance(variant, VariantItemFreqRangeMetal):
-            # For metals, frequency_range is required
-            raise ValueError(
-                f"frequency_range is required for {variant.__class__.__name__}.medium(). "
-                f"Please use {self.name}['{self.default}'].medium(frequency_range) instead, "
-                "where frequency_range is a tuple (f_min, f_max) in Hz."
-            )
-        else:
-            # Unsupported variant type
-            raise ValueError(
-                f"The variant type '{variant.__class__.__name__}' for material '{self.name}' "
-                f"is currently not supported by 'MaterialItemFreqRange.medium' property. "
-                f"Supported types are: 'VariantItemFreqRangeDielectric' and 'VariantItemFreqRangeMetal'."
-            )
+        if isinstance(variant, (VariantItemFreqRangeDielectric, VariantItemFreqRangeMetal)):
+            return variant.medium(frequency_range)
+        raise ValueError(
+            f"The variant type '{variant.__class__.__name__}' for material '{self.name}' "
+            f"is currently not supported by MaterialItemFreqRange.medium(). "
+            f"Supported types are: VariantItemFreqRangeDielectric and VariantItemFreqRangeMetal."
+        )
 
 
 Rogers3003_design = VariantItem(
@@ -902,12 +915,10 @@ Gold_Matula = VariantItemFreqRangeMetal(
     reference=[rf_material_refs["Matula"]],
 )
 
-Aluminium = VariantItemFreqRangeMetal(
+Aluminum = VariantItemFreqRangeMetal(
     conductivity=37.67,
     reference=[rf_material_refs["Alum_293K"]],
 )
-
-Aluminum = Aluminium
 
 Brass_C21000 = VariantItemFreqRangeMetal(
     conductivity=32.48,
@@ -1187,13 +1198,6 @@ rf_material_library = {
         name="Gold (Matula)",
         variants={
             "standard": Gold_Matula,
-        },
-        default="standard",
-    ),
-    "Aluminium": MaterialItemFreqRange(
-        name="Aluminium",
-        variants={
-            "standard": Aluminium,
         },
         default="standard",
     ),

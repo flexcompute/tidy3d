@@ -3,9 +3,12 @@ from __future__ import annotations
 import importlib
 import io
 import json
+import multiprocessing as mp
 import os
+import queue
 import re
 import time
+import traceback
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -16,6 +19,7 @@ from click.testing import CliRunner
 from rich.console import Console
 
 import tidy3d as td
+import tidy3d.web.cache as cache_mod
 from tests.test_components.autograd.test_autograd import ALL_KEY, get_functions, params0
 from tests.test_web.test_webapi_mode import make_mode_sim
 from tests.utils import run_emulated
@@ -48,6 +52,8 @@ from tidy3d.web.core.task_core import BatchTask, SimulationTask
 common.CONNECTION_RETRY_TIME = 0.1
 
 MOCK_TASK_ID = "task-xyz"
+MP_BARRIER_TIMEOUT_S = 30  # long timeout for slow test runners
+MP_JOIN_TIMEOUT_S = 60  # long timeout for slow test runners
 # --- Fake pipeline global maps / queue ---
 TASK_TO_SIM: dict[str, td.Simulation] = {}  # task_id -> Simulation
 PATH_TO_SIM: dict[str, td.Simulation] = {}  # artifact path -> Simulation
@@ -64,7 +70,7 @@ def _isolate_local_cache(tmp_path, monkeypatch):
 
     def _safe_remove_cache_dir(path, *, recreate):
         target = Path(path).resolve()
-        allowed_root = tmp_path.resolve().parent
+        allowed_root = tmp_path.resolve()
         try:
             target.relative_to(allowed_root)
         except ValueError:
@@ -91,6 +97,101 @@ def _isolate_local_cache(tmp_path, monkeypatch):
 def _reset_fake_maps():
     TASK_TO_SIM.clear()
     PATH_TO_SIM.clear()
+
+
+def _stats_update_worker(
+    cache_dir: str, barrier, key: str, file_size: int, sleep_s: float, error_queue
+) -> None:
+    try:
+        cache = cache_mod.LocalCache(directory=cache_dir, max_entries=10, max_size_gb=1.0)
+
+        original_write_stats = cache_mod.LocalCache._write_stats
+
+        def _sleeping_write_stats(self, stats):
+            time.sleep(sleep_s)
+            return original_write_stats(self, stats)
+
+        cache_mod.LocalCache._write_stats = _sleeping_write_stats
+
+        artifact = Path(cache_dir) / f"artifact-{key}.hdf5"
+        artifact.write_text("x" * file_size)
+        metadata = cache_mod.build_entry_metadata(
+            simulation_hash=key,
+            workflow_type="FDTD",
+            task_id=key,
+            version="test",
+            path=artifact,
+        )
+
+        barrier.wait(timeout=MP_BARRIER_TIMEOUT_S)
+        cache._store(key=key, source_path=artifact, metadata=metadata)
+    except Exception:
+        error_queue.put(traceback.format_exc())
+        raise
+
+
+def _store_loop_worker(
+    cache_dir: str,
+    barrier,
+    key: str,
+    iterations: int,
+    payload_size: int,
+    sleep_s: float,
+    error_queue,
+) -> None:
+    try:
+        cache = cache_mod.LocalCache(directory=cache_dir, max_entries=10, max_size_gb=1.0)
+
+        original_write_stats = cache_mod.LocalCache._write_stats
+
+        def _sleeping_write_stats(self, stats):
+            time.sleep(sleep_s)
+            return original_write_stats(self, stats)
+
+        cache_mod.LocalCache._write_stats = _sleeping_write_stats
+
+        barrier.wait(timeout=MP_BARRIER_TIMEOUT_S)
+        for idx in range(iterations):
+            artifact = Path(cache_dir) / f"artifact-{key}-{idx}.hdf5"
+            artifact.write_text("x" * payload_size)
+            metadata = cache_mod.build_entry_metadata(
+                simulation_hash=f"{key}-{idx}",
+                workflow_type="FDTD",
+                task_id=key,
+                version="test",
+                path=artifact,
+            )
+            cache._store(key=key, source_path=artifact, metadata=metadata)
+    except Exception:
+        error_queue.put(traceback.format_exc())
+        raise
+
+
+def _invalidate_loop_worker(
+    cache_dir: str,
+    barrier,
+    key: str,
+    iterations: int,
+    sleep_s: float,
+    error_queue,
+) -> None:
+    try:
+        cache = cache_mod.LocalCache(directory=cache_dir, max_entries=10, max_size_gb=1.0)
+
+        original_write_stats = cache_mod.LocalCache._write_stats
+
+        def _sleeping_write_stats(self, stats):
+            time.sleep(sleep_s)
+            return original_write_stats(self, stats)
+
+        cache_mod.LocalCache._write_stats = _sleeping_write_stats
+
+        barrier.wait(timeout=MP_BARRIER_TIMEOUT_S)
+        for _ in range(iterations):
+            cache.invalidate(key)
+    except Exception:
+        error_queue.put(traceback.format_exc())
+        raise
 
 
 class _FakeStubData:
@@ -151,7 +252,13 @@ def fake_data(monkeypatch, basic_simulation):
     return calls
 
 
-def _patch_run_pipeline(monkeypatch):
+def _patch_run_pipeline(
+    monkeypatch,
+    task_type: str = "FDTD",
+    postprocess=None,
+    load_simulation_fn=None,
+    patch_autograd: bool = True,
+):
     """Patch upload, start, monitor, and download to avoid network calls and map sims."""
     counters = {"upload": 0, "start": 0, "monitor": 0, "download": 0}
     _reset_fake_maps()  # isolate between tests
@@ -174,8 +281,11 @@ def _patch_run_pipeline(monkeypatch):
 
     def _fake_upload(**kwargs):
         counters["upload"] += 1
-        task_id = f"{MOCK_TASK_ID}{kwargs['simulation']._hash_self()}"
         sim = _extract_simulation(kwargs)
+        if sim is not None:
+            task_id = f"{MOCK_TASK_ID}{sim._hash_self()}"
+        else:
+            task_id = f"{MOCK_TASK_ID}-{counters['upload']}"
         if sim is not None:
             TASK_TO_SIM[task_id] = sim
         return task_id
@@ -195,6 +305,8 @@ def _patch_run_pipeline(monkeypatch):
             PATH_TO_SIM[str(Path(path))] = sim
 
     def _fake_load_simulation(task_id, path="simulation.json", verbose=True):
+        if load_simulation_fn is not None:
+            return load_simulation_fn(task_id=task_id, path=path, verbose=verbose)
         sim = TASK_TO_SIM.get(task_id)
         if sim is None:
             sim = next(iter(PATH_TO_SIM.values()), None)
@@ -243,10 +355,11 @@ def _patch_run_pipeline(monkeypatch):
     def _fake_field_map_from_file(*args, **kwargs):
         return FieldMap(tracers=())
 
-    monkeypatch.setattr(io_utils, "download_file", _fake_download_file)
-    monkeypatch.setattr(autograd, "postprocess_fwd", _fake_postprocess_fwd)
-    monkeypatch.setattr(autograd, "postprocess_adj", _fake_postprocess_adj)
-    monkeypatch.setattr(FieldMap, "from_file", _fake_field_map_from_file)
+    if patch_autograd:
+        monkeypatch.setattr(io_utils, "download_file", _fake_download_file)
+        monkeypatch.setattr(autograd, "postprocess_fwd", _fake_postprocess_fwd)
+        monkeypatch.setattr(autograd, "postprocess_adj", _fake_postprocess_adj)
+        monkeypatch.setattr(FieldMap, "from_file", _fake_field_map_from_file)
     monkeypatch.setattr(WebContainer, "_check_folder", _fake__check_folder)
     monkeypatch.setattr(web, "upload", _fake_upload)
     monkeypatch.setattr(web, "start", _fake_start)
@@ -255,29 +368,27 @@ def _patch_run_pipeline(monkeypatch):
     monkeypatch.setattr(web, "load_simulation", _fake_load_simulation)
     monkeypatch.setattr(web, "estimate_cost", lambda *args, **kwargs: 0.0)
     monkeypatch.setattr(Job, "status", property(_fake_status))
-    monkeypatch.setattr(engine, "upload_sim_fields_keys", lambda *args, **kwargs: None)
+    if patch_autograd:
+        monkeypatch.setattr(engine, "upload_sim_fields_keys", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         web,
         "get_info",
         lambda task_id, verbose=True: type(
-            "_Info", (), {"solverVersion": "solver-1", "taskType": "FDTD"}
+            "_Info", (), {"solverVersion": "solver-1", "taskType": task_type}
         )(),
     )
+    if patch_autograd:
+        monkeypatch.setattr(
+            io_utils,
+            "get_info",
+            lambda task_id, verbose=True: type(
+                "_Info", (), {"solverVersion": "solver-1", "taskType": task_type}
+            )(),
+        )
+    if postprocess is not None:
+        monkeypatch.setattr(web.Tidy3dStubData, "postprocess", staticmethod(postprocess))
     monkeypatch.setattr(
-        io_utils,
-        "get_info",
-        lambda task_id, verbose=True: type(
-            "_Info", (), {"solverVersion": "solver-1", "taskType": "FDTD"}
-        )(),
-    )
-    monkeypatch.setattr(
-        web, "load_simulation", lambda task_id, *args, **kwargs: TASK_TO_SIM[task_id]
-    )
-    monkeypatch.setattr(
-        io_utils, "load_simulation", lambda task_id, *args, **kwargs: TASK_TO_SIM[task_id]
-    )
-    monkeypatch.setattr(
-        SimulationTask, "get", lambda *args, **kwargs: SimpleNamespace(taskType="FDTD")
+        SimulationTask, "get", lambda *args, **kwargs: SimpleNamespace(taskType=task_type)
     )
     monkeypatch.setattr(
         BatchTask, "detail", lambda *args, **kwargs: SimpleNamespace(status="success")
@@ -716,6 +827,133 @@ def test_cache_stats_sync(monkeypatch, tmp_path_factory, basic_simulation):
         assert isinstance(info, str)
 
     cache.clear()
+
+
+@pytest.mark.skipif(
+    (os.getenv("GITHUB_ACTIONS") or "").lower() == "true",
+    reason="Skip on CI due to resource problems. Activate temporarily for targeted testing.",
+)
+def test_cache_stats_concurrent_updates():
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    cache_dir = str(cache.root)
+    ctx = mp.get_context("spawn")
+    barrier = ctx.Barrier(2)
+    error_queue = ctx.Queue()
+
+    key1 = "concurrent-key-1"
+    key2 = "concurrent-key-2"
+    file_size1 = 3
+    file_size2 = 5
+    sleep_s = 0.3
+
+    proc1 = ctx.Process(
+        target=_stats_update_worker,
+        args=(cache_dir, barrier, key1, file_size1, sleep_s, error_queue),
+    )
+    proc2 = ctx.Process(
+        target=_stats_update_worker,
+        args=(cache_dir, barrier, key2, file_size2, sleep_s, error_queue),
+    )
+
+    proc1.start()
+    proc2.start()
+
+    proc1.join(timeout=MP_JOIN_TIMEOUT_S)
+    proc2.join(timeout=MP_JOIN_TIMEOUT_S)
+
+    if proc1.is_alive():
+        proc1.terminate()
+        proc1.join()
+    if proc2.is_alive():
+        proc2.terminate()
+        proc2.join()
+
+    errors = []
+    while True:
+        try:
+            errors.append(error_queue.get_nowait())
+        except queue.Empty:
+            break
+
+    if proc1.exitcode != 0 or proc2.exitcode != 0:
+        error_text = "\n".join(errors) if errors else "No worker traceback captured."
+        raise AssertionError(f"Worker exit codes: {proc1.exitcode}, {proc2.exitcode}\n{error_text}")
+
+    stats_path = Path(cache_dir) / CACHE_STATS_NAME
+    assert stats_path.exists()
+    stats = json.loads(stats_path.read_text())
+    assert stats["total_entries"] == 2
+    assert stats["total_size"] == file_size1 + file_size2
+    assert set(stats["last_used"].keys()) == {key1, key2}
+
+
+@pytest.mark.skipif(
+    (os.getenv("GITHUB_ACTIONS") or "").lower() == "true",
+    reason="Skip on CI due to resource problems. Activate temporarily for targeted testing.",
+)
+def test_cache_stats_store_invalidate_race():
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    cache_dir = str(cache.root)
+    ctx = mp.get_context("spawn")
+    barrier = ctx.Barrier(2)
+    error_queue = ctx.Queue()
+
+    key = "race-key"
+    iterations = 5
+    payload_size = 7
+    sleep_s = 0.05
+
+    proc_store = ctx.Process(
+        target=_store_loop_worker,
+        args=(cache_dir, barrier, key, iterations, payload_size, sleep_s, error_queue),
+    )
+    proc_invalidate = ctx.Process(
+        target=_invalidate_loop_worker,
+        args=(cache_dir, barrier, key, iterations, sleep_s, error_queue),
+    )
+
+    proc_store.start()
+    proc_invalidate.start()
+
+    proc_store.join(timeout=MP_JOIN_TIMEOUT_S)
+    proc_invalidate.join(timeout=MP_JOIN_TIMEOUT_S)
+
+    if proc_store.is_alive():
+        proc_store.terminate()
+        proc_store.join()
+    if proc_invalidate.is_alive():
+        proc_invalidate.terminate()
+        proc_invalidate.join()
+
+    errors = []
+    while True:
+        try:
+            errors.append(error_queue.get_nowait())
+        except queue.Empty:
+            break
+
+    if proc_store.exitcode != 0 or proc_invalidate.exitcode != 0:
+        error_text = "\n".join(errors) if errors else "No worker traceback captured."
+        raise AssertionError(
+            f"Worker exit codes: {proc_store.exitcode}, {proc_invalidate.exitcode}\n{error_text}"
+        )
+
+    stats_path = Path(cache_dir) / CACHE_STATS_NAME
+    assert stats_path.exists()
+    stats = json.loads(stats_path.read_text())
+
+    cache_check = cache_mod.LocalCache(directory=cache_dir, max_entries=10, max_size_gb=1.0)
+    entries = cache_check.list()
+    entry_keys = {entry["cache_key"] for entry in entries}
+    total_size = sum(entry["file_size"] for entry in entries)
+
+    assert stats["total_entries"] == len(entries)
+    assert stats["total_size"] == total_size
+    assert set(stats["last_used"].keys()) == entry_keys
 
 
 def test_store_and_fetch_do_not_iterate(monkeypatch, tmp_path, basic_simulation):

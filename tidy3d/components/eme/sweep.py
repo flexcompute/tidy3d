@@ -15,7 +15,26 @@ from .grid import MAX_NUM_REPS
 
 
 class EMESweepSpec(Tidy3dBaseModel, ABC):
-    """Abstract spec for sweep done during EME propagation step."""
+    """Abstract spec for a parameter sweep during the EME propagation step.
+
+    Notes
+    -----
+        An EME sweep re-runs the propagation step with varied parameters while reusing
+        previously computed mode data. This makes sweeps much faster than running
+        multiple independent simulations, since the mode solving step is typically the
+        most expensive part of an EME simulation.
+
+    See Also
+    --------
+        :class:`.EMELengthSweep` :
+            Sweep over cell lengths.
+        :class:`.EMEModeSweep` :
+            Sweep over number of modes (convergence testing).
+        :class:`.EMEPeriodicitySweep` :
+            Sweep over number of periodic repetitions.
+        :class:`.EMEFreqSweep` :
+            Sweep over frequency using perturbative mode solving.
+    """
 
     @property
     @abstractmethod
@@ -39,7 +58,19 @@ class EMESweepSpec(Tidy3dBaseModel, ABC):
 
 
 class EMELengthSweep(EMESweepSpec):
-    """Spec for sweeping EME cell lengths."""
+    """Spec for sweeping EME cell lengths.
+
+    Notes
+    -----
+        Varies the lengths of EME cells without re-solving modes. This is useful for
+        optimizing device length, since only the propagation phase accumulated within
+        each cell changes. If a 2D array is provided for ``scale_factors``, different
+        cells can be scaled independently at each sweep index.
+
+    Example
+    -------
+    >>> sweep_spec = EMELengthSweep(scale_factors=[0.5, 1.0, 1.5, 2.0])
+    """
 
     scale_factors: ArrayLike = Field(
         title="Length Scale Factor",
@@ -63,7 +94,12 @@ class EMELengthSweep(EMESweepSpec):
 
 class EMEModeSweep(EMESweepSpec):
     """Spec for sweeping number of modes in EME propagation step.
-    Used for convergence testing."""
+    Used for convergence testing.
+
+    Example
+    -------
+    >>> sweep_spec = EMEModeSweep(num_modes=[1, 2, 5, 10])
+    """
 
     num_modes: ArrayInt1D = Field(
         title="Number of Modes",
@@ -94,7 +130,12 @@ class EMEFreqSweep(EMESweepSpec):
     """Spec for sweeping frequency in EME propagation step.
     Unlike ``sim.freqs``, the frequency sweep is approximate, using a
     perturbative mode solver relative to the simulation EME modes.
-    This can be a faster way to solve at a larger number of frequencies."""
+    This can be a faster way to solve at a larger number of frequencies.
+
+    Example
+    -------
+    >>> sweep_spec = EMEFreqSweep(freq_scale_factors=[0.9, 0.95, 1.0, 1.05, 1.1])
+    """
 
     freq_scale_factors: ArrayFloat1D = Field(
         title="Frequency Scale Factors",

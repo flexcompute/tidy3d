@@ -36,6 +36,13 @@ on:
           - basic
           - full
         default: 'basic'
+      test_selection:
+        description: 'test-selection (testmon or full)'
+        type: choice
+        options:
+          - testmon
+          - full
+        default: 'testmon'
       release_tag:
         description: 'Release Tag (v2.10.0, v2.10.0rc1)'
         required: false
@@ -79,6 +86,11 @@ on:
         type: string
         required: false
         default: 'basic'
+      test_selection:
+        description: 'Test selection mode for local and remote tests (testmon or full)'
+        type: string
+        required: false
+        default: 'testmon'
       release_tag:
         description: 'Release Tag (v2.10.0, v2.10.0rc1)'
         required: false
@@ -95,8 +107,6 @@ on:
       - develop
       - 'pre/*'
     types: ['opened', 'reopened', 'synchronize', 'ready_for_review', 'edited']
-  pull_request_review:
-    types: [submitted]
 
 permissions:
   contents: read
@@ -121,6 +131,7 @@ jobs:
       version_match_tests: ${{ steps.determine-test-type.outputs.version_match_tests }}
       extras_integration_tests: ${{ steps.determine-test-type.outputs.extras_integration_tests }}
       test_type: ${{ steps.determine-test-type.outputs.test_type }}
+      test_selection: ${{ steps.determine-test-type.outputs.test_selection }}
     steps:
       - name: determine-test-type
         id: determine-test-type
@@ -136,6 +147,7 @@ jobs:
           INPUT_VERSION_MATCH: ${{ github.event.inputs.version_match_tests || inputs.version_match_tests }}
           INPUT_EXTRAS_INTEGRATION: ${{ github.event.inputs.extras_integration_tests || inputs.extras_integration_tests }}
           INPUT_TEST_TYPE: ${{ github.event.inputs.test_type || inputs.test_type }}
+          INPUT_TEST_SELECTION: ${{ github.event.inputs.test_selection || inputs.test_selection }}
         run: |
           echo "Event: $EVENT_NAME"
           echo "Draft: $DRAFT_STATE"
@@ -148,6 +160,7 @@ jobs:
           echo "Input version_match: $INPUT_VERSION_MATCH"
           echo "Input extras_integration: $INPUT_EXTRAS_INTEGRATION"
           echo "Input test_type: $INPUT_TEST_TYPE"
+          echo "Input test_selection: $INPUT_TEST_SELECTION"
 
           remote_tests=false
           local_tests=false
@@ -158,6 +171,7 @@ jobs:
           pr_review_tests=false
           extras_integration_tests=false
           test_type="basic"
+          test_selection="testmon"
           
             # Workflow_dispatch and workflow_call input override
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "workflow_call" ]]; then
@@ -186,6 +200,10 @@ jobs:
             if [[ "$INPUT_EXTRAS_INTEGRATION" == "true" ]]; then
               extras_integration_tests=true
             fi
+
+            if [[ -n "$INPUT_TEST_SELECTION" ]]; then
+              test_selection="$INPUT_TEST_SELECTION"
+            fi
           fi
 
           # All PRs that have been triggered need local tests (remote reserved for merge queue/manual)
@@ -193,6 +211,7 @@ jobs:
               local_tests=true
               code_quality_tests=true
               pr_review_tests=true
+              test_selection="testmon"
           fi
 
           if [[ "$EVENT_NAME" == "merge_group" ]]; then
@@ -201,6 +220,7 @@ jobs:
               code_quality_tests=true
               extras_integration_tests=true
               test_type="basic"
+              test_selection="full"
           fi
 
           # Set test_type based on input or event
@@ -217,6 +237,7 @@ jobs:
           echo "pr_review_tests=$pr_review_tests" >> $GITHUB_OUTPUT
           echo "extras_integration_tests=$extras_integration_tests" >> $GITHUB_OUTPUT
           echo "test_type=$test_type" >> $GITHUB_OUTPUT
+          echo "test_selection=$test_selection" >> $GITHUB_OUTPUT
           echo "code_quality_tests=$code_quality_tests"
           echo "pr_review_tests=$pr_review_tests"
           echo "local_tests=$local_tests"
@@ -226,6 +247,7 @@ jobs:
           echo "version_match_tests=$version_match_tests"
           echo "extras_integration_tests=$extras_integration_tests"
           echo "test_type=$test_type"
+          echo "test_selection=$test_selection"
       
 
   move-type-imports:
@@ -235,7 +257,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout-branch
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -243,7 +265,7 @@ jobs:
           persist-credentials: false
 
       - name: setup-python
-        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ env.VERIFICATIONS_PY_VERSION }}
 
@@ -267,12 +289,12 @@ jobs:
     runs-on: ubuntu-latest 
     container: ghcr.io/astral-sh/uv:debian
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
           submodules: false
           persist-credentials: false
-      - uses: astral-sh/ruff-action@57714a7c8a2e59f32539362ba31877a1957dded1 # v3.5.1
+      - uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6 # v3.6.1
         with:
           version: 0.11.11
       - name: Run ruff format
@@ -286,14 +308,14 @@ jobs:
     if: needs.determine-test-scope.outputs.code_quality_tests == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
           submodules: false
           persist-credentials: false
 
       - name: setup-python-${{ env.VERIFICATIONS_PY_VERSION }}
-        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ env.VERIFICATIONS_PY_VERSION }}
 
@@ -315,7 +337,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
@@ -364,6 +386,7 @@ jobs:
 
       - name: enforce-jira-key
         id: enforce-jira-key
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]'
         env:
           STEPS_EXTRACT_BRANCH_NAME_OUTPUTS_BRANCH_NAME: ${{ steps.extract-branch-name.outputs.branch_name }}
         run: |
@@ -410,13 +433,13 @@ jobs:
     continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Check out source code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0  # fetch all commits in the PR
           persist-credentials: false
 
       - name: Setup node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: lts/*
 
@@ -464,7 +487,7 @@ jobs:
         shell: bash
     steps:
       - name: checkout-branch
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -639,12 +662,13 @@ jobs:
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+      TEST_SELECTION: ${{ needs.determine-test-scope.outputs.test_selection }}
     permissions:
         pull-requests: write
     steps:
     - name: checkout-head
       if: ${{ !env.RELEASE_TAG }}
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         fetch-depth: 0
         submodules: false
@@ -652,12 +676,73 @@ jobs:
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 0
         submodules: false
         persist-credentials: false
+
+    - name: compute-testmon-cache-key
+      id: testmon-cache-key
+      if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
+      env:
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'develop' }}
+      run: |
+        default_branch="$DEFAULT_BRANCH"
+        case "$default_branch" in
+          ''|*[!A-Za-z0-9._/-]*)
+            echo "::warning::Invalid default branch '$default_branch'; using 'develop'."
+            default_branch="develop"
+            ;;
+        esac
+        default_branch_sha=$(git ls-remote --heads origin "refs/heads/${default_branch}" | awk '{print $1}')
+        if [[ -z "${default_branch_sha}" ]]; then
+          echo "::warning::Unable to resolve SHA for default branch '${default_branch}'."
+          default_branch_sha="unknown"
+        fi
+
+        dep_hash=$(
+          {
+            git show HEAD:pyproject.toml
+            git show HEAD:poetry.lock
+          } | sha256sum | awk '{print $1}'
+        )
+
+        echo "default_branch=$default_branch" >> "$GITHUB_OUTPUT"
+        echo "default_branch_sha=$default_branch_sha" >> "$GITHUB_OUTPUT"
+        echo "dep_hash=$dep_hash" >> "$GITHUB_OUTPUT"
+
+    - name: restore-testmon-cache
+      id: testmon-cache-restore
+      if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
+      uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      with:
+        path: .testmondata
+        key: testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        restore-keys: |
+          testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
+          testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-
+          testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-
+
+    - name: telemetry-cache-exact-hit
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-hit == 'true'
+      run: echo "testmon cache exact hit"
+
+    - name: telemetry-cache-fallback-hit
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-hit != 'true' &&
+        steps.testmon-cache-restore.outputs.cache-matched-key != ''
+      run: echo "testmon cache fallback hit"
+
+    - name: telemetry-cache-miss
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-matched-key == ''
+      run: echo "testmon cache miss"
 
     - name: install-project
       env:
@@ -680,18 +765,85 @@ jobs:
         echo "Testing vtk is correctly installed."
         python -c "import vtk"
 
+    - name: determine-pytest-selection-flags
+      id: pytest-selection-flags
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+      run: |
+        if [[ "${TEST_SELECTION}" == "testmon" ]]; then
+          echo "flags=--testmon --testmon-forceselect" >> "$GITHUB_OUTPUT"
+          echo "mode=testmon_forceselect" >> "$GITHUB_OUTPUT"
+          echo "Using pytest testmon selection mode."
+        elif [[ "${TEST_SELECTION}" == "full" && "${EVENT_NAME}" == "merge_group" ]]; then
+          echo "flags=--testmon-noselect" >> "$GITHUB_OUTPUT"
+          echo "mode=full_with_testmon_collection" >> "$GITHUB_OUTPUT"
+          echo "Using full test execution with testmon collection mode."
+        else
+          echo "flags=--no-testmon" >> "$GITHUB_OUTPUT"
+          echo "mode=full_no_testmon" >> "$GITHUB_OUTPUT"
+          echo "Using full pytest execution mode."
+        fi
+
+    - name: telemetry-selection-testmon
+      if: steps.pytest-selection-flags.outputs.mode == 'testmon_forceselect'
+      run: echo "pytest selection testmon forceselect"
+
+    - name: telemetry-selection-full-with-testmon-collection
+      if: steps.pytest-selection-flags.outputs.mode == 'full_with_testmon_collection'
+      run: echo "pytest selection full with testmon collection"
+
+    - name: telemetry-selection-full-no-testmon
+      if: steps.pytest-selection-flags.outputs.mode == 'full_no_testmon'
+      run: echo "pytest selection full no testmon"
+
     - name: run-tests-coverage
       env:
         PYTHONUNBUFFERED: "1"
+        PYTEST_SELECTION_FLAGS: ${{ steps.pytest-selection-flags.outputs.flags }}
       run: |
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
         # pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
-        pytest --cov=tidy3d -rF --tb=short tests
+        pytest ${PYTEST_SELECTION_FLAGS} --cov=tidy3d -rF --tb=short tests
         coverage report -m
         coverage xml -o ${GITHUB_WORKSPACE}/coverage.xml
         TOTAL_COVERAGE=$(coverage report --format=total)
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
+
+    - name: stage-testmon-cache-candidate
+      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      env:
+        CACHE_KEY: testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+      run: |
+        set -euo pipefail
+        candidate_dir="$RUNNER_TEMP/testmon-cache-candidate-local-py${{ matrix.python-version }}"
+        rm -rf "$candidate_dir"
+        mkdir -p "$candidate_dir"
+        cp -R .testmondata "$candidate_dir/.testmondata"
+        cat > "$candidate_dir/metadata.json" <<EOF
+        {
+          "cache_key": "${CACHE_KEY}",
+          "job_class": "local",
+          "runner_os": "${{ runner.os }}",
+          "python_version": "${{ matrix.python-version }}"
+        }
+        EOF
+
+    - name: upload-testmon-cache-candidate
+      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: testmon-cache-candidate-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/testmon-cache-candidate-local-py${{ matrix.python-version }}
+        include-hidden-files: true
+        retention-days: 1
+
+    - name: save-testmon-cache
+      if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
+      uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      with:
+        path: .testmondata
+        key: testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
 
     - name: diff-coverage-report
       if: >- 
@@ -707,7 +859,7 @@ jobs:
           --compare-branch origin/${GITHUB_EVENT_PULL_REQUEST_BASE_REF} \
           --format markdown:diff-coverage.md
 
-    - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+    - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
       if: >- 
         matrix.python-version == '3.13' &&
         github.event_name == 'pull_request' &&
@@ -765,11 +917,12 @@ jobs:
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag }}
+      TEST_SELECTION: ${{ needs.determine-test-scope.outputs.test_selection }}
 
     steps:
     - name: checkout-head
       if: ${{ !env.RELEASE_TAG }}
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         fetch-depth: 1
         submodules: false
@@ -777,12 +930,73 @@ jobs:
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 1
         submodules: false
         persist-credentials: false
+
+    - name: compute-testmon-cache-key
+      id: testmon-cache-key
+      if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
+      env:
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch || 'develop' }}
+      run: |
+        default_branch="$DEFAULT_BRANCH"
+        case "$default_branch" in
+          ''|*[!A-Za-z0-9._/-]*)
+            echo "::warning::Invalid default branch '$default_branch'; using 'develop'."
+            default_branch="develop"
+            ;;
+        esac
+        default_branch_sha=$(git ls-remote --heads origin "refs/heads/${default_branch}" | awk '{print $1}')
+        if [[ -z "${default_branch_sha}" ]]; then
+          echo "::warning::Unable to resolve SHA for default branch '${default_branch}'."
+          default_branch_sha="unknown"
+        fi
+
+        dep_hash=$(
+          {
+            git show HEAD:pyproject.toml
+            git show HEAD:poetry.lock
+          } | sha256sum | awk '{print $1}'
+        )
+
+        echo "default_branch=$default_branch" >> "$GITHUB_OUTPUT"
+        echo "default_branch_sha=$default_branch_sha" >> "$GITHUB_OUTPUT"
+        echo "dep_hash=$dep_hash" >> "$GITHUB_OUTPUT"
+
+    - name: restore-testmon-cache
+      id: testmon-cache-restore
+      if: needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group'
+      uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      with:
+        path: .testmondata
+        key: testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        restore-keys: |
+          testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
+          testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-
+          testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-
+
+    - name: telemetry-cache-exact-hit
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-hit == 'true'
+      run: echo "testmon cache exact hit"
+
+    - name: telemetry-cache-fallback-hit
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-hit != 'true' &&
+        steps.testmon-cache-restore.outputs.cache-matched-key != ''
+      run: echo "testmon cache fallback hit"
+
+    - name: telemetry-cache-miss
+      if: >-
+        (needs.determine-test-scope.outputs.test_selection == 'testmon' || github.event_name == 'merge_group') &&
+        steps.testmon-cache-restore.outputs.cache-matched-key == ''
+      run: echo "testmon cache miss"
 
     - name: install-poetry
       uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a  # v1.4.1
@@ -792,7 +1006,7 @@ jobs:
         virtualenvs-in-project: true
 
     - name: set-python-${{ matrix.python-version }}
-      uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -846,20 +1060,89 @@ jobs:
         poetry run pip install gdstk --only-binary gdstk
         poetry install -E dev
 
-    - name: run-doctests
+    - name: determine-pytest-selection-flags
+      id: pytest-selection-flags
+      env:
+        EVENT_NAME: ${{ github.event_name }}
       run: |
-        poetry run pytest -rF --tb=short tidy3d
+        if [[ "${TEST_SELECTION}" == "testmon" ]]; then
+          echo "flags=--testmon --testmon-forceselect" >> "$GITHUB_OUTPUT"
+          echo "mode=testmon_forceselect" >> "$GITHUB_OUTPUT"
+          echo "Using pytest testmon selection mode."
+        elif [[ "${TEST_SELECTION}" == "full" && "${EVENT_NAME}" == "merge_group" ]]; then
+          echo "flags=--testmon-noselect" >> "$GITHUB_OUTPUT"
+          echo "mode=full_with_testmon_collection" >> "$GITHUB_OUTPUT"
+          echo "Using full test execution with testmon collection mode."
+        else
+          echo "flags=--no-testmon" >> "$GITHUB_OUTPUT"
+          echo "mode=full_no_testmon" >> "$GITHUB_OUTPUT"
+          echo "Using full pytest execution mode."
+        fi
+
+    - name: telemetry-selection-testmon
+      if: steps.pytest-selection-flags.outputs.mode == 'testmon_forceselect'
+      run: echo "pytest selection testmon forceselect"
+
+    - name: telemetry-selection-full-with-testmon-collection
+      if: steps.pytest-selection-flags.outputs.mode == 'full_with_testmon_collection'
+      run: echo "pytest selection full with testmon collection"
+
+    - name: telemetry-selection-full-no-testmon
+      if: steps.pytest-selection-flags.outputs.mode == 'full_no_testmon'
+      run: echo "pytest selection full no testmon"
+
+    - name: run-doctests
+      env:
+        PYTEST_SELECTION_FLAGS: ${{ steps.pytest-selection-flags.outputs.flags }}
+      run: |
+        poetry run pytest ${PYTEST_SELECTION_FLAGS} -rF --tb=short tidy3d
 
     - name: run-tests-coverage
       env:
         PYTHONUNBUFFERED: "1"
+        PYTEST_SELECTION_FLAGS: ${{ steps.pytest-selection-flags.outputs.flags }}
       run: |
-        poetry run pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
-        poetry run pytest --cov=tidy3d -rF --tb=short tests
+        poetry run pytest ${PYTEST_SELECTION_FLAGS} --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
+        poetry run pytest ${PYTEST_SELECTION_FLAGS} --cov=tidy3d -rF --tb=short tests
         poetry run coverage report -m
         TOTAL_COVERAGE=$(poetry run coverage report --format=total)
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
+
+    - name: stage-testmon-cache-candidate
+      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      env:
+        CACHE_KEY: testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+      run: |
+        set -euo pipefail
+        candidate_dir="$RUNNER_TEMP/testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}"
+        rm -rf "$candidate_dir"
+        mkdir -p "$candidate_dir"
+        cp -R .testmondata "$candidate_dir/.testmondata"
+        cat > "$candidate_dir/metadata.json" <<EOF
+        {
+          "cache_key": "${CACHE_KEY}",
+          "job_class": "remote",
+          "platform": "${{ matrix.platform }}",
+          "python_version": "${{ matrix.python-version }}"
+        }
+        EOF
+
+    - name: upload-testmon-cache-candidate
+      if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}
+        include-hidden-files: true
+        retention-days: 1
+
+    - name: save-testmon-cache
+      if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
+      uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      with:
+        path: .testmondata
+        key: testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
 
     - name: create-badge
       if: ${{ github.ref == 'refs/heads/develop' }}
@@ -891,7 +1174,7 @@ jobs:
     if: needs.determine-test-scope.outputs.version_match_tests == 'true'
     steps:
       - name: checkout-code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || inputs.release_tag) || github.ref }}
           persist-credentials: false
@@ -961,7 +1244,7 @@ jobs:
     steps:
       - name: checkout-head
         if: ${{ !env.RELEASE_TAG }}
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: 'recursive'
           fetch-depth: 0
@@ -969,7 +1252,7 @@ jobs:
 
       - name: checkout-tag
         if: ${{ env.RELEASE_TAG }}
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ env.RELEASE_TAG }}
           submodules: 'recursive'
@@ -1054,6 +1337,25 @@ jobs:
       test_type: ${{ needs.determine-test-scope.outputs.test_type }}
     secrets: inherit # zizmor: ignore[secrets-inherit]
 
+  promote-testmon-cache:
+    name: promote-testmon-cache
+    needs:
+      - determine-test-scope
+      - local-tests
+      - remote-tests
+    if: >-
+      needs.determine-test-scope.outputs.local_tests == 'true' &&
+      needs.determine-test-scope.outputs.remote_tests == 'true' &&
+      github.event_name == 'merge_group' &&
+      needs.local-tests.result == 'success' &&
+      needs.remote-tests.result == 'success'
+    permissions:
+      actions: write
+      contents: read
+    with:
+      source_event: ${{ github.event_name }}
+    uses: ./.github/workflows/tidy3d-testmon-cache-promote.yml
+
   workflow-validation:
     name: workflow-validation
     if: always()
@@ -1072,6 +1374,7 @@ jobs:
       - verify-version-consistency
       - test-submodules
       - extras-integration-tests
+      - promote-testmon-cache
     runs-on: ubuntu-latest
     steps:
       - name: move-type-imports
@@ -1150,6 +1453,12 @@ jobs:
         if: ${{ needs.determine-test-scope.outputs.extras_integration_tests == 'true' && needs.extras-integration-tests.result != 'success' && needs.extras-integration-tests.result != 'skipped' }}
         run: |
           echo "❌ tidy3d-extras integration tests failed."
+          exit 1
+
+      - name: check-testmon-cache-promotion
+        if: ${{ github.event_name == 'merge_group' && needs.promote-testmon-cache.result != 'success' && needs.promote-testmon-cache.result != 'skipped' }}
+        run: |
+          echo "❌ Testmon cache promotion workflow failed."
           exit 1
 
       - name: all-checks-passed

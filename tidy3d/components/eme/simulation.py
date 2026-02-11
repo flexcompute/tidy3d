@@ -51,11 +51,6 @@ if TYPE_CHECKING:
 
     from .grid import EMEGrid, EMEGridSpec
 
-try:
-    import matplotlib as mpl
-except ImportError:
-    pass
-
 # maximum numbers of simulation parameters
 WARN_MONITOR_DATA_SIZE_GB = 10
 MAX_MONITOR_INTERNAL_DATA_SIZE_GB = 50
@@ -107,6 +102,13 @@ class EMESimulation(AbstractYeeGridSimulation):
         The electromagnetic fields are expanded locally in the basis of eigenmodes of the
         waveguide; they are then propagated by imposing continuity conditions in this basis.
 
+        The solver computes the full **bidirectional scattering matrix**, accounting for
+        reflections and mode coupling at every cell interface, with optional passivity or
+        unitarity constraints. Supported features include bent waveguides (via ``bend_radius`` in
+        :class:`.EMEModeSpec`), anisotropic materials (:class:`.AnisotropicMedium`),
+        broadband frequency interpolation, and efficient parameter sweeps over cell lengths,
+        number of modes, and periodic repetitions.
+
         The EME simulation is performed along the propagation axis ``axis`` at frequencies ``freqs``.
         The simulation is divided into cells along the propagation axis, as defined by
         ``eme_grid_spec``. Mode solving is performed at cell centers, and boundary conditions are
@@ -115,6 +117,20 @@ class EMESimulation(AbstractYeeGridSimulation):
 
         An EME simulation always computes the full scattering matrix of the structure.
         Additional data can be recorded by adding 'monitors' to the simulation.
+
+        **Monitors**
+
+        The following monitor types are supported:
+
+        - :class:`.EMEModeSolverMonitor` — record the eigenmodes at each EME cell.
+        - :class:`.EMEFieldMonitor` — record the propagated E and H fields.
+        - :class:`.EMECoefficientMonitor` — record forward/backward mode coefficients and
+          related diagnostic quantities.
+        - :class:`.ModeSolverMonitor` — solve modes at a cross-section (e.g. for use with
+          :meth:`.EMESimulationData.smatrix_in_basis`).
+        - :class:`.PermittivityMonitor` — record the complex relative permittivity tensor.
+        - :class:`.MediumMonitor` — record the complex relative permittivity and permeability
+          tensors.
 
         **Other Bases**
 
@@ -200,6 +216,9 @@ class EMESimulation(AbstractYeeGridSimulation):
         (),
         title="Monitors",
         description="Tuple of monitors in the simulation. "
+        "Supported types: 'EMEModeSolverMonitor', 'EMEFieldMonitor', "
+        "'EMECoefficientMonitor', 'ModeSolverMonitor', 'PermittivityMonitor', "
+        "and 'MediumMonitor'. "
         "Note: monitor names are used to access data after simulation is run.",
     )
 
@@ -339,7 +358,30 @@ class EMESimulation(AbstractYeeGridSimulation):
         vlim: Optional[tuple[float, float]] = None,
         **kwargs: Any,
     ) -> Ax:
-        """Plot the EME ports."""
+        """Plot the EME port locations on a cross-sectional plane.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y range if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        import matplotlib as mpl
+
         kwargs.setdefault("linewidth", 0.4)
         kwargs.setdefault("colors", "black")
         rmin = self.geometry.bounds[0][self.axis]
@@ -383,10 +425,35 @@ class EMESimulation(AbstractYeeGridSimulation):
         vlim: Optional[tuple[float, float]] = None,
         **kwargs: Any,
     ) -> Ax:
-        """Plot the EME subgrid boundaries.
+        """Plot the EME subgrid boundaries on a cross-sectional plane.
+
         Does nothing if ``eme_grid_spec`` is not :class:`.EMECompositeGrid`.
-        Operates recursively on subgrids.
+        Operates recursively on nested subgrids.
+
+        Parameters
+        ----------
+        eme_grid_spec : :class:`.EMEGridSpec`
+            The EME grid spec whose subgrid boundaries to plot.
+        x : float = None
+            Position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y range if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
         """
+        import matplotlib as mpl
+
         if not isinstance(eme_grid_spec, EMECompositeGrid):
             return ax
         kwargs.setdefault("linewidth", 0.4)
@@ -435,7 +502,30 @@ class EMESimulation(AbstractYeeGridSimulation):
         vlim: Optional[tuple[float, float]] = None,
         **kwargs: Any,
     ) -> Ax:
-        """Plot the EME grid."""
+        """Plot the EME cell boundaries on a cross-sectional plane.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y range if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        import matplotlib as mpl
+
         kwargs.setdefault("linewidth", 0.2)
         kwargs.setdefault("colors", "black")
         cell_boundaries = self.eme_grid.boundaries
@@ -558,8 +648,12 @@ class EMESimulation(AbstractYeeGridSimulation):
         scene : :class:`.Scene`
             Scene containing structures information.
         **kwargs
-            Other arguments
+            Other arguments passed to the :class:`.EMESimulation` constructor.
 
+        Returns
+        -------
+        :class:`.EMESimulation`
+            An EME simulation with structures and medium from the provided scene.
         """
         return cls(
             structures=scene.structures,

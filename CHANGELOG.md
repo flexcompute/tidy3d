@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added   
+### Added
+- Added `GeometryArray` class for efficiently representing multiple copies of a base geometry at specified offsets with transformation matrices. Includes a convenience method `geometry.array(offsets=..., transforms=...)` on all geometry objects.
 - Added `ModeSortSpec.keep_modes` which can be set to `"all"` to keep all modes in the mode solver (the default), `"filtered"` to keep only modes passing the filter defined by the `ModeSortSpec`, or an integer `N` to keep only the top `N` modes after filtering and sorting.
 - Added `fill_fraction_box` as a new filtering and sorting key which computes the field-energy fill fraction within a specified bounding box (`ModeSortSpec.bounding_box`).
 - Added `Grid.fine_mesh_info` property to identify and report locations where grid cell sizes are fine for understanding meshing hotspots.
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added deprecation warning for `conformal` in TCAD heat/charge monitors when explicitly set; this option is ignored (treated as `False`) when meshing with `remove_fragments=True`.
 - Added in-memory caching for downloaded batch results, configurable via ``config.batch_data_cache``.
 - Added frequency-parametrized lossy dielectrics and lossy metals to the RF material library. User can choose between the material fit for the default frequency range via ``medium()`` or get a fit for the desired frequency range via ``medium(frequency_range)``. When the specified range is outside the default one, a new model is created with averaged properties and a warning is issued.
+- Added `DesignSpace` support for sweeping `WorkflowType` objects, including mode/EME simulations and component modelers.
 
 ### Breaking Changes
 - Added optional automatic extrusion of structures at the simulation boundaries into/through PML/Absorber layers via `extrude_structures` field in class `AbsorberSpec`.
@@ -38,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added validation to `GaussianDoping` to ensure `ref_con < concentration`, validate `source` face identifier, and warn the user when the box size is not sufficient for the specified transition width.
 - Local caching is now enabled by default (set `td.config.local_cache.enabled=False` to opt out).
 - Reduced computation time of `adaptive_vjp_spacing` for `GeometryGroup` by allowing permittivity based spacing value to be cached.
+- Added warning in `LayerRefinementSpec` when `dl_min_from_gaps` (derived from automatic gap refinement) is very small relative to the lateral grid size for identifying cases where excessive grid refinement may occur due to very small detected gaps.
+- Added `custom_vjp` and new custom run functions that provide hooks into adjoint for custom gradient calculations.
+- Changed default `num_points` in `EMEModeSpec.interp_spec` from 3 to 5 for improved accuracy of frequency interpolation.
 
 ### Fixed
 - Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.
@@ -46,9 +51,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed sliver polygon artifacts in 2D material subdivision by filtering polygons based on grid cell size, preventing numerical issues with large-coordinate geometries.
 - Fixed `CustomMedium` gradient calculation when field coordinates exactly align with boundaries.
 - Fixed adjoint simulation `grid_spec` to align exactly with forward simulation for correct `FieldData` adjoint source power.
+- Fixed `TerminalComponentModeler` serialization failure with `CustomGridBoundaries` by storing JSON-serializable grid metadata in `GridSpec.attrs`.
 - Fixed redundant logging when `Batch.download()` skips existing files, and added `replace_existing` to `Batch.run()` so overwrite behavior can be controlled directly.
 - Fixed redundant server lookups when loading simulation results.
 - Updated docstrings for `DerivativeInfo` to more accurately reflect dataclass fields.
+- Fixed local cache race conditions causing `FileNotFoundError`.
+- Improved `ModeSolver.solve()` to suppress the accuracy warning when local subpixel averaging is enabled via `tidy3d-extras`, and expanded docstrings for `ModeSolver.solve()`, `ModeSimulation.run_local()`, `Simulation.epsilon()`, and `Simulation.epsilon_on_grid()` to document the `config.simulation.use_local_subpixel` option.
+- Fixed `ModeSolver.validate_pre_upload` not validating `MicrowaveModeSpec` with `AutoImpedanceSpec`, causing cryptic server-side errors for invalid conductor geometries.
+- Fixed local cache not storing results for `ModalComponentModeler` (and `TerminalComponentModeler`) runs, causing cache misses on repeated `web.run()` calls.
 
 ## [2.10.2] - 2026-01-21
 

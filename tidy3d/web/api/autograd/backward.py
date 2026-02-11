@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
@@ -17,10 +18,15 @@ from tidy3d.packaging import disable_local_subpixel
 from .utils import E_to_D, get_derivative_maps
 
 if TYPE_CHECKING:
-    from typing import Union
+    from typing import Any, Callable, Optional, Union
 
     from tidy3d import Medium
     from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
+    from tidy3d.components.geometry.base import Box
+    from tidy3d.components.geometry.utils import GeometryType
+
+    from .types import CustomVJPConfig
 
 
 def setup_adj(
@@ -132,18 +138,49 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
+    custom_vjp: Optional[tuple[CustomVJPConfig, ...]] = None,
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
-    # map of index into 'structures' to the list of paths we need vjps for
-    sim_vjp_map = defaultdict(list)
-    for _, structure_index, *structure_path in sim_fields_keys:
+    def get_all_paths(match_structure_index: int) -> tuple[tuple[str, str, int]]:
+        """Get all the paths that may appear in autograd for this structure index. This allows a
+        custom_vjp to be called for all autograd paths for the structure.
+        """
+        all_paths = tuple(
+            tuple(structure_path)
+            for namespace, structure_index_, *structure_path in sim_fields_keys
+            if structure_index_ == match_structure_index
+        )
+
+        return all_paths
+
+    custom_vjp_lookup: dict[int, dict[tuple[str, str], Callable[..., Any]]] = {}
+    if custom_vjp:
+        for vjp_config in custom_vjp:
+            structure_index = vjp_config.structure
+            vjp_fn = vjp_config.compute_derivatives
+            path = vjp_config.path_key
+
+            if path is None:
+                for match_path in get_all_paths(structure_index):
+                    custom_vjp_lookup.setdefault(structure_index, {})[match_path[0:2]] = vjp_fn
+            else:
+                custom_vjp_lookup.setdefault(structure_index, {})[path] = vjp_fn
+
+    # map of index into 'structures' to the paths we need VJPs for
+    sim_vjp_map: defaultdict[int, list[tuple[Any, ...]]] = defaultdict(list)
+    for namespace, structure_index, *structure_path in sim_fields_keys:
         structure_path = tuple(structure_path)
-        sim_vjp_map[structure_index].append(structure_path)
+        if namespace == "structures":
+            sim_vjp_map[structure_index].append(structure_path)
 
     # store the derivative values given the forward and adjoint data
     sim_fields_vjp = {}
-    for structure_index, structure_paths in sim_vjp_map.items():
+    all_structure_indices = sorted(set(sim_vjp_map.keys()))
+
+    for structure_index in all_structure_indices:
+        structure_paths = tuple(sim_vjp_map.get(structure_index, ()))
+
         # grab the forward and adjoint data
         fld_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
         eps_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="eps")
@@ -300,6 +337,42 @@ def postprocess_adj(
         rmax_intersect = tuple([min(a, b) for a, b in zip(rmax_sim, rmax_struct)])
         bounds_intersect = (rmin_intersect, rmax_intersect)
 
+        def updated_epsilon_full_impl(
+            replacement_geometry: GeometryType,
+            adjoint_frequencies: Optional[FreqDataArray],
+            structure_index: Optional[int],
+            eps_box: Optional[Box],
+            sim_orig: td.Simulation,
+        ) -> ScalarFieldDataArray:
+            """Return the simulation permittivity for eps_box after replacing the geometry
+            for this structure with a new geometry. This is helpful for carrying out finite
+            difference permittivity computations.
+            """
+            update_sim = sim_orig.updated_copy(
+                structures=[
+                    sim_orig.structures[idx].updated_copy(geometry=replacement_geometry)
+                    if idx == structure_index
+                    else sim_orig.structures[idx]
+                    for idx in range(len(sim_orig.structures))
+                ],
+                grid_spec=td.components.grid.grid_spec.GridSpec.from_grid(sim_orig.grid),
+            )
+
+            eps_by_f = [
+                update_sim.epsilon(box=eps_box, coord_key="centers", freq=f)
+                for f in adjoint_frequencies
+            ]
+
+            return xr.concat(eps_by_f, dim="f").assign_coords(f=adjoint_frequencies)
+
+        updated_epsilon_full = functools.partial(
+            updated_epsilon_full_impl,
+            adjoint_frequencies=adjoint_frequencies,
+            structure_index=structure_index,
+            eps_box=resize_plane_eps,
+            sim_orig=sim_orig,
+        )
+
         # get chunk size - if None, process all frequencies as one chunk
         freq_chunk_size = config.adjoint.solver_freq_chunk_size
         n_freqs = len(adjoint_frequencies)
@@ -351,43 +424,60 @@ def postprocess_adj(
                 eps_inf_structure.isel(f=freq_slice) if eps_inf_structure is not None else None
             )
 
-            # create derivative info with sliced data
-            derivative_info = DerivativeInfo(
-                paths=structure_paths,
-                E_der_map=E_der_map_chunk,
-                D_der_map=D_der_map_chunk,
-                H_der_map=H_der_map_chunk,
-                E_fwd=E_fwd_chunk,
-                E_adj=E_adj_chunk,
-                D_fwd=D_fwd_chunk,
-                D_adj=D_adj_chunk,
-                H_fwd=H_fwd_chunk,
-                H_adj=H_adj_chunk,
-                eps_data=eps_data_chunk,
-                eps_in=eps_inf_structure_chunk,
-                eps_out=eps_no_structure_chunk,
-                frequencies=select_adjoint_freqs,  # only chunk frequencies
-                bounds=struct_bounds,
-                bounds_intersect=bounds_intersect,
-                simulation_bounds=sim_data_orig.simulation.bounds,
-                is_medium_pec=structure.medium.is_pec,
-                background_medium_is_pec=structure.background_medium
-                and structure.background_medium.is_pec,
+            def updated_epsilon_wrapper(
+                replacement_geometry: GeometryType,
+                select_adjoint_freqs: Optional[FreqDataArray],
+                updated_epsilon_full: Optional[Callable],
+            ) -> ScalarFieldDataArray:
+                # Get permittivity function for a subset of frequencies
+                return updated_epsilon_full(replacement_geometry).sel(f=select_adjoint_freqs)
+
+            updated_epsilon = functools.partial(
+                updated_epsilon_wrapper,
+                select_adjoint_freqs=select_adjoint_freqs,
+                updated_epsilon_full=updated_epsilon_full,
             )
 
-            # compute derivatives for chunk
-            vjp_chunk = structure._compute_derivatives(derivative_info)
+            if structure_paths:
+                # create derivative info with sliced data
+                derivative_info_struct = DerivativeInfo(
+                    paths=structure_paths,
+                    E_der_map=E_der_map_chunk,
+                    D_der_map=D_der_map_chunk,
+                    H_der_map=H_der_map_chunk,
+                    E_fwd=E_fwd_chunk,
+                    E_adj=E_adj_chunk,
+                    D_fwd=D_fwd_chunk,
+                    D_adj=D_adj_chunk,
+                    H_fwd=H_fwd_chunk,
+                    H_adj=H_adj_chunk,
+                    eps_data=eps_data_chunk,
+                    eps_in=eps_inf_structure_chunk,
+                    eps_out=eps_no_structure_chunk,
+                    updated_epsilon=updated_epsilon,
+                    frequencies=select_adjoint_freqs,  # only chunk frequencies
+                    bounds=struct_bounds,
+                    bounds_intersect=bounds_intersect,
+                    simulation_bounds=sim_data_orig.simulation.bounds,
+                    is_medium_pec=structure.medium.is_pec,
+                    background_medium_is_pec=structure.background_medium
+                    and structure.background_medium.is_pec,
+                )
 
-            # accumulate results
-            for path, value in vjp_chunk.items():
-                if path in vjp_value_map:
-                    val = vjp_value_map[path]
-                    if isinstance(val, (list, tuple)) and isinstance(value, (list, tuple)):
-                        vjp_value_map[path] = type(val)(x + y for x, y in zip(val, value))
+                vjp_fns = custom_vjp_lookup.get(structure_index)
+                vjp_chunk = structure._compute_derivatives(derivative_info_struct, vjp_fns=vjp_fns)
+
+                for path, value in vjp_chunk.items():
+                    if path in vjp_value_map:
+                        existing = vjp_value_map[path]
+                        if isinstance(existing, (list, tuple)) and isinstance(value, (list, tuple)):
+                            vjp_value_map[path] = type(existing)(
+                                x + y for x, y in zip(existing, value)
+                            )
+                        else:
+                            vjp_value_map[path] = existing + value
                     else:
-                        vjp_value_map[path] += value
-                else:
-                    vjp_value_map[path] = value
+                        vjp_value_map[path] = value
 
         # store vjps in output map
         for structure_path, vjp_value in vjp_value_map.items():

@@ -91,6 +91,19 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         return vtk["mod"].VTK_TETRA
 
     @classmethod
+    def _cell_types_numpy(cls, vtk_obj: vtkUnstructuredGrid) -> np.ndarray:
+        """Return cell types as a numpy array with a compatibility fallback."""
+        cell_types_array = vtk_obj.GetCellTypesArray()
+        if cell_types_array is not None:
+            return np.array(vtk["vtk_to_numpy"](cell_types_array), copy=True)
+
+        # VTK may return ``None`` for the consolidated array while still exposing per-cell types.
+        num_cells = vtk_obj.GetNumberOfCells()
+        return np.fromiter(
+            (vtk_obj.GetCellType(ind) for ind in range(num_cells)), dtype=int, count=num_cells
+        )
+
+    @classmethod
     @requires_vtk
     def _from_vtk_obj(
         cls,
@@ -115,7 +128,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         )
 
         # verify cell_types
-        cells_types = np.array(vtk["vtk_to_numpy"](vtk_obj.GetCellTypesArray()), copy=True)
+        cells_types = cls._cell_types_numpy(vtk_obj)
         invalid_cells = cells_types != cls._vtk_cell_type()
         if any(invalid_cells):
             if ignore_invalid_cells:

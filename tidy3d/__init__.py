@@ -278,7 +278,14 @@ from .components.field_projection import FieldProjector
 from .components.frequencies import FreqRange, FrequencyUtils, frequencies, wavelengths
 
 # geometry
-from .components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup, Transformed
+from .components.geometry.base import (
+    Box,
+    ClipOperation,
+    Geometry,
+    GeometryArray,
+    GeometryGroup,
+    Transformed,
+)
 from .components.geometry.mesh import TriangleMesh
 from .components.geometry.polyslab import PolySlab
 from .components.geometry.primitives import Cylinder, Sphere
@@ -490,6 +497,7 @@ log.info(f"Using client version: {__version__}")
 Transformed.model_rebuild()
 ClipOperation.model_rebuild()
 GeometryGroup.model_rebuild()
+GeometryArray.model_rebuild()
 
 # Backwards compatibility: Remove 2.11 renamed integral classes
 VoltageIntegralAxisAligned = AxisAlignedVoltageIntegral
@@ -675,6 +683,7 @@ __all__ = [
     "GaussianOverlapMonitor",
     "GaussianPulse",
     "Geometry",
+    "GeometryArray",
     "GeometryGroup",
     "Graphene",
     "Grid",

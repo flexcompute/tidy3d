@@ -4,6 +4,8 @@ from __future__ import annotations
 import numpy as np
 
 from tidy3d import material_library as lib
+from tidy3d.components.material.multi_physics import MultiPhysicsMedium
+from tidy3d.components.medium import LossyMetalMedium
 from tidy3d.constants import C_0
 from tidy3d.material_library.material_library import (
     MaterialItem,
@@ -11,6 +13,10 @@ from tidy3d.material_library.material_library import (
     MaterialItemUniaxial,
 )
 from tidy3d.plugins.microwave import rf_material_library as rf_lib
+from tidy3d.plugins.microwave.rf_material_library import (
+    VariantItemFreqRangeDielectric,
+    VariantItemFreqRangeMetal,
+)
 
 LOW_LOSS_THRESHOLD = 2e-5
 
@@ -108,6 +114,8 @@ def generate_material_library_doc():
                         row["model"] = ":class:`Medium2D`"
                     elif isinstance(mat, MaterialItemUniaxial):
                         row["model"] = ":class:`AnisotropicMedium`"
+                    elif isinstance(medium, MultiPhysicsMedium):
+                        row["model"] = ":class:`MultiPhysicsMedium`"
                     elif isinstance(mat, MaterialItem):
                         # Pole number
                         row["model"] = str(len(medium.poles)) + "-pole"
@@ -256,7 +264,10 @@ def generate_rf_material_library_doc():
             "For example, Rogers3010 laminate can be loaded as:\n\n"
             ">>> Rogers3010 = rf_material_library['RO3010']['design']\n\n"
             "You can also import the default variant of a material by:\n\n"
-            ">>> medium = rf_material_library['mat'].medium\n\n"
+            "For frequency-range parametrized materials (MaterialItemFreqRange):\n\n"
+            ">>> medium = rf_material_library['RT_duroid5880'].medium()\n\n"
+            "For standard materials (MaterialItem), medium is a property:\n\n"
+            ">>> medium = rf_material_library['RO3010'].medium\n\n"
             "It is often useful to see the full list of variants for a given medium:\n\n"
             ">>> print(rf_material_library['mat'].variants.keys())\n\n"
             "To access the details of a variant, including material model and references, use the following command:\n\n"
@@ -299,19 +310,30 @@ def generate_rf_material_library_doc():
                     row["variant"] += " (default)"
 
                 # Load medium
-                medium = var.medium
+                # Check if variant has medium as a method (VariantItemFreqRange*) or property (VariantItem)
+                if isinstance(var, (VariantItemFreqRangeDielectric, VariantItemFreqRangeMetal)):
+                    medium = var.medium()
+                else:
+                    medium = var.medium
 
                 # Pole number
-                row["model"] = str(len(medium.poles)) + "-pole"
-                # Lossy (based on model)
-                nonzero = np.sum(np.abs(np.array(medium.poles).real))
-                if nonzero:
-                    if medium.loss_upper_bound < LOW_LOSS_THRESHOLD:
-                        row["model"] += ", low loss"
-                    else:
-                        row["model"] += ", lossy"
+                # Handle LossyMetalMedium differently - it has num_poles and scaled_surface_impedance_model
+                if isinstance(medium, LossyMetalMedium):
+                    row["model"] = str(medium.num_poles) + "-pole"
+                    # Metals are inherently lossy
+                    row["model"] += ", lossy"
                 else:
-                    row["model"] += ", lossless"
+                    # PoleResidue and other mediums
+                    row["model"] = str(len(medium.poles)) + "-pole"
+                    # Lossy (based on model)
+                    nonzero = np.sum(np.abs(np.array(medium.poles).real))
+                    if nonzero:
+                        if medium.loss_upper_bound < LOW_LOSS_THRESHOLD:
+                            row["model"] += ", low loss"
+                        else:
+                            row["model"] += ", lossy"
+                    else:
+                        row["model"] += ", lossless"
 
                 # Valid range
                 if medium.frequency_range is None:
@@ -346,7 +368,7 @@ def generate_rf_material_library_doc():
 
                 # Update example code
                 code_string += (
-                    ">>> medium = material_library['" + abbr + "']['" + varname + "']\n\n"
+                    ">>> medium = rf_material_library['" + abbr + "']['" + varname + "']\n\n"
                 )
 
             # Write table

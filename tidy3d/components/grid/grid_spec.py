@@ -54,6 +54,12 @@ GAP_MESHING_TOL = 1e-3
 
 CornersAndConvexity = tuple[list[ArrayFloat2D], list[ArrayFloat1D]]
 
+# Fraction of detected gap width used to set dl_min_from_gaps
+DL_MIN_FROM_GAPS_FRACTION = 0.45
+
+# Threshold for warning when dl_min_from_gaps is very small relative to lateral grid size
+GAP_REFINEMENT_WARNING_THRESH = 0.1
+
 
 class GridSpec1d(Tidy3dBaseModel, ABC):
     """Abstract base class, defines 1D grid generation specifications."""
@@ -3129,6 +3135,44 @@ class GridSpec(Tidy3dBaseModel):
                         if layer_spec.dl_min_from_gap_width:
                             min_gap_width = min(min_gap_width, gap_width)
 
+                            # Warn if dl_min_from_gaps would be very small relative to lateral grid size
+                            if gap_width < inf:
+                                # Get lateral dimensions (perpendicular to layer axis)
+                                _, tan_dims = Box.pop_axis([0, 1, 2], layer_spec.axis)
+                                dim_names = ["x", "y", "z"]
+
+                                # Get grid sizes along lateral dimensions
+                                grid_sizes = old_grid.sizes.to_dict
+                                lateral_grid_sizes = [
+                                    grid_sizes[dim_names[tan_dims[0]]],
+                                    grid_sizes[dim_names[tan_dims[1]]],
+                                ]
+
+                                # Find minimum grid size along lateral dimensions
+                                min_lateral_grid_size = min(
+                                    min(sizes) if len(sizes) > 0 else inf
+                                    for sizes in lateral_grid_sizes
+                                )
+
+                                # Calculate dl_min_from_gaps for this layer spec
+                                dl_min_from_gaps = DL_MIN_FROM_GAPS_FRACTION * gap_width
+
+                                # Warn if dl_min_from_gaps is too small relative to lateral grid size
+                                if (
+                                    min_lateral_grid_size < inf
+                                    and dl_min_from_gaps
+                                    < GAP_REFINEMENT_WARNING_THRESH * min_lateral_grid_size
+                                ):
+                                    log.warning(
+                                        f"'LayerRefinementSpec' (axis={layer_spec.axis}) detected a very small gap width "
+                                        f"({gap_width:.2e}), resulting in 'dl_min_from_gaps'={dl_min_from_gaps:.2e}. "
+                                        f"This is less than {GAP_REFINEMENT_WARNING_THRESH * 100:.0f}% of the smallest "
+                                        f"lateral grid size ({min_lateral_grid_size:.2e}). This may lead to "
+                                        "excessive grid refinement. Consider adjusting the geometry or grid "
+                                        "specification.",
+                                        log_once=True,
+                                    )
+
                 if len(new_snapping_lines) == 0:
                     log.info(
                         "Grid is no longer changing. "
@@ -3147,7 +3191,7 @@ class GridSpec(Tidy3dBaseModel):
                     lumped_elements=lumped_elements,
                     internal_override_structures=internal_override_structures,
                     internal_snapping_points=snapping_lines + internal_snapping_points,
-                    dl_min_from_gaps=0.45 * min_gap_width,
+                    dl_min_from_gaps=DL_MIN_FROM_GAPS_FRACTION * min_gap_width,
                     structure_priority_mode=structure_priority_mode,
                     boundary_types=boundary_types,
                     parse_structures_interval_coords=parse_structures_interval_coords,

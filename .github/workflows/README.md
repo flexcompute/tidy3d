@@ -85,8 +85,15 @@ Primary CI workflow; it runs on PRs (`latest`, `develop`, `pre/*`), merge queue 
 - **Optional suites**: CLI tests, version consistency checks, submodule validation (non-RC release tags only), and `tidy3d-extras` integration tests can be toggled via inputs.
 - **Extras integration tests**: When enabled on merge_group, runs basic smoke tests (4 configurations). When called from release workflow, runs full tests (10 configurations covering all architectures and Python 3.10/3.13).
 - **Test type control**: `test_type` input ("basic" or "full") can override automatic selection for extras integration tests.
+- **Test selection control**: `test_selection` input (`testmon` or `full`) controls whether local/remote suites run with pytest-testmon (`--testmon --testmon-forceselect`) or full (`--no-testmon`) execution.
+- **Default policy**: PR and manual runs default to `test_selection: testmon`; merge queue (`merge_group`) forces `full` for safety.
+- **Testmon cache strategy**: local/remote testmon caches are shared by runner + Python and anchored to the default branch (`develop`) SHA, with dependency hash in the primary key. Restore keys degrade from exact branch+dependency to broader runner+Python prefixes. PR runs restore from shared caches and do not write new entries.
+- **Cache refresh path**: successful merge queue runs (`merge_group`) execute full coverage in testmon collection mode (`--testmon-noselect`) and write refreshed shared caches; no additional post-merge push run is required.
+- **Core cache telemetry**: local and remote jobs emit lightweight telemetry-only steps for cache outcome (`telemetry-cache-exact-hit`, `telemetry-cache-fallback-hit`, `telemetry-cache-miss`) and selection mode (`telemetry-selection-*`) so CI analytics can be derived from the jobs API without log scraping.
 - **Dynamic scope**: Determines which jobs to run based on the event (draft PRs, approvals, merge queue, manual overrides).
 - **Outputs**: `workflow_success` summarizes whether every required job succeeded; the release workflow uses this to decide if deployment can continue.
+
+Manual full-suite safety run: trigger `tidy3d-python-client-tests.yml` with `workflow_dispatch` and set `test_selection=full`.
 
 > The previous `tidy3d-python-client-release-tests.yml` workflow has been removed. Release-specific suites now live entirely inside this unified workflow.
 
@@ -131,6 +138,7 @@ The workflow ensures that the `tidy3d-extras` package installs and functions cor
 Scheduled at 05:00 UTC and also manually runnable. It fans out to:
 - `tidy3d-python-client-update-lockfile.yml` – keeps dependencies fresh.
 - `tidy3d-python-client-release.yml` – runs a daily draft release (`daily-0.0.0`) with client and CLI tests enabled to catch breaking changes early. This validates that the package can be built and tested against the latest develop branch without actually publishing artifacts.
+  - The release workflow explicitly calls the tests workflow with `test_selection: full`, so daily release validation keeps full non-testmon coverage.
 
 ### `tidy3d-python-client-update-lockfile.yml`
 

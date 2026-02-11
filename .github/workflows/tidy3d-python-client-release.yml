@@ -426,6 +426,7 @@ jobs:
       version_match_tests: true
       extras_integration_tests: ${{ needs.determine-workflow-scope.outputs.run_extras_integration_tests == 'true' }}
       test_type: full
+      test_selection: full
     secrets: inherit # zizmor: ignore[secrets-inherit]
   
   compile-tests-results:
@@ -512,13 +513,13 @@ jobs:
       IS_RC_RELEASE: ${{ needs.determine-workflow-scope.outputs.is_rc_release }}
     steps:
       - name: checkout-tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
       
       - name: create-github-release
-        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191  # v2.0.8
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2.5.0
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true

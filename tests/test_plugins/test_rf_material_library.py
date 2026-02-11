@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from tidy3d.components.medium import LossyMetalMedium, PoleResidue, SurfaceImpedanceFitterParam
+from tidy3d.constants import MICROWAVE_FREQUENCY_RANGE
 from tidy3d.material_library.material_library import MaterialItem, ReferenceData, VariantItem
 from tidy3d.plugins.microwave.rf_material_library import (
     AbstractVariantItemFreqRange,
@@ -386,23 +387,32 @@ def test_VariantItemFreqRangeMetal_medium():
     variant = VariantItemFreqRangeMetal(conductivity=60.0)
     frequency_range = (1e9, 10e9)
 
+    # Test with explicit frequency_range
     medium = variant.medium(frequency_range)
     assert isinstance(medium, LossyMetalMedium)
     assert medium.conductivity == 60.0
     assert medium.frequency_range == frequency_range
 
+    # Test without frequency_range - should use default RF frequency range
+    default_medium = variant.medium()
+    assert isinstance(default_medium, LossyMetalMedium)
+    assert default_medium.conductivity == 60.0
+    assert default_medium.frequency_range == MICROWAVE_FREQUENCY_RANGE
+
 
 def test_VariantItemFreqRangeMetal_medium_none_frequency_range():
-    """Test that VariantItemFreqRangeMetal.medium() raises ValueError when frequency_range is None."""
+    """Test that VariantItemFreqRangeMetal.medium() uses default RF frequency range when frequency_range is None."""
     variant = VariantItemFreqRangeMetal(conductivity=60.0)
 
-    # Should raise ValueError when called without frequency_range
-    with pytest.raises(ValueError, match="frequency_range is required"):
-        _ = variant.medium(None)
+    # Should use default RF frequency range when called with None
+    medium1 = variant.medium(None)
+    assert isinstance(medium1, LossyMetalMedium)
+    assert medium1.frequency_range == MICROWAVE_FREQUENCY_RANGE
 
-    # Should also raise ValueError when called without arguments (defaults to None)
-    with pytest.raises(ValueError, match="frequency_range is required"):
-        _ = variant.medium()
+    # Should also use default RF frequency range when called without arguments
+    medium2 = variant.medium()
+    assert isinstance(medium2, LossyMetalMedium)
+    assert medium2.frequency_range == MICROWAVE_FREQUENCY_RANGE
 
 
 def test_VariantItemFreqRangeMetal_with_optional_params():
@@ -434,7 +444,11 @@ def test_VariantItemFreqRangeMetal_summarize_mediums():
     variant = VariantItemFreqRangeMetal(conductivity=60.0)
     mediums = variant.summarize_mediums
     assert isinstance(mediums, dict)
-    assert len(mediums) == 0  # Empty dict since we can't create medium without frequency_range
+    assert len(mediums) == 1
+    assert "medium" in mediums
+    assert isinstance(mediums["medium"], LossyMetalMedium)
+    # Should use default microwave frequency range (300 MHz to 300 GHz)
+    assert mediums["medium"].frequency_range == (0.3e9, 300e9)
 
 
 def test_rf_material_library_VariantItem():
@@ -483,24 +497,39 @@ def test_rf_material_library_VariantItemFreqRangeMetal():
     assert np.isclose(medium.conductivity, copper_variant.conductivity)
     assert np.allclose(medium.frequency_range, frequency_range)
 
+    # Test medium() without frequency_range - should use default RF frequency range
+    default_medium = copper_variant.medium()
+    assert isinstance(default_medium, LossyMetalMedium)
+    assert np.isclose(default_medium.conductivity, copper_variant.conductivity)
+    assert default_medium.frequency_range == MICROWAVE_FREQUENCY_RANGE
+
 
 def test_MaterialItemFreqRange_medium_property():
-    """Test MaterialItemFreqRange.medium property."""
+    """Test MaterialItemFreqRange.medium method."""
     # Test with dielectric material
     rt_duroid = rf_material_library["RT_duroid5880"]
     assert isinstance(rt_duroid, MaterialItemFreqRange)
 
-    # Should return PoleResidue for dielectric
-    default_medium = rt_duroid.medium
+    # Should return PoleResidue for dielectric when called without arguments
+    default_medium = rt_duroid.medium()
     assert isinstance(default_medium, PoleResidue)
     assert default_medium == rt_duroid.variants[rt_duroid.default].medium()
 
-    # Test with metal material - should raise ValueError
+    # Test with metal material - should work without frequency_range (uses default RF range)
     copper_material = rf_material_library["Copper_Matula"]
     assert isinstance(copper_material, MaterialItemFreqRange)
 
-    with pytest.raises(ValueError, match="frequency_range is required"):
-        _ = copper_material.medium
+    # Should return LossyMetalMedium when called without arguments (uses default RF range)
+    default_metal_medium = copper_material.medium()
+    assert isinstance(default_metal_medium, LossyMetalMedium)
+    # Check that it uses the default microwave frequency range (300 MHz to 300 GHz)
+    assert default_metal_medium.frequency_range == (0.3e9, 300e9)
+
+    # Test with custom frequency range
+    custom_freq_range = (1e9, 10e9)
+    custom_metal_medium = copper_material.medium(frequency_range=custom_freq_range)
+    assert isinstance(custom_metal_medium, LossyMetalMedium)
+    assert custom_metal_medium.frequency_range == custom_freq_range
 
 
 def test_MaterialItemFreqRange_medium_unsupported_variant():
@@ -534,9 +563,9 @@ def test_MaterialItemFreqRange_medium_unsupported_variant():
         default="standard",
     )
 
-    # Accessing .medium should raise ValueError with appropriate message
+    # Accessing .medium() should raise ValueError with appropriate message
     with pytest.raises(ValueError) as exc_info:
-        _ = material.medium
+        _ = material.medium()
 
     # Verify the error message contains expected information
     error_message = str(exc_info.value)
@@ -585,7 +614,7 @@ def test_rf_material_library_eps_model():
                 assert np.allclose(eps_complex, eps_complex2)
 
             elif isinstance(variant, VariantItemFreqRangeMetal):
-                # VariantItemFreqRangeMetal - need to call medium() with frequency_range
+                # VariantItemFreqRangeMetal - can call medium() with or without frequency_range
                 frequency_range = (1e9, 10e9)
                 medium = variant.medium(frequency_range)
                 assert isinstance(medium, LossyMetalMedium)
@@ -593,6 +622,11 @@ def test_rf_material_library_eps_model():
                 # LossyMetalMedium doesn't have eps_model, but we can verify it was created
                 assert np.isclose(medium.conductivity, variant.conductivity)
                 assert np.allclose(medium.frequency_range, frequency_range)
+
+                # Test without frequency_range - should use default RF frequency range
+                default_medium = variant.medium()
+                assert isinstance(default_medium, LossyMetalMedium)
+                assert default_medium.frequency_range == MICROWAVE_FREQUENCY_RANGE
 
 
 def test_rf_material_library_material_item():
@@ -602,14 +636,11 @@ def test_rf_material_library_material_item():
     assert isinstance(ro3010, MaterialItem)
     assert ro3010["design"] == ro3010.medium
 
-    # Test MaterialItem with VariantItemFreqRangeDielectric
+    # Test MaterialItem with VariantItemFreqRangeDielectric (same LSP as VariantItem)
     rt_duroid = rf_material_library["RT_duroid5880"]
     assert isinstance(rt_duroid, MaterialItem)
-    # Accessing via [] returns the variant object, not the medium
-    variant = rt_duroid["standard"]
-    assert isinstance(variant, VariantItemFreqRangeDielectric)
-    # Need to call medium() to get the PoleResidue
-    medium = variant.medium()
+    # Accessing via [] returns the medium, consistent with MaterialItem
+    medium = rt_duroid["standard"]
     assert isinstance(medium, PoleResidue)
 
 
@@ -666,11 +697,11 @@ def test_rf_material_library_all_materials_accessible():
         default_variant = material.variants[material.default]
         assert default_variant is not None
 
-        # Test accessing via [] operator
-        variant = material[material.default]
+        # Test accessing via [] operator (returns medium for all variant types)
+        variant_medium = material[material.default]
         if isinstance(default_variant, VariantItem):
-            assert isinstance(variant, PoleResidue)
+            assert isinstance(variant_medium, PoleResidue)
         elif isinstance(default_variant, VariantItemFreqRangeDielectric):
-            assert isinstance(variant, VariantItemFreqRangeDielectric)
+            assert isinstance(variant_medium, PoleResidue)
         elif isinstance(default_variant, VariantItemFreqRangeMetal):
-            assert isinstance(variant, VariantItemFreqRangeMetal)
+            assert isinstance(variant_medium, LossyMetalMedium)

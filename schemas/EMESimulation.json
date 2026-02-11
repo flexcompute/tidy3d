@@ -1553,6 +1553,7 @@
               "ClipOperation": "#/$defs/ClipOperation",
               "ComplexPolySlabBase": "#/$defs/ComplexPolySlabBase",
               "Cylinder": "#/$defs/Cylinder",
+              "GeometryArray": "#/$defs/GeometryArray",
               "GeometryGroup": "#/$defs/GeometryGroup",
               "PolySlab": "#/$defs/PolySlab",
               "Sphere": "#/$defs/Sphere",
@@ -1573,6 +1574,9 @@
             },
             {
               "$ref": "#/$defs/Cylinder"
+            },
+            {
+              "$ref": "#/$defs/GeometryArray"
             },
             {
               "$ref": "#/$defs/GeometryGroup"
@@ -1598,6 +1602,7 @@
               "ClipOperation": "#/$defs/ClipOperation",
               "ComplexPolySlabBase": "#/$defs/ComplexPolySlabBase",
               "Cylinder": "#/$defs/Cylinder",
+              "GeometryArray": "#/$defs/GeometryArray",
               "GeometryGroup": "#/$defs/GeometryGroup",
               "PolySlab": "#/$defs/PolySlab",
               "Sphere": "#/$defs/Sphere",
@@ -1618,6 +1623,9 @@
             },
             {
               "$ref": "#/$defs/Cylinder"
+            },
+            {
+              "$ref": "#/$defs/GeometryArray"
             },
             {
               "$ref": "#/$defs/GeometryGroup"
@@ -5192,7 +5200,7 @@
             "reduce_data": true,
             "sampling_spec": {
               "attrs": {},
-              "num_points": 3,
+              "num_points": 5,
               "type": "ChebSampling"
             },
             "type": "ModeInterpSpec"
@@ -5841,6 +5849,123 @@
       ],
       "type": "object"
     },
+    "GeometryArray": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "geometry": {
+          "discriminator": {
+            "mapping": {
+              "Box": "#/$defs/Box",
+              "ClipOperation": "#/$defs/ClipOperation",
+              "ComplexPolySlabBase": "#/$defs/ComplexPolySlabBase",
+              "Cylinder": "#/$defs/Cylinder",
+              "GeometryArray": "#/$defs/GeometryArray",
+              "GeometryGroup": "#/$defs/GeometryGroup",
+              "PolySlab": "#/$defs/PolySlab",
+              "Sphere": "#/$defs/Sphere",
+              "Transformed": "#/$defs/Transformed",
+              "TriangleMesh": "#/$defs/TriangleMesh"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Box"
+            },
+            {
+              "$ref": "#/$defs/ClipOperation"
+            },
+            {
+              "$ref": "#/$defs/ComplexPolySlabBase"
+            },
+            {
+              "$ref": "#/$defs/Cylinder"
+            },
+            {
+              "$ref": "#/$defs/GeometryArray"
+            },
+            {
+              "$ref": "#/$defs/GeometryGroup"
+            },
+            {
+              "$ref": "#/$defs/PolySlab"
+            },
+            {
+              "$ref": "#/$defs/Sphere"
+            },
+            {
+              "$ref": "#/$defs/Transformed"
+            },
+            {
+              "$ref": "#/$defs/TriangleMesh"
+            }
+          ]
+        },
+        "offsets": {
+          "anyOf": [
+            {
+              "items": {
+                "maxItems": 3,
+                "minItems": 3,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transforms": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "ArrayLike",
+                "x-array-dtype": "<f8",
+                "x-array-forbid_nan": true,
+                "x-array-ndim": 2,
+                "x-array-scalar_to_1d": false,
+                "x-array-shape": [
+                  4,
+                  4
+                ],
+                "x-array-strict": false
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "GeometryArray",
+          "default": "GeometryArray",
+          "type": "string"
+        }
+      },
+      "required": [
+        "geometry"
+      ],
+      "type": "object"
+    },
     "GeometryGroup": {
       "additionalProperties": false,
       "properties": {
@@ -5856,6 +5981,7 @@
                 "ClipOperation": "#/$defs/ClipOperation",
                 "ComplexPolySlabBase": "#/$defs/ComplexPolySlabBase",
                 "Cylinder": "#/$defs/Cylinder",
+                "GeometryArray": "#/$defs/GeometryArray",
                 "GeometryGroup": "#/$defs/GeometryGroup",
                 "PolySlab": "#/$defs/PolySlab",
                 "Sphere": "#/$defs/Sphere",
@@ -5876,6 +6002,9 @@
               },
               {
                 "$ref": "#/$defs/Cylinder"
+              },
+              {
+                "$ref": "#/$defs/GeometryArray"
               },
               {
                 "$ref": "#/$defs/GeometryGroup"
@@ -7726,6 +7855,7 @@
               "ClipOperation": "#/$defs/ClipOperation",
               "ComplexPolySlabBase": "#/$defs/ComplexPolySlabBase",
               "Cylinder": "#/$defs/Cylinder",
+              "GeometryArray": "#/$defs/GeometryArray",
               "GeometryGroup": "#/$defs/GeometryGroup",
               "PolySlab": "#/$defs/PolySlab",
               "Sphere": "#/$defs/Sphere",
@@ -7746,6 +7876,9 @@
             },
             {
               "$ref": "#/$defs/Cylinder"
+            },
+            {
+              "$ref": "#/$defs/GeometryArray"
             },
             {
               "$ref": "#/$defs/GeometryGroup"
@@ -11282,6 +11415,7 @@
               "ClipOperation": "#/$defs/ClipOperation",
               "ComplexPolySlabBase": "#/$defs/ComplexPolySlabBase",
               "Cylinder": "#/$defs/Cylinder",
+              "GeometryArray": "#/$defs/GeometryArray",
               "GeometryGroup": "#/$defs/GeometryGroup",
               "PolySlab": "#/$defs/PolySlab",
               "Sphere": "#/$defs/Sphere",
@@ -11302,6 +11436,9 @@
             },
             {
               "$ref": "#/$defs/Cylinder"
+            },
+            {
+              "$ref": "#/$defs/GeometryArray"
             },
             {
               "$ref": "#/$defs/GeometryGroup"
@@ -11713,6 +11850,7 @@
               "ClipOperation": "#/$defs/ClipOperation",
               "ComplexPolySlabBase": "#/$defs/ComplexPolySlabBase",
               "Cylinder": "#/$defs/Cylinder",
+              "GeometryArray": "#/$defs/GeometryArray",
               "GeometryGroup": "#/$defs/GeometryGroup",
               "PolySlab": "#/$defs/PolySlab",
               "Sphere": "#/$defs/Sphere",
@@ -11733,6 +11871,9 @@
             },
             {
               "$ref": "#/$defs/Cylinder"
+            },
+            {
+              "$ref": "#/$defs/GeometryArray"
             },
             {
               "$ref": "#/$defs/GeometryGroup"

@@ -47,6 +47,9 @@ def _derivative_info(paths: list[tuple[str, ...]], freq: float):
         simulation_bounds=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
         eps_out=eps_no,
         eps_in=eps_inf,
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
     )
 
 
@@ -151,6 +154,9 @@ def test_anisotropic_medium_conductivity_uses_projected_d_map():
         simulation_bounds=((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
         eps_out=eps_no,
         eps_in=eps_inf,
+        updated_epsilon=lambda geom: td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [freq]}
+        ),
     )
 
     medium = td.AnisotropicMedium(

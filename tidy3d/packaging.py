@@ -7,7 +7,6 @@ This section should only depend on the standard core installation in the pyproje
 from __future__ import annotations
 
 import functools
-from importlib import import_module
 from importlib.util import find_spec
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
@@ -36,23 +35,23 @@ tidy3d_extras = {"mod": None, "use_local_subpixel": None}
 
 def check_import(module_name: str) -> bool:
     """
-    Check if a module or submodule section has been imported. This is a functional way of loading packages that will still load the corresponding module into the total space.
+    Check if a module or submodule is available for import without actually importing it.
+
+    This uses `importlib.util.find_spec` to check availability without importing,
+    which keeps the module out of `sys.modules` until it's actually needed.
 
     Parameters
     ----------
-    module_name
+    module_name : str
+        The name of the module to check.
 
     Returns
     -------
     bool
-        True if the module has been imported, False otherwise.
+        True if the module is available for import, False otherwise.
 
     """
-    try:
-        import_module(module_name)
-        return True
-    except ImportError:
-        return False
+    return find_spec(module_name) is not None
 
 
 def verify_packages_import(

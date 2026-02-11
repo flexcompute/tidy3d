@@ -347,6 +347,45 @@ def test_make_component_modeler(tmp_path, port_refinement):
             _ = sim.volumetric_structures
 
 
+def test_sim_dict_serialization_with_custom_grid_boundaries(tmp_path):
+    """TerminalComponentModeler sims should remain serializable with custom grid boundaries."""
+    grid_spec = td.GridSpec(
+        grid_x=td.CustomGridBoundaries(coords=np.linspace(-1000, 1000, 50)),
+        grid_y=td.CustomGridBoundaries(coords=np.linspace(-1000, 1000, 50)),
+        grid_z=td.CustomGridBoundaries(coords=np.linspace(-100, 100, 10)),
+        wavelength=td.C_0 / 5e9,
+    )
+    sim = td.Simulation(
+        size=(2000, 2000, 200),
+        structures=[],
+        grid_spec=grid_spec,
+        monitors=[],
+        run_time=1e-9,
+    )
+    port = LumpedPort(
+        center=(0, 0, 0),
+        size=(0.01, 100, 0),
+        voltage_axis=1,
+        name="port1",
+        num_grid_cells=None,
+        enable_snapping_points=False,
+    )
+    modeler = TerminalComponentModeler(
+        simulation=sim,
+        ports=[port],
+        freqs=np.linspace(1e9, 10e9, 11),
+    )
+
+    sim_tcm = modeler.sim_dict["port1"]
+
+    # Regression: this used to raise PydanticSerializationError because attrs contained ndarray.
+    sim_tcm.model_dump_json()
+
+    # Validate both user-facing export paths mentioned in the bug report.
+    sim_tcm.to_file(tmp_path / "sim.json")
+    sim_tcm.to_file(tmp_path / "sim.hdf5")
+
+
 def test_run(monkeypatch, tmp_path):
     modeler = make_component_modeler(planar_pec=True)
     modeler_data = run_component_modeler(monkeypatch, modeler)

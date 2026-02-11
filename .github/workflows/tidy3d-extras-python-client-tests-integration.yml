@@ -75,7 +75,7 @@ jobs:
     steps:
     - name: checkout-head
       if: ${{ !env.RELEASE_TAG }}
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         fetch-depth: 1
         submodules: false
@@ -83,7 +83,7 @@ jobs:
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 1
@@ -91,7 +91,7 @@ jobs:
         persist-credentials: false
 
     - name: set-python-${{ matrix.python-version }}
-      uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -222,7 +222,7 @@ jobs:
     steps:
     - name: checkout-head
       if: ${{ !env.RELEASE_TAG }}
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         fetch-depth: 1
         submodules: false
@@ -230,7 +230,7 @@ jobs:
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
-      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         ref: refs/tags/${{ env.RELEASE_TAG }}
         fetch-depth: 1
@@ -238,7 +238,7 @@ jobs:
         persist-credentials: false
 
     - name: set-python-${{ matrix.python-version }}
-      uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
       with:
         python-version: ${{ matrix.python-version }}
 
