@@ -869,7 +869,7 @@ def _run_primitive(
     aux_data: dict,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    custom_vjp: Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig, ...]]] = None,
+    custom_vjp: Optional[tuple[CustomVJPConfig, ...]],
     **run_kwargs: Any,
 ) -> AutogradFieldMap:
     """Autograd-traced 'run()' function: runs simulation, strips tracer data, caches fwd data."""
@@ -938,7 +938,7 @@ def _run_async_primitive(
     aux_data_dict: dict[str, dict[str, Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    custom_vjp: Optional[dict[str, Sequence[CustomVJPConfig]]] = None,
+    custom_vjp: Optional[dict[str, Sequence[CustomVJPConfig]]],
     **run_async_kwargs: Any,
 ) -> dict[str, AutogradFieldMap]:
     task_names = sim_fields_dict.keys()
@@ -1044,7 +1044,7 @@ def _run_bwd(
     aux_data: dict,
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    custom_vjp: tuple[CustomVJPConfig, ...],
+    custom_vjp: Optional[tuple[CustomVJPConfig, ...]],
     **run_kwargs: Any,
 ) -> Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulations, computes grad."""
@@ -1171,7 +1171,7 @@ def _run_async_bwd(
     aux_data_dict: dict[str, dict[str, Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
-    custom_vjp: Optional[dict[str, Sequence[CustomVJPConfig]]] = None,
+    custom_vjp: Optional[dict[str, Sequence[CustomVJPConfig]]],
     **run_async_kwargs: Any,
 ) -> Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulation, computes grad."""
@@ -1331,7 +1331,7 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_keys: list[tuple],
-    custom_vjp: tuple[CustomVJPConfig, ...],
+    custom_vjp: Optional[tuple[CustomVJPConfig, ...]] = None,
 ) -> AutogradFieldMap:
     """Postprocess adjoint results into VJPs (delegated)."""
     return _postprocess_adj_impl(
