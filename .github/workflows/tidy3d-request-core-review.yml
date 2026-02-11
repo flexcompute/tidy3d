@@ -1,0 +1,54 @@
+name: Request EM Core Review
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+
+permissions:
+  pull-requests: write
+
+jobs:
+  request-core-review:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request @flexcompute/core team review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+            const teamSlug = "core";
+
+            try {
+              const requested = await github.rest.pulls.listRequestedReviewers({
+                owner,
+                repo,
+                pull_number,
+              });
+
+              const alreadyRequested = (requested.data.teams || []).some(
+                (team) => team.slug === teamSlug,
+              );
+
+              if (alreadyRequested) {
+                core.info(`Team ${teamSlug} already requested for PR #${pull_number}.`);
+                return;
+              }
+
+              await github.rest.pulls.requestReviewers({
+                owner,
+                repo,
+                pull_number,
+                team_reviewers: [teamSlug],
+              });
+
+              core.info(`Requested team ${teamSlug} review for PR #${pull_number}.`);
+            } catch (error) {
+              core.warning(
+                `Could not request team ${teamSlug} review for PR #${pull_number}: ${error.message}`,
+              );
+            }
