@@ -45,6 +45,10 @@ T = TypeVar("T")
     class body, e.g. ``_plane_validator = assert_plane()``. Avoid reusing the same attribute
     name for multiple validators, or earlier validators may be overwritten.
 
+    For the ``Medium`` and ``Simulation`` class families, prefer explicit orchestration of
+    cross-field checks in ``_run_after_validators()`` (with a short docstring) and call validator
+    factories via ``call_wrapped_validator(...)`` to keep ordering explicit.
+
     For more details: `Pydantic validators <https://docs.pydantic.dev/latest/concepts/validators/>`_
 """
 
@@ -60,6 +64,13 @@ def named_obj_descr(obj: Any, field_name: str, position_index: int) -> str:
     if hasattr(obj, "name") and obj.name:
         descr = f"'{obj.name}' (simulation.{field_name}[{position_index}])"
     return descr
+
+
+def call_wrapped_validator(
+    factory: Callable[..., Any], instance: Any, *args: Any, **kwargs: Any
+) -> Any:
+    """Call the wrapped pydantic validator produced by a factory."""
+    return factory(*args, **kwargs).wrapped(instance)
 
 
 def assert_line() -> Callable[[type, tuple[float, ...]], tuple[float, ...]]:
