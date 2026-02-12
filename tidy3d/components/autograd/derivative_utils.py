@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Optional
 import numpy as np
 from numpy.typing import NDArray
 
-from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
+from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.utils import _zeros_like
 from tidy3d.components.types import ArrayLike, Bound
 from tidy3d.config import config
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 FieldDataDict = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
-EpsType = FreqDataArray
+EpsType = ScalarFieldDataArray
 ArrayFloat = NDArray[np.floating]
 ArrayComplex = NDArray[np.complexfloating]
 

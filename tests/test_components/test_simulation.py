@@ -20,6 +20,7 @@ from tidy3d.plugins.mode import ModeSolver
 from ..utils import (
     SIM_FULL,
     AssertLogLevel,
+    AssertLogLevelHandler,
     AssertLogStr,
     cartesian_to_unstructured,
     run_emulated,
@@ -423,12 +424,6 @@ def test_validate_normalize_index():
         size=(0, 0, 0),
         polarization="Ex",
     )
-    src0 = td.UniformCurrentSource(
-        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=1.0e12, amplitude=0),
-        size=(0, 0, 0),
-        polarization="Ex",
-    )
-
     # negative normalize index
     with pytest.raises(ValidationError):
         td.Simulation(
@@ -457,6 +452,11 @@ def test_validate_normalize_index():
         RuntimeWarning,
         match=r"invalid value encountered in scalar divide",
     ):
+        src0 = td.UniformCurrentSource(
+            source_time=td.GaussianPulse(freq0=2.0e12, fwidth=1.0e12, amplitude=0),
+            size=(0, 0, 0),
+            polarization="Ex",
+        )
         with pytest.raises(ValidationError):
             td.Simulation(
                 size=(1, 1, 1),
@@ -464,6 +464,48 @@ def test_validate_normalize_index():
                 grid_spec=td.GridSpec.uniform(dl=0.1),
                 sources=(src0,),
             )
+
+
+def test_simulation_validator_warning_order():
+    src_cw = td.UniformCurrentSource(
+        source_time=td.ContinuousWave(freq0=2.0e12, fwidth=0.5e12),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    src_pulse = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=3.0e12, fwidth=0.5e12),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+
+    handler = AssertLogLevelHandler()
+    td.log.handlers["validator_order"] = handler
+    try:
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.01),
+            sources=(src_cw, src_pulse),
+            normalize_index=0,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.ABCBoundary()),
+        )
+    finally:
+        del td.log.handlers["validator_order"]
+
+    messages = [message for _level, message in handler.records]
+    mode_abc_msg = (
+        "At least one 'ModeABCBoundary' does not specify frequency at which the absorbed mode "
+        "must be evaluated. The central frequency of the first source will be used."
+    )
+    normalize_msg = (
+        "'normalize_index' 0 is a source with 'ContinuousWave' time dependence. Normalizing "
+        "frequency-domain monitors by this source is not meaningful because field decay does "
+        "not occur. Consider setting 'normalize_index' to 'None' instead."
+    )
+
+    assert mode_abc_msg in messages
+    assert normalize_msg in messages
+    assert messages.index(mode_abc_msg) < messages.index(normalize_msg)
 
 
 def test_validate_plane_wave_boundaries():

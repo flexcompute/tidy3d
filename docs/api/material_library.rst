@@ -381,16 +381,17 @@ Silicon (Crystalline) ("cSi")
 .. table::
    :widths: auto
 
-   ========================= ========================== ================ ============================================================================================================
-   Variant                   Valid for                  Model Info       Reference                                                                                                   
-   ========================= ========================== ================ ============================================================================================================
-   ``'Green2008'`` (default) 0.25 - 1.45 :math:`{\mu}m` 5-pole, lossy    [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
-   ``'Green2008_Lossless'``  1.2 - 1.45 :math:`{\mu}m`  1-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
-   ``'Li1993_293K'``         1.2 - 14.0 :math:`{\mu}m`  1-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Li-293K.yml>`__    
-   ``'Palik_Lossless'``      1.2 - 250.0 :math:`{\mu}m` 1-pole, low loss [3]                                                                                                         
-   ``'Palik_Lossy'``         0.1 - 1.4 :math:`{\mu}m`   5-pole, lossy    [3]                                                                                                         
-   ``'SalzbergVilla1957'``   1.36 - 11.0 :math:`{\mu}m` 1-pole, lossless [4][5] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Salzberg.yml>`__
-   ========================= ========================== ================ ============================================================================================================
+   ========================= ========================== =========================== ============================================================================================================
+   Variant                   Valid for                  Model Info                  Reference                                                                                                   
+   ========================= ========================== =========================== ============================================================================================================
+   ``'Green2008'`` (default) 0.25 - 1.45 :math:`{\mu}m` 5-pole, lossy               [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
+   ``'Green2008_Lossless'``  1.2 - 1.45 :math:`{\mu}m`  1-pole, lossless            [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
+   ``'Li1993_293K'``         1.2 - 14.0 :math:`{\mu}m`  1-pole, lossless            [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Li-293K.yml>`__    
+   ``'Palik_Lossless'``      1.2 - 250.0 :math:`{\mu}m` 1-pole, low loss            [3]                                                                                                         
+   ``'Palik_Lossy'``         0.1 - 1.4 :math:`{\mu}m`   5-pole, lossy               [3]                                                                                                         
+   ``'SalzbergVilla1957'``   1.36 - 11.0 :math:`{\mu}m` 1-pole, lossless            [4][5] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Salzberg.yml>`__
+   ``'Si_MultiPhysics'``     0.25 - 1.45 :math:`{\mu}m` :class:`MultiPhysicsMedium` [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
+   ========================= ========================== =========================== ============================================================================================================
 
 Examples:
 
@@ -405,6 +406,8 @@ Examples:
 >>> medium = material_library['cSi']['Palik_Lossy']
 
 >>> medium = material_library['cSi']['SalzbergVilla1957']
+
+>>> medium = material_library['cSi']['Si_MultiPhysics']
 
 References:
 
@@ -498,17 +501,20 @@ Germanium ("Ge")
 .. table::
    :widths: auto
 
-   ============================ ========================= ================ ============================================================================================================
-   Variant                      Valid for                 Model Info       Reference                                                                                                   
-   ============================ ========================= ================ ============================================================================================================
-   ``'Icenogle1976'`` (default) 2.5 - 12.0 :math:`{\mu}m` 2-pole, lossless [1][2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ge/Icenogle.yml>`__
-   ``'Palik_Lossless'``         1.2 - 20.0 :math:`{\mu}m` 1-pole, low loss [3]                                                                                                         
-   ``'Palik_Lossy'``            0.25 - 1.4 :math:`{\mu}m` 5-pole, lossy    [3]                                                                                                         
-   ============================ ========================= ================ ============================================================================================================
+   ============================ ========================== ================ ============================================================================================================
+   Variant                      Valid for                  Model Info       Reference                                                                                                   
+   ============================ ========================== ================ ============================================================================================================
+   ``'Icenogle1976'`` (default) 2.5 - 12.0 :math:`{\mu}m`  2-pole, lossless [1][2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ge/Icenogle.yml>`__
+   ``'Nunley'``                 0.19 - 2.48 :math:`{\mu}m` 16-pole, lossy   [3] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data/main/Ge/nk/Nunley.yml>`__     
+   ``'Palik_Lossless'``         1.2 - 20.0 :math:`{\mu}m`  1-pole, low loss [4]                                                                                                         
+   ``'Palik_Lossy'``            0.25 - 1.4 :math:`{\mu}m`  5-pole, lossy    [4]                                                                                                         
+   ============================ ========================== ================ ============================================================================================================
 
 Examples:
 
 >>> medium = material_library['Ge']['Icenogle1976']
+
+>>> medium = material_library['Ge']['Nunley']
 
 >>> medium = material_library['Ge']['Palik_Lossless']
 
@@ -518,6 +524,7 @@ References:
 
 #. \H. W. Icenogle, Ben C. Platt, and William L. Wolfe. Refractive indexes and temperature coefficients of germanium and silicon Appl. Opt. 15 2348-2351 (1976) `[doi] <https://doi.org/10.1364/AO.15.002348>`__
 #. \N. P. Barnes and M. S. Piltch. Temperature-dependent Sellmeier coefficients and nonlinear optics average power limit for germanium J. Opt. Soc. Am. 69 178-180 (1979) `[doi] <https://doi.org/10.1364/JOSA.69.000178>`__
+#. \T. S. Nunley, N. S. Fernando, N. Samarasingha, J. M. Moya, C. M. Nelson, A. A. Medina, and S. Zollner. Optical constants of germanium and thermally grown germanium dioxide from 0.5 to 6.6eV via a multisample ellipsometry investigation, J. Vac. Sci. Technol. B 34, 061205 (2016) `[doi] <https://doi.org/10.1116/1.4963075>`__
 #. \E. D. Palik. Handbook of Optical Constants of Solids, Academic Press (1998) `[doi] <https://doi.org/10.1016/B978-0-08-055630-7.50001-8>`__
 
 Germanium Oxide ("GeOx")

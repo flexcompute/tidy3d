@@ -24,6 +24,8 @@
 - Public APIs covered in `docs/` should use the existing Numpy-inspired block pattern rendered by our Sphinx Book Theme; lean on current API examples or the theme reference at https://sphinx-book-theme.readthedocs.io/en/stable/reference/api-numpy.html. Internal helpers may keep short docstrings but match local tone.
 - Prefer `tidy3d.log.log` and `tidy3d.exceptions` for contributor-facing messages; touch stdlib `logging` only when muting external libraries such as `pyroots`.
 - Reuse types from `tidy3d/components/types`, domain constants from `tidy3d/constants`, and runtime defaults from `tidy3d/config`.
+- For the `Medium` and `Simulation` class families, centralize `@model_validator(mode="after")` logic in `_run_after_validators()` with a short docstring, and call dependent checks in explicit order instead of relying on decorator registration.
+- For those same families, prefix validator helpers with `_` (e.g., `_check_*`, `_validate_*`) and use `call_wrapped_validator(...)` for validator factories so ordering stays explicit.
 
 ## Testing Guidelines
 - Mirror the source tree with `test_<feature>.py`, add a short module docstring, and import `tidy3d as td`; keep single-use fixtures local but upstream broadly useful helpers into `tests/conftest.py`.

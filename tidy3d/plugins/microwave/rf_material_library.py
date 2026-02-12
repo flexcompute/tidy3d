@@ -54,8 +54,8 @@ class AbstractVariantItemFreqRange(AbstractVariantItem, ABC):
         ----------
         frequency_range : Optional[FreqBound]
             Frequency range of validity for the medium, specified as (f_min, f_max) in Hz.
-            Optional for dielectrics (uses original range if not provided),
-            required for metals (will raise ValueError if None).
+            Optional for dielectrics (uses original range if not provided).
+            Optional for metals (uses default microwave frequency range if not provided).
 
         Returns
         -------

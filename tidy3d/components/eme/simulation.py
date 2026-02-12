@@ -21,7 +21,12 @@ from tidy3d.components.simulation import (
 )
 from tidy3d.components.types import Axis, FreqArray
 from tidy3d.components.types.base import discriminated_union
-from tidy3d.components.validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty
+from tidy3d.components.validators import (
+    MIN_FREQUENCY,
+    call_wrapped_validator,
+    validate_freqs_min,
+    validate_freqs_not_empty,
+)
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, inf
 from tidy3d.exceptions import SetupError, ValidationError
@@ -711,21 +716,36 @@ class EMESimulation(AbstractYeeGridSimulation):
         )
 
     @model_validator(mode="after")
+    def _run_after_validators(self) -> Self:
+        """Run post-init validations in an explicit, dependency-aware order."""
+        self._structures_not_at_edges()
+        self._validate_scene()
+        call_wrapped_validator(validate_boundaries_for_zero_dims, self, warn_on_change=False)
+        super()._run_after_validators()
+        self._validate_grid()
+        self._validate_eme_grid()
+        self._validate_mode_solver_monitors()
+        self._validate_cell_index_pairs()
+        self._validate_too_close_to_edges()
+        self._validate_port_offsets()
+        self._validate_symmetry()
+        self._validate_sweep_spec()
+        self._validate_monitor_setup()
+        self._validate_interp_specs()
+        return self
+
     def _validate_grid(self) -> Self:
         _ = self.grid
         return self
 
-    @model_validator(mode="after")
     def _validate_eme_grid(self) -> Self:
         _ = self.eme_grid
         return self
 
-    @model_validator(mode="after")
     def _validate_mode_solver_monitors(self) -> Self:
         _ = self.mode_solver_monitors
         return self
 
-    @model_validator(mode="after")
     def _validate_cell_index_pairs(self) -> Self:
         _ = self.mode_solver_monitors
         return self
@@ -742,7 +762,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         # self._warn_monitor_interval()
         log.end_capture(self)
 
-    @model_validator(mode="after")
     def _validate_too_close_to_edges(self) -> Self:
         """Can't have mode planes closer to boundary than extreme Yee grid center."""
         cell_centers = self.eme_grid.centers
@@ -784,7 +803,6 @@ class EMESimulation(AbstractYeeGridSimulation):
                 "reducing the number of modes or setting 'constraint=None'."
             )
 
-    @model_validator(mode="after")
     def _validate_port_offsets(self) -> Self:
         """Port offsets cannot jointly exceed simulation length."""
         total_offset = self.port_offsets[0] + self.port_offsets[1]
@@ -797,7 +815,6 @@ class EMESimulation(AbstractYeeGridSimulation):
             )
         return self
 
-    @model_validator(mode="after")
     def _validate_symmetry(self) -> Self:
         """Symmetry in propagation direction is not supported."""
         if self.symmetry[self.axis] != 0:
@@ -827,7 +844,6 @@ class EMESimulation(AbstractYeeGridSimulation):
                 f"which exceeds the maximum allowed '{MAX_NUM_SWEEP}'."
             )
 
-    @model_validator(mode="after")
     def _validate_sweep_spec(self) -> Self:
         """Validate sweep spec."""
         if self.sweep_spec is None:
@@ -898,7 +914,6 @@ class EMESimulation(AbstractYeeGridSimulation):
                 )
         return self
 
-    @model_validator(mode="after")
     def _validate_monitor_setup(self) -> Self:
         """Check monitor setup."""
         for i, monitor in enumerate(self.monitors):
@@ -962,7 +977,6 @@ class EMESimulation(AbstractYeeGridSimulation):
                     )
         return self
 
-    @model_validator(mode="after")
     def _validate_interp_specs(self) -> Self:
         """Require that the interp_specs are identical."""
         interp_specs = []
@@ -1443,5 +1457,3 @@ class EMESimulation(AbstractYeeGridSimulation):
         else:
             pairs = set(self.eme_grid_spec._cell_index_pairs)
         return list(pairs)
-
-    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims(warn_on_change=False)

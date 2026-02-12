@@ -241,7 +241,7 @@ def generate_rf_material_library_doc():
     unit = "GHz"
 
     # doc file path
-    fname = "./api/rf_material_library.rst"
+    fname = "./api/microwave/rf_material_library.rst"
 
     def num2str(num):
         if np.isinf(num):
@@ -251,12 +251,12 @@ def generate_rf_material_library_doc():
     with open(fname, "w") as f:
         # Write file header
         header = (
-            "****************\n"
+            "*******************\n"
             "RF Material Library\n"
-            "****************\n\n"
+            "*******************\n\n"
             ".. currentmodule:: tidy3d\n\n"
             "The RF material library is a dictionary containing various dispersive models for real-world RF materials. To use the materials in the library, import it first by:\n\n"
-            ">>> from tidy3d.plugins.microwave import rf_material_library\n\n"
+            ">>> from tidy3d.rf import rf_material_library\n\n"
             "The key of the dictionary is the abbreviated material name.\n\n"
             'Note: some materials have multiple variant models, in which case the second key is the "variant" name.\n\n'
             'To import a material "mat" of variant "var":\n\n'
