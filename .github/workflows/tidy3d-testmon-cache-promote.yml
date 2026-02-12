@@ -7,6 +7,7 @@ on: # zizmor: ignore[dangerous-triggers]
     types:
       - completed
     branches:
+      - develop
       - "gh-readonly-queue/develop/**"
   workflow_call:
     inputs:
