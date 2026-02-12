@@ -2,7 +2,11 @@ name: "public/tidy3d/python-client-tests"
 
 on:
   merge_group:
-  
+
+  push:
+    branches:
+      - develop
+
   workflow_dispatch:
     inputs:
       remote_tests:
@@ -211,6 +215,13 @@ jobs:
               local_tests=true
               code_quality_tests=true
               pr_review_tests=true
+              test_selection="testmon"
+          fi
+
+          # Seed develop-scoped caches post-merge without extra quality gates.
+          if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/develop" ]]; then
+              local_tests=true
+              remote_tests=true
               test_selection="testmon"
           fi
 
@@ -840,7 +851,11 @@ jobs:
         retention-days: 1
 
     - name: save-testmon-cache
-      if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
+      if: >-
+        success() &&
+        (github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')) &&
+        steps.testmon-cache-restore.outputs.cache-hit != 'true' &&
+        hashFiles('.testmondata') != ''
       uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: .testmondata
@@ -1139,7 +1154,11 @@ jobs:
         retention-days: 1
 
     - name: save-testmon-cache
-      if: success() && github.event_name == 'merge_group' && steps.testmon-cache-restore.outputs.cache-hit != 'true' && hashFiles('.testmondata') != ''
+      if: >-
+        success() &&
+        (github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')) &&
+        steps.testmon-cache-restore.outputs.cache-hit != 'true' &&
+        hashFiles('.testmondata') != ''
       uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: .testmondata
