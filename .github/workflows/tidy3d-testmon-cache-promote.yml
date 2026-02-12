@@ -119,11 +119,49 @@ jobs:
           for metadata_file in "${metadata_files[@]}"; do
             artifact_name=$(basename "$(dirname "$metadata_file")")
             cache_key=$(jq -r '.cache_key // empty' "$metadata_file")
+            job_class=$(jq -r '.job_class // empty' "$metadata_file")
+            runner_os=$(jq -r '.runner_os // empty' "$metadata_file")
+            platform=$(jq -r '.platform // empty' "$metadata_file")
             if [[ -z "$cache_key" ]]; then
               echo "::warning::Skipping ${artifact_name}; metadata missing cache_key."
               continue
             fi
-            candidate_rows+=("$(jq -cn --arg artifact_name "$artifact_name" --arg cache_key "$cache_key" '{artifact_name: $artifact_name, cache_key: $cache_key}')")
+
+            runner_spec_json=""
+            runner_family=""
+            case "$job_class" in
+              local)
+                if [[ "$runner_os" != "Linux" ]]; then
+                  echo "::warning::Skipping ${artifact_name}; unsupported local runner_os '$runner_os'."
+                  continue
+                fi
+                runner_spec_json='["slurm-runner","4xcpu","container=ghcr.io/astral-sh/uv:debian"]'
+                runner_family="local-self-hosted-linux"
+                ;;
+              remote)
+                case "$platform" in
+                  ubuntu-latest|macos-latest|windows-latest)
+                    runner_spec_json=$(jq -cn --arg platform "$platform" '$platform')
+                    runner_family="$platform"
+                    ;;
+                  *)
+                    echo "::warning::Skipping ${artifact_name}; unsupported remote platform '$platform'."
+                    continue
+                    ;;
+                esac
+                ;;
+              *)
+                echo "::warning::Skipping ${artifact_name}; unsupported job_class '$job_class'."
+                continue
+                ;;
+            esac
+
+            candidate_rows+=("$(jq -cn \
+              --arg artifact_name "$artifact_name" \
+              --arg cache_key "$cache_key" \
+              --arg runner_spec_json "$runner_spec_json" \
+              --arg runner_family "$runner_family" \
+              '{artifact_name: $artifact_name, cache_key: $cache_key, runner_spec_json: $runner_spec_json, runner_family: $runner_family}')")
           done
 
           if [[ "${#candidate_rows[@]}" -eq 0 ]]; then
@@ -143,7 +181,7 @@ jobs:
   promote-testmon-cache:
     needs: discover-cache-candidates
     if: needs.discover-cache-candidates.result == 'success' && needs.discover-cache-candidates.outputs.candidates != '' && needs.discover-cache-candidates.outputs.candidates != '[]'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJson(matrix.candidate.runner_spec_json) }}
     permissions:
       contents: read
       actions: write
@@ -181,12 +219,18 @@ jobs:
             exit 1
           fi
 
-      - name: stage-testmon-cache
+      - name: stage-testmon-cache-unix
+        if: runner.os != 'Windows'
         run: cp cache-candidate/.testmondata .testmondata
+
+      - name: stage-testmon-cache-windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Copy-Item -Path "cache-candidate/.testmondata" -Destination ".testmondata" -Force
 
       - name: lookup-existing-cache
         id: cache-lookup
-        uses: actions/cache/restore@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: .testmondata
           key: ${{ matrix.candidate.cache_key }}
@@ -194,7 +238,7 @@ jobs:
 
       - name: save-promoted-testmon-cache
         if: steps.cache-lookup.outputs.cache-hit != 'true'
-        uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: .testmondata
           key: ${{ matrix.candidate.cache_key }}
@@ -204,3 +248,25 @@ jobs:
         env:
           CACHE_KEY: ${{ matrix.candidate.cache_key }}
         run: echo "Cache already present for key '$CACHE_KEY'; skipping save."
+
+      - name: verify-promoted-cache-lookup
+        id: verify-cache-lookup
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: .testmondata
+          key: ${{ matrix.candidate.cache_key }}
+          lookup-only: true
+
+      - name: enforce-promoted-cache-availability
+        if: steps.verify-cache-lookup.outputs.cache-hit != 'true'
+        env:
+          CACHE_KEY: ${{ matrix.candidate.cache_key }}
+          RUNNER_FAMILY: ${{ matrix.candidate.runner_family }}
+          CACHE_HIT: ${{ steps.verify-cache-lookup.outputs.cache-hit }}
+          CACHE_MATCHED_KEY: ${{ steps.verify-cache-lookup.outputs.cache-matched-key }}
+        run: |
+          echo "::error::Promoted cache is not restorable on runner family '$RUNNER_FAMILY'."
+          echo "::error::cache_key=$CACHE_KEY"
+          echo "::error::cache_hit=$CACHE_HIT"
+          echo "::error::cache_matched_key=$CACHE_MATCHED_KEY"
+          exit 1
