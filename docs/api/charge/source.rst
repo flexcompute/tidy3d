@@ -1,7 +1,7 @@
 .. currentmodule:: tidy3d
 
-Thermal Sources
------------------
+Charge-Heat Coupled Sources
+-----------------------------
 
 .. autosummary::
    :toctree: ../_autosummary/

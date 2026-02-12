@@ -120,8 +120,9 @@ class SemiconductorMedium(AbstractChargeMedium):
             q \\frac{\\partial p}{\\partial t} = -\\nabla \\cdot \\mathbf{J_p} - qR
         \\end{equation}
 
-    As well as iso-thermal, the system is considered to be at :math:`T=300`. This restriction will
-    be removed in future releases.
+    The system defaults to isothermal conditions at :math:`T=300 \\text{K}`.
+    Non-isothermal (self-heating) simulations can be enabled via appropriate
+    analysis specifications (e.g., ``SteadyChargeDCAnalysis``).
 
     The above system requires the definition of the flux functions (free carrier current density), :math:`\\mathbf{J_n}` and
     :math:`\\mathbf{J_p}`. We consider the usual form
@@ -246,9 +247,9 @@ class SemiconductorMedium(AbstractChargeMedium):
     -------
         Current limitations of the formulation include:
 
-        - Boltzmann statistics are supported
-        - Iso-thermal equations with :math:`T=300K`
-        - Steady state only
+        - Boltzmann statistics by default; Fermi-Dirac statistics available
+        - Isothermal by default at T=300K; self-heating available through analysis spec
+        - Steady-state DC and small-signal AC analyses supported
         - Dopants are considered to be fully ionized
 
     Note

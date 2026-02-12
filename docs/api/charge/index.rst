@@ -8,7 +8,6 @@ Charge |:zap:|
     mediums
     boundary_conditions
     source
-    discretization
     monitor
     output_data
 
@@ -17,6 +16,5 @@ Charge |:zap:|
 .. include:: /api/charge/mediums.rst
 .. include:: /api/charge/boundary_conditions.rst
 .. include:: /api/charge/source.rst
-.. include:: /api/charge/discretization.rst
 .. include:: /api/charge/monitor.rst
 .. include:: /api/charge/output_data.rst
