@@ -39,8 +39,7 @@ To access the details of a variant, including material model and references, use
 >>> rf_material_library['mat'].variants['var']
 
 
-ArlonAD255C ("AD255C")
-======================
+.. rubric:: ArlonAD255C ("AD255C")
 
 .. table::
    :widths: auto
@@ -62,8 +61,7 @@ References:
 
 #. \AD255C High Performance Polyimide Laminates `[url] <https://www.rogerscorp.com/advanced-electronics-solutions/ad-series-laminates/ad255c-laminates>`__
 
-AISI 1008 Steel ("AISI_1008")
-=============================
+.. rubric:: AISI 1008 Steel ("AISI_1008")
 
 .. table::
    :widths: auto
@@ -82,8 +80,7 @@ References:
 
 #. \Oberg, E., Jones, F. D., Horton, H. L., & Ryffel, H. H. (2020)., Machinery's Handbook (31st ed.). Industrial Press.
 
-Alumina AO479U ("Alumina_AO479U")
-=================================
+.. rubric:: Alumina AO479U ("Alumina_AO479U")
 
 .. table::
    :widths: auto
@@ -102,8 +99,7 @@ References:
 
 #. \Low Dielectric Loss Tangent, High Strength, and High Purity Alumina (AO479U) `[url] <https://global.kyocera.com/prdct/fc/technologies/013.html>`__
 
-Alumina AO700 ("Alumina_AO700")
-===============================
+.. rubric:: Alumina AO700 ("Alumina_AO700")
 
 .. table::
    :widths: auto
@@ -122,8 +118,7 @@ References:
 
 #. \AO700/AO800 (High Flexural Strength Aluminum Oxide) `[url] <https://global.kyocera.com/prdct/semicon/search_material/detail/ao700_ao800.html>`__
 
-Alumina AO800 ("Alumina_AO800")
-===============================
+.. rubric:: Alumina AO800 ("Alumina_AO800")
 
 .. table::
    :widths: auto
@@ -142,8 +137,7 @@ References:
 
 #. \AO700/AO800 (High Flexural Strength Aluminum Oxide) `[url] <https://global.kyocera.com/prdct/semicon/search_material/detail/ao700_ao800.html>`__
 
-Aluminum ("Aluminum")
-=====================
+.. rubric:: Aluminum ("Aluminum")
 
 .. table::
    :widths: auto
@@ -162,8 +156,7 @@ References:
 
 #. \P.D. Desai, H.M. James, and C.Y. Ho. Electrical Resistivity of Aluminum and Manganese, Journal of Physical and Chemical Reference Data, Vol. 13, No. 4 (1984) `[url] <https://srd.nist.gov/JPCRD/jpcrd260.pdf>`__
 
-Annealed Copper ("Annealed_Copper")
-===================================
+.. rubric:: Annealed Copper ("Annealed_Copper")
 
 .. table::
    :widths: auto
@@ -182,8 +175,7 @@ References:
 
 #. \Copper wire tables, U.S. National Bureau of Standards, (1914). `[url] <https://archive.org/details/copperwiretables31unituoft/page/10/mode/2up>`__
 
-Brass C21000 ("Brass_C21000")
-=============================
+.. rubric:: Brass C21000 ("Brass_C21000")
 
 .. table::
    :widths: auto
@@ -202,8 +194,7 @@ References:
 
 #. \Electronic Connector Design Guide: Conductivity of Brass `[url] <https://www.copper.org/applications/industrial/DesignGuide/selection/conductbrass02.html>`__
 
-Brass C26000 ("Brass_C26000")
-=============================
+.. rubric:: Brass C26000 ("Brass_C26000")
 
 .. table::
    :widths: auto
@@ -222,8 +213,7 @@ References:
 
 #. \Electronic Connector Design Guide: Conductivity of Brass `[url] <https://www.copper.org/applications/industrial/DesignGuide/selection/conductbrass02.html>`__
 
-Cobalt ("Cobalt")
-=================
+.. rubric:: Cobalt ("Cobalt")
 
 .. table::
    :widths: auto
@@ -242,8 +232,7 @@ References:
 
 #. \Rumble, J. R. (Ed.). (2024), CRC Handbook of Chemistry and Physics (105th ed.)., CRC Press `[url] <https://www.engineeringtoolbox.com/conductors-d_1381.html>`__
 
-Copper (Matula) ("Copper_Matula")
-=================================
+.. rubric:: Copper (Matula) ("Copper_Matula")
 
 .. table::
    :widths: auto
@@ -262,8 +251,7 @@ References:
 
 #. \Matula, R.A. Journal of Physical and Chemical Reference Data. 8 (4): 1147 (1979). `[doi] <https://doi.org/10.1063/1.555614>`__ `[url] <https://srd.nist.gov/JPCRD/jpcrd155.pdf>`__
 
-FR4 ("FR4")
-===========
+.. rubric:: FR4 ("FR4")
 
 .. table::
    :widths: auto
@@ -286,8 +274,7 @@ References:
 #. \Low loss FR-4 Epoxy Glass Cloth Laminate `[url] <https://www.isola-group.com/pcb-laminates-prepreg/is410-fr-4-epoxy-laminate-and-prepreg/>`__
 #. \Standard FR-4 Epoxy Glass Cloth Laminate `[url] <https://www.isola-group.com/pcb-laminates-prepreg/is410-fr-4-epoxy-laminate-and-prepreg/>`__
 
-Getek ("Getek")
-===============
+.. rubric:: Getek ("Getek")
 
 .. table::
    :widths: auto
@@ -306,8 +293,7 @@ References:
 
 #. \Getek Low Dk/Df Laminate and Prepreg `[url] <https://www.midwestpcb.com/data_sheets/GETEK.pdf>`__
 
-Gold (Matula) ("Gold_Matula")
-=============================
+.. rubric:: Gold (Matula) ("Gold_Matula")
 
 .. table::
    :widths: auto
@@ -326,8 +312,7 @@ References:
 
 #. \Matula, R.A. Journal of Physical and Chemical Reference Data. 8 (4): 1147 (1979). `[doi] <https://doi.org/10.1063/1.555614>`__ `[url] <https://srd.nist.gov/JPCRD/jpcrd155.pdf>`__
 
-Iridium ("Iridium")
-===================
+.. rubric:: Iridium ("Iridium")
 
 .. table::
    :widths: auto
@@ -346,8 +331,7 @@ References:
 
 #. \Rumble, J. R. (Ed.). (2024), CRC Handbook of Chemistry and Physics (105th ed.)., CRC Press `[url] <https://www.engineeringtoolbox.com/conductors-d_1381.html>`__
 
-Isola 370HR ("Isola_370HR")
-===========================
+.. rubric:: Isola 370HR ("Isola_370HR")
 
 .. table::
    :widths: auto
@@ -366,8 +350,7 @@ References:
 
 #. \Isola 370HR Laminate and Prepreg `[url] <https://www.isola-group.com/wp-content/uploads/data-sheets/370hr.pdf>`__
 
-Isola FR406 ("Isola_FR406")
-===========================
+.. rubric:: Isola FR406 ("Isola_FR406")
 
 .. table::
    :widths: auto
@@ -386,8 +369,7 @@ References:
 
 #. \FR406 Standard Loss, High Tg Epoxy Laminate and Prepreg `[url] <https://www.isola-group.com/wp-content/uploads/data-sheets/fr406-laminate-and-prepreg.pdf>`__
 
-Isola FR408 ("Isola_FR408")
-===========================
+.. rubric:: Isola FR408 ("Isola_FR408")
 
 .. table::
    :widths: auto
@@ -406,8 +388,7 @@ References:
 
 #. \FR408 Standard Loss, High Tg Epoxy Laminate and Prepreg `[url] <https://www.isola-group.com/wp-content/uploads/data-sheets/fr408.pdf>`__
 
-Lead ("Lead")
-=============
+.. rubric:: Lead ("Lead")
 
 .. table::
    :widths: auto
@@ -426,8 +407,7 @@ References:
 
 #. \Raymond A. Serway (1998)., Principles of Physics, Fort Worth, Texas; London: Saunders College Pub. p. 602 `[url] <https://archive.org/details/principlesofphys00serw/page/602/mode/2up>`__
 
-Lithium ("Lithium")
-===================
+.. rubric:: Lithium ("Lithium")
 
 .. table::
    :widths: auto
@@ -446,8 +426,7 @@ References:
 
 #. \Rumble, J. R. (Ed.). (2024), CRC Handbook of Chemistry and Physics (105th ed.)., CRC Press `[url] <https://www.engineeringtoolbox.com/conductors-d_1381.html>`__
 
-Magnesium ("Magnesium")
-=======================
+.. rubric:: Magnesium ("Magnesium")
 
 .. table::
    :widths: auto
@@ -466,8 +445,7 @@ References:
 
 #. \Rumble, J. R. (Ed.). (2024), CRC Handbook of Chemistry and Physics (105th ed.)., CRC Press `[url] <https://www.engineeringtoolbox.com/conductors-d_1381.html>`__
 
-Megtron6 R5670_KG ("Megtron6_R5670_KG")
-=======================================
+.. rubric:: Megtron6 R5670_KG ("Megtron6_R5670_KG")
 
 .. table::
    :widths: auto
@@ -486,8 +464,7 @@ References:
 
 #. \Ultra-low transmission loss Highly heat resistant Multi-layer circuit board materials `[url] <https://api.pim.na.industrial.panasonic.com/file_stream/main/fileversion/261273>`__
 
-Megtron6 R5670_N ("Megtron6_R5670_N")
-=====================================
+.. rubric:: Megtron6 R5670_N ("Megtron6_R5670_N")
 
 .. table::
    :widths: auto
@@ -506,8 +483,7 @@ References:
 
 #. \High Speed, Low Loss Multi-layer Materials `[url] <https://api.pim.na.industrial.panasonic.com/file_stream/main/fileversion/244766>`__
 
-Megtron6 R5775_KG ("Megtron6_R5775_KG")
-=======================================
+.. rubric:: Megtron6 R5775_KG ("Megtron6_R5775_KG")
 
 .. table::
    :widths: auto
@@ -526,8 +502,7 @@ References:
 
 #. \Ultra-low transmission loss Highly heat resistant Multi-layer circuit board materials `[url] <https://api.pim.na.industrial.panasonic.com/file_stream/main/fileversion/261273>`__
 
-Megtron6 R5775_N ("Megtron6_R5775_N")
-=====================================
+.. rubric:: Megtron6 R5775_N ("Megtron6_R5775_N")
 
 .. table::
    :widths: auto
@@ -546,8 +521,7 @@ References:
 
 #. \High Speed, Low Loss Multi-layer Materials `[url] <https://api.pim.na.industrial.panasonic.com/file_stream/main/fileversion/244766>`__
 
-Nelco N4000-13 EP ("Nelco_N4000_13EP")
-======================================
+.. rubric:: Nelco N4000-13 EP ("Nelco_N4000_13EP")
 
 .. table::
    :widths: auto
@@ -566,8 +540,7 @@ References:
 
 #. \High-Speed Multifunctional Epoxy Laminate & Prepreg `[url] <https://www.cirexx.com/wp-content/uploads/n4000-13ep-1.pdf>`__
 
-Nelco N4000-13 EP SI ("Nelco_N4000_13EP_SI")
-============================================
+.. rubric:: Nelco N4000-13 EP SI ("Nelco_N4000_13EP_SI")
 
 .. table::
    :widths: auto
@@ -586,8 +559,7 @@ References:
 
 #. \High-Speed Multifunctional Epoxy Laminate & Prepreg `[url] <https://www.cirexx.com/wp-content/uploads/n4000-13ep-1.pdf>`__
 
-Nelco N4000-6 ("Nelco_N4000_6")
-===============================
+.. rubric:: Nelco N4000-6 ("Nelco_N4000_6")
 
 .. table::
    :widths: auto
@@ -606,8 +578,7 @@ References:
 
 #. \Park Electrochemical Nelco® N4000-6 FC Multifunctional Epoxy Laminate and Prepreg `[url] <https://www.lookpolymers.com/pdf/Park-Electrochemical-Nelco-N4000-6-FC-Multifunctional-Epoxy-Laminate-and-Prepreg.pdf>`__
 
-Nickel ("Nickel")
-=================
+.. rubric:: Nickel ("Nickel")
 
 .. table::
    :widths: auto
@@ -626,8 +597,7 @@ References:
 
 #. \Rumble, J. R. (Ed.). (2024), CRC Handbook of Chemistry and Physics (105th ed.)., CRC Press `[url] <https://www.engineeringtoolbox.com/conductors-d_1381.html>`__
 
-Platinum ("Platinum")
-=====================
+.. rubric:: Platinum ("Platinum")
 
 .. table::
    :widths: auto
@@ -646,8 +616,7 @@ References:
 
 #. \Raymond A. Serway (1998)., Principles of Physics, Fort Worth, Texas; London: Saunders College Pub. p. 602 `[url] <https://archive.org/details/principlesofphys00serw/page/602/mode/2up>`__
 
-PTFE_lowloss_low_density ("PTFE_lowloss_low_density")
-=====================================================
+.. rubric:: PTFE_lowloss_low_density ("PTFE_lowloss_low_density")
 
 .. table::
    :widths: auto
@@ -666,8 +635,7 @@ References:
 
 #. \HIGH PERFORMANCE MICROWAVE INTERCONNECT PRODUCTS `[url] <https://configurator.teledynestorm.com/pdf/DielectricOptions.pdf>`__
 
-PTFE_microporous_expanded ("PTFE_microporous_expanded")
-=======================================================
+.. rubric:: PTFE_microporous_expanded ("PTFE_microporous_expanded")
 
 .. table::
    :widths: auto
@@ -686,8 +654,7 @@ References:
 
 #. \HIGH PERFORMANCE MICROWAVE INTERCONNECT PRODUCTS `[url] <https://configurator.teledynestorm.com/pdf/DielectricOptions.pdf>`__
 
-PTFE_solid ("PTFE_solid")
-=========================
+.. rubric:: PTFE_solid ("PTFE_solid")
 
 .. table::
    :widths: auto
@@ -706,8 +673,7 @@ References:
 
 #. \HIGH PERFORMANCE MICROWAVE INTERCONNECT PRODUCTS `[url] <https://configurator.teledynestorm.com/pdf/DielectricOptions.pdf>`__
 
-Rogers3003 ("RO3003")
-=====================
+.. rubric:: Rogers3003 ("RO3003")
 
 .. table::
    :widths: auto
@@ -729,8 +695,7 @@ References:
 
 #. \RO3003™ Laminates `[url] <https://www.rogerscorp.com/advanced-electronics-solutions/ro3000-series-laminates/ro3003-laminates>`__
 
-Rogers3010 ("RO3010")
-=====================
+.. rubric:: Rogers3010 ("RO3010")
 
 .. table::
    :widths: auto
@@ -752,8 +717,7 @@ References:
 
 #. \RO3010™ Laminates `[url] <https://www.rogerscorp.com/advanced-electronics-solutions/ro3000-series-laminates/ro3010-laminates>`__
 
-Rogers4003C ("RO4003C")
-=======================
+.. rubric:: Rogers4003C ("RO4003C")
 
 .. table::
    :widths: auto
@@ -775,8 +739,7 @@ References:
 
 #. \RO4003C™ Laminates `[url] <https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4350b-laminates>`__
 
-Rogers4350B ("RO4350B")
-=======================
+.. rubric:: Rogers4350B ("RO4350B")
 
 .. table::
    :widths: auto
@@ -798,8 +761,7 @@ References:
 
 #. \RO4350B™ Laminates `[url] <https://www.rogerscorp.com/advanced-electronics-solutions/ro4000-series-laminates/ro4350b-laminates>`__
 
-Rogers RT_duroid 5880 ("RT_duroid5880")
-=======================================
+.. rubric:: Rogers RT_duroid 5880 ("RT_duroid5880")
 
 .. table::
    :widths: auto
@@ -818,8 +780,7 @@ References:
 
 #. \RT/duroid 5870/5880 High frequency Laminates `[url] <https://www.rogerscorp.com/advanced-electronics-solutions/rt-duroid-laminates/rt-duroid-5880-laminates>`__
 
-Rogers RT_duroid 6035HTC ("RT_duroid_6035HTC")
-==============================================
+.. rubric:: Rogers RT_duroid 6035HTC ("RT_duroid_6035HTC")
 
 .. table::
    :widths: auto
@@ -841,8 +802,7 @@ References:
 
 #. \RT/duroid® 6035HTC High Frequency Laminate `[url] <https://www.rogerscorp.com/-/media/project/rogerscorp/documents/advanced-electronics-solutions/english/data-sheets/rt-duroid-6035htc-high-frequency-laminates.pdf>`__
 
-Silver (Matula) ("Silver_Matula")
-=================================
+.. rubric:: Silver (Matula) ("Silver_Matula")
 
 .. table::
    :widths: auto
@@ -861,8 +821,7 @@ References:
 
 #. \Matula, R.A. Journal of Physical and Chemical Reference Data. 8 (4): 1147 (1979). `[doi] <https://doi.org/10.1063/1.555614>`__ `[url] <https://srd.nist.gov/JPCRD/jpcrd155.pdf>`__
 
-Tin ("Tin")
-===========
+.. rubric:: Tin ("Tin")
 
 .. table::
    :widths: auto
@@ -881,8 +840,7 @@ References:
 
 #. \Rumble, J. R. (Ed.). (2024), CRC Handbook of Chemistry and Physics (105th ed.)., CRC Press `[url] <https://www.engineeringtoolbox.com/conductors-d_1381.html>`__
 
-Titanium ("Titanium")
-=====================
+.. rubric:: Titanium ("Titanium")
 
 .. table::
    :widths: auto
@@ -901,8 +859,7 @@ References:
 
 #. \Rumble, J. R. (Ed.). (2024), CRC Handbook of Chemistry and Physics (105th ed.)., CRC Press `[url] <https://www.engineeringtoolbox.com/conductors-d_1381.html>`__
 
-Tungsten ("Tungsten")
-=====================
+.. rubric:: Tungsten ("Tungsten")
 
 .. table::
    :widths: auto
@@ -921,8 +878,7 @@ References:
 
 #. \Raymond A. Serway (1998)., Principles of Physics, Fort Worth, Texas; London: Saunders College Pub. p. 602 `[url] <https://archive.org/details/principlesofphys00serw/page/602/mode/2up>`__
 
-Zinc ("Zinc")
-=============
+.. rubric:: Zinc ("Zinc")
 
 .. table::
    :widths: auto

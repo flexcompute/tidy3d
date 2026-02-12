@@ -278,8 +278,7 @@ def generate_rf_material_library_doc():
             rf_lib.items(), key=lambda item: item[0].lower()
         ):  # iterate materials sorted by material abbreviation
             title = mat.name + ' ("' + abbr + '")'
-            f.write(title + "\n")
-            f.write("=" * len(title) + "\n\n")
+            f.write(".. rubric:: " + title + "\n\n")
 
             # Place holders
             ref_list = []  # references
