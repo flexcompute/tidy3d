@@ -2535,10 +2535,10 @@ class Simulation(AbstractYeeGridSimulation):
         *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
     """
 
-    extra_dt_reduction: pydantic.PositiveFloat = pydantic.Field(
-        1.0,
-        title="dt reduction",
-        description="dt reduction.",
+    relax_courant: bool = pydantic.Field(
+        False,
+        title="Relax Courant",
+        description="Relax the CFL stability condition if possible.",
     )
 
     precision: Literal["hybrid", "double"] = pydantic.Field(
@@ -3302,6 +3302,76 @@ class Simulation(AbstractYeeGridSimulation):
                 raise SetupError(
                     "Fixed-angle plane wave sources cannot be used in the presence of internal absorbers."
                 )
+
+        return values
+
+    @pydantic.root_validator()
+    @skip_if_fields_missing(
+        [
+            "relax_courant",
+            "sources",
+            "structures",
+            "medium",
+            "monitors",
+            "internal_absorbers",
+            "boundary_spec",
+        ],
+        root=True,
+    )
+    def _validate_relax_courant_compatibility(cls, values):
+        """Error if ``relax_courant`` is enabled with incompatible components."""
+
+        if not values.get("relax_courant"):
+            return values
+
+        incompatible = []
+
+        # Internal absorbers
+        internal_absorbers = values.get("internal_absorbers")
+        if internal_absorbers and len(internal_absorbers) > 0:
+            incompatible.append("Internal absorbers are not supported.")
+
+        # Adiabatic absorbers in boundary conditions
+        boundary_spec = values.get("boundary_spec")
+        if boundary_spec is not None:
+            for axis_name in ("x", "y", "z"):
+                boundary = boundary_spec[axis_name]
+                if isinstance(boundary.plus, Absorber) or isinstance(boundary.minus, Absorber):
+                    incompatible.append(f"Adiabatic absorber boundary condition along {axis_name}.")
+
+        # TFSF and fixed-angle PlaneWave sources
+        sources = values.get("sources") or []
+        for source in sources:
+            if isinstance(source, TFSF):
+                incompatible.append(f"TFSF source '{source.name}'.")
+            elif isinstance(source, PlaneWave) and isinstance(source.angular_spec, FixedAngleSpec):
+                incompatible.append(f"Fixed-angle PlaneWave source '{source.name}'.")
+
+        # Material checks
+        structures = values.get("structures") or []
+        medium_bg = values.get("medium")
+        mediums = [medium_bg] + [structure.medium for structure in structures] if medium_bg else []
+        for medium in mediums:
+            if isinstance(medium, FullyAnisotropicMedium):
+                incompatible.append("Contains a 'FullyAnisotropicMedium'.")
+            if hasattr(medium, "nonlinear_spec") and medium.nonlinear_spec is not None:
+                incompatible.append("Contains a nonlinear medium.")
+            if hasattr(medium, "modulation_spec") and medium.modulation_spec is not None:
+                incompatible.append("Contains a time-modulated medium.")
+
+        # No periodic or Bloch BC along x
+        if boundary_spec is not None:
+            x_boundary = boundary_spec.x
+            if isinstance(x_boundary.plus, (Periodic, BlochBoundary)) or isinstance(
+                x_boundary.minus, (Periodic, BlochBoundary)
+            ):
+                incompatible.append("Periodic or Bloch boundary condition along x.")
+
+        if incompatible:
+            detail = "\n".join(f"  - {item}" for item in incompatible)
+            raise SetupError(
+                "'relax_courant' is incompatible with the current simulation:\n" + detail
+            )
 
         return values
 
@@ -5453,7 +5523,28 @@ class Simulation(AbstractYeeGridSimulation):
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
         n_cfl = min(min(mat.n_cfl for mat in self.scene.mediums), 1)
-        return self.extra_dt_reduction * self._dt_fixed_angle_reduction_factor * n_cfl * self.scaled_courant * dl_avg / C_0
+
+        # CFL relaxation factor when relaxing Courant constraint along x
+        if self.relax_courant:
+            try:
+                from tidy3d_extras.extension import _relax_courant
+            except ImportError as exc:
+                raise ImportError(
+                    "'relax_courant' requires the 'tidy3d_extras' package to be installed."
+                ) from exc
+            dl_mins_xyz = [float(np.min(sizes)) for sizes in self.grid.sizes.to_list]
+            relax_ratio = _relax_courant(dl_mins=dl_mins_xyz)
+        else:
+            relax_ratio = 1.0
+
+        return (
+            relax_ratio
+            * self._dt_fixed_angle_reduction_factor
+            * n_cfl
+            * self.scaled_courant
+            * dl_avg
+            / C_0
+        )
 
     @cached_property
     def tmesh(self) -> Coords1D:
