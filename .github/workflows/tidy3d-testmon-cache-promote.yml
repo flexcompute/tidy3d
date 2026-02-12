@@ -200,6 +200,7 @@ jobs:
           path: cache-candidate
 
       - name: validate-cache-candidate
+        shell: bash
         env:
           EXPECTED_CACHE_KEY: ${{ matrix.candidate.cache_key }}
           ARTIFACT_NAME: ${{ matrix.candidate.artifact_name }}
@@ -259,6 +260,7 @@ jobs:
 
       - name: enforce-promoted-cache-availability
         if: steps.verify-cache-lookup.outputs.cache-hit != 'true'
+        shell: bash
         env:
           CACHE_KEY: ${{ matrix.candidate.cache_key }}
           RUNNER_FAMILY: ${{ matrix.candidate.runner_family }}
