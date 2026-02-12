@@ -8,8 +8,13 @@ import pytest
 from pydantic import ValidationError
 
 import tidy3d as td
+import tidy3d.components.viz as viz
 from tidy3d import Box, Medium, Simulation, Structure
-from tidy3d.components.viz import Polygon, restore_matplotlib_rcparams, set_default_labels_and_title
+from tidy3d.components.viz import (
+    Polygon,
+    flex_style,
+    set_default_labels_and_title,
+)
 from tidy3d.constants import inf
 from tidy3d.exceptions import Tidy3dKeyError
 
@@ -334,10 +339,25 @@ def test_sim_plot_structures_fill():
         assert patch.get_facecolor() != "none", "Face color should be set"
 
 
-def test_tidy3d_matplotlib_style_application_on_import():
-    """Test restore_matplotlib_rcparams() to reset the automatically applied matplotlib.rcParams"""
+def test_tidy3d_matplotlib_style_application_on_import(monkeypatch):
+    """Test that lazy application and manual restoration of rcParams works."""
+
+    # 1. Reset Matplotlib to factory defaults for this test
+    mpl.rcdefaults()
+
+    # 2. Monkeypatch the internal flags to simulate a 'never-applied' state
+    monkeypatch.setattr(viz, "_tidy3d_style_applied", False)
+    monkeypatch.setattr(flex_style, "_ORIGINAL_PARAMS", None)
+    # 3. Trigger the lazy application logic
+    viz._ensure_tidy3d_style()
+
+    # 4. Verify the style was applied
     assert mpl.rcParams.get("axes.prop_cycle").by_key()["color"][0] == "#176737"
-    restore_matplotlib_rcparams()
+
+    # 5. Test the restoration logic
+    viz.restore_matplotlib_rcparams()
+
+    # 6. Verify it's back to default
     assert (
         mpl.rcParams.get("axes.prop_cycle").by_key()["color"][0]
         == mpl.rcParamsDefault.get("axes.prop_cycle").by_key()["color"][0]
