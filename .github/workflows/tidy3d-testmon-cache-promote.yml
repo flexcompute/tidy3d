@@ -181,11 +181,14 @@ jobs:
             exit 1
           fi
 
+      - name: stage-testmon-cache
+        run: cp cache-candidate/.testmondata .testmondata
+
       - name: lookup-existing-cache
         id: cache-lookup
         uses: actions/cache/restore@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
-          path: cache-candidate/.testmondata
+          path: .testmondata
           key: ${{ matrix.candidate.cache_key }}
           lookup-only: true
 
@@ -193,7 +196,7 @@ jobs:
         if: steps.cache-lookup.outputs.cache-hit != 'true'
         uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
         with:
-          path: cache-candidate/.testmondata
+          path: .testmondata
           key: ${{ matrix.candidate.cache_key }}
 
       - name: report-existing-cache
