@@ -62,7 +62,7 @@ class InsulatingBC(HeatChargeBC):
 
         Ensures the electric potential to the normal :math:`\\nabla \\psi \\cdot \\mathbf{n}  = 0` as well as the
         surface recombination current density :math:`J_s = \\mathbf{J} \\cdot \\mathbf{n} = 0` are set to zero where
-        the current density is :math:`\\mathbf{J_n}` and the normal vector is :math:`\\mathbf{n}`
+        the current density is :math:`\\mathbf{J}` and the normal vector is :math:`\\mathbf{n}`
 
     Example
     -------

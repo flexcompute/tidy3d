@@ -60,7 +60,7 @@ Bandgap
 
 
 Effective Density Of States (DOS)
-^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -72,7 +72,7 @@ Effective Density Of States (DOS)
    tidy3d.DualValleyEffectiveDOS
 
 Energy Bandgap
-^^^^^^^^
+^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: ../_autosummary/

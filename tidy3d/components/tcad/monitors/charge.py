@@ -44,8 +44,8 @@ class SteadyFreeCarrierMonitor(HeatChargeMonitor):
     Example
     -------
     >>> import tidy3d as td
-    >>> voltage_monitor_z0 = td.SteadyFreeCarrierMonitor(
-    ... center=(0, 0.14, 0), size=(0.6, 0.3, 0), name="voltage_z0", unstructured=True,
+    >>> carrier_monitor_z0 = td.SteadyFreeCarrierMonitor(
+    ... center=(0, 0.14, 0), size=(0.6, 0.3, 0), name="carrier_z0", unstructured=True,
     ... )
     """
 

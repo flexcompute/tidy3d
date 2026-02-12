@@ -51,7 +51,7 @@ class IsotropicEffectiveDOS(EffectiveDOS):
 
     .. math::
 
-        \\mathbf{N_eff} = 2 * (\\frac{m_eff * m_e * k_B T}{2 \\pi \\hbar^2})^(3/2)
+        N_{\\text{eff}} = 2 \\left( \\frac{m_{\\text{eff}} \\cdot m_e \\cdot k_B T}{2 \\pi \\hbar^2} \\right)^{3/2}
 
     """
 

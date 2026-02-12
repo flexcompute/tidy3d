@@ -134,7 +134,7 @@ class RadiativeRecombination(Tidy3dBaseModel):
 
         .. math::
 
-            R_{\\text{rad}} = C \\left( np - n_0 p_0 \\right)
+            R_{\\text{rad}} = C \\cdot n \\cdot p
 
     Example
     -------
@@ -221,7 +221,7 @@ class DistributedGeneration(Tidy3dBaseModel):
     rate: SpatialDataArray = Field(
         title="Generation rate",
         description="Spatially varying generation rate.",
-        json_schema_extra={"units": "1/(cm^3 s^1)"},
+        json_schema_extra={"units": "1/(cm^3 s)"},
     )
 
     @classmethod
