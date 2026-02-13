@@ -44,10 +44,7 @@ class HeatChargeMonitor(AbstractMonitor, ABC):
         """Warn if deprecated ``conformal`` field is provided."""
         # Note:  Only warn when the deprecated flag is actually enabled.
         if isinstance(values, dict) and values.get("conformal"):
-            log.warning(
-                "The `conformal` flag is deprecated and will be removed in version 2.12. "
-                "It has no effect when the simulation mesh is created with `remove_fragments=True`.",
-            )
+            log.warning("The 'conformal' flag is deprecated and will be removed in version 2.12.")
         return values
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:

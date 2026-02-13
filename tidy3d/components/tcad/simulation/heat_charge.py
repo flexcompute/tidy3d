@@ -1085,7 +1085,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         if nodes_estimate > max_nodes:
             log.warning(
-                "WARNING: It has been estimated the mesh to be bigger than the currently "
+                "It is estimated that the mesh will be larger than the currently "
                 "supported mesh size for Charge simulations. The simulation may be "
                 "submitted but if the maximum number of nodes is indeed exceeded "
                 "the pipeline will be stopped. If this happens the grid specification "
