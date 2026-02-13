@@ -162,12 +162,12 @@ class Custom2DPathIntegral(Custom2DPathIntegralSpec):
         field : :class:`.FieldParameter`
             Can take the value of ``"E"`` or ``"H"``. Determines whether to perform the integral
             over electric or magnetic field.
-        em_field : :class:`.IntegrableMonitorDataType`
+        em_field : ``IntegrableMonitorDataType``
             The electromagnetic field data that will be used for integrating.
 
         Returns
         -------
-        :class:`.IntegralResultType`
+        ``IntegralResultType``
             Result of integral over remaining dimensions (frequency, time, mode indices).
         """
 

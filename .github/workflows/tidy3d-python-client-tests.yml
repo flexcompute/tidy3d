@@ -710,9 +710,18 @@ jobs:
           } | sha256sum | awk '{print $1}'
         )
 
+        cache_layout="v2"
+        if [[ "${GITHUB_EVENT_NAME}" == "merge_group" ]]; then
+          cache_sha="${GITHUB_SHA}"
+        else
+          cache_sha="${default_branch_sha}"
+        fi
+
         echo "default_branch=$default_branch" >> "$GITHUB_OUTPUT"
         echo "default_branch_sha=$default_branch_sha" >> "$GITHUB_OUTPUT"
         echo "dep_hash=$dep_hash" >> "$GITHUB_OUTPUT"
+        echo "cache_layout=$cache_layout" >> "$GITHUB_OUTPUT"
+        echo "cache_sha=$cache_sha" >> "$GITHUB_OUTPUT"
 
     - name: restore-testmon-cache
       id: testmon-cache-restore
@@ -720,11 +729,9 @@ jobs:
       uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: .testmondata
-        key: testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        key: testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
         restore-keys: |
-          testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
-          testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-
-          testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-
+          testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
 
     - name: telemetry-cache-exact-hit
       if: >-
@@ -814,7 +821,7 @@ jobs:
     - name: stage-testmon-cache-candidate
       if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
       env:
-        CACHE_KEY: testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        CACHE_KEY: testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
       run: |
         set -euo pipefail
         candidate_dir="$RUNNER_TEMP/testmon-cache-candidate-local-py${{ matrix.python-version }}"
@@ -844,7 +851,7 @@ jobs:
       uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: .testmondata
-        key: testmon-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        key: testmon-local-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ runner.os }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
 
     - name: diff-coverage-report
       if: >- 
@@ -964,9 +971,18 @@ jobs:
           } | sha256sum | awk '{print $1}'
         )
 
+        cache_layout="v2"
+        if [[ "${GITHUB_EVENT_NAME}" == "merge_group" ]]; then
+          cache_sha="${GITHUB_SHA}"
+        else
+          cache_sha="${default_branch_sha}"
+        fi
+
         echo "default_branch=$default_branch" >> "$GITHUB_OUTPUT"
         echo "default_branch_sha=$default_branch_sha" >> "$GITHUB_OUTPUT"
         echo "dep_hash=$dep_hash" >> "$GITHUB_OUTPUT"
+        echo "cache_layout=$cache_layout" >> "$GITHUB_OUTPUT"
+        echo "cache_sha=$cache_sha" >> "$GITHUB_OUTPUT"
 
     - name: restore-testmon-cache
       id: testmon-cache-restore
@@ -974,11 +990,9 @@ jobs:
       uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: .testmondata
-        key: testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        key: testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
         restore-keys: |
-          testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
-          testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-
-          testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-
+          testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-
 
     - name: telemetry-cache-exact-hit
       if: >-
@@ -1113,7 +1127,7 @@ jobs:
     - name: stage-testmon-cache-candidate
       if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
       env:
-        CACHE_KEY: testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        CACHE_KEY: testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
       run: |
         set -euo pipefail
         candidate_dir="$RUNNER_TEMP/testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}"
@@ -1143,7 +1157,7 @@ jobs:
       uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: .testmondata
-        key: testmon-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.default_branch_sha }}
+        key: testmon-remote-${{ steps.testmon-cache-key.outputs.cache_layout }}-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ steps.testmon-cache-key.outputs.default_branch }}-${{ steps.testmon-cache-key.outputs.dep_hash }}-${{ steps.testmon-cache-key.outputs.cache_sha }}
 
     - name: create-badge
       if: ${{ github.ref == 'refs/heads/develop' }}

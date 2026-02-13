@@ -44,7 +44,7 @@ class Source(Box, AbstractSource, ABC):
 
     @cached_property
     def geometry(self) -> Box:
-        """:class:`Box` representation of source."""
+        """:class:`~tidy3d.Box` representation of source."""
 
         return Box(center=self.center, size=self.size)
 

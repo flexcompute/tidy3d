@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added in-memory caching for downloaded batch results, configurable via ``config.batch_data_cache``.
 - Added frequency-parametrized lossy dielectrics and lossy metals to the RF material library. User can choose between the material fit for the default frequency range via ``medium()`` or get a fit for the desired frequency range via ``medium(frequency_range)``. When the specified range is outside the default one, a new model is created with averaged properties and a warning is issued.
 - Added `DesignSpace` support for sweeping `WorkflowType` objects, including mode/EME simulations and component modelers.
+- Added `current_amplitude_definition` parameter to `UniformCurrentSource` for size-independent total current injection. Set to `"total"` to interpret the source amplitude as total current rather than current density.
 
 ### Breaking Changes
 - Added optional automatic extrusion of structures at the simulation boundaries into/through PML/Absorber layers via `extrude_structures` field in class `AbsorberSpec`.
@@ -59,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved `ModeSolver.solve()` to suppress the accuracy warning when local subpixel averaging is enabled via `tidy3d-extras`, and expanded docstrings for `ModeSolver.solve()`, `ModeSimulation.run_local()`, `Simulation.epsilon()`, and `Simulation.epsilon_on_grid()` to document the `config.simulation.use_local_subpixel` option.
 - Fixed `ModeSolver.validate_pre_upload` not validating `MicrowaveModeSpec` with `AutoImpedanceSpec`, causing cryptic server-side errors for invalid conductor geometries.
 - Fixed local cache not storing results for `ModalComponentModeler` (and `TerminalComponentModeler`) runs, causing cache misses on repeated `web.run()` calls.
+- Fixed spurious `ModeSimulation` error logs during deserialization of `SimulationDataMap` by adding discriminators to `SimulationType` and `SimulationDataType` unions.
+- Fixed unintended model output in Jupyter notebooks during `import tidy3d` by preventing `Tidy3dBaseModel.__str__` from triggering notebook display side effects.
 
 ## [2.10.2] - 2026-01-21
 

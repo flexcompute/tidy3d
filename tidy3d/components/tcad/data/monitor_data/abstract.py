@@ -25,7 +25,7 @@ UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
 
 
 class HeatChargeMonitorData(AbstractMonitorData, ABC):
-    """Abstract base class of objects that store data pertaining to a single :class:`HeatChargeMonitor`."""
+    """Abstract base class of objects that store data pertaining to a single :class:`~tidy3d.components.tcad.monitors.abstract.HeatChargeMonitor`."""
 
     monitor: HeatChargeMonitorType = Field(
         title="Monitor",

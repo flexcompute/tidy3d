@@ -292,9 +292,8 @@ Working with GDS
    tidy3d.Geometry.to_gds_file
    tidy3d.Geometry.to_gds
    tidy3d.Geometry.to_gdstk
-   tidy3d.Geometry.to_gdspy
 
-The GDSII file format is commonly used in integrated circuit design to specify geometric shapes, labels, and other simulation metadata. Tidy3D supports the creation, import, and export of GDSII files via the third party packages ``gdstk`` or ``gdspy``. Please find detailed usage instructions in the linked articles below. 
+The GDSII file format is commonly used in integrated circuit design to specify geometric shapes, labels, and other simulation metadata. Tidy3D supports the creation, import, and export of GDSII files via the third party package ``gdstk``. Please find detailed usage instructions in the linked articles below.
 
 .. seealso::
 
@@ -333,4 +332,3 @@ Use the ``from_stl()`` class method to import from an external STL file, or ``fr
    + `Defining complex geometries using trimesh <../notebooks/CreatingGeometryUsingTrimesh.html>`_
 
 ~~~~
-

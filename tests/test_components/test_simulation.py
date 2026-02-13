@@ -65,6 +65,7 @@ def test_sim_init():
                     fwidth=1e12,
                 ),
                 name="my_dipole",
+                current_amplitude_definition="total",
             ),
             td.PointDipole(
                 center=(0, 0, 0),
@@ -171,6 +172,7 @@ def test_monitors_data_size():
                     fwidth=1e12,
                 ),
                 name="my_dipole",
+                current_amplitude_definition="total",
             ),
             td.PointDipole(
                 center=(0, 0, 0),
@@ -326,6 +328,7 @@ def test_monitor_medium_frequency_range(freq, log_level):
         source_time=td.GaussianPulse(freq0=2.5e12, fwidth=0.5e12),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
     with AssertLogLevel(log_level):
         _ = td.Simulation(
@@ -348,6 +351,7 @@ def test_monitor_simulation_frequency_range(monitor_freq, log_level):
         source_time=td.GaussianPulse(freq0=2.0e12, fwidth=0.1e12),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
     mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[monitor_freq])
 
@@ -368,6 +372,7 @@ def test_validate_monitor_simulation_frequency_range():
         source_time=td.GaussianPulse(freq0=2.0e12, fwidth=0.1e12),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
 
     mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[2e12])
@@ -423,7 +428,9 @@ def test_validate_normalize_index():
         source_time=td.GaussianPulse(freq0=2.0e12, fwidth=1.0e12),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
+
     # negative normalize index
     with pytest.raises(ValidationError):
         td.Simulation(
@@ -841,6 +848,7 @@ class TestAnisotropicPlotting:
                 freq0=td.C_0,
                 fwidth=10e14,
             ),
+            current_amplitude_definition="total",
         )
         structures = (td.Structure(geometry=td.Sphere(center=(0, 0, 0), radius=1), medium=medium),)
 
@@ -1197,6 +1205,7 @@ def test_sim_structure_gap(box_size, log_level):
         source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
 
     with AssertLogLevel(log_level):
@@ -1611,6 +1620,7 @@ def test_sim_structure_extent(box_size, log_level):
         source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
     box = td.Structure(geometry=td.Box(size=box_size), medium=td.Medium(permittivity=2))
 
@@ -1633,6 +1643,7 @@ def test_warn_lumped_elements_outside_sim_bounds():
         source_time=td.GaussianPulse(freq0=10e9, fwidth=8e9),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
 
     # Lumped element fully contained - should work
@@ -1718,6 +1729,7 @@ def test_sim_validate_structure_bounds_pml(box_length, absorb_type, log_level):
         source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
     box = td.Structure(
         geometry=td.Box(size=(box_length, 0.5, 0.5), center=(0, 0, 0)),
@@ -1831,18 +1843,21 @@ def _test_names_default():
                 center=(0, -0.5, 0),
                 polarization="Hx",
                 source_time=td.GaussianPulse(freq0=1e14, fwidth=1e12),
+                current_amplitude_definition="total",
             ),
             td.UniformCurrentSource(
                 size=(0, 0, 0),
                 center=(0, -0.5, 0),
                 polarization="Ex",
                 source_time=td.GaussianPulse(freq0=1e14, fwidth=1e12),
+                current_amplitude_definition="total",
             ),
             td.UniformCurrentSource(
                 size=(0, 0, 0),
                 center=(0, -0.5, 0),
                 polarization="Ey",
                 source_time=td.GaussianPulse(freq0=1e14, fwidth=1e12),
+                current_amplitude_definition="total",
             ),
         ),
         monitors=(
@@ -1891,6 +1906,7 @@ def test_names_unique():
                     polarization="Hx",
                     source_time=td.GaussianPulse(freq0=1e14, fwidth=1e12),
                     name="source1",
+                    current_amplitude_definition="total",
                 ),
                 td.UniformCurrentSource(
                     size=(0, 0, 0),
@@ -1898,6 +1914,7 @@ def test_names_unique():
                     polarization="Ex",
                     source_time=td.GaussianPulse(freq0=1e14, fwidth=1e12),
                     name="source1",
+                    current_amplitude_definition="total",
                 ),
             ),
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
@@ -2499,6 +2516,7 @@ def test_sim_volumetric_structures(tmp_path):
         source_time=td.GaussianPulse(freq0=1.5e14, fwidth=0.5e14),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
     for struct in [box, cyl, pslab]:
         sim = td.Simulation(
@@ -3669,6 +3687,7 @@ def test_sim_volumetric_structures_with_lumped_elements(tmp_path):
         source_time=td.GaussianPulse(freq0=1.5e14, fwidth=0.5e14),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
     substrate = td.Structure(
         geometry=td.Box(size=(4, td.inf, td.inf)), medium=td.Medium(permittivity=3.5)
@@ -3785,6 +3804,7 @@ def test_messages_contain_object_names():
         size=(1, 0, 0.5),
         polarization="Ex",
         source_time=td.GaussianPulse(freq0=100e14, fwidth=10e14),
+        current_amplitude_definition="total",
     )
     with pytest.raises(ValidationError, match=name) as e:
         _ = sim.updated_copy(sources=[source])

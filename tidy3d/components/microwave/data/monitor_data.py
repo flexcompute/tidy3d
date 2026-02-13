@@ -237,7 +237,8 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
     Notes
     -----
     This is a mixin class that must be combined with mode data classes (:class:`.ModeData` or
-    :class:`.ModeSolverData`). It uses ``super()`` to call methods on the mixed-in class, extending
+    :class:`~tidy3d.ModeSolverData`). It uses ``super()`` to call
+    methods on the mixed-in class, extending
     their functionality rather than replacing it.
 
     The mixin should be placed first in the inheritance list to ensure its method overrides
@@ -248,7 +249,7 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
         None,
         title="Transmission Line Data",
         description="Additional data relevant to transmission lines in RF and microwave applications, "
-        "like characteristic impedance. This field is populated when a :class:`MicrowaveModeSpec` has "
+        "like characteristic impedance. This field is populated when a :class:`~tidy3d.rf.MicrowaveModeSpec` has "
         "been used to set up the monitor or mode solver.",
     )
 
@@ -484,7 +485,7 @@ class MicrowaveModeData(MicrowaveModeDataBase, ModeData):
 
         The microwave mode data contains all the information from :class:`.ModeData` plus additional
         microwave dataset with impedance calculations performed using voltage and current line integrals
-        as specified in the :class:`.MicrowaveModeSpec`.
+        as specified in the :class:`~tidy3d.rf.MicrowaveModeSpec`.
 
     Example
     -------
@@ -541,14 +542,16 @@ class MicrowaveModeSolverData(MicrowaveModeDataBase, ModeSolverData):
     Notes
     -----
 
-        This class extends :class:`.ModeSolverData` with additional microwave-specific data including
+        This class extends :class:`~tidy3d.ModeSolverData` with
+        additional microwave-specific data including
         characteristic impedance, voltage coefficients, and current coefficients. The data is
         stored as `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
         objects using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
 
         The microwave mode solver data contains all field components (Ex, Ey, Ez, Hx, Hy, Hz) and
-        effective indices from :class:`.ModeSolverData`, plus impedance calculations performed using
-        voltage and current line integrals as specified in the :class:`.MicrowaveModeSpec`.
+        effective indices from :class:`~tidy3d.ModeSolverData`, plus
+        impedance calculations performed using
+        voltage and current line integrals as specified in the :class:`~tidy3d.rf.MicrowaveModeSpec`.
 
     Example
     -------
@@ -642,8 +645,9 @@ class MicrowaveModeSolverData(MicrowaveModeDataBase, ModeSolverData):
 
         Returns
         -------
-        ModeSolverData
-            New :class:`ModeSolverData` object with data interpolated to the requested frequencies.
+        :class:`~tidy3d.ModeSolverData`
+            New :class:`~tidy3d.ModeSolverData` object with data
+            interpolated to the requested frequencies.
 
         Raises
         ------

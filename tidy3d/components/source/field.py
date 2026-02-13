@@ -66,7 +66,7 @@ class PlanarSource(Source, ABC):
 
 
 class VolumeSource(Source, ABC):
-    """A source defined in a 3D :class:`Box`."""
+    """A source defined in a 3D :class:`~tidy3d.Box`."""
 
     _volume_validator = assert_volumetric()
 

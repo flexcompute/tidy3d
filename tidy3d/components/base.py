@@ -8,7 +8,6 @@ import json
 import math
 import os
 import tempfile
-import typing as _t
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from functools import total_ordering, wraps
@@ -16,7 +15,17 @@ from math import ceil
 from os import PathLike
 from pathlib import Path
 from types import UnionType
-from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar, Union, get_args, get_origin
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Literal,
+    Optional,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+)
 
 import h5py
 import numpy as np
@@ -33,6 +42,12 @@ from tidy3d.log import log
 from .autograd.types import TracedDict
 from .autograd.utils import get_static
 from .data.data_array import DATA_ARRAY_MAP
+from .docstrings import (
+    _DOCSTRING_RAW_ATTR,
+    _clean_default_repr,
+    _fmt_ann_literal,
+    _format_model_default,
+)
 from .file_util import compress_file_to_gzip, extract_gzip_file
 from .types import TYPE_TAG_STR, Undefined
 
@@ -145,15 +160,6 @@ def _get_valid_extension(fname: PathLike) -> str:
     )
 
 
-def _fmt_ann_literal(ann: Any) -> str:
-    """Spell the annotation exactly as written."""
-    if ann is None:
-        return "Any"
-    if isinstance(ann, _t._GenericAlias):
-        return str(ann).replace("typing.", "")
-    return ann.__name__ if hasattr(ann, "__name__") else str(ann)
-
-
 T = TypeVar("T", bound="Tidy3dBaseModel")
 
 
@@ -190,6 +196,9 @@ class Tidy3dBaseModel(BaseModel):
         extra="forbid",
         frozen=True,
     )
+
+    _DOCSTRING_SHOW_DEFAULT_ARGS: ClassVar[bool] = False
+    _DOCSTRING_INCLUDE_ATTRS: ClassVar[bool] = False
 
     attrs: dict = Field(
         default_factory=dict,
@@ -253,7 +262,29 @@ class Tidy3dBaseModel(BaseModel):
         super().__pydantic_init_subclass__(**kwargs)
 
         # add docstring once pydantic is done constructing the class
+        if _DOCSTRING_RAW_ATTR not in cls.__dict__:
+            setattr(cls, _DOCSTRING_RAW_ATTR, cls.__doc__ or "")
         cls.__doc__ = cls.generate_docstring()
+
+    @classmethod
+    def model_rebuild(
+        cls,
+        *,
+        force: bool = False,
+        raise_errors: bool = True,
+        _parent_namespace_depth: int = 2,
+        _types_namespace: Mapping[str, Any] | None = None,
+    ) -> bool | None:
+        rebuilt = super().model_rebuild(
+            force=force,
+            raise_errors=raise_errors,
+            _parent_namespace_depth=_parent_namespace_depth + 1,
+            _types_namespace=_types_namespace,
+        )
+        if _DOCSTRING_RAW_ATTR not in cls.__dict__:
+            setattr(cls, _DOCSTRING_RAW_ATTR, cls.__doc__ or "")
+        cls.__doc__ = cls.generate_docstring()
+        return rebuilt
 
     @model_validator(mode="wrap")
     @classmethod
@@ -648,12 +679,12 @@ class Tidy3dBaseModel(BaseModel):
         Recursively traverses a model structure yielding Tidy3dBaseModel instances and their paths.
 
         This is an internal helper method used by :meth:`find_paths` and :meth:`find_submodels`
-        to navigate nested :class:`Tidy3dBaseModel` structures.
+        to navigate nested :class:`~tidy3d.Tidy3dBaseModel` structures.
 
         Parameters
         ----------
         current_obj : Any
-            The current object in the traversal, which can be a :class:`Tidy3dBaseModel`,
+            The current object in the traversal, which can be a :class:`~tidy3d.Tidy3dBaseModel`,
             list, tuple, or other type.
         current_path_segments : tuple[str, ...]
             A tuple of strings representing the path segments from the initial model
@@ -662,7 +693,7 @@ class Tidy3dBaseModel(BaseModel):
         Returns
         -------
         Iterator[tuple[Self, tuple[str, ...]]]
-            An iterator yielding tuples, where the first element is a found :class:`Tidy3dBaseModel` instance
+            An iterator yielding tuples, where the first element is a found :class:`~tidy3d.Tidy3dBaseModel` instance
             and the second is a tuple of strings representing the path to that instance
             from the initial object. The path for the top-level model itself will be an empty tuple.
         """
@@ -699,7 +730,7 @@ class Tidy3dBaseModel(BaseModel):
         ----------
         target_field_name : str
             The name of the attribute (field) to search for within nested
-            :class:`Tidy3dBaseModel` instances. For example, ``"name"`` or ``"permittivity"``.
+            :class:`~tidy3d.Tidy3dBaseModel` instances. For example, ``"name"`` or ``"permittivity"``.
         target_field_value : Any, optional
             If provided, only paths to model instances where ``target_field_name`` also has this
             specific value will be returned. If omitted, paths are returned if the
@@ -709,7 +740,7 @@ class Tidy3dBaseModel(BaseModel):
         -------
         list[str]
             A sorted list of unique string paths. Each path points to a
-            :class:`Tidy3dBaseModel` instance that possesses the ``target_field_name``
+            :class:`~tidy3d.Tidy3dBaseModel` instance that possesses the ``target_field_name``
             (and optionally matches ``target_field_value``).
 
         Example
@@ -753,7 +784,7 @@ class Tidy3dBaseModel(BaseModel):
         ----------
         target_type : Tidy3dBaseModel
             The specific Tidy3D class (e.g., ``Structure``, ``Medium``, ``Box``) to search for.
-            This class must be a subclass of :class:`Tidy3dBaseModel`.
+            This class must be a subclass of :class:`~tidy3d.Tidy3dBaseModel`.
 
         Returns
         -------
@@ -790,7 +821,7 @@ class Tidy3dBaseModel(BaseModel):
         return list(found_models_dict.keys())
 
     def help(self, methods: bool = False) -> None:
-        """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.
+        """Prints message describing the fields and methods of a :class:`~tidy3d.Tidy3dBaseModel`.
 
         Parameters
         ----------
@@ -812,12 +843,12 @@ class Tidy3dBaseModel(BaseModel):
         on_load: Optional[Callable[[Any], None]] = None,
         **parse_obj_kwargs: Any,
     ) -> Self:
-        """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
+        """Loads a :class:`~tidy3d.Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
 
         Parameters
         ----------
         fname : PathLike
-            Full path to the file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
         group_path : Optional[str] = None
             Path to a group inside the file to use as the base level. Only for hdf5 files.
             Starting `/` is optional.
@@ -864,7 +895,7 @@ class Tidy3dBaseModel(BaseModel):
         Parameters
         ----------
         fname : PathLike
-            Full path to the file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
         group_path : str, optional
             Path to a group inside the file to use as the base level.
 
@@ -900,12 +931,12 @@ class Tidy3dBaseModel(BaseModel):
         return converter(**kwargs)
 
     def to_file(self, fname: PathLike) -> None:
-        """Exports :class:`Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
+        """Exports :class:`~tidy3d.Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
         fname : PathLike
-            Full path to the .yaml or .json file to save the :class:`Tidy3dBaseModel` to.
+            Full path to the .yaml or .json file to save the :class:`~tidy3d.Tidy3dBaseModel` to.
 
         Example
         -------
@@ -922,12 +953,12 @@ class Tidy3dBaseModel(BaseModel):
 
     @classmethod
     def from_json(cls: type[T], fname: PathLike, **model_validate_kwargs: Any) -> Self:
-        """Load a :class:`Tidy3dBaseModel` from .json file.
+        """Load a :class:`~tidy3d.Tidy3dBaseModel` from .json file.
 
         Parameters
         ----------
         fname : PathLike
-            Full path to the .json file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the .json file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
 
         Returns
         -------
@@ -950,7 +981,7 @@ class Tidy3dBaseModel(BaseModel):
         Parameters
         ----------
         fname : PathLike
-            Full path to the .json file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the .json file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
 
         Returns
         -------
@@ -966,12 +997,12 @@ class Tidy3dBaseModel(BaseModel):
         return model_dict
 
     def to_json(self, fname: PathLike) -> None:
-        """Exports :class:`Tidy3dBaseModel` instance to .json file
+        """Exports :class:`~tidy3d.Tidy3dBaseModel` instance to .json file
 
         Parameters
         ----------
         fname : PathLike
-            Full path to the .json file to save the :class:`Tidy3dBaseModel` to.
+            Full path to the .json file to save the :class:`~tidy3d.Tidy3dBaseModel` to.
 
         Example
         -------
@@ -987,12 +1018,12 @@ class Tidy3dBaseModel(BaseModel):
 
     @classmethod
     def from_yaml(cls: type[T], fname: PathLike, **model_validate_kwargs: Any) -> Self:
-        """Loads :class:`Tidy3dBaseModel` from .yaml file.
+        """Loads :class:`~tidy3d.Tidy3dBaseModel` from .yaml file.
 
         Parameters
         ----------
         fname : PathLike
-            Full path to the .yaml file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the .yaml file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
         **model_validate_kwargs
             Keyword arguments passed to pydantic's ``model_validate`` method.
 
@@ -1015,7 +1046,7 @@ class Tidy3dBaseModel(BaseModel):
         Parameters
         ----------
         fname : PathLike
-            Full path to the .yaml file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the .yaml file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
 
         Returns
         -------
@@ -1031,12 +1062,12 @@ class Tidy3dBaseModel(BaseModel):
         return model_dict
 
     def to_yaml(self, fname: PathLike) -> None:
-        """Exports :class:`Tidy3dBaseModel` instance to .yaml file.
+        """Exports :class:`~tidy3d.Tidy3dBaseModel` instance to .yaml file.
 
         Parameters
         ----------
         fname : PathLike
-            Full path to the .yaml file to save the :class:`Tidy3dBaseModel` to.
+            Full path to the .yaml file to save the :class:`~tidy3d.Tidy3dBaseModel` to.
 
         Example
         -------
@@ -1138,7 +1169,7 @@ class Tidy3dBaseModel(BaseModel):
         Parameters
         ----------
         fname : PathLike
-            Full path to the .hdf5 file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the .hdf5 file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
         group_path : str, optional
             Path to a group inside the file to selectively load a sub-element of the model only.
         custom_decoders : List[Callable]
@@ -1217,12 +1248,12 @@ class Tidy3dBaseModel(BaseModel):
         custom_decoders: Optional[list[Callable]] = None,
         **model_validate_kwargs: Any,
     ) -> Self:
-        """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
+        """Loads :class:`~tidy3d.Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
         ----------
         fname : PathLike
-            Full path to the .hdf5 file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the .hdf5 file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
         group_path : str, optional
             Path to a group inside the file to selectively load a sub-element of the model only.
             Starting `/` is optional.
@@ -1251,12 +1282,12 @@ class Tidy3dBaseModel(BaseModel):
         fname: Union[PathLike, io.BytesIO],
         custom_encoders: Optional[list[Callable]] = None,
     ) -> None:
-        """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
+        """Exports :class:`~tidy3d.Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
         ----------
         fname : Union[PathLike, BytesIO]
-            Full path to the .hdf5 file or buffer to save the :class:`Tidy3dBaseModel` to.
+            Full path to the .hdf5 file or buffer to save the :class:`~tidy3d.Tidy3dBaseModel` to.
         custom_encoders : List[Callable]
             List of functions accepting (fname: str, group_path: str, value: Any) that take
             the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
@@ -1322,7 +1353,7 @@ class Tidy3dBaseModel(BaseModel):
         Parameters
         ----------
         fname : PathLike
-            Full path to the .hdf5.gz file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the .hdf5.gz file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
         group_path : str, optional
             Path to a group inside the file to selectively load a sub-element of the model only.
         custom_decoders : List[Callable]
@@ -1363,12 +1394,12 @@ class Tidy3dBaseModel(BaseModel):
         custom_decoders: Optional[list[Callable]] = None,
         **model_validate_kwargs: Any,
     ) -> Self:
-        """Loads :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
+        """Loads :class:`~tidy3d.Tidy3dBaseModel` instance to .hdf5.gz file.
 
         Parameters
         ----------
         fname : PathLike
-            Full path to the .hdf5.gz file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the .hdf5.gz file to load the :class:`~tidy3d.Tidy3dBaseModel` from.
         group_path : str, optional
             Path to a group inside the file to selectively load a sub-element of the model only.
             Starting `/` is optional.
@@ -1397,12 +1428,12 @@ class Tidy3dBaseModel(BaseModel):
         fname: Union[PathLike, io.BytesIO],
         custom_encoders: Optional[list[Callable]] = None,
     ) -> None:
-        """Exports :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
+        """Exports :class:`~tidy3d.Tidy3dBaseModel` instance to .hdf5.gz file.
 
         Parameters
         ----------
         fname : Union[PathLike, BytesIO]
-            Full path to the .hdf5.gz file or buffer to save the :class:`Tidy3dBaseModel` to.
+            Full path to the .hdf5.gz file or buffer to save the :class:`~tidy3d.Tidy3dBaseModel` to.
         custom_encoders : List[Callable]
             List of functions accepting (fname: str, group_path: str, value: Any) that take
             the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
@@ -1491,12 +1522,12 @@ class Tidy3dBaseModel(BaseModel):
 
     @cached_property_guarded(lambda self: self._attrs_digest())
     def _json_string(self) -> str:
-        """Returns string representation of a :class:`Tidy3dBaseModel`.
+        """Returns string representation of a :class:`~tidy3d.Tidy3dBaseModel`.
 
         Returns
         -------
         str
-            Json-formatted string holding :class:`Tidy3dBaseModel` data.
+            Json-formatted string holding :class:`~tidy3d.Tidy3dBaseModel` data.
         """
         return self.model_dump_json(indent=INDENT, exclude_unset=False)
 
@@ -1637,15 +1668,26 @@ class Tidy3dBaseModel(BaseModel):
         return static_self
 
     @classmethod
-    def generate_docstring(cls) -> str:
+    def generate_docstring(
+        cls,
+        show_default_args: Optional[bool] = None,
+        include_attrs: Optional[bool] = None,
+    ) -> str:
         """Generates a docstring for a Tidy3D model."""
+        if show_default_args is None:
+            show_default_args = cls._DOCSTRING_SHOW_DEFAULT_ARGS
+        if include_attrs is None:
+            include_attrs = cls._DOCSTRING_INCLUDE_ATTRS
 
         doc = ""
 
         # keep any pre-existing class description
         original_docstrings = []
-        if cls.__doc__:
-            original_docstrings = cls.__doc__.split("\n\n")
+        raw_doc = cls.__dict__.get(_DOCSTRING_RAW_ATTR)
+        if raw_doc is None:
+            raw_doc = cls.__doc__ or ""
+        if raw_doc:
+            original_docstrings = raw_doc.split("\n\n")
             doc += original_docstrings.pop(0)
         original_docstrings = "\n\n".join(original_docstrings)
 
@@ -1654,23 +1696,30 @@ class Tidy3dBaseModel(BaseModel):
         for field_name, field in cls.model_fields.items():  # v2
             if field_name == TYPE_TAG_STR:
                 continue
+            if field_name == "attrs" and not include_attrs:
+                continue
 
             # type
             ann = getattr(field, "annotation", None)
-            data_type = _fmt_ann_literal(ann)
+            field_metadata = getattr(field, "metadata", None)
+            data_type = _fmt_ann_literal(ann, field_metadata=field_metadata)
 
             # default / default_factory
-            default_val = (
-                f"{field.default_factory.__name__}()"
-                if field.default_factory is not None
-                else field.get_default(call_default_factory=False)
-            )
+            if field.default_factory is not None:
+                try:
+                    default_val = field.default_factory()
+                except Exception:
+                    default_val = f"{field.default_factory.__name__}()"
+            else:
+                default_val = field.get_default(call_default_factory=False)
 
-            if isinstance(default_val, BaseModel) or (
-                "=" in str(default_val) if default_val is not None else False
-            ):
-                default_val = ", ".join(
-                    str(f"{default_val.__class__.__name__}({default_val})").split(" ")
+            if isinstance(default_val, BaseModel):
+                default_val = _format_model_default(
+                    default_val, show_default_args=show_default_args
+                )
+            elif "=" in str(default_val) if default_val is not None else False:
+                default_val = _clean_default_repr(
+                    str(f"{default_val.__class__.__name__}({default_val})")
                 )
 
             default_str = "" if field.is_required() else f" = {default_val}"
@@ -1793,6 +1842,13 @@ class Tidy3dBaseModel(BaseModel):
 
             yield name, value
 
+    def __repr__(self) -> str:
+        """Return a concise string representation of the model."""
+        try:
+            return _format_model_default(self, show_default_args=False)
+        except Exception:
+            return super().__repr__()
+
     def __str__(self) -> str:
         """Return a pretty-printed string representation of the model."""
         from io import StringIO
@@ -1800,7 +1856,7 @@ class Tidy3dBaseModel(BaseModel):
         from rich.console import Console
 
         sio = StringIO()
-        console = Console(file=sio)
+        console = Console(file=sio, force_jupyter=False)
         console.print(self)
         output = sio.getvalue()
         return output.rstrip("\n")

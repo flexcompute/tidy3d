@@ -113,12 +113,12 @@ class Custom2DCurrentIntegral(Custom2DPathIntegral, Custom2DCurrentIntegralSpec)
 
         Parameters
         ----------
-        em_field : :class:`.IntegrableMonitorDataType`
+        em_field : ``IntegrableMonitorDataType``
             The electromagnetic field data that will be used for integrating.
 
         Returns
         -------
-        :class:`.CurrentIntegralResultType`
+        ``CurrentIntegralResultType``
             Result of current computation over remaining dimensions (frequency, time, mode indices).
         """
 

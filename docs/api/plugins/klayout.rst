@@ -41,7 +41,7 @@ DRC Results
    :template: module.rst
 
     tidy3d.plugins.klayout.DRCResults
-    tidy3d.plugins.klayout.drc.DRCViolation
+    tidy3d.plugins.klayout.drc.results.DRCViolation
 
 DRC Markers
 ^^^^^^^^^^^
@@ -50,9 +50,9 @@ DRC Markers
    :toctree: ../_autosummary/
    :template: module.rst
 
-    tidy3d.plugins.klayout.drc.EdgeMarker
-    tidy3d.plugins.klayout.drc.EdgePairMarker
-    tidy3d.plugins.klayout.drc.MultiPolygonMarker
+    tidy3d.plugins.klayout.drc.results.EdgeMarker
+    tidy3d.plugins.klayout.drc.results.EdgePairMarker
+    tidy3d.plugins.klayout.drc.results.MultiPolygonMarker
 
 Utilities
 ~~~~~~~~~

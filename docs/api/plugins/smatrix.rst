@@ -6,7 +6,7 @@ S-Matrix Component Modelers Plugin
 This plugin provides component modelers for computing S-parameters (scattering parameters) for both **photonics** and **RF/microwave** applications. The plugin supports:
 
 * **Photonics**: Modal component modelers for photonic devices (waveguides, splitters, filters, etc.)
-* **RF/Microwave**: Terminal component modelers for microwave circuits and antennas (available in :class:`tidy3d.rf` subpackage as well)
+* **RF/Microwave**: Terminal component modelers for microwave circuits and antennas (available in the :mod:`~tidy3d.rf` subpackage as well)
 
 .. warning::
 
@@ -69,6 +69,6 @@ Further Details
    :template: module.rst
 
    tidy3d.plugins.smatrix.AbstractComponentModeler
-   tidy3d.plugins.smatrix.AbstractComponentModelerData
+   tidy3d.plugins.smatrix.data.base.AbstractComponentModelerData
    tidy3d.SimulationMap
    tidy3d.SimulationDataMap

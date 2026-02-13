@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from pydantic import Field
 
 from tidy3d.components.index import ValueMap
+from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.simulation import SimulationDataType
 
 
@@ -67,6 +68,7 @@ class SimulationDataMap(ValueMap, Mapping[str, SimulationDataType]):
     ...             center=(0, 0.5, 0),
     ...             polarization="Hx",
     ...             source_time=GaussianPulse(freq0=2e14, fwidth=4e13),
+    ...             current_amplitude_definition="total",
     ...         )
     ...     ],
     ...     monitors=[
@@ -104,7 +106,7 @@ class SimulationDataMap(ValueMap, Mapping[str, SimulationDataType]):
         description="A tuple of unique string identifiers for each simulation data object.",
         alias="keys",
     )
-    values_tuple: tuple[SimulationDataType, ...] = Field(
+    values_tuple: tuple[discriminated_union(SimulationDataType), ...] = Field(
         description=(
             "A tuple of `SimulationDataType` objects, each corresponding to a key at the "
             "same index."

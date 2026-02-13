@@ -208,6 +208,7 @@ def test_autogrid_2dmaterials():
         source_time=td.GaussianPulse(freq0=1.5e14, fwidth=0.5e14),
         size=(0, 0, 0),
         polarization="Ex",
+        current_amplitude_definition="total",
     )
     sim = td.Simulation(
         size=(10, 10, 10),

@@ -20,11 +20,14 @@
 from __future__ import annotations
 
 import datetime
+import inspect
 import logging
 import os
 import re
 import subprocess
 import sys
+from pathlib import Path
+from typing import get_args, get_origin
 
 import tidy3d
 
@@ -62,6 +65,7 @@ master_doc = "index"  # The master toctree document.s
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 add_module_names = False  # Remove namespaces from class/method signatures
 autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
+autosummary_generate_overwrite = True  # Regenerate autosummary stubs to match templates
 # autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
 # autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
 autodoc_class_signature = "separated"
@@ -69,7 +73,9 @@ autodoc_default_options = {
     "members": True,
     "member-order": "bysource",
     "undoc-members": True,
-    "exclude-members": "__hash__",
+    # Keep this list short and focused on public-named internals.
+    # Private/dunder members are filtered via autodoc_skip_member.
+    "exclude-members": ("attrs, model_config, model_post_init, type"),
 }
 autodoc_typehints = "none"
 ## TODO DEBATE KEEP
@@ -118,6 +124,11 @@ extensions = [
     "custom-sitemap",  # In _ext, these need to be at the end of the extensions list
     "custom-robots",  # In _ext, these need to be at the end of the extensions list
 ]
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "pydantic": ("https://docs.pydantic.dev/latest/", None),
+    "xarray": ("https://docs.xarray.dev/en/stable/", None),
+}
 extlinks = {}
 favicons = [
     {
@@ -183,10 +194,13 @@ napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
 napoleon_include_private_with_doc = False
-napoleon_include_special_with_doc = True
+# Don't include dunder ("special") methods like __get_pydantic_core_schema__ in API docs.
+# These are implementation details and tend to be very noisy.
+napoleon_include_special_with_doc = False
 napoleon_use_admonition_for_examples = False
 napoleon_use_admonition_for_notes = False
 napoleon_use_admonition_for_references = False
+napoleon_preprocess_types = False
 napoleon_use_ivar = False
 napoleon_use_param = True
 napoleon_use_rtype = True
@@ -309,7 +323,271 @@ def add_autosummary_filter(app):
     logger.addFilter(AutosummaryFilter())
 
 
+_PYDANTIC_MODEL_DOCS: dict[str, str] | None = None
+_ALIAS_TYPE_DOCS: dict[str, str] | None = None
+_ALIAS_ROLE_RE = re.compile(r":class:`([^`]+)`")
+_TIDY3D_CLASS_MAP: dict[str, str] | None = None
+_DOC_TARGETS: set[str] | None = None
+_MAX_ALIAS_REWRITE_DEPTH = 8
+
+
+def _get_pydantic_model_docs() -> dict[str, str]:
+    """Cache default Pydantic model_* docstrings to detect generic entries."""
+    global _PYDANTIC_MODEL_DOCS
+    if _PYDANTIC_MODEL_DOCS is not None:
+        return _PYDANTIC_MODEL_DOCS
+    docs: dict[str, str] = {}
+    try:
+        from pydantic import BaseModel
+
+        for attr_name in dir(BaseModel):
+            if not attr_name.startswith("model_"):
+                continue
+            doc = getattr(getattr(BaseModel, attr_name, None), "__doc__", None)
+            if doc:
+                docs[attr_name] = doc.strip()
+    except Exception:
+        docs = {}
+    _PYDANTIC_MODEL_DOCS = docs
+    return docs
+
+
+def _get_alias_type_docs() -> dict[str, str]:
+    """Cache formatted representations for tidy3d.components.types aliases."""
+    global _ALIAS_TYPE_DOCS
+    if _ALIAS_TYPE_DOCS is not None:
+        return _ALIAS_TYPE_DOCS
+    docs: dict[str, str] = {}
+    try:
+        from tidy3d.components import types as td_types
+        from tidy3d.components.docstrings import _fmt_ann_literal
+
+        for name in getattr(td_types, "__all__", []):
+            if name.startswith("_"):
+                continue
+            val = getattr(td_types, name, None)
+            if val is None:
+                continue
+            if isinstance(val, type):
+                continue
+            docs[name] = _fmt_ann_literal(val)
+    except Exception:
+        docs = {}
+    _ALIAS_TYPE_DOCS = docs
+    return docs
+
+
+def _get_tidy3d_class_map() -> dict[str, str]:
+    """Return a map of unique class names to fully qualified modules."""
+    global _TIDY3D_CLASS_MAP
+    if _TIDY3D_CLASS_MAP is not None:
+        return _TIDY3D_CLASS_MAP
+    class_map: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    root = Path(tidy3d.__file__).resolve().parent
+    for path in root.rglob("*.py"):
+        # Build a python module path relative to the tidy3d package root.
+        rel = path.relative_to(root).with_suffix("")
+        # package/__init__.py should map to package, not package.__init__.
+        if rel.name == "__init__":
+            rel = rel.parent
+        module = "tidy3d"
+        if rel.parts:
+            module += "." + ".".join(rel.parts)
+        try:
+            text = path.read_text(errors="ignore")
+        except Exception:
+            continue
+        for match in re.finditer(r"^class\s+(\w+)\b", text, re.M):
+            name = match.group(1)
+            full = f"{module}.{name}"
+            if name in class_map and class_map[name] != full:
+                ambiguous.add(name)
+            else:
+                class_map[name] = full
+    for name in ambiguous:
+        class_map.pop(name, None)
+    _TIDY3D_CLASS_MAP = class_map
+    return class_map
+
+
+def _get_doc_targets() -> set[str]:
+    """Collect documented object names to avoid emitting dead xrefs."""
+    global _DOC_TARGETS
+    if _DOC_TARGETS is not None:
+        return _DOC_TARGETS
+    targets: set[str] = set()
+    api_root = Path(here) / "api"
+    for path in api_root.rglob("_autosummary/*.rst"):
+        stem = path.stem.lstrip("\ufeff")
+        targets.add(stem)
+    xref_targets = api_root / "xref_targets.rst"
+    if xref_targets.exists():
+        for line in xref_targets.read_text().splitlines():
+            stripped = line.strip()
+            if stripped.startswith("tidy3d."):
+                targets.add(stripped)
+    _DOC_TARGETS = targets
+    return targets
+
+
+def autodoc_skip_member(app, what, name, obj, skip, options):
+    short_name = name.rsplit(".", 1)[-1]
+    if short_name.startswith("_"):
+        return True
+    return None
+
+
+def autodoc_process_docstring(app, what, name, obj, options, lines):
+    obj_module = getattr(obj, "__module__", "") or ""
+    short_name = name.rsplit(".", 1)[-1]
+    # Keep model_* methods listed, but clear their default Pydantic docstrings.
+    # Otherwise Sphinx renders the verbose "Usage Documentation" blocks.
+    if obj_module.startswith("pydantic") and short_name.startswith("model_"):
+        doc = (getattr(obj, "__doc__", "") or "").strip()
+        if not doc or _get_pydantic_model_docs().get(short_name) == doc:
+            lines.clear()
+            return
+        if doc.startswith('!!! abstract "Usage Documentation"'):
+            # Strip the default Pydantic MyST admonition so it doesn't render as a noisy block.
+            while lines and lines[0].strip() != "":
+                lines.pop(0)
+            while lines and lines[0].strip() == "":
+                lines.pop(0)
+            return
+    alias_docs = _get_alias_type_docs()
+    if not alias_docs:
+        return
+
+    owner_module = sys.modules.get(obj_module)
+    class_map = _get_tidy3d_class_map()
+    doc_targets = _get_doc_targets()
+
+    def _format_annotation_value(value: object) -> str | None:
+        try:
+            if isinstance(value, type) or get_origin(value) is not None or get_args(value):
+                from tidy3d.components.docstrings import _fmt_ann_literal
+
+                return _fmt_ann_literal(value)
+        except Exception:
+            return None
+        return None
+
+    for idx, line in enumerate(lines):
+
+        def _substitute_roles(text: str, depth: int = 0, seen: tuple[str, ...] = ()) -> str:
+            def _callback(match: re.Match[str]) -> str:
+                return _replace(match, depth=depth, seen=seen)
+
+            return _ALIAS_ROLE_RE.sub(_callback, text)
+
+        def _replace(
+            match: re.Match[str],
+            *,
+            depth: int = 0,
+            seen: tuple[str, ...] = (),
+        ) -> str:
+            raw_target = match.group(1).strip()
+            target = raw_target.lstrip("~")
+            is_relative = target.startswith(".")
+            if is_relative:
+                target = target[1:]
+            name_only = target.split(".")[-1]
+            if depth >= _MAX_ALIAS_REWRITE_DEPTH or target in seen:
+                return f"``{name_only}``"
+            tidy_alias = f"tidy3d.{name_only}"
+            rf_alias = f"tidy3d.rf.{name_only}"
+
+            def _best_doc_target(prefer: str | None = None) -> str | None:
+                """Pick a documented target for a name based on shared prefixes."""
+                candidates = [
+                    cand
+                    for cand in doc_targets
+                    if cand == tidy_alias or cand == rf_alias or cand.endswith(f".{name_only}")
+                ]
+                if not candidates:
+                    return None
+                if prefer:
+                    parts = prefer.split(".")[:-1]
+                    for i in range(len(parts), 0, -1):
+                        prefix = ".".join(parts[:i]) + "."
+                        pref = [cand for cand in candidates if cand.startswith(prefix)]
+                        if pref:
+                            return min(pref, key=len)
+                return min(candidates, key=len)
+
+            replacement = alias_docs.get(name_only)
+            if replacement is not None:
+                # Avoid dumping extremely long type aliases inline (hurts readability).
+                if len(replacement) > 200:
+                    return f"``{name_only}``"
+                # If the formatted alias contains xrefs, don't wrap it in a literal block
+                # (otherwise the roles won't be parsed and will render as raw text).
+                if ":class:`" in replacement:
+                    return _substitute_roles(replacement, depth=depth + 1, seen=(*seen, target))
+                return f"``{replacement}``"
+
+            if owner_module is None:
+                return match.group(0)
+            if "." in target and not is_relative:
+                if target.startswith("tidy3d."):
+                    if target in doc_targets:
+                        return match.group(0)
+                    if tidy_alias in doc_targets:
+                        return f":class:`~{tidy_alias}`"
+                    if rf_alias in doc_targets:
+                        return f":class:`~{rf_alias}`"
+                    best = _best_doc_target(target)
+                    if best is not None:
+                        return f":class:`~{best}`"
+                    return f"``{name_only}``"
+                return f"``{target}``"
+            candidate = getattr(owner_module, name_only, None)
+            if candidate is None:
+                full = class_map.get(name_only)
+                if full is None:
+                    return f"``{name_only}``"
+                if full in doc_targets:
+                    return f":class:`~{full}`"
+                if tidy_alias in doc_targets:
+                    return f":class:`~{tidy_alias}`"
+                if rf_alias in doc_targets:
+                    return f":class:`~{rf_alias}`"
+                best = _best_doc_target(full)
+                if best is not None:
+                    return f":class:`~{best}`"
+                return f"``{name_only}``"
+
+            if inspect.isclass(candidate) and candidate.__module__.startswith("tidy3d"):
+                full = f"{candidate.__module__}.{candidate.__name__}"
+                if full in doc_targets:
+                    return f":class:`~{full}`"
+                if tidy_alias in doc_targets:
+                    return f":class:`~{tidy_alias}`"
+                if rf_alias in doc_targets:
+                    return f":class:`~{rf_alias}`"
+                best = _best_doc_target(full)
+                if best is not None:
+                    return f":class:`~{best}`"
+                return f"``{candidate.__name__}``"
+
+            formatted = _format_annotation_value(candidate)
+            if formatted is not None:
+                if len(formatted) > 200:
+                    return f"``{name_only}``"
+                if ":class:`" in formatted:
+                    return _substitute_roles(formatted, depth=depth + 1, seen=(*seen, target))
+                return f"``{formatted}``"
+
+            return f"``{name_only}``"
+
+        lines[idx] = _substitute_roles(line)
+
+
 def setup(app):
     # Apply the custom filter early in the build process
     app.connect("builder-inited", add_autosummary_filter)
     app.connect("builder-inited", add_import_warning_filter)
+    # Run before napoleon's own skip-member hook so private/dunder members stay hidden.
+    app.connect("autodoc-skip-member", autodoc_skip_member, priority=0)
+    app.connect("autodoc-process-docstring", autodoc_process_docstring)

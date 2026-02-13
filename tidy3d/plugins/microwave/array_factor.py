@@ -514,14 +514,14 @@ class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
 
         Parameters
         ----------
-        monitor_data : AbstractFieldProjectionData
+        monitor_data : :class:`~tidy3d.components.data.monitor_data.AbstractFieldProjectionData`
             The monitor data of a single antenna.
-        new_monitor : AbstractFieldProjectionMonitor = None
+        new_monitor : :class:`~tidy3d.components.monitor.AbstractFieldProjectionMonitor` = None
             The new monitor to be used in the resulting data.
 
         Returns
         -------
-        AbstractFieldProjectionData
+        :class:`~tidy3d.components.data.monitor_data.AbstractFieldProjectionData`
             The monitor data of the antenna array.
         """
 

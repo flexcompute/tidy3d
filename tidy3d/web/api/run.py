@@ -108,7 +108,7 @@ def run(
     Submit one or many simulations and return results in the same container shape.
 
     This is a convenience wrapper around the autograd runners that accepts a single
-    :class:`WorkflowType` **or** an arbitrarily nested container of simulations
+    simulation **or** an arbitrarily nested container of simulations
     (`list`, `tuple`, or `dict` values). Internally, all simulations are collected,
     deduplicated by object hash, executed either synchronously (single) or
     asynchronously (batch), and the returned data objects are reassembled to mirror
@@ -129,7 +129,7 @@ def run(
         A simulation or a container whose leaves are simulations.
         Supported containers are ``list``, ``tuple``, and ``dict`` (values only).
         Dict **keys must not** be simulations.
-    task_name : Optional[str], default None
+    task_name : Optional[str] = None
         Optional name for a single run. Prefixed for multiple runs.
     folder_name : str = "default"
         Folder shown on the web UI.
@@ -197,25 +197,25 @@ def run(
 
     Examples
     --------
-        Single run (eager by default)::
+    Single run (eager by default)
 
-        .. code-block:: python
+    .. code-block:: python
 
-            sim_data = run(sim, task_name="wg_bend", path="out/bend")
-            # writes: "out/bend.hdf5"
+        sim_data = run(sim, task_name="wg_bend", path="out/bend")
+        # writes: "out/bend.hdf5"
 
-        Batch run with nested structure (lazy by default)::
+    Batch run with nested structure (lazy by default)
 
-        .. code-block:: python
+    .. code-block:: python
 
-            sims = {
-                "coarse": [sim_a, sim_b],
-                "fine": sim_c,
-            }
-            data = run(sims, path="out/batch_dir", max_workers=4)
+        sims = {
+            "coarse": [sim_a, sim_b],
+            "fine": sim_c,
+        }
+        data = run(sims, path="out/batch_dir", max_workers=4)
 
-            # 'data' mirrors 'sims' structure:
-            # data["coarse"][0] -> data for sim_a, etc.
+        # 'data' mirrors 'sims' structure:
+        # data["coarse"][0] -> data for sim_a, etc.
 
     See Also
     --------

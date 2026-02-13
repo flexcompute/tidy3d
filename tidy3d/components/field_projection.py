@@ -697,8 +697,9 @@ class FieldProjector(Tidy3dBaseModel):
 
         Parameters
         ----------
-        proj_monitor : :class:`.AbstractFieldProjectionMonitor`
-            Instance of :class:`.AbstractFieldProjectionMonitor` defining the projection
+        proj_monitor : :class:`~tidy3d.components.monitor.AbstractFieldProjectionMonitor`
+            Instance of :class:`~tidy3d.components.monitor.AbstractFieldProjectionMonitor` defining
+            the projection
             observation grid.
 
         Returns

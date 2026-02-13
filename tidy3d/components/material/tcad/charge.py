@@ -41,7 +41,7 @@ class AbstractChargeMedium(AbstractMedium):
     def charge(self) -> Self:
         """
         This means that a charge medium has been defined inherently within this solver medium.
-        This provides interconnection with the :class:`MultiPhysicsMedium` higher-dimensional classes.
+        This provides interconnection with the :class:`~tidy3d.MultiPhysicsMedium` higher-dimensional classes.
         """
         return self
 

@@ -960,8 +960,8 @@ Tungsten = VariantItemFreqRangeMetal(
 )
 
 Zinc = VariantItemFreqRangeMetal(
-    conductivity=16.9,
-    reference=[rf_material_refs["CRC_Handbook"]],
+    conductivity=16.77,
+    reference=[rf_material_refs["Zinc"]],
 )
 
 Lithium = VariantItemFreqRangeMetal(

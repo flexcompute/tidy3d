@@ -96,7 +96,8 @@ class LumpedElement(MicrowaveBaseModel, ABC):
 
     @abstractmethod
     def to_geometry(self) -> Geometry:
-        """Converts the :class:`.LumpedElement` object to a :class:`.Geometry`."""
+        """Converts the :class:`.LumpedElement` object to a
+        :class:`~tidy3d.Geometry`."""
 
     @abstractmethod
     def to_structure(self, grid: Optional[Grid] = None) -> Structure:
@@ -441,7 +442,8 @@ class CoaxialLumpedResistor(LumpedElement):
         )
 
     def to_geometry(self, grid: Optional[Grid] = None) -> ClipOperation:
-        """Converts the :class:`CoaxialLumpedResistor` object to a :class:`Geometry`."""
+        """Converts the :class:`CoaxialLumpedResistor` object to a
+        :class:`~tidy3d.Geometry`."""
         rout = self.outer_diameter / 2
         rin = self.inner_diameter / 2
         disk_out = Cylinder(axis=self.normal_axis, radius=rout, length=0, center=self.center)

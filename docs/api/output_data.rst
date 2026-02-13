@@ -59,7 +59,7 @@ List of Monitor Data Types
    tidy3d.FieldProjectionCartesianData
    tidy3d.FieldProjectionKSpaceData
    tidy3d.DiffractionData
-   tidy3d.DirectivityData
+   tidy3d.rf.DirectivityData
    tidy3d.AuxFieldTimeData
 
 
@@ -77,6 +77,8 @@ List of Dataset Types
    tidy3d.ScalarFieldDataArray
    tidy3d.ScalarModeFieldDataArray
    tidy3d.ScalarFieldTimeDataArray
+   tidy3d.components.data.data_array.FreqDataArray
+   tidy3d.components.data.data_array.FreqModeDataArray
    tidy3d.ModeAmpsDataArray
    tidy3d.ModeIndexDataArray
    tidy3d.FluxDataArray
@@ -85,6 +87,4 @@ List of Dataset Types
    tidy3d.FieldProjectionCartesianDataArray
    tidy3d.FieldProjectionKSpaceDataArray
    tidy3d.DiffractionDataArray
-   tidy3d.DirectivityDataArray
-   tidy3d.AxialRatioDataArray
    tidy3d.SteadyVoltageDataArray
