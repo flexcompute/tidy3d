@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field
 
@@ -394,8 +394,8 @@ def violations_from_file(
     resultsfile : Union[str, Path]
         Path to the KLayout DRC results file.
     max_results : Optional[int]
-        Maximum number of markers to load from the file. If ``None`` (default), all markers are
-        loaded.
+        Maximum number of markers to load **per cell**. If ``None`` (default),
+        all markers are loaded.
 
     Returns
     -------
@@ -420,9 +420,11 @@ def violations_from_file(
     except ET.ParseError as err:
         raise ET.ParseError(f"Invalid XML format in DRC result file: '{resultsfile}'.") from err
 
+    root = xmltree.getroot()
+
     # Initialize violations dict with all the categories
-    violations = {}
-    for category in xmltree.getroot().findall(".//categories/category/name"):
+    violations: dict[str, list[Any]] = {}
+    for category in root.findall(".//categories/category/name"):
         category_name = category.text
         if category_name is None:
             raise FileError("Encountered DRC category without a name in results file.")
@@ -430,7 +432,7 @@ def violations_from_file(
         violations[category_name] = []
 
     # Prepare the items and warn if necessary
-    items = list(xmltree.getroot().findall(".//item"))
+    items = list(root.findall(".//item"))
     total_markers = len(items)
     if max_results is None and total_markers > UNLIMITED_VIOLATION_WARNING_COUNT:
         log.warning(
@@ -438,28 +440,46 @@ def violations_from_file(
             "which can affect loading performance. "
             "Pass 'max_results' to limit loaded results."
         )
-    elif max_results is not None and total_markers > max_results:
-        log.warning(
-            f"DRC result file contains {total_markers} markers; "
-            f"only the first {max_results} were loaded due to 'max_results'."
-        )
+
+    # Per-cell marker counters
+    markers_per_cell: dict[str, int] = {}
+    skipped_due_to_limit = 0
 
     # Parse markers
-    for idx, item in enumerate(items):
-        if max_results is not None and idx >= max_results:
-            break
+    for item in items:
         category_el = item.find("category")
         if category_el is None or category_el.text is None:
             raise FileError("Encountered DRC item without a category in results file.")
         category = category_el.text.strip().strip("'\"")
+
         cell_el = item.find("cell")
         if cell_el is None or cell_el.text is None:
             raise FileError("Encountered DRC item without a cell in results file.")
         cell = cell_el.text.strip().strip("'\"")
-        value = item.find("values/value").text
+
+        # Enforce per-cell limit
+        if max_results is not None:
+            current_count = markers_per_cell.get(cell, 0)
+            if current_count >= max_results:
+                skipped_due_to_limit += 1
+                continue
+            markers_per_cell[cell] = current_count + 1
+
+        value_el = item.find("values/value")
+        if value_el is None or value_el.text is None:
+            raise FileError("Encountered DRC item without a 'values/value' entry in results file.")
+        value = value_el.text
+
         marker = parse_violation_value(value, cell=cell)
         markers = violations.setdefault(category, [])
         markers.append(marker)
+
+    if max_results is not None and skipped_due_to_limit > 0:
+        log.warning(
+            f"DRC result file contains {total_markers} markers; "
+            f"{skipped_due_to_limit} markers were skipped because more than "
+            f"{max_results} markers were present for at least one cell."
+        )
 
     return {
         category: DRCViolation(category=category, markers=tuple(markers))
