@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from copy import copy
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 import autograd.numpy as np
 import shapely
@@ -18,6 +18,7 @@ from tidy3d.components.autograd.types import TracedFloat
 from tidy3d.components.autograd.utils import hasbox
 from tidy3d.components.base import cached_property
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
+from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D
 from tidy3d.config import config
 from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dImportError, ValidationError
@@ -27,7 +28,7 @@ from tidy3d.packaging import verify_packages_import
 from . import base, triangulation
 
 if TYPE_CHECKING:
-    from typing import Optional, Union
+    from typing import Union
 
     from gdstk import Cell
     from numpy.typing import NDArray
@@ -37,8 +38,6 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.types import (
-        ArrayFloat1D,
-        ArrayFloat2D,
         ArrayLike,
         Axis,
         Bound,
@@ -62,6 +61,12 @@ _MAX_POLYSLAB_VERTICES_FOR_TRIANGULATION = 500
 
 _MIN_POLYGON_AREA = fp_eps
 
+# Angular resolution for arc discretization (approximately 1 degrees)
+_ARC_DISCRETIZATION_ANGULAR_STEP = np.pi / 180
+
+# Minimum number of intermediate points per arc segment for discretization
+_MIN_POINTS_PER_ARC = 5
+
 
 @lru_cache(maxsize=128)
 def leggauss(n: int) -> tuple[NDArray, NDArray]:
@@ -72,13 +77,389 @@ def leggauss(n: int) -> tuple[NDArray, NDArray]:
     )
 
 
+class PolyBulgeUtil:
+    """Pure-geometry utility methods for arc/bulge computations on polygons for internal use.
+    All methods in this class are static methods.
+    """
+
+    @staticmethod
+    def _arcs_from_bulges(
+        arc_starts: ArrayFloat2D,
+        arc_ends: ArrayFloat2D,
+        bulges: ArrayFloat1D,
+    ) -> dict:
+        """Compute arc geometry for multiple arcs at once (vectorized).
+
+        Parameters
+        ----------
+        arc_starts : ArrayFloat2D
+            Shape (N, 2) start points of each arc.
+        arc_ends : ArrayFloat2D
+            Shape (N, 2) end points of each arc.
+        bulges : ArrayFloat1D
+            Shape (N,) bulge values. Must all be non-zero; an error is raised if any are ≈ 0.
+
+        Returns
+        -------
+        dict
+            Dictionary with arrays of shape (N,) or (N, 2):
+            'centers', 'radii', 'start_angles', 'end_angles',
+            'included_angles'.
+        """
+
+        arc_starts = np.asarray(arc_starts, dtype=float)
+        arc_ends = np.asarray(arc_ends, dtype=float)
+        bulges = np.asarray(bulges, dtype=float)
+
+        # Validate that no bulges are close to 0
+        if np.any(np.isclose(bulges, 0)):
+            raise ValueError(
+                "All bulges must be non-zero. Edges with bulge ≈ 0 should be filtered out "
+                "before calling this method, as they represent straight line segments."
+            )
+
+        chord_vecs = arc_ends - arc_starts  # (N, 2)
+        chord_lengths = np.linalg.norm(chord_vecs, axis=1)  # (N,)
+
+        abs_bulges = np.abs(bulges)
+        included_angles = 4.0 * np.arctan(bulges)  # (N,)
+
+        # Sagitta: s = (chord/2) * |bulge|
+        sagittas = (chord_lengths / 2.0) * abs_bulges  # (N,)
+
+        # Radius: r = ((chord/2)^2 + s^2) / (2*s)
+        half_chords = chord_lengths / 2.0
+        radii = (half_chords**2 + sagittas**2) / (2.0 * sagittas)  # (N,)
+
+        # Midpoints of each chord
+        chord_midpoints = (arc_starts + arc_ends) / 2.0  # (N, 2)
+
+        # Perpendicular unit vectors (rotate chord by 90 degrees CCW)
+        chord_perpendiculars = (
+            np.column_stack([-chord_vecs[:, 1], chord_vecs[:, 0]]) / chord_lengths[:, np.newaxis]
+        )  # (N, 2)
+
+        # Distance from midpoint to center
+        midpoint_to_center_dist = radii - sagittas  # (N,)
+
+        # Center: positive bulge -> center at mid + d*perp, negative -> mid - d*perp
+        bulge_signs = np.sign(bulges)  # (N,)
+        centers = (
+            chord_midpoints
+            + (bulge_signs * midpoint_to_center_dist)[:, np.newaxis] * chord_perpendiculars
+        )  # (N, 2)
+
+        # Start and end angles
+        start_angles = np.arctan2(
+            arc_starts[:, 1] - centers[:, 1], arc_starts[:, 0] - centers[:, 0]
+        )  # (N,)
+        end_angles = np.arctan2(
+            arc_ends[:, 1] - centers[:, 1], arc_ends[:, 0] - centers[:, 0]
+        )  # (N,)
+
+        return {
+            "centers": centers,
+            "radii": radii,
+            "start_angles": start_angles,
+            "end_angles": end_angles,
+            "included_angles": included_angles,
+        }
+
+    @staticmethod
+    def _compute_bulge_data(vertices: ArrayFloat2D, bulges: ArrayFloat1D) -> dict:
+        """Precompute arc geometry from vertices and bulges, e.g. encoding which edges are arcs.
+
+        Parameters
+        ----------
+        vertices : ArrayFloat2D
+            Shape (N, 2) polygon vertices.
+        bulges : ArrayFloat1D
+            Shape (N,) bulge values for each edge.
+
+        Returns
+        -------
+        dict
+            Always contains 'arc_mask' that encodes which edges are arcs. When arcs exist, also contains
+            'centers', 'radii', 'start_angles', 'end_angles', 'included_angles'.
+        """
+        bulges = np.asarray(bulges)
+        arc_mask = ~np.isclose(bulges, 0)
+
+        if not np.any(arc_mask):
+            return {"arc_mask": arc_mask}
+
+        edge_starts = np.asarray(vertices)
+        edge_ends = np.roll(edge_starts, -1, axis=0)
+        arc_data = PolyBulgeUtil._arcs_from_bulges(
+            edge_starts[arc_mask], edge_ends[arc_mask], bulges[arc_mask]
+        )
+        return {"arc_mask": arc_mask, **arc_data}
+
+    @staticmethod
+    def _polygon_arcs_bounds(
+        vertices: ArrayFloat2D,
+        bulge_data: dict,
+    ) -> tuple[ArrayFloat2D, ArrayFloat2D]:
+        """Compute analytical bounding boxes for arc segments in a polygon.
+
+        An arc's bounding box is determined by its endpoints plus any cardinal
+        extrema (rightmost, topmost, leftmost, bottommost points of the underlying
+        circle) that the arc actually passes through. The method:
+
+        1. Initializes bounds from the two endpoints of each arc.
+        2. Checks which of the 4 cardinal angles (0, pi/2, pi, 3pi/2) fall within
+           each arc's angular sweep, accounting for sweep direction (CCW vs CW)
+           and wraparound at 0/2pi.
+        3. For each cardinal angle the arc passes through, expands the bounding box
+           to include the corresponding extremal point (center +/- radius).
+
+        Parameters
+        ----------
+        vertices : ArrayFloat2D
+            Shape (N, 2) polygon vertices.
+        bulge_data : dict
+            Precomputed arc data from ``_compute_bulge_data``.
+
+        Returns
+        -------
+        tuple[ArrayFloat2D, ArrayFloat2D]
+            (min_coords, max_coords) each of shape (N, 2) where N is the number of arc segments.
+
+        Raises
+        ------
+        KeyError
+            If ``bulge_data`` contains no arcs (all bulges are zero).
+        """
+        arc_mask = bulge_data["arc_mask"]
+        edge_starts = np.asarray(vertices)
+        edge_ends = np.roll(edge_starts, -1, axis=0)
+        arc_starts = edge_starts[arc_mask]
+        arc_ends = edge_ends[arc_mask]
+
+        # Initialize bounds from endpoints
+        min_coords = np.minimum(arc_starts, arc_ends)  # (N, 2)
+        max_coords = np.maximum(arc_starts, arc_ends)  # (N, 2)
+
+        # The 4 cardinal angles correspond to the extremal points of the circle:
+        #     pi/2 (top: max y)
+        #       |
+        #  pi (left: min x) ---+--- 0 (right: max x)
+        #       |
+        #   3pi/2 (bottom: min y)
+        cardinal_angles = np.array([0.0, np.pi / 2, np.pi, 3 * np.pi / 2])  # (4,)
+
+        # Normalize from arctan2's [-pi, pi] to [0, 2*pi) so the wraparound
+        # logic below can use a single consistent range.
+        start_angles_norm = bulge_data["start_angles"] % (2 * np.pi)  # (N,)
+        end_angles_norm = bulge_data["end_angles"] % (2 * np.pi)  # (N,)
+
+        # For each arc, check which cardinal angles lie within its angular sweep.
+        # Broadcast: (N, 1) vs (1, 4) -> (N, 4) boolean matrix
+        start_angles_norm_col = start_angles_norm[:, np.newaxis]  # (N, 1)
+        end_angles_norm_col = end_angles_norm[:, np.newaxis]  # (N, 1)
+        cardinal_row = cardinal_angles[np.newaxis, :]  # (1, 4)
+        sweeps_ccw_col = (bulge_data["included_angles"] > 0)[:, np.newaxis]  # (N, 1)
+
+        # CCW: angles increase from start to end.
+        #   No wrap (end > start): cardinal in [start, end]
+        #   Wrap    (end <= start): cardinal in [start, 2*pi) or [0, end]
+        ccw_simple = (cardinal_row >= start_angles_norm_col) & (cardinal_row <= end_angles_norm_col)
+        ccw_wrapped = (end_angles_norm_col <= start_angles_norm_col) & (
+            (cardinal_row >= start_angles_norm_col) | (cardinal_row <= end_angles_norm_col)
+        )
+        ccw_hits_cardinal = ccw_simple | ccw_wrapped
+
+        # CW: angles decrease from start to end.
+        #   No wrap (end < start): cardinal in [end, start]
+        #   Wrap    (end >= start): cardinal in [0, start] or [end, 2*pi)
+        cw_simple = (cardinal_row <= start_angles_norm_col) & (cardinal_row >= end_angles_norm_col)
+        cw_wrapped = (end_angles_norm_col >= start_angles_norm_col) & (
+            (cardinal_row <= start_angles_norm_col) | (cardinal_row >= end_angles_norm_col)
+        )
+        cw_hits_cardinal = cw_simple | cw_wrapped
+
+        arc_hits_cardinal = np.where(sweeps_ccw_col, ccw_hits_cardinal, cw_hits_cardinal)  # (N, 4)
+
+        # Expand bounds for each cardinal the arc passes through.
+        # Cardinal directions: 0=right(0°), 1=top(90°), 2=left(180°), 3=bottom(270°)
+        for n, _ in enumerate(cardinal_angles):
+            coord_idx = n % 2  # Alternates x(0), y(1), x(0), y(1)
+            sign = (-1) ** (n // 2)  # Pattern: +1, +1, -1, -1
+            bounds = max_coords if n < 2 else min_coords  # max for 0,1; min for 2,3
+            op_func = np.maximum if n < 2 else np.minimum
+
+            hit = arc_hits_cardinal[:, n]
+            extremal_values = bulge_data["centers"][:, coord_idx] + sign * bulge_data["radii"]
+            bounds[:, coord_idx] = np.where(
+                hit, op_func(bounds[:, coord_idx], extremal_values), bounds[:, coord_idx]
+            )
+
+        return min_coords, max_coords
+
+    @staticmethod
+    def _polygon_discretize(
+        vertices: ArrayFloat2D, bulge_data: dict, num_points_per_arc: int | None = None
+    ) -> ArrayFloat2D:
+        """Discretize a polygon with arc segments into a pure polyline.
+
+        This method converts arc edges (defined by bulge factors) into straight line segments,
+        producing a polyline approximation. It is used for:
+
+        - Validation: checking for self-intersection
+        - Geometric queries: inside point testing, plane intersections
+        - Visualization: rendering polygons with arcs as polylines
+
+        Parameters
+        ----------
+        vertices : ArrayFloat2D
+            Shape (N, 2) defining polygon vertices.
+        bulge_data : dict
+            Precomputed arc data from ``_compute_bulge_data``.
+        num_points_per_arc : int, optional
+            Number of intermediate points per arc segment. If None, the number of points
+            is automatically determined based on the arc's included angle, using approximately
+            one point per degree and a minimum of 5 points per arc.
+
+        Returns
+        -------
+        ArrayFloat2D
+            Discretized vertices with arcs converted to polylines.
+        """
+        vertices = np.asarray(vertices)
+        arc_mask = bulge_data["arc_mask"]
+        num_vertices = len(vertices)
+
+        if not np.any(arc_mask):
+            return vertices.copy()
+
+        arc_indices = np.where(arc_mask)[0]
+
+        # Compute number of points per arc (vectorized)
+        if num_points_per_arc is not None:
+            points_per_arc = np.full(len(arc_indices), num_points_per_arc, dtype=int)
+        else:
+            abs_angles = np.abs(bulge_data["included_angles"])
+            points_per_arc = np.maximum(
+                _MIN_POINTS_PER_ARC, np.ceil(abs_angles / _ARC_DISCRETIZATION_ANGULAR_STEP)
+            ).astype(int)
+
+        # Build a lookup: edge index -> position in arc arrays
+        edge_to_arc_idx = dict(zip(arc_indices, range(len(arc_indices))))
+
+        # Loop to assemble variable-length per-arc points
+        all_points = []
+        for vertex_idx in range(num_vertices):
+            all_points.append(vertices[vertex_idx])
+
+            if vertex_idx in edge_to_arc_idx:
+                arc_pos = edge_to_arc_idx[vertex_idx]
+                center = bulge_data["centers"][arc_pos]
+                radius = bulge_data["radii"][arc_pos]
+                start_angle = bulge_data["start_angles"][arc_pos]
+                end_angle = bulge_data["end_angles"][arc_pos]
+
+                # Generate angles
+                if bulge_data["included_angles"][arc_pos] > 0:
+                    if end_angle < start_angle:
+                        end_angle += 2 * np.pi
+                else:
+                    if end_angle > start_angle:
+                        end_angle -= 2 * np.pi
+                angles = np.linspace(start_angle, end_angle, points_per_arc[arc_pos] + 2)
+                # Skip first (edge_start) and last (edge_end) — last will be added as next vertex
+                angles = angles[1:-1]
+
+                if len(angles) > 0:
+                    arc_points = np.column_stack(
+                        [center[0] + radius * np.cos(angles), center[1] + radius * np.sin(angles)]
+                    )
+                    all_points.extend(arc_points)
+
+        return np.array(all_points)
+
+    @staticmethod
+    def _arc_segment_area(bulge_data: dict) -> float:
+        """Compute the signed total area of circular segments from arc edges.
+
+        Each arc edge contributes a circular segment (the region between the
+        arc and its chord). This correction is meant to be added to the
+        shoelace (chord-based) polygon area.
+
+        Parameters
+        ----------
+        bulge_data : dict
+            Precomputed arc data from ``_compute_bulge_data``.
+
+        Returns
+        -------
+        float
+            Signed sum of circular segment areas.
+
+        Raises
+        ------
+        KeyError
+            If ``bulge_data`` contains no arcs (all bulges are zero).
+        """
+        radii = bulge_data["radii"]
+        theta = np.abs(bulge_data["included_angles"])
+
+        # Circular segment area: A = r² * (θ - sin(θ)) / 2
+        segment_areas = (radii**2) * (theta - np.sin(theta)) / 2.0
+
+        # Sign: positive included_angle → outward bulge → adds area (for CCW polygon)
+        bulge_signs = np.sign(bulge_data["included_angles"])
+        return float(np.sum(bulge_signs * segment_areas))
+
+    @staticmethod
+    def _polygon_perimeter(vertices: ArrayFloat2D, bulge_data: dict) -> float:
+        """Compute the polygon perimeter using arc lengths for curved segments.
+
+        Parameters
+        ----------
+        vertices : ArrayFloat2D
+            Shape (N, 2) defining the polygon vertices in the xy-plane.
+        bulge_data : dict
+            Precomputed arc data from ``_compute_bulge_data``.
+
+        Returns
+        -------
+        float
+            Total perimeter including arc lengths.
+        """
+        next_vertices = np.roll(vertices, shift=-1, axis=0)
+        chord_lengths = np.linalg.norm(next_vertices - vertices, axis=1)  # (N,)
+
+        arc_mask = bulge_data["arc_mask"]
+        if not np.any(arc_mask):
+            return float(np.sum(chord_lengths))
+
+        # For arc edges: compute arc lengths from precomputed data
+        radii = bulge_data["radii"]
+        arc_lengths = radii * np.abs(bulge_data["included_angles"])
+
+        # Replace chord lengths with arc lengths for arc edges
+        edge_lengths = chord_lengths.copy()
+        edge_lengths[arc_mask] = arc_lengths
+
+        return float(np.sum(edge_lengths))
+
+
 class PolySlab(base.Planar):
     """Polygon extruded with optional sidewall angle along axis direction.
+
+    Polygon edges may optionally be circular arcs via the ``bulges`` parameter, which
+    follows the convention: ``bulge = tan(θ/4)`` where ``θ`` is the
+    included angle of the arc. For CCW polygon, a positive bulge produces an arc that bulges outward
+    ; a negative bulge bulges inward; and zero means a straight edge.
 
     Example
     -------
     >>> vertices = np.array([(0,0), (1,0), (1,1)])
     >>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
+    >>> # With arc segments (a rounded edge from vertex 1 to vertex 2):
+    >>> p_arc = PolySlab(
+    ...     vertices=vertices, axis=2, slab_bounds=(-1, 1), bulges=[0, 0.5, 0]
+    ... )
     """
 
     slab_bounds: tuple[TracedFloat, TracedFloat] = Field(
@@ -102,6 +483,23 @@ class PolySlab(base.Planar):
         "The index of dimension should be in the ascending order: e.g. if "
         "the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
         json_schema_extra={"units": MICROMETER},
+    )
+
+    bulges: Optional[ArrayFloat1D] = Field(
+        None,
+        title="Bulges In Segments",
+        description="List of values describing the bulge of each edge, following the typical convention: "
+        "``bulge = tan(θ/4)`` where θ is the included angle of the arc. "
+        "When ``bulges=None``, all segments are straight lines; otherwise, the number of bulge values "
+        "must equal the number of vertices. ``bulges[i]`` defines the arc on the edge from vertex ``i`` "
+        "to vertex ``(i+1) mod N``. "
+        "Sign convention: ``bulge=0`` means straight line; ``bulge>0`` bulges outward "
+        "(for CCW polygons); ``bulge<0`` bulges inward. "
+        "All values must be finite. "
+        "Canonicalization: bulges are kept synchronized with vertices during internal canonicalization. "
+        "When winding order is reversed to CCW (i.e., when the input polygon is CW), bulges are permuted to match the reversed edges and "
+        "their signs are flipped. When duplicate adjacent vertices are removed, the corresponding "
+        "zero-bulge entry is dropped; a zero-length edge with non-zero bulge raises ``SetupError``.",
     )
 
     @staticmethod
@@ -145,6 +543,99 @@ class PolySlab(base.Planar):
                 "in future releases."
             )
         return val
+
+    @model_validator(mode="after")
+    def _validate_bulge_array_length(self: Self) -> Self:
+        """When ``bulges`` is not None, its length must match ``vertices``."""
+        if self.bulges is None:
+            return self
+        if len(self.bulges) != self.vertices.shape[0]:
+            raise SetupError(
+                "The number of bulge values in 'bulges' must match the number of 'vertices'. "
+                f"However, this polyslab contains {self.vertices.shape[0]} vertices, but {len(self.bulges)} "
+                "bulge values."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_bulges_are_finite(self: Self) -> Self:
+        """All bulge values must be finite (no inf or nan)."""
+        if self.bulges is None:
+            return self
+        if not np.all(np.isfinite(self.bulges)):
+            raise SetupError(
+                "All 'bulges' values must be finite. Infinite or NaN bulge values are not allowed."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_no_bulge_on_zero_length_edges(self: Self) -> Self:
+        """Zero-length edges cannot have non-zero bulge values."""
+        if self.bulges is None:
+            return self
+
+        # Detect zero-length edges
+        vertices = np.array(self.vertices)
+        bulges = np.array(self.bulges)
+        vertices_next = np.roll(vertices, shift=-1, axis=0)
+        edge_lengths = np.linalg.norm(vertices - vertices_next, axis=1)
+        is_zero_length = np.isclose(edge_lengths, 0, rtol=_IS_CLOSE_RTOL)
+
+        # Check for zero-length edges with non-zero bulge
+        has_nonzero_bulge = ~np.isclose(bulges, 0)
+        invalid_edges = is_zero_length & has_nonzero_bulge
+        if np.any(invalid_edges):
+            invalid_idx = np.where(invalid_edges)[0][0]  # Report first invalid edge
+            raise SetupError(
+                f"Zero-length edge at vertex index {invalid_idx} has a non-zero bulge value "
+                f"({bulges[invalid_idx]}). A zero-length edge cannot define an arc segment."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _vertical_sidewall_no_dilation_with_arc(self: Self) -> Self:
+        """In the presence of arc segments, for now sidwall is limited to vertical, and no dilation allowed."""
+        if self.bulges is None:
+            return self
+        if not np.allclose(self.bulges, 0):
+            if not math.isclose(self.sidewall_angle, 0):
+                raise SetupError(
+                    "Arc segements are present in the polygon. 'sidewall_angle' must be 0. "
+                    "A general treatment for slanted polyslab containing arc segments "
+                    "will be available in future releases."
+                )
+            if not math.isclose(self.dilation, 0):
+                raise SetupError(
+                    "Arc segements are present in the polygon. 'dilation' value must be 0. "
+                    "A general treatment will be available in future releases."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_no_self_intersection_with_arcs(self: Self) -> Self:
+        """Ensure polygon with arc segments is not self-intersecting."""
+        if self.bulges is None:
+            return self
+        if np.allclose(self.bulges, 0):
+            return self  # No arcs, defer to existing vertex-based validation
+
+        # Use canonical (deduplicated, CCW) vertices and bulges
+        canon_verts, canon_bulges = PolySlab._canonicalize_vertices_and_bulges(
+            self.vertices, self.bulges
+        )
+
+        # Discretize the polygon with arc segments
+        bulge_data = PolyBulgeUtil._compute_bulge_data(canon_verts, canon_bulges)
+        discretized = PolyBulgeUtil._polygon_discretize(canon_verts, bulge_data)
+
+        # Check if the resulting polygon is valid
+        poly = shapely.Polygon(discretized)
+        if not poly.is_valid or not poly.is_simple:
+            raise SetupError(
+                "Polygon with arc segments is self-intersecting. "
+                "Please adjust the bulge values to avoid self-intersection."
+            )
+        return self
 
     @model_validator(mode="after")
     def no_complex_self_intersecting_polygon_at_reference_plane(self: Self) -> Self:
@@ -427,7 +918,7 @@ class PolySlab(base.Planar):
         ArrayLike[float, float]
             The vertices of the polygon at the reference plane.
         """
-        vertices = self._proper_vertices(self.vertices)
+        vertices = self._canonical_vertices_and_bulges[0]
         if math.isclose(self.dilation, 0):
             return vertices
         offset_vertices = self._shift_vertices(vertices, self.dilation)[0]
@@ -496,6 +987,87 @@ class PolySlab(base.Planar):
             )
         return self.updated_copy(slab_bounds=tuple(bounds))
 
+    @staticmethod
+    def _canonicalize_vertices_and_bulges(
+        vertices: ArrayFloat2D, bulges: ArrayFloat1D
+    ) -> tuple[ArrayFloat2D, ArrayFloat1D]:
+        """Canonicalize vertices and bulges together: remove zero-length edges,
+        enforce CCW winding, and synchronize bulge array.
+
+        Parameters
+        ----------
+        vertices : ArrayFloat2D
+            Shape (N, 2) polygon vertices.
+        bulges : ArrayFloat1D
+            Shape (N,) bulge values for each edge.
+
+        Returns
+        -------
+        tuple[ArrayFloat2D, ArrayFloat1D]
+            (canonical_vertices, canonical_bulges) both in CCW order
+            with zero-length edges removed.
+        """
+        vertices = np.array(vertices)
+        bulges = np.array(bulges)
+
+        # Detect and remove zero-length edges
+        next_vertices = np.roll(vertices, shift=-1, axis=0)
+        edge_lengths = np.linalg.norm(vertices - next_vertices, axis=1)
+        is_zero_length = np.isclose(edge_lengths, 0, rtol=_IS_CLOSE_RTOL)
+
+        if np.any(is_zero_length):
+            # Drop zero-length edges (both vertex and bulge)
+            # Note: validation for non-zero bulges on zero-length edges
+            # is handled by _validate_no_bulge_on_zero_length_edges validator
+            has_nonzero_length = ~is_zero_length
+            vertices = vertices[has_nonzero_length]
+            bulges = bulges[has_nonzero_length]
+
+        # Check winding and reverse if CW
+        if PolySlab._area(vertices) < 0:
+            vertices = vertices[::-1]
+            bulges = -np.roll(bulges[::-1], -1)
+
+        return vertices, bulges
+
+    @cached_property
+    def _canonical_vertices_and_bulges(self) -> tuple[ArrayFloat2D, ArrayFloat1D]:
+        """Canonical (CCW, deduplicated) vertices and bulges as a synchronized pair."""
+        if self.bulges is None:
+            return self._proper_vertices(self.vertices), np.zeros(self.vertices.shape[0])
+        return self._canonicalize_vertices_and_bulges(self.vertices, self.bulges)
+
+    @cached_property
+    def _bulges(self) -> ArrayFloat1D:
+        """Postprocessed bulge values."""
+        return self._canonical_vertices_and_bulges[1]
+
+    @cached_property
+    def _has_arc_segments(self) -> bool:
+        """Whether this PolySlab has any non-zero bulge (arc) segments."""
+        return not np.allclose(self._bulges, 0)
+
+    @cached_property
+    def _bulge_data(self) -> dict:
+        """Precomputed arc geometry data from bulges and reference polygon.
+
+        Note: currently assumes all polygon cross-sections are identical
+        (sidewall_angle must be 0 when bulges are present). This will need
+        per-polygon bulge_data when nonzero sidewall angle is supported with bulges.
+        """
+        return PolyBulgeUtil._compute_bulge_data(self.reference_polygon, self._bulges)
+
+    @cached_property
+    def _discretized_reference_polygon(self) -> ArrayFloat2D:
+        """Reference polygon with arc segments discretized to polylines.
+
+        For polygons without arc segments, returns the regular reference_polygon.
+        For polygons with arcs, returns a higher-resolution polyline approximation.
+        """
+        if not self._has_arc_segments:
+            return self.reference_polygon
+        return PolyBulgeUtil._polygon_discretize(self.reference_polygon, self._bulge_data)
+
     @cached_property
     def is_ccw(self) -> bool:
         """Is this ``PolySlab`` CCW-oriented?"""
@@ -548,7 +1120,9 @@ class PolySlab(base.Planar):
 
             # vertical sidewall
             if math.isclose(self.sidewall_angle, 0):
-                face_polygon = shapely.Polygon(self.reference_polygon).buffer(fp_eps)
+                # Use discretized polygon for arc segments
+                poly_vertices = self._discretized_reference_polygon
+                face_polygon = shapely.Polygon(poly_vertices).buffer(fp_eps)
                 shapely.prepare(face_polygon)
                 inside_polygon_slab = shapely.contains_xy(face_polygon, x=xs_slab, y=ys_slab)
                 inside_polygon[inside_height] = inside_polygon_slab
@@ -663,7 +1237,9 @@ class PolySlab(base.Planar):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         if math.isclose(self.sidewall_angle, 0):
-            return [self.make_shapely_polygon(self.reference_polygon)]
+            # Use discretized polygon for arc segments
+            poly_vertices = self._discretized_reference_polygon
+            return [self.make_shapely_polygon(poly_vertices)]
 
         z0 = self.center_axis
         z_local = z - z0  # distance to the middle
@@ -1056,6 +1632,15 @@ class PolySlab(base.Planar):
             xmin, ymin = np.amin(self.vertices, axis=0)
             xmax, ymax = np.amax(self.vertices, axis=0)
 
+        # Account for arc segments extending beyond chord endpoints
+        if self._has_arc_segments:
+            vertices = self._canonical_vertices_and_bulges[0]
+            arc_mins, arc_maxs = PolyBulgeUtil._polygon_arcs_bounds(vertices, self._bulge_data)
+            xmin = min(xmin, np.min(arc_mins[:, 0]))
+            ymin = min(ymin, np.min(arc_mins[:, 1]))
+            xmax = max(xmax, np.max(arc_maxs[:, 0]))
+            ymax = max(ymax, np.max(arc_maxs[:, 1]))
+
         # get bounds in (local) z
         zmin, zmax = self.slab_bounds
 
@@ -1424,8 +2009,14 @@ class PolySlab(base.Planar):
 
         length = z_max - z_min
 
-        top_area = abs(self._area(self.top_polygon))
-        base_area = abs(self._area(self.base_polygon))
+        # Use arc-aware area calculation when arc segments present
+        if self._has_arc_segments:
+            arc_correction = PolyBulgeUtil._arc_segment_area(self._bulge_data)
+            top_area = abs(self._area(self.top_polygon) + arc_correction)
+            base_area = abs(self._area(self.base_polygon) + arc_correction)
+        else:
+            top_area = abs(self._area(self.top_polygon))
+            base_area = abs(self._area(self.base_polygon))
 
         # https://mathworld.wolfram.com/PyramidalFrustum.html
         return 1.0 / 3.0 * length * (top_area + base_area + np.sqrt(top_area * base_area))
@@ -1438,11 +2029,18 @@ class PolySlab(base.Planar):
         top_polygon = self.top_polygon
         base_polygon = self.base_polygon
 
-        top_area = abs(self._area(top_polygon))
-        base_area = abs(self._area(base_polygon))
-
-        top_perim = self._perimeter(top_polygon)
-        base_perim = self._perimeter(base_polygon)
+        # Use arc-aware calculations when arc segments present
+        if self._has_arc_segments:
+            arc_correction = PolyBulgeUtil._arc_segment_area(self._bulge_data)
+            top_area = abs(self._area(top_polygon) + arc_correction)
+            base_area = abs(self._area(base_polygon) + arc_correction)
+            top_perim = PolyBulgeUtil._polygon_perimeter(top_polygon, self._bulge_data)
+            base_perim = PolyBulgeUtil._polygon_perimeter(base_polygon, self._bulge_data)
+        else:
+            top_area = abs(self._area(top_polygon))
+            base_area = abs(self._area(base_polygon))
+            top_perim = self._perimeter(top_polygon)
+            base_perim = self._perimeter(base_polygon)
 
         z_min, z_max = self.slab_bounds
 
@@ -1474,6 +2072,13 @@ class PolySlab(base.Planar):
           gradients; this includes the +/- inf cases.
         - A 2d simulation collapses the surface integral to a line integral
         """
+        if self._has_arc_segments:
+            raise NotImplementedError(
+                "Adjoint derivatives are not supported for 'PolySlab' with non-zero "
+                "bulge (arc segment) values. Please use straight-edged polyslabs for "
+                "inverse design optimization."
+            )
+
         vjps: AutogradFieldMap = {}
 
         intersect_min, intersect_max = map(np.asarray, derivative_info.bounds_intersect)

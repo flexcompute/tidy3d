@@ -35,6 +35,7 @@ from tidy3d.components.geometry.utils import (
     snap_box_to_grid,
     traverse_geometries,
 )
+from tidy3d.components.geometry.polyslab import PolyBulgeUtil
 from tidy3d.components.geometry.utils_2d import _is_sliver_polygon, subdivide
 from tidy3d.constants import LARGE_NUMBER, fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
@@ -414,6 +415,313 @@ def test_validate_polyslab_vertices_valid():
 def test_sidewall_failed_validation():
     with pytest.raises(pd.ValidationError):
         POLYSLAB.copy(update={"sidewall_angle": 1000})
+
+
+def test_bulge_size_validation():
+    size = POLYSLAB.vertices.shape[0]
+    with pytest.raises(pd.ValidationError):
+        POLYSLAB.updated_copy(bulges=[1, 2])
+    POLYSLAB.updated_copy(bulges=np.random.random(size))
+
+    assert len(POLYSLAB._bulges) == POLYSLAB.vertices.shape[0]
+    assert np.allclose(POLYSLAB._bulges, 0)
+
+
+def test_bulge_compatibility_validaiton():
+    polyslab = POLYSLAB.updated_copy(bulges=np.random.random(POLYSLAB.vertices.shape[0]))
+    POLYSLAB.updated_copy(dilation=0.01)
+    with pytest.raises(pd.ValidationError):
+        polyslab.updated_copy(dilation=0.01)
+    POLYSLAB.updated_copy(sidewall_angle=0.01)
+    with pytest.raises(pd.ValidationError):
+        polyslab.updated_copy(sidewall_angle=0.01)
+
+
+def test_arc_geometry_helpers():
+    """Test arc geometry helper functions."""
+    # All tests use chord from (0,0) to (2,0), chord_length = 2.
+    edge_start = np.array([[0.0, 0.0]])
+    edge_end = np.array([[2.0, 0.0]])
+
+    # --- Semicircle: bulge = tan(45°) = 1.0, included angle = 180° ---
+    # Positive bulge → CCW arc bulging downward (perpendicular to chord).
+    # radius = chord / (2 sin(90°)) = 1
+    # center = midpoint + 0 * perp = (1, 0)  (midpoint_to_center_dist = 0)
+    arc = PolyBulgeUtil._arcs_from_bulges(edge_start, edge_end, np.array([1.0]))
+    assert np.isclose(arc["included_angles"][0], np.pi)
+    assert np.isclose(arc["radii"][0], 1.0)
+    assert np.allclose(arc["centers"][0], [1.0, 0.0])
+    assert np.isclose(arc["start_angles"][0], np.pi)  # atan2(0, -1)
+    assert np.isclose(arc["end_angles"][0], 0.0)  # atan2(0, 1)
+
+    # --- Quarter-circle: bulge = tan(22.5°), included angle = 90° ---
+    # radius = chord / (2 sin(45°)) = 2 / √2 = √2
+    # midpoint_to_center_dist = √2 - tan(22.5°) = 1.0
+    # center = (1, 0) + 1 * (0, 1) = (1, 1)
+    quarter_bulge = np.tan(np.pi / 8)  # tan(22.5°)
+    arc = PolyBulgeUtil._arcs_from_bulges(edge_start, edge_end, np.array([quarter_bulge]))
+    assert np.isclose(arc["included_angles"][0], np.pi / 2)
+    assert np.isclose(arc["radii"][0], np.sqrt(2))
+    assert np.allclose(arc["centers"][0], [1.0, 1.0])
+    assert np.isclose(arc["start_angles"][0], -3 * np.pi / 4)  # atan2(-1, -1)
+    assert np.isclose(arc["end_angles"][0], -np.pi / 4)  # atan2(-1, 1)
+
+    # --- Negative quarter-circle: bulge = -tan(22.5°), included angle = -90° ---
+    # radius = √2 (same magnitude)
+    # center = (1, 0) + (-1) * 1 * (0, 1) = (1, -1)
+    arc = PolyBulgeUtil._arcs_from_bulges(edge_start, edge_end, np.array([-quarter_bulge]))
+    assert np.isclose(arc["included_angles"][0], -np.pi / 2)
+    assert np.isclose(arc["radii"][0], np.sqrt(2))
+    assert np.allclose(arc["centers"][0], [1.0, -1.0])
+    assert np.isclose(arc["start_angles"][0], 3 * np.pi / 4)  # atan2(1, -1)
+    assert np.isclose(arc["end_angles"][0], np.pi / 4)  # atan2(1, 1)
+
+    # --- Batch: semicircle + negative quarter-circle in one call ---
+    edge_starts = np.array([[0.0, 0.0], [0.0, 0.0]])
+    edge_ends = np.array([[2.0, 0.0], [2.0, 0.0]])
+    bulges = np.array([1.0, -quarter_bulge])
+    arcs = PolyBulgeUtil._arcs_from_bulges(edge_starts, edge_ends, bulges)
+    assert np.isclose(arcs["radii"][0], 1.0)
+    assert np.isclose(arcs["radii"][1], np.sqrt(2))
+    assert np.allclose(arcs["centers"][0], [1.0, 0.0])
+    assert np.allclose(arcs["centers"][1], [1.0, -1.0])
+    assert arcs["included_angles"][0] > 0  # positive bulge → CCW sweep
+    assert arcs["included_angles"][1] < 0  # negative bulge → CW sweep
+
+    # --- Verify endpoints lie on the arc (distance to center == radius) ---
+    for bulge_val in [1.0, quarter_bulge, -quarter_bulge]:
+        arc = PolyBulgeUtil._arcs_from_bulges(edge_start, edge_end, np.array([bulge_val]))
+        center = arc["centers"][0]
+        radius = arc["radii"][0]
+        dist_start = np.linalg.norm(edge_start[0] - center)
+        dist_end = np.linalg.norm(edge_end[0] - center)
+        assert np.isclose(dist_start, radius)
+        assert np.isclose(dist_end, radius)
+
+    # --- _polygon_arcs_bounds ---
+    # Arc that stays below the chord (positive bulge)
+    bounds_verts = np.array([[0.0, 0.0], [2.0, 0.0]])
+    bulge_data = PolyBulgeUtil._compute_bulge_data(bounds_verts, np.array([0.5, 0.0]))
+    min_c, max_c = PolyBulgeUtil._polygon_arcs_bounds(bounds_verts, bulge_data)
+    assert min_c[0, 0] <= 0 and max_c[0, 0] >= 2.0
+    assert min_c[0, 1] <= 0  # arc bulges downward for positive bulge
+
+    # Arc that stays above the chord (negative bulge)
+    bulge_data = PolyBulgeUtil._compute_bulge_data(bounds_verts, np.array([-0.5, 0.0]))
+    min_c, max_c = PolyBulgeUtil._polygon_arcs_bounds(bounds_verts, bulge_data)
+    assert max_c[0, 1] >= 0  # arc bulges upward for negative bulge
+
+
+def test_polyslab_with_arcs_basic():
+    """Test basic PolySlab creation with arc segments."""
+    vertices = [(0, 0), (1, 0), (1, 1), (0, 1)]
+
+    # Create with small bulge on first edge
+    polyslab = td.PolySlab(
+        vertices=vertices,
+        bulges=[0.2, 0, 0, 0],
+        axis=2,
+        slab_bounds=(-0.5, 0.5),
+    )
+
+    assert polyslab._has_arc_segments is True
+    assert len(polyslab._bulges) == 4
+    assert np.isclose(polyslab._bulges[0], 0.2)
+
+    # Discretized polygon should have more points
+    disc_verts = polyslab._discretized_reference_polygon
+    assert len(disc_verts) > len(vertices)
+
+    # JSON serialization should work
+    json_str = polyslab.json()
+    polyslab_loaded = td.PolySlab.parse_raw(json_str)
+    assert np.allclose(polyslab_loaded.bulges, polyslab.bulges)
+
+
+def test_polyslab_arc_self_intersection_validation():
+    """Test that self-intersecting arc polygons raise error."""
+    # Narrow rectangle where inward bulges cross in the middle
+    vertices = [(0, 0), (2, 0), (2, 0.3), (0, 0.3)]
+
+    # Large inward bulges that cross each other
+    with pytest.raises(pd.ValidationError):
+        td.PolySlab(
+            vertices=vertices,
+            bulges=[-1.5, 0, 1.5, 0],  # both bulge toward center, causing intersection
+            axis=2,
+            slab_bounds=(-0.5, 0.5),
+        )
+
+
+def test_polyslab_arc_area_perimeter():
+    """Test area and perimeter calculations with arc segments."""
+    # Unit square
+    vertices = np.array([(0, 0), (1, 0), (1, 1), (0, 1)])
+
+    # Without arcs: area = 1, perimeter = 4
+    area_no_arc = td.PolySlab._area(vertices)
+    perim_no_arc = td.PolySlab._perimeter(vertices)
+    assert np.isclose(abs(area_no_arc), 1.0)
+    assert np.isclose(perim_no_arc, 4.0)
+
+    # With semicircular bulge on one edge (bulge=1 on bottom edge)
+    # The semicircle adds area = pi*r^2/2 = pi*0.5^2/2 = pi/8
+    bulges = np.array([1.0, 0, 0, 0])
+    bulge_data = PolyBulgeUtil._compute_bulge_data(vertices, bulges)
+    area_with_arc = td.PolySlab._area(vertices) + PolyBulgeUtil._arc_segment_area(bulge_data)
+    # For a unit chord with bulge=1: radius=0.5, segment area = r^2*(pi - sin(pi))/2 = 0.5^2*pi/2
+    expected_segment_area = 0.25 * np.pi / 2
+    assert np.isclose(abs(area_with_arc), 1.0 + expected_segment_area, rtol=0.01)
+
+    # Perimeter with arc: replaces chord=1 with arc=pi*0.5=pi/2
+    perim_with_arc = PolyBulgeUtil._polygon_perimeter(vertices, bulge_data)
+    assert np.isclose(perim_with_arc, 3 + np.pi / 2, rtol=0.01)
+
+
+def test_polyslab_arc_bounds():
+    """Test that bounds properly account for arc extents."""
+    # Square from (0,0) to (1,1)
+    vertices = [(0, 0), (1, 0), (1, 1), (0, 1)]
+
+    # No arcs: bounds should be exactly the vertices
+    polyslab_no_arc = td.PolySlab(
+        vertices=vertices,
+        axis=2,
+        slab_bounds=(-0.5, 0.5),
+    )
+    bounds = polyslab_no_arc.bounds
+    assert np.isclose(bounds[0][0], 0)  # xmin
+    assert np.isclose(bounds[1][0], 1)  # xmax
+    assert np.isclose(bounds[0][1], 0)  # ymin
+    assert np.isclose(bounds[1][1], 1)  # ymax
+
+    # With outward bulge on bottom edge: y should extend below 0
+    polyslab_arc = td.PolySlab(
+        vertices=vertices,
+        bulges=[0.5, 0, 0, 0],  # bulge outward on bottom edge
+        axis=2,
+        slab_bounds=(-0.5, 0.5),
+    )
+    bounds_arc = polyslab_arc.bounds
+    assert bounds_arc[0][1] < 0  # ymin should be negative (arc extends below)
+
+
+def test_polyslab_arc_inside():
+    """Test point containment with arc segments."""
+    # Square with outward bulge on bottom
+    vertices = [(0, 0), (1, 0), (1, 1), (0, 1)]
+    polyslab = td.PolySlab(
+        vertices=vertices,
+        bulges=[0.5, 0, 0, 0],
+        axis=2,
+        slab_bounds=(-0.5, 0.5),
+    )
+
+    # Point inside the square part
+    x = np.array([0.5])
+    y = np.array([0.5])
+    z = np.array([0.0])
+    assert polyslab.inside(x, y, z)[0]
+
+    # Point in the arc bulge region (below y=0 but within arc)
+    x_arc = np.array([0.5])
+    y_arc = np.array([-0.05])  # slightly below y=0
+    z_arc = np.array([0.0])
+    assert polyslab.inside(x_arc, y_arc, z_arc)[0]
+
+    # Point outside the arc bulge region
+    x_out = np.array([0.5])
+    y_out = np.array([-0.5])  # far below y=0
+    z_out = np.array([0.0])
+    assert not polyslab.inside(x_out, y_out, z_out)[0]
+
+
+def test_polyslab_arc_intersections():
+    """Test cross-section intersections with arc segments."""
+    vertices = [(0, 0), (1, 0), (1, 1), (0, 1)]
+    polyslab = td.PolySlab(
+        vertices=vertices,
+        bulges=[0.3, 0, 0, 0],
+        axis=2,
+        slab_bounds=(-0.5, 0.5),
+    )
+
+    # Get intersection at z=0 (normal to axis)
+    shapes = polyslab._intersections_normal(z=0.0)
+    assert len(shapes) == 1
+
+    # The intersection polygon should have more than 4 vertices (due to arc discretization)
+    poly = shapes[0]
+    assert len(poly.exterior.coords) > 5
+
+
+def test_bulge_finite_validation():
+    """Inf and NaN bulge values must raise ValidationError."""
+    size = POLYSLAB.vertices.shape[0]
+    with pytest.raises(pd.ValidationError):
+        POLYSLAB.updated_copy(bulges=[np.inf, 0, 0, 0])
+    with pytest.raises(pd.ValidationError):
+        POLYSLAB.updated_copy(bulges=[0, -np.inf, 0, 0])
+    with pytest.raises(pd.ValidationError):
+        POLYSLAB.updated_copy(bulges=[0, 0, np.nan, 0])
+
+
+def test_zero_length_edge_nonzero_bulge():
+    """Duplicate vertex with non-zero bulge must raise an error."""
+    # Two identical vertices at (0,0) with a non-zero bulge on that zero-length edge
+    vertices = [(0, 0), (0, 0), (1, 0), (1, 1)]
+    with pytest.raises(pd.ValidationError):
+        td.PolySlab(
+            vertices=vertices,
+            bulges=[0.5, 0, 0, 0],
+            axis=2,
+            slab_bounds=(-0.5, 0.5),
+        )
+
+
+def test_zero_length_edge_zero_bulge_dropped():
+    """Duplicate vertex with zero bulge should be silently dropped."""
+    # (0,0) appears twice; the zero-length edge has bulge=0, should be dropped
+    vertices = [(0, 0), (0, 0), (1, 0), (1, 1)]
+    polyslab = td.PolySlab(
+        vertices=vertices,
+        bulges=[0, 0, 0, 0],
+        axis=2,
+        slab_bounds=(-0.5, 0.5),
+    )
+    canon_verts, canon_bulges = polyslab._canonical_vertices_and_bulges
+    # After dropping the duplicate, should have 3 vertices
+    assert len(canon_verts) == 3
+    assert len(canon_bulges) == 3
+
+
+def test_winding_reversal_adjusts_bulges():
+    """CW input should get reversed to CCW with bulges permuted and sign-flipped."""
+    # CW-ordered square: (0,0) -> (0,1) -> (1,1) -> (1,0)
+    vertices_cw = np.array([(0, 0), (0, 1), (1, 1), (1, 0)], dtype=float)
+    bulges_cw = np.array([0.2, 0.0, -0.3, 0.0])
+
+    canon_verts, canon_bulges = td.PolySlab._canonicalize_vertices_and_bulges(
+        vertices_cw, bulges_cw
+    )
+    # After canonicalization, should be CCW
+    assert td.PolySlab._area(canon_verts) > 0
+    # Bulge signs should be flipped and permuted
+    # For reversal: bulges_new = -np.roll(bulges[::-1], -1)
+    expected_bulges = -np.roll(bulges_cw[::-1], -1)
+    np.testing.assert_allclose(canon_bulges, expected_bulges)
+
+
+def test_adjoint_error_with_bulges():
+    """_compute_derivatives must raise NotImplementedError for non-zero bulges."""
+    polyslab = td.PolySlab(
+        vertices=[(0, 0), (1, 0), (1, 1), (0, 1)],
+        bulges=[0.2, 0, 0, 0],
+        axis=2,
+        slab_bounds=(-0.5, 0.5),
+    )
+    with pytest.raises(NotImplementedError, match="Adjoint derivatives are not supported"):
+        polyslab._compute_derivatives(derivative_info=None)
 
 
 def test_surfaces():
