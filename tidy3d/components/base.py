@@ -1856,7 +1856,7 @@ class Tidy3dBaseModel(BaseModel):
         from rich.console import Console
 
         sio = StringIO()
-        console = Console(file=sio)
+        console = Console(file=sio, force_jupyter=False)
         console.print(self)
         output = sio.getvalue()
         return output.rstrip("\n")
