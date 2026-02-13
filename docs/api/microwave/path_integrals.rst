@@ -7,7 +7,7 @@ Path integrals compute voltage and current from electromagnetic field data by in
 
 .. note::
 
-   For information on how path integrals are used to calculate characteristic impedance in transmission line mode analysis, see :ref:`microwave_mode_solver`. For the corresponding specification classes (``*Spec``) used in :class:`~tidy3d.MicrowaveModeSpec`, see the end of this page.
+   For information on how path integrals are used to calculate characteristic impedance in transmission line mode analysis, see :ref:`microwave_mode_solver`. For the corresponding specification classes (``*Spec``) used in :class:`~tidy3d.rf.MicrowaveModeSpec`, see the end of this page.
 
 Voltage Path Integrals
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -212,7 +212,7 @@ Additional Information
 
 **Path Integral Specification Classes**
 
-The classes documented above (``*Integral``) are **execution classes** that perform actual computations on field data. For use in :class:`~tidy3d.MicrowaveModeSpec` impedance specifications, corresponding **specification classes** (``*Spec``) exist:
+The classes documented above (``*Integral``) are **execution classes** that perform actual computations on field data. For use in :class:`~tidy3d.rf.MicrowaveModeSpec` impedance specifications, corresponding **specification classes** (``*Spec``) exist:
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -224,7 +224,7 @@ The classes documented above (``*Integral``) are **execution classes** that perf
    tidy3d.rf.Custom2DCurrentIntegralSpec
    tidy3d.rf.CompositeCurrentIntegralSpec
 
-These specification classes have the same parameters but are used for configuration (in :class:`~tidy3d.CustomImpedanceSpec`) rather than direct computation. See :ref:`microwave_mode_solver` for their usage in mode analysis.
+These specification classes have the same parameters but are used for configuration (in :class:`~tidy3d.rf.CustomImpedanceSpec`) rather than direct computation. See :ref:`microwave_mode_solver` for their usage in mode analysis.
 
 .. seealso::
 

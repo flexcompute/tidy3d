@@ -196,6 +196,8 @@ from .components.data.data_array import (
     FieldProjectionKSpaceDataArray,
     FluxDataArray,
     FluxTimeDataArray,
+    FreqDataArray,
+    FreqModeDataArray,
     GroupIndexDataArray,
     HeatDataArray,
     IndexedDataArray,
@@ -405,7 +407,6 @@ from .components.parameter_perturbation import (
 # run time spec
 from .components.run_time_spec import RunTimeSpec
 
-# scene
 # scene
 from .components.scene import Scene
 
@@ -642,7 +643,6 @@ __all__ = [
     "EMEScalarModeFieldDataArray",
     "EMESimulation",
     "EMESimulationData",
-    "EMESweepSpec",
     "EMEUniformGrid",
     "FieldData",
     "FieldDataset",
@@ -674,6 +674,8 @@ __all__ = [
     "FluxTimeDataArray",
     "FluxTimeMonitor",
     "FossumCarrierLifetime",
+    "FreqDataArray",
+    "FreqModeDataArray",
     "FreqRange",
     "FrequencyUtils",
     "FullyAnisotropicMedium",

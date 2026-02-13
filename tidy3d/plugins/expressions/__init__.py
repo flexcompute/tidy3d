@@ -65,4 +65,4 @@ for module_name in _module_names:
             _local_vars[name] = obj
 
 for cls in _model_classes:
-    cls.model_rebuild(force=True)
+    cls.model_rebuild(force=True, _types_namespace=_local_vars)

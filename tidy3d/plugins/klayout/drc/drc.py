@@ -170,12 +170,15 @@ class DRCRunner(Tidy3dBaseModel):
         max_results: Optional[int] = None,
         **to_gds_file_kwargs: Any,
     ) -> DRCResults:
-        """Runs KLayout's DRC on a GDS file or a Tidy3D object. The Tidy3D object can be a :class:`.Geometry`, :class:`.Structure`, or :class:`.Simulation`.
+        """Runs KLayout's DRC on a GDS file or a Tidy3D object. The Tidy3D object can be a
+        :class:`~tidy3d.Geometry`, :class:`~tidy3d.Structure`, or
+        :class:`~tidy3d.Simulation`.
 
         Parameters
         ----------
-        source : Union[:class:`.Geometry`, :class:`.Structure`, :class:`.Simulation`, Path]
-            The :class:`.Geometry`, :class:`.Structure`, :class:`.Simulation`, or GDS file to run DRC on.
+        source : Union[:class:`~tidy3d.Geometry`, :class:`~tidy3d.Structure`, :class:`~tidy3d.Simulation`, Path]
+            The :class:`~tidy3d.Geometry`, :class:`~tidy3d.Structure`,
+            :class:`~tidy3d.Simulation`, or GDS file to run DRC on.
         td_object_gds_savefile : Path
             The path to save the Tidy3D object to. Defaults to ``"layout.gds"``.
         resultsfile : Path

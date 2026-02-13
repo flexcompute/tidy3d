@@ -251,29 +251,6 @@ Controls the optional on-disk cache for simulation artifacts.
      - Maximum number of cached simulations retained. ``0`` means no limit and eviction falls back to size constraints.
 
 
-Batch Data Cache (``config.batch_data_cache``)
-----------------------------------------------
-
-Controls the in-memory cache used when accessing entries in ``BatchData``.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 24 18 10 48
-
-   * - Option
-     - Default
-     - Persisted
-     - Description
-   * - ``enabled``
-     - ``True``
-     - No
-     - Cache batch results in memory when all task data files are below the size threshold.
-   * - ``max_total_size_gb``
-     - ``1.0``
-     - No
-     - Cache batch task data only when the combined size of all task data files is at or below this threshold. ``0`` disables caching.
-
-
 Plugins (``config.plugins``)
 ----------------------------
 

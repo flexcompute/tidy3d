@@ -370,7 +370,7 @@ class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
 
 
 class FieldDataset(ElectromagneticFieldDataset):
-    """Dataset storing a collection of the scalar components of E and H fields in the freq. domain
+    """Dataset storing a collection of the scalar components of E and H fields in the freq. domain.
 
     Example
     -------

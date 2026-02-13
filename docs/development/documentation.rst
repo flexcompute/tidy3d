@@ -103,4 +103,3 @@ Writing Documentation
     - for subsections
     ^ for subsubsections
     " for paragraphs
-

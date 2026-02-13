@@ -79,12 +79,12 @@ class Custom2DVoltageIntegral(Custom2DPathIntegral, Custom2DVoltageIntegralSpec)
 
         Parameters
         ----------
-        em_field : :class:`.IntegrableMonitorDataType`
+        em_field : ``IntegrableMonitorDataType``
             The electromagnetic field data that will be used for integrating.
 
         Returns
         -------
-        :class:`.VoltageIntegralResultType`
+        ``VoltageIntegralResultType``
             Result of voltage computation over remaining dimensions (frequency, time, mode indices).
         """
 

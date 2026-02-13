@@ -35,7 +35,7 @@ class MicrowaveModeSpec(AbstractModeSpec, MicrowaveBaseModel):
 
     Notes
     -----
-        The :class:`.MicrowaveModeSpec` class specifies how quantities related to transmission line
+        The :class:`~tidy3d.rf.MicrowaveModeSpec` class specifies how quantities related to transmission line
         modes and microwave waveguides are computed. For example, it defines the paths for line integrals, which are used to
         compute voltage, current, and characteristic impedance of the transmission line.
 

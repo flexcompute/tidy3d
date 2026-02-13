@@ -116,7 +116,7 @@ class ModeSortSpec(Tidy3dBaseModel):
         None,
         title="Bounding box",
         description=(
-            "Regular 3D tidy3d :class:`Box` used by metrics such as ``'fill_fraction_box'``. "
+            "Regular 3D tidy3d :class:`~tidy3d.Box` used by metrics such as ``'fill_fraction_box'``. "
             "The extent along the propagation axis is ignored for the metric, but the box must "
             "still intersect the monitor plane. Required when filtering or sorting with that key."
         ),

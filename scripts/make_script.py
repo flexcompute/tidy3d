@@ -57,21 +57,31 @@ def main(args):
 
     # new we need to get rid of all the "type" info that isn't needed
 
-    # remove type='...', in middle
-    pattern = r"type='([A-Za-z0-9_\./\\-]*)', "
+    # Remove only the discriminator field named exactly `type=...` without touching
+    # unrelated fields like `simulation_type=...`.
+    #
+    # We handle four positions separately to preserve valid python syntax:
+    # - start:  (type='Foo', x=1) -> (x=1)
+    # - middle: (x=1, type='Foo', y=2) -> (x=1, y=2)
+    # - end:    (x=1, type='Foo') -> (x=1)
+    # - only:   (type='Foo') -> ()
+    type_value_pattern = r"(?:'[^']*'|\"[^\"]*\")"
+
+    # remove `type=...` at start of argument list
+    pattern = rf"(?<=\()\s*type={type_value_pattern}\s*,\s*"
     sim_string = re.sub(pattern, "", sim_string)
 
-    # remove , type='...')
-    pattern = r", type='([A-Za-z0-9_\./\\-]*)'\)"
+    # remove `type=...` in the middle of argument list
+    pattern = rf"(?<=,)\s*type={type_value_pattern}\s*,\s*"
+    sim_string = re.sub(pattern, "", sim_string)
+
+    # remove `type=...` at end of argument list
+    pattern = rf",\s*type={type_value_pattern}\s*\)"
     sim_string = re.sub(pattern, ")", sim_string)
 
-    # remove (type='...'),
-    pattern = r"\(type='([A-Za-z0-9_\./\\-]*)'\)"
+    # remove `type=...` as the only argument
+    pattern = rf"\(\s*type={type_value_pattern}\s*\)"
     sim_string = re.sub(pattern, "()", sim_string)
-
-    # remove (type='...',
-    pattern = r"\(type='([A-Za-z0-9_\./\\-]*)', "
-    sim_string = re.sub(pattern, "(", sim_string)
 
     # write sim_string to a temporary file
     with tempfile.NamedTemporaryFile(

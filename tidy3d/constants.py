@@ -141,7 +141,7 @@ PERMITTIVITY = "None (relative permittivity)"
 Relative permittivity.
 """
 
-PML_SIGMA = "2*EPSILON_0/dt"
+PML_SIGMA = r":math:`2\epsilon_0/\Delta t`"
 """
 2 times vacuum permittivity over time differential step.
 """

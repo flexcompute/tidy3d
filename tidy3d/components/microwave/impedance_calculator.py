@@ -96,16 +96,16 @@ class ImpedanceCalculator(MicrowaveBaseModel):
 
         Parameters
         ----------
-        em_field : :class:`.IntegrableMonitorDataType`
+        em_field : ``IntegrableMonitorDataType``
             The electromagnetic field data that will be used for computing the characteristic
             impedance.
         return_voltage_and_current: bool = False
-            When ``True``, returns additional :class:`.IntegralResultType` that represent the voltage
+            When ``True``, returns additional ``IntegralResultType`` that represent the voltage
             and current associated with the supplied fields.
 
         Returns
         -------
-        :class:`.IntegralResultType` or tuple[VoltageIntegralResultType, CurrentIntegralResultType, ImpedanceResultType]
+        ``IntegralResultType`` or tuple[VoltageIntegralResultType, CurrentIntegralResultType, ImpedanceResultType]
             If ``return_voltage_and_current=False``, single result of impedance computation
             over remaining dimensions (frequency, time, mode indices). If ``return_voltage_and_current=True``,
             tuple of (impedance, voltage, current).

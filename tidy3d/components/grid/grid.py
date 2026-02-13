@@ -683,11 +683,11 @@ class Grid(Tidy3dBaseModel):
     def discretize_inds(
         self, box: Box, extend: bool = False, relax_precision: bool = False
     ) -> list[tuple[int, int]]:
-        """Start and stopping indexes for the cells that intersect with a :class:`Box`.
+        """Start and stopping indexes for the cells that intersect with a :class:`~tidy3d.Box`.
 
         Parameters
         ----------
-        box : :class:`Box`
+        box : :class:`~tidy3d.Box`
             Rectangular geometry within simulation to discretize.
         extend : bool = False
             If ``True``, ensure that the returned indexes extend sufficiently in every direction to
@@ -826,7 +826,7 @@ class Grid(Tidy3dBaseModel):
 
         Parameters
         ----------
-        box : :class:`Box`
+        box : :class:`~tidy3d.Box`
             Box to use for the zero dim check.
 
         Returns

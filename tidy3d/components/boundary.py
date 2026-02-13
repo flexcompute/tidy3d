@@ -316,7 +316,7 @@ class ModeABCBoundary(AbstractABCBoundary):
 
         Parameters
         ----------
-        source : :class:`ModeSource`
+        source : :class:`~tidy3d.ModeSource`
             Mode source.
         freq_spec : Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None
             Specifies the frequency at which field is absorbed. If ``None``, then the central frequency of the source is used. If ``BroadbandModeABCSpec``, then the field is absorbed over the specified frequency range.
@@ -519,7 +519,7 @@ class BlochBoundary(BoundaryEdge):
 
         Parameters
         ----------
-        source : Union[:class:`GaussianBeam`, :class:`ModeSource`, :class:`PlaneWave`]
+        source : Union[:class:`~tidy3d.GaussianBeam`, :class:`~tidy3d.ModeSource`, :class:`~tidy3d.PlaneWave`]
             Angled source.
         domain_size: float
             Size of the domain (micron) in the direction normal to the Bloch boundary.
@@ -602,7 +602,10 @@ class AbsorberParams(Tidy3dBaseModel):
     sigma_order: NonNegativeInt = Field(
         3,
         title="Sigma Order",
-        description="Order of the polynomial describing the absorber profile (~dist^sigma_order).",
+        description=(
+            "Order of the polynomial describing the absorber profile "
+            "(:math:`\\mathrm{dist}^{\\text{sigma\\_order}}`)."
+        ),
     )
 
     sigma_min: NonNegativeFloat = Field(
@@ -631,8 +634,10 @@ class PMLParams(AbsorberParams):
     kappa_order: NonNegativeInt = Field(
         3,
         title="Kappa Order",
-        description="Order of the polynomial describing the PML kappa profile "
-        "(kappa~dist^kappa_order).",
+        description=(
+            "Order of the polynomial describing the PML kappa profile "
+            "(:math:`\\kappa\\sim\\mathrm{dist}^{\\text{kappa\\_order}}`)."
+        ),
     )
 
     kappa_min: NonNegativeFloat = Field(0.0, title="Kappa Minimum")
@@ -642,8 +647,10 @@ class PMLParams(AbsorberParams):
     alpha_order: NonNegativeInt = Field(
         3,
         title="Alpha Order",
-        description="Order of the polynomial describing the PML alpha profile "
-        "(alpha~dist^alpha_order).",
+        description=(
+            "Order of the polynomial describing the PML alpha profile "
+            "(:math:`\\alpha\\sim\\mathrm{dist}^{\\text{alpha\\_order}}`)."
+        ),
     )
 
     alpha_min: NonNegativeFloat = Field(
@@ -1110,13 +1117,13 @@ class Boundary(Tidy3dBaseModel):
 
         Parameters
         ----------
-        source : Union[:class:`GaussianBeam`, :class:`ModeSource`, :class:`PlaneWave`]
+        source : Union[:class:`~tidy3d.GaussianBeam`, :class:`~tidy3d.ModeSource`, :class:`~tidy3d.PlaneWave`]
             Angled source.
-        domain_size: float
+        domain_size : float
             Size of the domain in the direction normal to the Bloch boundary
-        axis: int
+        axis : int
             Axis normal to the Bloch boundary
-        medium : :class:`.Medium`
+        medium : :class:`~tidy3d.Medium`
             Background medium associated with the Bloch vector.
             Default: free space.
 
@@ -1234,7 +1241,7 @@ class Boundary(Tidy3dBaseModel):
 
         Parameters
         ----------
-        source : :class:`ModeSource`
+        source : :class:`~tidy3d.ModeSource`
             Mode source.
         freq_spec : Optional[Union[PositiveFloat, BroadbandModeABCSpec]] = None
             Specifies the frequency at which field is absorbed. If ``None``, then the central frequency of the source is used. If ``BroadbandModeABCSpec``, then the field is absorbed over the specified frequency range.
@@ -1287,7 +1294,7 @@ class Boundary(Tidy3dBaseModel):
         ----------
         num_layers : int = 12
             Number of layers of standard PML to add to + and - boundaries.
-        parameters : :class:`PMLParams`
+        parameters : :class:`~tidy3d.PMLParams`
             Parameters of the complex frequency-shifted absorption poles.
 
         Example
@@ -1310,7 +1317,7 @@ class Boundary(Tidy3dBaseModel):
         ----------
         num_layers : int = 40
             Number of layers of 'stable' PML to add to + and - boundaries.
-        parameters : :class:`PMLParams`
+        parameters : :class:`~tidy3d.PMLParams`
             'Stable' parameters of the complex frequency-shifted absorption poles.
 
         Example
@@ -1333,7 +1340,7 @@ class Boundary(Tidy3dBaseModel):
         ----------
         num_layers : int = 40
             Number of layers of absorber to add to + and - boundaries.
-        parameters : :class:`PMLParams`
+        parameters : :class:`~tidy3d.PMLParams`
             Adiabatic absorber parameters.
 
         Example

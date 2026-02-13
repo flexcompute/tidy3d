@@ -815,7 +815,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
     @cached_property
     def fill_fraction_box(self) -> FreqModeDataArray:
-        """Convenience accessor using the :class:`Box` defined on ``sort_spec``.
+        """Convenience accessor using the :class:`~tidy3d.Box` defined on ``sort_spec``.
 
         The component of the box along the propagation axis does not influence the fill fraction,
         but the box must intersect the monitor plane.
@@ -3291,7 +3291,7 @@ class AbstractFieldProjectionData(MonitorData):
     def fields_spherical(self) -> xr.Dataset:
         """Get all field components in spherical coordinates relative to the monitor's
         local origin for all projection grid points and frequencies specified in the
-        :class:`AbstractFieldProjectionMonitor`.
+        :class:`~tidy3d.components.monitor.AbstractFieldProjectionMonitor`.
 
         Returns
         -------
@@ -3308,7 +3308,7 @@ class AbstractFieldProjectionData(MonitorData):
     def fields_cartesian(self) -> xr.Dataset:
         """Get all field components in Cartesian coordinates relative to the monitor's
         local origin for all projection grid points and frequencies specified in the
-        :class:`AbstractFieldProjectionMonitor`.
+        :class:`~tidy3d.components.monitor.AbstractFieldProjectionMonitor`.
 
         Returns
         -------

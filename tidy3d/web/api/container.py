@@ -98,13 +98,13 @@ class WebContainer(Tidy3dBaseModel, ABC):
 
 class Job(WebContainer):
     """
-    Interface for managing the running of a :class:`.Simulation` on server.
+    Interface for managing the running of a :class:`~tidy3d.Simulation` on server.
 
     Notes
     -----
 
         This class provides a more convenient way to manage single simulations, mainly because it eliminates the need
-        for keeping track of the ``task_id`` and original :class:`.Simulation`.
+        for keeping track of the ``task_id`` and original :class:`~tidy3d.Simulation`.
 
         We can get the cost estimate of running the task before actually running it. This prevents us from
         accidentally running large jobs that we set up by mistake. The estimated cost is the maximum cost
@@ -161,11 +161,11 @@ class Job(WebContainer):
     --------
 
     :meth:`tidy3d.web.api.webapi.run_async`
-        Submits a set of :class:`.Simulation` objects to server, starts running, monitors progress,
+        Submits a set of :class:`~tidy3d.Simulation` objects to server, starts running, monitors progress,
         downloads, and loads results as a :class:`.BatchData` object.
 
     :class:`Batch`
-         Interface for submitting several :class:`.Simulation` objects to sever.
+         Interface for submitting several :class:`~tidy3d.Simulation` objects to sever.
 
     **Notebooks**
         *  `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
@@ -442,7 +442,7 @@ class Job(WebContainer):
 
         Note
         ----
-        To load the output of completed simulation into :class:`.SimulationData` objects,
+        To load the output of completed simulation into :class:`~tidy3d.SimulationData` objects,
         call :meth:`Job.load`.
         """
         if self.load_if_cached:
@@ -477,7 +477,8 @@ class Job(WebContainer):
 
         Returns
         -------
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
+        Union[:class:`~tidy3d.SimulationData`, :class:`~tidy3d.HeatSimulationData`,
+        :class:`~tidy3d.EMESimulationData`]
             Object containing simulation results.
         """
         self._check_path_dir(path=path)
@@ -575,23 +576,25 @@ class Job(WebContainer):
 
 class BatchData(Tidy3dBaseModel, Mapping):
     """
-    Holds a collection of :class:`.SimulationData` returned by :class:`Batch`.
+    Holds a collection of :class:`~tidy3d.SimulationData` returned by :class:`Batch`.
 
     Notes
     -----
 
-        When the batch is completed, the output is not a :class:`.SimulationData` but rather a :class:`BatchData`. The
-        data within this :class:`BatchData` object can either be indexed directly ``batch_results[task_name]`` or can be looped
-        through ``batch_results.items()`` to get the :class:`.SimulationData` for each task.
+        When the batch is completed, the output is not a :class:`~tidy3d.SimulationData` but rather a
+        :class:`BatchData`. The data within this :class:`BatchData` object can either be indexed
+        directly ``batch_results[task_name]`` or can be looped through ``batch_results.items()`` to
+        get the :class:`~tidy3d.SimulationData` for each task.
 
     See Also
     --------
 
     :class:`Batch`:
-         Interface for submitting several :class:`.Simulation` objects to sever.
+         Interface for submitting several :class:`~tidy3d.Simulation` objects to sever.
 
-    :class:`.SimulationData`:
-         Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.
+    :class:`~tidy3d.SimulationData`:
+         Stores data from a collection of :class:`~tidy3d.Monitor` objects in a
+         :class:`~tidy3d.Simulation`.
 
     **Notebooks**
         * `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
@@ -730,8 +733,9 @@ class BatchData(Tidy3dBaseModel, Mapping):
         Returns
         ------
         :class:`BatchData`
-            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
-            for each Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
+            Contains Union[:class:`~tidy3d.SimulationData`, :class:`~tidy3d.HeatSimulationData`,
+            :class:`~tidy3d.EMESimulationData`] for each Union[:class:`~tidy3d.Simulation`,
+            :class:`~tidy3d.HeatSimulation`, :class:`~tidy3d.EMESimulation`] in :class:`Batch`.
         """
         base_dir = Path(path_dir)
         batch_file = Batch._batch_path(path_dir=base_dir)
@@ -741,20 +745,21 @@ class BatchData(Tidy3dBaseModel, Mapping):
 
 class Batch(WebContainer):
     """
-    Interface for submitting several :class:`.Simulation` objects to sever.
+    Interface for submitting several :class:`~tidy3d.Simulation` objects to sever.
 
     Notes
     -----
 
-        Commonly one needs to submit a batch of :class:`.Simulation`. The built-in :class:`Batch` object is the best way to upload,
-        start, monitor, and load a series of tasks. The batch object is like a :class:`Job`, but stores task metadata
-        for a series of simulations.
+        Commonly one needs to submit a batch of :class:`~tidy3d.Simulation`. The built-in
+        :class:`Batch` object is the best way to upload, start, monitor, and load a series of
+        tasks. The batch object is like a :class:`Job`, but stores task metadata for a series of
+        simulations.
 
     See Also
     --------
 
     :meth:`tidy3d.web.api.webapi.run_async`
-        Submits a set of :class:`.Simulation` objects to server, starts running, monitors progress,
+        Submits a set of :class:`~tidy3d.Simulation` objects to server, starts running, monitors progress,
         downloads, and loads results as a :class:`.BatchData` object.
 
     :class:`Job`:
@@ -872,8 +877,9 @@ class Batch(WebContainer):
         Returns
         ------
         :class:`BatchData`
-            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData] for
-            each Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
+            Contains Union[:class:`~tidy3d.SimulationData`, :class:`~tidy3d.HeatSimulationData`,
+            :class:`~tidy3d.EMESimulationData`] for each Union[:class:`~tidy3d.Simulation`,
+            :class:`~tidy3d.HeatSimulation`, :class:`~tidy3d.EMESimulation`] in :class:`Batch`.
 
         Note
         ----
@@ -1403,8 +1409,9 @@ class Batch(WebContainer):
         Returns
         ------
         :class:`BatchData`
-            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] for each
-            Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
+            Contains Union[:class:`~tidy3d.SimulationData`, :class:`~tidy3d.HeatSimulationData`,
+            :class:`~tidy3d.EMESimulationData`] for each Union[:class:`~tidy3d.Simulation`,
+            :class:`~tidy3d.HeatSimulation`, :class:`~tidy3d.EMESimulation`] in :class:`Batch`.
 
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.

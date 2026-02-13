@@ -687,7 +687,7 @@ class TriangleMesh(base.Geometry, ABC):
     def inside(self, x: NDArray, y: NDArray, z: NDArray) -> np.ndarray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
         with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
-        volume of the :class:`Geometry`, and ``False`` otherwise.
+        volume of the :class:`~tidy3d.Geometry`, and ``False`` otherwise.
 
         Parameters
         ----------

@@ -178,9 +178,9 @@ def build_documentation(args: Any = None) -> None:
     args : optional
         Additional arguments for the documentation build process.
     """
-    # Runs the documentation build from the poetry environment
+    # Runs a clean doc build to avoid stale doctrees after refactors.
     echo_and_check_subprocess(
-        ["poetry", "run", "python", "-m", "sphinx", "-j", "auto", "docs/", "_docs/"]
+        ["poetry", "run", "python", "-m", "sphinx", "-E", "-a", "-j", "auto", "docs/", "_docs/"]
     )
     return 0
 

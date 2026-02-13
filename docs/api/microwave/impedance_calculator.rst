@@ -124,7 +124,7 @@ The impedance calculator and path integral classes work with various types of fi
 * :class:`~tidy3d.ModeSolverData`: Mode field profiles from 2D mode solver
 * :class:`~tidy3d.FieldData`: Frequency-domain field data from monitors
 * :class:`~tidy3d.FieldTimeData`: Time-domain field data from monitors
-* :class:`~tidy3d.MicrowaveModeSolverData`: Microwave mode solver data (includes pre-computed integrals)
+* :class:`~tidy3d.rf.MicrowaveModeSolverData`: Microwave mode solver data (includes pre-computed integrals)
 
 .. code-block:: python
 

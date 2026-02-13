@@ -225,10 +225,10 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     heat_spec: Optional[ThermalSpecType] = Field(
         None,
         title="Heat Specification",
-        description="DEPRECATED: Use :class:`MultiPhysicsMedium`. Specification of the medium heat properties. They are "
-        "used for solving the heat equation via the :class:`HeatSimulation` interface. Such simulations can be"
+        description="DEPRECATED: Use :class:`~tidy3d.MultiPhysicsMedium`. Specification of the medium heat properties. They are "
+        "used for solving the heat equation via the :class:`~tidy3d.HeatSimulation` interface. Such simulations can be"
         "used for investigating the influence of heat propagation on the properties of optical systems. "
-        "Once the temperature distribution in the system is found using :class:`HeatSimulation` object, "
+        "Once the temperature distribution in the system is found using :class:`~tidy3d.HeatSimulation` object, "
         "``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation "
         "models defined into spatially dependent custom mediums. "
         "Otherwise, the ``heat_spec`` does not directly affect the running of an optical "
@@ -6989,8 +6989,8 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
 class PerturbationMedium(Medium, AbstractPerturbationMedium):
     """Dispersionless medium with perturbations. Perturbation model can be defined either directly
     through providing ``permittivity_perturbation`` and ``conductivity_perturbation`` or via
-    providing a specific perturbation model (:class:`PermittivityPerturbation`,
-    :class:`IndexPerturbation`) as ``perturbaiton_spec``.
+    providing a specific perturbation model (:class:`~tidy3d.PermittivityPerturbation`,
+    :class:`~tidy3d.IndexPerturbation`) as ``perturbaiton_spec``.
 
     Example
     -------
@@ -7158,8 +7158,8 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     """A dispersive medium described by the pole-residue pair model with perturbations.
     Perturbation model can be defined either directly
     through providing ``eps_inf_perturbation`` and ``poles_perturbation`` or via
-    providing a specific perturbation model (:class:`PermittivityPerturbation`,
-    :class:`IndexPerturbation`) as ``perturbaiton_spec``.
+    providing a specific perturbation model (:class:`~tidy3d.PermittivityPerturbation`,
+    :class:`~tidy3d.IndexPerturbation`) as ``perturbaiton_spec``.
 
     Notes
     -----

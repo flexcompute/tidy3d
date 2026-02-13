@@ -692,7 +692,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         Parameters
         ----------
         field_monitor_name : str
-            Name of :class:`.FieldMonitor`, :class:`.FieldTimeData`, or :class:`.ModeSolverData`
+            Name of :class:`.FieldMonitor`, :class:`.FieldTimeData`, or
+            :class:`~tidy3d.ModeSolverData`
             to plot.
         field_name : str
             Name of ``field`` component to plot (eg. `'Ex'`).
