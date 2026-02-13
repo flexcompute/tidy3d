@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `ModeSolver.validate_pre_upload` not validating `MicrowaveModeSpec` with `AutoImpedanceSpec`, causing cryptic server-side errors for invalid conductor geometries.
 - Fixed local cache not storing results for `ModalComponentModeler` (and `TerminalComponentModeler`) runs, causing cache misses on repeated `web.run()` calls.
 - Fixed spurious `ModeSimulation` error logs during deserialization of `SimulationDataMap` by adding discriminators to `SimulationType` and `SimulationDataType` unions.
+- Fixed unintended model output in Jupyter notebooks during `import tidy3d` by preventing `Tidy3dBaseModel.__str__` from triggering notebook display side effects.
 
 ## [2.10.2] - 2026-01-21
 
