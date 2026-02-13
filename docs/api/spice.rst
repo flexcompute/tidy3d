@@ -24,7 +24,7 @@ Analysis
 
    tidy3d.SteadyChargeDCAnalysis
    tidy3d.IsothermalSteadyChargeDCAnalysis
-   tidy3d.AbstractSSACAnalysis
+   tidy3d.components.spice.analysis.ac.AbstractSSACAnalysis
    tidy3d.SSACAnalysis
    tidy3d.IsothermalSSACAnalysis
    tidy3d.SteadyChargeDCAnalysis

@@ -97,7 +97,7 @@ class Monitor(AbstractMonitor):
 
 
 class FreqMonitor(Monitor, ABC):
-    """:class:`Monitor` that records data in the frequency-domain."""
+    """:class:`~tidy3d.Monitor` that records data in the frequency-domain."""
 
     freqs: FreqArray = Field(
         title="Frequencies",
@@ -147,7 +147,7 @@ class FreqMonitor(Monitor, ABC):
 
 
 class TimeMonitor(Monitor, ABC):
-    """:class:`Monitor` that records data in the time-domain."""
+    """:class:`~tidy3d.Monitor` that records data in the time-domain."""
 
     start: NonNegativeFloat = Field(
         0.0,
@@ -246,7 +246,7 @@ class TimeMonitor(Monitor, ABC):
 
 
 class AbstractFieldMonitor(Monitor, ABC):
-    """:class:`Monitor` that records electromagnetic field data as a function of x,y,z."""
+    """:class:`~tidy3d.Monitor` that records electromagnetic field data as a function of x,y,z."""
 
     fields: tuple[EMField, ...] = Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
@@ -334,7 +334,7 @@ class AbstractAuxFieldMonitor(Monitor, ABC):
 
 
 class PlanarMonitor(Monitor, ABC):
-    """:class:`Monitor` that has a planar geometry."""
+    """:class:`~tidy3d.Monitor` that has a planar geometry."""
 
     _plane_validator = assert_plane()
 
@@ -345,7 +345,7 @@ class PlanarMonitor(Monitor, ABC):
 
 
 class AbstractOverlapMonitor(PlanarMonitor, FreqMonitor):
-    """:class:`Monitor` that projects fields onto a specified basis and stores overlap amplitudes.
+    """:class:`~tidy3d.Monitor` that projects fields onto a specified basis and stores overlap amplitudes.
 
     This base is shared by ModeMonitor and Gaussian-overlap monitors.
     """
@@ -423,7 +423,7 @@ class AbstractOverlapMonitor(PlanarMonitor, FreqMonitor):
 
 
 class AbstractModeMonitor(AbstractOverlapMonitor):
-    """:class:`Monitor` that records mode-related data."""
+    """:class:`~tidy3d.Monitor` that records mode-related data."""
 
     _draw_overlap_arrows: bool = False  # AbstractModeMonitor.plot() draws its own arrows
 
@@ -534,7 +534,7 @@ class AbstractModeMonitor(AbstractOverlapMonitor):
 
 
 class AbstractGaussianOverlapMonitor(AbstractOverlapMonitor):
-    """:class:`Monitor` that records amplitudes from decomposition onto a Gaussian-like beam.
+    """:class:`~tidy3d.Monitor` that records amplitudes from decomposition onto a Gaussian-like beam.
 
     Common fields and behavior shared by GaussianOverlapMonitor and
     AstigmaticGaussianOverlapMonitor.
@@ -580,7 +580,7 @@ class AbstractGaussianOverlapMonitor(AbstractOverlapMonitor):
 
 
 class GaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
-    """:class:`Monitor` that records amplitudes from decomposition onto a Gaussian beam.
+    """:class:`~tidy3d.Monitor` that records amplitudes from decomposition onto a Gaussian beam.
 
     Example
     -------
@@ -617,7 +617,7 @@ class GaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
 
 
 class AstigmaticGaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
-    """:class:`Monitor` that records amplitudes from decomposition onto an astigmatic Gaussian beam.
+    """:class:`~tidy3d.Monitor` that records amplitudes from decomposition onto an astigmatic Gaussian beam.
 
     The simple astigmatic Gaussian distribution allows
     both an elliptical intensity profile and different waist locations for the two principal axes
@@ -664,7 +664,7 @@ class AstigmaticGaussianOverlapMonitor(AbstractGaussianOverlapMonitor):
 
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
-    """:class:`Monitor` that records electromagnetic fields in the frequency domain.
+    """:class:`~tidy3d.Monitor` that records electromagnetic fields in the frequency domain.
 
     Notes
     -----
@@ -704,7 +704,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
 
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
-    """:class:`Monitor` that records electromagnetic fields in the time domain.
+    """:class:`~tidy3d.Monitor` that records electromagnetic fields in the time domain.
 
     Notes
     -----
@@ -777,7 +777,7 @@ class AuxFieldTimeMonitor(AbstractAuxFieldMonitor, TimeMonitor):
 
 
 class AbstractMediumPropertyMonitor(FreqMonitor, ABC):
-    """:class:`Monitor` that records material properties in the frequency domain."""
+    """:class:`~tidy3d.Monitor` that records material properties in the frequency domain."""
 
     colocate: Literal[False] = Field(
         False,
@@ -802,7 +802,7 @@ class AbstractMediumPropertyMonitor(FreqMonitor, ABC):
 
 
 class MediumMonitor(AbstractMediumPropertyMonitor):
-    """:class:`Monitor` that records the diagonal components of the complex-valued relative
+    """:class:`~tidy3d.Monitor` that records the diagonal components of the complex-valued relative
     permittivity and permeability tensor in the frequency domain. The recorded data has the same shape as a
     :class:`.FieldMonitor` of the same geometry: the permittivity and permeability values are saved at the
     Yee grid locations, and can be interpolated to any point inside the monitor.
@@ -831,7 +831,7 @@ class MediumMonitor(AbstractMediumPropertyMonitor):
 
 
 class PermittivityMonitor(AbstractMediumPropertyMonitor):
-    """:class:`Monitor` that records the diagonal components of the complex-valued relative
+    """:class:`~tidy3d.Monitor` that records the diagonal components of the complex-valued relative
     permittivity tensor in the frequency domain. The recorded data has the same shape as a
     :class:`.FieldMonitor` of the same geometry: the permittivity values are saved at the
     Yee grid locations, and can be interpolated to any point inside the monitor.
@@ -923,11 +923,11 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
 
 
 class AbstractFluxMonitor(SurfaceIntegrationMonitor, ABC):
-    """:class:`Monitor` that records flux during the solver run."""
+    """:class:`~tidy3d.Monitor` that records flux during the solver run."""
 
 
 class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
-    """:class:`Monitor` that records power flux in the frequency domain.
+    """:class:`~tidy3d.Monitor` that records power flux in the frequency domain.
 
     Notes
     -----
@@ -960,7 +960,7 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
 
 
 class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
-    """:class:`Monitor` that records power flux in the time domain.
+    """:class:`~tidy3d.Monitor` that records power flux in the time domain.
 
     Notes
     -----
@@ -989,7 +989,7 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
 
 
 class ModeMonitor(AbstractModeMonitor):
-    """:class:`Monitor` that records amplitudes from modal decomposition of fields on plane.
+    """:class:`~tidy3d.Monitor` that records amplitudes from modal decomposition of fields on plane.
 
     Notes
     ------
@@ -1052,7 +1052,7 @@ class ModeMonitor(AbstractModeMonitor):
 
 
 class ModeSolverMonitor(AbstractModeMonitor):
-    """:class:`Monitor` that stores the mode field profiles returned by the mode solver in the
+    """:class:`~tidy3d.Monitor` that stores the mode field profiles returned by the mode solver in the
     monitor plane.
 
     Example
@@ -1151,7 +1151,7 @@ class FieldProjectionSurface(Tidy3dBaseModel):
 
 
 class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
-    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
+    """:class:`~tidy3d.Monitor` that samples electromagnetic near fields in the frequency domain
     and projects them to a given set of observation points.
     """
 
@@ -1326,7 +1326,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
 
 
 class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
-    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
+    """:class:`~tidy3d.Monitor` that samples electromagnetic near fields in the frequency domain
     and projects them at given observation angles.
 
     Notes
@@ -1460,7 +1460,7 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
 class DirectivityMonitor(MicrowaveBaseModel, FieldProjectionAngleMonitor, FluxMonitor):
     """
-    :class:`Monitor` that records the radiation characteristics of antennas in the frequency domain
+    :class:`~tidy3d.Monitor` that records the radiation characteristics of antennas in the frequency domain
     at specified observation angles.
 
     Note
@@ -1508,7 +1508,7 @@ class DirectivityMonitor(MicrowaveBaseModel, FieldProjectionAngleMonitor, FluxMo
 
 
 class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
-    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
+    """:class:`~tidy3d.Monitor` that samples electromagnetic near fields in the frequency domain
     and projects them on a Cartesian observation plane.
 
     Notes
@@ -1650,7 +1650,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
 
 class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
-    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
+    """:class:`~tidy3d.Monitor` that samples electromagnetic near fields in the frequency domain
     and projects them on an observation plane defined in k-space.
 
      Notes
@@ -1765,7 +1765,7 @@ class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
 
 
 class DiffractionMonitor(PlanarMonitor, FreqMonitor):
-    """:class:`Monitor` that uses a 2D Fourier transform to compute the
+    """:class:`~tidy3d.Monitor` that uses a 2D Fourier transform to compute the
     diffraction amplitudes and efficiency for allowed diffraction orders.
 
     Note

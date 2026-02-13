@@ -1613,7 +1613,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         return grid.snap_to_box_zero_dim(Box(center=self.center, size=size_snapped))
 
     def _discretize_grid(self, box: Box, grid: Grid, extend: bool = False) -> Grid:
-        """Grid containing only cells that intersect with a :class:`Box`.
+        """Grid containing only cells that intersect with a :class:`~tidy3d.Box`.
 
         As opposed to ``Simulation.discretize``, this function operates on a ``grid``
         which may not be the grid of the simulation.
@@ -3005,22 +3005,24 @@ class Simulation(AbstractYeeGridSimulation):
         description="Tuple of integers defining reflection symmetry across a plane "
         "bisecting the simulation domain normal to the x-, y-, and z-axis "
         "at the simulation center of each axis, respectively. "
-        "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or "
-        "``-1`` (odd, i.e. 'PEC' symmetry). "
+        "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. "
+        ":class:`~tidy3d.PMCBoundary` symmetry) or ``-1`` (odd, i.e. "
+        ":class:`~tidy3d.PECBoundary` symmetry). "
         "Note that the vectorial nature of the fields must be taken into account to correctly "
         "determine the symmetry value.",
     )
     """
     You should set the ``symmetry`` parameter in your :class:`.Simulation` object using a tuple of integers
     defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
-    Each element can be 0 (no symmetry), 1 (even, i.e. :class:`PMC` symmetry) or -1 (odd, i.e. :class:`PEC`
+    Each element can be 0 (no symmetry), 1 (even, i.e. :class:`~tidy3d.PMCBoundary` symmetry) or -1 (odd, i.e. :class:`~tidy3d.PECBoundary`
     symmetry). Note that the vectorial nature of the fields must be considered to determine the symmetry value
     correctly.
 
-    The figure below illustrates how the electric and magnetic field components transform under :class:`PEC`- and
-    :class:`PMC`-like symmetry planes. You can refer to this figure when considering whether a source field conforms
-    to a :class:`PEC`- or :class:`PMC`-like symmetry axis. This would be helpful, especially when dealing with
-    optical waveguide modes.
+    The figure below illustrates how the electric and magnetic field components transform under
+    :class:`~tidy3d.PECBoundary`- and :class:`~tidy3d.PMCBoundary`-like symmetry planes. You can refer to this figure
+    when considering whether a source field conforms to a :class:`~tidy3d.PECBoundary`- or
+    :class:`~tidy3d.PMCBoundary`-like symmetry axis. This would be helpful, especially when dealing with optical
+    waveguide modes.
 
     .. image:: ../../notebooks/img/pec_pmc.png
 

@@ -37,12 +37,12 @@ class AbstractMonitor(Box, ABC):
 
     @cached_property
     def geometry(self) -> Box:
-        """:class:`Box` representation of monitor.
+        """:class:`~tidy3d.Box` representation of monitor.
 
         Returns
         -------
-        :class:`Box`
-            Representation of the monitor geometry as a :class:`Box`.
+        :class:`~tidy3d.Box`
+            Representation of the monitor geometry as a :class:`~tidy3d.Box`.
         """
         return Box(center=self.center, size=self.size)
 

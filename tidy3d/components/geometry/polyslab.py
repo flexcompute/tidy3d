@@ -504,7 +504,7 @@ class PolySlab(base.Planar):
     def inside(self, x: NDArray[float], y: NDArray[float], z: NDArray[float]) -> NDArray[bool]:
         """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
         with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
-        volume of the :class:`Geometry`, and ``False`` otherwise.
+        volume of the :class:`~tidy3d.Geometry`, and ``False`` otherwise.
 
         Note
         ----
@@ -2467,7 +2467,7 @@ class PolySlab(base.Planar):
 
         Returns
         -------
-        :class:`Geometry`
+        :class:`~tidy3d.Geometry`
             Scaled copy of this geometry.
         """
         scale_normal, scale_in_plane = self.pop_axis((x, y, z), axis=self.axis)

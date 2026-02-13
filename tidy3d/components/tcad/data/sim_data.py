@@ -148,7 +148,7 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
         Parameters
         ----------
         monitor_name : str
-            Name of :class:`.HeatChargeMonitor` to plot. Must be a monitor with the `unstructured=True` setting.
+            Name of :class:`~tidy3d.components.tcad.monitors.abstract.HeatChargeMonitor` to plot. Must be a monitor with the `unstructured=True` setting.
         field_name : Optional[str] = "mesh"
             Name of ``field`` component whose associated grid to plot. Not required if monitor data contains only one field.
         structures_fill : bool = True
@@ -299,7 +299,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         Parameters
         ----------
         monitor_name : str
-            Name of :class:`.HeatChargeMonitor` to plot.
+            Name of :class:`~tidy3d.components.tcad.monitors.abstract.HeatChargeMonitor` to plot.
         field_name : Optional[Literal["temperature", "potential"]] = None
             Name of ``field`` component to plot (eg. `'temperature'`). Not required if monitor data contains only one field.
         val : Literal['real', 'abs', 'abs^2'] = 'real'
@@ -492,7 +492,7 @@ class HeatSimulationData(HeatChargeSimulationData):
 
     simulation: HeatSimulation = Field(
         title="Heat Simulation",
-        description="Original :class:`HeatSimulation` associated with the data.",
+        description="Original :class:`~tidy3d.HeatSimulation` associated with the data.",
     )
 
     @model_validator(mode="before")
@@ -583,7 +583,7 @@ class VolumeMesherData(AbstractHeatChargeSimulationData):
 
     @model_validator(mode="after")
     def data_monitors_match_sim(self) -> Self:
-        """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
+        """Ensure each :class:`~tidy3d.components.base_sim.data.monitor_data.AbstractMonitorData` in ``.data`` corresponds to a monitor in
         ``.simulation``.
         """
         mnt_names = {mnt.name for mnt in self.monitors}

@@ -194,7 +194,7 @@ class AbstractStructure(Tidy3dBaseModel):
 class Structure(AbstractStructure):
     """Defines a physical object that interacts with the electromagnetic fields.
     A :class:`.Structure` is a combination of a material property (:class:`AbstractMedium`)
-    and a :class:`Geometry`.
+    and a :class:`~tidy3d.Geometry`.
 
     Notes
     ------
@@ -798,7 +798,7 @@ class MeshOverrideStructure(AbstractStructure):
     Notes
     -----
 
-        A :class:`.MeshOverrideStructure` is a combination of geometry :class:`Geometry`,
+        A :class:`.MeshOverrideStructure` is a combination of geometry :class:`~tidy3d.Geometry`,
         grid size along ``x``, ``y``, ``z`` directions, and a boolean on whether the override
         will be enforced.
 

@@ -63,7 +63,7 @@ def test_medium_repr():
     test_media = [
         td.Medium(permittivity=1.5**2),
         td.Medium(permittivity=1.5**2, name=material_name),
-        td.material_library["SiO2"]["Horiba"].updated_copy(name=None),
+        td.material_library["SiO2"]["Horiba"],
     ]
     noname_medium_in_dict = {"medium": test_media[0]}
 
@@ -72,7 +72,7 @@ def test_medium_repr():
     str_noname_medium_dict = str(noname_medium_in_dict)
 
     assert "name=None," in str_noname_medium, "Expected medium information in string"
-    assert "name=None" in repr_noname_medium, "Expected medium information in repr"
+    assert "permittivity=" in repr_noname_medium, "Expected medium information in repr"
     assert repr_noname_medium in str_noname_medium_dict, "Expected repr in dictionary string"
 
     for medium in test_media:

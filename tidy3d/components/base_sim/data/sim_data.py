@@ -29,18 +29,18 @@ if TYPE_CHECKING:
 
 class AbstractSimulationData(Tidy3dBaseModel, ABC):
     """Stores data from a collection of :class:`AbstractMonitor` objects in
-    a :class:`AbstractSimulation`.
+    a :class:`~tidy3d.components.base_sim.simulation.AbstractSimulation`.
     """
 
     simulation: AbstractSimulation = Field(
         title="Simulation",
-        description="Original :class:`AbstractSimulation` associated with the data.",
+        description="Original :class:`~tidy3d.components.base_sim.simulation.AbstractSimulation` associated with the data.",
     )
 
     data: tuple[AbstractMonitorData, ...] = Field(
         title="Monitor Data",
-        description="List of :class:`AbstractMonitorData` instances "
-        "associated with the monitors of the original :class:`AbstractSimulation`.",
+        description="List of :class:`~tidy3d.components.base_sim.data.monitor_data.AbstractMonitorData` instances "
+        "associated with the monitors of the original :class:`~tidy3d.components.base_sim.simulation.AbstractSimulation`.",
     )
 
     log: Optional[str] = Field(
@@ -56,12 +56,12 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
 
     @property
     def monitor_data(self) -> dict[str, AbstractMonitorData]:
-        """Dictionary mapping monitor name to its associated :class:`AbstractMonitorData`."""
+        """Dictionary mapping monitor name to its associated :class:`~tidy3d.components.base_sim.data.monitor_data.AbstractMonitorData`."""
         return {monitor_data.monitor.name: monitor_data for monitor_data in self.data}
 
     @model_validator(mode="after")
     def data_monitors_match_sim(self) -> Self:
-        """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
+        """Ensure each :class:`~tidy3d.components.base_sim.data.monitor_data.AbstractMonitorData` in ``.data`` corresponds to a monitor in
         ``.simulation``.
         """
         sim = self.simulation
@@ -82,7 +82,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
     def validate_no_ambiguity(
         cls, val: tuple[AbstractMonitorData, ...]
     ) -> tuple[AbstractMonitorData, ...]:
-        """Ensure all :class:`AbstractMonitorData` entries in ``.data`` correspond to different
+        """Ensure all :class:`~tidy3d.components.base_sim.data.monitor_data.AbstractMonitorData` entries in ``.data`` correspond to different
         monitors in ``.simulation``.
         """
         names = [mnt_data.monitor.name for mnt_data in val]

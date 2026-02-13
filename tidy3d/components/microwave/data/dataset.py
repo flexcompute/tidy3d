@@ -18,7 +18,7 @@ class TransmissionLineDataset(ModeFreqDataset):
 
     Notes
     -----
-        The data in this class is only calculated when a :class:`MicrowaveModeSpec`
+        The data in this class is only calculated when a :class:`~tidy3d.rf.MicrowaveModeSpec`
         is provided to the :class:`ModeMonitor`, :class:`ModeSolverMonitor`, :class:`ModeSolver`,
         or :class:`ModeSimulation`.
     """

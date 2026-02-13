@@ -83,7 +83,7 @@ There are many different models that can be used to describe dispersive mediums.
 
    tidy3d.plugins.dispersion.FastDispersionFitter
 
-Alternatively, the :class:`FastDispersionFitter` plugin can be used to generate a dispersive medium from external data. The data can be provided as a local text file or a web URL from the materials database `refractiveindex.info <https://refractiveindex.info>`_.
+Alternatively, the :class:`~tidy3d.plugins.dispersion.FastDispersionFitter` plugin can be used to generate a dispersive medium from external data. The data can be provided as a local text file or a web URL from the materials database `refractiveindex.info <https://refractiveindex.info>`_.
 
 .. code-block:: python
 
@@ -139,7 +139,7 @@ Anisotropic
    :template: module.rst
 
    tidy3d.AnisotropicMedium
-   tidy3d.AnisotropicMediumFromMedium2D
+   tidy3d.components.medium.AnisotropicMediumFromMedium2D
    tidy3d.FullyAnisotropicMedium
    tidy3d.Medium2D
 
@@ -190,10 +190,10 @@ Metallic/PEC/PMC
 
    tidy3d.PECMedium
    tidy3d.PMCMedium
-   tidy3d.LossyMetalMedium
-   tidy3d.SurfaceImpedanceFitterParam
-   tidy3d.HammerstadSurfaceRoughness
-   tidy3d.HuraySurfaceRoughness
+   tidy3d.rf.LossyMetalMedium
+   tidy3d.rf.SurfaceImpedanceFitterParam
+   tidy3d.rf.HammerstadSurfaceRoughness
+   tidy3d.rf.HuraySurfaceRoughness
 
 At lower frequencies, the EM field typically does not penetrate very far into the metallic medium. In this regime, metallic structures are commonly modeled as boundary conditions. In Tidy3D, a metallic medium is assigned to a structure and the corresponding boundary conditions are automatically applied to its geometric boundaries.
 
@@ -205,11 +205,11 @@ At lower frequencies, the EM field typically does not penetrate very far into th
    # lossy metal (conductivity in S/um)
    my_lossy_metal = LossyMetalMedium(conductivity=58, freq_range=(1e9, 10e9))
 
-The :class:`.LossyMetalMedium` class implements the surface impedance boundary condition (SIBC). It can also accept surface roughness specifications using the Hammerstad or Huray models. Please refer to its documentation page for details.
+The :class:`~tidy3d.rf.LossyMetalMedium` class implements the surface impedance boundary condition (SIBC). It can also accept surface roughness specifications using the Hammerstad or Huray models. Please refer to its documentation page for details.
 
 .. note::
    
-   For lossy metallic mediums, always be sure to check the skin depth --- if the skin depth is not negligible compared to the structure size, then :class:`.LossyMetalMedium` may be not accurate. In that case, use a regular dispersive medium instead.
+   For lossy metallic mediums, always be sure to check the skin depth --- if the skin depth is not negligible compared to the structure size, then :class:`~tidy3d.rf.LossyMetalMedium` may be not accurate. In that case, use a regular dispersive medium instead.
 
 ~~~~
 
@@ -286,6 +286,8 @@ Perturbation (Multiphysics)
    tidy3d.PerturbationPoleResidue
    tidy3d.NedeljkovicSorefMashanovich
    tidy3d.ParameterPerturbation
+   tidy3d.PermittivityPerturbation
+   tidy3d.IndexPerturbation
 
 When performing a multiphysics simulation, the temperature or carrier density field will result in a perturbation to the optical medium.
 

@@ -10,14 +10,14 @@ from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 
 
 class MicrowaveModeMonitorBase(MicrowaveBaseModel):
-    """Base class for microwave mode monitors that use :class:`.MicrowaveModeSpec`.
+    """Base class for microwave mode monitors that use :class:`~tidy3d.rf.MicrowaveModeSpec`.
 
     This mixin provides the ``mode_spec`` field configured for RF and microwave applications,
     including characteristic impedance calculations and transmission line analysis.
 
     Notes
     -----
-    This is a mixin class that provides the :class:`.MicrowaveModeSpec` field for mode monitors.
+    This is a mixin class that provides the :class:`~tidy3d.rf.MicrowaveModeSpec` field for mode monitors.
     It must be placed first in the inheritance list to ensure its ``mode_spec`` field takes
     precedence over the base :class:`.ModeSpec` field from :class:`.AbstractModeMonitor`.
     """

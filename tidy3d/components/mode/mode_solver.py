@@ -489,7 +489,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     @property
     def _has_microwave_mode_spec(self) -> bool:
-        """Check if the mode solver is using a :class:`.MicrowaveModeSpec`.,
+        """Check if the mode solver is using a :class:`~tidy3d.rf.MicrowaveModeSpec`.,
         and will thus be creating :class:`.MicrowaveModeSolverData`."""
         return isinstance(self.mode_spec, MicrowaveModeSpec)
 
