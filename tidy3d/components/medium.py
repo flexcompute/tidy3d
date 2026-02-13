@@ -2703,7 +2703,7 @@ class DispersiveMedium(AbstractMedium, ABC):
     def _run_after_validators(self) -> Self:
         """Run post-init validations in an explicit, dependency-aware order."""
         super()._run_after_validators()
-        if "eps_inf" in self.model_fields:
+        if "eps_inf" in type(self).model_fields:
             call_wrapped_validator(DispersiveMedium._permittivity_modulation_validation, self)
         call_wrapped_validator(DispersiveMedium._conductivity_modulation_validation, self)
         return self
