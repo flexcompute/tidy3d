@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
 import numpy as np
 from pydantic import BaseModel, TypeAdapter
 
+from tidy3d.log import log
+
 if TYPE_CHECKING:
     from typing import Optional
 
@@ -108,7 +110,11 @@ def _format_model_default(model: BaseModel, *, show_default_args: bool) -> str:
 
     model_cls = model.__class__
     try:
-        default_model = model_cls()
+        # Suppress log output during speculative default model creation, as some models
+        # (e.g. CustomMedium, ParameterPerturbation) cannot be instantiated without
+        # required arguments and their validators log error messages before raising.
+        with log.suppress_output():
+            default_model = model_cls()
         current_dump = model.model_dump()
         default_dump = default_model.model_dump()
     except Exception:

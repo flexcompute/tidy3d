@@ -139,6 +139,7 @@ class Logger:
         self._stack = None
         self._capture = False
         self._captured_warnings = []
+        self._suppress_all = False
 
     def set_capture(self, capture: bool) -> None:
         """Turn on/off tree-like capturing of log messages."""
@@ -178,6 +179,20 @@ class Logger:
                 self.log(max_level, "Suppressed " + ", ".join(counts) + noun)
                 self._stack = stack
         return False
+
+    @contextmanager
+    def suppress_output(self) -> Iterator[None]:
+        """Context manager to suppress all log output.
+
+        This is useful for speculative operations where validation failures are expected
+        and their error messages should not be shown to the user.
+        """
+        old_value = self._suppress_all
+        self._suppress_all = True
+        try:
+            yield
+        finally:
+            self._suppress_all = old_value
 
     def begin_capture(self) -> None:
         """Start capturing log stack for consolidated validation log.
@@ -279,6 +294,10 @@ class Logger:
         capture: bool = True,
     ) -> None:
         """Distribute log messages to all handlers"""
+
+        # Skip all output if suppression is active (for speculative operations)
+        if self._suppress_all:
+            return
 
         # Check global cache if requested or if warn_once is enabled for warnings
         # (before composing/capturing to avoid duplicates)
