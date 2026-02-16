@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
-from pydantic import Field, PositiveInt, PrivateAttr, model_validator
+from pydantic import Field, PositiveInt, PrivateAttr, field_validator, model_validator
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from tidy3d._runtime import WASM_BUILD
@@ -855,6 +855,23 @@ class Batch(WebContainer):
     )
 
     _job_type: type = PrivateAttr(Job)
+
+    @field_validator("simulations", mode="before")
+    @classmethod
+    def _validate_simulation_keys_are_task_names(cls, simulations: Any) -> Any:
+        """Ensure mapping keys are task-name strings with a concise error message."""
+        if not isinstance(simulations, Mapping):
+            return simulations
+
+        for task_name in simulations:
+            if not isinstance(task_name, str):
+                raise ValueError(
+                    "Batch simulations keys must be strings (task names). "
+                    f"Got key {task_name!r} of type {type(task_name).__name__!r}. "
+                    "Use explicit string keys, for example: simulations[str(i)] = simulation."
+                )
+
+        return simulations
 
     def run(
         self,
