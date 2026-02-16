@@ -579,3 +579,70 @@ def test_log_scale_with_custom_limits():
     ):
         _ = scene.plot_structures_property(x=0, property="eps", scale="invalid")
     plt.close()
+
+
+def test_perturbed_mediums_unique_names():
+    """Test that perturbed_mediums_copy generates unique medium names based on structure."""
+    from ..utils import AssertLogLevel
+
+    # Setup temperature field for perturbation - large enough to cover both structures
+    coords = {"x": [-1, 2], "y": [-1, 2], "z": [-1, 2]}
+    temperature = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=coords)
+
+    # Create a perturbation medium with a name
+    pp = td.ParameterPerturbation(
+        heat=td.LinearHeatPerturbation(coeff=0.01, temperature_ref=300),
+    )
+    pmed = td.PerturbationMedium(permittivity=3, permittivity_perturbation=pp, name="Si")
+
+    # Two structures using the same perturbation medium - one with name, one without
+    struct1 = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(0.5, 0.5, 0.5)),
+        medium=pmed,
+        name="core",
+    )
+    struct2 = td.Structure(
+        geometry=td.Box(center=(1, 1, 1), size=(0.5, 0.5, 0.5)),
+        medium=pmed,
+        # no name - should use index-based suffix
+    )
+
+    original_scene = td.Scene(structures=[struct1, struct2])
+
+    # No warning about duplicate names since unique names are generated
+    with AssertLogLevel(None):
+        perturbed_scene = original_scene.perturbed_mediums_copy(temperature=temperature)
+
+    # Verify the perturbed mediums have unique names based on structure
+    med1 = perturbed_scene.structures[0].medium
+    med2 = perturbed_scene.structures[1].medium
+
+    assert med1.name == "Si[core]"  # Uses structure name
+    assert med2.name == "Si[structures[1]]"  # Uses index since no structure name
+    assert med1 is not med2  # Different objects
+    # Both derived from the same parent
+    assert med1.derived_from == med2.derived_from == pmed
+
+    # Test with unnamed medium - should remain unnamed (no suffix added)
+    pmed_unnamed = td.PerturbationMedium(permittivity=3, permittivity_perturbation=pp)
+    struct_unnamed = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(0.5, 0.5, 0.5)),
+        medium=pmed_unnamed,
+        name="test",
+    )
+    scene_unnamed = td.Scene(structures=[struct_unnamed])
+
+    with AssertLogLevel(None):
+        perturbed_unnamed = scene_unnamed.perturbed_mediums_copy(temperature=temperature)
+
+    # Unnamed medium should remain unnamed
+    assert perturbed_unnamed.structures[0].medium.name is None
+
+    # Test no-op case: calling without perturbation data should NOT rename mediums
+    with AssertLogLevel(None):
+        no_op_scene = original_scene.perturbed_mediums_copy()  # No perturbation data
+
+    # Medium should be unchanged - same type and name (not renamed with suffix)
+    assert isinstance(no_op_scene.structures[0].medium, td.PerturbationMedium)
+    assert no_op_scene.structures[0].medium.name == "Si"  # Name unchanged, no suffix added
+    assert no_op_scene.structures[1].medium.name == "Si"  # Both still have same name
