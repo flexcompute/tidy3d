@@ -326,10 +326,12 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         method: Optional[Literal["nearest", "pad", "ffill", "backfill", "bfill"]] = None,
         **sel_kwargs: Any,
     ) -> Union[TriangularGridDataset, XrDataArray]:
-        """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument
-        among 'x', 'y', 'z' or non-spatial dimensions through additional arguments. Along spatial dimensions a suitable slicing of
-        grid is applied (plane slice, line slice, or interpolation). Selection along non-spatial dimensions is forwarded to
-        .sel() xarray function. Parameter 'method' applies only to non-spatial dimensions.
+        """Extract/interpolate data along one or more spatial or non-spatial directions.
+
+        Must provide at least one argument among 'x', 'y', 'z' or non-spatial dimensions
+        through additional arguments. Along spatial dimensions a suitable slicing of
+        grid is applied (plane slice, line slice, or interpolation). Selection along
+        non-spatial dimensions is forwarded to .sel() xarray function.
 
         Parameters
         ----------
@@ -339,8 +341,8 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
             y-coordinate of the slice.
         z : Union[float, ArrayLike] = None
             z-coordinate of the slice.
-        method: Optional[Literal["nearest", "pad", "ffill", "backfill", "bfill"]] = None
-            Method to use in xarray sel() function.
+        method : Optional[Literal["nearest", "pad", "ffill", "backfill", "bfill"]] = None
+            Method to use for inexact matches (applies to non-spatial dimensions only).
         **sel_kwargs : dict
             Keyword arguments to pass to the xarray sel() function.
 
