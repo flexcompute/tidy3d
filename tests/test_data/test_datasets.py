@@ -235,6 +235,17 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         assert np.all(no_intersection.data == 909)
         assert no_intersection.name == ds_name
 
+        # test default fill_value="extrapolate" - should use nearest neighbor extrapolation
+        # for points outside the grid (not zeros)
+        extrapolated = tri_grid.interp(x=[1.5, 2], y=2, z=np.linspace(0.2, 0.6, 10))
+        assert not np.all(extrapolated.data == 0)  # should extrapolate, not fill with zeros
+
+        # fill_value=None should behave the same as fill_value="extrapolate"
+        extrapolated_none = tri_grid.interp(
+            x=[1.5, 2], y=2, z=np.linspace(0.2, 0.6, 10), fill_value=None
+        )
+        assert np.allclose(extrapolated.data, extrapolated_none.data)
+
     # renaming
     tri_grid_renamed = tri_grid.rename("renamed")
     assert tri_grid_renamed.name == "renamed"
