@@ -2181,6 +2181,39 @@
       ],
       "type": "object"
     },
+    "CircuitImpedanceModel": {
+      "additionalProperties": false,
+      "properties": {
+        "a": {
+          "items": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "b": {
+          "items": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "CircuitImpedanceModel",
+          "default": "CircuitImpedanceModel",
+          "type": "string"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ],
+      "type": "object"
+    },
     "ClipOperation": {
       "additionalProperties": false,
       "properties": {
@@ -9319,6 +9352,7 @@
           "discriminator": {
             "mapping": {
               "AdmittanceNetwork": "#/$defs/AdmittanceNetwork",
+              "CircuitImpedanceModel": "#/$defs/CircuitImpedanceModel",
               "RLCNetwork": "#/$defs/RLCNetwork"
             },
             "propertyName": "type"
@@ -9326,6 +9360,9 @@
           "oneOf": [
             {
               "$ref": "#/$defs/AdmittanceNetwork"
+            },
+            {
+              "$ref": "#/$defs/CircuitImpedanceModel"
             },
             {
               "$ref": "#/$defs/RLCNetwork"

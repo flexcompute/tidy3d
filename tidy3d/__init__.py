@@ -307,6 +307,7 @@ from .components.grid.grid_spec import (
 # lumped elements
 from .components.lumped_element import (
     AdmittanceNetwork,
+    CircuitImpedanceModel,
     CoaxialLumpedResistor,
     LinearLumpedElement,
     LumpedElement,
@@ -566,6 +567,7 @@ __all__ = [
     "ChargeInsulatorMedium",
     "ChargeToleranceSpec",
     "ChebSampling",
+    "CircuitImpedanceModel",
     "ClipOperation",
     "CoaxialLumpedResistor",
     "CompositeCurrentIntegral",
