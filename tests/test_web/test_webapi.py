@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 import responses
 from _pytest import monkeypatch
+from pydantic import ValidationError
 from responses import matchers
 
 import tidy3d as td
@@ -709,6 +710,31 @@ def test_batch(mock_webapi, mock_job_status, mock_load, tmp_path, task_name):
     b2.run(path_dir=str(tmp_path))
     _ = b2.get_info()
     assert b2.real_cost() == FLEX_UNIT * len(sims)
+
+
+def test_batch_accepts_string_simulation_keys():
+    sims = {"0": make_sim(), "1": make_sim()}
+
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME)
+
+    assert tuple(batch.simulations.keys()) == ("0", "1")
+
+
+def test_batch_rejects_numeric_simulation_keys_with_clear_message():
+    sims = {0: make_sim()}
+
+    with pytest.raises(
+        ValidationError,
+        match="Batch simulations keys must be strings \\(task names\\)",
+    ):
+        Batch(simulations=sims, folder_name=PROJECT_NAME)
+
+
+def test_batch_rejects_non_string_non_numeric_simulation_keys():
+    sims = {("task",): make_sim()}
+
+    with pytest.raises(ValidationError, match="Use explicit string keys"):
+        Batch(simulations=sims, folder_name=PROJECT_NAME)
 
 
 @responses.activate

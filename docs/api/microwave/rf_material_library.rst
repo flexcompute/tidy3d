@@ -22,13 +22,17 @@ For example, Rogers3010 laminate can be loaded as:
 
 You can also import the default variant of a material by:
 
-For frequency-range parametrized materials (MaterialItemFreqRange):
+For frequency-range parametrized materials (MaterialItemFreqRange), medium is a property:
 
->>> medium = rf_material_library['RT_duroid5880'].medium()
+>>> medium = rf_material_library['RT_duroid5880'].medium
 
-For standard materials (MaterialItem), medium is a property:
+For standard materials (MaterialItem), medium is also a property:
 
 >>> medium = rf_material_library['RO3010'].medium
+
+To get a medium for a specific frequency range, use medium_at_range():
+
+>>> medium = rf_material_library['RT_duroid5880'].medium_at_range(frequency_range=(5e9, 10e9))
 
 It is often useful to see the full list of variants for a given medium:
 
@@ -895,5 +899,5 @@ Examples:
 
 References:
 
-#. \Rumble, J. R. (Ed.). (2024), CRC Handbook of Chemistry and Physics (105th ed.)., CRC Press `[url] <https://www.engineeringtoolbox.com/conductors-d_1381.html>`__
+#. \P.D. Desai, Electrical Resistivity of Selected Elements., Journal of Physical and Chemical Reference Data, Vol. 13, No. 4 (1984). `[url] <https://pubs.aip.org/aip/jpr/article-abstract/13/4/1069/241360/Electrical-Resistivity-of-Selected-Elements>`__
 

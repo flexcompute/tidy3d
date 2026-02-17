@@ -729,6 +729,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     f" of grid points ({num_points})."
                 )
 
+            # copy=True is required because vtk_to_numpy may return a view into VTK's
+            # internal memory buffer, which can be invalidated when the VTK object is
+            # modified or garbage collected, causing data corruption.
             values_numpy = np.array(vtk["vtk_to_numpy"](array_vtk), copy=True)
             values_name = array_vtk.GetName()
 
@@ -923,9 +926,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         x: Union[float, ArrayLike] = None,
         y: Union[float, ArrayLike] = None,
         z: Union[float, ArrayLike] = None,
-        fill_value: Optional[
-            Union[float, Literal["extrapolate"]]
-        ] = None,  # TODO: an array if multiple fields?
+        fill_value: Union[
+            float, Literal["extrapolate"], None
+        ] = "extrapolate",  # TODO: an array if multiple fields?
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
@@ -944,10 +947,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             y-coordinates of sampling points.
         z : Union[float, ArrayLike] = None
             z-coordinates of sampling points.
-        fill_value : Union[float, Literal["extrapolate"]] = 0
+        fill_value : Union[float, Literal["extrapolate"], None] = "extrapolate"
             Value to use when filling points without interpolated values. If ``"extrapolate"`` then
-            nearest values are used. Note: in a future version the default value will be changed
-            to ``"extrapolate"``.
+            nearest values are used. Passing ``None`` is equivalent to ``"extrapolate"``.
         use_vtk : bool = False
             Use vtk's interpolation functionality or Tidy3D's own implementation. Note: this
             option will be removed in a future version.
@@ -972,12 +974,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             Interpolated data.
         """
 
+        # Treat None as "extrapolate" for backward compatibility
         if fill_value is None:
-            log.warning(
-                "Default parameter setting 'fill_value=0' will be changed to "
-                "'fill_value=``extrapolate``' in a future version."
-            )
-            fill_value = 0
+            fill_value = "extrapolate"
 
         spatial_dims_given = any(comp is not None for comp in [x, y, z])
         if spatial_dims_given and any(comp is None for comp in [x, y, z]):
@@ -1050,9 +1049,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
         z: Union[float, ArrayLike],
-        fill_value: Optional[
-            Union[float, Literal["extrapolate"]]
-        ] = None,  # TODO: an array if multiple fields?
+        fill_value: Union[
+            float, Literal["extrapolate"]
+        ] = "extrapolate",  # TODO: an array if multiple fields?
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
@@ -1069,10 +1068,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             y-coordinates of sampling points.
         z : Union[float, ArrayLike]
             z-coordinates of sampling points.
-        fill_value : Union[float, Literal["extrapolate"]] = 0
+        fill_value : Union[float, Literal["extrapolate"]] = "extrapolate"
             Value to use when filling points without interpolated values. If ``"extrapolate"`` then
-            nearest values are used. Note: in a future version the default value will be changed
-            to ``"extrapolate"``.
+            nearest values are used.
         use_vtk : bool = False
             Use vtk's interpolation functionality or Tidy3D's own implementation. Note: this
             option will be removed in a future version.

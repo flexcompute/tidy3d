@@ -13,10 +13,6 @@ from tidy3d.material_library.material_library import (
     MaterialItemUniaxial,
 )
 from tidy3d.plugins.microwave import rf_material_library as rf_lib
-from tidy3d.plugins.microwave.rf_material_library import (
-    VariantItemFreqRangeDielectric,
-    VariantItemFreqRangeMetal,
-)
 
 LOW_LOSS_THRESHOLD = 2e-5
 
@@ -264,10 +260,12 @@ def generate_rf_material_library_doc():
             "For example, Rogers3010 laminate can be loaded as:\n\n"
             ">>> Rogers3010 = rf_material_library['RO3010']['design']\n\n"
             "You can also import the default variant of a material by:\n\n"
-            "For frequency-range parametrized materials (MaterialItemFreqRange):\n\n"
-            ">>> medium = rf_material_library['RT_duroid5880'].medium()\n\n"
-            "For standard materials (MaterialItem), medium is a property:\n\n"
+            "For frequency-range parametrized materials (MaterialItemFreqRange), medium is a property:\n\n"
+            ">>> medium = rf_material_library['RT_duroid5880'].medium\n\n"
+            "For standard materials (MaterialItem), medium is also a property:\n\n"
             ">>> medium = rf_material_library['RO3010'].medium\n\n"
+            "To get a medium for a specific frequency range, use medium_at_range():\n\n"
+            ">>> medium = rf_material_library['RT_duroid5880'].medium_at_range(frequency_range=(5e9, 10e9))\n\n"
             "It is often useful to see the full list of variants for a given medium:\n\n"
             ">>> print(rf_material_library['mat'].variants.keys())\n\n"
             "To access the details of a variant, including material model and references, use the following command:\n\n"
@@ -309,11 +307,8 @@ def generate_rf_material_library_doc():
                     row["variant"] += " (default)"
 
                 # Load medium
-                # Check if variant has medium as a method (VariantItemFreqRange*) or property (VariantItem)
-                if isinstance(var, (VariantItemFreqRangeDielectric, VariantItemFreqRangeMetal)):
-                    medium = var.medium()
-                else:
-                    medium = var.medium
+                # medium is a property for all variant types (VariantItemFreqRange* and VariantItem)
+                medium = var.medium
 
                 # Pole number
                 # Handle LossyMetalMedium differently - it has num_poles and scaled_surface_impedance_model

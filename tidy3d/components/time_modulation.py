@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     from tidy3d.compat import Self
 
-    from .types import Bound
+    from .types import ArrayComplex1D, ArrayFloat1D, Bound
 
 
 class AbstractTimeModulation(AbstractTimeDependence, ABC):
@@ -76,7 +76,7 @@ class ContinuousWaveTimeModulation(AbstractTimeDependence):
         json_schema_extra={"units": HERTZ},
     )
 
-    def amp_time(self, time: float) -> complex:
+    def amp_time(self, time: Union[float, ArrayFloat1D]) -> Union[complex, ArrayComplex1D]:
         """Complex-valued source amplitude as a function of time."""
 
         omega = 2 * np.pi * self.freq0

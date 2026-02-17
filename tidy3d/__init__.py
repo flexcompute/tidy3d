@@ -348,6 +348,14 @@ from .components.medium import (
     SurfaceImpedanceFitterParam,
     medium_from_nk,
 )
+
+# sources
+from .components.microwave.time import (
+    BasebandCustomSourceTime,
+    BasebandGaussianPulse,
+    BasebandRectangularPulse,
+    BasebandStep,
+)
 from .components.mode.data.sim_data import ModeSimulationData
 
 # Mode
@@ -431,8 +439,6 @@ from .components.source.field import (
 from .components.source.frame import (
     PECFrame,
 )
-
-# sources
 from .components.source.time import (
     BroadbandPulse,
     ContinuousWave,
@@ -540,6 +546,10 @@ __all__ = [
     "AxisAlignedCurrentIntegralSpec",
     "AxisAlignedVoltageIntegral",
     "AxisAlignedVoltageIntegralSpec",
+    "BasebandCustomSourceTime",
+    "BasebandGaussianPulse",
+    "BasebandRectangularPulse",
+    "BasebandStep",
     "BlochBoundary",
     "Boundary",
     "BoundaryEdge",

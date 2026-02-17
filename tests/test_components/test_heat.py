@@ -662,24 +662,35 @@ def test_sim_version_update():
 
 @pytest.mark.parametrize("zero_dim_axis", [None, 0, 2])
 def test_symmetry_expanded(zero_dim_axis):
+    # Test symmetry expansion with mesh that conforms to symmetry axis but not monitor bounds.
+    # The mesh boundary is at the symmetry center, so after expansion there are no duplicate
+    # cells at the join. But the expanded data may extend beyond the monitor, requiring clipping.
+    # sel_inside keeps boundary cells, so final bounds may slightly exceed monitor bounds.
     symmetry_center = [2, 0.5, 0]
     symmetry = [1, 1, 1]
 
     lens = [1, 2, 2]
-    num_points = [7, 4, 11]
+    num_points = [7, 5, 11]
 
     if zero_dim_axis is not None:
         lens[zero_dim_axis] = 0
         num_points[zero_dim_axis] = 1
 
-    mnt_span_x = [1 - lens[0], 1]
-    mnt_span_y = [-lens[1] / 2, lens[1] / 2]
-    mnt_span_z = [1, 1 + lens[2]]
+    # Monitor is smaller than the expanded data, requiring clipping
+    # For x: data [3, 4] mirrors around x=2 to [0, 1], monitor = [0, 1] (exact match)
+    # For y: data [0.5, 2.5] expands around y=0.5 to [-1.5, 2.5], monitor = [-1, 1] (needs clipping)
+    # For z: no expansion needed (monitor doesn't extend into mirror region)
+    mnt_span_x = [1 - lens[0], 1]  # [0, 1] for lens[0]=1
+    mnt_span_y = [-lens[1] / 2, lens[1] / 2]  # [-1, 1] for lens[1]=2
+    mnt_span_z = [1, 1 + lens[2]]  # [1, 3] for lens[2]=2
 
-    # symmetric around symmetry_center
-    data_span_x = [3, 3 + lens[0]]
-    data_span_y = [0.5, 0.5 + lens[1]]
-    data_span_z = [1, 1 + lens[2]]
+    # Data with mesh boundary at symmetry center (conforms to symmetry axis)
+    # - x: reflection_only mirrors [3, 4] to [0, 1]
+    # - y: data starts at symmetry center, expands to cover both sides
+    # - z: no expansion needed
+    data_span_x = [3, 3 + lens[0]]  # [3, 4] → [0, 1] via reflection_only
+    data_span_y = [symmetry_center[1], symmetry_center[1] + lens[1]]  # [0.5, 2.5] → [-1.5, 2.5]
+    data_span_z = [1, 1 + lens[2]]  # [1, 3] stays as is
 
     mnt_bounds = np.array(list(zip(mnt_span_x, mnt_span_y, mnt_span_z)))
     mnt_size = tuple(mnt_bounds[1] - mnt_bounds[0])
@@ -719,10 +730,9 @@ def test_symmetry_expanded(zero_dim_axis):
     data_expanded_cart = mnt_data_cart_expanded.temperature
     data_expanded_ugrid = mnt_data_ugrid_expanded.temperature
 
-    # print(data_expanded_ugrid.bounds)
-    # print(mnt_bounds)
-
-    assert np.all(data_expanded_ugrid.bounds == mnt_bounds)
+    # Unstructured data uses sel_inside for clipping, which keeps boundary cells.
+    # So the final bounds may extend slightly beyond monitor bounds, but must cover them.
+    assert data_expanded_ugrid.does_cover(mnt_bounds)
     assert data_expanded_cart.does_cover(mnt_bounds)
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from pydantic import Field, PositiveFloat, field_validator, model_validator
@@ -19,11 +19,13 @@ from tidy3d.components.types import FreqBound
 from tidy3d.components.validators import warn_if_dataset_none
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import HERTZ
-from tidy3d.exceptions import ValidationError
+from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import check_tidy3d_extras_licensed_feature, tidy3d_extras
 
 if TYPE_CHECKING:
+    from typing import Union
+
     from tidy3d.components.types import ArrayComplex1D, ArrayFloat1D, Ax, PlotVal
 
 # how many units of ``twidth`` from the ``offset`` until a gaussian pulse is considered "off"
@@ -75,6 +77,49 @@ class SourceTime(AbstractTimeDependence):
         return self.plot_spectrum_in_frequency_range(
             times, fmin, fmax, num_freqs=num_freqs, val=val, ax=ax
         )
+
+    @staticmethod
+    def _frequency_range_from_fft(dt: float, values: ArrayFloat1D, num_fwidth: float) -> FreqBound:
+        """Compute frequency range from FFT of a time-domain signal.
+
+        Returns ``(fmin, fmax)`` bounding all FFT bins whose amplitude exceeds
+        ``exp(-num_fwidth**2 / 2)`` of the peak value.  The lower bound is
+        nonzero when the signal has no DC content (e.g. a modulated carrier).
+
+        Parameters
+        ----------
+        dt : float
+            Uniform time step between samples.
+        values : np.ndarray
+            Real-valued signal samples.
+        num_fwidth : float
+            Number of equivalent bandwidths for the cutoff threshold.
+            Bins are kept where ``amplitude >= exp(-num_fwidth**2 / 2) * peak``.
+
+        Returns
+        -------
+        Tuple[float, float]
+            ``(fmin, fmax)`` frequency range.
+        """
+        if len(values) < 2:
+            raise SetupError("'values' must be an array with more than one element.")
+        if np.allclose(values, 0):
+            raise SetupError("'values' signal is all zeros; frequency range is undefined.")
+        spectrum = np.abs(np.fft.rfft(np.real(values)))
+        freqs = np.fft.rfftfreq(len(values), d=dt)
+        df = freqs[1] - freqs[0]
+
+        peak = np.max(spectrum)
+
+        cutoff = np.exp(-(num_fwidth**2) / 2)
+        above_cutoff = spectrum >= cutoff * peak
+
+        indices = np.where(above_cutoff)[0]
+        fmin = float(freqs[indices[0]])
+        fmax = float(freqs[indices[-1]])
+        # Ensure at least one frequency bin of bandwidth
+        fmax = max(fmax, fmin + df)
+        return (fmin, fmax)
 
     @abstractmethod
     def frequency_range(self, num_fwidth: float = DEFAULT_SIGMA) -> FreqBound:
@@ -200,7 +245,7 @@ class GaussianPulse(Pulse):
         """Offset time in seconds. Note that in the case of DC removal, the maximal value of pulse can be shifted."""
         return self.peak_time + self._peak_time_shift
 
-    def amp_time(self, time: float) -> complex:
+    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time."""
 
         omega0 = 2 * np.pi * self.freq0
@@ -221,7 +266,7 @@ class GaussianPulse(Pulse):
             # 1j to make it agree in large omega0 limit
             pulse_amp = pulse_amp * 1j
 
-        return pulse_amp
+        return np.atleast_1d(pulse_amp)
 
     def end_time(self) -> Optional[float]:
         """Time after which the source is effectively turned off / close to zero amplitude."""
@@ -413,7 +458,7 @@ class ContinuousWave(Pulse):
     >>> cw = ContinuousWave(freq0=200e12, fwidth=20e12)
     """
 
-    def amp_time(self, time: float) -> complex:
+    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time."""
 
         twidth = 1.0 / (2 * np.pi * self.fwidth)
@@ -425,7 +470,7 @@ class ContinuousWave(Pulse):
         oscillation = np.exp(-1j * omega0 * time)
         amp = 1 / (1 + np.exp(-time_shifted / twidth)) * self.amplitude
 
-        return const * offset * oscillation * amp
+        return np.atleast_1d(const * offset * oscillation * amp)
 
     def end_time(self) -> Optional[float]:
         """Time after which the source is effectively turned off / close to zero amplitude."""
@@ -484,12 +529,17 @@ class CustomSourceTime(Pulse):
 
     @field_validator("source_time_dataset")
     @classmethod
-    def _more_than_one_time(cls, val: Optional[TimeDataset]) -> Optional[TimeDataset]:
-        """Must have more than one time to interpolate."""
+    def _validate_time_coords(cls, val: Optional[TimeDataset]) -> Optional[TimeDataset]:
+        """Time coordinates must have more than one point and be strictly increasing."""
         if val is None:
             return val
         if val.values.size <= 1:
             raise ValidationError("'CustomSourceTime' must have more than one time coordinate.")
+        times = val.values.coords["t"].values
+        if not np.all(np.diff(times) > 0):
+            raise ValidationError(
+                "'CustomSourceTime' time coordinates must be strictly monotonically increasing."
+            )
         return val
 
     @classmethod
@@ -519,6 +569,8 @@ class CustomSourceTime(Pulse):
             between ``0`` and ``dt * (N-1)`` with a step size of ``dt``, where ``N`` is the length of
             the values array.
         """
+        if dt <= 0:
+            raise ValidationError("'dt' must be positive.")
 
         times = np.arange(len(values)) * dt
         source_time_dataarray = TimeDataArray(values, coords={"t": times})
@@ -553,25 +605,25 @@ class CustomSourceTime(Pulse):
 
         return (max_time_shifted < min(data_times)) | (min_time_shifted > max(data_times))
 
-    def amp_time(self, time: float) -> complex:
+    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time.
 
         Parameters
         ----------
-        time : float
-            Time in seconds.
+        time : Union[float, ArrayFloat1D]
+            Time in seconds, either a single value or an array.
 
         Returns
         -------
-        complex
-            Complex-valued source amplitude at that time.
+        ArrayComplex1D
+            Complex-valued source amplitude at the given time(s).
         """
 
         if self.source_time_dataset is None:
-            return None
+            raise SetupError("'source_time_dataset' must be provided to use this method.")
 
         # make time a numpy array for uniform handling
-        times = np.array([time] if isinstance(time, (int, float)) else time)
+        times = np.atleast_1d(np.asarray(time))
         data_times = self.data_times
 
         # shift time
@@ -600,7 +652,7 @@ class CustomSourceTime(Pulse):
         """Time after which the source is effectively turned off / close to zero amplitude."""
 
         if self.source_time_dataset is None:
-            return None
+            raise SetupError("'source_time_dataset' must be provided to use this method.")
 
         data_array = self.source_time_dataset.values
 
@@ -608,7 +660,10 @@ class CustomSourceTime(Pulse):
         source_is_non_zero = ~np.isclose(abs(data_array), 0)
         t_non_zero = t_coords[source_is_non_zero]
 
-        return np.max(t_non_zero)
+        if len(t_non_zero) == 0:
+            return None
+
+        return float(np.max(t_non_zero))
 
 
 class BroadbandPulse(SourceTime):
@@ -669,7 +724,7 @@ class BroadbandPulse(SourceTime):
         """Time after which the source is effectively turned off / close to zero amplitude."""
         return self._source.end_time(END_TIME_FACTOR_GAUSSIAN)
 
-    def amp_time(self, time: float) -> complex:
+    def amp_time(self, time: Union[float, ArrayFloat1D]) -> ArrayComplex1D:
         """Complex-valued source amplitude as a function of time."""
         return self._source.amp_time(time)
 
@@ -686,6 +741,3 @@ class BroadbandPulse(SourceTime):
         is within ``exp(-num_fwidth**2/2)`` of the peak amplitude.
         """
         return self.frequency_range_sigma(num_fwidth)
-
-
-SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime, BroadbandPulse]

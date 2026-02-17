@@ -45,6 +45,44 @@ if TYPE_CHECKING:
     from tidy3d.components.types import Ax, RealFieldVal
 
 
+def _compute_monitor_axis_limits(
+    monitor: Any,
+    sim_bounds: tuple,
+    field_data_bounds: tuple,
+    axis: int,
+) -> tuple[list[float], list[float]]:
+    """Compute axis limits from monitor extent clipped to simulation domain.
+
+    Parameters
+    ----------
+    monitor : Monitor
+        The monitor whose bounds are used for axis limits.
+    sim_bounds : tuple
+        The simulation domain bounds ((xmin, ymin, zmin), (xmax, ymax, zmax)).
+    field_data_bounds : tuple
+        The field data bounds to use as fallback for zero-size dimensions.
+    axis : int
+        The normal axis to exclude from the returned limits.
+
+    Returns
+    -------
+    tuple
+        (ax_min, ax_max) each as a 2-element list for the two tangential axes.
+    """
+    ax_min: list[float] = []
+    ax_max: list[float] = []
+    for d in range(3):
+        if monitor.size[d] > 0:
+            ax_min.append(max(monitor.center[d] - monitor.size[d] / 2, sim_bounds[0][d]))
+            ax_max.append(min(monitor.center[d] + monitor.size[d] / 2, sim_bounds[1][d]))
+        else:
+            ax_min.append(field_data_bounds[0][d])
+            ax_max.append(field_data_bounds[1][d])
+    ax_min.pop(axis)
+    ax_max.pop(axis)
+    return ax_min, ax_max
+
+
 class DeviceCharacteristics(Tidy3dBaseModel):
     """Stores device characteristics. For example, in steady-state it stores
     the steady DC capacitance (provided an array of voltages has been defined
@@ -194,12 +232,17 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
         axis = field_data.normal_axis
         position = field_data.normal_pos
 
-        # compute plot bounds
+        # compute plot bounds from field data for structures
         field_data_bounds = field_data.bounds
         min_bounds = list(field_data_bounds[0])
         max_bounds = list(field_data_bounds[1])
         min_bounds.pop(axis)
         max_bounds.pop(axis)
+
+        # compute axis limits from monitor extent (clipped to simulation domain)
+        ax_min, ax_max = _compute_monitor_axis_limits(
+            monitor_data.monitor, self.simulation.bounds, field_data_bounds, axis
+        )
 
         # select the cross section data
         interp_kwarg = {"xyz"[axis]: position}
@@ -212,12 +255,13 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
             **interp_kwarg,
         )
 
-        # only then overlay the mesh plot
-        field_data.plot(ax=ax, cmap=False, field=False, grid=True)
+        # set axis limits to monitor bounds and disable autoscaling
+        ax.set_xlim(ax_min[0], ax_max[0])
+        ax.set_ylim(ax_min[1], ax_max[1])
+        ax.autoscale(False)
 
-        # set the limits based on the xarray coordinates min and max
-        ax.set_xlim(min_bounds[0], max_bounds[0])
-        ax.set_ylim(min_bounds[1], max_bounds[1])
+        # overlay the mesh plot (will be clipped to the set limits)
+        field_data.plot(ax=ax, cmap=False, field=False, grid=True)
 
         return ax
 
@@ -385,12 +429,13 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             axis = field_data.normal_axis
             position = field_data.normal_pos
 
-            # compute plot bounds
+            # compute axis limits from monitor extent (clipped to simulation domain)
             field_data_bounds = field_data.bounds
-            min_bounds = list(field_data_bounds[0])
-            max_bounds = list(field_data_bounds[1])
-            min_bounds.pop(axis)
-            max_bounds.pop(axis)
+            ax_min, ax_max = _compute_monitor_axis_limits(
+                monitor_data.monitor, self.simulation.bounds, field_data_bounds, axis
+            )
+            min_bounds = tuple(ax_min)
+            max_bounds = tuple(ax_max)
 
         if isinstance(field_data, SpatialDataArray):
             # interp out any monitor.size==0 dimensions

@@ -25,8 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added frequency-parametrized lossy dielectrics and lossy metals to the RF material library. User can choose between the material fit for the default frequency range via ``medium()`` or get a fit for the desired frequency range via ``medium(frequency_range)``. When the specified range is outside the default one, a new model is created with averaged properties and a warning is issued.
 - Added `DesignSpace` support for sweeping `WorkflowType` objects, including mode/EME simulations and component modelers.
 - Added `current_amplitude_definition` parameter to `UniformCurrentSource` for size-independent total current injection. Set to `"total"` to interpret the source amplitude as total current rather than current density.
+- Added baseband source time classes (`BasebandStep`, `BasebandGaussianPulse`, `BasebandRectangularPulse`, `BasebandCustomSourceTime`) for transient RF simulations with real-valued time signals.
 
 ### Breaking Changes
+- `web.Batch(simulations=...)` now requires string task names when simulations are passed as a dictionary. Numeric keys (for example `0`, `1`) are no longer converted automatically; convert them to strings first (for example `"0"`, `"1"`).
 - Added optional automatic extrusion of structures at the simulation boundaries into/through PML/Absorber layers via `extrude_structures` field in class `AbsorberSpec`.
 - Added `structure_priority_mode` for `TerminalComponentModeler` and default to `"conductor"` to ensure metal structures override dielectrics regardless of structure order, preventing order-dependent results in RF simulations.
 - 1D lumped elements (with zero lateral extent) are no longer allowed. Use a small finite lateral extent (e.g., `1e-6`) instead.
@@ -34,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed the interpretation of `waist_distance` and `waist_distances` for backward-propagating Gaussian beams (`GaussianBeam`, `AstigmaticGaussianBeam`, `GaussianBeamProfile`, `AstigmaticGaussianBeamProfile`). Previously, the waist position was interpreted relative to the directed propagation axis, meaning switching `direction` from `+` to `-` would also flip the waist position in the global reference frame. Now, the waist position is defined consistently for both directions: a positive `waist_distance` always places the beam waist behind the source/monitor plane (toward the negative normal axis), regardless of propagation direction. This ensures reciprocity between Gaussian sources and overlap monitors used in port-based S-matrix calculations. Users with existing simulations using backward-propagating Gaussian beams with non-zero waist distances may need to adjust their values.
 
 ### Changed
+- Changed the default value of `fill_value` in `UnstructuredGridDataset.interp()` from `0` to `"extrapolate"`. This means points outside the mesh will now use nearest-neighbor extrapolation instead of being filled with zeros.
 - `ModeSortSpec.sort_key` is now required with a default of `"n_eff"` (previously optional with `None` default). `ModeSortSpec.sort_order` is now optional with a default of `None`, which automatically selects the natural order based on `sort_key` and `sort_reference`: ascending when a reference is provided (closest first), otherwise descending for `n_eff` and polarization fractions (higher values first), ascending for `k_eff` and `mode_area` (lower values first).
 - Added `symmetric_pseudo` option for `s_param_def` in `TerminalComponentModeler` which applies a scaling factor that ensures the S-matrix is symmetric in reciprocal systems.
 - Added deprecation warning for `TemperatureMonitor` and `SteadyPotentialMonitor` when `unstructured` parameter is not explicitly set. The default value of `unstructured` will change from `False` to `True` in the next release.
@@ -44,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added warning in `LayerRefinementSpec` when `dl_min_from_gaps` (derived from automatic gap refinement) is very small relative to the lateral grid size for identifying cases where excessive grid refinement may occur due to very small detected gaps.
 - Added `custom_vjp` and new custom run functions that provide hooks into adjoint for custom gradient calculations.
 - Changed default `num_points` in `EMEModeSpec.interp_spec` from 3 to 5 for improved accuracy of frequency interpolation.
+- Unstructured data plots are now "crinkled", showing the full mesh elements that cover given monitor boundaries. Previously, the mesh elements were "clipped" to the monitor boundaries.
 
 ### Fixed
 - Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.

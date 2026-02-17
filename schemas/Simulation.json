@@ -817,6 +817,10 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BasebandCustomSourceTime": "#/$defs/BasebandCustomSourceTime",
+              "BasebandGaussianPulse": "#/$defs/BasebandGaussianPulse",
+              "BasebandRectangularPulse": "#/$defs/BasebandRectangularPulse",
+              "BasebandStep": "#/$defs/BasebandStep",
               "BroadbandPulse": "#/$defs/BroadbandPulse",
               "ContinuousWave": "#/$defs/ContinuousWave",
               "CustomSourceTime": "#/$defs/CustomSourceTime",
@@ -825,6 +829,18 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/$defs/BasebandCustomSourceTime"
+            },
+            {
+              "$ref": "#/$defs/BasebandGaussianPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandRectangularPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandStep"
+            },
             {
               "$ref": "#/$defs/BroadbandPulse"
             },
@@ -1376,6 +1392,158 @@
       "required": [
         "sign",
         "size"
+      ],
+      "type": "object"
+    },
+    "BasebandCustomSourceTime": {
+      "additionalProperties": false,
+      "properties": {
+        "amplitude": {
+          "default": 1.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "phase": {
+          "const": 0,
+          "default": 0,
+          "type": "integer"
+        },
+        "source_time_dataset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeDataset"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "BasebandCustomSourceTime",
+          "default": "BasebandCustomSourceTime",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "BasebandGaussianPulse": {
+      "additionalProperties": false,
+      "properties": {
+        "amplitude": {
+          "default": 1.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "offset": {
+          "default": 5.0,
+          "minimum": 2.5,
+          "type": "number"
+        },
+        "phase": {
+          "const": 0,
+          "default": 0,
+          "type": "integer"
+        },
+        "twidth": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "const": "BasebandGaussianPulse",
+          "default": "BasebandGaussianPulse",
+          "type": "string"
+        }
+      },
+      "required": [
+        "twidth"
+      ],
+      "type": "object"
+    },
+    "BasebandRectangularPulse": {
+      "additionalProperties": false,
+      "properties": {
+        "amplitude": {
+          "default": 1.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "offset": {
+          "default": 5.0,
+          "minimum": 2.5,
+          "type": "number"
+        },
+        "phase": {
+          "const": 0,
+          "default": 0,
+          "type": "integer"
+        },
+        "rise_time": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "twidth": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "const": "BasebandRectangularPulse",
+          "default": "BasebandRectangularPulse",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rise_time",
+        "twidth"
+      ],
+      "type": "object"
+    },
+    "BasebandStep": {
+      "additionalProperties": false,
+      "properties": {
+        "amplitude": {
+          "default": 1.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "offset": {
+          "default": 5.0,
+          "minimum": 2.5,
+          "type": "number"
+        },
+        "phase": {
+          "const": 0,
+          "default": 0,
+          "type": "integer"
+        },
+        "rise_time": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "const": "BasebandStep",
+          "default": "BasebandStep",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rise_time"
       ],
       "type": "object"
     },
@@ -3093,6 +3261,10 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BasebandCustomSourceTime": "#/$defs/BasebandCustomSourceTime",
+              "BasebandGaussianPulse": "#/$defs/BasebandGaussianPulse",
+              "BasebandRectangularPulse": "#/$defs/BasebandRectangularPulse",
+              "BasebandStep": "#/$defs/BasebandStep",
               "BroadbandPulse": "#/$defs/BroadbandPulse",
               "ContinuousWave": "#/$defs/ContinuousWave",
               "CustomSourceTime": "#/$defs/CustomSourceTime",
@@ -3101,6 +3273,18 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/$defs/BasebandCustomSourceTime"
+            },
+            {
+              "$ref": "#/$defs/BasebandGaussianPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandRectangularPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandStep"
+            },
             {
               "$ref": "#/$defs/BroadbandPulse"
             },
@@ -3706,6 +3890,10 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BasebandCustomSourceTime": "#/$defs/BasebandCustomSourceTime",
+              "BasebandGaussianPulse": "#/$defs/BasebandGaussianPulse",
+              "BasebandRectangularPulse": "#/$defs/BasebandRectangularPulse",
+              "BasebandStep": "#/$defs/BasebandStep",
               "BroadbandPulse": "#/$defs/BroadbandPulse",
               "ContinuousWave": "#/$defs/ContinuousWave",
               "CustomSourceTime": "#/$defs/CustomSourceTime",
@@ -3714,6 +3902,18 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/$defs/BasebandCustomSourceTime"
+            },
+            {
+              "$ref": "#/$defs/BasebandGaussianPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandRectangularPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandStep"
+            },
             {
               "$ref": "#/$defs/BroadbandPulse"
             },
@@ -7607,6 +7807,10 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BasebandCustomSourceTime": "#/$defs/BasebandCustomSourceTime",
+              "BasebandGaussianPulse": "#/$defs/BasebandGaussianPulse",
+              "BasebandRectangularPulse": "#/$defs/BasebandRectangularPulse",
+              "BasebandStep": "#/$defs/BasebandStep",
               "BroadbandPulse": "#/$defs/BroadbandPulse",
               "ContinuousWave": "#/$defs/ContinuousWave",
               "CustomSourceTime": "#/$defs/CustomSourceTime",
@@ -7615,6 +7819,18 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/$defs/BasebandCustomSourceTime"
+            },
+            {
+              "$ref": "#/$defs/BasebandGaussianPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandRectangularPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandStep"
+            },
             {
               "$ref": "#/$defs/BroadbandPulse"
             },
@@ -11202,6 +11418,10 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BasebandCustomSourceTime": "#/$defs/BasebandCustomSourceTime",
+              "BasebandGaussianPulse": "#/$defs/BasebandGaussianPulse",
+              "BasebandRectangularPulse": "#/$defs/BasebandRectangularPulse",
+              "BasebandStep": "#/$defs/BasebandStep",
               "BroadbandPulse": "#/$defs/BroadbandPulse",
               "ContinuousWave": "#/$defs/ContinuousWave",
               "CustomSourceTime": "#/$defs/CustomSourceTime",
@@ -11210,6 +11430,18 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/$defs/BasebandCustomSourceTime"
+            },
+            {
+              "$ref": "#/$defs/BasebandGaussianPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandRectangularPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandStep"
+            },
             {
               "$ref": "#/$defs/BroadbandPulse"
             },
@@ -12903,6 +13135,10 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BasebandCustomSourceTime": "#/$defs/BasebandCustomSourceTime",
+              "BasebandGaussianPulse": "#/$defs/BasebandGaussianPulse",
+              "BasebandRectangularPulse": "#/$defs/BasebandRectangularPulse",
+              "BasebandStep": "#/$defs/BasebandStep",
               "BroadbandPulse": "#/$defs/BroadbandPulse",
               "ContinuousWave": "#/$defs/ContinuousWave",
               "CustomSourceTime": "#/$defs/CustomSourceTime",
@@ -12911,6 +13147,18 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/$defs/BasebandCustomSourceTime"
+            },
+            {
+              "$ref": "#/$defs/BasebandGaussianPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandRectangularPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandStep"
+            },
             {
               "$ref": "#/$defs/BroadbandPulse"
             },
@@ -13020,6 +13268,10 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BasebandCustomSourceTime": "#/$defs/BasebandCustomSourceTime",
+              "BasebandGaussianPulse": "#/$defs/BasebandGaussianPulse",
+              "BasebandRectangularPulse": "#/$defs/BasebandRectangularPulse",
+              "BasebandStep": "#/$defs/BasebandStep",
               "BroadbandPulse": "#/$defs/BroadbandPulse",
               "ContinuousWave": "#/$defs/ContinuousWave",
               "CustomSourceTime": "#/$defs/CustomSourceTime",
@@ -13028,6 +13280,18 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/$defs/BasebandCustomSourceTime"
+            },
+            {
+              "$ref": "#/$defs/BasebandGaussianPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandRectangularPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandStep"
+            },
             {
               "$ref": "#/$defs/BroadbandPulse"
             },
@@ -14848,6 +15112,10 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BasebandCustomSourceTime": "#/$defs/BasebandCustomSourceTime",
+              "BasebandGaussianPulse": "#/$defs/BasebandGaussianPulse",
+              "BasebandRectangularPulse": "#/$defs/BasebandRectangularPulse",
+              "BasebandStep": "#/$defs/BasebandStep",
               "BroadbandPulse": "#/$defs/BroadbandPulse",
               "ContinuousWave": "#/$defs/ContinuousWave",
               "CustomSourceTime": "#/$defs/CustomSourceTime",
@@ -14856,6 +15124,18 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/$defs/BasebandCustomSourceTime"
+            },
+            {
+              "$ref": "#/$defs/BasebandGaussianPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandRectangularPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandStep"
+            },
             {
               "$ref": "#/$defs/BroadbandPulse"
             },
@@ -15280,6 +15560,10 @@
         "source_time": {
           "discriminator": {
             "mapping": {
+              "BasebandCustomSourceTime": "#/$defs/BasebandCustomSourceTime",
+              "BasebandGaussianPulse": "#/$defs/BasebandGaussianPulse",
+              "BasebandRectangularPulse": "#/$defs/BasebandRectangularPulse",
+              "BasebandStep": "#/$defs/BasebandStep",
               "BroadbandPulse": "#/$defs/BroadbandPulse",
               "ContinuousWave": "#/$defs/ContinuousWave",
               "CustomSourceTime": "#/$defs/CustomSourceTime",
@@ -15288,6 +15572,18 @@
             "propertyName": "type"
           },
           "oneOf": [
+            {
+              "$ref": "#/$defs/BasebandCustomSourceTime"
+            },
+            {
+              "$ref": "#/$defs/BasebandGaussianPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandRectangularPulse"
+            },
+            {
+              "$ref": "#/$defs/BasebandStep"
+            },
             {
               "$ref": "#/$defs/BroadbandPulse"
             },

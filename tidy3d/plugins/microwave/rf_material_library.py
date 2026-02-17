@@ -43,8 +43,13 @@ class AbstractVariantItemFreqRange(AbstractVariantItem, ABC):
     lossy dielectrics or lossy metals.
     """
 
+    @property
     @abstractmethod
-    def medium(
+    def medium(self) -> Union[PoleResidue, LossyMetalMedium]:
+        """The default medium for this variant."""
+
+    @abstractmethod
+    def medium_at_range(
         self, frequency_range: Optional[FreqBound] = None
     ) -> Union[PoleResidue, LossyMetalMedium]:
         """
@@ -73,8 +78,9 @@ class VariantItemFreqRangeDielectric(AbstractVariantItemFreqRange):
     """:class:`.VariantItemFreqRangeDielectric` is a frequency-range parametrized variant item
     for lossy dielectric materials.
 
-    This class stores a ``PoleResidue`` model and provides a ``medium()`` method that
-    updates the ``frequency_range`` attribute for the requested range.
+    This class stores a ``PoleResidue`` model and provides a ``medium`` property that
+    returns the prefitted medium, and a ``medium_at_range()`` method that returns
+    a medium for a specific frequency range.
     """
 
     loss_tangent: Union[float, list[float]] = Field(
@@ -129,7 +135,12 @@ class VariantItemFreqRangeDielectric(AbstractVariantItemFreqRange):
 
         return self
 
-    def medium(self, frequency_range: Optional[FreqBound] = None) -> PoleResidue:
+    @property
+    def medium(self) -> PoleResidue:
+        """The default medium for this variant (returns the prefitted medium)."""
+        return self.prefitted_medium
+
+    def medium_at_range(self, frequency_range: Optional[FreqBound] = None) -> PoleResidue:
         """
         Generate ``PoleResidue`` medium with specified ``frequency_range``.
         If ``frequency_range`` is not provided, returns the original prefitted material model.
@@ -269,7 +280,33 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
         "and logarithmic vs linear frequency sampling.",
     )
 
-    def medium(self, frequency_range: Optional[FreqBound] = None) -> LossyMetalMedium:
+    @property
+    def medium(self) -> LossyMetalMedium:
+        """The default medium for this variant (uses default microwave frequency range)."""
+        # Use default microwave frequency range with relaxed fit parameters
+        if self.fit_param is None:
+            fit_param = SurfaceImpedanceFitterParam(
+                max_num_poles=12,  # Increased from default 5
+                tolerance_rms=1e-3,  # Original default value
+                frequency_sampling_points=50,  # Increased from default 20
+            )
+        else:
+            fit_param = self.fit_param
+
+        kwargs = {
+            "conductivity": self.conductivity,
+            "frequency_range": MICROWAVE_FREQUENCY_RANGE,
+        }
+        if self.roughness is not None:
+            kwargs["roughness"] = self.roughness
+        if self.thickness is not None:
+            kwargs["thickness"] = self.thickness
+        if fit_param is not None:
+            kwargs["fit_param"] = fit_param
+
+        return LossyMetalMedium(**kwargs)
+
+    def medium_at_range(self, frequency_range: Optional[FreqBound] = None) -> LossyMetalMedium:
         """
         Generate ``LossyMetalMedium`` with specified ``frequency_range``.
 
@@ -296,19 +333,8 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
         """
         if frequency_range is None:
             frequency_range = MICROWAVE_FREQUENCY_RANGE
-            # Use more relaxed fit parameters for the wide default frequency range
-            # to avoid excessive warnings during documentation generation
-            if self.fit_param is None:
-                fit_param = SurfaceImpedanceFitterParam(
-                    max_num_poles=12,  # Increased from default 5
-                    tolerance_rms=1e-3,  # Original default value
-                    frequency_sampling_points=50,  # Increased from default 20
-                )
-            else:
-                # Use provided fit_param but ensure reasonable values for wide range
-                fit_param = self.fit_param
-        else:
-            fit_param = self.fit_param  # Use provided fit_param or default for custom ranges
+
+        fit_param = self.fit_param  # Use provided fit_param or None for default
 
         kwargs = {
             "conductivity": self.conductivity,
@@ -326,7 +352,7 @@ class VariantItemFreqRangeMetal(AbstractVariantItemFreqRange):
     @property
     def summarize_mediums(self) -> dict[str, LossyMetalMedium]:
         """Summarize the mediums in this variant."""
-        return {"medium": self.medium()}
+        return {"medium": self.medium}
 
 
 class MaterialItemFreqRange(MaterialItem):
@@ -341,19 +367,48 @@ class MaterialItemFreqRange(MaterialItem):
 
     def __getitem__(self, variant_name: str) -> Union[PoleResidue, LossyMetalMedium]:
         """Helper function to easily access the medium of a variant."""
-        return self.variants[variant_name].medium()
+        return self.variants[variant_name].medium
 
-    def medium(
-        self, frequency_range: Optional[FreqBound] = None
-    ) -> Union[PoleResidue, LossyMetalMedium]:
+    @property
+    def medium(self) -> Union[PoleResidue, LossyMetalMedium]:
         """The default medium for the default variant.
 
-        Returns the medium for the default variant.
+        Returns the default medium for the default variant. This is a property to maintain
+        consistency with the base ``MaterialItem`` class where ``medium`` is also a property.
+
+        Returns
+        -------
+        Union[PoleResidue, LossyMetalMedium]
+            The default medium model for the default variant.
+
+        Examples
+        --------
+        >>> # Get default medium for default variant (dielectric)
+        >>> default_medium = rf_material_library["RT_duroid5880"].medium
+        >>>
+        >>> # Get default medium for default variant (metal)
+        >>> metal_medium = rf_material_library["Aluminum"].medium
+        """
+        variant = self.variants[self.default]
+        if isinstance(variant, (VariantItemFreqRangeDielectric, VariantItemFreqRangeMetal)):
+            return variant.medium
+        raise ValueError(
+            f"The variant type '{variant.__class__.__name__}' for material '{self.name}' "
+            f"is currently not supported by MaterialItemFreqRange.medium. "
+            f"Supported types are: VariantItemFreqRangeDielectric and VariantItemFreqRangeMetal."
+        )
+
+    def medium_at_range(
+        self, frequency_range: Optional[FreqBound] = None
+    ) -> Union[PoleResidue, LossyMetalMedium]:
+        """Get medium for the default variant at a specific frequency range.
+
+        Returns the medium for the default variant at the specified frequency range.
         For dielectrics, if ``frequency_range`` is not provided, returns the stored
-        ``PoleResidue`` model (equivalent to calling ``variant.medium()`` without arguments).
-        If ``frequency_range`` is provided, returns ``variant.medium(frequency_range)``.
+        ``PoleResidue`` model (same as ``medium`` property).
+        If ``frequency_range`` is provided, returns ``variant.medium_at_range(frequency_range)``.
         For metals, if ``frequency_range`` is not provided, uses the default microwave frequency range
-        (300 MHz to 300 GHz). If provided, returns ``variant.medium(frequency_range)``.
+        (300 MHz to 300 GHz). If provided, returns ``variant.medium_at_range(frequency_range)``.
 
         Parameters
         ----------
@@ -369,24 +424,18 @@ class MaterialItemFreqRange(MaterialItem):
 
         Examples
         --------
-        >>> # Get default medium for default variant (dielectric)
-        >>> default_medium = rf_material_library["RT_duroid5880"].medium()
-        >>>
         >>> # Get medium for a specific frequency range (dielectric)
-        >>> custom_medium = rf_material_library["RT_duroid5880"].medium(frequency_range=(5e9, 10e9))
-        >>>
-        >>> # Get medium with default RF frequency range (metal)
-        >>> metal_medium = rf_material_library["Aluminum"].medium()
+        >>> custom_medium = rf_material_library["RT_duroid5880"].medium_at_range(frequency_range=(5e9, 10e9))
         >>>
         >>> # Get medium for a specific frequency range (metal)
-        >>> metal_medium = rf_material_library["Aluminum"].medium(frequency_range=(1e9, 10e9))
+        >>> metal_medium = rf_material_library["Aluminum"].medium_at_range(frequency_range=(1e9, 10e9))
         """
         variant = self.variants[self.default]
         if isinstance(variant, (VariantItemFreqRangeDielectric, VariantItemFreqRangeMetal)):
-            return variant.medium(frequency_range)
+            return variant.medium_at_range(frequency_range)
         raise ValueError(
             f"The variant type '{variant.__class__.__name__}' for material '{self.name}' "
-            f"is currently not supported by MaterialItemFreqRange.medium(). "
+            f"is currently not supported by MaterialItemFreqRange.medium_at_range(). "
             f"Supported types are: VariantItemFreqRangeDielectric and VariantItemFreqRangeMetal."
         )
 

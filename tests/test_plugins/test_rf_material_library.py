@@ -47,7 +47,7 @@ def test_VariantItemFreqRangeDielectric_validation():
 
 
 def test_VariantItemFreqRangeDielectric_medium():
-    """Test VariantItemFreqRangeDielectric.medium() method."""
+    """Test VariantItemFreqRangeDielectric.medium property."""
     pole_res = PoleResidue(
         eps_inf=2.5,
         poles=[((-1e10 + 1e11j), (1e10 + 0j))],
@@ -60,14 +60,14 @@ def test_VariantItemFreqRangeDielectric_medium():
         measurement_frequencies=[1e9, 10e9],
     )
 
-    # Test without frequency_range - should return original
-    medium1 = variant.medium()
+    # Test medium property - should return original prefitted medium
+    medium1 = variant.medium
     assert medium1 is variant.prefitted_medium
     assert medium1.frequency_range == (1e9, 10e9)
 
     # Test with frequency_range inside stored range - should return copy with updated range
     new_freq_range = (3e9, 7e9)  # Inside (1e9, 10e9)
-    medium2 = variant.medium(new_freq_range)
+    medium2 = variant.medium_at_range(new_freq_range)
     assert medium2 is variant.prefitted_medium  # Should be the same pole
     assert medium2.eps_inf == variant.prefitted_medium.eps_inf
     assert medium2.poles == variant.prefitted_medium.poles  # Poles unchanged
@@ -80,7 +80,7 @@ def test_VariantItemFreqRangeDielectric_medium():
 
 
 def test_VariantItemFreqRangeDielectric_medium_frequency_range_cases():
-    """Test VariantItemFreqRangeDielectric.medium() with inside/outside/overlapping frequency ranges."""
+    """Test VariantItemFreqRangeDielectric.medium_at_range() with inside/outside/overlapping frequency ranges."""
     pole_res = PoleResidue(
         eps_inf=2.5,
         poles=[((-1e10 + 1e11j), (1e10 + 0j))],
@@ -97,7 +97,7 @@ def test_VariantItemFreqRangeDielectric_medium_frequency_range_cases():
     # Should return stored model with updated frequency_range, no warning
     with AssertLogLevel(None):
         inside_range = (3e9, 7e9)  # Completely inside (1e9, 10e9)
-        medium_inside = variant.medium(inside_range)
+        medium_inside = variant.medium_at_range(inside_range)
 
         assert medium_inside is variant.prefitted_medium
         assert np.isclose(medium_inside.eps_inf, variant.prefitted_medium.eps_inf)
@@ -109,7 +109,7 @@ def test_VariantItemFreqRangeDielectric_medium_frequency_range_cases():
     # Should create new model using constant loss tangent fitter, with warning
     with AssertLogLevel("WARNING", contains_str="outside"):
         outside_range = (20e9, 30e9)  # Completely outside (1e9, 10e9)
-        medium_outside = variant.medium(outside_range)
+        medium_outside = variant.medium_at_range(outside_range)
 
         assert medium_outside is not variant.prefitted_medium  # Should be a new model
         assert np.allclose(medium_outside.frequency_range, outside_range)
@@ -121,14 +121,14 @@ def test_VariantItemFreqRangeDielectric_medium_frequency_range_cases():
     # Should create new model using constant loss tangent fitter, with warning
     with AssertLogLevel("WARNING", contains_str="outside"):
         overlap_range_high = (5e9, 15e9)  # Overlaps but extends beyond upper bound
-        medium_overlap_high = variant.medium(overlap_range_high)
+        medium_overlap_high = variant.medium_at_range(overlap_range_high)
 
         assert medium_overlap_high is not variant.prefitted_medium  # Should be a new model
         assert medium_overlap_high.frequency_range == overlap_range_high
 
     with AssertLogLevel("WARNING", contains_str="outside"):
         overlap_range_low = (0.5e9, 5e9)  # Overlaps but extends beyond lower bound
-        medium_overlap_low = variant.medium(overlap_range_low)
+        medium_overlap_low = variant.medium_at_range(overlap_range_low)
 
         assert medium_overlap_low is not variant.prefitted_medium  # Should be a new model
         assert np.allclose(medium_overlap_low.frequency_range, overlap_range_low)
@@ -137,13 +137,13 @@ def test_VariantItemFreqRangeDielectric_medium_frequency_range_cases():
     # Should return stored model with updated frequency_range, no warning
     with AssertLogLevel(None):
         exact_range = (1e9, 10e9)  # Exactly matches stored range
-        medium_exact = variant.medium(exact_range)
+        medium_exact = variant.medium_at_range(exact_range)
 
         assert medium_exact is variant.prefitted_medium  # Should be the same pole
 
 
 def test_VariantItemFreqRangeDielectric_medium_none_frequency_range():
-    """Test VariantItemFreqRangeDielectric.medium() when prefitted_medium.frequency_range is None."""
+    """Test VariantItemFreqRangeDielectric.medium_at_range() when prefitted_medium.frequency_range is None."""
     pole_res = PoleResidue(
         eps_inf=2.5,
         poles=[((-1e10 + 1e11j), (1e10 + 0j))],
@@ -159,7 +159,7 @@ def test_VariantItemFreqRangeDielectric_medium_none_frequency_range():
     # When stored frequency_range is None, any requested range should create new model
     with AssertLogLevel("WARNING", contains_str="outside"):
         requested_range = (5e9, 15e9)
-        medium = variant.medium(requested_range)
+        medium = variant.medium_at_range(requested_range)
 
     assert medium is not variant.prefitted_medium  # Should be a new model
     assert medium.frequency_range == requested_range
@@ -193,7 +193,7 @@ def test_VariantItemFreqRangeDielectric_medium_averaged_values():
     # Verify warning mentions averaged values and contains the averaged values
     with AssertLogLevel("WARNING", contains_str="averaged") as ctx:
         outside_range = (20e9, 30e9)
-        medium_outside = variant.medium(outside_range)
+        medium_outside = variant.medium_at_range(outside_range)
 
     # Check that warning contains the averaged values (with some tolerance for formatting)
     # Records are tuples of (level, message)
@@ -227,7 +227,7 @@ def test_VariantItemFreqRangeDielectric_medium_single_float_values():
     # Request range outside stored range - should use single float values directly
     with AssertLogLevel("WARNING", contains_str="outside"):
         outside_range = (20e9, 30e9)
-        medium_outside = variant.medium(outside_range)
+        medium_outside = variant.medium_at_range(outside_range)
 
     assert isinstance(medium_outside, PoleResidue)
     assert medium_outside.frequency_range == outside_range
@@ -383,34 +383,34 @@ def test_VariantItemFreqRangeMetal_validation():
 
 
 def test_VariantItemFreqRangeMetal_medium():
-    """Test VariantItemFreqRangeMetal.medium() method."""
+    """Test VariantItemFreqRangeMetal.medium property and medium_at_range() method."""
     variant = VariantItemFreqRangeMetal(conductivity=60.0)
     frequency_range = (1e9, 10e9)
 
     # Test with explicit frequency_range
-    medium = variant.medium(frequency_range)
+    medium = variant.medium_at_range(frequency_range)
     assert isinstance(medium, LossyMetalMedium)
     assert medium.conductivity == 60.0
     assert medium.frequency_range == frequency_range
 
-    # Test without frequency_range - should use default RF frequency range
-    default_medium = variant.medium()
+    # Test medium property - should use default RF frequency range
+    default_medium = variant.medium
     assert isinstance(default_medium, LossyMetalMedium)
     assert default_medium.conductivity == 60.0
     assert default_medium.frequency_range == MICROWAVE_FREQUENCY_RANGE
 
 
 def test_VariantItemFreqRangeMetal_medium_none_frequency_range():
-    """Test that VariantItemFreqRangeMetal.medium() uses default RF frequency range when frequency_range is None."""
+    """Test that VariantItemFreqRangeMetal.medium_at_range() uses default RF frequency range when frequency_range is None."""
     variant = VariantItemFreqRangeMetal(conductivity=60.0)
 
     # Should use default RF frequency range when called with None
-    medium1 = variant.medium(None)
+    medium1 = variant.medium_at_range(None)
     assert isinstance(medium1, LossyMetalMedium)
     assert medium1.frequency_range == MICROWAVE_FREQUENCY_RANGE
 
-    # Should also use default RF frequency range when called without arguments
-    medium2 = variant.medium()
+    # medium property should also use default RF frequency range
+    medium2 = variant.medium
     assert isinstance(medium2, LossyMetalMedium)
     assert medium2.frequency_range == MICROWAVE_FREQUENCY_RANGE
 
@@ -430,7 +430,7 @@ def test_VariantItemFreqRangeMetal_with_optional_params():
     )
 
     frequency_range = (1e9, 10e9)
-    medium = variant.medium(frequency_range)
+    medium = variant.medium_at_range(frequency_range)
 
     assert medium.conductivity == 60.0
     assert medium.frequency_range == frequency_range
@@ -469,14 +469,14 @@ def test_rf_material_library_VariantItemFreqRangeDielectric():
     rt_duroid_variant = rf_material_library["RT_duroid5880"].variants["standard"]
     assert isinstance(rt_duroid_variant, VariantItemFreqRangeDielectric)
 
-    # Test medium() without frequency_range
-    medium1 = rt_duroid_variant.medium()
+    # Test medium property
+    medium1 = rt_duroid_variant.medium
     assert isinstance(medium1, PoleResidue)
     assert medium1.frequency_range == rt_duroid_variant.prefitted_medium.frequency_range
 
-    # Test medium() with frequency_range
+    # Test medium_at_range() with frequency_range
     new_freq_range = (5e9, 20e9)
-    medium2 = rt_duroid_variant.medium(new_freq_range)
+    medium2 = rt_duroid_variant.medium_at_range(new_freq_range)
     assert isinstance(medium2, PoleResidue)
 
     # Verify poles are unchanged
@@ -490,44 +490,44 @@ def test_rf_material_library_VariantItemFreqRangeMetal():
     copper_variant = rf_material_library["Copper_Matula"].variants["standard"]
     assert isinstance(copper_variant, VariantItemFreqRangeMetal)
 
-    # Test medium() with frequency_range
+    # Test medium_at_range() with frequency_range
     frequency_range = (1e9, 10e9)
-    medium = copper_variant.medium(frequency_range)
+    medium = copper_variant.medium_at_range(frequency_range)
     assert isinstance(medium, LossyMetalMedium)
     assert np.isclose(medium.conductivity, copper_variant.conductivity)
     assert np.allclose(medium.frequency_range, frequency_range)
 
-    # Test medium() without frequency_range - should use default RF frequency range
-    default_medium = copper_variant.medium()
+    # Test medium property - should use default RF frequency range
+    default_medium = copper_variant.medium
     assert isinstance(default_medium, LossyMetalMedium)
     assert np.isclose(default_medium.conductivity, copper_variant.conductivity)
     assert default_medium.frequency_range == MICROWAVE_FREQUENCY_RANGE
 
 
 def test_MaterialItemFreqRange_medium_property():
-    """Test MaterialItemFreqRange.medium method."""
+    """Test MaterialItemFreqRange.medium property and medium_at_range() method."""
     # Test with dielectric material
     rt_duroid = rf_material_library["RT_duroid5880"]
     assert isinstance(rt_duroid, MaterialItemFreqRange)
 
-    # Should return PoleResidue for dielectric when called without arguments
-    default_medium = rt_duroid.medium()
+    # Should return PoleResidue for dielectric (medium property)
+    default_medium = rt_duroid.medium
     assert isinstance(default_medium, PoleResidue)
-    assert default_medium == rt_duroid.variants[rt_duroid.default].medium()
+    assert default_medium == rt_duroid.variants[rt_duroid.default].medium
 
-    # Test with metal material - should work without frequency_range (uses default RF range)
+    # Test with metal material - medium property uses default RF range
     copper_material = rf_material_library["Copper_Matula"]
     assert isinstance(copper_material, MaterialItemFreqRange)
 
-    # Should return LossyMetalMedium when called without arguments (uses default RF range)
-    default_metal_medium = copper_material.medium()
+    # Should return LossyMetalMedium (medium property uses default RF range)
+    default_metal_medium = copper_material.medium
     assert isinstance(default_metal_medium, LossyMetalMedium)
     # Check that it uses the default microwave frequency range (300 MHz to 300 GHz)
     assert default_metal_medium.frequency_range == (0.3e9, 300e9)
 
     # Test with custom frequency range
     custom_freq_range = (1e9, 10e9)
-    custom_metal_medium = copper_material.medium(frequency_range=custom_freq_range)
+    custom_metal_medium = copper_material.medium_at_range(frequency_range=custom_freq_range)
     assert isinstance(custom_metal_medium, LossyMetalMedium)
     assert custom_metal_medium.frequency_range == custom_freq_range
 
@@ -540,12 +540,21 @@ def test_MaterialItemFreqRange_medium_unsupported_variant():
     class UnsupportedVariant(AbstractVariantItemFreqRange):
         """An unsupported variant type for testing."""
 
-        def medium(self, frequency_range=None):
+        @property
+        def medium(self):
             """Dummy implementation."""
             return PoleResidue(
                 eps_inf=1.0,
                 poles=[],
                 frequency_range=(1e9, 10e9),
+            )
+
+        def medium_at_range(self, frequency_range=None):
+            """Dummy implementation."""
+            return PoleResidue(
+                eps_inf=1.0,
+                poles=[],
+                frequency_range=frequency_range or (1e9, 10e9),
             )
 
         @property
@@ -563,9 +572,9 @@ def test_MaterialItemFreqRange_medium_unsupported_variant():
         default="standard",
     )
 
-    # Accessing .medium() should raise ValueError with appropriate message
+    # Accessing .medium should raise ValueError with appropriate message
     with pytest.raises(ValueError) as exc_info:
-        _ = material.medium()
+        _ = material.medium
 
     # Verify the error message contains expected information
     error_message = str(exc_info.value)
@@ -597,34 +606,34 @@ def test_rf_material_library_eps_model():
                 assert np.allclose(eps_complex1, eps_complex2)
 
             elif isinstance(variant, VariantItemFreqRangeDielectric):
-                # VariantItemFreqRangeDielectric - need to call medium()
+                # VariantItemFreqRangeDielectric - use medium property or medium_at_range()
                 original_range = variant.prefitted_medium.frequency_range
                 fmin, fmax = original_range
                 freqs = np.linspace(fmin, fmax, 11)
 
                 # Test with original frequency_range
-                medium = variant.medium(original_range)
+                medium = variant.medium_at_range(original_range)
                 eps_complex = medium.eps_model(freqs)
                 assert len(eps_complex) == len(freqs)
                 assert np.all(np.isfinite(eps_complex))
 
-                # Test without frequency_range (should use original)
-                medium2 = variant.medium()
+                # Test medium property (should use original)
+                medium2 = variant.medium
                 eps_complex2 = medium2.eps_model(freqs)
                 assert np.allclose(eps_complex, eps_complex2)
 
             elif isinstance(variant, VariantItemFreqRangeMetal):
-                # VariantItemFreqRangeMetal - can call medium() with or without frequency_range
+                # VariantItemFreqRangeMetal - use medium property or medium_at_range()
                 frequency_range = (1e9, 10e9)
-                medium = variant.medium(frequency_range)
+                medium = variant.medium_at_range(frequency_range)
                 assert isinstance(medium, LossyMetalMedium)
 
                 # LossyMetalMedium doesn't have eps_model, but we can verify it was created
                 assert np.isclose(medium.conductivity, variant.conductivity)
                 assert np.allclose(medium.frequency_range, frequency_range)
 
-                # Test without frequency_range - should use default RF frequency range
-                default_medium = variant.medium()
+                # Test medium property - should use default RF frequency range
+                default_medium = variant.medium
                 assert isinstance(default_medium, LossyMetalMedium)
                 assert default_medium.frequency_range == MICROWAVE_FREQUENCY_RANGE
 
@@ -650,9 +659,9 @@ def test_rf_material_library_frequency_range_consistency():
     original_range = variant.prefitted_medium.frequency_range
 
     # Get mediums with different frequency_ranges
-    medium1 = variant.medium(original_range)
-    medium2 = variant.medium((5e9, 20e9))
-    medium3 = variant.medium()  # No parameter - uses original
+    medium1 = variant.medium_at_range(original_range)
+    medium2 = variant.medium_at_range((5e9, 20e9))
+    medium3 = variant.medium  # Property - uses original prefitted medium
 
     # Evaluate at same frequency - should get same epsilon
     test_freq = 10e9
@@ -671,7 +680,7 @@ def test_rf_material_library_lossy_metal_fitting():
 
     # Create medium for specific frequency range
     frequency_range = (1e9, 10e9)
-    medium = variant.medium(frequency_range)
+    medium = variant.medium_at_range(frequency_range)
 
     assert isinstance(medium, LossyMetalMedium)
     assert medium.frequency_range == frequency_range

@@ -372,3 +372,103 @@ def test_assert_log_level():
     # Test when log level is higher than expected
     with pytest.raises(AssertionError), AssertLogLevel("INFO"):
         td.log.warning("ABC")  # Should fail since WARNING > INFO
+
+
+def test_suppress_output():
+    """Test that suppress_output() context manager prevents log messages from being emitted."""
+    from ..utils import AssertLogLevelHandler
+
+    # Register a handler to capture log records
+    handler = AssertLogLevelHandler()
+    td.log.handlers["test_suppress"] = handler
+
+    try:
+        # Without suppression, messages should be captured
+        td.log.warning("visible warning")
+        td.log.error("visible error")
+        assert len(handler.records) == 2
+
+        # With suppression, messages should not be captured
+        with td.log.suppress_output():
+            td.log.warning("suppressed warning")
+            td.log.error("suppressed error")
+            td.log.info("suppressed info")
+
+        # Still only 2 records from before
+        assert len(handler.records) == 2
+
+        # After exiting context, messages should be captured again
+        td.log.warning("visible again")
+        assert len(handler.records) == 3
+
+        # Nested suppression should work correctly
+        with td.log.suppress_output():
+            td.log.warning("outer suppressed")
+            with td.log.suppress_output():
+                td.log.warning("inner suppressed")
+            td.log.warning("still outer suppressed")
+
+        # Still only 3 records
+        assert len(handler.records) == 3
+
+    finally:
+        del td.log.handlers["test_suppress"]
+
+
+def test_suppress_output_during_repr():
+    """Test that suppress_output prevents spurious errors during repr of models that can't be default-instantiated.
+
+    This tests the scenario where:
+    1. A model has optional fields with defaults (so Pydantic can attempt to instantiate it)
+    2. A validator raises SetupError when instantiated with defaults (which logs an error)
+    3. The repr optimization tries to create a default instance to compare against
+    4. Without suppress_output, the error would be logged even though it's caught
+
+    This mirrors what happens with CustomMedium (permittivity=None by default, but validator
+    requires either permittivity or eps_dataset to be provided).
+    """
+    from typing import Optional
+
+    from pydantic import model_validator
+
+    from tidy3d.components.base import Tidy3dBaseModel
+    from tidy3d.exceptions import SetupError
+
+    from ..utils import AssertLogLevelHandler
+
+    # Create a model that:
+    # - Has optional field with None default (so Pydantic can instantiate it)
+    # - Raises SetupError in validator when value is None (which logs an error before raising)
+    class _ModelRequiringValue(Tidy3dBaseModel):
+        value: Optional[float] = None
+
+        @model_validator(mode="after")
+        def _check_value(self):
+            if self.value is None:
+                raise SetupError("test error: value cannot be None")
+            return self
+
+    # Verify the model raises when instantiated with no args
+    # (SetupError is wrapped in Pydantic's ValidationError)
+    with pytest.raises(ValidationError, match="value cannot be None"):
+        _ModelRequiringValue()
+
+    # Register a handler to capture log records
+    handler = AssertLogLevelHandler()
+    td.log.handlers["test_repr"] = handler
+
+    try:
+        # Create a valid instance (with value provided)
+        model = _ModelRequiringValue(value=1.0)
+
+        # repr() internally tries to create _ModelRequiringValue() to compare defaults.
+        # This fails with SetupError, which logs an error before raising.
+        # The suppress_output context manager should prevent this error from appearing.
+        _ = repr(model)
+
+        # Check that no ERROR level messages were logged
+        error_records = [r for r in handler.records if r[0] >= _get_level_int("ERROR")]
+        assert len(error_records) == 0, f"Unexpected error logs during repr: {error_records}"
+
+    finally:
+        del td.log.handlers["test_repr"]
