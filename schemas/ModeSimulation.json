@@ -1967,6 +1967,23 @@
           ],
           "type": "integer"
         },
+        "bulges": {
+          "anyOf": [
+            {
+              "type": "ArrayLike",
+              "x-array-dtype": "<f8",
+              "x-array-forbid_nan": true,
+              "x-array-ndim": 1,
+              "x-array-scalar_to_1d": true,
+              "x-array-shape": null,
+              "x-array-strict": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "dilation": {
           "default": 0.0,
           "type": "number"
@@ -10039,6 +10056,23 @@
             2
           ],
           "type": "integer"
+        },
+        "bulges": {
+          "anyOf": [
+            {
+              "type": "ArrayLike",
+              "x-array-dtype": "<f8",
+              "x-array-forbid_nan": true,
+              "x-array-ndim": 1,
+              "x-array-scalar_to_1d": true,
+              "x-array-shape": null,
+              "x-array-strict": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "dilation": {
           "default": 0.0,
