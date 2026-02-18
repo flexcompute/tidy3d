@@ -625,6 +625,7 @@ class LocalCache:
             cache_key = build_cache_key(
                 simulation_hash=simulation_hash,
                 version=versions,
+                workflow_type=workflow_type,
             )
 
             entry = self._fetch(cache_key)
@@ -678,14 +679,18 @@ class LocalCache:
         Legacy task ID mappings are recorded to support backward lookup compatibility.
         """
         try:
+            workflow_name = (
+                workflow_type.value if isinstance(workflow_type, TaskType) else workflow_type
+            )
+
+            if not workflow_name:
+                log.debug("Failed storing local cache entry: workflow_type is not set.")
+                return False
+
             if simulation is not None:
                 simulation_obj = simulation
             else:
-                workflow_name = (
-                    workflow_type.value if isinstance(workflow_type, TaskType) else workflow_type
-                )
                 if workflow_name in {TaskType.MODAL_CM.value, TaskType.TERMINAL_CM.value}:
-                    # ComponentModelerData types use 'modeler' instead of 'simulation'
                     simulation_obj = getattr(stub_data, "modeler", None)
                 else:
                     simulation_obj = getattr(stub_data, "simulation", None)
@@ -704,6 +709,7 @@ class LocalCache:
             cache_key = build_cache_key(
                 simulation_hash=simulation_hash,
                 version=version,
+                workflow_type=workflow_name,
             )
 
             metadata = build_entry_metadata(
@@ -843,12 +849,19 @@ def build_cache_key(
     *,
     simulation_hash: str,
     version: str,
+    workflow_type: str,
 ) -> str:
-    """Construct a deterministic cache key."""
+    """Construct a deterministic cache key.
+
+    ``workflow_type`` is included so that different task types sharing the same
+    underlying simulation (e.g. ``VolumeMesher`` vs ``HeatChargeSimulation``)
+    never collide.
+    """
 
     payload = {
         "simulation_hash": simulation_hash,
         "versions": _canonicalize(version),
+        "workflow_type": workflow_type,
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
