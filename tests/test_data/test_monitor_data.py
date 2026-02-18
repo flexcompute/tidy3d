@@ -787,9 +787,10 @@ def test_mode_data_with_fields_sort(conjugated_dot_product):
     unsorting = np.arange(num_modes) * np.ones((num_freqs, num_modes))
     unsorting = unsorting.astype(int)
     # we keep first, central, and last sorted
+    rng = np.random.default_rng(12345)
     for freq_id in range(1, num_freqs - 1):
         if freq_id != num_freqs // 2:
-            unsorting[freq_id, :] = np.random.permutation(unsorting[freq_id, :])
+            unsorting[freq_id, :] = rng.permutation(unsorting[freq_id, :])
 
     # unsort using sorting tool
     data_unsorted = data._apply_mode_reorder(unsorting)
