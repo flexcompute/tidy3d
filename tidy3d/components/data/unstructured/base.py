@@ -279,7 +279,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     def rename(self, name: str) -> UnstructuredGridDataset:
         """Return a renamed array."""
-        return self.updated_copy(values=self.values.rename(name), deep=False, validate=False)
+        return self.updated_copy(values=self.values.rename(name), deep=False)
 
     @property
     def is_complex(self) -> bool:
@@ -401,9 +401,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             points = self.points
             values = self.values
 
-        return self.updated_copy(
-            points=points, values=values, cells=cells, deep=False, validate=False
-        )
+        return self.updated_copy(points=points, values=values, cells=cells, deep=False)
 
     """ Arithmetic operations """
 
@@ -435,28 +433,28 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         if type(result) is tuple:
             # multiple return values
-            return tuple(self.updated_copy(values=x, deep=False, validate=False) for x in result)
+            return tuple(self.updated_copy(values=x, deep=False) for x in result)
         elif method == "at":
             # no return value
             return None
         else:
             # one return value
-            return self.updated_copy(values=result, deep=False, validate=False)
+            return self.updated_copy(values=result, deep=False)
 
     @property
     def real(self) -> Self:
         """Real part of dataset."""
-        return self.updated_copy(values=self.values.real, deep=False, validate=False)
+        return self.updated_copy(values=self.values.real, deep=False)
 
     @property
     def imag(self) -> UnstructuredGridDataset:
         """Imaginary part of dataset."""
-        return self.updated_copy(values=self.values.imag, deep=False, validate=False)
+        return self.updated_copy(values=self.values.imag, deep=False)
 
     @property
     def abs(self) -> UnstructuredGridDataset:
         """Absolute value of dataset."""
-        return self.updated_copy(values=self.values.abs, deep=False, validate=False)
+        return self.updated_copy(values=self.values.abs, deep=False)
 
     """ VTK interfacing """
 
@@ -1049,7 +1047,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 kwargs={"fill_value": fill_value},
             ),
             deep=False,
-            validate=False,
         )
 
     def _spatial_interp(
@@ -1825,7 +1822,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         return self.updated_copy(
             values=self.values.sel(**sel_kwargs_only_lists, method=method),
             deep=False,
-            validate=False,
         )
 
     def isel(
@@ -1853,9 +1849,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         sel_kwargs_only_lists = {
             key: value if isinstance(value, list) else [value] for key, value in sel_kwargs.items()
         }
-        return self.updated_copy(
-            values=self.values.isel(**sel_kwargs_only_lists), deep=False, validate=False
-        )
+        return self.updated_copy(values=self.values.isel(**sel_kwargs_only_lists), deep=False)
 
     @requires_vtk
     def sel_inside(self, bounds: Bound) -> UnstructuredGridDataset:

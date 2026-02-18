@@ -585,9 +585,28 @@ class Tidy3dBaseModel(BaseModel):
         Parameters
         ----------
         deep : bool = True
-            Whether to make a deep copy first (same as v1).
+            Whether to make a deep copy of all fields before applying *update*.
+            With ``deep=False``, fields **not** listed in *update* become shared
+            references with the original instance.  This is only safe when no
+            code path will later mutate those shared objects in-place (e.g.
+            ``array[:] = …``).  Since tidy3d models are generally treated as
+            immutable, ``deep=False`` is usually fine for internal
+            copy-and-update patterns.
         validate : bool = True
             If ``True``, run full Pydantic validation on the copied data.
+
+            **When is** ``validate=False`` **safe?**  Only when *all* update values
+            are already the correct pydantic field types (validated model
+            instances, plain Python scalars, ``None``, etc.).
+
+            It is **not safe** when update values come from xarray operations
+            (arithmetic, ``sel``, ``isel``, ``interp``, ``rename``, ``drop_vars``,
+            numpy ufuncs, ``.real/.imag/.abs``, …) because those return plain
+            ``xr.DataArray`` and lose the tidy3d subclass
+            (``ScalarFieldDataArray``, ``IndexedDataArray``, …).  Validation is
+            needed to coerce them back.  It is also **not safe** when the model
+            has validators that enforce business logic (e.g.
+            ``Simulation._check_normalize_index``).
         update : Optional[Mapping[str, Any]] = None
             Optional mapping of fields to overwrite (passed straight
             through to ``model_copy(update=...)``).

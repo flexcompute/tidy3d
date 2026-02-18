@@ -1157,12 +1157,6 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 new_data[comp] = -np.conj(field)
             else:
                 new_data[comp] = np.conj(field)
-        # NOTE: deep=False is safe because update values are new objects. However,
-        # validate=False is NOT safe here (or in similar methods like normalize,
-        # grid_corrected_copy, etc.) because xarray arithmetic/operations (e.g.
-        # np.conj, field / amps, field * factor) produce plain DataArray objects that
-        # lose the tidy3d subclass (e.g. ScalarFieldDataArray). Pydantic validation
-        # is needed to coerce them back to the correct type.
         return self.copy(deep=False, update=new_data)
 
     def _check_fields_stored(self, components: list[str]) -> None:
