@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from tidy3d.log import log
+
 from . import sections  # noqa: F401 - ensure builtin sections register
 from .legacy import LegacyConfigWrapper, LegacyEnvironment, LegacyEnvironmentConfig
 from .manager import ConfigManager
+from .migrations import CURRENT_CONFIG_VERSION, register_migration
 from .registry import (
     get_handlers,
     get_sections,
@@ -16,6 +19,7 @@ from .registry import (
 )
 
 __all__ = [
+    "CURRENT_CONFIG_VERSION",
     "ConfigManager",
     "Env",
     "Environment",
@@ -24,13 +28,26 @@ __all__ = [
     "get_handlers",
     "get_sections",
     "register_handler",
+    "register_migration",
     "register_plugin",
     "register_section",
 ]
 
 
-def _create_manager() -> ConfigManager:
-    return ConfigManager()
+def _create_manager(*, profile: str | None = None, allow_fallback: bool = True) -> ConfigManager:
+    try:
+        return ConfigManager(profile=profile)
+    except Exception as exc:
+        if not allow_fallback:
+            raise
+        from .loader import _temporary_config_dir
+
+        fallback_dir = _temporary_config_dir()
+        log.warning(
+            "Failed to initialize configuration from the active config directory: "
+            f"{exc}. Falling back to temporary configuration at '{fallback_dir}'."
+        )
+        return ConfigManager(profile=profile, config_dir=fallback_dir)
 
 
 _base_manager = _create_manager()
@@ -53,7 +70,7 @@ def reload_config(*, profile: str | None = None) -> LegacyConfigWrapper:
             _base_manager.apply_web_env({})
         except AttributeError:
             pass
-    _base_manager = ConfigManager(profile=profile)
+    _base_manager = _create_manager(profile=profile, allow_fallback=False)
     _config_wrapper.reset_manager(_base_manager)
     Env.reset_manager(_base_manager)
     return _config_wrapper

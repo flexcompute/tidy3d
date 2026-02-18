@@ -455,7 +455,8 @@ def test_medium_eps_diagonal_on_grid(medium):
 @pytest.mark.parametrize("unstructured", [False, True])
 def test_medium_nk(unstructured):
     """Construct custom medium from n (and k) DataArrays."""
-    n = make_scalar_data().real
+    # keep n^2 - k^2 strictly above 1 to avoid rare random-edge flakes
+    n = make_scalar_data().real + 1e-5
     k = make_scalar_data().real * 0.001
     ns = td.SpatialDataArray(n.squeeze(dim="f", drop=True))
     ks = td.SpatialDataArray(k.squeeze(dim="f", drop=True))

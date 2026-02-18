@@ -130,6 +130,13 @@ def test_config_manager_with_legacy_nexus(old_nexus_config):
 
     manager = ConfigManager(config_dir=config_dir)
 
+    # Manager load should persist the migrated file and back up the legacy flat config.
+    new_config = config_dir / "config.toml"
+    backup = config_dir / "config.migrated"
+    assert new_config.exists()
+    assert backup.exists()
+    assert not old_config.exists()
+
     # Should auto-load Nexus settings
     web = manager.get_section("web")
 
@@ -142,6 +149,29 @@ def test_config_manager_with_legacy_nexus(old_nexus_config):
     # Check env_vars
     assert "AWS_ENDPOINT_URL_S3" in web.env_vars
     assert web.env_vars["AWS_ENDPOINT_URL_S3"] == "http://nexus.company.com:9000"
+
+
+def test_config_manager_legacy_invalid_payload_skips_write_back(tmp_path, monkeypatch):
+    """Invalid legacy payloads should load with env overrides but not be persisted."""
+    from tests.utils import AssertLogStr
+
+    config_dir = tmp_path / ".tidy3d"
+    config_dir.mkdir()
+    legacy_file = config_dir / "config"
+    legacy_file.write_text('apikey = "test-key"\nenable_caching = "not-a-bool"\n', encoding="utf-8")
+
+    monkeypatch.setenv("TIDY3D_WEB__ENABLE_CACHING", "false")
+
+    with AssertLogStr(
+        log_level_expected="WARNING",
+        contains_str="Skipping auto-migration write-back",
+    ):
+        manager = ConfigManager(config_dir=config_dir)
+
+    assert manager.get_section("web").enable_caching is False
+    assert legacy_file.exists()
+    assert not (config_dir / "config.toml").exists()
+    assert not (config_dir / "config.migrated").exists()
 
 
 def test_no_migration_if_new_config_exists(tmp_path):
@@ -240,6 +270,34 @@ def test_no_migration_if_no_legacy_config(tmp_path):
     assert not (config_dir / "config").exists()
     assert not (config_dir / "config.toml").exists()
     assert not (config_dir / "config.migrated").exists()
+
+
+def test_legacy_payload_migration_failure_falls_back_without_legacy_file(tmp_path, monkeypatch):
+    from tests.utils import AssertLogStr
+    from tidy3d.config import legacy as config_legacy
+
+    config_dir = tmp_path / ".tidy3d"
+    config_dir.mkdir()
+
+    legacy_payload = {"web": {"apikey": "legacy-key"}}
+
+    monkeypatch.setattr(
+        config_legacy, "load_legacy_flat_config", lambda _config_dir: legacy_payload
+    )
+
+    def fail_migration(self, _data):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(ConfigLoader, "_migrate_legacy_payload", fail_migration)
+
+    loader = ConfigLoader(config_dir)
+    with AssertLogStr(
+        log_level_expected="WARNING", contains_str="Using legacy data without migration"
+    ):
+        data = loader.load_base()
+
+    assert data == legacy_payload
+    assert not (config_dir / "config.toml").exists()
 
 
 def test_migration_preserves_comments_when_possible(old_nexus_config):
@@ -417,15 +475,15 @@ def test_configure_fn_with_nexus_url(tmp_path, monkeypatch):
     from unittest.mock import Mock
 
     from tidy3d.config import ConfigManager
-    from tidy3d.web.cli.app import configure_fn
+    from tidy3d.web.cli.config import configure_fn
 
     # Create a fresh config manager
     manager = ConfigManager(config_dir=tmp_path)
 
     # Monkeypatch the global config and requests
-    import tidy3d.web.cli.app as cli_app
+    import tidy3d.web.cli.config as cli_config
 
-    monkeypatch.setattr(cli_app, "config", manager)
+    monkeypatch.setattr(cli_config, "config", manager)
 
     # Mock successful API key validation
     mock_response = Mock()
@@ -454,13 +512,13 @@ def test_configure_fn_with_manual_endpoints(tmp_path, monkeypatch):
     from unittest.mock import Mock
 
     from tidy3d.config import ConfigManager
-    from tidy3d.web.cli.app import configure_fn
+    from tidy3d.web.cli.config import configure_fn
 
     manager = ConfigManager(config_dir=tmp_path)
 
-    import tidy3d.web.cli.app as cli_app
+    import tidy3d.web.cli.config as cli_config
 
-    monkeypatch.setattr(cli_app, "config", manager)
+    monkeypatch.setattr(cli_config, "config", manager)
 
     mock_response = Mock()
     mock_response.status_code = 200
@@ -491,13 +549,13 @@ def test_configure_fn_with_manual_endpoints(tmp_path, monkeypatch):
 def test_configure_fn_validation_error(tmp_path, monkeypatch, capsys):
     """Test configure_fn with incomplete endpoint specification."""
     from tidy3d.config import ConfigManager
-    from tidy3d.web.cli.app import configure_fn
+    from tidy3d.web.cli.config import configure_fn
 
     manager = ConfigManager(config_dir=tmp_path)
 
-    import tidy3d.web.cli.app as cli_app
+    import tidy3d.web.cli.config as cli_config
 
-    monkeypatch.setattr(cli_app, "config", manager)
+    monkeypatch.setattr(cli_config, "config", manager)
 
     # Only provide api_endpoint without website_endpoint (should fail)
     configure_fn(
@@ -514,13 +572,13 @@ def test_configure_fn_restore_defaults(tmp_path, monkeypatch, capsys):
     from unittest.mock import Mock
 
     from tidy3d.config import ConfigManager
-    from tidy3d.web.cli.app import configure_fn
+    from tidy3d.web.cli.config import configure_fn
 
     manager = ConfigManager(config_dir=tmp_path)
 
-    import tidy3d.web.cli.app as cli_app
+    import tidy3d.web.cli.config as cli_config
 
-    monkeypatch.setattr(cli_app, "config", manager)
+    monkeypatch.setattr(cli_config, "config", manager)
 
     # First configure nexus
     mock_response = Mock()
@@ -595,13 +653,13 @@ def test_api_key_validation_failure(tmp_path, monkeypatch, capsys):
     from unittest.mock import Mock
 
     from tidy3d.config import ConfigManager
-    from tidy3d.web.cli.app import configure_fn
+    from tidy3d.web.cli.config import configure_fn
 
     manager = ConfigManager(config_dir=tmp_path)
 
-    import tidy3d.web.cli.app as cli_app
+    import tidy3d.web.cli.config as cli_config
 
-    monkeypatch.setattr(cli_app, "config", manager)
+    monkeypatch.setattr(cli_config, "config", manager)
 
     # Mock failed API key validation
     mock_response = Mock()
