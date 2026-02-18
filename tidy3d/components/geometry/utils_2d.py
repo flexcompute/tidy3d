@@ -38,14 +38,6 @@ def get_bounds(geom: Geometry, axis: Axis) -> tuple[float, float]:
     return (geom.bounds[0][axis], geom.bounds[1][axis])
 
 
-def get_thickened_geom(geom: Geometry, axis: Axis) -> Geometry:
-    """Helper to return a slightly thickened version of a planar geometry."""
-    center = get_bounds(geom, axis)[0]
-    neg_thickness = increment_float(center, -1.0)
-    pos_thickness = increment_float(center, 1.0)
-    return geom._update_from_bounds(bounds=(neg_thickness, pos_thickness), axis=axis)
-
-
 def get_neighbors(
     geom: Geometry,
     axis: Axis,
