@@ -7644,6 +7644,27 @@ files = [
 ]
 
 [[package]]
+name = "towncrier"
+version = "25.8.0"
+description = "Building newsfiles for your project."
+optional = true
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "extra == \"dev\""
+files = [
+    {file = "towncrier-25.8.0-py3-none-any.whl", hash = "sha256:b953d133d98f9aeae9084b56a3563fd2519dfc6ec33f61c9cd2c61ff243fb513"},
+    {file = "towncrier-25.8.0.tar.gz", hash = "sha256:eef16d29f831ad57abb3ae32a0565739866219f1ebfbdd297d32894eb9940eb1"},
+]
+
+[package.dependencies]
+click = "*"
+jinja2 = "*"
+tomli = {version = "*", markers = "python_version < \"3.11\""}
+
+[package.extras]
+dev = ["furo (>=2024.05.06)", "nox", "packaging", "sphinx (>=5)", "twisted"]
+
+[[package]]
 name = "tox"
 version = "4.34.1"
 description = "tox is a generic virtualenv management and test command line tool"
@@ -8129,7 +8150,7 @@ files = [
 
 [extras]
 design = ["bayesian-optimization", "pygad", "pyswarms"]
-dev = ["bayesian-optimization", "cma", "coverage", "diff-cover", "dill", "gdstk", "grcwa", "ipython", "ipython", "jinja2", "jupyter", "libcst", "memory_profiler", "mypy", "myst-parser", "nbconvert", "nbdime", "nbsphinx", "networkx", "openpyxl", "optax", "pre-commit", "psutil", "pydata-sphinx-theme", "pygad", "pylint", "pyswarms", "pytest", "pytest-cov", "pytest-env", "pytest-testmon", "pytest-timeout", "pytest-xdist", "rtree", "ruff", "sax", "scikit-rf", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-design", "sphinx-favicon", "sphinx-notfound-page", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm", "torch", "torch", "tox", "trimesh", "vtk", "zizmor"]
+dev = ["bayesian-optimization", "cma", "coverage", "diff-cover", "dill", "gdstk", "grcwa", "ipython", "ipython", "jinja2", "jupyter", "libcst", "memory_profiler", "mypy", "myst-parser", "nbconvert", "nbdime", "nbsphinx", "networkx", "openpyxl", "optax", "pre-commit", "psutil", "pydata-sphinx-theme", "pygad", "pylint", "pyswarms", "pytest", "pytest-cov", "pytest-env", "pytest-testmon", "pytest-timeout", "pytest-xdist", "rtree", "ruff", "sax", "scikit-rf", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-design", "sphinx-favicon", "sphinx-notfound-page", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm", "torch", "torch", "towncrier", "tox", "trimesh", "vtk", "zizmor"]
 docs = ["cma", "gdstk", "grcwa", "ipython", "jinja2", "jupyter", "myst-parser", "nbconvert", "nbdime", "nbsphinx", "openpyxl", "optax", "pydata-sphinx-theme", "pylint", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-design", "sphinx-favicon", "sphinx-notfound-page", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm"]
 extras = ["tidy3d-extras"]
 gdstk = ["gdstk"]
@@ -8144,4 +8165,4 @@ vtk = ["vtk"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "a09616de367b2f46ad52109dc990ad23613c4cb0008bc1ed510e372594d8733a"
+content-hash = "b373985f28814d5d05ddab1800864563dbc586b85b8b7d8b98292573b64d1cee"

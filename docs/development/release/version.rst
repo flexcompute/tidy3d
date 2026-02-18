@@ -143,6 +143,37 @@ Examples
    workflow_control: start-deploy
    # Skips tag creation and tests
 
+Release Changelog Build
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Before running the release workflow, generate release notes from ``changelog.d`` fragments:
+
+.. code-block:: bash
+
+   RELVER=$(poetry version -s | sed -E 's/\.dev[0-9]+$//')
+   RELDATE=$(date -u +%F)
+   poetry run towncrier build --yes --version "${RELVER}" --date "${RELDATE}"
+   poetry run python scripts/changelog_refs.py --version "${RELVER}"
+
+This sequence:
+
+- Derives the release version from ``pyproject.toml`` (for example ``2.11.0.dev0`` -> ``2.11.0``).
+- Builds ``CHANGELOG.md`` and consumes fragment files.
+- Adds or updates the reference-style compare link for ``[RELVER]`` using the latest reachable stable ``vX.Y.Z`` tag as the previous version.
+
+Commit the updated ``CHANGELOG.md`` and removed fragment files in the same release commit.
+
+Automated Changelog PR Workflow
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You can automate changelog generation and PR creation with GitHub Actions workflow ``public/tidy3d/python-client-build-changelog-pr``.
+
+- Default source branch: ``develop``
+- Default target branch: ``develop``
+- Optional overrides: ``source_branch``, ``target_branch``, ``release_version``, ``release_date``, ``previous_version``
+
+This workflow runs Towncrier, updates compare reference links, and opens a PR with the resulting changes.
+
 Best Practices
 ^^^^^^^^^^^^^^
 
