@@ -39,3 +39,13 @@ Registration Utilities
    tidy3d.config.register_handler
    tidy3d.config.get_sections
    tidy3d.config.get_handlers
+
+Schema Versioning
+-----------------
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.config.CURRENT_CONFIG_VERSION
+   tidy3d.config.register_migration

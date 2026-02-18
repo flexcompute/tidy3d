@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `DesignSpace` support for sweeping `WorkflowType` objects, including mode/EME simulations and component modelers.
 - Added `current_amplitude_definition` parameter to `UniformCurrentSource` for size-independent total current injection. Set to `"total"` to interpret the source amplitude as total current rather than current density.
 - Added baseband source time classes (`BasebandStep`, `BasebandGaussianPulse`, `BasebandRectangularPulse`, `BasebandCustomSourceTime`) for transient RF simulations with real-valued time signals.
+- Added config versioning with automatic backward migrations by default; forward‑compat is best‑effort unless strict mode is enabled.
 
 ### Breaking Changes
 - `web.Batch(simulations=...)` now requires string task names when simulations are passed as a dictionary. Numeric keys (for example `0`, `1`) are no longer converted automatically; convert them to strings first (for example `"0"`, `"1"`).

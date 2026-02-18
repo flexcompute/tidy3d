@@ -64,6 +64,18 @@ def test_uppercase_profile_normalization(monkeypatch):
         reload_config(profile="default")
 
 
+def test_reload_config_raises_for_invalid_runtime_config(tmp_path, monkeypatch):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.toml").write_text(
+        'config_version = 1\nlogging = "oops"\n', encoding="utf-8"
+    )
+    monkeypatch.setenv("TIDY3D_BASE_DIR", str(tmp_path))
+
+    with pytest.raises(TypeError, match="must be a mapping"):
+        reload_config()
+
+
 def test_adjoint_defaults(config_manager):
     adjoint = config_manager.get_section("adjoint")
     assert adjoint.min_wvl_fraction == pytest.approx(5e-2)
