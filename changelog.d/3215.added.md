@@ -1,0 +1,1 @@
+Added `GeometryArray` class for efficiently representing multiple copies of a base geometry at specified offsets with transformation matrices. Includes a convenience method `geometry.array(offsets=..., transforms=...)` on all geometry objects.

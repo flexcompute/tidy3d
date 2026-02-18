@@ -1,0 +1,1 @@
+Added `structure_priority_mode` for `TerminalComponentModeler` and default to `"conductor"` to ensure metal structures override dielectrics regardless of structure order, preventing order-dependent results in RF simulations.

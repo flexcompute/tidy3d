@@ -5,67 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-- Added `GeometryArray` class for efficiently representing multiple copies of a base geometry at specified offsets with transformation matrices. Includes a convenience method `geometry.array(offsets=..., transforms=...)` on all geometry objects.
-- Added `ModeSortSpec.keep_modes` which can be set to `"all"` to keep all modes in the mode solver (the default), `"filtered"` to keep only modes passing the filter defined by the `ModeSortSpec`, or an integer `N` to keep only the top `N` modes after filtering and sorting.
-- Added `fill_fraction_box` as a new filtering and sorting key which computes the field-energy fill fraction within a specified bounding box (`ModeSortSpec.bounding_box`).
-- Added `Grid.fine_mesh_info` property to identify and report locations where grid cell sizes are fine for understanding meshing hotspots.
-- Added visualization of finest grid regions in `Simulation.plot_grid()` with shaded regions highlighting areas of fine meshing.
-- Added autograd support for `Sphere`.
-- Added validation warning in `HeatChargeSimulation` for very small `Cylinder` radii to help users avoid meshing and numerical issues.
-- Added `GaussianOverlapMonitor` and `AstigmaticGaussianOverlapMonitor` for decomposing electromagnetic fields onto Gaussian beam profiles.
-- Added `GaussianPort` and `AstigmaticGaussianPort` for S-matrix calculations using Gaussian beam sources and overlap monitors.
-- Added `symmetric_pseudo` option for `s_param_def` in `TerminalComponentModeler` which applies a scaling factor that ensures the S-matrix is symmetric in reciprocal systems.
-- Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
-- Added flag `remove_fragments` to the base `UnstructuredGrid` to remove fragments in unstructured grids. This can ease meshing by eliminating internal boundaries in overlapping structures.
-- Added deprecation warning for `conformal` in TCAD heat/charge monitors when explicitly set; this option is ignored (treated as `False`) when meshing with `remove_fragments=True`.
-- Added in-memory caching for downloaded batch results, configurable via ``config.batch_data_cache``.
-- Added `DesignSpace` support for sweeping `WorkflowType` objects, including mode/EME simulations and component modelers.
-- Added `current_amplitude_definition` parameter to `UniformCurrentSource` for size-independent total current injection. Set to `"total"` to interpret the source amplitude as total current rather than current density.
-- Added baseband source time classes (`BasebandStep`, `BasebandGaussianPulse`, `BasebandRectangularPulse`, `BasebandCustomSourceTime`) for transient RF simulations with real-valued time signals.
-- Added config versioning with automatic backward migrations by default; forward‑compat is best‑effort unless strict mode is enabled.
-
-### Breaking Changes
-- `web.Batch(simulations=...)` now requires string task names when simulations are passed as a dictionary. Numeric keys (for example `0`, `1`) are no longer converted automatically; convert them to strings first (for example `"0"`, `"1"`).
-- Added optional automatic extrusion of structures at the simulation boundaries into/through PML/Absorber layers via `extrude_structures` field in class `AbsorberSpec`.
-- Added `structure_priority_mode` for `TerminalComponentModeler` and default to `"conductor"` to ensure metal structures override dielectrics regardless of structure order, preventing order-dependent results in RF simulations.
-- 1D lumped elements (with zero lateral extent) are no longer allowed. Use a small finite lateral extent (e.g., `1e-6`) instead.
-- `ModeSortSpec.sort_key` is now required with a default of `"n_eff"` (previously optional with `None` default). `ModeSortSpec.sort_order` is now optional with a default of `None`, which automatically selects the natural order based on `sort_key` and `sort_reference`: ascending when a reference is provided (closest first), otherwise descending for `n_eff` and polarization fractions (higher values first), ascending for `k_eff` and `mode_area` (lower values first).
-- Changed the interpretation of `waist_distance` and `waist_distances` for backward-propagating Gaussian beams (`GaussianBeam`, `AstigmaticGaussianBeam`, `GaussianBeamProfile`, `AstigmaticGaussianBeamProfile`). Previously, the waist position was interpreted relative to the directed propagation axis, meaning switching `direction` from `+` to `-` would also flip the waist position in the global reference frame. Now, the waist position is defined consistently for both directions: a positive `waist_distance` always places the beam waist behind the source/monitor plane (toward the negative normal axis), regardless of propagation direction. This ensures reciprocity between Gaussian sources and overlap monitors used in port-based S-matrix calculations. Users with existing simulations using backward-propagating Gaussian beams with non-zero waist distances may need to adjust their values.
-
-### Changed
-- Changed the default value of `fill_value` in `UnstructuredGridDataset.interp()` from `0` to `"extrapolate"`. This means points outside the mesh will now use nearest-neighbor extrapolation instead of being filled with zeros.
-- `ModeSortSpec.sort_key` is now required with a default of `"n_eff"` (previously optional with `None` default). `ModeSortSpec.sort_order` is now optional with a default of `None`, which automatically selects the natural order based on `sort_key` and `sort_reference`: ascending when a reference is provided (closest first), otherwise descending for `n_eff` and polarization fractions (higher values first), ascending for `k_eff` and `mode_area` (lower values first).
-- Added `symmetric_pseudo` option for `s_param_def` in `TerminalComponentModeler` which applies a scaling factor that ensures the S-matrix is symmetric in reciprocal systems.
-- Added deprecation warning for `TemperatureMonitor` and `SteadyPotentialMonitor` when `unstructured` parameter is not explicitly set. The default value of `unstructured` will change from `False` to `True` in the next release.
-- Added deprecation warning for ``TemperatureMonitor`` and ``SteadyPotentialMonitor`` when ``unstructured`` parameter is not explicitly set. The default value of ``unstructured`` will change from ``False`` to ``True`` after the 2.11 release.
-- Added validation to `GaussianDoping` to ensure `ref_con < concentration`, validate `source` face identifier, and warn the user when the box size is not sufficient for the specified transition width.
-- Local caching is now enabled by default (set `td.config.local_cache.enabled=False` to opt out).
-- Reduced computation time of `adaptive_vjp_spacing` for `GeometryGroup` by allowing permittivity based spacing value to be cached.
-- Added warning in `LayerRefinementSpec` when `dl_min_from_gaps` (derived from automatic gap refinement) is very small relative to the lateral grid size for identifying cases where excessive grid refinement may occur due to very small detected gaps.
-- Added `custom_vjp` and new custom run functions that provide hooks into adjoint for custom gradient calculations.
-- Changed default `num_points` in `EMEModeSpec.interp_spec` from 3 to 5 for improved accuracy of frequency interpolation.
-- Unstructured data plots are now "crinkled", showing the full mesh elements that cover given monitor boundaries. Previously, the mesh elements were "clipped" to the monitor boundaries.
-
-### Fixed
-- Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.
-- Fixed frequency accumulation of gradients for custom dispersive media.
-- Fixed `snap_box_to_grid` producing zero-size boxes when using `Expand` behavior with very small intervals centered on a grid point.
-- Fixed sliver polygon artifacts in 2D material subdivision by filtering polygons based on grid cell size, preventing numerical issues with large-coordinate geometries.
-- Fixed `CustomMedium` gradient calculation when field coordinates exactly align with boundaries.
-- Fixed adjoint simulation `grid_spec` to align exactly with forward simulation for correct `FieldData` adjoint source power.
-- Fixed `TerminalComponentModeler` serialization failure with `CustomGridBoundaries` by storing JSON-serializable grid metadata in `GridSpec.attrs`.
-- Fixed redundant logging when `Batch.download()` skips existing files, and added `replace_existing` to `Batch.run()` so overwrite behavior can be controlled directly.
-- Fixed redundant server lookups when loading simulation results.
-- Updated docstrings for `DerivativeInfo` to more accurately reflect dataclass fields.
-- Fixed local cache race conditions causing `FileNotFoundError`.
-- Improved `ModeSolver.solve()` to suppress the accuracy warning when local subpixel averaging is enabled via `tidy3d-extras`, and expanded docstrings for `ModeSolver.solve()`, `ModeSimulation.run_local()`, `Simulation.epsilon()`, and `Simulation.epsilon_on_grid()` to document the `config.simulation.use_local_subpixel` option.
-- Fixed `ModeSolver.validate_pre_upload` not validating `MicrowaveModeSpec` with `AutoImpedanceSpec`, causing cryptic server-side errors for invalid conductor geometries.
-- Fixed local cache not storing results for `ModalComponentModeler` (and `TerminalComponentModeler`) runs, causing cache misses on repeated `web.run()` calls.
-- Fixed spurious `ModeSimulation` error logs during deserialization of `SimulationDataMap` by adding discriminators to `SimulationType` and `SimulationDataType` unions.
-- Fixed unintended model output in Jupyter notebooks during `import tidy3d` by preventing `Tidy3dBaseModel.__str__` from triggering notebook display side effects.
+<!-- Maintainer note: do not edit this file directly in regular PRs. Add Towncrier fragments in changelog.d/ and follow changelog.d/README.md. -->
+<!-- towncrier release notes start -->
 
 ## [2.10.2] - 2026-01-21
 
@@ -2011,7 +1952,6 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.10.2...develop
 [2.10.2]: https://github.com/flexcompute/tidy3d/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/flexcompute/tidy3d/compare/v2.10.0...v2.10.1
 [2.10.0]: https://github.com/flexcompute/tidy3d/compare/v2.9.3...v2.10.0
