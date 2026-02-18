@@ -1073,3 +1073,123 @@ def test_cache_cli_commands(monkeypatch, tmp_path_factory, basic_simulation, tmp
     list_after = runner.invoke(tidy3d_cli, ["cache", "list"])
     assert list_after.exit_code == 0
     assert "Cache is empty." in list_after.output
+
+
+def test_cache_key_includes_workflow_type():
+    """build_cache_key must produce different keys for different workflow types
+    even when the simulation hash and version are identical.
+
+    Regression test for a bug where a VolumeMesher result could be returned
+    when a HeatChargeSimulation was run because both shared the same inner
+    simulation hash and workflow_type was not part of the cache key.
+    """
+    from tidy3d.web.cache import build_cache_key
+
+    common_hash = "abc123"
+    version = "1.0"
+
+    key_heat = build_cache_key(
+        simulation_hash=common_hash, version=version, workflow_type="HEAT_CHARGE"
+    )
+    key_mesh = build_cache_key(
+        simulation_hash=common_hash, version=version, workflow_type="VOLUME_MESH"
+    )
+    key_fdtd = build_cache_key(simulation_hash=common_hash, version=version, workflow_type="FDTD")
+
+    assert key_heat != key_mesh, "HEAT_CHARGE and VOLUME_MESH must produce different cache keys"
+    assert key_heat != key_fdtd, "HEAT_CHARGE and FDTD must produce different cache keys"
+    assert key_mesh != key_fdtd, "VOLUME_MESH and FDTD must produce different cache keys"
+
+    # Same inputs must be deterministic
+    key_heat2 = build_cache_key(
+        simulation_hash=common_hash, version=version, workflow_type="HEAT_CHARGE"
+    )
+    assert key_heat == key_heat2
+
+
+def test_volume_mesh_cache_no_collision_with_heat(tmp_path_factory):
+    """Storing a VOLUME_MESH result must not be returned when fetching a
+    HeatChargeSimulation that shares the same inner simulation.
+
+    Reproduces the notebook bug where web.run(sim, parent_tasks=[mesh_job.task_id])
+    returned VolumeMesherData instead of running the heat solver.
+    """
+    heat_sim = td.HeatChargeSimulation(
+        size=(3.0, 3.0, 3.0),
+        medium=td.Medium(permittivity=1.0, heat_spec=td.FluidSpec()),
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+                medium=td.Medium(
+                    permittivity=2.0,
+                    heat_spec=td.SolidSpec(conductivity=1, capacity=1),
+                ),
+                name="box",
+            ),
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.5),
+        sources=[td.HeatSource(rate=1, structures=["box"])],
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureBoundary(structure="box"),
+                condition=td.TemperatureBC(temperature=300),
+            )
+        ],
+        monitors=[
+            td.TemperatureMonitor(center=(0, 0, 0), size=(1, 1, 0), name="temp", unstructured=True),
+        ],
+    )
+
+    mesher = td.VolumeMesher(
+        simulation=heat_sim,
+        monitors=[
+            td.VolumeMeshMonitor(center=(0, 0, 0), size=(1, 1, 0), name="mesh"),
+        ],
+    )
+
+    cache = resolve_local_cache(use_cache=True)
+    cache.clear()
+
+    # Store a fake result keyed as if it came from a VOLUME_MESH task.
+    # Use simulation=None so store_result extracts stub_data.simulation (the HeatChargeSimulation).
+    artifact = tmp_path_factory.mktemp("mesh_art") / CACHE_ARTIFACT_NAME
+    artifact.write_text("mesh-payload")
+
+    class _FakeVolumeMesherData:
+        """Minimal stand-in for VolumeMesherData with .simulation = HeatChargeSimulation."""
+
+        def __init__(self, sim):
+            self.simulation = sim
+
+    cache.store_result(
+        stub_data=_FakeVolumeMesherData(heat_sim),
+        task_id="vom-fake-id",
+        path=str(artifact),
+        workflow_type="VOLUME_MESH",
+    )
+    assert len(cache) == 1
+
+    # try_fetch for the HeatChargeSimulation must NOT return the VOLUME_MESH entry
+    entry = cache.try_fetch(heat_sim)
+    assert entry is None, (
+        "Cache returned a VOLUME_MESH entry for a HeatChargeSimulation lookup; "
+        "workflow_type must be part of the cache key to prevent this collision."
+    )
+
+    # try_fetch for the VolumeMesher itself must also NOT match (different sim hash)
+    entry_mesher = cache.try_fetch(mesher)
+    assert entry_mesher is None
+
+    # Storing a HEAT_CHARGE result should then be fetchable
+    heat_artifact = tmp_path_factory.mktemp("heat_art") / CACHE_ARTIFACT_NAME
+    heat_artifact.write_text("heat-payload")
+    cache.store_result(
+        stub_data=_FakeVolumeMesherData(heat_sim),
+        task_id="hcs-fake-id",
+        path=str(heat_artifact),
+        workflow_type="HEAT_CHARGE",
+    )
+    assert len(cache) == 2
+
+    entry_heat = cache.try_fetch(heat_sim)
+    assert entry_heat is not None, "HEAT_CHARGE entry should be fetchable for HeatChargeSimulation"
