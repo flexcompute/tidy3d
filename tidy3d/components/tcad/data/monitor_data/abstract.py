@@ -68,7 +68,9 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
         for field, val in self.field_components.items():
             new_field_components[field] = self._symmetry_expanded_copy_base(property=val)
 
-        return self.updated_copy(symmetry=(0, 0, 0), **new_field_components)
+        return self.updated_copy(
+            symmetry=(0, 0, 0), **new_field_components, deep=False, validate=False
+        )
 
     def _symmetry_expanded_copy_base(self, property: FieldDataset) -> FieldDataset:
         """Return the property with symmetry applied."""

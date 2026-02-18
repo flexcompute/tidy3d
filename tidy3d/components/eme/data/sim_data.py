@@ -628,4 +628,4 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             if not sweep_in_field:
                 new_fields[field_key] = new_fields[field_key].drop_vars("sweep_index")
 
-        return field.updated_copy(**new_fields)
+        return field.updated_copy(**new_fields, deep=False, validate=False)

@@ -1040,9 +1040,13 @@ class SimulationData(AbstractYeeGridSimulationData):
         # Make a new monitor_data dictionary with renormalized data
         data_normalized = tuple(mnt_data.normalize(source_spectrum_fn) for mnt_data in self.data)
 
-        simulation = self.simulation.copy(update={"normalize_index": normalize_index})
+        simulation = self.simulation.copy(
+            deep=False, validate=False, update={"normalize_index": normalize_index}
+        )
 
-        return self.copy(update={"simulation": simulation, "data": data_normalized})
+        return self.copy(
+            deep=False, validate=False, update={"simulation": simulation, "data": data_normalized}
+        )
 
     def _split_adjoint_data(self: SimulationData, num_mnts_original: int) -> tuple[list, list]:
         """Split data list into original, adjoint field, and adjoint permittivity."""

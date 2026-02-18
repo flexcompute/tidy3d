@@ -120,7 +120,7 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         """Sort modes per frequency according to ``sort_spec``."""
 
         modes_sorted = self.modes_raw.sort_modes(sort_spec=sort_spec)
-        data_sorted = self.updated_copy(modes_raw=modes_sorted)
+        data_sorted = self.updated_copy(modes_raw=modes_sorted, deep=False, validate=False)
         return data_sorted.updated_copy(
             path="simulation", mode_spec=modes_sorted.monitor.mode_spec, deep=False, validate=False
         )

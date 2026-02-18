@@ -306,7 +306,9 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # disallow reflecting along normal direction
         if axis == self.normal_axis:
             if reflection_only:
-                return self.updated_copy(normal_pos=2 * center - self.normal_pos)
+                return self.updated_copy(
+                    normal_pos=2 * center - self.normal_pos, deep=False, validate=False
+                )
             else:
                 raise DataError(
                     "Reflection in the normal direction to the grid is prohibited unless 'reflection_only=True'."

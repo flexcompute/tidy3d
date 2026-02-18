@@ -347,6 +347,8 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
             hole_capacitance=new_hole_capacitance,
             electron_capacitance=new_electron_capacitance,
             symmetry=(0, 0, 0),
+            deep=False,
+            validate=False,
         )
 
 

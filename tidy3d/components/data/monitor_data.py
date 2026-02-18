@@ -655,7 +655,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 update[field_name] = field * self.grid_dual_correction
             else:
                 update[field_name] = field * self.grid_primal_correction
-        return field_data.copy(update=update)
+        return field_data.copy(deep=False, update=update)
 
     @property
     def intensity(self) -> ScalarFieldDataArray:
@@ -1157,7 +1157,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 new_data[comp] = -np.conj(field)
             else:
                 new_data[comp] = np.conj(field)
-        return self.copy(update=new_data)
+        # NOTE: deep=False is safe because update values are new objects. However,
+        # validate=False is NOT safe here (or in similar methods like normalize,
+        # grid_corrected_copy, etc.) because xarray arithmetic/operations (e.g.
+        # np.conj, field / amps, field * factor) produce plain DataArray objects that
+        # lose the tidy3d subclass (e.g. ScalarFieldDataArray). Pydantic validation
+        # is needed to coerce them back to the correct type.
+        return self.copy(deep=False, update=new_data)
 
     def _check_fields_stored(self, components: list[str]) -> None:
         """Check that all requested field components are stored in the data."""
@@ -1206,6 +1212,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             grid_expanded=grid_expanded,
             **self._grid_correction_dict,
             **field_kwargs,
+            deep=False,
         )
 
     def to_zbf(
@@ -1461,7 +1468,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
             src_amps = source_spectrum_fn(field_data.f)
             fields_norm[field_name] = (field_data / src_amps).astype(field_data.dtype)
 
-        return self.copy(update=fields_norm)
+        return self.copy(deep=False, update=fields_norm)
 
     def to_source(
         self, source_time: SourceTimeType, center: Coordinate, size: Size = None, **kwargs: Any
@@ -1491,7 +1498,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
             size = self.monitor.size
 
         fields = {}
-        for name, field in self.symmetry_expanded_copy.field_components.items():
+        for name, field in self.symmetry_expanded.field_components.items():
             fields[name] = field.copy()
             for dim, dim_name in enumerate("xyz"):
                 coords_shift = field.coords[dim_name] - self.monitor.center[dim]
@@ -1521,7 +1528,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
                 # accounts for the effective size of the source when injecting into a
                 # simulation with symmetry
                 symmetry_factor = np.prod(values.shape) / np.prod(
-                    self.symmetry_expanded_copy.field_components[name].sel(f=freq0).values.shape
+                    self.symmetry_expanded.field_components[name].sel(f=freq0).values.shape
                 )
 
                 # make source go backwards
@@ -1646,7 +1653,7 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
                 new_data[comp] = field
             # Reverse time coordinates
             new_data[comp] = new_data[comp].assign_coords({"t": field.t[::-1]}).sortby("t")
-        return self.copy(update=new_data)
+        return self.copy(deep=False, update=new_data)
 
 
 class AuxFieldTimeData(AuxFieldTimeDataset, AbstractFieldData):
@@ -1756,7 +1763,7 @@ class AbstractOverlapData(ElectromagneticFieldData):
             return self.copy()
         source_freq_amps = source_spectrum_fn(self.amps.f)[None, :, None]
         new_amps = (self.amps / source_freq_amps).astype(self.amps.dtype)
-        return self.copy(update={"amps": new_amps})
+        return self.copy(deep=False, update={"amps": new_amps})
 
     @property
     def time_reversed_copy(self) -> AbstractOverlapData:
@@ -1783,7 +1790,7 @@ class AbstractOverlapData(ElectromagneticFieldData):
         if hasattr(mnt, "direction"):
             update_dict["direction"] = new_dir
         new_data["monitor"] = mnt.updated_copy(**update_dict)
-        return self.copy(update=new_data)
+        return self.copy(deep=False, update=new_data)
 
 
 class FieldOverlapData(AbstractOverlapData):
@@ -2145,7 +2152,7 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
 
         update_dict["monitor"] = self.monitor.updated_copy(freqs=freqs)
 
-        return self.copy(update=update_dict)
+        return self.copy(deep=False, update=update_dict)
 
     def _colocated_propagation_axes_field(self, field_name: Literal["E", "H"]) -> DataArray:
         """Collect a field DataArray containing all 3 field components and rotate from frame
@@ -2452,7 +2459,7 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
 
             modify_data[key] = DataArray(arr_sorted, coords=coords_out, dims=dims_orig)
 
-        return self.updated_copy(**modify_data)
+        return self.updated_copy(**modify_data, deep=False)
 
     def _apply_mode_subset(self, subset_inds_2d: np.ndarray) -> ModeSolverData:
         """Return copy of self containing only the selected modes.
@@ -2518,7 +2525,7 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
 
             modify_data[key] = DataArray(arr_subset, coords=coords_out, dims=dims_orig)
 
-        return self.updated_copy(**modify_data)
+        return self.updated_copy(**modify_data, deep=False)
 
     def sort_modes(
         self, sort_spec: Optional[ModeSortSpec] = None, track_freq: Optional[TrackFreq] = None
@@ -2966,7 +2973,7 @@ class ModeSolverData(ModeData):
                 )
             )
 
-        updated_data = self.updated_copy(**update_dict)
+        updated_data = self.updated_copy(**update_dict, deep=False)
         if renormalize:
             updated_data._normalize_modes()
 
@@ -3071,7 +3078,7 @@ class FluxData(MonitorData):
         source_freq_amps = source_spectrum_fn(self.flux.f)
         source_power = abs(source_freq_amps) ** 2
         new_flux = (self.flux / source_power).astype(self.flux.dtype)
-        return self.copy(update={"flux": new_flux})
+        return self.copy(deep=False, update={"flux": new_flux})
 
 
 class FluxTimeData(MonitorData):
@@ -3252,7 +3259,7 @@ class AbstractFieldProjectionData(MonitorData):
             src_amps = source_spectrum_fn(field_data.f)
             fields_norm[field_name] = (field_data / src_amps).astype(field_data.dtype)
 
-        return self.copy(update=fields_norm)
+        return self.copy(deep=False, update=fields_norm)
 
     @staticmethod
     def wavenumber(medium: MediumType, frequency: float) -> complex:
@@ -4291,7 +4298,7 @@ class DirectivityData(FieldProjectionAngleData):
             projection_surfaces=monitor.projection_surfaces,
         )
         flux = dir_data.flux_from_projected_fields()
-        return dir_data.updated_copy(flux=flux)
+        return dir_data.updated_copy(flux=flux, deep=False, validate=False)
 
     def __add__(self, other: DirectivityData) -> DirectivityData:
         """Form the superposition of two :class:`.DirectivityData`. Flux is recomputed by
@@ -4323,7 +4330,7 @@ class DirectivityData(FieldProjectionAngleData):
         source_power = abs(source_freq_amps) ** 2
         new_flux = (self.flux / source_power).astype(self.flux.dtype)
 
-        return self.copy(update=dict(fields_norm, flux=new_flux))
+        return self.copy(deep=False, update=dict(fields_norm, flux=new_flux))
 
     @staticmethod
     def _check_valid_pol_basis(pol_basis: PolarizationBasis, tilt_angle: float) -> None:
