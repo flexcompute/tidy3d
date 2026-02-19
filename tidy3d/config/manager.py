@@ -136,8 +136,8 @@ class ConfigManager:
         self._env_overrides: dict[str, Any] = load_environment_overrides()
         self._web_env_previous: dict[str, Optional[str]] = {}
 
-        attach_manager(self)
         self._reload()
+        attach_manager(self)
 
         # Notify users when using a non-default profile
         if self._profile != "default":
