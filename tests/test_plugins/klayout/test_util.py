@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -45,3 +46,25 @@ def test_check_installation_finds_known_location(monkeypatch, tmp_path):
     resolved = util.check_installation(raise_error=True)
     assert resolved == str(fake_binary)
     assert os.environ["PATH"] == ""
+
+
+def test_common_install_locations_include_homebrew_cask_app_suite(monkeypatch):
+    """Darwin candidates include Homebrew cask app-suite install locations."""
+
+    monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.util.platform.system", lambda: "Darwin")
+    paths = util._common_install_locations()
+    assert Path("/Applications/KLayout/klayout.app/Contents/MacOS/klayout") in paths
+
+
+def test_brew_cask_klayout_binaries_detect_versioned_paths(monkeypatch, tmp_path):
+    """Discover binaries from versioned Homebrew cask directories."""
+
+    cask_root = tmp_path / "Caskroom" / "klayout"
+    binary = cask_root / "0.30.6" / "KLayout" / "klayout.app" / "Contents" / "MacOS" / "klayout"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+
+    monkeypatch.setattr(f"{KLAYOUT_PLUGIN_PATH}.util._MACOS_BREW_CASK_KLAYOUT_ROOTS", (cask_root,))
+    candidates = util._brew_cask_klayout_binaries()
+    assert binary in candidates
