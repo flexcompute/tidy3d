@@ -70,9 +70,9 @@ jobs:
           fi
           
           # Validate tag format
-          TAG_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$'
+          TAG_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|\.dev[0-9]+)?$'
           if [[ ! "$RELEASE_TAG" =~ $TAG_REGEX ]]; then
-            echo " Warning: Tag format doesn't match standard pattern v{major}.{minor}.{patch}[rc{num}]"
+            echo " Warning: Tag format doesn't match standard pattern v{major}.{minor}.{patch}[rc{num}|.dev{num}]"
             echo "   Tag: $RELEASE_TAG"
             echo "   Continuing anyway..."
           fi

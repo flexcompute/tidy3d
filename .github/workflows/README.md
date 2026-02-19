@@ -246,9 +246,9 @@ Re-running with `only-tag` or `only-tag-deploy` is helpful when you must recreat
 - **Invalid tag format (`release_type: pypi`)**
   ```
   Invalid tag format: v2.10
-    Expected format: v{major}.{minor}.{patch}[rc{num}]
+    Expected format: v{major}.{minor}.{patch}[rc{num}|.dev{num}]
   ```
-  Use `v2.10.0`, `v2.10.1rc1`, etc.
+  Use `v2.10.0`, `v2.10.1rc1`, `v2.11.0.dev0`, etc.
 
 - **Tag already exists**
   The tagging workflow deletes and recreates the tag automatically. No manual cleanup is needed.
