@@ -9,6 +9,7 @@ from tidy3d.components.viz import PlotParams
 HEAT_BC_COLOR_TEMPERATURE = "orange"
 HEAT_BC_COLOR_FLUX = "green"
 HEAT_BC_COLOR_CONVECTION = "brown"
+HEAT_BC_COLOR_RADIATION = "red"
 CHARGE_BC_INSULATOR = "black"
 HEAT_SOURCE_CMAP = "coolwarm"
 CHARGE_DIST_CMAP = "viridis"

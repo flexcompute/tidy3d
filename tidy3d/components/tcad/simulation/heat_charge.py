@@ -65,6 +65,7 @@ from tidy3d.components.tcad.types import (
     HeatFromElectricSource,
     HeatSource,
     InsulatingBC,
+    RadiationBC,
     TemperatureBC,
     UniformHeatSource,
     VoltageBC,
@@ -73,6 +74,7 @@ from tidy3d.components.tcad.viz import (
     CHARGE_BC_INSULATOR,
     HEAT_BC_COLOR_CONVECTION,
     HEAT_BC_COLOR_FLUX,
+    HEAT_BC_COLOR_RADIATION,
     HEAT_BC_COLOR_TEMPERATURE,
     HEAT_SOURCE_CMAP,
     plot_params_heat_bc,
@@ -98,7 +100,7 @@ if TYPE_CHECKING:
 
 HEAT_CHARGE_BACK_STRUCTURE_STR = "<<<HEAT_CHARGE_BACKGROUND_STRUCTURE>>>"
 
-HeatBCTypes = (TemperatureBC, HeatFluxBC, ConvectionBC)
+HeatBCTypes = (TemperatureBC, HeatFluxBC, ConvectionBC, RadiationBC)
 HeatSourceTypes = (UniformHeatSource, HeatSource, HeatFromElectricSource)
 ChargeSourceTypes = ()
 ElectricBCTypes = (VoltageBC, CurrentBC, InsulatingBC)
@@ -1524,6 +1526,8 @@ class HeatChargeSimulation(AbstractSimulation):
             plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_FLUX)
         elif isinstance(condition, ConvectionBC):
             plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_CONVECTION)
+        elif isinstance(condition, RadiationBC):
+            plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_RADIATION)
         elif isinstance(condition, InsulatingBC):
             plot_params = plot_params.updated_copy(facecolor=CHARGE_BC_INSULATOR)
 
