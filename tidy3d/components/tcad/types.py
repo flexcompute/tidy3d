@@ -13,6 +13,7 @@ from tidy3d.components.tcad.boundary.charge import CurrentBC, InsulatingBC, Volt
 from tidy3d.components.tcad.boundary.heat import (
     ConvectionBC,
     HeatFluxBC,
+    RadiationBC,
     TemperatureBC,
 )
 from tidy3d.components.tcad.effective_DOS import (
@@ -69,5 +70,5 @@ HeatChargeMonitorType = Union[
 ]
 HeatChargeSourceType = Union[HeatSource, HeatFromElectricSource, UniformHeatSource]
 HeatChargeBCType = Union[
-    TemperatureBC, HeatFluxBC, ConvectionBC, VoltageBC, CurrentBC, InsulatingBC
+    TemperatureBC, HeatFluxBC, ConvectionBC, RadiationBC, VoltageBC, CurrentBC, InsulatingBC
 ]

@@ -16,6 +16,7 @@ from tidy3d import (
     HeatSimulationData,
     HeatSource,
     MediumMediumInterface,
+    RadiationBC,
     SimulationBoundary,
     SolidSpec,
     StructureBoundary,
@@ -143,6 +144,17 @@ def test_heat_bcs():
     _, solid_medium = make_heat_mediums()
     with pytest.raises(ValidationError):
         td.VerticalNaturalConvectionCoeffModel(medium=solid_medium.heat_spec, plate_length=1e5)
+
+    # RadiationBC validation
+    bc_rad = RadiationBC(ambient_temperature=300, emissivity=0.9)
+    assert bc_rad.emissivity == 0.9
+
+    with pytest.raises(ValidationError):
+        RadiationBC(ambient_temperature=-300, emissivity=0.9)
+    with pytest.raises(ValidationError):
+        RadiationBC(ambient_temperature=300, emissivity=-0.1)
+    with pytest.raises(ValidationError):
+        RadiationBC(ambient_temperature=300, emissivity=1.5)
 
 
 def make_heat_mnts():

@@ -1294,6 +1294,19 @@
           "additionalProperties": true,
           "type": "object"
         },
+        "emissivity": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "transfer_coeff": {
           "anyOf": [
             {
@@ -4557,6 +4570,7 @@
               "CurrentBC": "#/$defs/CurrentBC",
               "HeatFluxBC": "#/$defs/HeatFluxBC",
               "InsulatingBC": "#/$defs/InsulatingBC",
+              "RadiationBC": "#/$defs/RadiationBC",
               "TemperatureBC": "#/$defs/TemperatureBC",
               "VoltageBC": "#/$defs/VoltageBC"
             },
@@ -4574,6 +4588,9 @@
             },
             {
               "$ref": "#/$defs/InsulatingBC"
+            },
+            {
+              "$ref": "#/$defs/RadiationBC"
             },
             {
               "$ref": "#/$defs/TemperatureBC"
@@ -4638,6 +4655,7 @@
               "CurrentBC": "#/$defs/CurrentBC",
               "HeatFluxBC": "#/$defs/HeatFluxBC",
               "InsulatingBC": "#/$defs/InsulatingBC",
+              "RadiationBC": "#/$defs/RadiationBC",
               "TemperatureBC": "#/$defs/TemperatureBC",
               "VoltageBC": "#/$defs/VoltageBC"
             },
@@ -4655,6 +4673,9 @@
             },
             {
               "$ref": "#/$defs/InsulatingBC"
+            },
+            {
+              "$ref": "#/$defs/RadiationBC"
             },
             {
               "$ref": "#/$defs/TemperatureBC"
@@ -7158,6 +7179,34 @@
       "required": [
         "slab_bounds",
         "vertices"
+      ],
+      "type": "object"
+    },
+    "RadiationBC": {
+      "additionalProperties": false,
+      "properties": {
+        "ambient_temperature": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "emissivity": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "type": {
+          "const": "RadiationBC",
+          "default": "RadiationBC",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ambient_temperature"
       ],
       "type": "object"
     },
