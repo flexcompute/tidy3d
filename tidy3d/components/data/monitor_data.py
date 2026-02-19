@@ -2285,11 +2285,16 @@ class ModeData(ModeSolverDataset, AbstractOverlapData):
         if self.n_group_raw is not None:
             info["group index"] = self.n_group_raw
 
-        if len(self.field_components) == 6:
+        stored = self.field_components
+        e_fields_stored = all(c in stored for c in ("Ex", "Ey", "Ez"))
+
+        if e_fields_stored:
             info["mode area"] = self.mode_area
             info[f"TE (E{self._tangential_dims[0]}) fraction"] = self.TE_fraction
-            info["wg TE fraction"] = self.wg_TE_fraction
-            info["wg TM fraction"] = self.wg_TM_fraction
+
+            if all(c in stored for c in ("Hx", "Hy", "Hz")):
+                info["wg TE fraction"] = self.wg_TE_fraction
+                info["wg TM fraction"] = self.wg_TM_fraction
 
         return xr.Dataset(data_vars=info)
 
