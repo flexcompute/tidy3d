@@ -223,10 +223,11 @@ def boundary_conditions():
     bc_temp = td.TemperatureBC(temperature=300)
     bc_flux = td.HeatFluxBC(flux=20)
     bc_conv = td.ConvectionBC(ambient_temperature=400, transfer_coeff=0.2)
+    bc_rad = td.RadiationBC(ambient_temperature=300, emissivity=0.9)
     bc_volt = td.VoltageBC(source=td.DCVoltageSource(voltage=[1]))
     bc_current = td.CurrentBC(source=td.DCCurrentSource(current=3e-1))
 
-    return [bc_temp, bc_flux, bc_conv, bc_volt, bc_current]
+    return [bc_temp, bc_flux, bc_conv, bc_rad, bc_volt, bc_current]
 
 
 @pytest.fixture(scope="module")
@@ -333,11 +334,11 @@ def heat_simulation(mediums, structures, boundary_conditions, monitors, grid_spe
 def conduction_simulation(mediums, structures, boundary_conditions, monitors, grid_specs):
     """Creates a heat-charge conduction simulation."""
     pl4 = td.HeatChargeBoundarySpec(
-        condition=boundary_conditions[3],  # bc_volt
+        condition=boundary_conditions[4],  # bc_volt
         placement=td.SimulationBoundary(),
     )
     pl5 = td.HeatChargeBoundarySpec(
-        condition=boundary_conditions[4],  # bc_current
+        condition=boundary_conditions[5],  # bc_current
         placement=td.StructureSimulationBoundary(structure="insulator_structure"),
     )
 
@@ -415,9 +416,9 @@ def current_voltage_simulation(mediums, structures, boundary_conditions, monitor
     This can be used to measure conduction properties and free carriers with different
     monitors, e.g. potential monitors and free carrier monitors.
     """
-    # We'll reuse bc_volt=boundary_conditions[3] and bc_current=boundary_conditions[4]
-    bc_volt = boundary_conditions[3]  # VoltageBC(source=td.DCVoltageSource(voltage=[1]))
-    bc_current = boundary_conditions[4]  # CurrentBC(source=td.DCCurrentSource(current=3e-1))
+    # We'll reuse bc_volt=boundary_conditions[4] and bc_current=boundary_conditions[5]
+    bc_volt = boundary_conditions[4]  # VoltageBC(source=td.DCVoltageSource(voltage=[1]))
+    bc_current = boundary_conditions[5]  # CurrentBC(source=td.DCCurrentSource(current=3e-1))
 
     # Place the voltage BC at the simulation boundary
     pl6 = td.HeatChargeBoundarySpec(
@@ -873,7 +874,7 @@ def test_heat_charge_structures_creation(structures):
 
 def test_heat_charge_bcs_validation(boundary_conditions):
     """Tests the validators for boundary conditions."""
-    bc_temp, bc_flux, bc_conv, bc_volt, bc_current = boundary_conditions
+    bc_temp, bc_flux, bc_conv, bc_rad, bc_volt, bc_current = boundary_conditions
 
     # Invalid TemperatureBC
     with pytest.raises(ValidationError):
@@ -886,6 +887,42 @@ def test_heat_charge_bcs_validation(boundary_conditions):
     # Invalid ConvectionBC: negative transfer coefficient
     with pytest.raises(ValidationError):
         td.ConvectionBC(ambient_temperature=400, transfer_coeff=-0.2)
+
+    # Invalid RadiationBC: negative ambient temperature
+    with pytest.raises(ValidationError):
+        td.RadiationBC(ambient_temperature=-300, emissivity=0.9)
+
+    # Invalid RadiationBC: emissivity below 0
+    with pytest.raises(ValidationError):
+        td.RadiationBC(ambient_temperature=300, emissivity=-0.1)
+
+    # Invalid RadiationBC: emissivity above 1
+    with pytest.raises(ValidationError):
+        td.RadiationBC(ambient_temperature=300, emissivity=1.5)
+
+    # Valid RadiationBC: emissivity at boundaries
+    bc_blackbody = td.RadiationBC(ambient_temperature=300, emissivity=1.0)
+    assert bc_blackbody.emissivity == 1.0
+    bc_reflective = td.RadiationBC(ambient_temperature=300, emissivity=0.0)
+    assert bc_reflective.emissivity == 0.0
+
+    # Valid RadiationBC: default emissivity is 1.0 (blackbody)
+    bc_default = td.RadiationBC(ambient_temperature=300)
+    assert bc_default.emissivity == 1.0
+
+    # ConvectionBC with valid emissivity (combined mode)
+    bc_combined = td.ConvectionBC(ambient_temperature=300, transfer_coeff=10, emissivity=0.9)
+    assert bc_combined.emissivity == 0.9
+
+    # ConvectionBC without emissivity (pure convection, backward-compatible)
+    bc_pure_conv = td.ConvectionBC(ambient_temperature=300, transfer_coeff=10)
+    assert bc_pure_conv.emissivity is None
+
+    # ConvectionBC with invalid emissivity
+    with pytest.raises(ValidationError):
+        td.ConvectionBC(ambient_temperature=300, transfer_coeff=10, emissivity=-0.1)
+    with pytest.raises(ValidationError):
+        td.ConvectionBC(ambient_temperature=300, transfer_coeff=10, emissivity=1.5)
 
     # Invalid VoltageBC: infinite voltage
     with pytest.raises(ValidationError):

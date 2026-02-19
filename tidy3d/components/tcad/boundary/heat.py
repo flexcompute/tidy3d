@@ -125,8 +125,46 @@ class VerticalNaturalConvectionCoeffModel(Tidy3dBaseModel):
         )
 
 
+class RadiationBC(HeatChargeBC):
+    """Thermal radiation boundary condition (Stefan-Boltzmann law).
+
+    Models the net radiative heat flux from a surface as:
+
+    .. math::
+
+        q = \\varepsilon \\, \\sigma \\, (T_{\\text{surface}}^4 - T_{\\text{ambient}}^4)
+
+    where :math:`\\varepsilon` is the surface emissivity, :math:`\\sigma` is the
+    Stefan-Boltzmann constant, :math:`T_{\\text{surface}}` is the local surface
+    temperature, and :math:`T_{\\text{ambient}}` is the ambient radiation temperature.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> bc = td.RadiationBC(ambient_temperature=300, emissivity=0.9)
+    """
+
+    ambient_temperature: PositiveFloat = Field(
+        title="Ambient Radiation Temperature",
+        description="Far-field ambient temperature for radiation exchange.",
+        json_schema_extra={"units": KELVIN},
+    )
+
+    emissivity: float = Field(
+        default=1.0,
+        title="Surface Emissivity",
+        description=(
+            "Emissivity of the surface (dimensionless). "
+            "Must be between 0 (perfectly reflective) and 1 (blackbody). "
+            "Default is 1.0 (blackbody)."
+        ),
+        ge=0.0,
+        le=1.0,
+    )
+
+
 class ConvectionBC(HeatChargeBC):
-    """Convective thermal boundary conditions.
+    """Convective thermal boundary conditions, with optional radiation.
 
     Example
     -------
@@ -159,11 +197,16 @@ class ConvectionBC(HeatChargeBC):
     >>> bc_natural_nom = td.ConvectionBC(
     ...     ambient_temperature=300, transfer_coeff=natural_conv_model
     ... )
+
+    >>> # Combined convection + radiation (same ambient temperature)
+    >>> bc_combined = td.ConvectionBC(
+    ...     ambient_temperature=300, transfer_coeff=10, emissivity=0.9
+    ... )
     """
 
     ambient_temperature: PositiveFloat = Field(
         title="Ambient Temperature",
-        description="Ambient temperature.",
+        description="Ambient temperature for convective (and optionally radiative) exchange.",
         json_schema_extra={"units": KELVIN},
     )
 
@@ -171,4 +214,17 @@ class ConvectionBC(HeatChargeBC):
         title="Heat Transfer Coefficient",
         description="Heat transfer coefficient value.",
         json_schema_extra={"units": HEAT_TRANSFER_COEFF},
+    )
+
+    emissivity: Optional[float] = Field(
+        default=None,
+        title="Surface Emissivity",
+        description=(
+            "Optional surface emissivity for radiation (dimensionless). "
+            "When set, the boundary applies both convective and radiative heat "
+            "transfer using the same ambient temperature. "
+            "Must be between 0 (perfectly reflective) and 1 (blackbody)."
+        ),
+        ge=0.0,
+        le=1.0,
     )
