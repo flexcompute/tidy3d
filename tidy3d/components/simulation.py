@@ -6012,6 +6012,13 @@ class Simulation(AbstractYeeGridSimulation):
                     new_medium = med.perturbed_copy(
                         **restricted_arrays, interp_method=interp_method
                     )
+
+                    # Generate unique medium name based on structure to avoid duplicate
+                    # name warnings. Only rename if a new medium was actually created.
+                    if new_medium is not med and new_medium.name is not None:
+                        suffix = structure.name if structure.name else f"structures[{s_ind}]"
+                        new_medium = new_medium.updated_copy(name=f"{new_medium.name}[{suffix}]")
+
                     new_structure = structure.updated_copy(medium=new_medium)
                     new_structures.append(new_structure)
             else:
