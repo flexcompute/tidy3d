@@ -159,13 +159,13 @@ jobs:
           if [[ "$RELEASE_TYPE" == "pypi" ]]; then
             echo "PyPI release detected - applying strict tag validation"
             
-            # Tag must match semantic versioning: v{major}.{minor}.{patch}[rc{num}]
-            TAG_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$'
-            
+            # Tag must match semantic versioning: v{major}.{minor}.{patch}[rc{num}|.dev{num}]
+            TAG_REGEX='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|\.dev[0-9]+)?$'
+
             if [[ ! "$RELEASE_TAG" =~ $TAG_REGEX ]]; then
               echo "Invalid tag format: $RELEASE_TAG"
-              echo "  Expected format: v{major}.{minor}.{patch}[rc{num}]"
-              echo "  Examples: v2.10.0, v2.10.0rc1, v2.10.1rc2"
+              echo "  Expected format: v{major}.{minor}.{patch}[rc{num}|.dev{num}]"
+              echo "  Examples: v2.10.0, v2.10.0rc1, v2.10.1rc2, v2.11.0.dev0"
               exit 1
             fi
             
