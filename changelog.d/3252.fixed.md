@@ -1,1 +1,0 @@
-Improved `ModeSolver.solve()` to suppress the accuracy warning when local subpixel averaging is enabled via `tidy3d-extras`, and expanded docstrings for `ModeSolver.solve()`, `ModeSimulation.run_local()`, `Simulation.epsilon()`, and `Simulation.epsilon_on_grid()` to document the `config.simulation.use_local_subpixel` option.

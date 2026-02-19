@@ -1,1 +1,0 @@
-Added warning in `LayerRefinementSpec` when `dl_min_from_gaps` (derived from automatic gap refinement) is very small relative to the lateral grid size for identifying cases where excessive grid refinement may occur due to very small detected gaps.
