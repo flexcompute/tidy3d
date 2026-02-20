@@ -40,6 +40,9 @@ CHEB_GRID_WIDTH = 1.5
 # ``CRITICAL_FREQUENCY_FACTOR * f_crit``, where ``f_crit`` is the critical frequency
 # (oblique propagation).
 CRITICAL_FREQUENCY_FACTOR = 1.15
+# Oversampling factor for VF fitting frequency grid: the mode solver samples at
+# VF_OVERSAMPLING * num_freqs uniform frequency points to ensure accurate fitting.
+VF_OVERSAMPLING = 3
 
 
 class FieldSource(Source, ABC):
@@ -108,12 +111,42 @@ class BroadbandSource(Source, ABC):
         le=20,
     )
 
+    broadband_method: str = Field(
+        "chebyshev",
+        title="Broadband Method",
+        description="Method for representing the frequency dependence of the injected field. "
+        "'chebyshev' uses Chebyshev polynomial interpolation (default). "
+        "'pole_residue' uses a pole-residue (vector fitting) decomposition with "
+        "auxiliary differential equation (ADE) time stepping. The pole-residue method "
+        "can be more accurate for highly dispersive modes and uses fewer terms. "
+        "For pole_residue, 'num_freqs' controls the number of broadband terms "
+        "(1 feedthrough + num_freqs-1 poles). The mode solver samples at an oversampled "
+        "uniform frequency grid for accurate fitting.",
+    )
+
+    @field_validator("broadband_method")
+    @classmethod
+    def _validate_broadband_method(cls, val: str) -> str:
+        """Validate broadband method is one of the allowed values."""
+        allowed = ("chebyshev", "pole_residue")
+        if val not in allowed:
+            raise SetupError(f"'broadband_method' must be one of {allowed}, got '{val}'.")
+        return val
+
     @cached_property
     def frequency_grid(self) -> NDArray:
-        """A Chebyshev grid used to approximate frequency dependence."""
+        """Frequency grid used to approximate frequency dependence.
+
+        For Chebyshev: returns ``num_freqs`` Chebyshev-spaced points.
+        For pole_residue: returns ``VF_OVERSAMPLING * num_freqs`` uniformly spaced
+        points, providing enough samples for accurate vector fitting.
+        """
         if self.num_freqs == 1:
             return np.array([self.source_time._freq0])
         freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
+        if self.broadband_method == "pole_residue":
+            n_samples = VF_OVERSAMPLING * self.num_freqs
+            return np.linspace(freq_min, freq_max, n_samples)
         return self._chebyshev_freq_grid(freq_min, freq_max)
 
     def _chebyshev_freq_grid(self, freq_min: float, freq_max: float) -> NDArray:
