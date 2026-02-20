@@ -10,6 +10,7 @@ import pytest
 from matplotlib import pyplot as plt
 
 import tidy3d as td
+from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.exceptions import SetupError, ValidationError
 
 from ..test_data.test_data_arrays import (
@@ -158,6 +159,57 @@ def test_validation_from_simulation():
             mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
             freqs=[td.C_0],
         )
+
+
+def test_rotated_structures_copy_drops_sources_for_angled_mode_solver():
+    """The rotated reference simulation used for angled mode solving should not retain sources."""
+
+    wavelength = 1.55
+    freq0 = td.C_0 / wavelength
+
+    gaussian_beam = td.GaussianBeam(
+        center=(-1.5, 0, 0),
+        size=(0, 2.0, 2.0),
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 20),
+        direction="+",
+        angle_theta=0.0,
+        angle_phi=0.0,
+        waist_radius=0.8,
+    )
+    mode_monitor = td.ModeMonitor(
+        center=(1.0, 0, 0),
+        size=(0, 2.0, 2.0),
+        freqs=[freq0],
+        mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=0.2, bend_axis=1, num_modes=1),
+        name="mode_mnt",
+    )
+    sim = td.Simulation(
+        size=(5.0, 4.0, 4.0),
+        grid_spec=td.GridSpec.auto(min_steps_per_wvl=8),
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(1.0, 0, 0), size=(1.0, 3.0, 3.0)),
+                medium=td.Medium(permittivity=2.0),
+            )
+        ],
+        sources=[gaussian_beam],
+        monitors=[mode_monitor],
+        run_time=1e-12,
+    )
+
+    mode_solver = ModeSolver(
+        simulation=sim,
+        plane=mode_monitor,
+        mode_spec=mode_monitor.mode_spec,
+        freqs=mode_monitor.freqs,
+    )
+
+    rotated = mode_solver.rotated_structures_copy
+
+    assert len(mode_solver.simulation.sources) == 1
+    assert len(rotated.simulation.sources) == 0
+    assert len(rotated.simulation.monitors) == 0
+    assert rotated.simulation.grid_spec.wavelength == pytest.approx(wavelength)
 
 
 def get_mode_sim():

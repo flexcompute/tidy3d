@@ -704,7 +704,19 @@ class ModeSolver(Tidy3dBaseModel):
         and reset angles to normal."""
 
         rotated_structures = self._rotate_structures
-        rotated_simulation = self.simulation.updated_copy(structures=rotated_structures)
+        rotated_grid_spec = self.simulation.grid_spec
+        if rotated_grid_spec.auto_grid_used and rotated_grid_spec.wavelength is None:
+            wavelength = rotated_grid_spec.get_wavelength(self.simulation.sources)
+            rotated_grid_spec = rotated_grid_spec.updated_copy(wavelength=wavelength)
+
+        # Sources are not used by mode solving and can become invalid after rotating structures.
+        rotated_simulation = self.simulation.updated_copy(
+            structures=rotated_structures,
+            sources=(),
+            monitors=(),
+            grid_spec=rotated_grid_spec,
+            validate=False,
+        )
         rotated_mode_spec = self.mode_spec.updated_copy(
             angle_rotation=False, angle_theta=0, angle_phi=0
         )
