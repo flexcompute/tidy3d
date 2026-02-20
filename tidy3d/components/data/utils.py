@@ -27,6 +27,10 @@ CustomSpatialDataTypeAnnotated = Union[
     SpatialDataArray,
 ]
 
+OUTER_DOT_BLOCK_TARGET_BYTES = 64 * 1024**2
+OUTER_DOT_BLOCK_MIN_SIZE = 8
+OUTER_DOT_BLOCK_MAX_SIZE = 64
+
 
 def _instantaneous_power_flow_numpy(
     E: tuple[np.ndarray, np.ndarray],
@@ -276,27 +280,94 @@ def _outer_dot_numpy(
     assert E2u.shape == H2v.shape
     assert E2v.shape == H2u.shape
 
+    dS_EuHv, dS_EvHu = dS
+
     # Get number of modes and broadcast shape
     n_modes_1 = E1u.shape[-3]
     n_modes_2 = E2u.shape[-3]
     broadcast_shape = E1u.shape[:-3]
-    dtype = E1u.dtype
+    num_grid_points = E1u.shape[-2] * E1u.shape[-1]
+    dtype = np.result_type(
+        E1u.dtype,
+        E1v.dtype,
+        H1u.dtype,
+        H1v.dtype,
+        E2u.dtype,
+        E2v.dtype,
+        H2u.dtype,
+        H2v.dtype,
+        np.asarray(dS_EuHv).dtype,
+        np.asarray(dS_EvHu).dtype,
+    )
 
     # Initialize output matrix
     S = np.zeros((*broadcast_shape, n_modes_1, n_modes_2), dtype=dtype)
+
+    if n_modes_1 == 0 or n_modes_2 == 0:
+        return S
 
     # Conjugate outside loop to avoid copies
     if conjugate:
         E1u, E1v = np.conj(E1u), np.conj(E1v)
         H1u, H1v = np.conj(H1u), np.conj(H1v)
 
-    # Compute all elements of the overlap matrix
-    # Use slices instead of fancy indexing for E2/H2 to avoid copies
-    for i in range(n_modes_1):
-        E1_i = (E1u[..., i : i + 1, :, :], E1v[..., i : i + 1, :, :])
-        H1_i = (H1u[..., i : i + 1, :, :], H1v[..., i : i + 1, :, :])
-        # E2/H2 use all modes, so just pass them directly (no indexing needed)
-        S[..., i, :] = _dot_numpy(E1_i, H1_i, E2, H2, dS, False, bidirectional)
+    # Heuristic: choose mode block size targeting bounded temporary allocations.
+    itemsize = np.dtype(dtype).itemsize
+    if num_grid_points == 0:
+        block_size = OUTER_DOT_BLOCK_MAX_SIZE
+    else:
+        block_size = int(OUTER_DOT_BLOCK_TARGET_BYTES // (num_grid_points * itemsize))
+        block_size = max(OUTER_DOT_BLOCK_MIN_SIZE, block_size)
+        block_size = min(OUTER_DOT_BLOCK_MAX_SIZE, block_size)
+
+    block_size_left = min(n_modes_1, block_size)
+    block_size_right = min(n_modes_2, block_size)
+
+    dS_EuHv_flat = np.asarray(dS_EuHv).reshape(-1)
+    dS_EvHu_flat = np.asarray(dS_EvHu).reshape(-1)
+    if dS_EuHv_flat.size != num_grid_points or dS_EvHu_flat.size != num_grid_points:
+        raise ValueError("Tangential area shape mismatch in blocked outer_dot kernel.")
+
+    num_batches = int(np.prod(broadcast_shape, dtype=int)) if broadcast_shape else 1
+    out_flat = S.reshape(num_batches, n_modes_1, n_modes_2)
+
+    if bidirectional:
+        term_specs = (
+            (0.25, E1u, H2v, dS_EuHv_flat),
+            (0.25, H1v, E2u, dS_EuHv_flat),
+            (-0.25, E1v, H2u, dS_EvHu_flat),
+            (-0.25, H1u, E2v, dS_EvHu_flat),
+        )
+    else:
+        term_specs = (
+            (0.5, E1u, H2v, dS_EuHv_flat),
+            (-0.5, E1v, H2u, dS_EvHu_flat),
+        )
+
+    # Flatten once outside loops so each block only performs views + BLAS matmul.
+    flattened_terms = tuple(
+        (
+            coeff,
+            left.reshape(num_batches, n_modes_1, num_grid_points),
+            right.reshape(num_batches, n_modes_2, num_grid_points),
+            d_area,
+        )
+        for coeff, left, right, d_area in term_specs
+    )
+
+    for batch_idx in range(num_batches):
+        out_batch = out_flat[batch_idx]
+        for coeff, left_term, right_term, d_area in flattened_terms:
+            left_batch = left_term[batch_idx]
+            right_batch = right_term[batch_idx]
+            for i0 in range(0, n_modes_1, block_size_left):
+                i0_end = min(i0 + block_size_left, n_modes_1)
+                left_block = left_batch[i0:i0_end]
+                for i1 in range(0, n_modes_2, block_size_right):
+                    i1_end = min(i1 + block_size_right, n_modes_2)
+                    right_block = right_batch[i1:i1_end]
+                    weighted_right = right_block * d_area
+                    out_batch[i0:i0_end, i1:i1_end] += coeff * (left_block @ weighted_right.T)
 
     return S
 

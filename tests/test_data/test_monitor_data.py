@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import tracemalloc
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -24,6 +26,7 @@ from tidy3d.components.data.monitor_data import (
     ModeSolverData,
     PermittivityData,
 )
+from tidy3d.components.data.utils import _dot_numpy, _outer_dot_numpy
 from tidy3d.components.data.zbf import ZBFData
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.constants import UnitScaling
@@ -1575,6 +1578,70 @@ def test_dot_outer_dot_consistency(conjugate, sim_2d):
             d = A_i.dot(B_j, conjugate=conjugate)
             od_val = od.sel(mode_index_0=i, mode_index_1=j).values
             np.testing.assert_allclose(od_val, d.values.squeeze(), rtol=1e-12)
+
+
+def test_outer_dot_numpy_memory_regression():
+    """Ensure blocked outer-dot kernel lowers peak allocation versus naive mode loop."""
+
+    def _outer_dot_numpy_naive(
+        E1: tuple[np.ndarray, np.ndarray],
+        H1: tuple[np.ndarray, np.ndarray],
+        E2: tuple[np.ndarray, np.ndarray],
+        H2: tuple[np.ndarray, np.ndarray],
+        dS: tuple[np.ndarray, np.ndarray],
+        conjugate: bool,
+    ) -> np.ndarray:
+        E1u, E1v = E1
+        H1u, H1v = H1
+        E2u, E2v = E2
+        H2u, H2v = H2
+
+        if conjugate:
+            E1u, E1v = np.conj(E1u), np.conj(E1v)
+            H1u, H1v = np.conj(H1u), np.conj(H1v)
+
+        n_modes_1 = E1u.shape[-3]
+        n_modes_2 = E2u.shape[-3]
+        result = np.zeros((*E1u.shape[:-3], n_modes_1, n_modes_2), dtype=np.result_type(E1u, E2u))
+
+        for i in range(n_modes_1):
+            E1_i = (E1u[..., i : i + 1, :, :], E1v[..., i : i + 1, :, :])
+            H1_i = (H1u[..., i : i + 1, :, :], H1v[..., i : i + 1, :, :])
+            result[..., i, :] = _dot_numpy(E1_i, H1_i, (E2u, E2v), (H2u, H2v), dS, conjugate=False)
+
+        return result
+
+    def _run_with_peak_bytes(fn):
+        tracemalloc.start()
+        try:
+            out = fn()
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        return out, peak
+
+    # n_modes=40 and spatial grid 300x400 are large enough to expose mode-loop temporaries
+    # while keeping this regression test fast enough for CI.
+    rng = np.random.default_rng(0)
+    shape = (1, 40, 300, 400)
+    left = rng.standard_normal(shape).astype(np.complex128)
+    right = rng.standard_normal(shape).astype(np.complex128)
+    dS = (np.ones(shape[-2:], dtype=np.float64), np.ones(shape[-2:], dtype=np.float64))
+
+    E1 = (left, left)
+    H1 = (left, left)
+    E2 = (right, right)
+    H2 = (right, right)
+
+    naive_result, naive_peak = _run_with_peak_bytes(
+        lambda: _outer_dot_numpy_naive(E1, H1, E2, H2, dS, conjugate=True)
+    )
+    blocked_result, blocked_peak = _run_with_peak_bytes(
+        lambda: _outer_dot_numpy(E1, H1, E2, H2, dS, conjugate=True)
+    )
+
+    np.testing.assert_allclose(blocked_result, naive_result, rtol=1e-12, atol=1e-12)
+    assert blocked_peak < naive_peak * 0.85
 
 
 # ---------------------------------------------------------------------------
