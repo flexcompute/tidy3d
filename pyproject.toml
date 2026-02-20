@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.11.0.dev0"
+version = "2.11.0.dev1"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -119,12 +119,13 @@ myst-parser = { version = "^4.0.1", optional = true }
 optax = { version = ">=0.2.2,<0.3.0", optional = true }
 signac = { version = "^2.3.0", optional = true }
 flax = { version = ">=0.8.2,<0.13", optional = true }
+orbax-checkpoint = { version = "<0.11.33", optional = true }
 sax = { version = "^0.11", optional = true }
 vtk = { version = ">=9.2.6,<10.0.0", optional = true }
 sphinxemoji = { version = "^0.3.2", optional = true }
 cma = { version = "^4.4.1", optional = true }
 openpyxl = { version = "^3.1.5", optional = true }
-tidy3d-extras = { version = "2.11.0.dev0", optional = true }
+tidy3d-extras = { version = "2.11.0.dev1", optional = true }
 
 [tool.poetry.extras]
 dev = [
@@ -147,6 +148,7 @@ dev = [
   'nbsphinx',
   'networkx',
   'optax',
+  'orbax-checkpoint',
   'psutil',
   'pre-commit',
   'pydata-sphinx-theme',
@@ -185,6 +187,7 @@ dev = [
   'libcst',
 ]
 tests = [
+  'orbax-checkpoint',
   'psutil',
   'pre-commit',
   'pylint',
@@ -197,6 +200,7 @@ tests = [
   'trimesh'
 ]
 docs = [
+  'orbax-checkpoint',
   "jupyter",
   "jinja2",
   "nbconvert",
