@@ -119,6 +119,7 @@ The base configuration file (``~/.config/tidy3d/config.toml``) stores the API ke
 .. code-block:: toml
 
    # Base config: ~/.config/tidy3d/config.toml
+   config_version = 1
    default_profile = "nexus"  # Profile to use by default
 
    [web]
@@ -129,6 +130,7 @@ The base configuration file (``~/.config/tidy3d/config.toml``) stores the API ke
 .. code-block:: toml
 
    # Nexus profile: ~/.config/tidy3d/profiles/nexus.toml
+   config_version = 1
    [web]
    api_endpoint = "http://nexus.company.com/tidy3d-api"
    website_endpoint = "http://nexus.company.com/tidy3d"

@@ -108,20 +108,29 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         None,
         title="Steady DC hole capacitance",
         description="Device steady DC capacitance data based on holes. If the simulation "
-        "has converged, these result should be close to that of electrons.",
+        "has converged, these result should be close to that of electrons. "
+        "Units: fF (3D) or fF/μm (2D). For 2D simulations, multiply by the device depth "
+        "to obtain the total capacitance.",
+        json_schema_extra={"units": "fF"},
     )
 
     steady_dc_electron_capacitance: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Steady DC electron capacitance",
         description="Device steady DC capacitance data based on electrons. If the simulation "
-        "has converged, these result should be close to that of holes.",
+        "has converged, these result should be close to that of holes. "
+        "Units: fF (3D) or fF/μm (2D). For 2D simulations, multiply by the device depth "
+        "to obtain the total capacitance.",
+        json_schema_extra={"units": "fF"},
     )
 
     steady_dc_current_voltage: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Steady DC current-voltage",
-        description="Device steady DC current-voltage relation for the device.",
+        description="Device steady DC current-voltage relation for the device. "
+        "Units: A (3D) or A/μm (2D). For 2D simulations, multiply by the device depth "
+        "to obtain the total current.",
+        json_schema_extra={"units": "A"},
     )
 
     steady_dc_resistance_voltage: Optional[SteadyVoltageDataArray] = Field(
@@ -129,7 +138,9 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         title="Small signal resistance",
         description="Steady DC computation of the small signal resistance. This is computed "
         "as the derivative of the current-voltage relation :math:`\\frac{\\Delta V}{\\Delta I}`, and the result "
-        "is given in Ohms. Note that in 2D the resistance is given in :math:`\\Omega \\mu`.",
+        "is given in Ohms. In 2D the resistance is given in :math:`\\Omega \\cdot \\mu\\text{m}`. "
+        "For 2D simulations, multiply by the device depth (in μm) to obtain the resistance in Ω.",
+        json_schema_extra={"units": "Ω"},
     )
 
     ac_current_voltage: Optional[FreqVoltageDataArray] = Field(
@@ -138,7 +149,9 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         description="Small-signal AC current as a function of DC bias voltage and frequency. "
         "This complex-valued data :math:`I(v, f)` is computed from small-signal analysis and "
         "can be used to determine frequency-dependent device parameters like admittance. "
-        "For 2D simulations, the units are :math:`A/{\\mu m}`, so scale by device width.",
+        "Units: A (3D) or A/μm (2D). For 2D simulations, multiply by the device depth "
+        "(extrusion length) to obtain the total current.",
+        json_schema_extra={"units": "A"},
     )
 
 

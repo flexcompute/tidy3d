@@ -53,10 +53,13 @@ flowchart LR
 - `sections.py` - Pydantic models for built-in sections (logging, simulation, microwave, adjoint, web, local cache, in-memory batch data cache, plugin container) registered via `register_section`. The bundled models inherit from the internal `ConfigSection` helper, but external code can use plain `BaseModel` subclasses. Optional handlers perform side effects. Fields mark persistence with `json_schema_extra={"persist": True}`.
 - `registry.py` - Stores section and handler registries and notifies the attached manager so new entries appear immediately.
 - `manager.py` - `ConfigManager` caches validated models, tracks runtime overrides per profile, filters persisted fields, exposes helpers such as `plugins`, `profiles`, and `format`. `SectionAccessor` routes attribute access to `update_section`.
-- `loader.py` - Resolves the config directory, loads `config.toml` and `profiles/<name>.toml`, parses environment overrides, and writes atomically through `serializer.build_document`.
+- `loader.py` - Resolves the config directory, loads `config.toml` and `profiles/<name>.toml`, parses environment overrides, applies schema migrations, centralizes section payload iteration/validation helpers, and writes atomically through `serializer.build_document`.
 - `serializer.py` - Builds stable TOML documents with descriptive comments derived from section docstrings.
 - `profiles.py` - Supplies builtin profiles merged ahead of user overrides.
 - `legacy.py` - Implements backward-compatible wrappers and deprecation warnings around the manager.
+- `migrations.py` - Schema versioning utilities and the `vN -> vN+1` migration registry.
+- `deprecations.py` - Centralizes deprecated/removed field warnings during config validation.
+- `schema_utils.py` - Shared helpers for walking nested config model annotations.
 
 ## Extending the System
 
@@ -72,7 +75,19 @@ flowchart LR
 ## Persistence Notes
 
 - Only fields tagged with `persist` write by default. Call `config.save(include_defaults=True)` to emit the full tree.
-- `ConfigLoader` writes files atomically and leaves a `.bak` backup while swapping.
+- `ConfigLoader` writes files atomically using a temporary swap file and rollback backup.
+- Schema migration write-backs (`auto-migrate` and `tidy3d config upgrade`) retain a `.bak` copy of the pre-migration file for recovery.
+- `default_profile` is base-only metadata and is valid in `config.toml` (not in `profiles/<name>.toml`).
+
+## Schema Versioning
+
+- Persisted config files include a root `config_version` key. Missing versions are treated as `0`.
+- `tidy3d.config.migrations` defines `CURRENT_CONFIG_VERSION` and a contiguous `vN -> vN+1` migration chain.
+- Loads always migrate in-memory before validation. Write-back happens after validation unless disabled with `TIDY3D_CONFIG_AUTO_MIGRATE=0`, and keeps a `.bak` snapshot of the prior file.
+- For `config_version <= CURRENT_CONFIG_VERSION`, unknown top-level sections are treated as validation errors, while unknown plugin subsections under `[plugins]` are tolerated. Core sections that are intentionally unavailable in the current build (for example `web`/`local_cache`/`batch_data_cache` in WASM) are ignored with a warning.
+- If backward auto-migration fails, the loader logs an error, keeps the original file untouched, and raises a load error.
+- If `config_version` is newer than the installed client, the loader warns and performs a best-effort parse. Set `TIDY3D_CONFIG_FORWARD_COMPAT=strict` to raise instead.
+- Use `tidy3d config upgrade` to inspect or apply schema migrations manually.
 
 ## Debugging
 

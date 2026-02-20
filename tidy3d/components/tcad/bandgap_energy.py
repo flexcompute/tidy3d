@@ -39,9 +39,9 @@ class VarshniEnergyBandGap(Tidy3dBaseModel):
     ... )
 
     References
-    -------
+    ----------
 
-        Varshni, Y. P. (1967). Temperature dependence of the energy gap in semiconductors. Physica, 34(1), 149-154.
+        .. [1] Varshni, Y. P. (1967). Temperature dependence of the energy gap in semiconductors. Physica, 34(1), 149-154.
 
     """
 

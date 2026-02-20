@@ -86,6 +86,9 @@ class FakeJob:
         self.events.append((self.task_id, "status", status))
         return status
 
+    def get_info(self):
+        return SimpleNamespace(status=self.status)
+
     def download(self, path: PathLike):
         self.events.append((self.task_id, "download", str(path)))
 
@@ -864,6 +867,38 @@ def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
     downloads = [event for event in events if event[1] == "download"]
 
     assert downloads == [("task_b_id", "download", os.path.join(str(tmp_path), "task_b_id.hdf5"))]
+
+
+def test_batch_monitor_skips_get_info_for_cached(monkeypatch, tmp_path):
+    """Cached jobs must not trigger get_info() remote calls during monitoring."""
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+
+    class CachedFakeJob(FakeJob):
+        @property
+        def load_if_cached(self):
+            return True
+
+        def get_info(self):
+            raise AssertionError("get_info() should not be called for cached jobs")
+
+    sims = {"cached_task": make_sim(), "running_task": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    fake_jobs = {
+        "cached_task": CachedFakeJob("cached_id", ["success"], events),
+        "running_task": FakeJob("running_id", ["running", "success", "success"], events),
+    }
+    batch._cached_properties["jobs"] = fake_jobs
+
+    batch.monitor(download_on_success=True, path_dir=str(tmp_path))
+
+    # Cached job would have raised AssertionError if get_info() was called.
+    # Verify the non-cached job still downloaded normally.
+    downloads = [e for e in events if e[1] == "download"]
+    assert any(e[0] == "running_id" for e in downloads)
 
 
 def test_batch_download_surfaces_download_errors(monkeypatch, tmp_path):

@@ -59,6 +59,11 @@ Files Inside the Directory
 - ``config.toml`` – base settings shared by all profiles.
 - ``profiles/<name>.toml`` – optional overrides for custom profiles. Each file
   only contains the differences from the base settings.
+- ``default_profile`` is base metadata and is only valid in ``config.toml``.
+
+Each configuration file includes a root ``config_version`` key. When it is
+missing, Tidy3D treats the file as version 0 and migrates it in memory to the
+current schema on load.
 
 Priority Order
 --------------
@@ -139,6 +144,12 @@ them into the new location described above. The command copies the legacy files
 into the canonical directory, leaving the originals untouched unless you pass
 ``--delete-legacy``. Use ``--overwrite`` if you have already started using the
 new location and want to replace those files with the legacy versions.
+
+Use ``tidy3d config upgrade`` to preview or apply schema migrations for
+``config.toml`` and profile files. Pass ``--dry-run`` to inspect diffs or
+``--check`` in CI. Automatic write-back can be disabled with
+``TIDY3D_CONFIG_AUTO_MIGRATE=0``; use ``TIDY3D_CONFIG_FORWARD_COMPAT=strict`` to
+error on newer schema versions instead of best-effort parsing.
 
 Legacy Access Points
 --------------------

@@ -17,6 +17,18 @@ from tidy3d.packaging import (
 assert check_import("tidy3d") is True
 
 
+@pytest.fixture(autouse=True)
+def _reset_tidy3d_extras():
+    """Reinitialize tidy3d_extras config before and after every test."""
+    tidy3d_extras["mod"] = None
+    tidy3d_extras["use_local_subpixel"] = None
+    reload_config(profile="default")
+    yield
+    tidy3d_extras["mod"] = None
+    tidy3d_extras["use_local_subpixel"] = None
+    reload_config(profile="default")
+
+
 # Mock module import function to simulate availability
 def mock_check_import(module_name):
     """
@@ -90,46 +102,15 @@ def test_tidy3d_extras():
             if tidy3d_extras["use_local_subpixel"]:
                 check_tidy3d_extras_licensed_feature("local_subpixel")
         else:
+            print(f"has_tidy3d_extras = {has_tidy3d_extras}")
             assert tidy3d_extras["use_local_subpixel"] is False
             assert tidy3d_extras["mod"] is None
 
     get_eps()
 
 
-def test_tidy3d_extras_broadband_feature():
-    import importlib
-
-    has_tidy3d_extras = importlib.util.find_spec("tidy3d_extras") is not None
-    print(f"has_tidy3d_extras = {has_tidy3d_extras}")
-    if has_tidy3d_extras:
-        features = tidy3d_extras["mod"].extension._features()
-        if "BroadbandPulse" in features:
-            check_tidy3d_extras_licensed_feature("BroadbandPulse")
-
-
-def test_supports_local_subpixel_respects_config_false():
-    reload_config(profile="default")
-    tidy3d_extras["mod"] = object()
-    tidy3d_extras["use_local_subpixel"] = True
-
-    try:
-        config.update_section("simulation", use_local_subpixel=False)
-
-        @supports_local_subpixel
-        def get_flag():
-            return tidy3d_extras["use_local_subpixel"]
-
-        assert get_flag() is False
-    finally:
-        tidy3d_extras["use_local_subpixel"] = None
-        reload_config(profile="default")
-
-
-def test_supports_local_subpixel_requires_extras_when_forced(monkeypatch):
-    reload_config(profile="default")
-    tidy3d_extras["mod"] = None
-    tidy3d_extras["use_local_subpixel"] = None
-
+def test_broadband_feature_raises_when_extras_missing(monkeypatch):
+    """check_tidy3d_extras_licensed_feature must raise when tidy3d-extras is absent."""
     real_import = builtins.__import__
 
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -139,19 +120,62 @@ def test_supports_local_subpixel_requires_extras_when_forced(monkeypatch):
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
-    try:
-        config.update_section("simulation", use_local_subpixel=True)
+    with pytest.raises(Tidy3dImportError, match="tidy3d-extras"):
+        check_tidy3d_extras_licensed_feature("BroadbandPulse")
 
-        @supports_local_subpixel
-        def get_flag():
-            return tidy3d_extras["use_local_subpixel"]
 
-        with pytest.raises(Tidy3dImportError):
-            get_flag()
-    finally:
-        tidy3d_extras["mod"] = None
-        tidy3d_extras["use_local_subpixel"] = None
-        reload_config(profile="default")
+def test_broadband_feature_raises_when_not_licensed():
+    """check_tidy3d_extras_licensed_feature must raise when feature is not in the license."""
+    from types import SimpleNamespace
+
+    mock_extension = SimpleNamespace(_features=lambda: {"other_feature"})
+    tidy3d_extras["mod"] = SimpleNamespace(extension=mock_extension)
+
+    with pytest.raises(Tidy3dImportError, match="not available with your license"):
+        check_tidy3d_extras_licensed_feature("BroadbandPulse")
+
+
+def test_broadband_feature_succeeds_when_licensed():
+    """check_tidy3d_extras_licensed_feature must not raise when feature is licensed."""
+    from types import SimpleNamespace
+
+    mock_extension = SimpleNamespace(_features=lambda: {"BroadbandPulse"})
+    tidy3d_extras["mod"] = SimpleNamespace(extension=mock_extension)
+
+    check_tidy3d_extras_licensed_feature("BroadbandPulse")
+
+
+def test_supports_local_subpixel_respects_config_false():
+    tidy3d_extras["mod"] = object()
+    tidy3d_extras["use_local_subpixel"] = True
+
+    config.update_section("simulation", use_local_subpixel=False)
+
+    @supports_local_subpixel
+    def get_flag():
+        return tidy3d_extras["use_local_subpixel"]
+
+    assert get_flag() is False
+
+
+def test_supports_local_subpixel_requires_extras_when_forced(monkeypatch):
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "tidy3d_extras":
+            raise ImportError("forced failure")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    config.update_section("simulation", use_local_subpixel=True)
+
+    @supports_local_subpixel
+    def get_flag():
+        return tidy3d_extras["use_local_subpixel"]
+
+    with pytest.raises(Tidy3dImportError):
+        get_flag()
 
 
 def test_supports_local_subpixel_no_error_logged_when_optional(monkeypatch, caplog):
@@ -159,10 +183,6 @@ def test_supports_local_subpixel_no_error_logged_when_optional(monkeypatch, capl
     and tidy3d-extras is unavailable, since the decorator handles it gracefully."""
     import logging
 
-    reload_config(profile="default")
-    tidy3d_extras["mod"] = None
-    tidy3d_extras["use_local_subpixel"] = None
-
     real_import = builtins.__import__
 
     def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
@@ -172,26 +192,21 @@ def test_supports_local_subpixel_no_error_logged_when_optional(monkeypatch, capl
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
-    try:
-        # preference=None is the default - feature is optional
-        config.update_section("simulation", use_local_subpixel=None)
+    # preference=None is the default - feature is optional
+    config.update_section("simulation", use_local_subpixel=None)
 
-        @supports_local_subpixel
-        def get_flag():
-            return tidy3d_extras["use_local_subpixel"]
+    @supports_local_subpixel
+    def get_flag():
+        return tidy3d_extras["use_local_subpixel"]
 
-        with caplog.at_level(logging.ERROR):
-            result = get_flag()
+    with caplog.at_level(logging.ERROR):
+        result = get_flag()
 
-        # Should fall back gracefully without logging errors
-        assert result is False
-        assert not any("tidy3d-extras" in record.message for record in caplog.records), (
-            "ERROR was logged but should have been suppressed for optional feature check"
-        )
-    finally:
-        tidy3d_extras["mod"] = None
-        tidy3d_extras["use_local_subpixel"] = None
-        reload_config(profile="default")
+    # Should fall back gracefully without logging errors
+    assert result is False
+    assert not any("tidy3d-extras" in record.message for record in caplog.records), (
+        "ERROR was logged but should have been suppressed for optional feature check"
+    )
 
 
 def test_solve_warning_suppressed_when_subpixel_enabled():
@@ -200,8 +215,6 @@ def test_solve_warning_suppressed_when_subpixel_enabled():
 
     from tidy3d.log import log
 
-    reload_config(profile="default")
-
     # Build a mock module that satisfies _check_tidy3d_extras_available (mod is not
     # None ⇒ early return) and check_tidy3d_extras_licensed_feature (needs
     # mod.extension._features() containing "local_subpixel").
@@ -209,7 +222,6 @@ def test_solve_warning_suppressed_when_subpixel_enabled():
     mock_mod = SimpleNamespace(extension=mock_extension)
 
     tidy3d_extras["mod"] = mock_mod
-    tidy3d_extras["use_local_subpixel"] = None
 
     _LogCapture = type(
         "_LogCapture", (), {"records": [], "handle": lambda s, *a: s.records.append(a)}
@@ -233,19 +245,12 @@ def test_solve_warning_suppressed_when_subpixel_enabled():
             "Accuracy warning should be suppressed when local subpixel is enabled"
         )
     finally:
-        tidy3d_extras["mod"] = None
-        tidy3d_extras["use_local_subpixel"] = None
         del log.handlers["_test_capture"]
-        reload_config(profile="default")
 
 
 def test_solve_warning_emitted_when_subpixel_disabled(monkeypatch):
     """The accuracy warning in ModeSolver.solve() should fire when local subpixel is off."""
     from tidy3d.log import log
-
-    reload_config(profile="default")
-    tidy3d_extras["mod"] = None
-    tidy3d_extras["use_local_subpixel"] = None
 
     real_import = builtins.__import__
 
@@ -278,10 +283,7 @@ def test_solve_warning_emitted_when_subpixel_disabled(monkeypatch):
             "Accuracy warning should be emitted when local subpixel is unavailable"
         )
     finally:
-        tidy3d_extras["mod"] = None
-        tidy3d_extras["use_local_subpixel"] = None
         del log.handlers["_test_capture"]
-        reload_config(profile="default")
 
 
 if __name__ == "__main__":

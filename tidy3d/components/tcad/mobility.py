@@ -62,7 +62,7 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
          - ``mu_min``
          - Minimum low-field mobility for :math:`n` and :math:`p`
        * - :math:`\\mu_{max}`
-         - ``mu_n``
+         - ``mu``
          - Maximum low-field mobility for :math:`n` and :math:`p`
        * - :math:`\\alpha_1`
          - ``exp_1``
@@ -73,6 +73,9 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
        * - :math:`\\alpha_N`
          - ``exp_N``
          - Exponent for doping dependence.
+       * - :math:`\\alpha_3`
+         - ``exp_3``
+         - Exponent for the temperature dependence of the reference doping
        * - :math:`\\alpha_4`
          - ``exp_4``
          - Exponent for the temperature dependence of the exponent :math:`\\alpha_N`

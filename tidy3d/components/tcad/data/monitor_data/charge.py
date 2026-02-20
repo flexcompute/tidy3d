@@ -53,6 +53,7 @@ class SteadyPotentialData(HeatChargeMonitorData):
         None,
         title="Electric potential series",
         description="Contains the electric potential series.",
+        json_schema_extra={"units": "V"},
     )
 
     @property
@@ -81,6 +82,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
         None,
         title="Electrons series",
         description=r"Contains the computed electrons concentration :math:`n`.",
+        json_schema_extra={"units": "1/cm^3"},
     )
     # n = electrons
 
@@ -88,6 +90,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
         None,
         title="Holes series",
         description=r"Contains the computed holes concentration :math:`p`.",
+        json_schema_extra={"units": "1/cm^3"},
     )
     # p = holes
 
@@ -154,30 +157,35 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
         None,
         title="Conduction band series",
         description="Contains the computed energy of the bottom of the conduction band :math:`E_c`.",
+        json_schema_extra={"units": "eV"},
     )
 
     Ev: Optional[UnstructuredFieldType] = Field(
         None,
         title="Valence band series",
         description="Contains the computed energy of the top of the valence band :math:`E_v`.",
+        json_schema_extra={"units": "eV"},
     )
 
     Ei: Optional[UnstructuredFieldType] = Field(
         None,
         title="Intrinsic Fermi level series",
         description="Contains the computed intrinsic Fermi level for the material :math:`E_i`.",
+        json_schema_extra={"units": "eV"},
     )
 
     Efn: Optional[UnstructuredFieldType] = Field(
         None,
         title="Electron's quasi-Fermi level series",
         description="Contains the computed quasi-Fermi level for electrons :math:`E_{fn}`.",
+        json_schema_extra={"units": "eV"},
     )
 
     Efp: Optional[UnstructuredFieldType] = Field(
         None,
         title="Hole's quasi-Fermi level series",
         description="Contains the computed quasi-Fermi level for holes :math:`E_{fp}`.",
+        json_schema_extra={"units": "eV"},
     )
 
     @property
@@ -305,14 +313,18 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     hole_capacitance: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Hole capacitance",
-        description="Small signal capacitance :math:`(\\frac{dQ_p}{dV})` associated to the monitor.",
+        description="Small signal capacitance :math:`(\\frac{dQ_p}{dV})` associated to the monitor. "
+        "Units: fF (3D) or fF/μm (2D, per unit length).",
+        json_schema_extra={"units": "fF"},
     )
     # C_p = hole_capacitance
 
     electron_capacitance: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Electron capacitance",
-        description="Small signal capacitance :math:`(\\frac{dQn}{dV})` associated to the monitor.",
+        description="Small signal capacitance :math:`(\\frac{dQn}{dV})` associated to the monitor. "
+        "Units: fF (3D) or fF/μm (2D, per unit length).",
+        json_schema_extra={"units": "fF"},
     )
     # C_n = electron_capacitance
 
@@ -393,8 +405,8 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
 
 class SteadyCurrentDensityData(HeatChargeMonitorData):
     """
-    Stores current density :math:`\\vec{J}` from a Charge/Conduction simulation. It is given in
-    units of :math:`A/\\mu m^2`
+    Stores current density :math:`\\vec{J}` from a Charge/Conduction simulation.
+    Units: :math:`A/\\mu m^2` (3D) or :math:`A/\\mu m` (2D, per unit length).
     """
 
     monitor: SteadyCurrentDensityMonitor = Field(

@@ -387,7 +387,10 @@ jobs:
 
       - name: enforce-jira-key
         id: enforce-jira-key
-        if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]'
+        if: >
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.user.login != 'dependabot[bot]' &&
+          !startsWith(github.event.pull_request.head.ref, 'chore/build-changelog-')
         env:
           STEPS_EXTRACT_BRANCH_NAME_OUTPUTS_BRANCH_NAME: ${{ steps.extract-branch-name.outputs.branch_name }}
         run: |
@@ -424,6 +427,44 @@ jobs:
                 exit 1
               fi
           fi
+
+  enforce-changelog-policy:
+    needs: determine-test-scope
+    runs-on: ubuntu-latest
+    if: needs.determine-test-scope.outputs.pr_review_tests == 'true'
+    name: enforce-changelog-policy
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: disallow-manual-changelog-edits
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          if ! git cat-file -e "${PR_BASE_SHA}:changelog.d/README.md" 2>/dev/null; then
+            echo "Towncrier changelog workflow not detected in base commit; skipping check."
+            exit 0
+          fi
+
+          if [[ "$PR_BRANCH" == chore/build-changelog-* ]]; then
+            echo "Auto-generated changelog branch detected; allowing CHANGELOG.md edits."
+            exit 0
+          fi
+
+          if git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA" | grep -Fxq "CHANGELOG.md"; then
+            echo "❌ Manual edits to CHANGELOG.md are not allowed."
+            echo "Add changelog fragments under changelog.d/ instead."
+            exit 1
+          fi
+
+          echo "✅ No direct CHANGELOG.md edits detected."
 
   lint-commit-messages:
     needs: determine-test-scope
@@ -1365,6 +1406,7 @@ jobs:
       - verify-schema-change
       - lint-commit-messages
       - lint-branch-name
+      - enforce-changelog-policy
       - zizmor
       - develop-cli-tests
       - verify-version-consistency
@@ -1418,6 +1460,12 @@ jobs:
         if: ${{ needs.determine-test-scope.outputs.pr_review_tests == 'true' && needs.lint-branch-name.result != 'success' && needs.lint-branch-name.result != 'skipped' }}
         run: |
           echo "❌ Branch name linting failed."
+          exit 1
+
+      - name: check-changelog-policy
+        if: ${{ needs.determine-test-scope.outputs.pr_review_tests == 'true' && needs.enforce-changelog-policy.result != 'success' && needs.enforce-changelog-policy.result != 'skipped' }}
+        run: |
+          echo "❌ Changelog policy check failed."
           exit 1
 
       - name: check-zizmor-static-analysis

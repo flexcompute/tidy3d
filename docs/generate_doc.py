@@ -13,6 +13,7 @@ from tidy3d.material_library.material_library import (
     MaterialItemUniaxial,
 )
 from tidy3d.plugins.microwave import rf_material_library as rf_lib
+from tidy3d.plugins.microwave.rf_material_library import MaterialItemFreqRange
 
 LOW_LOSS_THRESHOLD = 2e-5
 
@@ -259,13 +260,11 @@ def generate_rf_material_library_doc():
             ">>> medium = rf_material_library['mat']['var']\n\n"
             "For example, Rogers3010 laminate can be loaded as:\n\n"
             ">>> Rogers3010 = rf_material_library['RO3010']['design']\n\n"
-            "You can also import the default variant of a material by:\n\n"
-            "For frequency-range parametrized materials (MaterialItemFreqRange), medium is a property:\n\n"
+            "You can also import the default variant of a material by accessing the ``medium`` property:\n\n"
             ">>> medium = rf_material_library['RT_duroid5880'].medium\n\n"
-            "For standard materials (MaterialItem), medium is also a property:\n\n"
-            ">>> medium = rf_material_library['RO3010'].medium\n\n"
-            "To get a medium for a specific frequency range, use medium_at_range():\n\n"
-            ">>> medium = rf_material_library['RT_duroid5880'].medium_at_range(frequency_range=(5e9, 10e9))\n\n"
+            "For frequency-range parametrized materials, you can also use ``medium_in_range()`` to get a medium "
+            "for a specific frequency range:\n\n"
+            ">>> medium = rf_material_library['RT_duroid5880'].medium_in_range(frequency_range=(5e9, 10e9))\n\n"
             "It is often useful to see the full list of variants for a given medium:\n\n"
             ">>> print(rf_material_library['mat'].variants.keys())\n\n"
             "To access the details of a variant, including material model and references, use the following command:\n\n"
@@ -283,9 +282,10 @@ def generate_rf_material_library_doc():
             code_string = ""  # example code
 
             # Initialize table
-            columns = ["variant", "range", "model", "ref"]  # column key
+            columns = ["variant", "type", "range", "model", "ref"]  # column key
             name = {  # column label
                 "variant": "Variant",
+                "type": "Type",
                 "range": "Valid for",
                 "model": "Model Info",
                 "ref": "Reference",
@@ -305,6 +305,12 @@ def generate_rf_material_library_doc():
                 row["variant"] = "``'" + varname + "'``"
                 if varname == mat.default:
                     row["variant"] += " (default)"
+
+                # Material type indicator
+                if isinstance(mat, MaterialItemFreqRange):
+                    row["type"] = "Frequency-range parametrized"
+                else:
+                    row["type"] = "Standard"
 
                 # Load medium
                 # medium is a property for all variant types (VariantItemFreqRange* and VariantItem)

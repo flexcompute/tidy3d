@@ -20,6 +20,7 @@ from tidy3d.exceptions import WebError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api.states import (
     ALL_POST_VALIDATE_STATES,
+    COMPLETED_PERCENT,
     END_STATES,
     ERROR_STATES,
     MAX_STEPS,
@@ -1204,6 +1205,61 @@ def load(
     return stub_data
 
 
+def _batch_detail_progress(detail: BatchDetail) -> tuple[str, str, float]:
+    """Compute display status, color status, and progress % from BatchDetail subtasks.
+
+    Used by :meth:`Batch.monitor` to show accurate per-subtask progress for
+    jobs that are modeler batches (TCM / RF tasks).
+
+    Parameters
+    ----------
+    detail : BatchDetail
+        The detailed batch information including subtask statuses.
+
+    Returns
+    -------
+    tuple[str, str, float]
+        ``(display_status, color_status, progress_pct)`` where
+        *display_status* is a human-readable label (e.g. ``"queued (3/5)"``),
+        *color_status* is a canonical status for colour lookup in state sets,
+        and *progress_pct* is a percentage in ``[0, COMPLETED_PERCENT]``.
+    """
+    batch_status = (detail.status or "draft").lower()
+
+    if not detail.tasks:
+        return batch_status, batch_status, STATE_PROGRESS_PERCENTAGE.get(batch_status, 0)
+
+    if batch_status in END_STATES:
+        pct = STATE_PROGRESS_PERCENTAGE.get(batch_status, COMPLETED_PERCENT)
+        return batch_status, batch_status, pct
+
+    # Compute average progress from subtask stages
+    n = len(detail.tasks)
+    stage_acc = 0.0
+    status_counts: dict[str, int] = {}
+    for t in detail.tasks:
+        tstatus = (t.status or "draft").lower()
+        stage_name, idx = status_to_stage(tstatus)
+        stage_acc += idx / MAX_STEPS
+        status_counts[stage_name] = status_counts.get(stage_name, 0) + 1
+
+    task_avg = stage_acc / n
+    # 80 % from subtask average, final 20 % only on completion
+    # (consistent with _monitor_modeler_batch below)
+    pct = task_avg * 0.8 * COMPLETED_PERCENT
+
+    # Derive display status from most common subtask stage
+    dominant_stage = max(status_counts, key=status_counts.get)
+    dominant_count = status_counts[dominant_stage]
+
+    if n > 1 and dominant_count < n:
+        display_status = f"{dominant_stage} ({dominant_count}/{n})"
+    else:
+        display_status = dominant_stage
+
+    return display_status, dominant_stage, pct
+
+
 def _monitor_modeler_batch(
     task_id: str,
     verbose: bool = True,
@@ -1241,10 +1297,10 @@ def _monitor_modeler_batch(
     console.log(header)
     with Progress(*progress_columns, console=console, transient=False) as progress:
         # Phase: Run (aggregate + per-task)
-        stage = status_to_stage(status)[0]
-        p_run = progress.add_task("Run Total", total=1.0, status=f" {stage} ")
+        display_status, _, _ = _batch_detail_progress(detail)
+        p_run = progress.add_task("Run Total", total=1.0, status=f" {display_status} ")
         task_bars: dict[str, int] = {}
-        prev_stage = status_to_stage(status)[0]
+        prev_display_status = display_status
         console.log(f"Batch status = {status}")
 
         # Note: get_status errors if an erroring status occurred
@@ -1252,10 +1308,11 @@ def _monitor_modeler_batch(
         while not end_monitor:
             total = len(detail.tasks)
             r = detail.runSuccess or 0
-            if stage != prev_stage:
-                prev_stage = stage
-                console.log(f"Batch status = {stage}")
-                progress.update(p_run, status=f" {stage} ")
+            display_status, _, _ = _batch_detail_progress(detail)
+            if display_status != prev_display_status:
+                prev_display_status = display_status
+                console.log(f"Batch status = {display_status}")
+                progress.update(p_run, status=f" {display_status} ")
 
             # Create per-task bars as soon as tasks appear
             if total and total <= max_detail_tasks and detail.tasks:
@@ -1316,7 +1373,6 @@ def _monitor_modeler_batch(
             time.sleep(REFRESH_TIME)
             detail = _get_batch_detail_handle_error_status(task)
             status = detail.status.lower()
-            stage = status_to_stage(status)[0]
 
         if console is not None:
             console.log("Modeler has finished running successfully.")

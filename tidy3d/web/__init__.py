@@ -37,7 +37,7 @@ from .api.webapi import (
     upload,
 )
 from .cli import tidy3d_cli
-from .cli.app import configure_fn as configure
+from .cli.config import configure_fn as configure
 
 __all__ = [
     "Batch",

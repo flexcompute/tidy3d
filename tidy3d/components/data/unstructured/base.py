@@ -257,11 +257,20 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     @model_validator(mode="after")
     def _warn_unused_points(self) -> Self:
-        """Warn if some points are unused."""
-        point_indices = set(np.arange(len(self.points.data)))
-        used_indices = set(self.cells.values.ravel())
+        """Warn if some points are unused.
 
-        if not point_indices.issubset(used_indices):
+        Uses efficient NumPy boolean array instead of Python sets for O(n) performance.
+        """
+        num_points = len(self.points.data)
+        cell_indices = self.cells.values.ravel()
+
+        # Use boolean array: O(n) time and O(n) space, much faster than Python sets
+        used = np.zeros(num_points, dtype=bool)
+        # Clip to valid range to handle any out-of-bounds indices gracefully
+        valid_indices = cell_indices[(cell_indices >= 0) & (cell_indices < num_points)]
+        used[valid_indices] = True
+
+        if not np.all(used):
             log.warning(
                 "Unstructured grid dataset contains unused points. "
                 "Consider calling 'clean()' to remove them."

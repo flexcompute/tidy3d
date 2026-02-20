@@ -29,3 +29,15 @@ Legacy Attributes
   and ``config.use_local_subpixel`` still work and set the equivalent fields in
   ``config.logging`` or ``config.simulation``. Each call raises a warning so
   you can update scripts at your own pace.
+
+Schema Versioning
+-----------------
+
+- Config files now include a root ``config_version`` to support incremental
+  schema migrations. Missing versions are treated as ``0``.
+- The loader migrates configs in memory and writes back upgraded files by
+  default. Set ``TIDY3D_CONFIG_AUTO_MIGRATE=0`` to disable auto write-back.
+- Use ``tidy3d config upgrade --dry-run`` to inspect schema diffs or
+  ``tidy3d config upgrade --check`` in CI to verify files are current.
+- Set ``TIDY3D_CONFIG_FORWARD_COMPAT=strict`` to error on newer schema versions
+  instead of best-effort parsing.

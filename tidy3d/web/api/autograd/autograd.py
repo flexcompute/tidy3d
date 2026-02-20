@@ -1154,7 +1154,7 @@ def _run_bwd(
                     if isinstance(val, (list, tuple)) and isinstance(v, (list, tuple)):
                         vjp_traced_fields[k] = type(val)(x + y for x, y in zip(val, v))
                     else:
-                        vjp_traced_fields[k] += v
+                        vjp_traced_fields[k] = vjp_traced_fields[k] + v
                 else:
                     vjp_traced_fields[k] = v
 
@@ -1302,7 +1302,7 @@ def _run_async_bwd(
                     if isinstance(val, (list, tuple)) and isinstance(v, (list, tuple)):
                         sim_fields_vjp_dict[task_name][k] = type(val)(x + y for x, y in zip(val, v))
                     else:
-                        sim_fields_vjp_dict[task_name][k] += v
+                        sim_fields_vjp_dict[task_name][k] = sim_fields_vjp_dict[task_name][k] + v
                 else:
                     sim_fields_vjp_dict[task_name][k] = v
 

@@ -79,7 +79,7 @@ If those overrides are omitted, deployment targets are inferred from `release_ty
 ### `tidy3d-python-client-tests.yml`
 
 Primary CI workflow; it runs on PRs (`latest`, `develop`, `pre/*`), merge queue (`merge_group`), manual dispatch, and `workflow_call`. Highlights:
-- **Code quality**: `ruff format`, `ruff check`, `mypy`, `zizmor`, schema regeneration, commit/branch linting.
+- **Code quality**: `ruff format`, `ruff check`, `mypy`, `zizmor`, schema regeneration, commit/branch linting, and changelog policy enforcement (no direct `CHANGELOG.md` edits on regular PR branches).
 - **Local tests**: Self-hosted Slurm runners on Python 3.10 and 3.13 (coverage enforced, diff-coverage comments for 3.13).
 - **Remote tests**: GitHub-hosted matrix across Windows, Linux, and macOS for Python 3.10–3.13.
 - **Optional suites**: CLI tests, version consistency checks, submodule validation (non-RC release tags only), and `tidy3d-extras` integration tests can be toggled via inputs.
@@ -149,6 +149,26 @@ Manual or called workflow that updates `poetry.lock`, authenticates against AWS 
 - `run_workflow` – boolean to enable/disable the workflow execution.
 
 The workflow creates a PR with branch name `chore/update-poetry-lock-{source_branch}` targeting the specified source branch.
+
+### `tidy3d-python-client-build-changelog-pr.yml`
+
+Manual workflow that builds `CHANGELOG.md` from Towncrier fragments and opens a PR.
+
+**Key inputs:**
+- `source_branch` – branch to checkout and build changelog from (defaults to `develop`).
+- `target_branch` – branch to open the PR against (defaults to `develop`).
+- `release_version` – optional override for the release version. If omitted, it is derived from `pyproject.toml` by stripping `.devN`.
+- `release_date` – optional override in `YYYY-MM-DD`. If omitted, UTC `today` is used.
+- `previous_version` – optional override for the compare-link previous version. If omitted, the workflow uses the latest reachable stable `vX.Y.Z` tag, and falls back to the latest stable heading in `CHANGELOG.md` when no tag is available.
+- `run_workflow` – boolean guard to enable/disable execution.
+
+The workflow:
+1. Installs Poetry dependencies (`--extras dev`).
+2. Runs `towncrier build --yes`.
+3. Runs `scripts/changelog_refs.py` to update compare reference links.
+4. Opens a PR with the generated changelog updates.
+
+If no fragments are present in `changelog.d/`, the workflow exits without opening a PR.
 
 ## Documentation Workflows
 

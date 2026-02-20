@@ -1941,6 +1941,13 @@ class Scene(Tidy3dBaseModel):
         electron_density, and hole_density can be ``None``. All provided fields must have identical
         coords.
 
+        Note
+        ----
+        The resulting custom mediums are given unique names based on the structure they belong to.
+        If the original medium has a name (e.g., ``"Si"``), the new medium name will be
+        ``"Si[structure_name]"`` if the structure has a name, or ``"Si[structures[index]]"``
+        otherwise. This ensures unique medium names across the scene.
+
         Parameters
         ----------
         temperature : Union[
@@ -2003,6 +2010,14 @@ class Scene(Tidy3dBaseModel):
                             )
 
                 new_medium = med.perturbed_copy(**restricted_arrays, interp_method=interp_method)
+
+                # Generate unique medium name based on structure to avoid duplicate name warnings.
+                # Only rename if a new medium was actually created (not when perturbed_copy returns
+                # the original unchanged due to no perturbation data being provided).
+                if new_medium is not med and new_medium.name is not None:
+                    suffix = structure.name if structure.name else f"structures[{s_ind}]"
+                    new_medium = new_medium.updated_copy(name=f"{new_medium.name}[{suffix}]")
+
                 new_structure = structure.updated_copy(medium=new_medium)
                 new_structures.append(new_structure)
             else:

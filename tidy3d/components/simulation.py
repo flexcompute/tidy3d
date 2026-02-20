@@ -58,7 +58,7 @@ from .frequency_extrapolation import LowFrequencySmoothingSpec
 from .geometry.base import Box, Geometry, GeometryGroup
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import _shift_object, flatten_groups, traverse_geometries
-from .geometry.utils_2d import get_bounds, get_thickened_geom, snap_coordinate_to_grid, subdivide
+from .geometry.utils_2d import get_bounds, snap_coordinate_to_grid, subdivide
 from .grid.grid import Coords, Grid
 from .grid.grid_spec import AutoGrid, GridSpec, UniformGrid
 from .lumped_element import LumpedElementType
@@ -1871,26 +1871,28 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         if not self._contains_converted_volumetric_structures:
             return self.scene.sorted_structures
 
-        def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> list[float]:
-            """Get grid size around the 2D material."""
-            dls = self._discretize_grid(Box.from_bounds(*geom.bounds), grid=grid).sizes.to_list[
-                axis
-            ]
-            # When 1 dl is requested it is assumed that only an approximate value is needed
-            # before the 2D material has been snapped to the grid
-            if num_dls == 1:
-                return [np.mean(dls)]
+        def get_dls(snapped_center: float, axis: Axis) -> list[float]:
+            """Get grid sizes adjacent to a 2D material.
 
-            # When 2 dls are requested the 2D geometry should have been snapped to grid,
-            # so this represents the exact adjacent grid spacing
-            if len(dls) != num_dls:
+            Finds the boundary closest to the snapped center and returns the
+            cell sizes on either side.
+            """
+            boundaries = np.array(grid.boundaries.to_list[axis])
+
+            # Find the boundary index closest to the snapped center
+            idx = np.argmin(np.abs(boundaries - snapped_center))
+
+            # Need at least one cell on each side of the boundary
+            if idx == 0 or idx >= len(boundaries) - 1:
                 raise Tidy3dError(
                     "Failed to detect grid size around the 2D material. "
                     "Can't generate volumetric equivalent for this simulation. "
                     "If you received this error, please create an issue in the Tidy3D "
                     "github repository."
                 )
-            return dls
+
+            # Return cell sizes: one before the boundary, one after
+            return [boundaries[idx] - boundaries[idx - 1], boundaries[idx + 1] - boundaries[idx]]
 
         def snap_to_grid(geom: Geometry, axis: Axis) -> Geometry:
             """Snap a 2D material to the Yee grid."""
@@ -1901,7 +1903,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                     "The upper and lower bounds of the geometry in the normal direction are not equal. "
                     "If you encounter this error, please create an issue in the Tidy3D github repository."
                 )
-            snapped_center = snap_coordinate_to_grid(self.grid, center, axis)
+            snapped_center = snap_coordinate_to_grid(grid, center, axis)
             return geom._update_from_bounds(bounds=(snapped_center, snapped_center), axis=axis)
 
         # Convert lumped elements into structures
@@ -1943,7 +1945,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 # Snap to the grid and create volumetric equivalent
                 snapped_geometry = snap_to_grid(subdivided_geometry[0], axis)
                 snapped_center = get_bounds(snapped_geometry, axis)[0]
-                dls = get_dls(get_thickened_geom(snapped_geometry, axis), axis, 2)
+                dls = get_dls(snapped_center, axis)
                 adjacent_media = [subdivided_geometry[1].medium, subdivided_geometry[2].medium]
 
                 # Create the new volumetric medium
@@ -6012,6 +6014,13 @@ class Simulation(AbstractYeeGridSimulation):
                     new_medium = med.perturbed_copy(
                         **restricted_arrays, interp_method=interp_method
                     )
+
+                    # Generate unique medium name based on structure to avoid duplicate
+                    # name warnings. Only rename if a new medium was actually created.
+                    if new_medium is not med and new_medium.name is not None:
+                        suffix = structure.name if structure.name else f"structures[{s_ind}]"
+                        new_medium = new_medium.updated_copy(name=f"{new_medium.name}[{suffix}]")
+
                     new_structure = structure.updated_copy(medium=new_medium)
                     new_structures.append(new_structure)
             else:

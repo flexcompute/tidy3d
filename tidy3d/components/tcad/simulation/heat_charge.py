@@ -213,16 +213,16 @@ class HeatChargeSimulation(AbstractSimulation):
     Currently, this solver supports steady-state heat conduction where :math:`q` is the heat flux, :math:`k`
     is the thermal conductivity, and :math:`T` is the temperature.
 
-         .. math::
+    .. math::
 
-            -\\nabla \\cdot (-k \\nabla T) = q
+        -\\nabla \\cdot (-k \\nabla T) = q
 
     It is also possible to run transient heat simulations by specifying ``analysis_spec=UnsteadyHeatAnalysis(...)``. This adds
     the temporal terms to the above equations:
 
-        .. math::
+    .. math::
 
-            \\frac{\\partial \\rho c_p T}{\\partial t} -\\nabla \\cdot (k \\nabla(T)) = q
+        \\frac{\\partial \\rho c_p T}{\\partial t} -\\nabla \\cdot (k \\nabla(T)) = q
 
     where :math:`\\rho` is the density and :math:`c_p` is the specific heat capacity of the medium.
 
@@ -231,9 +231,9 @@ class HeatChargeSimulation(AbstractSimulation):
     medium, and the electric field (:math:`\\mathbf{E} = -\\nabla(\\psi)`) derived from electrical potential (:math:`\\psi`).
     Currently, in this type of simulation, no current sources or sinks are supported.
 
-        .. math::
+    .. math::
 
-            \\text{div}(\\sigma \\cdot \\nabla(\\psi)) = 0
+        \\text{div}(\\sigma \\cdot \\nabla(\\psi)) = 0
 
 
     For further details on what equations are solved in ``Charge`` simulations, refer to the :class:`SemiconductorMedium`.
