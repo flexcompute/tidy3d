@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from math import isclose
 from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeVar, Union, get_args
 
@@ -243,6 +243,14 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         self._check_either_modulation_or_nonlinear_spec()
         self._validate_modulation_spec_after()
         return self
+
+    @field_validator("nonlinear_spec", mode="before")
+    @classmethod
+    def _normalize_empty_nonlinear_spec_dict(cls, val: Any) -> Any:
+        """Treat an empty nonlinear spec mapping as a missing value."""
+        if isinstance(val, Mapping) and not val:
+            return None
+        return val
 
     def _validate_nonlinear_spec(self) -> Self:
         """Check compatibility with nonlinear_spec."""
