@@ -1331,12 +1331,12 @@ class EigSolver(Tidy3dBaseModel):
         # Convert set to sorted list for consistent indexing
         mode_list = sorted(mode_indices)
 
-        # Extract tangential field components as tuples
-        # Mixed integer + fancy indexing: integer `0` on axis 0 and list on axis -1
-        # are non-adjacent advanced indexes, so numpy places the broadcast result
-        # (n_modes,) at the front → shape (n_modes, Nx, Ny), matching _outer_dot_numpy.
-        E_tan = (E[0, ..., mode_list], E[1, ..., mode_list])
-        H_tan = (H[0, ..., mode_list], H[1, ..., mode_list])
+        # E/H shape: (3, Nx, Ny, num_modes) → select modes, move to axis 1 → (3, n_modes, Nx, Ny)
+        E_sel = np.moveaxis(E[:, :, :, mode_list], -1, 1)
+        H_sel = np.moveaxis(H[:, :, :, mode_list], -1, 1)
+        # Extract tangential components: each (n_modes, Nx, Ny), matching _outer_dot_numpy
+        E_tan = (E_sel[0], E_sel[1])
+        H_tan = (H_sel[0], H_sel[1])
 
         # Make the differential area elements
         dS = (np.outer(dl_primal[0], dl_dual[1]), np.outer(dl_dual[0], dl_primal[1]))

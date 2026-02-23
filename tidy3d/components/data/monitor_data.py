@@ -561,42 +561,39 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             mnt_min = mnt_bounds[0, axis]
             mnt_max = mnt_bounds[1, axis]
 
-            # Compute field coordinates from grid_expanded boundaries
-            # For Yee grid: E at cell centers, H at cell boundaries (excluding last)
-            # e_field_centers = self._tangential_fields["E" + dim].coords[dim].values
-            # h_field_boundaries = self._tangential_fields["H" + dim].coords[dim].values
+            # Compute field data coordinates from grid_expanded boundaries
             full_boundaries = full_bounds[dim]
-            e_field_centers = (full_boundaries[:-1] + full_boundaries[1:]) / 2
-            h_field_boundaries = full_boundaries[:-1]
+            field_data_centers = (full_boundaries[:-1] + full_boundaries[1:]) / 2
+            field_data_boundaries = full_boundaries[:-1]
 
             # Determine integration bounds
             if truncate_to_monitor_bounds:
                 # Use monitor bounds, handling inf by finding grid boundary outside field data
                 if np.isinf(mnt_min):
                     integration_min = self._find_enclosing_boundary(
-                        e_field_centers[0], full_boundaries, "lower"
+                        field_data_centers[0], full_boundaries, "lower"
                     )
                 else:
                     integration_min = mnt_min
 
                 if np.isinf(mnt_max):
                     integration_max = self._find_enclosing_boundary(
-                        e_field_centers[-1], full_boundaries, "upper"
+                        field_data_centers[-1], full_boundaries, "upper"
                     )
                 else:
                     integration_max = mnt_max
             else:
                 # Use grid_expanded bounds that enclose all field data
                 integration_min = self._find_enclosing_boundary(
-                    e_field_centers[0], full_boundaries, "lower"
+                    field_data_centers[0], full_boundaries, "lower"
                 )
                 integration_max = self._find_enclosing_boundary(
-                    e_field_centers[-1], full_boundaries, "upper"
+                    field_data_centers[-1], full_boundaries, "upper"
                 )
 
             # Build coordinate arrays for size calculation
-            centers = np.concatenate([[integration_min], e_field_centers])
-            boundaries = np.concatenate([h_field_boundaries, [integration_max]])
+            centers = np.concatenate([[integration_min], field_data_centers])
+            boundaries = np.concatenate([field_data_boundaries, [integration_max]])
 
             # Dual sizes: distances between cell centers, clamped
             dual_coords = np.clip(centers, integration_min, integration_max)
@@ -1135,28 +1132,28 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         .. math:
 
-           \frac{1}{4} \int \left( E_0^* \times H_1 + H_0^* \times E_1 \right) \, {\rm d}S
+           \frac{1}{4} \int \left( E_0 \times H_1^* + H_0 \times E_1^* \right) \, {\rm d}S
 
         If ``bidirectional=False``, the dot product is instead:
 
         .. math:
 
-           \frac{1}{2} \int \left( E_0^* \times H_1 \right) \, {\rm d}S
+           \frac{1}{2} \int \left( E_0 \times H_1^* \right) \, {\rm d}S
 
         Parameters
         ----------
         field_data : :class:`.FieldData` | :class:`.ModeData` | :class:`.ModeSolverData`
             A data instance to compute the dot product with.
         conjugate : bool, optional
-            If ``True`` (default), the dot product is defined as above. If ``False``, the definition
-            is similar, but without the complex conjugation of the fields.
+            If ``True`` (default), conjugate the other dataset's fields before computing the
+            overlap. If ``False``, no conjugation is applied.
         use_colocated_fields : bool = False
             If ``True``, force colocated field integration regardless of the monitor's
             ``colocate`` setting.
         bidirectional : bool = True
             If ``True`` (default), computes the symmetric bidirectional overlap:
-            ``1/4 * integral(E1 x H2 + H1 x E2) dS``.
-            If ``False``, computes just: ``1/2 * integral(E1 x H2) dS``.
+            ``1/4 * integral(E1 x H2* + H1 x E2*) dS``.
+            If ``False``, computes just: ``1/2 * integral(E1 x H2*) dS``.
 
         Returns
         -------
@@ -1170,11 +1167,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         ----
             The dot product with and without conjugation is equivalent (up to a phase) for
             modes in lossless waveguides but differs for modes in lossy materials. In that case,
-            the conjugated dot product can be interpreted as the fraction of the power of the first
-            mode carried by the second, but modes are not orthogonal with respect to that product
+            the conjugated dot product can be interpreted as the fraction of the power carried by
+            the second mode, but modes are not orthogonal with respect to that product
             and the sum of carried power fractions may be different from the total flux.
             In the non-conjugated definition, modes are orthogonal, but the interpretation of the
-            dot product power carried by a given mode is no longer valid.
+            dot product as power carried by a given mode is no longer valid.
         """
         dim1, dim2 = self._tangential_dims
 
@@ -1373,28 +1370,28 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         .. math:
 
-           \frac{1}{4} \int \left( E_0^* \times H_1 + H_0^* \times E_1 \right) \, {\rm d}S
+           \frac{1}{4} \int \left( E_0 \times H_1^* + H_0 \times E_1^* \right) \, {\rm d}S
 
         If ``bidirectional=False``, the dot product is instead:
 
         .. math:
 
-           \frac{1}{2} \int \left( E_0^* \times H_1 \right) \, {\rm d}S
+           \frac{1}{2} \int \left( E_0 \times H_1^* \right) \, {\rm d}S
 
         Parameters
         ----------
         field_data : :class:`.FieldData` | :class:`.ModeData` | :class:`.ModeSolverData`
             A data instance to compute the dot product with.
         conjugate : bool = True
-            If ``True`` (default), the dot product is defined as above. If ``False``, the definition
-            is similar, but without the complex conjugation of the fields.
+            If ``True`` (default), conjugate the other dataset's fields before computing the
+            overlap. If ``False``, no conjugation is applied.
         use_colocated_fields : bool = False
             If ``True``, force colocated field integration regardless of the monitor's
             ``colocate`` setting.
         bidirectional : bool = True
             If ``True`` (default), computes the symmetric bidirectional overlap:
-            ``1/4 * integral(E1 x H2 + H1 x E2) dS``.
-            If ``False``, computes just: ``1/2 * integral(E1 x H2) dS``.
+            ``1/4 * integral(E1 x H2* + H1 x E2*) dS``.
+            If ``False``, computes just: ``1/2 * integral(E1 x H2*) dS``.
 
         Returns
         -------
