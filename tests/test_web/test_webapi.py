@@ -580,6 +580,23 @@ def test_delete_old(set_api_key):
 
 
 @responses.activate
+@pytest.mark.parametrize("payload", [7, "data", ["data", 3], None])
+def test_http_interceptor_handles_non_dict_json_payload(set_api_key, payload):
+    """Non-dict JSON payloads should be returned without unwrapping."""
+    import tidy3d.web.core.http_util as http_module
+
+    request_path = f"tidy3d/non-dict/{type(payload).__name__}"
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/{request_path}",
+        json=payload,
+        status=200,
+    )
+
+    assert http_module.http.get(request_path) == payload
+
+
+@responses.activate
 def test_get_tasks(set_api_key):
     responses.add(
         responses.GET,
