@@ -196,34 +196,6 @@ class DerivativeInfo:
             return coords
         return np.nan_to_num(coords, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
 
-    @staticmethod
-    def _evaluate_with_interpolators(
-        interpolators: dict[str, Callable[[ArrayFloat], ArrayComplex]],
-        coords: ArrayFloat,
-    ) -> dict[str, ArrayComplex]:
-        """Evaluate field components at coordinates using cached interpolators.
-
-        Parameters
-        ----------
-        interpolators : dict
-            Dictionary mapping field component names to ``RegularGridInterpolator`` objects.
-        coords : np.ndarray
-            Spatial coordinates (N, 3) where fields are evaluated.
-
-        Returns
-        -------
-        dict[str, np.ndarray]
-            Dictionary mapping component names to field values at coordinates.
-        """
-        auto_cfg = config.adjoint
-        float_dtype = auto_cfg.gradient_dtype_float
-        complex_dtype = auto_cfg.gradient_dtype_complex
-
-        coords = DerivativeInfo._nan_to_num_if_needed(coords)
-        if coords.dtype != float_dtype and coords.dtype != complex_dtype:
-            coords = coords.astype(float_dtype, copy=False)
-        return {name: interp(coords) for name, interp in interpolators.items()}
-
     def create_interpolators(self, dtype: Optional[np.dtype[Any]] = None) -> dict[str, Any]:
         """Create interpolators for field components and permittivity data.
 

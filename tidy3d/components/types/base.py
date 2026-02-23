@@ -276,12 +276,6 @@ Direction = Literal["+", "-"]
 """ monitors """
 
 
-def _list_to_tuple(v: Any) -> Any:
-    if isinstance(v, list):
-        return tuple(v)
-    return v
-
-
 EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FreqArray = ArrayFloat1D

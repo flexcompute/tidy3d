@@ -732,9 +732,7 @@ class LocalCache:
         return True
 
 
-def _copy_and_hash(
-    source: Path, dest: Optional[Path], existing_hash: Optional[str] = None
-) -> tuple[str, int]:
+def _copy_and_hash(source: Path, dest: Optional[Path]) -> tuple[str, int]:
     """Copy ``source`` to ``dest`` while computing SHA256 checksum.
 
     Parameters
@@ -743,9 +741,6 @@ def _copy_and_hash(
         Source file path.
     dest : Path or None
         Destination file path. If ``None``, no copy is performed.
-    existing_hash : str, optional
-        If provided alongside ``dest`` and ``dest`` already exists, skip copying when hashes match.
-
     Returns
     -------
     tuple[str, int]

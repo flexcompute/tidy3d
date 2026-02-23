@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import copy
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.data.data_array import SpatialDataArray
@@ -17,6 +17,9 @@ from tidy3d.components.types import Coordinate, ScalarSymmetry
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import MICROMETER
 from tidy3d.log import log
+
+if TYPE_CHECKING:
+    from tidy3d.compat import Self
 
 FieldDataset = Union[
     SpatialDataArray, discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset])
@@ -48,6 +51,17 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
     @abstractmethod
     def field_components(self) -> dict:
         """Maps the field components to their associated data."""
+
+    @model_validator(mode="after")
+    def _warn_missing_fields(self) -> Self:
+        """Warn when a monitor field has no data available."""
+        for field_name, field_data in self.field_components.items():
+            if field_data is None:
+                log.warning(
+                    f"No data is available for monitor '{self.monitor.name}' field '{field_name}'. "
+                    "This is typically caused by monitor not intersecting any solid medium."
+                )
+        return self
 
     def field_name(self, val: str = "") -> str:
         """Gets the name of the fields to be plot."""
@@ -133,13 +147,3 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
                 new_property = new_property.sel_inside(bounds=clip_bounds)
 
         return new_property
-
-    def _post_init_validators(self) -> None:
-        """Call validators taking ``self`` that get run after init."""
-        # validate that data exists for all fields
-        for field_name, field in self.field_components.items():
-            if field is None:
-                log.warning(
-                    f"No data is available for monitor '{self.monitor.name}' field '{field_name}'. "
-                    "This is typically caused by monitor not intersecting any solid medium."
-                )

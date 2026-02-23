@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
+import tidy3d.plugins.invdes.region as invdes_region
 from tidy3d.exceptions import SetupError
 from tidy3d.plugins.expressions import ModeAmp, ModePower
 from tidy3d.plugins.invdes.initialization import (
@@ -156,6 +157,34 @@ def test_region_inf_size():
     region = region.updated_copy(size=inf_size)
     params_0_inf = region.params_zeros
     _ = region.to_structure(params_0_inf)
+
+
+def test_region_constructor_validates_transformations():
+    """Ensure constructor-time validation evaluates transformations."""
+    with pytest.raises(ValidationError, match="Could not evaluate transformations"):
+        _ = make_design_region().updated_copy(
+            initialization_spec=CustomInitializationSpec(params=np.ones((2, 2, 2)))
+        )
+
+
+def test_region_constructor_validates_penalties(monkeypatch):
+    """Ensure constructor-time validation evaluates penalties."""
+
+    def _raise_penalty_error(self, x, pixel_size):
+        raise RuntimeError("penalty failure")
+
+    monkeypatch.setattr(tdi.ErosionDilationPenalty, "evaluate", _raise_penalty_error)
+
+    with pytest.raises(ValidationError, match="Could not evaluate penalties"):
+        _ = make_design_region()
+
+
+def test_region_constructor_rejects_invalid_penalty_gradients(monkeypatch):
+    """Ensure constructor-time validation rejects NaN/Inf penalty gradients."""
+    monkeypatch.setattr(invdes_region, "grad", lambda fn: lambda x: np.array([np.nan]))
+
+    with pytest.raises(ValidationError, match="Penalty gradients contain 'NaN' or 'Inf' values"):
+        _ = make_design_region()
 
 
 def test_region_priority():

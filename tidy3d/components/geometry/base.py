@@ -2729,9 +2729,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         # First, check if the face is outside the simulation domain in which case set the
         # face gradient to 0.
-        bounds_normal, bounds_perp = self.pop_axis(
-            np.array(derivative_info.bounds).T, axis=axis_normal
-        )
+        bounds_normal, _ = self.pop_axis(np.array(derivative_info.bounds).T, axis=axis_normal)
         coord_normal_face = bounds_normal[min_max_index]
 
         if min_max_index == 0:
@@ -2756,10 +2754,6 @@ class Box(SimplePlaneIntersection, Centered):
             return 0.0
 
         is_2d = np.any(is_2d_map)
-
-        sim_bounds_normal, sim_bounds_perp = self.pop_axis(
-            np.array(derivative_info.simulation_bounds).T, axis=axis_normal
-        )
 
         # Build point grid
         adaptive_spacing = derivative_info.adaptive_vjp_spacing()

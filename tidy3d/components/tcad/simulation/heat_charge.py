@@ -2091,12 +2091,6 @@ class HeatChargeSimulation(AbstractSimulation):
         """Returns True if 'HeatFromElectricSource' has been defined."""
         return any(isinstance(source, HeatFromElectricSource) for source in self.sources)
 
-    def _get_charge_type(self) -> Literal["ac", "dc"]:
-        if isinstance(self.analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
-            return "ac"
-        else:
-            return "dc"
-
     def _get_ssac_frequency_and_amplitude(self) -> tuple[ArrayFloat1D, FiniteFloat]:
         if not isinstance(self.analysis_spec, (SSACAnalysis, IsothermalSSACAnalysis)):
             raise SetupError(
