@@ -1,30 +1,3 @@
-solid tetrahedron.stl
-facet normal 1.0 1.0 1.0
-  outer loop
-    vertex 1.0 0.0 0.0
-    vertex 0.0 1.0 0.0
-    vertex 0.0 0.0 1.0
-  endloop
-endfacet
-facet normal -1.0 0.0 0.0
-  outer loop
-    vertex 0.0 0.0 0.0
-    vertex 0.0 0.0 1.0
-    vertex 0.0 1.0 0.0
-  endloop
-endfacet
-facet normal 0.0 -1.0 0.0
-  outer loop
-    vertex 0.0 0.0 0.0
-    vertex 1.0 0.0 0.0
-    vertex 0.0 0.0 1.0
-  endloop
-endfacet
-facet normal 0.0 0.0 -1.0
-  outer loop
-    vertex 0.0 0.0 0.0
-    vertex 0.0 1.0 0.0
-    vertex 1.0 0.0 0.0
-  endloop
-endfacet
-endsolid tetrahedron.stl
+version https://git-lfs.github.com/spec/v1
+oid sha256:20ad5bc89b7e58caa142a6de72af79a955018d32a373024f06e57aa340fb6cef
+size 554
