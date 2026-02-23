@@ -1116,6 +1116,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         field_data: FieldData | ModeData | ModeSolverData,
         conjugate: bool = True,
         use_colocated_fields: bool = False,
+        bidirectional: bool = True,
     ) -> FreqDataArray | FreqModeDataArray:
         r"""Dot product (modal overlap) with another :class:`.FieldData` object. Both datasets have
         to be frequency-domain data associated with a 2D monitor.
@@ -1136,6 +1137,12 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
            \frac{1}{4} \int \left( E_0^* \times H_1 + H_0^* \times E_1 \right) \, {\rm d}S
 
+        If ``bidirectional=False``, the dot product is instead:
+
+        .. math:
+
+           \frac{1}{2} \int \left( E_0^* \times H_1 \right) \, {\rm d}S
+
         Parameters
         ----------
         field_data : :class:`.FieldData` | :class:`.ModeData` | :class:`.ModeSolverData`
@@ -1146,6 +1153,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         use_colocated_fields : bool = False
             If ``True``, force colocated field integration regardless of the monitor's
             ``colocate`` setting.
+        bidirectional : bool = True
+            If ``True`` (default), computes the symmetric bidirectional overlap:
+            ``1/4 * integral(E1 x H2 + H1 x E2) dS``.
+            If ``False``, computes just: ``1/2 * integral(E1 x H2) dS``.
 
         Returns
         -------
@@ -1206,7 +1217,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         E2 = (prepped_fields_other["E" + u], prepped_fields_other["E" + v])
         H2 = (prepped_fields_other["H" + u], prepped_fields_other["H" + v])
 
-        dot_result = _dot_numpy(E1, H1, E2, H2, dS_numpy, conjugate=conjugate)
+        dot_result = _dot_numpy(
+            E1, H1, E2, H2, dS_numpy, conjugate=conjugate, bidirectional=bidirectional
+        )
 
         # Squeeze out mode_index dimension (axis 1) if not in final_coords
         if "mode_index" not in final_coords:
@@ -1344,6 +1357,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         field_data: FieldData | ModeData | ModeSolverData,
         conjugate: bool = True,
         use_colocated_fields: bool = False,
+        bidirectional: bool = True,
     ) -> FreqDataArray | MixedModeDataArray:
         r"""Outer dot product (pairwise modal overlap matrix) with another :class:`.FieldData`
         object.
@@ -1361,6 +1375,12 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
            \frac{1}{4} \int \left( E_0^* \times H_1 + H_0^* \times E_1 \right) \, {\rm d}S
 
+        If ``bidirectional=False``, the dot product is instead:
+
+        .. math:
+
+           \frac{1}{2} \int \left( E_0^* \times H_1 \right) \, {\rm d}S
+
         Parameters
         ----------
         field_data : :class:`.FieldData` | :class:`.ModeData` | :class:`.ModeSolverData`
@@ -1371,6 +1391,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         use_colocated_fields : bool = False
             If ``True``, force colocated field integration regardless of the monitor's
             ``colocate`` setting.
+        bidirectional : bool = True
+            If ``True`` (default), computes the symmetric bidirectional overlap:
+            ``1/4 * integral(E1 x H2 + H1 x E2) dS``.
+            If ``False``, computes just: ``1/2 * integral(E1 x H2) dS``.
 
         Returns
         -------
@@ -1435,7 +1459,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         H1 = (prepped_fields_self["H" + u], prepped_fields_self["H" + v])
         E2 = (prepped_fields_other["E" + u], prepped_fields_other["E" + v])
         H2 = (prepped_fields_other["H" + u], prepped_fields_other["H" + v])
-        numpy_result = _outer_dot_numpy(E1, H1, E2, H2, dS_numpy, conjugate=conjugate)
+        numpy_result = _outer_dot_numpy(
+            E1, H1, E2, H2, dS_numpy, conjugate=conjugate, bidirectional=bidirectional
+        )
 
         # Determine return type based on final_coords
         # numpy_result shape is (n_freq, n_modes_0, n_modes_1)
@@ -1987,6 +2013,7 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         field_data: ElectromagneticFieldData,
         conjugate: bool = True,
         use_colocated_fields: bool = False,
+        bidirectional: bool = True,
     ) -> xr.DataArray:
         """Inner product is not defined for time-domain data."""
         raise DataError("Inner product is not defined for time-domain data.")
@@ -1996,6 +2023,7 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         field_data: ElectromagneticFieldData,
         conjugate: bool = True,
         use_colocated_fields: bool = False,
+        bidirectional: bool = True,
     ) -> xr.DataArray:
         """Outer dot product is not defined for time-domain data."""
         raise DataError("Outer dot product is not defined for time-domain data.")
