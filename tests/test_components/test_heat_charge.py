@@ -1291,6 +1291,17 @@ def test_heat_charge_mnt_data(
                     _ = mnt_data.updated_copy(J=tri_grid)
 
 
+def test_heat_charge_monitor_data_warns_for_missing_fields(monitors):
+    """Ensure monitor-data missing-field warnings are emitted at initialization."""
+    temp_monitor_empty = monitors[3]
+    with AssertLogLevel("WARNING", contains_str="field 'temperature'"):
+        _ = td.TemperatureData(monitor=temp_monitor_empty, temperature=None)
+
+    potential_monitor_empty = monitors[7]
+    with AssertLogLevel("WARNING", contains_str="field 'potential'"):
+        _ = td.SteadyPotentialData(monitor=potential_monitor_empty, potential=None)
+
+
 def test_grid_spec_validation(grid_specs):
     """Tests whether unstructured grids can be created and different validators for them."""
     # Test UniformUnstructuredGrid

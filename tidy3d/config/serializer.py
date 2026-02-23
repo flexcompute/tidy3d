@@ -89,7 +89,6 @@ def build_document(
             value=value,
             path=(key,),
             descriptions=descriptions,
-            is_new=key not in document,
         )
     return document
 
@@ -107,7 +106,6 @@ def _apply_value(
     value: Any,
     path: Path,
     descriptions: dict[Path, str],
-    is_new: bool,
 ) -> None:
     description = descriptions.get(path)
     if isinstance(value, dict):
@@ -121,7 +119,6 @@ def _apply_value(
                 value=sub_value,
                 path=(*path, sub_key),
                 descriptions=descriptions,
-                is_new=not isinstance(existing, Table) or sub_key not in table,
             )
         if key in container:
             container[key] = table

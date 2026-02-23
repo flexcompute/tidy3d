@@ -60,7 +60,7 @@ from .geometry.mesh import TriangleMesh
 from .geometry.utils import _shift_object, flatten_groups, traverse_geometries
 from .geometry.utils_2d import get_bounds, snap_coordinate_to_grid, subdivide
 from .grid.grid import Coords, Grid
-from .grid.grid_spec import AutoGrid, GridSpec, UniformGrid
+from .grid.grid_spec import GridSpec, UniformGrid
 from .lumped_element import LumpedElementType
 from .medium import (
     AbstractCustomMedium,
@@ -1498,9 +1498,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             structure_priority_mode=self.scene.structure_priority_mode,
             cached_merged_geos=self._internal_layerrefinement_merged_geos,
         )
-
-        # This would AutoGrid the in-plane directions of the 2D materials
-        # return self._grid_corrections_2dmaterials(grid)
         return grid, lines
 
     @cached_property
@@ -1514,9 +1511,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         """
 
         grid, _ = self._grid_and_snapping_lines
-
-        # This would AutoGrid the in-plane directions of the 2D materials
-        # return self._grid_corrections_2dmaterials(grid)
         return grid
 
     @cached_property
@@ -5644,63 +5638,6 @@ class Simulation(AbstractYeeGridSimulation):
     def all_structures(self) -> list[Structure]:
         """List of all structures in the simulation (including the ``Simulation.medium``)."""
         return self.scene.all_structures
-
-    def _grid_corrections_2dmaterials(self, grid: Grid) -> Grid:
-        """Correct the grid if 2d materials are present, using their volumetric equivalents."""
-        if not any(isinstance(structure.medium, Medium2D) for structure in self.structures):
-            return grid
-
-        # when there are 2D materials, need to make grid again with volumetric_structures
-        # generated using the first grid
-
-        volumetric_structures = [Structure(geometry=self.geometry, medium=self.medium)]
-        volumetric_structures += self._volumetric_structures_grid(grid)
-
-        volumetric_grid = self.grid_spec.make_grid(
-            structures=volumetric_structures,
-            symmetry=self.symmetry,
-            sources=self.sources,
-            num_pml_layers=self.num_pml_layers,
-            lumped_elements=self.lumped_elements,
-            internal_snapping_points=self.internal_snapping_points,
-            internal_override_structures=self.internal_override_structures,
-            cached_merged_geos=self._internal_layerrefinement_merged_geos,
-        )
-
-        # Handle 2D materials if ``AutoGrid`` is used for in-plane directions
-        # must use original grid for the normal directions of all 2d materials
-        grid_axes = [False, False, False]
-        # must use volumetric grid for the ``AutoGrid`` in-plane directions of 2d materials
-        volumetric_grid_axes = [False, False, False]
-        with log as consolidated_logger:
-            for structure in self.structures:
-                if isinstance(structure.medium, Medium2D):
-                    normal = structure.geometry._normal_2dmaterial
-                    grid_axes[normal] = True
-                    for axis, grid_axis in enumerate(
-                        [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
-                    ):
-                        if isinstance(grid_axis, AutoGrid):
-                            if axis != normal:
-                                volumetric_grid_axes[axis] = True
-                            else:
-                                consolidated_logger.warning(
-                                    "Using 'AutoGrid' for the normal direction of a 2D material "
-                                    "may generate a grid that is not sufficiently fine."
-                                )
-        coords_all = [None, None, None]
-        for axis in range(3):
-            if grid_axes[axis] and volumetric_grid_axes[axis]:
-                raise ValidationError(
-                    "Unable to generate grid. Cannot use 'AutoGrid' for "
-                    "an axis that is in-plane to one 2D material and normal to another."
-                )
-            if volumetric_grid_axes[axis]:
-                coords_all[axis] = volumetric_grid.boundaries.to_list[axis]
-            else:
-                coords_all[axis] = grid.boundaries.to_list[axis]
-
-        return Grid(boundaries=Coords(**dict(zip("xyz", coords_all))))
 
     @cached_property
     def num_cells(self) -> int:
