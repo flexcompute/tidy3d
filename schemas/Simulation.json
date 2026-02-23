@@ -794,14 +794,6 @@
           ],
           "default": null
         },
-        "normalization_grid": {
-          "default": "colocated",
-          "enum": [
-            "colocated",
-            "staggered"
-          ],
-          "type": "string"
-        },
         "num_freqs": {
           "default": 1,
           "maximum": 20,
@@ -867,6 +859,10 @@
           "const": "AstigmaticGaussianBeam",
           "default": "AstigmaticGaussianBeam",
           "type": "string"
+        },
+        "use_colocated_normalization": {
+          "default": true,
+          "type": "boolean"
         },
         "waist_distances": {
           "default": [
@@ -3885,14 +3881,6 @@
           ],
           "default": null
         },
-        "normalization_grid": {
-          "default": "colocated",
-          "enum": [
-            "colocated",
-            "staggered"
-          ],
-          "type": "string"
-        },
         "size": {
           "maxItems": 3,
           "minItems": 3,
@@ -3948,6 +3936,10 @@
           "const": "CustomFieldSource",
           "default": "CustomFieldSource",
           "type": "string"
+        },
+        "use_colocated_normalization": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -7800,14 +7792,6 @@
           ],
           "default": null
         },
-        "normalization_grid": {
-          "default": "colocated",
-          "enum": [
-            "colocated",
-            "staggered"
-          ],
-          "type": "string"
-        },
         "num_freqs": {
           "default": 1,
           "maximum": 20,
@@ -7873,6 +7857,10 @@
           "const": "GaussianBeam",
           "default": "GaussianBeam",
           "type": "string"
+        },
+        "use_colocated_normalization": {
+          "default": true,
+          "type": "boolean"
         },
         "waist_distance": {
           "default": 0.0,
@@ -11423,14 +11411,6 @@
           ],
           "default": null
         },
-        "normalization_grid": {
-          "default": "colocated",
-          "enum": [
-            "colocated",
-            "staggered"
-          ],
-          "type": "string"
-        },
         "num_freqs": {
           "default": 1,
           "maximum": 20,
@@ -11492,6 +11472,10 @@
           "const": "ModeSource",
           "default": "ModeSource",
           "type": "string"
+        },
+        "use_colocated_normalization": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -13144,14 +13128,6 @@
           ],
           "default": null
         },
-        "normalization_grid": {
-          "default": "colocated",
-          "enum": [
-            "colocated",
-            "staggered"
-          ],
-          "type": "string"
-        },
         "num_freqs": {
           "default": 3,
           "maximum": 20,
@@ -13217,6 +13193,10 @@
           "const": "PlaneWave",
           "default": "PlaneWave",
           "type": "string"
+        },
+        "use_colocated_normalization": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -15129,14 +15109,6 @@
           ],
           "default": null
         },
-        "normalization_grid": {
-          "default": "colocated",
-          "enum": [
-            "colocated",
-            "staggered"
-          ],
-          "type": "string"
-        },
         "num_freqs": {
           "default": 1,
           "maximum": 20,
@@ -15202,6 +15174,10 @@
           "const": "TFSF",
           "default": "TFSF",
           "type": "string"
+        },
+        "use_colocated_normalization": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [

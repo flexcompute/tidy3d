@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 from pydantic import Field, NonNegativeInt, PositiveFloat, field_validator, model_validator
@@ -54,13 +54,14 @@ class PlanarSource(Source, ABC):
 
     _plane_validator = assert_plane()
 
-    normalization_grid: Literal["colocated", "staggered"] = Field(
-        "colocated",
-        title="Normalization Grid",
-        description="Grid type used when computing the flux for source power normalization. "
-        "'colocated' uses fields interpolated to grid cell boundaries, matching monitors "
-        "with ``colocate=True``. 'staggered' uses fields at native Yee grid positions, "
-        "matching monitors with ``colocate=False``.",
+    use_colocated_normalization: bool = Field(
+        True,
+        title="Use Colocated Normalization",
+        description="If ``True`` (default), source power normalization uses fields interpolated "
+        "to grid cell boundaries, matching monitors with ``colocate=True``. If ``False``, "
+        "uses fields at native Yee grid positions, matching monitors with ``colocate=False``. "
+        "Flux agreement between source normalization and monitors is much better when both "
+        "use the same colocation setting.",
     )
 
     @cached_property
@@ -716,13 +717,14 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
         "to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
     )
 
-    normalization_grid: Literal["colocated", "staggered"] = Field(
-        "colocated",
-        title="Normalization Grid",
-        description="Grid type used when computing the flux for source power normalization. "
-        "'colocated' uses fields interpolated to grid cell boundaries, matching monitors "
-        "with ``colocate=True``. 'staggered' uses fields at native Yee grid positions, "
-        "matching monitors with ``colocate=False``.",
+    use_colocated_normalization: bool = Field(
+        True,
+        title="Use Colocated Normalization",
+        description="If ``True`` (default), source power normalization uses fields interpolated "
+        "to grid cell boundaries, matching monitors with ``colocate=True``. If ``False``, "
+        "uses fields at native Yee grid positions, matching monitors with ``colocate=False``. "
+        "Flux agreement between source normalization and monitors is much better when both "
+        "use the same colocation setting.",
     )
 
     @cached_property

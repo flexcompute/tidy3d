@@ -27,10 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added baseband source time classes (`BasebandStep`, `BasebandGaussianPulse`, `BasebandRectangularPulse`, `BasebandCustomSourceTime`) for transient RF simulations with real-valued time signals.
 - Monitors with `colocate=False` now compute flux, dot product, and outer dot product directly on the
   Yee grid without interpolation, improving accuracy.
-- Added `normalization_grid` field on `PlaneWave`, `GaussianBeam`, `AstigmaticGaussianBeam`,
-  `ModeSource`, and `TFSF` sources. Set to `"staggered"` to match monitors with `colocate=False`,
-  or keep the default `"colocated"` to match monitors with `colocate=True`. Using the same grid
-  for both source normalization and monitor computation gives the most consistent results.
+- Added `use_colocated_normalization` field on `PlaneWave`, `GaussianBeam`,
+  `AstigmaticGaussianBeam`, `ModeSource`, and `TFSF` sources. Set to ``False`` to match
+  monitors with ``colocate=False``, or keep the default ``True`` to match monitors with
+  ``colocate=True``. Flux agreement between source normalization and monitors is much
+  better when both use the same colocation setting.
 
 ### Breaking Changes
 - `web.Batch(simulations=...)` now requires string task names when simulations are passed as a dictionary. Numeric keys (for example `0`, `1`) are no longer converted automatically; convert them to strings first (for example `"0"`, `"1"`).

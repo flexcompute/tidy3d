@@ -4298,20 +4298,19 @@ class Simulation(AbstractYeeGridSimulation):
         return self
 
     def _warn_source_monitor_normalization_grid(self) -> None:
-        """Warn when a source's normalization_grid doesn't match monitor colocate settings."""
+        """Warn when a source's use_colocated_normalization doesn't match monitor colocate settings."""
         with log as consolidated_logger:
             for src_idx, source in enumerate(self.sources):
                 if not isinstance(source, (PlanarSource, TFSF)):
                     continue
-                norm_grid = source.normalization_grid
-                expects_colocate = norm_grid == "colocated"
+                expects_colocate = source.use_colocated_normalization
                 for monitor in self.monitors:
                     if not isinstance(monitor, (AbstractFieldMonitor, AbstractAuxFieldMonitor)):
                         continue
                     if monitor.colocate != expects_colocate:
                         consolidated_logger.warning(
                             f"Source '{source.name}' has "
-                            f"'normalization_grid={norm_grid}', which expects monitors "
+                            f"'use_colocated_normalization={expects_colocate}', which expects monitors "
                             f"with 'colocate={expects_colocate}'. However, monitor "
                             f"'{monitor.name}' has "
                             f"'colocate={monitor.colocate}'. This mismatch may lead to "

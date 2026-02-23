@@ -8228,14 +8228,6 @@
           ],
           "default": null
         },
-        "normalization_grid": {
-          "default": "colocated",
-          "enum": [
-            "colocated",
-            "staggered"
-          ],
-          "type": "string"
-        },
         "num_freqs": {
           "default": 1,
           "maximum": 20,
@@ -8297,6 +8289,10 @@
           "const": "ModeSource",
           "default": "ModeSource",
           "type": "string"
+        },
+        "use_colocated_normalization": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
