@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `custom_vjp` and new custom run functions that provide hooks into adjoint for custom gradient calculations.
 - Changed default `num_points` in `EMEModeSpec.interp_spec` from 3 to 5 for improved accuracy of frequency interpolation.
 - Unstructured data plots are now "crinkled", showing the full mesh elements that cover given monitor boundaries. Previously, the mesh elements were "clipped" to the monitor boundaries.
+- Mode solver field data is now normalized based on the monitor or mode solver `conjugated_dot_product` setting.
 
 ### Fixed
 - Fixed intermittent "API key not found" errors in parallel job launches by making configuration directory detection race-safe.

@@ -76,6 +76,8 @@ from .medium import (
 )
 from .microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from .monitor import (
+    AbstractAuxFieldMonitor,
+    AbstractFieldMonitor,
     AbstractFieldProjectionMonitor,
     AbstractModeMonitor,
     AuxFieldTimeMonitor,
@@ -105,6 +107,7 @@ from .source.field import (
     FixedAngleSpec,
     GaussianBeam,
     ModeSource,
+    PlanarSource,
     PlaneWave,
 )
 from .source.frame import PECFrame
@@ -3155,6 +3158,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._source_homogeneous_isotropic()
         self._check_normalize_index()
         self._validate_low_freq_smoothing()
+        self._warn_source_monitor_normalization_grid()
         self._validate_scene()
         return self
 
@@ -4292,6 +4296,28 @@ class Simulation(AbstractYeeGridSimulation):
                     f"Low frequency smoothing specification refers to monitor '{monitor}' which either does not exist or is not a mode monitor."
                 )
         return self
+
+    def _warn_source_monitor_normalization_grid(self) -> None:
+        """Warn when a source's normalization_grid doesn't match monitor colocate settings."""
+        with log as consolidated_logger:
+            for src_idx, source in enumerate(self.sources):
+                if not isinstance(source, (PlanarSource, TFSF)):
+                    continue
+                norm_grid = source.normalization_grid
+                expects_colocate = norm_grid == "colocated"
+                for monitor in self.monitors:
+                    if not isinstance(monitor, (AbstractFieldMonitor, AbstractAuxFieldMonitor)):
+                        continue
+                    if monitor.colocate != expects_colocate:
+                        consolidated_logger.warning(
+                            f"Source '{source.name}' has "
+                            f"'normalization_grid={norm_grid}', which expects monitors "
+                            f"with 'colocate={expects_colocate}'. However, monitor "
+                            f"'{monitor.name}' has "
+                            f"'colocate={monitor.colocate}'. This mismatch may lead to "
+                            "slightly inaccurate power normalization.",
+                            custom_loc=["sources", src_idx],
+                        )
 
     def _validate_scene(self) -> Self:
         _ = self.scene

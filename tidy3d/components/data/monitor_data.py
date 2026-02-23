@@ -610,8 +610,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         dim2 = self._tangential_dims[1]
         dS_EuHv = np.outer(cell_sizes[dim1], dual_sizes[dim2])
         dS_EvHu = np.outer(dual_sizes[dim1], cell_sizes[dim2])
-        dS_Ew = np.outer(cell_sizes[dim1], cell_sizes[dim2])
-        dS_Hw = np.outer(dual_sizes[dim1], dual_sizes[dim2])
+        dS_Ew = np.outer(dual_sizes[dim1], dual_sizes[dim2])
+        dS_Hw = np.outer(cell_sizes[dim1], cell_sizes[dim2])
 
         return (
             DataArray(dS_EuHv, dims=self._tangential_dims),
@@ -874,9 +874,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         prepped_fields = {key: field.transpose(*dim_order).values for key, field in fields.items()}
 
-        final_coords = {"f": test_field.coords["f"].values}
-        if "mode_index" in test_field.coords:
-            final_coords["mode_index"] = test_field.coords["mode_index"].values
+        non_spatial_dims = [d for d in test_field.dims if d not in tangential_dims]
+        final_coords = {d: test_field.coords[d].values for d in non_spatial_dims}
 
         return final_coords, prepped_fields
 
@@ -1178,6 +1177,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             fields_self = self._tangential_fields
             fields_other = field_data._tangential_fields
             if not self._fields_share_tangential_coords(fields_self, fields_other):
+                log.warning(
+                    "Tangential field coordinates do not match in 'dot'; "
+                    "switching to colocated-based computation."
+                )
                 use_yee_grid = False
 
         if use_yee_grid:
@@ -1222,7 +1225,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             if key not in fields_b:
                 return False
             for dim in self._tangential_dims:
-                if not np.array_equal(
+                if not np.allclose(
                     fields_a[key].coords[dim].values,
                     fields_b[key].coords[dim].values,
                 ):
@@ -1404,6 +1407,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             fields_self = self._tangential_fields
             fields_other = field_data._tangential_fields
             if not self._fields_share_tangential_coords(fields_self, fields_other):
+                log.warning(
+                    "Tangential field coordinates do not match in 'outer_dot'; "
+                    "switching to colocated-based computation."
+                )
                 use_yee_grid = False
 
         if use_yee_grid:
@@ -3140,11 +3147,9 @@ class ModeSolverData(ModeData):
         "interpolating in frequency.",
     )
 
-    def _normalize_modes(self, conjugate: Optional[bool] = None) -> None:
+    def _normalize_modes(self) -> None:
         """Normalize modes. Note: this modifies ``self`` in-place."""
-        if conjugate is None:
-            conjugate = self.monitor.conjugated_dot_product
-        self_dot = self.dot(self, conjugate=conjugate)
+        self_dot = self.dot(self, conjugate=self.monitor.conjugated_dot_product)
         scaling = np.sqrt(np.sign(np.real(self_dot)) * self_dot)
         for field in self.field_components.values():
             field /= scaling

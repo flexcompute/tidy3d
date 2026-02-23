@@ -202,11 +202,6 @@ def _dot_numpy(
     E2u, E2v = E2
     H2u, H2v = H2
 
-    assert E1u.shape == H1v.shape
-    assert E1v.shape == H1u.shape
-    assert E2u.shape == H2v.shape
-    assert E2v.shape == H2u.shape
-
     if conjugate:
         E1u, E1v = np.conj(E1u), np.conj(E1v)
         H1u, H1v = np.conj(H1u), np.conj(H1v)
@@ -274,11 +269,6 @@ def _outer_dot_numpy(
     H1u, H1v = H1
     E2u, E2v = E2
     H2u, H2v = H2
-
-    assert E1u.shape == H1v.shape
-    assert E1v.shape == H1u.shape
-    assert E2u.shape == H2v.shape
-    assert E2v.shape == H2u.shape
 
     dS_EuHv, dS_EvHu = dS
 
