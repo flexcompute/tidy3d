@@ -191,6 +191,14 @@ class TopologyDesignRegion(DesignRegion):
         "the value is automatically assigned based on `structure_priority_mode` in the `Simulation`.",
     )
 
+    @model_validator(mode="after")
+    def _run_validation_checks(self) -> Self:
+        """Run topology-specific validation checks after model initialization."""
+        self._validate_eps_values()
+        self._validate_penalty_value()
+        self._validate_gradients()
+        return self
+
     def _validate_eps_values(self) -> None:
         """Validate the epsilon values by evaluating the transformations."""
         try:

@@ -248,9 +248,9 @@ def generate_rf_material_library_doc():
     with open(fname, "w") as f:
         # Write file header
         header = (
-            "*******************\n"
+            ".. _RF Material Library:\n\n"
             "RF Material Library\n"
-            "*******************\n\n"
+            "-------------------\n\n"
             ".. currentmodule:: tidy3d\n\n"
             "The RF material library is a dictionary containing various dispersive models for real-world RF materials. To use the materials in the library, import it first by:\n\n"
             ">>> from tidy3d.rf import rf_material_library\n\n"
@@ -310,7 +310,7 @@ def generate_rf_material_library_doc():
                 if isinstance(mat, MaterialItemFreqRange):
                     row["type"] = "Frequency-range parametrized"
                 else:
-                    row["type"] = "Standard"
+                    row["type"] = "Pre-fitted"
 
                 # Load medium
                 # medium is a property for all variant types (VariantItemFreqRange* and VariantItem)

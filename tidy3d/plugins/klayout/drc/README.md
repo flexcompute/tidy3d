@@ -35,6 +35,9 @@ export PATH="$PATH:/Applications/klayout.app/Contents/MacOS"
 ```
 Run `check_installation()` again to check if the application is found.
 
+On macOS, Homebrew cask app-suite installs such as
+`/Applications/KLayout/klayout.app/Contents/MacOS/klayout` are also discovered automatically.
+
 2. Provide a KLayout DRC runset script that defines the source (input gds) using `source($gdsfile)` and the report (output result file) using `report("DRC results", $resultsfile)`. Please refer to the [DRC Runset Formatting section below](#drc-runset-file-formatting).
 
 ## DRC Runset File Formatting

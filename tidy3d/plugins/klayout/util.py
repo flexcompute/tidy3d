@@ -11,6 +11,11 @@ import tidy3d as td
 if TYPE_CHECKING:
     from typing import Union
 
+_MACOS_BREW_CASK_KLAYOUT_ROOTS: tuple[Path, ...] = (
+    Path("/opt/homebrew/Caskroom/klayout"),
+    Path("/usr/local/Caskroom/klayout"),
+)
+
 
 def check_installation(raise_error: bool = False) -> Union[str, None]:
     """Return the path to the KLayout executable if it is installed.
@@ -68,13 +73,17 @@ def _common_install_locations() -> tuple[Path, ...]:
         apps = [
             Path("/Applications") / "KLayout.app" / "Contents" / "MacOS" / "klayout",
             Path("/Applications") / "klayout.app" / "Contents" / "MacOS" / "klayout",
+            Path("/Applications") / "KLayout" / "klayout.app" / "Contents" / "MacOS" / "klayout",
+            Path("/Applications") / "KLayout" / "KLayout.app" / "Contents" / "MacOS" / "klayout",
+            Path("/Applications") / "klayout" / "klayout.app" / "Contents" / "MacOS" / "klayout",
             home / "Applications" / "KLayout.app" / "Contents" / "MacOS" / "klayout",
+            home / "Applications" / "KLayout" / "klayout.app" / "Contents" / "MacOS" / "klayout",
         ]
         brew_bins = [
             Path("/opt/homebrew/bin/klayout"),
             Path("/usr/local/bin/klayout"),
         ]
-        paths.extend(apps + brew_bins)
+        paths.extend(apps + brew_bins + list(_brew_cask_klayout_binaries()))
     elif system == "windows":
         program_files = [
             Path(os.environ.get("ProgramFiles", r"C:\\Program Files")),
@@ -113,3 +122,24 @@ def _common_install_locations() -> tuple[Path, ...]:
             seen.add(path)
 
     return tuple(unique_paths)
+
+
+def _brew_cask_klayout_binaries() -> tuple[Path, ...]:
+    """Return likely KLayout binaries from Homebrew Cask installation roots on macOS."""
+
+    binaries: list[Path] = []
+    for cask_root in _MACOS_BREW_CASK_KLAYOUT_ROOTS:
+        if not cask_root.exists():
+            continue
+        for version_dir in cask_root.iterdir():
+            if not version_dir.is_dir():
+                continue
+            for app_dir_name in ("KLayout", "klayout"):
+                app_dir = version_dir / app_dir_name
+                binaries.extend(
+                    [
+                        app_dir / "klayout.app" / "Contents" / "MacOS" / "klayout",
+                        app_dir / "KLayout.app" / "Contents" / "MacOS" / "klayout",
+                    ]
+                )
+    return tuple(binaries)

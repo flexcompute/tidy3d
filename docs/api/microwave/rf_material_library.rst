@@ -1,6 +1,7 @@
-*******************
+.. _RF Material Library:
+
 RF Material Library
-*******************
+-------------------
 
 .. currentmodule:: tidy3d
 
@@ -42,12 +43,12 @@ To access the details of a variant, including material model and references, use
 .. table::
    :widths: auto
 
-   ====================== ======== ============== ============= ===========
-   Variant                Type     Valid for      Model Info    Reference  
-   ====================== ======== ============== ============= ===========
-   ``'design'`` (default) Standard 1.0 - 30.0 GHz 5-pole, lossy [1]        
-   ``'process'``          Standard 1.0 - 30.0 GHz 5-pole, lossy [1]        
-   ====================== ======== ============== ============= ===========
+   ====================== ========== ============== ============= ===========
+   Variant                Type       Valid for      Model Info    Reference  
+   ====================== ========== ============== ============= ===========
+   ``'design'`` (default) Pre-fitted 1.0 - 30.0 GHz 5-pole, lossy [1]        
+   ``'process'``          Pre-fitted 1.0 - 30.0 GHz 5-pole, lossy [1]        
+   ====================== ========== ============== ============= ===========
 
 Examples:
 
@@ -254,12 +255,12 @@ References:
 .. table::
    :widths: auto
 
-   ======================== ======== ============= ============= ===========
-   Variant                  Type     Valid for     Model Info    Reference  
-   ======================== ======== ============= ============= ===========
-   ``'lowloss'``            Standard 1.0 - 3.0 GHz 5-pole, lossy [1]        
-   ``'standard'`` (default) Standard 1.0 - 3.0 GHz 5-pole, lossy [2]        
-   ======================== ======== ============= ============= ===========
+   ======================== ========== ============= ============= ===========
+   Variant                  Type       Valid for     Model Info    Reference  
+   ======================== ========== ============= ============= ===========
+   ``'lowloss'``            Pre-fitted 1.0 - 3.0 GHz 5-pole, lossy [1]        
+   ``'standard'`` (default) Pre-fitted 1.0 - 3.0 GHz 5-pole, lossy [2]        
+   ======================== ========== ============= ============= ===========
 
 Examples:
 
@@ -676,12 +677,12 @@ References:
 .. table::
    :widths: auto
 
-   ====================== ======== ============== ============= ===========
-   Variant                Type     Valid for      Model Info    Reference  
-   ====================== ======== ============== ============= ===========
-   ``'design'`` (default) Standard 1.0 - 30.0 GHz 5-pole, lossy [1]        
-   ``'process'``          Standard 1.0 - 30.0 GHz 5-pole, lossy [1]        
-   ====================== ======== ============== ============= ===========
+   ====================== ========== ============== ============= ===========
+   Variant                Type       Valid for      Model Info    Reference  
+   ====================== ========== ============== ============= ===========
+   ``'design'`` (default) Pre-fitted 1.0 - 30.0 GHz 5-pole, lossy [1]        
+   ``'process'``          Pre-fitted 1.0 - 30.0 GHz 5-pole, lossy [1]        
+   ====================== ========== ============== ============= ===========
 
 Examples:
 
@@ -698,12 +699,12 @@ References:
 .. table::
    :widths: auto
 
-   ====================== ======== ============== ============= ===========
-   Variant                Type     Valid for      Model Info    Reference  
-   ====================== ======== ============== ============= ===========
-   ``'design'`` (default) Standard 1.0 - 30.0 GHz 5-pole, lossy [1]        
-   ``'process'``          Standard 1.0 - 30.0 GHz 5-pole, lossy [1]        
-   ====================== ======== ============== ============= ===========
+   ====================== ========== ============== ============= ===========
+   Variant                Type       Valid for      Model Info    Reference  
+   ====================== ========== ============== ============= ===========
+   ``'design'`` (default) Pre-fitted 1.0 - 30.0 GHz 5-pole, lossy [1]        
+   ``'process'``          Pre-fitted 1.0 - 30.0 GHz 5-pole, lossy [1]        
+   ====================== ========== ============== ============= ===========
 
 Examples:
 
@@ -720,12 +721,12 @@ References:
 .. table::
    :widths: auto
 
-   ====================== ======== ============== ============= ===========
-   Variant                Type     Valid for      Model Info    Reference  
-   ====================== ======== ============== ============= ===========
-   ``'design'`` (default) Standard 8.0 - 40.0 GHz 5-pole, lossy [1]        
-   ``'process'``          Standard 8.0 - 40.0 GHz 5-pole, lossy [1]        
-   ====================== ======== ============== ============= ===========
+   ====================== ========== ============== ============= ===========
+   Variant                Type       Valid for      Model Info    Reference  
+   ====================== ========== ============== ============= ===========
+   ``'design'`` (default) Pre-fitted 8.0 - 40.0 GHz 5-pole, lossy [1]        
+   ``'process'``          Pre-fitted 8.0 - 40.0 GHz 5-pole, lossy [1]        
+   ====================== ========== ============== ============= ===========
 
 Examples:
 
@@ -742,12 +743,12 @@ References:
 .. table::
    :widths: auto
 
-   ====================== ======== ============== ============= ===========
-   Variant                Type     Valid for      Model Info    Reference  
-   ====================== ======== ============== ============= ===========
-   ``'design'`` (default) Standard 8.0 - 40.0 GHz 5-pole, lossy [1]        
-   ``'process'``          Standard 8.0 - 40.0 GHz 5-pole, lossy [1]        
-   ====================== ======== ============== ============= ===========
+   ====================== ========== ============== ============= ===========
+   Variant                Type       Valid for      Model Info    Reference  
+   ====================== ========== ============== ============= ===========
+   ``'design'`` (default) Pre-fitted 8.0 - 40.0 GHz 5-pole, lossy [1]        
+   ``'process'``          Pre-fitted 8.0 - 40.0 GHz 5-pole, lossy [1]        
+   ====================== ========== ============== ============= ===========
 
 Examples:
 
