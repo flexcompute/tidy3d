@@ -1485,7 +1485,7 @@ class Scene(Tidy3dBaseModel):
             # Use matplotlib colormap if available, otherwise fallback to grayscale
             if mpl is not None:
                 cmap_name = _get_colormap(reverse=reverse)
-                cmap = mpl.colormaps[cmap_name]
+                cmap = mpl.colormaps.get_cmap(cmap_name)
                 rgba = tuple(float(component) for component in cmap(color_value))
             else:
                 # Grayscale fallback when matplotlib is unavailable
