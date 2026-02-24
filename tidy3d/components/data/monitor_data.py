@@ -1228,10 +1228,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             if key not in fields_b:
                 return False
             for dim in self._tangential_dims:
-                if not np.allclose(
-                    fields_a[key].coords[dim].values,
-                    fields_b[key].coords[dim].values,
-                ):
+                coords_a = fields_a[key].coords[dim].values
+                coords_b = fields_b[key].coords[dim].values
+                if coords_a.size != coords_b.size:
+                    return False
+                if not np.allclose(coords_a, coords_b):
                     return False
         return True
 

@@ -4307,6 +4307,9 @@ class Simulation(AbstractYeeGridSimulation):
                 for monitor in self.monitors:
                     if not isinstance(monitor, (AbstractFieldMonitor, AbstractAuxFieldMonitor)):
                         continue
+                    # Skip internally generated adjoint monitors (colocate=False by design)
+                    if monitor.name.startswith("adjoint_"):
+                        continue
                     if monitor.colocate != expects_colocate:
                         consolidated_logger.warning(
                             f"Source '{source.name}' has "
