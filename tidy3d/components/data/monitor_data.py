@@ -1173,15 +1173,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             In the non-conjugated definition, modes are orthogonal, but the interpretation of the
             dot product as power carried by a given mode is no longer valid.
         """
-        dim1, dim2 = self._tangential_dims
-
-        # Try to use raw Yee-grid fields (avoids interpolation)
-        use_yee_grid = (
-            not self.monitor.colocate
-            and not field_data.monitor.colocate
-            and not use_colocated_fields
-        )
-        if use_yee_grid:
+        use_colocated = self.monitor.colocate or field_data.monitor.colocate or use_colocated_fields
+        if not use_colocated:
             fields_self = self._tangential_fields
             fields_other = field_data._tangential_fields
             if not self._fields_share_tangential_coords(fields_self, fields_other):
@@ -1189,18 +1182,18 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                     "Tangential field coordinates do not match in 'dot'; "
                     "switching to colocated-based computation."
                 )
-                use_yee_grid = False
+                use_colocated = True
 
-        if use_yee_grid:
-            dS_EuHv, dS_EvHu, _, _ = self._diff_area_at_yee_positions(
-                truncate_to_monitor_bounds=False
-            )
-            dS_numpy = (dS_EuHv.to_numpy(), dS_EvHu.to_numpy())
-        else:
+        if use_colocated:
             fields_self = self._colocated_tangential_fields
             fields_other = field_data._interpolated_tangential_fields(self._plane_grid_boundaries)
             d_area = self._diff_area.to_numpy()
             dS_numpy = (d_area, d_area)
+        else:
+            dS_EuHv, dS_EvHu, _, _ = self._diff_area_at_yee_positions(
+                truncate_to_monitor_bounds=False
+            )
+            dS_numpy = (dS_EuHv.to_numpy(), dS_EvHu.to_numpy())
 
         # Determine broadcast behavior and final dimensions (returns numpy arrays directly)
         final_coords, prepped_fields_self, prepped_fields_other = self._prepare_fields_for_dot(
@@ -1416,15 +1409,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         if not all(a == b for a, b in zip(tan_dims, field_data._tangential_dims)):
             raise DataError("Tangential dimensions must match between the two monitors.")
 
-        dim1, dim2 = self._tangential_dims
-
-        # Try to use raw Yee-grid fields (avoids interpolation)
-        use_yee_grid = (
-            not self.monitor.colocate
-            and not field_data.monitor.colocate
-            and not use_colocated_fields
-        )
-        if use_yee_grid:
+        use_colocated = self.monitor.colocate or field_data.monitor.colocate or use_colocated_fields
+        if not use_colocated:
             fields_self = self._tangential_fields
             fields_other = field_data._tangential_fields
             if not self._fields_share_tangential_coords(fields_self, fields_other):
@@ -1432,18 +1418,18 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                     "Tangential field coordinates do not match in 'outer_dot'; "
                     "switching to colocated-based computation."
                 )
-                use_yee_grid = False
+                use_colocated = True
 
-        if use_yee_grid:
-            dS_EuHv, dS_EvHu, _, _ = self._diff_area_at_yee_positions(
-                truncate_to_monitor_bounds=False
-            )
-            dS_numpy = (dS_EuHv.to_numpy(), dS_EvHu.to_numpy())
-        else:
+        if use_colocated:
             fields_self = self._colocated_tangential_fields
             fields_other = field_data._interpolated_tangential_fields(self._plane_grid_boundaries)
             d_area = self._diff_area.to_numpy()
             dS_numpy = (d_area, d_area)
+        else:
+            dS_EuHv, dS_EvHu, _, _ = self._diff_area_at_yee_positions(
+                truncate_to_monitor_bounds=False
+            )
+            dS_numpy = (dS_EuHv.to_numpy(), dS_EvHu.to_numpy())
 
         # Determine broadcast behavior and final dimensions (returns numpy arrays directly)
         final_coords, prepped_fields_self, prepped_fields_other = (
