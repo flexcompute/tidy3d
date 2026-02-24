@@ -506,7 +506,7 @@ class AbstractModeMonitor(AbstractOverlapMonitor):
         cls: type[ModeMonitor], val: ModeSpec, info: FieldValidationInfo
     ) -> ModeSpec:
         """Warn if number of modes is too large."""
-        if val.num_modes > WARN_NUM_MODES:
+        if isinstance(val.num_modes, int) and val.num_modes > WARN_NUM_MODES:
             log.warning(
                 f"A large number ({val.num_modes}) of modes requested in monitor "
                 f"'{info.field_name}'. This can lead to solver slow-down and increased cost. "

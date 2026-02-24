@@ -111,7 +111,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         size : tuple[float, float, float] = [inf, inf, inf]
             Size of the 2D plane (size along ``axis`` is ignored)
         interior_disjoint_geometries: bool = False
-            If ``True``, geometries on the plane must not be overlapping.
+            If ``True``, geometries of different properties on the plane must be interior disjoint.
         keep_metal_only: bool = False
             If ``True``, drop all other structures that are not made of metal.
         Returns

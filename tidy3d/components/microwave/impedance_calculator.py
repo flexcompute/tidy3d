@@ -82,6 +82,31 @@ class ImpedanceCalculator(MicrowaveBaseModel):
         description="Definition of contour integral for computing current.",
     )
 
+    def compute_voltage_current(
+        self, em_field: IntegrableMonitorDataType
+    ) -> tuple[VoltageIntegralResultType, CurrentIntegralResultType]:
+        """Compute voltage and current for the supplied ``em_field`` using ``voltage_integral`` and
+        ``current_integral``. None is returned for the integral that is not defined.
+
+        Parameters
+        ----------
+        em_field : :class:`.IntegrableMonitorDataType`
+            The electromagnetic field data that will be used for computing the voltage and current.
+
+        Returns
+        -------
+        tuple[VoltageIntegralResultType, CurrentIntegralResultType]
+            Tuple of (voltage, current). None is returned for the integral that is not defined.
+        """
+        AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
+        voltage = None
+        current = None
+        if self.voltage_integral is not None:
+            voltage = self.voltage_integral.compute_voltage(em_field)
+        if self.current_integral is not None:
+            current = self.current_integral.compute_current(em_field)
+        return (voltage, current)
+
     def compute_impedance(
         self,
         em_field: IntegrableMonitorDataType,
@@ -111,15 +136,7 @@ class ImpedanceCalculator(MicrowaveBaseModel):
             tuple of (impedance, voltage, current).
         """
 
-        AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
-
-        voltage = None
-        current = None
-        # If both voltage and current integrals have been defined then impedance is computed directly
-        if self.voltage_integral is not None:
-            voltage = self.voltage_integral.compute_voltage(em_field)
-        if self.current_integral is not None:
-            current = self.current_integral.compute_current(em_field)
+        voltage, current = self.compute_voltage_current(em_field)
 
         # If only one of the integrals has been provided, then the computation falls back to using
         # total power (flux) with Ohm's law to compute the missing quantity. The input field should

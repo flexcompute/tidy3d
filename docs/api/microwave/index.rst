@@ -40,7 +40,7 @@ The following sections discuss:
 * `Impedance Calculator`_: Post-processing tool for impedance calculation from electromagnetic fields
 * `RF Mode Analysis`_: Performing RF-specific mode analysis, like computing the characteristic impedance of transmission line modes
 * `Lumped Port & Elements`_: Lumped excitations and circuit elements
-* `Wave Port`_: Port excitation based on modal fields
+* `Wave Port`_: Port excitation based on modal fields or terminal modal fields
 * `Radiation & Scattering`_: Useful features for antenna and scattering problems
 * `RF Output Data`_: Data containers for microwave simulation results
 

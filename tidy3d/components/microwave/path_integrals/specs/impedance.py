@@ -2,22 +2,40 @@
 
 from __future__ import annotations
 
+from abc import abstractmethod
 from typing import TYPE_CHECKING, Optional, Union
 
+import numpy as np
 from pydantic import Field, model_validator
 
+from tidy3d.components.geometry.bound_ops import bounds_contains
 from tidy3d.components.microwave.base import MicrowaveBaseModel
+from tidy3d.components.microwave.path_integrals.specs.current import AxisAlignedCurrentIntegralSpec
 from tidy3d.components.microwave.path_integrals.types import (
     CurrentPathSpecType,
     VoltagePathSpecType,
 )
+from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
+    from tidy3d.components.geometry.base import Box
+    from tidy3d.components.microwave.types import ImpedanceDef
+    from tidy3d.components.types.base import Direction
 
 
-class AutoImpedanceSpec(MicrowaveBaseModel):
+class AbstractImpedanceSpec(MicrowaveBaseModel):
+    """Abstract base class for impedance specifications."""
+
+    @abstractmethod
+    def _check_path_integrals_within_box(self, box: Box) -> None:
+        """Raise SetupError if a path specification is
+        defined outside a candidate box.
+        """
+
+
+class AutoImpedanceSpec(AbstractImpedanceSpec):
     """Specification for fully automatic transmission line impedance computation.
 
     Notes
@@ -27,8 +45,13 @@ class AutoImpedanceSpec(MicrowaveBaseModel):
         specifications are required.
     """
 
+    def _check_path_integrals_within_box(self, box: Box) -> None:
+        """Raise SetupError if a path specification is
+        defined outside a candidate box.
+        """
 
-class CustomImpedanceSpec(MicrowaveBaseModel):
+
+class CustomImpedanceSpec(AbstractImpedanceSpec):
     """Specification for custom transmission line voltages and currents in mode solvers.
 
     Notes
@@ -82,6 +105,72 @@ class CustomImpedanceSpec(MicrowaveBaseModel):
                 "Not a valid 'CustomImpedanceSpec', the 'voltage_spec' and 'current_spec' cannot both be 'None'."
             )
         return self
+
+    @property
+    def impedance_definition(self) -> ImpedanceDef:
+        """Determine the impedance definition based on provided path specifications.
+
+        Returns
+        -------
+        ImpedanceDef
+            The impedance definition type:
+            - VI: Both voltage and current specs provided.
+            - PI: Only current spec provided.
+            - PV: Only voltage spec provided.
+        """
+        if self.voltage_spec is not None and self.current_spec is not None:
+            return "VI"
+        elif self.current_spec is not None:
+            return "PI"
+        else:
+            return "PV"
+
+    def _check_path_integrals_within_box(self, box: Box) -> None:
+        """Raise 'SetupError' if a path specification is defined outside a candidate box."""
+        for spec, spec_type in [
+            (self.voltage_spec, "voltage"),
+            (self.current_spec, "current"),
+        ]:
+            if spec is None:
+                continue
+
+            box_bounds = box.bounds
+            # If the box is a plane (one dimension is zero), we need to ignore
+            # the bounds check along the normal axis
+            if box.size.count(0.0) == 1:
+                normal_axis = box._normal_axis
+                # Convert tuple to list so we can modify it
+                box_bounds = [list(box_bounds[0]), list(box_bounds[1])]
+                # Set the bounds along normal axis to match the spec bounds
+                box_bounds[0][normal_axis] = spec.bounds[0][normal_axis]
+                box_bounds[1][normal_axis] = spec.bounds[1][normal_axis]
+                # Convert back to tuple for bounds_contains
+                box_bounds = (tuple(box_bounds[0]), tuple(box_bounds[1]))
+
+            if not bounds_contains(
+                box_bounds, spec.bounds, fp_eps, np.finfo(np.float32).smallest_normal
+            ):
+                raise SetupError(
+                    "A 'CustomImpedanceSpec' must be setup with all path specifications defined within "
+                    f"the bounds of the mode solving plane. The 'CustomImpedanceSpec' was provided with a {spec_type} path specification with bounds "
+                    f"'{spec.bounds}', but the mode plane bounds are '{box.bounds}'."
+                )
+
+    @classmethod
+    def from_bounding_box(
+        cls, bounding_box: Box, current_sign: Direction = "+"
+    ) -> CustomImpedanceSpec:
+        """Create a custom impedance specification from a bounding box."""
+        return cls(
+            current_spec=AxisAlignedCurrentIntegralSpec(
+                center=bounding_box.center,
+                size=bounding_box.size,
+                sign=current_sign,
+                extrapolate_to_endpoints=False,
+                snap_contour_to_grid=True,
+            ),
+            voltage_spec=None,
+        )
 
 
 ImpedanceSpecType = Union[AutoImpedanceSpec, CustomImpedanceSpec]

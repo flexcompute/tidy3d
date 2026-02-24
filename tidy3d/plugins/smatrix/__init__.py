@@ -28,7 +28,7 @@ from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.modal import AstigmaticGaussianPort, GaussianPort, Port
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
-from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.plugins.smatrix.ports.wave import TerminalWavePort, WavePort
 
 # Instantiate on plugin import till we unite with toplevel
 warnings.filterwarnings(
@@ -60,5 +60,6 @@ __all__ = [
     "TerminalComponentModeler",
     "TerminalComponentModelerData",
     "TerminalPortDataArray",
+    "TerminalWavePort",
     "WavePort",
 ]

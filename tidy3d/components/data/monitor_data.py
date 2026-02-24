@@ -725,7 +725,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     def mode_area(self) -> FreqModeDataArray:
         r"""Effective mode area corresponding to a 2D monitor.
 
-        .. math:
+        .. math::
 
            \frac{\left(\int |E|^2 \, {\rm d}S\right)^2}{\int |E|^4 \, {\rm d}S}
         """
@@ -830,7 +830,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return self.fill_fraction(bounding_box)
 
     def dot(
-        self, field_data: Union[FieldData, ModeData, ModeSolverData], conjugate: bool = True
+        self,
+        field_data: Union[FieldData, ModeData, ModeSolverData],
+        conjugate: bool = True,
+        use_symmetric_form: bool = True,
     ) -> ModeAmpsDataArray:
         r"""Dot product (modal overlap) with another :class:`.FieldData` object. Both datasets have
         to be frequency-domain data associated with a 2D monitor. Along the tangential directions,
@@ -843,9 +846,17 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         The dot product is defined as:
 
-        .. math:
+        .. math::
 
            \frac{1}{4} \int \left( E_0 \times H_1^* + H_0^* \times E_1 \) \, {\rm d}S
+
+        when ``use_symmetric_form=True``, or as:
+
+        .. math::
+
+           \frac{1}{2} \int E_0 \times H_1^* \, {\rm d}S
+
+        when ``use_symmetric_form=False``.
 
         Parameters
         ----------
@@ -854,6 +865,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         conjugate : bool, optional
             If ``True`` (default), the dot product is defined as above. If ``False``, the definition
             is similar, but without the complex conjugation of the $H$ fields.
+        use_symmetric_form : bool, optional
+            If ``True`` (default), uses the symmetric form: 1/4 ∫ (E_0 × H_1* + H_0* × E_1) dS.
+            If ``False``, uses the asymmetric form: 1/2 ∫ (E_0 × H_1*) dS.
 
         Note
         ----
@@ -864,15 +878,27 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             and the sum of carried power fractions may be different from the total flux.
             In the non-conjugated definition, modes are orthogonal, but the interpretation of the
             dot product power carried by a given mode is no longer valid.
+
+        Note
+        ----
+            The symmetric form (``use_symmetric_form=True``) is the correct definition for the
+            mode orthogonality relation and ensures proper normalization of modal fields. The
+            asymmetric form (``use_symmetric_form=False``) is useful in other scenarios such as
+            transmission line analysis.
         """
 
         # Tangential fields for current and other field data
         fields_self = self._colocated_tangential_fields
-
-        if conjugate:
-            fields_self = {key: field.conj() for key, field in fields_self.items()}
-
         fields_other = field_data._interpolated_tangential_fields(self._plane_grid_boundaries)
+
+        # Apply conjugation based on the form and conjugate flag
+        # For symmetric form: conjugate fields_self to get (E₀* × H₁) - (H₀* × E₁)
+        # For asymmetric form: conjugate fields_other to get E₀ × H₁*
+        if conjugate:
+            if use_symmetric_form:
+                fields_self = {key: field.conj() for key, field in fields_self.items()}
+            else:
+                fields_other = {key: field.conj() for key, field in fields_other.items()}
         dim1, dim2 = self._tangential_dims
         d_area = self._diff_area
 
@@ -885,11 +911,16 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             # Arrays are same shape, so we can use numpy
             e_self_x_h_other = fields_self["E" + dim1].values * fields_other["H" + dim2].values
             e_self_x_h_other -= fields_self["E" + dim2].values * fields_other["H" + dim1].values
-            h_self_x_e_other = fields_self["H" + dim1].values * fields_other["E" + dim2].values
-            h_self_x_e_other -= fields_self["H" + dim2].values * fields_other["E" + dim1].values
-            integrand = xr.DataArray(
-                e_self_x_h_other - h_self_x_e_other, coords=fields_self["E" + dim1].coords
-            )
+
+            if use_symmetric_form:
+                h_self_x_e_other = fields_self["H" + dim1].values * fields_other["E" + dim2].values
+                h_self_x_e_other -= fields_self["H" + dim2].values * fields_other["E" + dim1].values
+                integrand = xr.DataArray(
+                    e_self_x_h_other - h_self_x_e_other, coords=fields_self["E" + dim1].coords
+                )
+            else:
+                integrand = xr.DataArray(e_self_x_h_other, coords=fields_self["E" + dim1].coords)
+
             integrand *= d_area
         else:
             # Broadcasting is needed, which may be complicated depending on the dimensions order.
@@ -901,12 +932,17 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             # Cross products of fields
             e_self_x_h_other = fields_self["E" + dim1] * fields_other["H" + dim2]
             e_self_x_h_other -= fields_self["E" + dim2] * fields_other["H" + dim1]
-            h_self_x_e_other = fields_self["H" + dim1] * fields_other["E" + dim2]
-            h_self_x_e_other -= fields_self["H" + dim2] * fields_other["E" + dim1]
-            integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
+
+            if use_symmetric_form:
+                h_self_x_e_other = fields_self["H" + dim1] * fields_other["E" + dim2]
+                h_self_x_e_other -= fields_self["H" + dim2] * fields_other["E" + dim1]
+                integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
+            else:
+                integrand = e_self_x_h_other * d_area
 
         # Integrate over plane
-        return ModeAmpsDataArray(0.25 * integrand.sum(dim=d_area.dims))
+        coefficient = 0.25 if use_symmetric_form else 0.5
+        return ModeAmpsDataArray(coefficient * integrand.sum(dim=d_area.dims))
 
     def _tangential_fields_match_coords(self, coords: ArrayFloat2D) -> bool:
         """Check if the tangential fields already match given coords in the tangential plane."""
@@ -954,7 +990,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return fields
 
     def outer_dot(
-        self, field_data: Union[FieldData, ModeData], conjugate: bool = True
+        self,
+        field_data: Union[FieldData, ModeData],
+        conjugate: bool = True,
+        use_symmetric_form: bool = True,
     ) -> MixedModeDataArray:
         r"""Dot product (modal overlap) with another :class:`.FieldData` object.
 
@@ -966,9 +1005,17 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         The dot product is defined as:
 
-        .. math:
+        .. math::
 
            \frac{1}{4} \int \left( E_0 \times H_1^* + H_0^* \times E_1 \) \, {\rm d}S
+
+        when ``use_symmetric_form=True``, or as:
+
+        .. math::
+
+           \frac{1}{2} \int E_0 \times H_1^* \, {\rm d}S
+
+        when ``use_symmetric_form=False``.
 
         Parameters
         ----------
@@ -977,6 +1024,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         conjugate : bool = True
             If ``True`` (default), the dot product is defined as above. If ``False``, the definition
             is similar, but without the complex conjugation of the $H$ fields.
+        use_symmetric_form : bool, optional
+            If ``True`` (default), uses the symmetric form: 1/4 ∫ (E_0 × H_1* + H_0* × E_1) dS.
+            If ``False``, uses the asymmetric form: 1/2 ∫ (E_0 × H_1*) dS.
 
         Returns
         -------
@@ -995,12 +1045,18 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         # Tangential fields for current
         fields_self = self._colocated_tangential_fields
-        if conjugate:
-            fields_self = {component: field.conj() for component, field in fields_self.items()}
 
         # Tangential fields for other data
-
         fields_other = field_data._interpolated_tangential_fields(self._plane_grid_boundaries)
+
+        # Apply conjugation based on the form and conjugate flag
+        # For symmetric form: conjugate fields_self to get (E₀* × H₁) - (H₀* × E₁)
+        # For asymmetric form: conjugate fields_other to get E₀ × H₁*
+        if conjugate:
+            if use_symmetric_form:
+                fields_self = {key: field.conj() for key, field in fields_self.items()}
+            else:
+                fields_other = {key: field.conj() for key, field in fields_other.items()}
 
         # Tangential field component names
         dim1, dim2 = tan_dims
@@ -1058,9 +1114,12 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
             # Cross products of fields
             e_self_x_h_other = e_self_1 * h_other_2 - e_self_2 * h_other_1
-            h_self_x_e_other = h_self_1 * e_other_2 - h_self_2 * e_other_1
 
-            summand = 0.25 * (e_self_x_h_other - h_self_x_e_other) * d_area
+            if use_symmetric_form:
+                h_self_x_e_other = h_self_1 * e_other_2 - h_self_2 * e_other_1
+                summand = 0.25 * (e_self_x_h_other - h_self_x_e_other) * d_area
+            else:
+                summand = 0.5 * e_self_x_h_other * d_area
             return summand
 
         result = self._outer_fn_summation(

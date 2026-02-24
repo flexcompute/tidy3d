@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from pydantic import Field, PositiveFloat, field_validator, model_validator
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from tidy3d.components.data.data_array import FreqDataArray
     from tidy3d.components.data.sim_data import SimulationData
     from tidy3d.components.grid.grid import Grid, YeeGrid
-    from tidy3d.components.source.time import GaussianPulse
+    from tidy3d.components.source.time import SourceTimeType
     from tidy3d.components.types import FreqArray, Size
 
 DEFAULT_COAX_SOURCE_NUM_POINTS = 11
@@ -115,7 +115,11 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         return self
 
     def to_source(
-        self, source_time: GaussianPulse, snap_center: Optional[float] = None, grid: Grid = None
+        self,
+        source_time: SourceTimeType,
+        snap_center: Optional[float] = None,
+        grid: Optional[Grid] = None,
+        **kwargs: Any,
     ) -> CustomCurrentSource:
         """Create a current source from the lumped port."""
         # Discretized source amps are manually zeroed out later if they
@@ -225,7 +229,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         )
 
     def to_voltage_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
     ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
         center = list(self.center)
@@ -249,7 +253,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         )
 
     def to_current_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
     ) -> FieldMonitor:
         """Field monitor to compute port current."""
         center = list(self.center)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import Field
 
 from tidy3d.components.microwave.base import MicrowaveBaseModel
-from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
+from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec, MicrowaveModeSpecType
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 
 
@@ -22,7 +22,7 @@ class MicrowaveModeMonitorBase(MicrowaveBaseModel):
     precedence over the base :class:`.ModeSpec` field from :class:`.AbstractModeMonitor`.
     """
 
-    mode_spec: MicrowaveModeSpec = Field(
+    mode_spec: MicrowaveModeSpecType = Field(
         default_factory=MicrowaveModeSpec._default_without_license_warning,
         title="Mode Specification",
         description="Parameters to feed to mode solver which determine modes measured by monitor.",

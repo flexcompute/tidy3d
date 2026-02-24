@@ -20,6 +20,7 @@ from pydantic import (
 )
 
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
+from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
 from tidy3d.exceptions import (
@@ -4919,6 +4920,9 @@ class Simulation(AbstractYeeGridSimulation):
                 symmetry=self.symmetry,
                 simulation_geometry=self.simulation_geometry,
                 label=f" for monitor '{monitor.name}'",
+                interior_disjoint_geometries=ModePlaneAnalyzer.apply_interior_disjoint_geometries(
+                    self.structure_priority_mode
+                ),
             )
 
     @cached_property

@@ -102,6 +102,7 @@ class AxisAlignedVoltageIntegralSpec(AxisAlignedPathIntegralSpec):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        plot_markers: bool = True,
         **path_kwargs: Any,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
@@ -116,6 +117,8 @@ class AxisAlignedVoltageIntegralSpec(AxisAlignedPathIntegralSpec):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        plot_markers : bool = True
+            Whether to plot endpoint markers (+ and -). Default is ``True``.
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -134,17 +137,22 @@ class AxisAlignedVoltageIntegralSpec(AxisAlignedPathIntegralSpec):
         # Plot the path
         plot_params = plot_params_voltage_path.include_kwargs(**path_kwargs)
         plot_kwargs = plot_params.to_kwargs()
-        ax.plot(xs, ys, markevery=[0, -1], **plot_kwargs)
+        if plot_markers:
+            ax.plot(xs, ys, markevery=[0, -1], **plot_kwargs)
+        else:
+            # Plot without markers
+            ax.plot(xs, ys, **{**plot_kwargs, "marker": ""})
 
         # Plot special end points
-        end_kwargs = plot_params_voltage_plus.include_kwargs(**path_kwargs).to_kwargs()
-        start_kwargs = plot_params_voltage_minus.include_kwargs(**path_kwargs).to_kwargs()
+        if plot_markers:
+            end_kwargs = plot_params_voltage_plus.include_kwargs(**path_kwargs).to_kwargs()
+            start_kwargs = plot_params_voltage_minus.include_kwargs(**path_kwargs).to_kwargs()
 
-        if self.sign == "-":
-            start_kwargs, end_kwargs = end_kwargs, start_kwargs
+            if self.sign == "-":
+                start_kwargs, end_kwargs = end_kwargs, start_kwargs
 
-        ax.plot(xs[0], ys[0], **start_kwargs)
-        ax.plot(xs[1], ys[1], **end_kwargs)
+            ax.plot(xs[0], ys[0], **start_kwargs)
+            ax.plot(xs[1], ys[1], **end_kwargs)
         return ax
 
 
@@ -167,6 +175,7 @@ class Custom2DVoltageIntegralSpec(Custom2DPathIntegralSpec):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        plot_markers: bool = True,
         **path_kwargs: Any,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
@@ -181,6 +190,8 @@ class Custom2DVoltageIntegralSpec(Custom2DPathIntegralSpec):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        plot_markers : bool = True
+            Whether to plot endpoint markers (+ and -). Default is ``True``.
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -199,12 +210,17 @@ class Custom2DVoltageIntegralSpec(Custom2DPathIntegralSpec):
         plot_kwargs = plot_params.to_kwargs()
         xs = self.vertices[:, 0]
         ys = self.vertices[:, 1]
-        ax.plot(xs, ys, markevery=[0, -1], **plot_kwargs)
+        if plot_markers:
+            ax.plot(xs, ys, markevery=[0, -1], **plot_kwargs)
+        else:
+            # Plot without markers
+            ax.plot(xs, ys, **{**plot_kwargs, "marker": ""})
 
         # Plot special end points
-        end_kwargs = plot_params_voltage_plus.include_kwargs(**path_kwargs).to_kwargs()
-        start_kwargs = plot_params_voltage_minus.include_kwargs(**path_kwargs).to_kwargs()
-        ax.plot(xs[0], ys[0], **start_kwargs)
-        ax.plot(xs[-1], ys[-1], **end_kwargs)
+        if plot_markers:
+            end_kwargs = plot_params_voltage_plus.include_kwargs(**path_kwargs).to_kwargs()
+            start_kwargs = plot_params_voltage_minus.include_kwargs(**path_kwargs).to_kwargs()
+            ax.plot(xs[0], ys[0], **start_kwargs)
+            ax.plot(xs[-1], ys[-1], **end_kwargs)
 
         return ax

@@ -1164,6 +1164,88 @@ def test_mode_spec_with_microwave_mode_spec():
         td.MicrowaveModeSpec(num_modes=2, impedance_specs=impedance_specs)
 
 
+def test_mode_spec_preserved_in_mode_solver_data_roundtrip():
+    """Test that MicrowaveModeSpec fields survive the ModeSolverData -> MicrowaveModeSolverData conversion.
+
+    The mode solver internally creates a ModeSolverData (whose monitor field is typed as
+    ModeSolverMonitor) then converts it to MicrowaveModeSolverData. Pydantic v2 serializes
+    nested models based on the declared field type, so model_dump() on ModeSolverData drops
+    subclass-specific fields like impedance_specs. This test verifies the fix preserves them.
+    """
+    from tidy3d.components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
+    from tidy3d.components.microwave.data.monitor_data import MicrowaveModeSolverData
+
+    custom_spec = td.CustomImpedanceSpec(
+        current_spec=td.AxisAlignedCurrentIntegralSpec(center=(0, 0, 0), size=(2, 1, 0), sign="+")
+    )
+
+    # -- MicrowaveModeSpec --
+    mw_spec = td.MicrowaveModeSpec(num_modes=1, impedance_specs=custom_spec)
+    mw_mon = td.MicrowaveModeSolverMonitor(
+        center=(0, 0, 0), size=(2, 0, 6), freqs=[2e14], mode_spec=mw_spec, name="test"
+    )
+
+    x, y, z = [-1, 1, 3], [-2, 0], [-3, -1, 1, 3, 5]
+    grid = td.Grid(boundaries=td.Coords(x=x, y=y, z=z))
+    field_coords = {"x": x[:-1], "y": y[:-1], "z": z[:-1], "f": [2e14], "mode_index": np.arange(1)}
+    field = ScalarModeFieldDataArray(
+        (1 + 1j) * np.random.random((2, 1, 4, 1, 1)), coords=field_coords
+    )
+    n_complex = ModeIndexDataArray(
+        (1 + 1j) * np.random.random((1, 1)), coords={"f": [2e14], "mode_index": np.arange(1)}
+    )
+
+    data = td.ModeSolverData(
+        monitor=mw_mon,
+        Ex=field,
+        Ey=field,
+        Ez=field,
+        Hx=field,
+        Hy=field,
+        Hz=field,
+        n_complex=n_complex,
+        grid_expanded=grid,
+    )
+
+    # This is the conversion pattern used in ModeSolver.data_raw
+    converted = MicrowaveModeSolverData(
+        **data.model_dump(exclude={"type", "monitor"}), monitor=data.monitor
+    )
+    assert isinstance(converted.monitor.mode_spec.impedance_specs, td.CustomImpedanceSpec)
+
+    # -- MicrowaveTerminalModeSpec --
+    from tidy3d.components.microwave.mode_spec import MicrowaveTerminalModeSpec
+
+    terminal_spec = MicrowaveTerminalModeSpec(
+        num_modes=1,
+        impedance_specs={"T0": custom_spec},
+    )
+    terminal_mon = td.MicrowaveModeSolverMonitor(
+        center=(0, 0, 0), size=(2, 0, 6), freqs=[2e14], mode_spec=terminal_spec, name="test"
+    )
+
+    data_terminal = td.ModeSolverData(
+        monitor=terminal_mon,
+        Ex=field,
+        Ey=field,
+        Ez=field,
+        Hx=field,
+        Hy=field,
+        Hz=field,
+        n_complex=n_complex,
+        grid_expanded=grid,
+    )
+
+    converted_terminal = MicrowaveModeSolverData(
+        **data_terminal.model_dump(exclude={"type", "monitor"}), monitor=data_terminal.monitor
+    )
+    assert isinstance(converted_terminal.monitor.mode_spec, MicrowaveTerminalModeSpec)
+    assert "T0" in converted_terminal.monitor.mode_spec.impedance_specs
+    assert isinstance(
+        converted_terminal.monitor.mode_spec.impedance_specs["T0"], td.CustomImpedanceSpec
+    )
+
+
 def test_mode_solver_with_microwave_mode_spec():
     """Test running the mode locally and see if impedance is close to correct."""
 
@@ -1218,6 +1300,10 @@ def test_mode_solver_with_microwave_mode_spec():
     )
     mms = mms.updated_copy(mode_spec=microwave_spec_custom)
     mms_data: td.MicrowaveModeSolverData = mms.data
+
+    # Verify that CustomImpedanceSpec survives the ModeSolverData -> MicrowaveModeSolverData roundtrip
+    stored_specs = mms_data.monitor.mode_spec.impedance_specs
+    assert isinstance(stored_specs[0], td.CustomImpedanceSpec)
 
     # _, ax = plt.subplots(1, 1, tight_layout=True, figsize=(15, 15))
     # mms_data.field_components["Ez"].isel(mode_index=0, f=0).real.plot(ax=ax)
@@ -2199,12 +2285,18 @@ def test_microwave_mode_data_interpolation():
     """Test that MicrowaveModeSolverData interpolation correctly handles transmission_line_data."""
     from tidy3d.components.data.data_array import (
         CurrentFreqModeDataArray,
+        CurrentFreqTerminalModeDataArray,
         ImpedanceFreqModeDataArray,
+        ImpedanceFreqTerminalTerminalDataArray,
         ModeIndexDataArray,
         ScalarModeFieldDataArray,
         VoltageFreqModeDataArray,
+        VoltageFreqTerminalModeDataArray,
     )
-    from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+    from tidy3d.components.microwave.data.dataset import (
+        TransmissionLineDataset,
+        TransmissionLineTerminalDataset,
+    )
 
     # Setup coordinates with sparse frequencies
     x = [-1, 1, 3]
@@ -2258,6 +2350,55 @@ def test_microwave_mode_data_interpolation():
         Z0=impedance_data, voltage_coeffs=voltage_data, current_coeffs=current_data
     )
 
+    # Create transmission line terminal data with frequency dependence
+    terminal_labels = [f"t{i}" for i in range(len(mode_index))]
+    terminal_coords = {
+        "f": f_sparse,
+        "terminal_label": terminal_labels,
+        "mode_index": mode_index,
+    }
+    terminal_z0_coords = {
+        "f": f_sparse,
+        "terminal_label_out": terminal_labels,
+        "terminal_label_in": terminal_labels,
+    }
+
+    n_t = len(terminal_labels)
+    n_m = len(mode_index)
+    n_f = len(f_sparse)
+
+    terminal_z0_values = np.zeros((n_f, n_t, n_t))
+    terminal_voltage_values = np.zeros((n_f, n_t, n_m), dtype=complex)
+    terminal_current_values = np.zeros((n_f, n_t, n_m), dtype=complex)
+
+    for f_idx, freq in enumerate(f_sparse):
+        for t_idx in range(n_t):
+            # Diagonal Z0 matrix varying with frequency
+            terminal_z0_values[f_idx, t_idx, t_idx] = 50 + (freq / 1e14) * 5 + t_idx * 10
+            for m_idx in range(n_m):
+                terminal_voltage_values[f_idx, t_idx, m_idx] = ((freq / 1e14) + t_idx + m_idx) * (
+                    2 + 1j
+                )
+                terminal_current_values[f_idx, t_idx, m_idx] = ((freq / 1e14) + t_idx + m_idx) * (
+                    0.1 + 0.05j
+                )
+
+    terminal_z0_data = ImpedanceFreqTerminalTerminalDataArray(
+        terminal_z0_values, coords=terminal_z0_coords
+    )
+    terminal_voltage_data = VoltageFreqTerminalModeDataArray(
+        terminal_voltage_values, coords=terminal_coords
+    )
+    terminal_current_data = CurrentFreqTerminalModeDataArray(
+        terminal_current_values, coords=terminal_coords
+    )
+
+    tl_terminal_data = TransmissionLineTerminalDataset(
+        Z0=terminal_z0_data,
+        voltage_transform=terminal_voltage_data,
+        current_transform=terminal_current_data,
+    )
+
     # Create monitor
     monitor = td.MicrowaveModeSolverMonitor(
         center=(0, 0, 0),
@@ -2279,6 +2420,7 @@ def test_microwave_mode_data_interpolation():
         n_complex=index_data,
         grid_expanded=grid,
         transmission_line_data=tl_data,
+        transmission_line_terminal_data=tl_terminal_data,
     )
 
     # Interpolate to denser frequency grid
@@ -2378,6 +2520,83 @@ def test_microwave_mode_data_interpolation():
     expected_Z0_end_mode1 = 50 + 2 * 10 + 1 * 20
     assert np.allclose(Z0_at_end_mode1, expected_Z0_end_mode1, rtol=1e-6), (
         f"Z0 at endpoint should match original: expected {expected_Z0_end_mode1}, got {Z0_at_end_mode1}"
+    )
+
+    # Verify that transmission_line_terminal_data is also interpolated
+    assert data_interp_linear.transmission_line_terminal_data is not None, (
+        "transmission_line_terminal_data should be interpolated"
+    )
+    assert len(data_interp_linear.transmission_line_terminal_data.Z0.coords["f"]) == len(f_dense), (
+        "terminal Z0 should be interpolated to new frequencies"
+    )
+    assert len(
+        data_interp_linear.transmission_line_terminal_data.voltage_transform.coords["f"]
+    ) == len(f_dense), "terminal voltage_transform should be interpolated to new frequencies"
+    assert len(
+        data_interp_linear.transmission_line_terminal_data.current_transform.coords["f"]
+    ) == len(f_dense), "terminal current_transform should be interpolated to new frequencies"
+
+    # Check terminal Z0 interpolation accuracy at midpoint
+    # At f=1.5e14, terminal 0: Z0[0,0] = 50 + 1.5*5 + 0*10 = 57.5
+    terminal_Z0_mid = (
+        data_interp_linear.transmission_line_terminal_data.Z0.sel(f=f_mid, method="nearest")
+        .sel(terminal_label_out="t0", terminal_label_in="t0")
+        .values
+    )
+    expected_terminal_Z0 = 50 + 1.5 * 5 + 0 * 10
+    assert np.allclose(terminal_Z0_mid, expected_terminal_Z0, rtol=0.01), (
+        f"Terminal Z0 interpolation: expected {expected_terminal_Z0}, got {terminal_Z0_mid}"
+    )
+
+    # Check terminal voltage_transform interpolation accuracy at midpoint
+    # At f=1.5e14, terminal 0, mode 0: (1.5 + 0 + 0) * (2+1j) = 1.5*(2+1j)
+    terminal_v_mid = (
+        data_interp_linear.transmission_line_terminal_data.voltage_transform.sel(
+            f=f_mid, method="nearest"
+        )
+        .sel(terminal_label="t0", mode_index=0)
+        .values
+    )
+    expected_terminal_v = 1.5 * (2 + 1j)
+    assert np.allclose(terminal_v_mid, expected_terminal_v, rtol=0.01), (
+        f"Terminal voltage_transform interpolation: expected {expected_terminal_v}, got {terminal_v_mid}"
+    )
+
+    # Check terminal current_transform interpolation accuracy at midpoint
+    # At f=1.5e14, terminal 0, mode 0: (1.5 + 0 + 0) * (0.1+0.05j) = 1.5*(0.1+0.05j)
+    terminal_i_mid = (
+        data_interp_linear.transmission_line_terminal_data.current_transform.sel(
+            f=f_mid, method="nearest"
+        )
+        .sel(terminal_label="t0", mode_index=0)
+        .values
+    )
+    expected_terminal_i = 1.5 * (0.1 + 0.05j)
+    assert np.allclose(terminal_i_mid, expected_terminal_i, rtol=0.01), (
+        f"Terminal current_transform interpolation: expected {expected_terminal_i}, got {terminal_i_mid}"
+    )
+
+    # Test at endpoints to ensure terminal data matches original values
+    # At f=1e14, terminal 1: Z0[1,1] = 50 + 1*5 + 1*10 = 65
+    terminal_Z0_start = (
+        data_interp_linear.transmission_line_terminal_data.Z0.sel(f=1e14, method="nearest")
+        .sel(terminal_label_out="t1", terminal_label_in="t1")
+        .values
+    )
+    expected_terminal_Z0_start = 50 + 1 * 5 + 1 * 10
+    assert np.allclose(terminal_Z0_start, expected_terminal_Z0_start, rtol=1e-6), (
+        f"Terminal Z0 at endpoint: expected {expected_terminal_Z0_start}, got {terminal_Z0_start}"
+    )
+
+    # At f=2e14, terminal 1: Z0[1,1] = 50 + 2*5 + 1*10 = 70
+    terminal_Z0_end = (
+        data_interp_linear.transmission_line_terminal_data.Z0.sel(f=2e14, method="nearest")
+        .sel(terminal_label_out="t1", terminal_label_in="t1")
+        .values
+    )
+    expected_terminal_Z0_end = 50 + 2 * 5 + 1 * 10
+    assert np.allclose(terminal_Z0_end, expected_terminal_Z0_end, rtol=1e-6), (
+        f"Terminal Z0 at endpoint: expected {expected_terminal_Z0_end}, got {terminal_Z0_end}"
     )
 
 
@@ -2609,3 +2828,87 @@ def test_baseband_source_plot():
     _, ax = plt.subplots()
     cst.plot(times, ax=ax)
     plt.close()
+
+
+def test_transmission_line_Z0_matrix():
+    """Test that TransmissionLineDataset.Z0_matrix correctly converts diagonal Z0 to full matrix."""
+    from tidy3d.components.data.data_array import (
+        CurrentFreqModeDataArray,
+        ImpedanceFreqModeDataArray,
+        VoltageFreqModeDataArray,
+    )
+    from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+
+    # Create test data with 2 frequencies and 3 modes
+    freqs = [1e14, 2e14]
+    mode_indices = [0, 1, 2]
+
+    # Create Z0 with unique values for each (freq, mode) pair
+    Z0_values = np.array(
+        [
+            [50.0, 75.0, 100.0],  # freq 0: mode 0 = 50, mode 1 = 75, mode 2 = 100
+            [60.0, 80.0, 110.0],  # freq 1: mode 0 = 60, mode 1 = 80, mode 2 = 110
+        ]
+    )
+    Z0_data = ImpedanceFreqModeDataArray(Z0_values, coords={"f": freqs, "mode_index": mode_indices})
+
+    # Create dummy voltage and current data
+    voltage_data = VoltageFreqModeDataArray(
+        np.ones((2, 3), dtype=complex), coords={"f": freqs, "mode_index": mode_indices}
+    )
+    current_data = CurrentFreqModeDataArray(
+        np.ones((2, 3), dtype=complex), coords={"f": freqs, "mode_index": mode_indices}
+    )
+
+    # Create TransmissionLineDataset
+    tl_data = TransmissionLineDataset(
+        Z0=Z0_data, voltage_coeffs=voltage_data, current_coeffs=current_data
+    )
+
+    # Get the Z0_matrix
+    Z0_matrix = tl_data.Z0_matrix
+
+    # Test 1: Check shape
+    assert Z0_matrix.shape == (2, 3, 3), (
+        f"Z0_matrix shape should be (2, 3, 3), got {Z0_matrix.shape}"
+    )
+
+    # Test 2: Check dimensions
+    assert set(Z0_matrix.dims) == {"f", "mode_index_out", "mode_index_in"}, (
+        f"Z0_matrix dimensions should be (f, mode_index_out, mode_index_in), got {Z0_matrix.dims}"
+    )
+
+    # Test 3: Check coordinates
+    assert np.allclose(Z0_matrix.coords["f"].values, freqs), (
+        "Z0_matrix frequency coordinates don't match"
+    )
+    assert np.allclose(Z0_matrix.coords["mode_index_out"].values, mode_indices), (
+        "Z0_matrix mode_index_out coordinates don't match"
+    )
+    assert np.allclose(Z0_matrix.coords["mode_index_in"].values, mode_indices), (
+        "Z0_matrix mode_index_in coordinates don't match"
+    )
+
+    # Test 4: Check diagonal elements match original Z0
+    for f_idx, f in enumerate(freqs):
+        for m_idx, m in enumerate(mode_indices):
+            diagonal_value = Z0_matrix.sel(
+                f=f, mode_index_out=m, mode_index_in=m, method="nearest"
+            ).values
+            expected_value = Z0_values[f_idx, m_idx]
+            assert np.isclose(diagonal_value, expected_value), (
+                f"Diagonal element at f={f}, mode={m} should be {expected_value}, got {diagonal_value}"
+            )
+
+    # Test 5: Check off-diagonal elements are zero
+    for _f_idx, f in enumerate(freqs):
+        for i, m_out in enumerate(mode_indices):
+            for j, m_in in enumerate(mode_indices):
+                if i != j:  # Off-diagonal
+                    off_diag_value = Z0_matrix.sel(
+                        f=f, mode_index_out=m_out, mode_index_in=m_in, method="nearest"
+                    ).values
+                    assert np.isclose(off_diag_value, 0.0), (
+                        f"Off-diagonal element at f={f}, mode_out={m_out}, mode_in={m_in} "
+                        f"should be 0, got {off_diag_value}"
+                    )

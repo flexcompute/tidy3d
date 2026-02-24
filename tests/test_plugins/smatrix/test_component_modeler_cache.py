@@ -61,7 +61,8 @@ def _patch_terminal_smatrix(monkeypatch, modeler) -> None:
     monkeypatch.setattr(
         smatrix_utils,
         "compute_F",
-        lambda Z_numpy, s_param_def: 1.0 / (2.0 * np.sqrt(np.abs(Z_numpy) + 1e-4)),
+        lambda Z_numpy, s_param_def, compute_Finv=False: 1.0
+        / (2.0 * np.sqrt(np.abs(Z_numpy) + 1e-4)),
     )
     monkeypatch.setattr(
         terminal_analysis,

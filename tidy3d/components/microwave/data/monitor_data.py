@@ -7,12 +7,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
+import xarray as xr
 from pydantic import Field
 
+from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
     FreqDataArray,
     FreqModeDataArray,
     ImpedanceFreqModeDataArray,
+    ScalarTerminalFieldDataArray,
 )
 from tidy3d.components.data.monitor_data import DirectivityData, ModeData, ModeSolverData
 from tidy3d.components.microwave.base import MicrowaveBaseModel
@@ -21,7 +24,11 @@ from tidy3d.components.microwave.data.data_array import (
     PhaseVelocityArray,
     PropagationConstantArray,
 )
-from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+from tidy3d.components.microwave.data.dataset import (
+    TerminalFieldDataset,
+    TransmissionLineDataset,
+    TransmissionLineTerminalDataset,
+)
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from tidy3d.constants import C_0
 from tidy3d.log import log
@@ -29,7 +36,6 @@ from tidy3d.log import log
 if TYPE_CHECKING:
     from typing import Literal
 
-    import xarray as xr
     from numpy.typing import NDArray
     from typing_extensions import Self
 
@@ -253,6 +259,40 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
         "been used to set up the monitor or mode solver.",
     )
 
+    transmission_line_terminal_data: Optional[TransmissionLineTerminalDataset] = Field(
+        None,
+        title="Transmission Line Terminal Data",
+        description="Additional data relevant to transmission line terminals in RF and microwave applications, "
+        "like characteristic impedance, voltage transformation matrix, and current transformation matrix. "
+        "This field is populated when a :class:`MicrowaveTerminalModeSpec` has "
+        "been used to set up the monitor or mode solver.",
+    )
+
+    @cached_property
+    def terminal_fields(self) -> Optional[TerminalFieldDataset]:
+        """Field data for each terminal.
+
+        Returns
+        -------
+        Optional[TerminalFieldDataset]
+            Dataset containing Ex, Ey, Ez, Hx, Hy, Hz field components indexed by terminal_label,
+            or None if transmission_line_terminal_data is not set.
+        """
+        if self.transmission_line_terminal_data is None:
+            return None
+
+        # Transform each field component: field_terminal = voltage_transform^-1 @ field_mode
+        # Use the cached inverse of the voltage transform matrix
+        voltage_transform_inv = self.transmission_line_terminal_data.voltage_transform_inv
+        field_dict = {}
+        for field_name, mode_field in self.field_components.items():
+            if mode_field is not None:
+                # Use xarray.dot for the matrix multiplication over mode_index
+                terminal_field = xr.dot(voltage_transform_inv, mode_field, dims="mode_index")
+                field_dict[field_name] = ScalarTerminalFieldDataArray(terminal_field)
+
+        return TerminalFieldDataset(**field_dict)
+
     @property
     def modes_info(self) -> xr.Dataset:
         """Dataset collecting various properties of the stored modes."""
@@ -446,6 +486,22 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
                 "current_coeffs": self.transmission_line_data.current_coeffs.isel(f=center_inds),
             }
             super_data = super_data.updated_copy(**update_dict, path="transmission_line_data")
+
+        # Add transmission line terminal data handling if present
+        if self.transmission_line_terminal_data is not None:
+            _, center_inds, _ = self._group_index_freq_slices()
+            update_dict = {
+                "Z0": self.transmission_line_terminal_data.Z0.isel(f=center_inds),
+                "voltage_transform": self.transmission_line_terminal_data.voltage_transform.isel(
+                    f=center_inds
+                ),
+                "current_transform": self.transmission_line_terminal_data.current_transform.isel(
+                    f=center_inds
+                ),
+            }
+            super_data = super_data.updated_copy(
+                **update_dict, path="transmission_line_terminal_data"
+            )
         return super_data
 
     def _apply_mode_reorder(self, sort_inds_2d: NDArray) -> Self:
@@ -466,6 +522,15 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
             )
             main_data_reordered = main_data_reordered.updated_copy(
                 transmission_line_data=transmission_line_data_reordered
+            )
+
+        # Add transmission line terminal data handling if present
+        if self.transmission_line_terminal_data is not None:
+            transmission_line_terminal_data_reordered = (
+                self.transmission_line_terminal_data._apply_mode_reorder(sort_inds_2d)
+            )
+            main_data_reordered = main_data_reordered.updated_copy(
+                transmission_line_terminal_data=transmission_line_terminal_data_reordered
             )
         return main_data_reordered
 
@@ -685,5 +750,13 @@ class MicrowaveModeSolverData(MicrowaveModeDataBase, ModeSolverData):
             transmission_line_data_interp = self.transmission_line_data.updated_copy(**update_dict)
             main_data_interp = main_data_interp.updated_copy(
                 transmission_line_data=transmission_line_data_interp
+            )
+        if self.transmission_line_terminal_data is not None:
+            update_dict = self.transmission_line_terminal_data._interp_in_freq_update_dict(
+                freqs, method, assume_sorted
+            )
+            terminal_data_interp = self.transmission_line_terminal_data.updated_copy(**update_dict)
+            main_data_interp = main_data_interp.updated_copy(
+                transmission_line_terminal_data=terminal_data_interp
             )
         return main_data_interp

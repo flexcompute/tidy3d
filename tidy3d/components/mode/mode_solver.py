@@ -18,9 +18,12 @@ from tidy3d.components.base import (
 )
 from tidy3d.components.boundary import PML, Absorber, Boundary, BoundarySpec, PECBoundary, StablePML
 from tidy3d.components.data.data_array import (
+    CurrentFreqTerminalModeDataArray,
+    ImpedanceFreqTerminalTerminalDataArray,
     ModeIndexDataArray,
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
+    VoltageFreqTerminalModeDataArray,
     _make_current_data_array,
     _make_impedance_data_array,
     _make_voltage_data_array,
@@ -35,12 +38,19 @@ from tidy3d.components.medium import (
     IsotropicUniformMediumType,
     LossyMetalMedium,
 )
-from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+from tidy3d.components.microwave.data.dataset import (
+    TransmissionLineDataset,
+    TransmissionLineTerminalDataset,
+)
 from tidy3d.components.microwave.data.monitor_data import MicrowaveModeSolverData
 from tidy3d.components.microwave.impedance_calculator import ImpedanceCalculator
-from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
+from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec, MicrowaveTerminalModeSpec
 from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
-from tidy3d.components.microwave.path_integrals.factory import make_path_integrals
+from tidy3d.components.microwave.path_integrals.factory import (
+    make_path_integrals,
+    make_path_integrals_for_terminal,
+)
+from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
 from tidy3d.components.simulation import Simulation
@@ -65,7 +75,9 @@ if TYPE_CHECKING:
     from pydantic import NonNegativeFloat, NonNegativeInt, PositiveInt
 
     from tidy3d.compat import Self
-    from tidy3d.components.data.data_array import FreqModeDataArray
+    from tidy3d.components.data.data_array import (
+        FreqModeDataArray,
+    )
     from tidy3d.components.grid.grid import Coords, Grid
     from tidy3d.components.microwave.impedance_calculator import (
         CurrentIntegralType,
@@ -86,7 +98,11 @@ if TYPE_CHECKING:
         Symmetry,
     )
     from tidy3d.components.types.monitor_data import ModeSolverDataType
-from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
+from tidy3d.packaging import (
+    check_tidy3d_extras_licensed_feature,
+    supports_local_subpixel,
+    tidy3d_extras,
+)
 
 # Importing the local solver may not work if e.g. scipy is not installed
 IMPORT_ERROR_MSG = """Could not import local solver, 'ModeSolver' objects can still be constructed
@@ -208,6 +224,13 @@ class ModeSolver(Tidy3dBaseModel):
         "methods like ``flux``, ``dot`` require all tangential field components, while others "
         "like ``mode_area`` require all E-field components.",
     )
+
+    @model_validator(mode="after")
+    def _validate_mode_spec(self) -> Self:
+        """Validate that num_modes is an integer."""
+        if not isinstance(self.mode_spec.num_modes, int):
+            raise ValidationError("num_modes must be an integer.")
+        return self
 
     @field_validator("simulation")
     @classmethod
@@ -489,9 +512,16 @@ class ModeSolver(Tidy3dBaseModel):
 
     @property
     def _has_microwave_mode_spec(self) -> bool:
-        """Check if the mode solver is using a :class:`~tidy3d.rf.MicrowaveModeSpec`.,
-        and will thus be creating :class:`.MicrowaveModeSolverData`."""
-        return isinstance(self.mode_spec, MicrowaveModeSpec)
+        """Check if the mode solver is using a :class:`.MicrowaveModeSpec` but not :class:`.MicrowaveTerminalModeSpec`."""
+        return (
+            isinstance(self.mode_spec, MicrowaveModeSpec)
+            and not self._has_microwave_terminal_mode_spec
+        )
+
+    @property
+    def _has_microwave_terminal_mode_spec(self) -> bool:
+        """Check if the mode solver is using a :class:`.MicrowaveTerminalModeSpec`."""
+        return isinstance(self.mode_spec, MicrowaveTerminalModeSpec)
 
     @supports_local_subpixel
     def solve(self) -> ModeSolverData:
@@ -567,10 +597,10 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Compute data on the Yee grid
         mode_solver_data = self._data_on_yee_grid()
-        if self._has_microwave_mode_spec:
-            mode_solver_data = MicrowaveModeSolverData(
-                **mode_solver_data.model_dump(exclude={"type"})
-            )
+        if self._has_microwave_mode_spec or self._has_microwave_terminal_mode_spec:
+            data = mode_solver_data.model_dump(exclude={"type", "monitor"})
+            data["monitor"] = mode_solver_data.monitor
+            mode_solver_data = MicrowaveModeSolverData(**data)
 
         # Colocate to grid boundaries if requested
         if self.colocate:
@@ -609,9 +639,11 @@ class ModeSolver(Tidy3dBaseModel):
             if not self.mode_spec.interp_spec.reduce_data:
                 mode_solver_data = mode_solver_data.interpolated_copy
 
-        # Calculate and add the characteristic impedance
+        # Calculate and add the transmission line data
         if self._has_microwave_mode_spec:
             mode_solver_data = self._add_microwave_data(mode_solver_data)
+        if self._has_microwave_terminal_mode_spec:
+            mode_solver_data = self._add_microwave_terminal_data(mode_solver_data)
         return mode_solver_data
 
     @cached_property
@@ -1448,10 +1480,31 @@ class ModeSolver(Tidy3dBaseModel):
             )
         return make_path_integrals(self.mode_spec)
 
-    def _add_microwave_data(
+    def _make_path_integrals_for_terminal(
+        self,
+    ) -> dict[str, tuple[Optional[VoltageIntegralType], Optional[CurrentIntegralType]]]:
+        """Wrapper for making path integrals for each terminal from the MicrowaveTerminalModeSpec."""
+        if not self._has_microwave_terminal_mode_spec:
+            raise ValueError(
+                "Cannot make path integrals for when 'mode_spec' is not a 'MicrowaveTerminalModeSpec'."
+            )
+        return make_path_integrals_for_terminal(self.mode_spec)
+
+    def _generate_transmission_line_data(
         self, mode_solver_data: MicrowaveModeSolverData
-    ) -> MicrowaveModeSolverData:
-        """Calculate and add microwave data to ``mode_solver_data`` which uses the path specifications."""
+    ) -> TransmissionLineDataset:
+        """Generate transmission line data from mode solver data using path integrals.
+
+        Parameters
+        ----------
+        mode_solver_data : MicrowaveModeSolverData
+            Mode solver data to compute transmission line quantities from.
+
+        Returns
+        -------
+        TransmissionLineDataset
+            Dataset containing characteristic impedance, voltage coefficients, and current coefficients.
+        """
         voltage_integrals, current_integrals = self._make_path_integrals()
         # Need to operate on the full symmetry expanded fields
         mode_solver_data_expanded = mode_solver_data.symmetry_expanded_copy
@@ -1483,10 +1536,277 @@ class ModeSolver(Tidy3dBaseModel):
         all_mode_V = _make_voltage_data_array(all_mode_V)
         all_mode_I = xr.concat(I_list, dim="mode_index")
         all_mode_I = _make_current_data_array(all_mode_I)
-        mw_data = TransmissionLineDataset(
+        return TransmissionLineDataset(
             Z0=all_mode_Z0, voltage_coeffs=all_mode_V, current_coeffs=all_mode_I
         )
+
+    @staticmethod
+    def _assemble_transform_matrices(
+        input_list: Optional[dict[str, list]],
+        terminal_labels: list[str],
+    ) -> xr.DataArray:
+        """Assemble voltage/current transform matrices from per-terminal, per-mode data.
+
+        Parameters
+        ----------
+        input_list : Optional[dict[str, list]]
+            Dictionary mapping terminal labels to lists of voltage/current data per mode.
+        terminal_labels : list[str]
+            Ordered list of terminal labels.
+
+        Returns
+        -------
+        xr.DataArray
+            Transform matrix with dimensions (f, terminal_label, mode_index).
+        """
+        # Stack voltage/current data for each terminal across modes, then stack terminals
+        # Result: (f, terminal_label, mode_index)
+        stacked_list = []
+        for terminal_label in terminal_labels:
+            # Concat across modes for this terminal: list of FreqDataArray -> (f, mode_index)
+            mode_data = xr.concat(input_list[terminal_label], dim="mode_index")
+            stacked_list.append(mode_data)
+
+        # Stack all terminals: (f, mode_index) per terminal -> (f, terminal_label, mode_index)
+        result = xr.concat(stacked_list, dim="terminal_label")
+        result = result.assign_coords(terminal_label=terminal_labels)
+
+        # Assign explicit mode_index coordinates
+        num_modes = len(input_list[terminal_labels[0]])
+        result = result.assign_coords(mode_index=np.arange(num_modes))
+
+        # Ensure dimension order is (f, terminal_label, mode_index)
+        result = result.transpose("f", "terminal_label", "mode_index")
+
+        return result
+
+    @staticmethod
+    def _construct_differential_pair_transform(
+        terminals_mapping: Optional[dict[str, Union[str, tuple[str, str]]]],
+        terminal_labels: list[str],
+        voltage_transform: bool = True,
+    ) -> np.ndarray:
+        """Construct differential pair transformation matrix Q.
+
+        This matrix transforms single-ended terminal voltages to output terminal voltages,
+        which may include differential pairs. For differential pairs:
+        - Common mode: V_comm = 0.5 * (V_1 + V_2), I_comm = I_1 + I_2
+        - Differential mode: V_diff = V_1 - V_2, I_diff = 0.5 * (I_1 - I_2)
+
+        Parameters
+        ----------
+        terminals_mapping : Optional[dict[str, Union[str, tuple[str, str]]]]
+            Mapping from output terminals (including differential pairs) to input single-ended terminals.
+            Keys ending with "@comm" or "@diff" indicate differential pair modes.
+        terminal_labels : list[str]
+            Ordered list of input single-ended terminal labels.
+        voltage_transform : bool, optional
+            Whether it's applied to voltage transform (True), or current transform (False).
+
+        Returns
+        -------
+        np.ndarray
+            Transformation matrix Q with shape (num_output_terminals, num_input_terminals).
+        """
+        # if terminals_mapping is None, return an identity matrix
+        if terminals_mapping is None:
+            return np.eye(len(terminal_labels))
+
+        # Create mapping from terminal labels to indices for fast lookup
+        label_to_idx = {label: idx for idx, label in enumerate(terminal_labels)}
+
+        # Initialize Q matrix
+        num_output = len(terminals_mapping)
+        num_input = len(terminal_labels)
+        Q = np.zeros((num_output, num_input))
+
+        # Fill Q matrix based on terminals_mapping
+        for output_idx, (output_label, input_mapping) in enumerate(terminals_mapping.items()):
+            if isinstance(input_mapping, str):
+                # Single-ended terminal: direct mapping
+                input_idx = label_to_idx[input_mapping]
+                Q[output_idx, input_idx] = 1.0
+            else:
+                # Differential pair: tuple (label1, label2)
+                label1, label2 = input_mapping
+                idx1 = label_to_idx[label1]
+                idx2 = label_to_idx[label2]
+
+                if output_label.endswith("@comm"):
+                    factor = 0.5 if voltage_transform else 1.0
+                    Q[output_idx, idx1] = factor
+                    Q[output_idx, idx2] = factor
+                elif output_label.endswith("@diff"):
+                    factor = 1 if voltage_transform else 0.5
+                    Q[output_idx, idx1] = factor
+                    Q[output_idx, idx2] = -factor
+                else:
+                    # Should not happen based on the design, but handle gracefully
+                    raise ValueError(
+                        f"Differential pair terminal '{output_label}' must end with '@comm' or '@diff'"
+                    )
+
+        return Q
+
+    def _generate_transmission_line_terminal_data(
+        self, mode_solver_data: MicrowaveModeSolverData
+    ) -> TransmissionLineTerminalDataset:
+        """Generate transmission line terminal data from mode field integrals.
+
+        Computes voltage and current path integrals over the mode fields for each
+        terminal, then applies a terminal transformation to obtain the impedance
+        matrix and mode-to-terminal transformation matrices.
+
+        Parameters
+        ----------
+        mode_solver_data : MicrowaveModeSolverData
+            Mode solver data to extract frequency and mode dimensions from.
+
+        Returns
+        -------
+        TransmissionLineTerminalDataset
+            Dataset containing Z0 matrix (terminal_label_out × terminal_label_in),
+            voltage transformation matrix (terminal_label × mode_index),
+            and current transformation matrix (terminal_label × mode_index).
+        """
+        integrals_dict = self._make_path_integrals_for_terminal()
+        impedance_definition = self.mode_spec.impedance_definition
+        # Need to operate on the full symmetry expanded fields
+        mode_solver_data_expanded = mode_solver_data.symmetry_expanded_copy
+
+        # Initialize dictionaries to collect voltage/current for each terminal across all modes
+        # Structure: {terminal_label: [voltage_mode0, voltage_mode1, ...]}
+        V_list = {terminal_label: [] for terminal_label in integrals_dict.keys()}
+        I_list = {terminal_label: [] for terminal_label in integrals_dict.keys()}
+
+        # Loop over mode indices
+        for mode_index in range(self.mode_spec.num_modes):
+            single_mode_data = mode_solver_data_expanded._isel(mode_index=[mode_index])
+            for terminal_label, (v_integral, i_integral) in integrals_dict.items():
+                impedance_calc = ImpedanceCalculator(
+                    voltage_integral=v_integral, current_integral=i_integral
+                )
+                voltage, current = impedance_calc.compute_voltage_current(
+                    single_mode_data,
+                )
+                # Append to list for this terminal
+                V_list[terminal_label].append(voltage)
+                I_list[terminal_label].append(current)
+
+        # Validate that terminal transforms feature is available
+        check_tidy3d_extras_licensed_feature("terminal_transformation_matrix")
+
+        # Get input terminal labels (before differential pair transformation)
+        terminal_labels = list(integrals_dict.keys())
+
+        # Determine which arrays are needed based on impedance definition
+        # VI: needs v_list, i_list
+        # PI: needs i_list, power_matrix
+        # PV: needs v_list, power_matrix
+        need_v = impedance_definition in ("VI", "PV")
+        need_i = impedance_definition in ("VI", "PI")
+        need_p = impedance_definition in ("PI", "PV")
+
+        # Assemble V and I arrays as numpy arrays: (num_freqs, num_terminals, num_modes)
+        v_array = (
+            self._assemble_transform_matrices(V_list, terminal_labels).values if need_v else None
+        )
+        i_array = (
+            self._assemble_transform_matrices(I_list, terminal_labels).values if need_i else None
+        )
+
+        # Compute power matrix if needed: (num_freqs, num_modes, num_modes)
+        power_matrix = None
+        if need_p:
+            power_matrix = (
+                2
+                * mode_solver_data_expanded.outer_dot(
+                    mode_solver_data_expanded, conjugate=True, use_symmetric_form=False
+                )
+            ).values
+
+        # Build Q matrices for differential pair transformation
+        Q_voltage = self._construct_differential_pair_transform(
+            self.mode_spec.terminals_mapping, terminal_labels, voltage_transform=True
+        )
+        Q_current = self._construct_differential_pair_transform(
+            self.mode_spec.terminals_mapping, terminal_labels, voltage_transform=False
+        )
+
+        # Call tidy3d_extras to compute transforms and Z0
+        voltage_transform_arr, current_transform_arr, z0_arr = tidy3d_extras[
+            "mod"
+        ].extension._compute_terminal_transforms(
+            v_array,
+            i_array,
+            power_matrix,
+            Q_voltage,
+            Q_current,
+        )
+
+        # Get output terminal labels (after differential pair transformation)
+        out_terminal_labels = list(self.mode_spec._terminal_indices)
+
+        # Get coordinates from mode solver data
+        freqs = mode_solver_data.n_eff.coords["f"].values
+        mode_indices = mode_solver_data.n_eff.coords["mode_index"].values
+
+        # Wrap voltage_transform: (num_freqs, num_terminals, num_modes)
+        voltage_transform = VoltageFreqTerminalModeDataArray(
+            xr.DataArray(
+                voltage_transform_arr,
+                coords={
+                    "f": freqs,
+                    "terminal_label": out_terminal_labels,
+                    "mode_index": mode_indices,
+                },
+                dims=["f", "terminal_label", "mode_index"],
+            )
+        )
+
+        # Wrap current_transform: (num_freqs, num_terminals, num_modes)
+        current_transform = CurrentFreqTerminalModeDataArray(
+            xr.DataArray(
+                current_transform_arr,
+                coords={
+                    "f": freqs,
+                    "terminal_label": out_terminal_labels,
+                    "mode_index": mode_indices,
+                },
+                dims=["f", "terminal_label", "mode_index"],
+            )
+        )
+
+        # Wrap Z0: (num_freqs, num_terminals, num_terminals)
+        Z0 = ImpedanceFreqTerminalTerminalDataArray(
+            xr.DataArray(
+                z0_arr,
+                coords={
+                    "f": freqs,
+                    "terminal_label_out": out_terminal_labels,
+                    "terminal_label_in": out_terminal_labels,
+                },
+                dims=["f", "terminal_label_out", "terminal_label_in"],
+            )
+        )
+
+        return TransmissionLineTerminalDataset(
+            Z0=Z0, voltage_transform=voltage_transform, current_transform=current_transform
+        )
+
+    def _add_microwave_data(
+        self, mode_solver_data: MicrowaveModeSolverData
+    ) -> MicrowaveModeSolverData:
+        """Calculate and add microwave data to ``mode_solver_data`` which uses the path specifications."""
+        mw_data = self._generate_transmission_line_data(mode_solver_data)
         return mode_solver_data.updated_copy(transmission_line_data=mw_data)
+
+    def _add_microwave_terminal_data(
+        self, mode_solver_data: MicrowaveModeSolverData
+    ) -> MicrowaveModeSolverData:
+        """Calculate and add microwave terminal data to ``mode_solver_data`` which uses the path specifications."""
+        mw_data = self._generate_transmission_line_terminal_data(mode_solver_data)
+        return mode_solver_data.updated_copy(transmission_line_terminal_data=mw_data)
 
     @cached_property
     def data(self) -> ModeSolverDataType:
@@ -2126,7 +2446,7 @@ class ModeSolver(Tidy3dBaseModel):
             )
 
         mode_solver_monitor_type = ModeMonitor
-        if self._has_microwave_mode_spec:
+        if self._has_microwave_mode_spec or self._has_microwave_terminal_mode_spec:
             mode_solver_monitor_type = MicrowaveModeMonitor
 
         return mode_solver_monitor_type(
@@ -2177,7 +2497,7 @@ class ModeSolver(Tidy3dBaseModel):
             colocate = self.colocate
 
         mode_solver_monitor_type = ModeSolverMonitor
-        if self._has_microwave_mode_spec:
+        if self._has_microwave_mode_spec or self._has_microwave_terminal_mode_spec:
             mode_solver_monitor_type = MicrowaveModeSolverMonitor
 
         return mode_solver_monitor_type(
@@ -2773,6 +3093,9 @@ class ModeSolver(Tidy3dBaseModel):
             symmetry=self.simulation.symmetry,
             simulation_geometry=self.simulation.simulation_geometry,
             label=" for mode solver",
+            interior_disjoint_geometries=ModePlaneAnalyzer.apply_interior_disjoint_geometries(
+                self.simulation.structure_priority_mode
+            ),
         )
 
     def validate_pre_upload(self) -> None:

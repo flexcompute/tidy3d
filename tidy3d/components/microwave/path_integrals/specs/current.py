@@ -160,6 +160,7 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        plot_arrow: bool = True,
         **path_kwargs: Any,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
@@ -174,6 +175,8 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        plot_arrow : bool = True
+            Whether to plot the arrow indicating current direction. Default is ``True``.
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -196,39 +199,40 @@ class AxisAlignedCurrentIntegralSpec(AbstractAxesRH, Box):
             (xs, ys) = path._vertices_2D(axis)
             ax.plot(xs, ys, **plot_kwargs)
 
-        (ax1, ax2) = self.remaining_axes
-
         # Add arrow to bottom path, unless right path is longer
-        arrow_path = path_integrals[0]
-        if self.size[ax2] > self.size[ax1]:
-            arrow_path = path_integrals[1]
+        if plot_arrow:
+            (ax1, ax2) = self.remaining_axes
 
-        (xs, ys) = arrow_path._vertices_2D(axis)
-        X = (xs[0] + xs[1]) / 2
-        Y = (ys[0] + ys[1]) / 2
-        center = np.array([X, Y])
-        dx = xs[1] - xs[0]
-        dy = ys[1] - ys[0]
-        direction = np.array([dx, dy])
-        segment_length = np.linalg.norm(direction)
-        unit_dir = direction / segment_length
+            arrow_path = path_integrals[0]
+            if self.size[ax2] > self.size[ax1]:
+                arrow_path = path_integrals[1]
 
-        # Change direction of arrow depending on sign of current definition
-        if self.sign == "-":
-            unit_dir *= -1.0
-        # Change direction of arrow when the "y" axis is dropped,
-        # since the plotted coordinate system will be left-handed (x, z)
-        if self.main_axis == 1:
-            unit_dir *= -1.0
+            (xs, ys) = arrow_path._vertices_2D(axis)
+            X = (xs[0] + xs[1]) / 2
+            Y = (ys[0] + ys[1]) / 2
+            center = np.array([X, Y])
+            dx = xs[1] - xs[0]
+            dy = ys[1] - ys[0]
+            direction = np.array([dx, dy])
+            segment_length = np.linalg.norm(direction)
+            unit_dir = direction / segment_length
 
-        start = center - unit_dir * segment_length
-        end = center
-        ax.annotate(
-            "",
-            xytext=(start[0], start[1]),
-            xy=(end[0], end[1]),
-            arrowprops=ARROW_CURRENT,
-        )
+            # Change direction of arrow depending on sign of current definition
+            if self.sign == "-":
+                unit_dir *= -1.0
+            # Change direction of arrow when the "y" axis is dropped,
+            # since the plotted coordinate system will be left-handed (x, z)
+            if self.main_axis == 1:
+                unit_dir *= -1.0
+
+            start = center - unit_dir * segment_length
+            end = center
+            ax.annotate(
+                "",
+                xytext=(start[0], start[1]),
+                xy=(end[0], end[1]),
+                arrowprops=ARROW_CURRENT,
+            )
         return ax
 
 
@@ -255,6 +259,7 @@ class Custom2DCurrentIntegralSpec(Custom2DPathIntegralSpec):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        plot_arrow: bool = True,
         **path_kwargs: Any,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
@@ -269,6 +274,8 @@ class Custom2DCurrentIntegralSpec(Custom2DPathIntegralSpec):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        plot_arrow : bool = True
+            Whether to plot the arrow indicating current direction. Default is ``True``.
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -290,12 +297,13 @@ class Custom2DCurrentIntegralSpec(Custom2DPathIntegralSpec):
         ax.plot(xs, ys, **plot_kwargs)
 
         # Add arrow at start of contour
-        ax.annotate(
-            "",
-            xytext=(xs[0], ys[0]),
-            xy=(xs[1], ys[1]),
-            arrowprops=ARROW_CURRENT,
-        )
+        if plot_arrow:
+            ax.annotate(
+                "",
+                xytext=(xs[0], ys[0]),
+                xy=(xs[1], ys[1]),
+                arrowprops=ARROW_CURRENT,
+            )
         return ax
 
 
@@ -344,6 +352,7 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        plot_arrow: bool = True,
         **path_kwargs: Any,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
@@ -358,6 +367,8 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        plot_arrow : bool = True
+            Whether to plot the arrow indicating current direction. Default is ``True``.
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -369,7 +380,7 @@ class CompositeCurrentIntegralSpec(MicrowaveBaseModel):
             The supplied or created matplotlib axes.
         """
         for path_spec in self.path_specs:
-            ax = path_spec.plot(x=x, y=y, z=z, ax=ax, **path_kwargs)
+            ax = path_spec.plot(x=x, y=y, z=z, ax=ax, plot_arrow=plot_arrow, **path_kwargs)
         return ax
 
     @field_validator("path_specs")
