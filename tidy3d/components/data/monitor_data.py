@@ -3161,7 +3161,13 @@ class ModeSolverData(ModeData):
     def _normalize_modes(self) -> None:
         """Normalize modes. Note: this modifies ``self`` in-place."""
         self_dot = self.dot(self, conjugate=self.monitor.conjugated_dot_product)
-        scaling = np.sqrt(np.sign(np.real(self_dot)) * self_dot)
+        real_part = np.real(self_dot)
+        imag_part = np.imag(self_dot)
+        tolerance = fp_eps * np.abs(self_dot)
+        has_meaningful_real_part = np.abs(real_part) > tolerance
+        sign = np.where(has_meaningful_real_part, np.sign(real_part), np.sign(imag_part))
+        sign = np.where(sign == 0, 1.0, sign)
+        scaling = np.sqrt(sign * self_dot)
         near_zero = np.abs(scaling) < fp_eps
         if np.any(near_zero):
             affected = near_zero.any(dim="f") if "f" in near_zero.dims else near_zero
