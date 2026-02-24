@@ -22,6 +22,8 @@ from tidy3d.components.monitor import (
     ModeMonitor,
     ModeSolverMonitor,
     PermittivityMonitor,
+    SurfaceFieldMonitor,
+    SurfaceFieldTimeMonitor,
 )
 
 # types of monitors that are accepted by simulation
@@ -44,4 +46,12 @@ MonitorType = Union[
     MicrowaveModeSolverMonitor,
     GaussianOverlapMonitor,
     AstigmaticGaussianOverlapMonitor,
+    SurfaceFieldMonitor,
+    SurfaceFieldTimeMonitor,
+]
+
+
+SurfaceMonitorType = Union[
+    SurfaceFieldMonitor,
+    SurfaceFieldTimeMonitor,
 ]

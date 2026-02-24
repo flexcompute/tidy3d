@@ -113,7 +113,7 @@ from .source.utils import SourceType
 from .structure import Structure
 from .subpixel_spec import SubpixelSpec
 from .types import TYPE_TAG_STR, PermittivityComponent, Symmetry
-from .types.monitor import MonitorType
+from .types.monitor import MonitorType, SurfaceMonitorType
 from .validators import (
     assert_objects_contained_in_sim_bounds,
     assert_objects_in_sim_bounds,
@@ -156,6 +156,8 @@ if TYPE_CHECKING:
         ArrayFloat2D,
         Ax,
         Axis,
+        Bound,
+        Coordinate,
         CoordinateOptional,
         FreqBound,
         InterpMethod,
@@ -3147,6 +3149,8 @@ class Simulation(AbstractYeeGridSimulation):
         self._projection_monitors_distance()
         self._projection_mnts_2d()
         self._diffraction_and_directivity_monitor_medium()
+        self._error_empty_surface_monitor()
+        self._error_surface_monitors_with_zero_size()
         self._warn_grid_size_too_small()
         self._source_homogeneous_isotropic()
         self._check_normalize_index()
@@ -4055,6 +4059,57 @@ class Simulation(AbstractYeeGridSimulation):
                 _, index_k = medium.nk_model(frequency=freqs)
                 if not np.all(index_k == 0):
                     raise SetupError(f"'{monitor.type}' must not lie in a lossy medium.")
+        return self
+
+    @classmethod
+    def _get_surface_monitor_bounds(
+        cls,
+        center: Coordinate,
+        size: Coordinate,
+        monitor: SurfaceMonitorType,
+        medium: MediumType3D,
+        structures: list[Structure],
+    ) -> list[Bound]:
+        """Intersect a surface monitor with the bounding box of each PEC structure."""
+
+        sim_box = Box(center=center, size=size)
+        mnt_bounds = Box.bounds_intersection(monitor.bounds, sim_box.bounds)
+
+        if medium.is_pec_like:
+            return [mnt_bounds]
+
+        bounds = []
+        for structure in structures:
+            if structure.medium.is_pec_like:
+                intersection_bounds = Box.bounds_intersection(mnt_bounds, structure.geometry.bounds)
+                if all(bmin <= bmax for bmin, bmax in zip(*intersection_bounds)):
+                    bounds.append(intersection_bounds)
+
+        return bounds
+
+    def _error_empty_surface_monitor(self) -> Self:
+        """Error if any surface monitor does not at least cross a bounding box of a PEC/LossyMetal structure."""
+        for mnt in self.monitors:
+            if isinstance(mnt, get_args(SurfaceMonitorType)):
+                bounds = self._get_surface_monitor_bounds(
+                    self.center, self.size, mnt, self.medium, self.structures
+                )
+                if len(bounds) == 0:
+                    raise SetupError(
+                        f"Surface monitor {mnt.name} does not cross any PEC or LossyMetalMedium structures."
+                    )
+        return self
+
+    def _error_surface_monitors_with_zero_size(self) -> Self:
+        """Error if simulation has surface monitors and the size of domain is zero along any dimension."""
+        not_3d = any(dim == 0 for dim in self.size)
+        surface_monitors_present = any(
+            isinstance(mnt, get_args(SurfaceMonitorType)) for mnt in self.monitors
+        )
+        if not_3d and surface_monitors_present:
+            raise SetupError(
+                "Simulation domain has size zero along at least one dimension; surface monitors are not allowed in this case."
+            )
         return self
 
     def _warn_grid_size_too_small(self) -> Self:

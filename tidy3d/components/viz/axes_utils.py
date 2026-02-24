@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import inspect
 from functools import wraps
 from typing import TYPE_CHECKING
 
 from tidy3d.components.types import LengthUnit
 from tidy3d.constants import UnitScaling
 from tidy3d.exceptions import Tidy3dKeyError
+from tidy3d.packaging import pyvista
 
 if TYPE_CHECKING:
-    from typing import Callable, ParamSpec, TypeVar
+    from typing import Any, Callable, ParamSpec, TypeVar
 
     import matplotlib.ticker as ticker
     from matplotlib.axes import Axes
@@ -154,6 +156,140 @@ def equal_aspect(plot: T) -> T:
         ax = plot(*args, **kwargs)
         ax.set_aspect("equal")
         return ax
+
+    return _plot
+
+
+def _is_notebook() -> bool:
+    """Detect if running in an interactive notebook environment.
+
+    This function detects various notebook environments including:
+    - Jupyter Notebook
+    - JupyterLab
+    - Google Colab
+    - VSCode Interactive Window/Notebook
+    - Other kernel-backed IPython environments
+
+    Returns
+    -------
+    bool
+        True if running in a notebook environment, False otherwise.
+    """
+    try:
+        # Check for Google Colab first
+        import sys
+
+        if "google.colab" in sys.modules:
+            return True
+
+        # Check for IPython
+        from IPython import get_ipython
+
+        # Get the IPython instance
+        ipython = get_ipython()
+        if ipython is None:
+            return False
+
+        # Kernel-backed IPython sessions (Jupyter/VSCode notebook) expose IPKernelApp.
+        if "IPKernelApp" in ipython.config:
+            return True
+
+        # ZMQInteractiveShell is used by notebook frontends; terminal IPython uses
+        # TerminalInteractiveShell and should not be treated as notebook mode.
+        shell_name = ipython.__class__.__name__
+        shell_module = ipython.__class__.__module__
+        if shell_name == "ZMQInteractiveShell" or "ipykernel" in shell_module:
+            return True
+
+        # Check if we're in VSCode's interactive window
+        if "jupyter" in shell_name.lower() or "jupyter" in shell_module.lower():
+            return True
+
+        return False
+    except (ImportError, AttributeError):
+        return False
+
+
+def add_plotter_if_none(plot: Callable) -> Callable:
+    """Decorates ``plot(*args, **kwargs, plotter=None)`` function for PyVista.
+    If plotter=None in the function call, creates a plotter and feeds it to rest of function.
+
+    The wrapped function should accept 'plotter' as first argument after self.
+    The wrapped function should return the plotter object.
+
+    This decorator will:
+    - Auto-detect notebook environment (or use windowed parameter)
+    - Create plotter if None
+    - Call plotter.show() at the end if show=True and plotter was created here
+    - Return the plotter object or show() result
+
+    Parameters handled by decorator:
+    - plotter: If None, creates new plotter
+    - show: If True and plotter was created, calls plotter.show()
+    - windowed: If None, auto-detects. If True, forces external window.
+    - window_size: Tuple for window dimensions (only when creating plotter)
+    """
+
+    @wraps(plot)
+    def _plot(*args: Any, **kwargs: Any) -> Any:
+        """New plot function using a generated plotter if None."""
+        # Pop decorator-specific parameters before any forwarding
+        show = kwargs.pop("show", True)
+        windowed = kwargs.pop("windowed", None)
+        window_size = kwargs.pop("window_size", (800, 600))
+
+        # Determine how plotter was passed and its current value.
+        # We must distinguish three cases:
+        #   1. plotter passed as keyword arg (possibly None)
+        #   2. plotter passed positionally (possibly None)
+        #   3. plotter not passed at all
+        plotter = None
+        plotter_in_kwargs = "plotter" in kwargs
+        plotter_positional = False
+        plotter_idx = None
+
+        if plotter_in_kwargs:
+            plotter = kwargs.pop("plotter")
+        else:
+            sig = inspect.signature(plot)
+            params = list(sig.parameters)
+            if "plotter" in params:
+                plotter_idx = params.index("plotter")
+                if plotter_idx < len(args):
+                    plotter = args[plotter_idx]
+                    plotter_positional = True
+
+        # Determine display mode
+        if windowed is None:
+            # Auto-detect: windowed=False (inline) in notebooks, True otherwise
+            windowed = not _is_notebook()
+
+        # Track if we created the plotter
+        plotter_created = plotter is None
+
+        # Create plotter if not provided
+        if plotter is None:
+            pv = pyvista["mod"]
+            # PyVista uses 'notebook' parameter (True=inline, False=window)
+            # Our 'windowed' is opposite: True=window, False=inline
+            plotter = pv.Plotter(notebook=not windowed, window_size=window_size)
+
+        if plotter_positional:
+            # Replace the positional value with the (possibly new) plotter
+            args = list(args)
+            args[plotter_idx] = plotter
+            args = tuple(args)
+        else:
+            kwargs["plotter"] = plotter
+
+        # Call the wrapped function
+        plotter = plot(*args, **kwargs)
+
+        # Show if we created the plotter and show=True
+        if plotter_created and show:
+            return plotter.show()
+
+        return plotter
 
     return _plot
 

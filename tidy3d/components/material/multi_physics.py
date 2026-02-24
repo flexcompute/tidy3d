@@ -158,6 +158,7 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
             "eps_complex_to_nk": self.optical,
             "nonlinear_spec": self.optical,
             "is_pec": self.optical,
+            "is_pec_like": self.optical,
             "is_time_modulated": self.optical,
             "is_nonlinear": self.optical,
             "is_fully_anisotropic": self.optical,

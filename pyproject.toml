@@ -122,6 +122,10 @@ flax = { version = ">=0.8.2,<0.13", optional = true }
 orbax-checkpoint = { version = "<0.11.33", optional = true }
 sax = { version = "^0.11", optional = true }
 vtk = { version = ">=9.2.6,<10.0.0", optional = true }
+pyvista = { version = ">=0.43,<0.47.0", optional = true }
+trame = { version = ">=3.0.0,<4.0.0", optional = true }
+trame-vtk = { version = ">=2.0.0,<3.0.0", optional = true }
+trame-vuetify = { version = ">=2.0.0,<3.0.0", optional = true }
 sphinxemoji = { version = "^0.3.2", optional = true }
 cma = { version = "^4.4.1", optional = true }
 openpyxl = { version = "^3.1.5", optional = true }
@@ -180,6 +184,10 @@ dev = [
   'trimesh',
   'scikit-rf',
   'vtk',
+  'pyvista',
+  'trame',
+  'trame-vtk',
+  'trame-vuetify',
   'cma',
   'diff-cover',
   'openpyxl',
@@ -233,6 +241,7 @@ gdstk = ["gdstk"]
 scikit-rf = ["scikit-rf"]
 trimesh = ["trimesh", "networkx", "rtree"]
 vtk = ["vtk"]
+pyvista = ["pyvista", "vtk", "trame", "trame-vtk", "trame-vuetify"]
 ruff = ["ruff"]
 heatcharge = ["trimesh", "vtk"]
 # plugins with extra deps

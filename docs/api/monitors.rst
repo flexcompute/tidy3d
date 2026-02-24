@@ -16,6 +16,7 @@ The types of monitors in Tidy3D include:
 * `Mode`_: Records mode coefficient(s) of the field across a 2D plane
 * `Diffraction`_: Records diffraction coefficient(s) in a periodic simulation
 * `Far-field`_: Various monitors for calculating far-field projection and radiation characteristics
+* `Surface`_: Records EM fields on PEC and lossy metal surfaces in a 3D region at specified time or frequency points
 * `Permittivity`_: Records material permittivity properties within a given region
 * `Medium`_: Records material permittivity and permeability properties within a given region
 
@@ -267,6 +268,47 @@ Please see the learning center article below for detailed explanations on additi
    + `Mid-IR metalens based on silicon nanopillars <../notebooks/MidIRMetalens.html>`_
    + `Spherical Fresnel lens <../notebooks/FresnelLens.html>`_
    + `Directivity and S-parameters computation of patch antenna <../notebooks/AntennaCharacteristics.html>`_
+
+~~~~
+
+Surface
+-------
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.SurfaceFieldMonitor
+   tidy3d.SurfaceFieldTimeMonitor
+
+The ``SurfaceFieldMonitor`` records electromagnetic fields on PEC (``PECMedium``) and lossy metal (``LossyMetalMedium``) surfaces within a 3D region at specified frequency point(s). The ``SurfaceFieldTimeMonitor`` does the same, except at specified time intervals instead of frequency. These monitors store the normal E and tangential H fields on these surfaces.
+
+.. code-block:: python
+
+   # define a frequency-domain surface field monitor
+   my_surface_monitor = SurfaceFieldMonitor(
+       center=(1,2,3),
+       size=(2,2,2),
+       fields=['E', 'H'],
+       freqs=[250e12, 300e12],
+       name='surface_monitor',
+   )
+
+   # define a time-domain surface field monitor
+   my_surface_time_monitor = SurfaceFieldTimeMonitor(
+       center=(1,2,3),
+       size=(2,2,2),
+       fields=['H'],
+       start=1e-13,
+       stop=5e-13,
+       interval=2,
+       name='surface_time_monitor',
+   )
+
+.. note::
+
+   Surface monitors are currently in beta stage. Please exercise caution when analyzing surface monitor data and verify results carefully.
+
 
 ~~~~
 

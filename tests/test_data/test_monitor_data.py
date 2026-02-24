@@ -23,6 +23,8 @@ from tidy3d.components.data.monitor_data import (
     ModeData,
     ModeSolverData,
     PermittivityData,
+    SurfaceFieldData,
+    SurfaceFieldTimeData,
 )
 from tidy3d.components.data.zbf import ZBFData
 from tidy3d.components.mode.mode_solver import ModeSolver
@@ -49,6 +51,8 @@ from .test_data_arrays import (
     PERMITTIVITY_MONITOR,
     SIM,
     SIM_SYM,
+    SURFACE_FIELD_MONITOR,
+    SURFACE_FIELD_TIME_MONITOR,
     make_diffraction_data_array,
     make_far_field_data_array,
     make_flux_data_array,
@@ -61,6 +65,8 @@ from .test_data_arrays import (
     make_scalar_mode_field_data_array,
     make_scalar_mode_field_data_array_smooth,
     make_scalar_mode_field_solver_data_array,
+    make_surface_field_data_array,
+    make_surface_normal_data_array,
 )
 
 # data array instances
@@ -346,6 +352,35 @@ def make_diffraction_data():
         sim_size=sim_size,
         bloch_vecs=bloch_vecs,
     )
+
+
+def make_surface_field_data(time: bool = False):
+    """Create a SurfaceFieldData or SurfaceFieldTimeData instance for testing.
+
+    Parameters
+    ----------
+    time : bool
+        If True, create SurfaceFieldTimeData. Otherwise, create SurfaceFieldData.
+
+    Returns
+    -------
+    SurfaceFieldData or SurfaceFieldTimeData
+        The created data object.
+    """
+    normal = make_surface_normal_data_array()
+
+    if time:
+        monitor = SURFACE_FIELD_TIME_MONITOR
+        cls = SurfaceFieldTimeData
+    else:
+        monitor = SURFACE_FIELD_MONITOR
+        cls = SurfaceFieldData
+
+    field_datasets = {}
+    for field in monitor.fields:
+        field_datasets[field] = make_surface_field_data_array(time=time)
+
+    return cls(monitor=monitor, normal=normal, **field_datasets)
 
 
 """ Test them out """
@@ -1257,3 +1292,106 @@ def test_symmetry_expansion_no_interpolation_warning():
 
     with AssertLogLevel(None):
         _ = field_data.symmetry_expanded_copy
+
+
+import pytest
+
+
+@pytest.mark.parametrize("time", [False, True])
+def test_surface_field_data_unified(time):
+    """Test SurfaceFieldData and SurfaceFieldTimeData functionality."""
+    data = make_surface_field_data(time=time)
+    monitor = data.monitor
+
+    # Test field component access
+    for field in monitor.fields:
+        field_data = getattr(data, field)
+        assert field_data is not None
+        assert hasattr(field_data, "values")
+
+    # Test normal vector access
+    assert data.normal is not None
+    assert hasattr(data.normal, "values")
+
+    # Test Poynting vector calculation
+    poynting = data.poynting
+    assert poynting is not None
+    assert hasattr(poynting, "values")
+    assert np.all(np.isreal(poynting.values.values))
+
+    # test intensity calculation
+    intensity = data.intensity
+    assert intensity is not None
+    assert hasattr(intensity, "values")
+    assert np.all(np.isreal(intensity.values.values))
+
+    if not time:
+        # Test normalization (only for freq domain variant, SurfaceFieldData)
+        def dummy_source_spectrum(freq):
+            return 1.0 + 0.1j * np.ones_like(freq)
+
+        normalized_data = data.normalize(dummy_source_spectrum)
+        assert isinstance(normalized_data, SurfaceFieldData)
+
+        # Verify that the field components are different after normalization
+        for field_name, original_field in data.field_components.items():
+            normalized_field = getattr(normalized_data, field_name)
+            # Should not be exactly equal due to normalization
+            assert not np.allclose(original_field.values, normalized_field.values)
+
+
+def test_surface_field_data_missing_fields():
+    """Test error handling when required fields are missing for Poynting calculation."""
+    normal = make_surface_normal_data_array()
+
+    # Create data with only E field (no H field)
+    surface_data_partial = SurfaceFieldData(
+        monitor=SURFACE_FIELD_MONITOR.updated_copy(fields=("E",)),
+        normal=normal,
+        E=make_surface_field_data_array(time=False),
+        H=None,
+    )
+
+    # Should raise ValueError when trying to calculate Poynting vector
+    with pytest.raises(DataError, match="not included in this data object"):
+        _ = surface_data_partial.poynting
+
+    # Similar for current density calculation
+    with pytest.raises(ValueError, match="Could not calculate current density"):
+        _ = surface_data_partial.current_density
+
+
+def test_surface_field_time_data_missing_fields():
+    """Test error handling when required fields are missing for Poynting calculation."""
+    normal = make_surface_normal_data_array()
+
+    # Create data with only E field (no H field)
+    surface_data_partial = SurfaceFieldTimeData(
+        monitor=SURFACE_FIELD_TIME_MONITOR.updated_copy(fields=("H",)),
+        normal=normal,
+        H=make_surface_field_data_array(time=True),
+        E=None,
+    )
+
+    # Should raise ValueError when trying to calculate Poynting vector
+    with pytest.raises(DataError, match="not included in this data object"):
+        _ = surface_data_partial.poynting
+
+    # Can calculate current density besause E field is not required
+    current_density = surface_data_partial.current_density
+    assert current_density is not None
+    assert hasattr(current_density, "values")
+
+
+@pytest.mark.parametrize("time", [False, True])
+def test_surface_field_data_symmetry_expanded_copy_parametrized(time):
+    """Test symmetry_expanded_copy functionality for SurfaceFieldData and SurfaceFieldTimeData."""
+
+    # no symmetry
+    data = make_surface_field_data(time=time)
+    data_sym = data.symmetry_expanded_copy
+    assert data == data_sym, f"Failed for time={time} with no symmetry"
+
+    data = data.updated_copy(symmetry=(1, 0, -1))
+    data_sym = data.symmetry_expanded_copy
+    assert data != data_sym, f"Failed for time={time} with symmetry (1, 0, -1)"
