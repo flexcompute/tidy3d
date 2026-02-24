@@ -1597,8 +1597,8 @@ def test_outer_dot_numpy_memory_regression():
         H2u, H2v = H2
 
         if conjugate:
-            E1u, E1v = np.conj(E1u), np.conj(E1v)
-            H1u, H1v = np.conj(H1u), np.conj(H1v)
+            E2u, E2v = np.conj(E2u), np.conj(E2v)
+            H2u, H2v = np.conj(H2u), np.conj(H2v)
 
         n_modes_1 = E1u.shape[-3]
         n_modes_2 = E2u.shape[-3]
@@ -1624,8 +1624,8 @@ def test_outer_dot_numpy_memory_regression():
     # while keeping this regression test fast enough for CI.
     rng = np.random.default_rng(0)
     shape = (1, 40, 300, 400)
-    left = rng.standard_normal(shape).astype(np.complex128)
-    right = rng.standard_normal(shape).astype(np.complex128)
+    left = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+    right = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
     dS = (np.ones(shape[-2:], dtype=np.float64), np.ones(shape[-2:], dtype=np.float64))
 
     E1 = (left, left)
@@ -1710,6 +1710,7 @@ _DOT_BROADCAST_CASES = [
 ]
 
 
+@pytest.mark.parametrize("bidirectional", [True, False])
 @pytest.mark.parametrize("sim_2d", [False, True])
 @pytest.mark.parametrize(
     "self_f_idx,other_f_idx,self_m_idx,other_m_idx,"
@@ -1726,6 +1727,7 @@ def test_dot_broadcasting_combinations(
     expected_m_size,
     is_other_field,
     is_self_field,
+    bidirectional,
 ):
     """Systematically test dot() broadcasting rules across freq/mode combinations."""
     sim = SIM_2D if sim_2d else SIM
@@ -1750,7 +1752,7 @@ def test_dot_broadcasting_combinations(
         if other_m_idx is not None:
             other_data = _isel_mode(other_data, other_m_idx)
 
-    result = self_data.dot(other_data)
+    result = self_data.dot(other_data, bidirectional=bidirectional)
 
     # Check frequency dimension
     assert result.sizes["f"] == expected_f_size
@@ -1810,6 +1812,7 @@ _OUTER_DOT_CASES = [
 ]
 
 
+@pytest.mark.parametrize("bidirectional", [True, False])
 @pytest.mark.parametrize("sim_2d", [False, True])
 @pytest.mark.parametrize(
     "self_f_idx,other_f_idx,self_m_idx,other_m_idx,"
@@ -1828,6 +1831,7 @@ def test_outer_dot_broadcasting_combinations(
     expected_mi1_size,
     is_other_field,
     is_self_field,
+    bidirectional,
 ):
     """Systematically test outer_dot() intersection rules across freq/mode combinations."""
     sim = SIM_2D if sim_2d else SIM
@@ -1858,7 +1862,7 @@ def test_outer_dot_broadcasting_combinations(
         if other_m_idx is not None:
             other_data = _isel_mode(other_data, other_m_idx)
 
-    result = self_data.outer_dot(other_data)
+    result = self_data.outer_dot(other_data, bidirectional=bidirectional)
 
     # Check frequency dimension
     assert result.sizes["f"] == expected_f_size
@@ -1915,3 +1919,29 @@ def test_normalize_modes_zero_mode():
         assert np.allclose(field.sel(mode_index=zero_mode).values, 0.0), (
             "Zero mode should remain zero after normalization"
         )
+
+
+def test_dot_coord_mismatch_fallback():
+    """Test that dot/outer_dot fall back to colocated when tangential coords don't match."""
+    self_data = _make_dot_test_mode_solver_data(SIM, colocate=False)
+    other_data = _make_dot_test_mode_solver_data(SIM, colocate=False)
+
+    # Shift spatial coordinates of other_data so Yee grids differ
+    shifted_fields = {}
+    for comp, field in other_data.field_components.items():
+        new_coords = dict(field.coords)
+        for dim in ("y", "z"):
+            if dim in new_coords:
+                new_coords[dim] = new_coords[dim].values + 1e-6
+        shifted_fields[comp] = field.copy(data=field.values).assign_coords(new_coords)
+    other_data = other_data.updated_copy(**shifted_fields, validate=False)
+
+    # dot should warn and fall back to colocated
+    with AssertLogLevel("WARNING", contains_str="switching to colocated"):
+        result = self_data.dot(other_data)
+    assert "f" in result.dims
+
+    # outer_dot should also warn and fall back
+    with AssertLogLevel("WARNING", contains_str="switching to colocated"):
+        result = self_data.outer_dot(other_data)
+    assert "f" in result.dims
