@@ -1164,7 +1164,8 @@ def test_mode_spec_with_microwave_mode_spec():
         td.MicrowaveModeSpec(num_modes=2, impedance_specs=impedance_specs)
 
 
-def test_mode_solver_with_microwave_mode_spec():
+@pytest.mark.parametrize("colocate", [False, True])
+def test_mode_solver_with_microwave_mode_spec(colocate):
     """Test running the mode locally and see if impedance is close to correct."""
 
     width = 1.0 * mm
@@ -1191,7 +1192,7 @@ def test_mode_solver_with_microwave_mode_spec():
         simulation=stripline_sim,
         plane=plane,
         mode_spec=mode_spec,
-        colocate=False,
+        colocate=colocate,
         freqs=freqs,
     )
 
@@ -1205,11 +1206,14 @@ def test_mode_solver_with_microwave_mode_spec():
     with pytest.raises(SetupError, match="Auto path specification is not available"):
         mms_data: td.MicrowaveModeSolverData = mms.data
 
-    # Manually defined impedance spec will work
+    # Manually defined impedance spec will work.
+    # With colocated fields the current integral path needs extra padding (1 grid cell)
+    # away from the metal boundary for accurate results.
+    current_pad = 2 * dl if colocate else dl
     custom_spec = td.CustomImpedanceSpec(
         voltage_spec=None,
         current_spec=td.AxisAlignedCurrentIntegralSpec(
-            size=(0, width + dl, metal_thickness + dl), sign="+"
+            size=(0, width + current_pad, metal_thickness + current_pad), sign="+"
         ),
     )
     impedance_specs = (custom_spec, None, None)
