@@ -114,7 +114,7 @@ Coords1D = ArrayFloat1D
 
 # how much to shift the adjoint field source for 0-D axes dimensions
 SHIFT_VALUE_ADJ_FLD_SRC = 1e-5
-AXIAL_RATIO_CAP = 100
+AXIAL_RATIO_CAP = 1e10
 # At this sampling rate, the computed area of a sphere is within ~1% of the true value.
 MIN_ANGULAR_SAMPLES_SPHERE = 10
 # Threshold for cos(theta) to avoid unphysically large amplitudes near grazing angles
@@ -4550,27 +4550,30 @@ class DirectivityData(FieldProjectionAngleData):
         John Wiley & Sons, Chapter 2.12 (2016).
         """
 
-        # Calculate the terms of the equation
-        E1_abs_squared = np.abs(self.Etheta) ** 2
-        E2_abs_squared = np.abs(self.Ephi) ** 2
-        E1_squared = self.Etheta**2
-        E2_squared = self.Ephi**2
-
         # Axial ratio calculations based on equations (2-65) to (2-67)
         # from Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
-        # John Wiley & Sons, 2016. These calculations use complex numbers
-        # directly and are equivalent to the referenced equations.
-        AR_numerator = E1_abs_squared + E2_abs_squared + np.abs(E1_squared + E2_squared)
-        AR_denominator = E1_abs_squared + E2_abs_squared - np.abs(E1_squared + E2_squared)
+        # John Wiley & Sons, 2016.
+        #
+        # The standard formula computes AR_denominator = (A + B) - |C| where
+        # A = |Etheta|², B = |Ephi|², C = Etheta² + Ephi². For near-linear
+        # polarization |C| ≈ A + B, causing catastrophic cancellation.
+        #
+        # Instead, we use the identity (A+B)² - |C|² = 4*(ad - bc)² where
+        # a,b = Re,Im(Etheta) and c,d = Re,Im(Ephi). This "cross" term
+        # avoids the subtraction entirely.
+        cross = self.Etheta.real * self.Ephi.imag - self.Etheta.imag * self.Ephi.real
+
+        AR_numerator = (
+            np.abs(self.Etheta) ** 2
+            + np.abs(self.Ephi) ** 2
+            + np.abs(self.Etheta**2 + self.Ephi**2)
+        )
 
         inds_zero = AR_numerator == 0
         axial_ratio_inverse = xr.zeros_like(AR_numerator)
-        # Perform the axial ratio inverse calculation where the numerator is non-zero
-        axial_ratio_inverse = axial_ratio_inverse.where(
-            inds_zero, np.sqrt(np.abs(AR_denominator / AR_numerator))
-        )
+        axial_ratio_inverse = axial_ratio_inverse.where(inds_zero, 2 * np.abs(cross) / AR_numerator)
 
-        # Cap the axial ratio values at 1 / AXIAL_RATIO_CAP
+        # Safety-net cap for the degenerate case of zero total field
         axial_ratio_inverse = axial_ratio_inverse.where(
             axial_ratio_inverse >= 1 / AXIAL_RATIO_CAP, 1 / AXIAL_RATIO_CAP
         )
