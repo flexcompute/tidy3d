@@ -1171,7 +1171,11 @@ class EigSolver(Tidy3dBaseModel):
         raise RuntimeError(f"Unidentified 'mode_solver_type={mode_solver_type}'.")
 
     @staticmethod
-    def _truncate_medium_data(mat_data, cell_min, cell_max):
+    def _truncate_medium_data(
+        mat_data: Union[np.ndarray, tuple[np.ndarray, ...]],
+        cell_min: list[int],
+        cell_max: list[int],
+    ) -> Union[np.ndarray, tuple[np.ndarray, ...]]:
         """Truncate medium data (eps or mu) to the specified cell range.
 
         Parameters

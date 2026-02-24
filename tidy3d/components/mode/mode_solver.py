@@ -1213,33 +1213,57 @@ class ModeSolver(Tidy3dBaseModel):
             return self
 
     @cached_property
-    def _sim_boundary_positions(self) -> Bound2D:
-        """Get simulation boundary positions for the mode plane's tangential axes.
+    def _pec_boundary_positions(self) -> Bound2D:
+        """PEC boundary positions snapped to nearest grid boundary on or outside the plane.
 
-        Returns the simulation boundary positions and logs warnings if the mode solver
-        grid extends beyond boundaries with unsupported conditions (PMC, Periodic, Bloch).
-        PEC boundaries are fully supported. PML/Absorber/ABC boundaries are silently
-        ignored since including them would introduce too many warnings in existing simulations.
+        For each tangential axis, the PEC boundary is placed at the grid boundary
+        closest to (but not inside) the mode plane bounds. This ensures correct PEC
+        placement for interior wave ports where the mode plane is smaller than the
+        simulation domain.
 
-        .. TODO Consolidate all boundary conditions in the underlying simulation and the mode solver.
+        Also logs warnings if the PEC position coincides with a simulation boundary
+        that uses an unsupported condition (PMC, Periodic, Bloch).
 
         Returns
         -------
         Bound2D
             ((min_0, min_1), (max_0, max_1)) positions along tangential axes.
         """
-        trans_axes = [0, 1, 2]
-        trans_axes.remove(self.normal_axis)
-        axis_names = ["x", "y", "z"]
+        from tidy3d.components.geometry.utils import (
+            SnapBehavior,
+            SnapLocation,
+            SnappingSpec,
+            snap_box_to_grid,
+        )
 
+        _, tangential_axes = Box.pop_axis([0, 1, 2], self.normal_axis)
+
+        # Build snap spec: Expand on tangential axes, Off on normal/degenerate axes
+        behavior = [SnapBehavior.Off, SnapBehavior.Off, SnapBehavior.Off]
+        location = [SnapLocation.Boundary, SnapLocation.Boundary, SnapLocation.Boundary]
+        for ax in tangential_axes:
+            # Skip degenerate axes (1D mode solves in 2D simulations) —
+            # solver grid is fixed to all available cells, PEC truncation is meaningless
+            if self.simulation.grid.num_cells[ax] > 1:
+                behavior[ax] = SnapBehavior.Expand
+
+        snap_spec = SnappingSpec(
+            location=tuple(location),
+            behavior=tuple(behavior),
+        )
+        snapped = snap_box_to_grid(self.simulation.grid, self.plane, snap_spec)
+
+        # Extract tangential-axis bounds as Bound2D
+        pos_min = [snapped.bounds[0][ax] for ax in tangential_axes]
+        pos_max = [snapped.bounds[1][ax] for ax in tangential_axes]
+
+        # Warn if PEC position coincides with a simulation boundary using unsupported BC
+        axis_names = ["x", "y", "z"]
         sim_grid_list = self.simulation.grid.boundaries.to_list
         solver_grid_list = self._solver_grid.boundaries.to_list
         bspec = self.simulation.boundary_spec
 
-        pos_min = [None, None]
-        pos_max = [None, None]
-
-        for i, axis in enumerate(trans_axes):
+        for axis in tangential_axes:
             axis_name = axis_names[axis]
             boundary = bspec[axis_name]
 
@@ -1247,14 +1271,11 @@ class ModeSolver(Tidy3dBaseModel):
             sim_max = sim_grid_list[axis][-1]
             solver_min = solver_grid_list[axis][0]
             solver_max = solver_grid_list[axis][-1]
-            pos_min[i] = sim_min
-            pos_max[i] = sim_max
-            # Check if mode solver plane intersects simulation boundaries
-            # Min side: intersects if solver grid extends beyond (below) sim boundary
+
+            # Check if solver grid extends beyond (below/above) simulation boundary
             intersects_min = solver_min < sim_min and not np.isclose(
                 solver_min, sim_min, rtol=fp_eps, atol=fp_eps
             )
-            # Max side: intersects if solver grid extends beyond (above) sim boundary
             intersects_max = solver_max > sim_max and not np.isclose(
                 solver_max, sim_max, rtol=fp_eps, atol=fp_eps
             )
@@ -1274,7 +1295,6 @@ class ModeSolver(Tidy3dBaseModel):
                         f"unsupported periodic/Bloch boundary condition. "
                         f"Fields will not wrap around periodically."
                     )
-            # ABC boundaries: no truncation, no warning (fields can extend)
 
             # Check plus side
             bc_plus = boundary.plus
@@ -1291,7 +1311,7 @@ class ModeSolver(Tidy3dBaseModel):
                         f"unsupported periodic/Bloch boundary condition. "
                         f"Fields will not wrap around periodically."
                     )
-            # ABC boundaries: no truncation, no warning (fields can extend)
+
         return (tuple(pos_min), tuple(pos_max))
 
     def _data_on_yee_grid(self) -> ModeSolverData:
@@ -1467,7 +1487,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         colocate_coords = self._get_colocation_coordinates()
 
-        min_bound, max_bound = self._sim_boundary_positions
+        min_bound, max_bound = self._pec_boundary_positions
         _, plane_dims = self.plane.pop_axis("xyz", self.normal_axis)
         slice_dict = {plane_dims[axis]: slice(min_bound[axis], max_bound[axis]) for axis in [0, 1]}
         # Colocate input data to new coordinates
@@ -1804,7 +1824,7 @@ class ModeSolver(Tidy3dBaseModel):
             direction=self.direction,
             precision=self._precision,
             plane_center=self.plane_center_tangential(self.plane),
-            sim_pec_bound=self._sim_boundary_positions,
+            sim_pec_bound=self._pec_boundary_positions,
         )
 
         fields = self._postprocess_solver_fields(
@@ -1869,7 +1889,7 @@ class ModeSolver(Tidy3dBaseModel):
             solver_basis_fields=solver_basis_fields,
             precision=self._precision,
             plane_center=self.plane_center_tangential(self.plane),
-            sim_pec_bound=self._sim_boundary_positions,
+            sim_pec_bound=self._pec_boundary_positions,
         )
 
         fields = self._postprocess_solver_fields(

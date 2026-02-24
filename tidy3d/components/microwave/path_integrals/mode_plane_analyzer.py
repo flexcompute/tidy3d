@@ -89,6 +89,34 @@ class ModePlaneAnalyzer(Box):
 
         return (tuple(min_b_2d_list), max_b)
 
+    def _get_pec_boundary_positions(
+        self, sim_grid: Grid, mode_symmetry: tuple[Symmetry, Symmetry, Symmetry]
+    ) -> Bound:
+        """PEC boundary positions snapped to nearest grid boundary on or outside the plane.
+
+        Uses ``SnapBehavior.Expand`` (no margin) so the PEC is placed at the grid
+        boundary closest to the mode plane edge. This matches the positions used by
+        the mode solver for PEC enforcement during eigensolve.
+
+        For symmetry axes, the min bound is moved to the symmetry center so the
+        PEC line is placed where the half-domain boundary is. The filter method
+        ``_filter_conductors_touching_sim_bounds`` then removes that line for
+        PMC symmetry (symmetry=1) but keeps it for PEC-like symmetry (symmetry=-1).
+        """
+        behavior = [SnapBehavior.Off] * 3
+        location = [SnapLocation.Boundary] * 3
+        for ax in range(3):
+            if ax != self._normal_axis and sim_grid.num_cells[ax] > 1:
+                behavior[ax] = SnapBehavior.Expand
+        snap_spec = SnappingSpec(location=location, behavior=behavior)
+        pec_box = snap_box_to_grid(sim_grid, self.geometry, snap_spec=snap_spec)
+        min_b, max_b = pec_box.bounds
+        min_b_list = list(min_b)
+        for dim in range(3):
+            if mode_symmetry[dim] != 0:
+                min_b_list[dim] = self.center[dim]
+        return (tuple(min_b_list), max_b)
+
     def _get_isolated_conductors_as_shapely(
         self,
         plane: Box,
@@ -125,7 +153,7 @@ class ModePlaneAnalyzer(Box):
 
     def _filter_conductors_touching_sim_bounds(
         self,
-        mode_limits: Bound,
+        pec_bounds: Bound,
         mode_symmetry_3d: tuple[Symmetry, Symmetry, Symmetry],
         conductor_polygons: list[Shapely],
     ) -> list[Shapely]:
@@ -135,8 +163,8 @@ class ModePlaneAnalyzer(Box):
 
         Parameters
         ----------
-        mode_limits : Bound
-            The locations of the boundary conditions.
+        pec_bounds : Bound
+            PEC boundary positions snapped to the grid.
         mode_symmetry_3d : tuple[Symmetry, Symmetry, Symmetry]
             Symmetry settings for the mode solver plane.
         conductor_polygons : list[Shapely]
@@ -148,7 +176,7 @@ class ModePlaneAnalyzer(Box):
         list[Shapely]
             The filtered list of shapely geometries, where structures "shorted" to PEC boundaries have been removed.
         """
-        min_b_3d, max_b_3d = mode_limits[0], mode_limits[1]
+        min_b_3d, max_b_3d = pec_bounds[0], pec_bounds[1]
         _, mode_symmetry = Geometry.pop_axis(mode_symmetry_3d, self._normal_axis)
         _, min_b = Geometry.pop_axis(min_b_3d, self._normal_axis)
         _, max_b = Geometry.pop_axis(max_b_3d, self._normal_axis)
@@ -219,8 +247,12 @@ class ModePlaneAnalyzer(Box):
             intersection_plane, structures
         )
 
+        # Use PEC-snapped bounds (tighter than mode_limits) for filtering conductors
+        # that are "shorted" to PEC boundaries. This matches the PEC positions used
+        # by the mode solver during eigensolve.
+        pec_bounds = self._get_pec_boundary_positions(grid, mode_symmetry_3d)
         filtered_conductor_shapely = self._filter_conductors_touching_sim_bounds(
-            (min_b_3d, max_b_3d), mode_symmetry_3d, isolated_conductor_shapely
+            pec_bounds, mode_symmetry_3d, isolated_conductor_shapely
         )
 
         if len(filtered_conductor_shapely) < 1:
@@ -243,7 +275,6 @@ class ModePlaneAnalyzer(Box):
                 box_snapped = snap_box_to_grid(grid, box, snap_spec)
                 bounding_boxes.append(box_snapped)
 
-        # TODO Improve these checks once FXC-4112-PEC-boundary-position-not-respected-by-ModeSolver is merged
         for bounding_box in bounding_boxes:
             if self._check_box_intersects_with_conductors(isolated_conductor_shapely, bounding_box):
                 raise SetupError(

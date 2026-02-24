@@ -2066,5 +2066,160 @@ def test_mode_solver_boundary_warning(
     with AssertLogLevel(
         "WARNING" if expected_warnings > 0 else None, contains_str=warning_str
     ) as ctx:
-        _ = ms._sim_boundary_positions
+        _ = ms._pec_boundary_positions
         assert ctx.num_records == expected_warnings
+
+
+def test_mode_solver_pec_boundary_interior_plane():
+    """Test that PEC snaps to the mode plane edges for an interior plane (smaller than simulation)."""
+    freq0 = td.C_0 / 1.55
+    dl = 0.05
+
+    # Large simulation with PEC boundaries
+    simulation = td.Simulation(
+        size=(4.0, 0.0, 4.0),
+        grid_spec=td.GridSpec.uniform(dl=dl),
+        run_time=1e-14,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pec(),
+        ),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+                polarization="Ex",
+            )
+        ],
+    )
+
+    # Interior plane much smaller than the simulation
+    plane = td.Box(center=(0, 0, 0), size=(2.0, 0, 1.5))
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=plane,
+        mode_spec=td.ModeSpec(num_modes=1, precision="double"),
+        freqs=[freq0],
+        direction="+",
+        colocate=False,
+    )
+
+    pec_bounds = ms._pec_boundary_positions
+    sim_bounds = simulation.bounds
+
+    # PEC should snap to plane edges, NOT simulation edges
+    # x-axis: plane spans [-1.0, 1.0], sim spans [-2.0, 2.0]
+    assert pec_bounds[0][0] <= plane.bounds[0][0]  # min_x snapped <= plane_min_x
+    assert pec_bounds[1][0] >= plane.bounds[1][0]  # max_x snapped >= plane_max_x
+    assert pec_bounds[0][0] > sim_bounds[0][0]  # NOT at sim edge
+    assert pec_bounds[1][0] < sim_bounds[1][0]  # NOT at sim edge
+
+    # z-axis: plane spans [-0.75, 0.75], sim spans [-2.0, 2.0]
+    assert pec_bounds[0][1] <= plane.bounds[0][2]
+    assert pec_bounds[1][1] >= plane.bounds[1][2]
+    assert pec_bounds[0][1] > sim_bounds[0][2]
+    assert pec_bounds[1][1] < sim_bounds[1][2]
+
+    # PEC should be close to plane edges (within one grid cell)
+    assert abs(pec_bounds[0][0] - plane.bounds[0][0]) <= dl
+    assert abs(pec_bounds[1][0] - plane.bounds[1][0]) <= dl
+    assert abs(pec_bounds[0][1] - plane.bounds[0][2]) <= dl
+    assert abs(pec_bounds[1][1] - plane.bounds[1][2]) <= dl
+
+
+def test_mode_solver_pec_boundary_at_sim_edge():
+    """Test that PEC at simulation edge gives same behavior as before (plane spans full sim)."""
+    freq0 = td.C_0 / 1.55
+
+    sim_size = (2.0, 0.0, 1.5)
+    simulation = td.Simulation(
+        size=sim_size,
+        grid_spec=td.GridSpec.uniform(dl=0.05),
+        run_time=1e-14,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pec(),
+        ),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+                polarization="Ex",
+            )
+        ],
+    )
+
+    # Plane spans full simulation
+    plane = td.Box(center=(0, 0, 0), size=(sim_size[0], 0, sim_size[2]))
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=plane,
+        mode_spec=td.ModeSpec(num_modes=1),
+        freqs=[freq0],
+        direction="+",
+    )
+
+    pec_bounds = ms._pec_boundary_positions
+    sim_grid = simulation.grid.boundaries.to_list
+
+    # PEC should be at (or very close to) simulation grid boundaries
+    assert np.isclose(pec_bounds[0][0], sim_grid[0][0], rtol=fp_eps)
+    assert np.isclose(pec_bounds[1][0], sim_grid[0][-1], rtol=fp_eps)
+    assert np.isclose(pec_bounds[0][1], sim_grid[2][0], rtol=fp_eps)
+    assert np.isclose(pec_bounds[1][1], sim_grid[2][-1], rtol=fp_eps)
+
+
+def test_mode_solver_pec_boundary_1d_mode_solve():
+    """Test that degenerate tangential axes (2D simulation) use Off behavior and mode solve completes.
+
+    In a 2D simulation (zero size along z), the z-axis has num_cells <= 1. When z is tangential
+    to the mode plane (propagation along y), the PEC snapping should use SnapBehavior.Off for that
+    degenerate axis to avoid issues with snap_box_to_grid's force-expansion logic.
+    """
+    freq0 = td.C_0 / 1.55
+
+    # 2D simulation: zero size in z → num_cells <= 1 along z
+    # Normal axis is y (propagation), tangential axes are x and z.
+    # z is degenerate (1 cell).
+    simulation = td.Simulation(
+        size=(2.0, 3.0, 0.0),
+        grid_spec=td.GridSpec.uniform(dl=0.05),
+        run_time=1e-14,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.pec(),
+            z=td.Boundary.periodic(),
+        ),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+                polarization="Ex",
+            )
+        ],
+    )
+
+    # Mode plane normal to y, tangential to x (non-degenerate) and z (degenerate).
+    # Plane z-size is nonzero (required for a valid planar Box), but the sim has 0 z-size
+    # so num_cells[z] <= 1 and SnapBehavior.Off will be used for z.
+    plane = td.Box(center=(0, 0, 0), size=(2.0, 0, 1.0))
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=plane,
+        mode_spec=td.ModeSpec(num_modes=1),
+        freqs=[freq0],
+        direction="+",
+    )
+
+    # Should not raise — degenerate z-axis uses SnapBehavior.Off
+    pec_bounds = ms._pec_boundary_positions
+    assert pec_bounds is not None
+
+    # The mode solve should complete without error
+    data = ms.data
+    assert data is not None

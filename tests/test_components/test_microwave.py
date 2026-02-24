@@ -918,26 +918,61 @@ def test_mode_plane_analyzer_mode_bounds(mode_size, symmetry):
         colocate=True,
         freqs=[freq0],
     )
-    mode_solver_boundaries = mms._solver_grid.boundaries.to_list
     mode_plane_analyzer = ModePlaneAnalyzer(
         center=mode_center,
         size=mode_size,
         field_data_colocated=False,
     )
-    mode_plane_limits = mode_plane_analyzer._get_mode_limits(sim.grid, sim.symmetry)
+    # Verify that ModePlaneAnalyzer PEC bounds match ModeSolver PEC bounds
+    mode_symmetry_3d = mode_plane_analyzer._get_mode_symmetry(sim.bounding_box, sim.symmetry)
+    analyzer_pec = mode_plane_analyzer._get_pec_boundary_positions(sim.grid, mode_symmetry_3d)
+    solver_pec = mms._pec_boundary_positions
+    _, tangential_axes = td.Box.pop_axis([0, 1, 2], mms.normal_axis)
+    for i, ax in enumerate(tangential_axes):
+        # Max side should always match
+        assert np.isclose(analyzer_pec[1][ax], solver_pec[1][i])
+        # Min side matches only when no symmetry (with symmetry, analyzer
+        # moves min to center for half-domain conductor filtering)
+        if mode_symmetry_3d[ax] == 0:
+            assert np.isclose(analyzer_pec[0][ax], solver_pec[0][i])
 
-    for dim in (0, 1):
-        solver_dim_boundaries = mode_solver_boundaries[dim]
-        # TODO: Need the second check because the mode solver erroneously adds
-        # an extra grid cell even when touching the simulation boundary
-        assert (
-            solver_dim_boundaries[0] == mode_plane_limits[0][dim]
-            or mode_plane_limits[0][dim] == sim.bounds[0][dim]
-        )
-        assert (
-            solver_dim_boundaries[-1] == mode_plane_limits[1][dim]
-            or mode_plane_limits[1][dim] == sim.bounds[1][dim]
-        )
+
+def test_mode_plane_analyzer_ground_plane_filtered():
+    """Test that a ground plane extending beyond the mode plane is correctly filtered
+    as shorted to PEC boundary. Regression test for SCRF-2777."""
+    # Microstrip: narrow signal trace + wide ground plane, with PEC boundaries
+    signal_trace = td.Structure(
+        geometry=td.Box(center=(0, 0, 1.1 * mm), size=(0.4 * mm, td.inf, 35)),
+        medium=td.PEC,
+    )
+    ground_plane = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(1.5 * mm, td.inf, 35)),
+        medium=td.PEC,
+    )
+    substrate = td.Structure(
+        geometry=td.Box(center=(0, 0, 0.55 * mm), size=(2 * mm, td.inf, 1.1 * mm)),
+        medium=td.Medium(permittivity=4.4),
+    )
+    sim = td.Simulation(
+        center=(0, 0, 1 * mm),
+        size=(2 * mm, 2 * mm, 3 * mm),
+        grid_spec=td.GridSpec.uniform(dl=0.05 * mm),
+        structures=[substrate, signal_trace, ground_plane],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(), y=td.Boundary.pec(), z=td.Boundary.pec()
+        ),
+    )
+    # Mode plane is narrower than the ground plane in x
+    mode_plane = td.Box(center=(0, 0, 1 * mm), size=(1.2 * mm, 0, 2.5 * mm))
+    analyzer = ModePlaneAnalyzer(
+        center=mode_plane.center, size=mode_plane.size, field_data_colocated=False
+    )
+    bounding_boxes, conductors = analyzer.get_conductor_bounding_boxes(
+        sim.structures, sim.grid, sim.symmetry, sim.bounding_box
+    )
+    # Only the signal trace should remain; ground plane is shorted to PEC
+    assert len(conductors) == 1
 
 
 def test_impedance_spec_validation():
