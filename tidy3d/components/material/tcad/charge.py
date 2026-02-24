@@ -72,19 +72,35 @@ class ChargeInsulatorMedium(AbstractChargeMedium):
 class ChargeConductorMedium(AbstractChargeMedium):
     """Conductor medium for conduction simulations.
 
-    Example
-    -------
+    Examples
+    --------
+    Using a uniform scalar electrical conductivity:
+
     >>> import tidy3d as td
     >>> solid = td.ChargeConductorMedium(conductivity=3)
+
+    Using a spatially varying electrical conductivity via :class:`.SpatialDataArray`:
+
+    >>> import numpy as np
+    >>> import tidy3d as td
+    >>> x = [0, 1]
+    >>> y = [0, 1]
+    >>> z = [0, 1]
+    >>> sigma = np.ones((2, 2, 2)) * 3
+    >>> sigma_arr = td.SpatialDataArray(sigma, coords={"x": x, "y": y, "z": z})
+    >>> solid_custom = td.ChargeConductorMedium(conductivity=sigma_arr)  # doctest: +SKIP
 
     Note
     ----
         A relative permittivity will be assumed 1 if no value is specified.
     """
 
-    conductivity: PositiveFloat = Field(
+    conductivity: Union[PositiveFloat, SpatialDataArray] = Field(
         title="Electric conductivity",
-        description="Electric conductivity of material.",
+        description=(
+            "Electric conductivity of material. Can be a scalar or a "
+            "SpatialDataArray for spatially varying values."
+        ),
         json_schema_extra={"units": CONDUCTIVITY},
     )
 

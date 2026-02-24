@@ -51,6 +51,15 @@ def make_heat_mediums():
     return fluid_medium, solid_medium
 
 
+def make_spatial_conductivity():
+    """Create a SpatialDataArray for use as spatially varying thermal conductivity."""
+    x = [0.0, 1.0]
+    y = [0.0, 1.0]
+    z = [0.0, 1.0]
+    k_data = np.ones((2, 2, 2)) * 3.0
+    return td.SpatialDataArray(k_data, coords={"x": x, "y": y, "z": z})
+
+
 def test_heat_medium():
     _, solid_medium = make_heat_mediums()
 
@@ -79,6 +88,102 @@ def test_heat_medium():
 
     with pytest.raises(ValueError):
         _ = solid_from_si.optical
+
+
+def test_solid_medium_spatial_conductivity():
+    """Test that SolidMedium and SolidSpec accept SpatialDataArray for conductivity."""
+    k_array = make_spatial_conductivity()
+
+    # SolidMedium accepts SpatialDataArray conductivity
+    solid = td.SolidMedium(capacity=2, conductivity=k_array)
+    assert isinstance(solid.conductivity, td.SpatialDataArray)
+
+    # SolidSpec (backwards-compat subclass) also accepts SpatialDataArray conductivity
+    solid_spec = td.SolidSpec(capacity=2, conductivity=k_array)
+    assert isinstance(solid_spec.conductivity, td.SpatialDataArray)
+
+    # from_si_units also accepts SpatialDataArray (values are scaled by 1e-6)
+    solid_si = td.SolidMedium.from_si_units(conductivity=k_array, capacity=1, density=1)
+    assert isinstance(solid_si.conductivity, td.SpatialDataArray)
+    np.testing.assert_allclose(solid_si.conductivity.values, k_array.values * 1e-6)
+
+
+def make_spatial_conductivity_sim():
+    """Build a minimal HeatSimulation with a SpatialDataArray conductivity."""
+    k_array = make_spatial_conductivity()
+    solid_medium = td.Medium(
+        permittivity=5,
+        heat_spec=td.SolidSpec(capacity=2, conductivity=k_array, density=1),
+        name="solid_medium",
+    )
+    fluid_medium = td.Medium(
+        permittivity=3,
+        heat_spec=FluidSpec(),
+        name="fluid_medium",
+    )
+    box = td.Box(center=(0, 0, 0), size=(1, 1, 1))
+    solid_structure = td.Structure(geometry=box, medium=solid_medium, name="solid_structure")
+    return HeatSimulation(
+        medium=fluid_medium,
+        structures=[solid_structure],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        boundary_spec=[
+            HeatBoundarySpec(
+                condition=TemperatureBC(temperature=300), placement=SimulationBoundary()
+            )
+        ],
+        grid_spec=UniformUnstructuredGrid(dl=0.1),
+        sources=[],
+        monitors=[TemperatureMonitor(size=(1.6, 2, 2), name="test")],
+    )
+
+
+def test_solid_medium_spatial_conductivity_plot():
+    """Test that plot_heat_conductivity renders a heatmap for SpatialDataArray conductivity."""
+    from matplotlib.collections import QuadMesh
+
+    heat_sim = make_spatial_conductivity_sim()
+
+    _, ax = plt.subplots()
+    ax = heat_sim.plot_heat_conductivity(y=0, ax=ax)
+    quad_meshes = [c for c in ax.collections if isinstance(c, QuadMesh)]
+    assert len(quad_meshes) >= 1, "Expected at least one pcolormesh for spatial conductivity"
+    plt.close()
+
+    # Also verify via the unified plot_structures_property entry point
+    _, ax = plt.subplots()
+    ax = heat_sim.scene.plot_structures_property(y=0, property="heat_conductivity", ax=ax)
+    quad_meshes = [c for c in ax.collections if isinstance(c, QuadMesh)]
+    assert len(quad_meshes) >= 1, "Expected pcolormesh via plot_structures_property"
+    plt.close()
+
+    # Scalar conductivity should not produce a pcolormesh overlay
+    scalar_sim = make_heat_sim()
+    _, ax = plt.subplots()
+    ax = scalar_sim.scene.plot_structures_property(y=0, property="heat_conductivity", ax=ax)
+    quad_meshes = [c for c in ax.collections if isinstance(c, QuadMesh)]
+    assert len(quad_meshes) == 0, "Scalar conductivity should not produce a pcolormesh"
+    plt.close()
+
+
+def test_spatial_conductivity_plot_log_scale():
+    """The pcolormesh norm should match the caller's scale, not always be linear."""
+    import matplotlib as mpl
+    from matplotlib.collections import QuadMesh
+
+    heat_sim = make_spatial_conductivity_sim()
+
+    _, ax = plt.subplots()
+    ax = heat_sim.scene.plot_structures_property(
+        y=0, property="heat_conductivity", ax=ax, scale="log"
+    )
+    quad_meshes = [c for c in ax.collections if isinstance(c, QuadMesh)]
+    assert len(quad_meshes) >= 1, "Expected pcolormesh for spatial conductivity"
+    assert isinstance(quad_meshes[0].norm, mpl.colors.LogNorm), (
+        "pcolormesh should use LogNorm when scale='log'"
+    )
+    plt.close()
 
 
 def make_heat_structures():

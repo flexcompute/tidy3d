@@ -16,6 +16,7 @@ from tidy3d.components.bc_placement import (
     StructureSimulationBoundary,
     StructureStructureInterface,
 )
+from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.geometry.base import Box, Transformed
 from tidy3d.components.geometry.primitives import Cylinder
 from tidy3d.components.geometry.utils import flatten_groups
@@ -1034,7 +1035,32 @@ class HeatChargeSimulation(AbstractSimulation):
                     "but none have been defined."
                 )
 
+        self._check_spatial_conductivity_no_semiconductors()
+
         return self
+
+    def _check_spatial_conductivity_no_semiconductors(self) -> None:
+        """Raise if any ChargeConductorMedium uses SpatialDataArray conductivity while
+        semiconductors are also present in the simulation, as this feature is not currently supported.
+        """
+        has_spatial = False
+        for structure in self.structures:
+            medium = structure.medium
+            charge = getattr(medium, "charge", None)
+            if isinstance(charge, ChargeConductorMedium) and isinstance(
+                charge.conductivity, SpatialDataArray
+            ):
+                has_spatial = True
+                break
+
+        if not has_spatial:
+            return
+
+        if self._check_if_semiconductor_present(self.structures):
+            raise SetupError(
+                "SpatialDataArray conductivity in 'ChargeConductorMedium' cannot be used "
+                "when semiconductor structures are present in the simulation."
+            )
 
     def _estimate_charge_mesh_size(self) -> Self:
         """Make an estimate of the mesh size and raise a warning if too big.

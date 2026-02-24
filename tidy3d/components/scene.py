@@ -989,7 +989,9 @@ class Scene(Tidy3dBaseModel):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         grid: Grid = None,
-        property: Literal["eps", "doping", "N_a", "N_d"] = "eps",
+        property: Literal[
+            "eps", "doping", "N_a", "N_d", "heat_conductivity", "electric_conductivity"
+        ] = "eps",
         eps_component: Optional[PermittivityComponent] = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
@@ -1025,9 +1027,10 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-        property: Literal["eps", "doping", "N_a", "N_d"] = "eps"
+        property: Literal["eps", "doping", "N_a", "N_d", "heat_conductivity", \
+"electric_conductivity"] = "eps"
             Indicates the property to plot for the structures. Currently supported properties
-            are ["eps", "doping", "N_a", "N_d"]
+            are ["eps", "doping", "N_a", "N_d", "heat_conductivity", "electric_conductivity"]
         eps_component : Optional[PermittivityComponent] = None
             Component of the permittivity tensor to plot for anisotropic materials,
             e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
@@ -1054,15 +1057,16 @@ class Scene(Tidy3dBaseModel):
             need_filtered_shaped = alpha < 1 and not isinstance(self.medium, AbstractCustomMedium)
         if property in ["N_d", "N_a", "doping"]:
             need_filtered_shaped = alpha < 1
+        if property in ["heat_conductivity", "electric_conductivity"]:
+            need_filtered_shaped = alpha < 1
+
+        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
 
         if need_filtered_shaped:
-            axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
             center = Box.unpop_axis(position, (0, 0), axis=axis)
             size = Box.unpop_axis(0, (inf, inf), axis=axis)
             plane = Box(center=center, size=size)
-            # for doping background structure could be a non-doping structure
-            # that needs to be rendered
-            if property in ["N_d", "N_a", "doping"]:
+            if property in ["N_d", "N_a", "doping", "heat_conductivity", "electric_conductivity"]:
                 structures = [self.background_structure, *list(structures)]
             medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
         else:
@@ -1095,6 +1099,12 @@ class Scene(Tidy3dBaseModel):
                     property_min = property_min if property_min is not None else -donor_limits[1]
                     property_max = property_max if property_max is not None else acceptor_limits[1]
                     linthresh = min(acceptor_abs_min, donor_abs_min)
+
+            if property in ["heat_conductivity", "electric_conductivity"]:
+                cond_min, cond_max = self.heat_charge_property_bounds(property=property)
+                property_min = property_min if property_min is not None else cond_min
+                property_max = property_max if property_max is not None else cond_max
+                linthresh = 1e-2 * max(abs(property_min), 1e-10)
 
             if np.isclose(linthresh, 0.0):
                 # fallback to default linthresh of 1e-3
@@ -1148,6 +1158,30 @@ class Scene(Tidy3dBaseModel):
                         property,
                         norm,
                     )
+            elif property in ["heat_conductivity", "electric_conductivity"]:
+                ax = self._plot_shape_structure_heat_charge_property(
+                    alpha=alpha,
+                    medium=medium,
+                    property_val_min=property_min,
+                    property_val_max=property_max,
+                    reverse=reverse,
+                    shape=shape,
+                    ax=ax,
+                    property=property,
+                )
+                spatial_cond = self._get_spatial_conductivity(medium, property)
+                if spatial_cond is not None:
+                    ax = self._plot_spatial_conductivity_on_shape(
+                        conductivity=spatial_cond,
+                        shape=shape,
+                        axis=axis,
+                        position=position,
+                        property_val_min=property_min,
+                        property_val_max=property_max,
+                        alpha=alpha,
+                        ax=ax,
+                        norm=norm,
+                    )
             else:
                 # if the background medium is custom medium, it needs to be rendered separately
                 if medium == self.medium and need_filtered_shaped:
@@ -1192,6 +1226,24 @@ class Scene(Tidy3dBaseModel):
                     vmax=property_max,
                     label=r"$\rm{Doping} \#/cm^3$",
                     cmap=HEAT_SOURCE_CMAP,
+                    ax=ax,
+                    norm=norm,
+                )
+            elif property == "heat_conductivity":
+                Scene._add_cbar(
+                    vmin=property_min,
+                    vmax=property_max,
+                    label=f"Thermal conductivity ({THERMAL_CONDUCTIVITY})",
+                    cmap=STRUCTURE_HEAT_COND_CMAP,
+                    ax=ax,
+                    norm=norm,
+                )
+            elif property == "electric_conductivity":
+                Scene._add_cbar(
+                    vmin=property_min,
+                    vmax=property_max,
+                    label=f"Electric conductivity ({CONDUCTIVITY})",
+                    cmap=STRUCTURE_HEAT_COND_CMAP,
                     ax=ax,
                     norm=norm,
                 )
@@ -1701,8 +1753,9 @@ class Scene(Tidy3dBaseModel):
         if alpha <= 0:
             return ax
 
+        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+
         if alpha < 1:
-            axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
             center = Box.unpop_axis(position, (0, 0), axis=axis)
             size = Box.unpop_axis(0, (inf, inf), axis=axis)
             plane = Box(center=center, size=size)
@@ -1714,6 +1767,8 @@ class Scene(Tidy3dBaseModel):
             )
 
         property_val_min, property_val_max = self.heat_charge_property_bounds(property=property)
+
+        # First pass: draw each structure as a uniform-filled polygon
         for medium, shape in medium_shapes:
             ax = self._plot_shape_structure_heat_charge_property(
                 alpha=alpha,
@@ -1725,6 +1780,23 @@ class Scene(Tidy3dBaseModel):
                 ax=ax,
                 property=property,
             )
+
+        # Second pass: overlay heatmaps for structures with spatially varying conductivity
+        if property in ["heat_conductivity", "electric_conductivity"]:
+            for medium, shape in medium_shapes:
+                spatial_cond = self._get_spatial_conductivity(medium, property)
+                if spatial_cond is None:
+                    continue
+                ax = self._plot_spatial_conductivity_on_shape(
+                    conductivity=spatial_cond,
+                    shape=shape,
+                    axis=axis,
+                    position=position,
+                    property_val_min=property_val_min,
+                    property_val_max=property_val_max,
+                    alpha=alpha,
+                    ax=ax,
+                )
 
         if cbar:
             label = ""
@@ -1740,8 +1812,6 @@ class Scene(Tidy3dBaseModel):
                 ax=ax,
             )
 
-        # clean up the axis display
-        axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_lims(axis=axis, ax=ax)
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         # Add the default axis labels, tick labels, and title
@@ -1765,12 +1835,27 @@ class Scene(Tidy3dBaseModel):
             medium_list = [
                 medium for medium in medium_list if isinstance(medium.heat_spec, SolidType)
             ]
-            cond_list = [medium.heat_spec.conductivity for medium in medium_list]
+            cond_list = []
+            for medium in medium_list:
+                cond = medium.heat_spec.conductivity
+                if isinstance(cond, SpatialDataArray):
+                    # Include the full value range so the colorbar spans real data
+                    cond_list.append(float(np.min(cond.values)))
+                    cond_list.append(float(np.max(cond.values)))
+                else:
+                    cond_list.append(float(cond))
         elif property == "electric_conductivity":
             cond_mediums = [
                 medium for medium in medium_list if isinstance(medium.charge, ChargeConductorMedium)
             ]
-            cond_list = [medium.charge.conductivity for medium in cond_mediums]
+            cond_list = []
+            for medium in cond_mediums:
+                cond = medium.charge.conductivity
+                if isinstance(cond, SpatialDataArray):
+                    cond_list.append(float(np.min(cond.values)))
+                    cond_list.append(float(np.max(cond.values)))
+                else:
+                    cond_list.append(float(cond))
 
         if len(cond_list) == 0:
             cond_list = [0]
@@ -1827,7 +1912,10 @@ class Scene(Tidy3dBaseModel):
             cond_medium = None
 
         if cond_medium is not None:
-            delta_cond = cond_medium - property_val_min
+            # For SpatialDataArray, the mean drives the background polygon fill;
+            # a heatmap overlay is rendered on top by plot_structures_heat_charge_property.
+            cond_scalar = float(np.mean(cond_medium))
+            delta_cond = cond_scalar - property_val_min
             delta_cond_max = property_val_max - property_val_min + 1e-5 * property_val_min
             cond_fraction = delta_cond / delta_cond_max
             color = cond_fraction if reverse else 1 - cond_fraction
@@ -1862,6 +1950,79 @@ class Scene(Tidy3dBaseModel):
             property=property,
         )
         ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
+        return ax
+
+    @staticmethod
+    def _get_spatial_conductivity(
+        medium: MultiPhysicsMediumType3D, property: str
+    ) -> Optional[SpatialDataArray]:
+        """Return the SpatialDataArray conductivity for a medium if applicable, else None."""
+        SolidType = (SolidSpec, SolidMedium)
+        if property == "heat_conductivity":
+            if isinstance(medium.heat_spec, SolidType):
+                cond = medium.heat_spec.conductivity
+                if isinstance(cond, SpatialDataArray):
+                    return cond
+        elif property == "electric_conductivity":
+            if isinstance(medium.charge, ChargeConductorMedium):
+                cond = medium.charge.conductivity
+                if isinstance(cond, SpatialDataArray):
+                    return cond
+        return None
+
+    def _plot_spatial_conductivity_on_shape(
+        self,
+        conductivity: SpatialDataArray,
+        shape: Shapely,
+        axis: int,
+        position: float,
+        property_val_min: float,
+        property_val_max: float,
+        alpha: float,
+        ax: Ax,
+        norm: mpl.colors.Normalize | None = None,
+    ) -> Ax:
+        """Plot a ``SpatialDataArray`` conductivity on a 2D cross-section, clipped to the
+        structure's polygon outline.
+        """
+        import matplotlib as mpl
+
+        plane_axes_inds = [0, 1, 2]
+        plane_axes_inds.pop(axis)
+
+        shape_bounds = shape.bounds
+        rmin, rmax = [*shape_bounds[:2]], [*shape_bounds[2:]]
+        rmin.insert(axis, position)
+        rmax.insert(axis, position)
+
+        N = 100
+        coords_2D = [np.linspace(rmin[d], rmax[d], N) for d in plane_axes_inds]
+        X, Y = np.meshgrid(coords_2D[0], coords_2D[1], indexing="ij")
+
+        struct_coords = {"xyz"[d]: coords_2D[i] for i, d in enumerate(plane_axes_inds)}
+
+        data_2D = conductivity.sel(**{"xyz"[axis]: position}, method="nearest")
+
+        k_grid = data_2D.interp(
+            **struct_coords,
+            method="nearest",
+            kwargs={"bounds_error": False, "fill_value": 0},
+        )
+
+        if norm is None:
+            norm = mpl.colors.Normalize(vmin=property_val_min, vmax=property_val_max)
+
+        ax.pcolormesh(
+            X,
+            Y,
+            k_grid.values,
+            clip_path=(polygon_path(shape), ax.transData),
+            cmap=STRUCTURE_HEAT_COND_CMAP,
+            alpha=alpha,
+            clip_box=ax.bbox,
+            norm=norm,
+        )
+
         return ax
 
     @equal_aspect

@@ -1502,6 +1502,104 @@ def test_conduction_simulation_has_conductors(conduction_simulation, structures)
         )
 
 
+def test_conduction_spatial_conductivity():
+    """ChargeConductorMedium should accept SpatialDataArray for conductivity."""
+    x = [0.0, 1.0]
+    y = [0.0, 1.0]
+    z = [0.0, 1.0]
+    sigma_data = np.ones((2, 2, 2)) * 5.0
+    sigma_arr = td.SpatialDataArray(sigma_data, coords={"x": x, "y": y, "z": z})
+
+    cond_medium = td.ChargeConductorMedium(conductivity=sigma_arr)
+    assert isinstance(cond_medium.conductivity, td.SpatialDataArray)
+
+    conductor = td.MultiPhysicsMedium(
+        charge=cond_medium,
+        name="conductor",
+    )
+    sim = td.HeatChargeSimulation(
+        center=(0, 0, 0),
+        size=(3, 3, 3),
+        medium=td.MultiPhysicsMedium(
+            charge=td.ChargeInsulatorMedium(),
+            name="air",
+        ),
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+                medium=conductor,
+            ),
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.SimulationBoundary(),
+                condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0)),
+            ),
+        ],
+        monitors=[td.SteadyPotentialMonitor(size=(1, 1, 0), name="pot")],
+    )
+    assert sim is not None
+
+
+def test_conduction_spatial_conductivity_with_semiconductor_raises():
+    """SpatialDataArray conductivity + semiconductor must raise an error."""
+    x = [0.0, 1.0]
+    y = [0.0, 1.0]
+    z = [0.0, 1.0]
+    sigma_data = np.ones((2, 2, 2)) * 5.0
+    sigma_arr = td.SpatialDataArray(sigma_data, coords={"x": x, "y": y, "z": z})
+
+    conductor = td.MultiPhysicsMedium(
+        charge=td.ChargeConductorMedium(conductivity=sigma_arr),
+        name="conductor",
+    )
+    semiconductor = td.MultiPhysicsMedium(
+        charge=td.SemiconductorMedium(
+            N_c=td.ConstantEffectiveDOS(N=1e10),
+            N_v=td.ConstantEffectiveDOS(N=1e10),
+            E_g=td.ConstantEnergyBandGap(eg=1),
+            mobility_n=td.ConstantMobilityModel(mu=1500),
+            mobility_p=td.ConstantMobilityModel(mu=1500),
+        ),
+        name="semiconductor",
+    )
+
+    with pytest.raises(ValidationError, match="SpatialDataArray conductivity"):
+        td.HeatChargeSimulation(
+            center=(0, 0, 0),
+            size=(3, 3, 3),
+            medium=td.MultiPhysicsMedium(
+                heat=td.FluidSpec(),
+                charge=td.ChargeInsulatorMedium(),
+                name="air",
+            ),
+            structures=[
+                td.Structure(
+                    geometry=td.Box(size=(1, 1, 1), center=(-0.5, 0, 0)),
+                    medium=conductor,
+                ),
+                td.Structure(
+                    geometry=td.Box(size=(1, 1, 1), center=(0.5, 0, 0)),
+                    medium=semiconductor,
+                ),
+            ],
+            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            boundary_spec=[
+                td.HeatChargeBoundarySpec(
+                    placement=td.SimulationBoundary(surfaces=["z-"]),
+                    condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0)),
+                ),
+                td.HeatChargeBoundarySpec(
+                    placement=td.SimulationBoundary(surfaces=["z+"]),
+                    condition=td.VoltageBC(source=td.DCVoltageSource(voltage=1)),
+                ),
+            ],
+            monitors=[td.SteadyPotentialMonitor(size=(1, 1, 0), name="pot")],
+            analysis_spec=td.IsothermalSteadyChargeDCAnalysis(),
+        )
+
+
 def test_coupling_source(conduction_simulation, heat_simulation):
     """Test whether the coupling source can be applied."""
 

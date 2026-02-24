@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Optional, Union
 from pydantic import Field, NonNegativeFloat, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.constants import (
     DENSITY,
     DYNAMIC_VISCOSITY,
@@ -151,12 +152,25 @@ class FluidSpec(FluidMedium):
 class SolidMedium(AbstractHeatMedium):
     """Solid medium for heat simulations.
 
-    Example
-    -------
+    Examples
+    --------
+    Using a uniform scalar thermal conductivity:
+
     >>> solid = SolidMedium(
     ...     capacity=2,
     ...     conductivity=3,
     ... )
+
+    Using a spatially varying thermal conductivity via :class:`.SpatialDataArray`:
+
+    >>> import numpy as np
+    >>> import tidy3d as td
+    >>> x = [0, 1]
+    >>> y = [0, 1]
+    >>> z = [0, 1]
+    >>> k_data = np.ones((2, 2, 2)) * 3
+    >>> k_array = td.SpatialDataArray(k_data, coords={"x": x, "y": y, "z": z})
+    >>> solid_custom = SolidMedium(capacity=2, conductivity=k_array) # doctest: +SKIP
     """
 
     capacity: Optional[PositiveFloat] = Field(
@@ -166,9 +180,13 @@ class SolidMedium(AbstractHeatMedium):
         json_schema_extra={"units": SPECIFIC_HEAT_CAPACITY},
     )
 
-    conductivity: PositiveFloat = Field(
+    conductivity: Union[PositiveFloat, SpatialDataArray] = Field(
         title="Thermal conductivity",
-        description=f"Thermal conductivity of material in units of {THERMAL_CONDUCTIVITY}.",
+        description=(
+            "Thermal conductivity of material in units of "
+            f"{THERMAL_CONDUCTIVITY}. Can be a scalar or a SpatialDataArray for "
+            "spatially varying values."
+        ),
         json_schema_extra={"units": THERMAL_CONDUCTIVITY},
     )
 
@@ -182,12 +200,24 @@ class SolidMedium(AbstractHeatMedium):
     @classmethod
     def from_si_units(
         cls,
-        conductivity: PositiveFloat,
+        conductivity: Union[PositiveFloat, SpatialDataArray],
         capacity: Optional[PositiveFloat] = None,
         density: Optional[PositiveFloat] = None,
     ) -> Self:
-        """Create a SolidMedium using SI units"""
-        new_conductivity = conductivity * 1e-6  # Convert from W/(m*K) to W/(um*K)
+        """Create a SolidMedium using SI units.
+
+        Parameters
+        ----------
+        conductivity : Union[float, SpatialDataArray]
+            Thermal conductivity in W/(m*K). Can be a scalar or a
+            :class:`.SpatialDataArray` for spatially varying values.
+        capacity : float, optional
+            Specific heat capacity in J/(kg*K).
+        density : float, optional
+            Mass density in kg/m^3.
+        """
+        # Convert from W/(m*K) to W/(um*K)
+        new_conductivity = conductivity * 1e-6
         new_capacity = capacity
         new_density = density
 

@@ -1914,8 +1914,15 @@
           "type": "object"
         },
         "conductivity": {
-          "exclusiveMinimum": 0,
-          "type": "number"
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "frequency_range": {
           "anyOf": [
@@ -15048,8 +15055,15 @@
           "default": null
         },
         "conductivity": {
-          "exclusiveMinimum": 0,
-          "type": "number"
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "density": {
           "anyOf": [
@@ -15105,8 +15119,15 @@
           "default": null
         },
         "conductivity": {
-          "exclusiveMinimum": 0,
-          "type": "number"
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "density": {
           "anyOf": [
