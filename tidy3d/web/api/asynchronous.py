@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tidy3d.log import log
 from tidy3d.web.core.types import PayType
 
 from .container import DEFAULT_DATA_DIR, Batch
@@ -50,7 +49,7 @@ def run_async(
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     num_workers: int = None
-        Number of tasks to submit at once in a batch, if None, will run all at the same time.
+        Number of worker threads used by :class:`Batch` upload/start/download stages.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
     simulation_type : str = "tidy3d"
@@ -86,13 +85,6 @@ def run_async(
     if simulation_type is None:
         simulation_type = "tidy3d"
 
-    # if number of workers not specified, just use the number of simulations
-    if num_workers is not None:
-        log.warning(
-            "The 'num_workers' kwarg does not have an effect anymore as all "
-            "simulations will now be uploaded in a single batch."
-        )
-
     batch = Batch(
         simulations=simulations,
         folder_name=folder_name,
@@ -104,6 +96,7 @@ def run_async(
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
         lazy=lazy,
+        **({"num_workers": num_workers} if num_workers is not None else {}),
     )
 
     batch_data = batch.run(path_dir=path_dir, priority=priority)
