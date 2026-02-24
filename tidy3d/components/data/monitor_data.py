@@ -3176,6 +3176,15 @@ class ModeSolverData(ModeData):
         """Normalize modes. Note: this modifies ``self`` in-place."""
         self_dot = self.dot(self, conjugate=self.monitor.conjugated_dot_product)
         scaling = np.sqrt(np.sign(np.real(self_dot)) * self_dot)
+        near_zero = np.abs(scaling) < fp_eps
+        if np.any(near_zero):
+            affected = near_zero.any(dim="f") if "f" in near_zero.dims else near_zero
+            affected_modes = [int(m) for m in affected.mode_index.values[affected.values]]
+            log.warning(
+                f"Mode indices {affected_modes} have a self-overlap magnitude smaller than "
+                f"'fp_eps' and cannot be normalized. Skipping normalization for these modes."
+            )
+            scaling = scaling.where(~near_zero, other=1.0)
         for field in self.field_components.values():
             field /= scaling
 

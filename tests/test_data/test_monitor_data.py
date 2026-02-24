@@ -1885,3 +1885,33 @@ def test_outer_dot_broadcasting_combinations(
         assert isinstance(result, FreqDataArray)
     else:
         assert isinstance(result, MixedModeDataArray)
+
+
+def test_normalize_modes_zero_mode():
+    """Test that _normalize_modes warns when a mode cannot be normalized."""
+    # Start from a working ModeSolverData (uses MODE_SOLVER_MONITOR with 4 modes)
+    mode_data = make_mode_solver_data()
+
+    # Zero out all fields for mode_index=1
+    zero_mode = 1
+    zeroed_fields = {}
+    for comp, field in mode_data.field_components.items():
+        values = field.values.copy()
+        values[:, :, :, :, zero_mode] = 0.0
+        zeroed_fields[comp] = field.copy(data=values)
+    mode_data = mode_data.copy(update=zeroed_fields)
+
+    with AssertLogLevel("WARNING", contains_str="Mode indices [1]"):
+        mode_data._normalize_modes()
+
+    # Non-zero modes should remain finite (no division by zero)
+    for field in mode_data.field_components.values():
+        assert np.all(np.isfinite(field.sel(mode_index=0).values)), (
+            "Non-zero mode fields should remain finite after normalization"
+        )
+
+    # Zero mode should remain zero (normalization skipped)
+    for field in mode_data.field_components.values():
+        assert np.allclose(field.sel(mode_index=zero_mode).values, 0.0), (
+            "Zero mode should remain zero after normalization"
+        )
