@@ -97,9 +97,55 @@ class FakeJob:
         return False
 
 
+class FakeJobWithSimulation(FakeJob):
+    def __init__(
+        self, task_id: str, statuses: list[str], events: list[str], simulation: td.Simulation
+    ):
+        super().__init__(task_id=task_id, statuses=statuses, events=events)
+        self.simulation = simulation
+
+
+class UploadStartFakeJob:
+    def __init__(self, task_id: str, events: list[tuple], cached: bool = False):
+        self.task_id = task_id
+        self.events = events
+        self._cached = cached
+
+    @property
+    def load_if_cached(self):
+        return self._cached
+
+    def upload(self):
+        self.events.append((self.task_id, "upload"))
+
+    def start(self, priority=None):
+        self.events.append((self.task_id, "start", priority))
+
+
+class LoadStatusFakeJob:
+    def __init__(self, task_id: str, status: str, simulation: td.Simulation):
+        self.task_id = task_id
+        self._status = status
+        self.simulation = simulation
+
+    @property
+    def status(self):
+        return self._status
+
+    @property
+    def load_if_cached(self):
+        return False
+
+
 class ImmediateExecutor:
     def __init__(self, *args, **kwargs):
         pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.shutdown(wait=True)
 
     def submit(self, fn, *args, **kwargs):
         future = Future()
@@ -782,10 +828,10 @@ def test_batch_run_saves_file_after_upload(mock_webapi, mock_job_status, tmp_pat
         batch_file_saved["has_task_ids"] = self.jobs is not None and TASK_NAME in self.jobs
         return original_to_file(self, fname)
 
-    # mock start to interrupt run() after upload and to_file
-    def mock_start_interrupt(self, *args, **kwargs):
-        # at this point, upload() and to_file() should have been called
-        assert batch_file_saved["saved"], "Batch file should be saved before start()"
+    # mock monitor to interrupt run() after upload/start and to_file
+    def mock_monitor_interrupt(self, *args, **kwargs):
+        # at this point, upload/start and to_file() should have been called
+        assert batch_file_saved["saved"], "Batch file should be saved before monitor()"
         assert batch_file_saved["has_task_ids"], "Batch file should have task_ids"
         # verify file actually exists and can be loaded
         batch_path = self._batch_path(path_dir=str(tmp_path))
@@ -795,11 +841,35 @@ def test_batch_run_saves_file_after_upload(mock_webapi, mock_job_status, tmp_pat
         raise RuntimeError("Simulated interruption after upload")
 
     monkeypatch.setattr(Batch, "to_file", track_to_file)
-    monkeypatch.setattr(Batch, "start", mock_start_interrupt)
+    monkeypatch.setattr(Batch, "monitor", mock_monitor_interrupt)
 
     # run should save the batch file after upload, even if interrupted
     with pytest.raises(RuntimeError, match="Simulated interruption"):
         batch.run(path_dir=str(tmp_path))
+
+
+def test_batch_run_saves_file_when_upload_and_start_fails(tmp_path, monkeypatch):
+    sims = {TASK_NAME: make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME)
+
+    batch_file_saved = {"saved": False}
+    original_to_file = Batch.to_file
+
+    def track_to_file(self, fname):
+        batch_file_saved["saved"] = True
+        return original_to_file(self, fname)
+
+    def mock_upload_and_start_fail(self, *args, **kwargs):
+        raise RuntimeError("Simulated failure during upload/start")
+
+    monkeypatch.setattr(Batch, "to_file", track_to_file)
+    monkeypatch.setattr(Batch, "_upload_and_start", mock_upload_and_start_fail)
+
+    with pytest.raises(RuntimeError, match="Simulated failure"):
+        batch.run(path_dir=str(tmp_path))
+
+    assert batch_file_saved["saved"]
+    assert os.path.exists(batch._batch_path(path_dir=str(tmp_path)))
 
 
 def test_batch_monitor_downloads_on_success(monkeypatch, tmp_path):
@@ -841,6 +911,74 @@ def test_batch_monitor_downloads_on_success(monkeypatch, tmp_path):
     )
 
     assert job1_download_idx < job2_success_idx, "Download should start before other jobs finish"
+
+
+def test_batch_monitor_does_not_repoll_completed_jobs(monkeypatch, tmp_path):
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+
+    sims = {"done_task": make_sim(), "slow_task": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        "done_task": FakeJob("done_id", ["success", "success"], events),
+        "slow_task": FakeJob("slow_id", ["running", "running", "success"], events),
+    }
+
+    batch.monitor(download_on_success=False, path_dir=str(tmp_path))
+
+    done_status_calls = sum(1 for event in events if event == ("done_id", "status", "success"))
+    slow_status_calls = sum(1 for event in events if event[0] == "slow_id" and event[1] == "status")
+    assert done_status_calls == 1
+    assert slow_status_calls >= 3
+
+
+def test_batch_upload_and_start_starts_each_task_after_upload(monkeypatch):
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr(Batch, "_check_folder", staticmethod(lambda *args, **kwargs: None))
+
+    sims = {"task_a": make_sim(), "task_b": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        "task_a": UploadStartFakeJob("task_a_id", events),
+        "task_b": UploadStartFakeJob("task_b_id", events),
+    }
+
+    batch._upload_and_start(priority=6)
+
+    assert events == [
+        ("task_a_id", "upload"),
+        ("task_a_id", "start", 6),
+        ("task_b_id", "upload"),
+        ("task_b_id", "start", 6),
+    ]
+
+
+def test_batch_upload_and_start_skips_cached_jobs(monkeypatch):
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr(Batch, "_check_folder", staticmethod(lambda *args, **kwargs: None))
+
+    sims = {"cached_task": make_sim(), "running_task": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        "cached_task": UploadStartFakeJob("cached_id", events, cached=True),
+        "running_task": UploadStartFakeJob("running_id", events, cached=False),
+    }
+
+    batch._upload_and_start(priority=3)
+
+    assert events == [
+        ("running_id", "upload"),
+        ("running_id", "start", 3),
+    ]
 
 
 def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
@@ -918,6 +1056,92 @@ def test_batch_download_surfaces_download_errors(monkeypatch, tmp_path):
         batch.download(path_dir=str(tmp_path))
 
 
+def test_batch_upload_surfaces_upload_errors(monkeypatch):
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr(Batch, "_check_folder", staticmethod(lambda *args, **kwargs: None))
+    monkeypatch.setattr("tidy3d.web.api.container.Job.load_if_cached", property(lambda self: False))
+
+    def _raise_upload(self):
+        raise RuntimeError("upload failed")
+
+    monkeypatch.setattr("tidy3d.web.api.container.Job.upload", _raise_upload)
+
+    sims = {"task_a": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+
+    with pytest.raises(RuntimeError, match="upload failed"):
+        batch.upload()
+
+
+def test_batch_load_parallel_status_collection(monkeypatch, tmp_path):
+    max_workers_used = []
+    submit_calls = []
+    warning_messages = []
+
+    class CapturingExecutor(ImmediateExecutor):
+        def __init__(self, *args, **kwargs):
+            max_workers_used.append(kwargs.get("max_workers"))
+
+        def submit(self, fn, *args, **kwargs):
+            submit_calls.append((fn, args, kwargs))
+            return super().submit(fn, *args, **kwargs)
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", CapturingExecutor)
+    monkeypatch.setattr(
+        "tidy3d.web.api.container.log.warning", lambda msg: warning_messages.append(msg)
+    )
+
+    sims = {"ok_task": make_sim(), "bad_task": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {
+        "jobs": {
+            "ok_task": LoadStatusFakeJob("ok_task_id", "success", sims["ok_task"]),
+            "bad_task": LoadStatusFakeJob("bad_task_id", "error", sims["bad_task"]),
+        }
+    }
+
+    data = batch.load(path_dir=str(tmp_path), skip_download=True)
+
+    assert max_workers_used == [batch.num_workers]
+    assert len(submit_calls) == 2
+    assert data.task_ids == {"ok_task": "ok_task_id"}
+    assert set(data.task_paths.keys()) == {"ok_task"}
+    assert warning_messages == ["Not loading 'bad_task' as the task errored."]
+
+
+def test_batch_load_reuses_terminal_status_snapshot(monkeypatch, tmp_path):
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+
+    sims = {"task_a": make_sim(), "task_b": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        "task_a": FakeJobWithSimulation(
+            "task_a_id",
+            ["running", "success", "success"],
+            events,
+            sims["task_a"],
+        ),
+        "task_b": FakeJobWithSimulation(
+            "task_b_id",
+            ["running", "running", "success", "success"],
+            events,
+            sims["task_b"],
+        ),
+    }
+
+    batch.monitor(download_on_success=False, path_dir=str(tmp_path))
+    status_calls_before_load = sum(1 for event in events if event[1] == "status")
+
+    _ = batch.load(path_dir=str(tmp_path), skip_download=True)
+    status_calls_after_load = sum(1 for event in events if event[1] == "status")
+
+    assert status_calls_after_load == status_calls_before_load
+
+
 """ Async """
 
 
@@ -927,6 +1151,86 @@ def test_async(mock_webapi, mock_job_status, tmp_path, task_name):
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
     sims = {TASK_NAME: make_sim()} if task_name else [make_sim()]
     _ = run_async(sims, folder_name=PROJECT_NAME, path_dir=str(tmp_path))
+
+
+def test_async_forwards_num_workers(monkeypatch):
+    captured_kwargs = {}
+    captured_run_kwargs = {}
+
+    class DummyBatch:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+        def run(self, **kwargs):
+            captured_run_kwargs.update(kwargs)
+            return {}
+
+    monkeypatch.setattr("tidy3d.web.api.asynchronous.Batch", DummyBatch)
+
+    sims = {TASK_NAME: make_sim()}
+    _ = run_async(sims, folder_name=PROJECT_NAME, path_dir=".", num_workers=7, verbose=False)
+
+    assert captured_kwargs["num_workers"] == 7
+    assert captured_run_kwargs["path_dir"] == "."
+
+
+def test_async_omits_num_workers_when_not_provided(monkeypatch):
+    captured_kwargs = {}
+
+    class DummyBatch:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+        def run(self, **kwargs):
+            return {}
+
+    monkeypatch.setattr("tidy3d.web.api.asynchronous.Batch", DummyBatch)
+
+    sims = {TASK_NAME: make_sim()}
+    _ = run_async(sims, folder_name=PROJECT_NAME, path_dir=".", verbose=False)
+
+    assert "num_workers" not in captured_kwargs
+
+
+def test_batch_run_uses_optimized_upload_and_start(monkeypatch, tmp_path):
+    class RunFakeJob:
+        @property
+        def load_if_cached(self):
+            return False
+
+    upload_start_calls = {"count": 0, "priority": None}
+    load_kwargs = {}
+
+    def _raise_legacy_upload(*args, **kwargs):
+        raise AssertionError("Batch.run should not call legacy Batch.upload().")
+
+    def _raise_legacy_start(*args, **kwargs):
+        raise AssertionError("Batch.run should not call legacy Batch.start().")
+
+    def _track_upload_and_start(self, priority=None):
+        upload_start_calls["count"] += 1
+        upload_start_calls["priority"] = priority
+
+    def _fake_load(self, **kwargs):
+        load_kwargs.update(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(Batch, "upload", _raise_legacy_upload)
+    monkeypatch.setattr(Batch, "start", _raise_legacy_start)
+    monkeypatch.setattr(Batch, "_upload_and_start", _track_upload_and_start)
+    monkeypatch.setattr(Batch, "to_file", lambda *args, **kwargs: None)
+    monkeypatch.setattr(Batch, "monitor", lambda *args, **kwargs: None)
+    monkeypatch.setattr(Batch, "load", _fake_load)
+
+    batch = Batch(simulations={"task_a": make_sim()}, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {"jobs": {"task_a": RunFakeJob()}}
+
+    result = batch.run(path_dir=str(tmp_path), priority=8)
+
+    assert result == {"ok": True}
+    assert upload_start_calls["count"] == 1
+    assert upload_start_calls["priority"] == 8
+    assert load_kwargs == {"path_dir": str(tmp_path), "skip_download": True}
 
 
 """ Main """
