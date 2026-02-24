@@ -1627,6 +1627,33 @@ class Batch(WebContainer):
             if task_name in self.jobs
         }
 
+        def _known_task_id(task_name: TaskName, job: Job) -> Optional[TaskId]:
+            """Return a known task id without triggering uploads."""
+            task_id = terminal_task_id_by_task.get(task_name)
+            if task_id is not None:
+                return task_id
+
+            cached_properties = getattr(job, "_cached_properties", None)
+            if isinstance(cached_properties, dict):
+                task_id = cached_properties.get("task_id")
+                if task_id is not None:
+                    return task_id
+
+            task_id_cached = getattr(job, "task_id_cached", None)
+            if task_id_cached is not None:
+                return task_id_cached
+
+            # Support lightweight job doubles in tests without touching real Job.task_id.
+            if not isinstance(job, Job):
+                task_id = getattr(job, "task_id", None)
+                if task_id is not None:
+                    return task_id
+
+            if job.load_if_cached:
+                return getattr(job, "_cached_task_id", None)
+
+            return None
+
         def _resolve_task_status(
             task_name: TaskName, job: Job
         ) -> tuple[TaskName, str, Optional[TaskId]]:
@@ -1634,21 +1661,32 @@ class Batch(WebContainer):
             if terminal_status in END_STATES:
                 if "error" in terminal_status:
                     return task_name, terminal_status, None
-                task_id = terminal_task_id_by_task.get(task_name)
+
+                task_id = _known_task_id(task_name, job)
                 if task_id is None:
-                    task_id = job.task_id
+                    raise DataError(
+                        f"Can't load batch results for '{task_name}', task hasn't been uploaded."
+                    )
                 return task_name, terminal_status, task_id
 
             if job.load_if_cached:
-                task_id = terminal_task_id_by_task.get(task_name)
+                task_id = _known_task_id(task_name, job)
                 if task_id is None:
-                    task_id = job.task_id
+                    raise DataError(
+                        f"Can't load batch results for '{task_name}', task hasn't been uploaded."
+                    )
                 return task_name, "success", task_id
+
+            task_id = _known_task_id(task_name, job)
+            if task_id is None:
+                raise DataError(
+                    f"Can't load batch results for '{task_name}', task hasn't been uploaded."
+                )
 
             status = job.status
             if "error" in status:
                 return task_name, status, None
-            return task_name, status, job.task_id
+            return task_name, status, task_id
 
         status_by_task: dict[TaskName, str] = {}
         task_id_by_task: dict[TaskName, TaskId] = {}

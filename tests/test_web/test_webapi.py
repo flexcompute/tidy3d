@@ -26,7 +26,7 @@ from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import PointDipole
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import DataError, SetupError
 from tidy3d.web import common
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, BatchData, Job, WebContainer
@@ -1140,6 +1140,22 @@ def test_batch_load_reuses_terminal_status_snapshot(monkeypatch, tmp_path):
     status_calls_after_load = sum(1 for event in events if event[1] == "status")
 
     assert status_calls_after_load == status_calls_before_load
+
+
+def test_batch_load_does_not_upload_unknown_tasks(monkeypatch, tmp_path):
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.Job.load_if_cached", property(lambda self: False))
+
+    def _raise_upload(self, *args, **kwargs):
+        raise AssertionError("Batch.load() should not upload tasks.")
+
+    monkeypatch.setattr("tidy3d.web.api.container.Job._upload", _raise_upload)
+
+    sims = {"task_a": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+
+    with pytest.raises(DataError, match="task hasn't been uploaded"):
+        batch.load(path_dir=str(tmp_path), skip_download=True)
 
 
 """ Async """
