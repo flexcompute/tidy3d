@@ -491,6 +491,9 @@ class TriangularGridDataset(UnstructuredGridDataset):
         axes = [ind for ind, comp in enumerate(xyz) if comp is not None]
         num_provided = len(axes)
 
+        if num_provided == 0 and len(sel_kwargs) == 0:
+            raise DataError("At least one dimension for selection must be provided.")
+
         if self.normal_axis in axes:
             if xyz[self.normal_axis] != self.normal_pos:
                 raise DataError(
@@ -501,9 +504,6 @@ class TriangularGridDataset(UnstructuredGridDataset):
             if num_provided < 3:
                 num_provided -= 1
                 axes.remove(self.normal_axis)
-
-        if num_provided == 0 and len(sel_kwargs) == 0:
-            raise DataError("At least one dimension for selection must be provided.")
 
         self_after_non_spatial_sel = self._non_spatial_sel(method=method, **sel_kwargs)
 

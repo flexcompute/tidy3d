@@ -294,6 +294,10 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         result = tri_grid.sel(x=np.linspace(0, 1, 3), y=tri_grid.normal_pos, z=[0.3, 0.4, 0.5])
         assert result.name == ds_name
 
+        # selecting only along the normal axis is a no-op and should return self
+        result_normal_only = tri_grid.sel(y=tri_grid.normal_pos)
+        assert result_normal_only == tri_grid
+
         # can't select out of plane
         with pytest.raises(DataError):
             _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=1.2, z=[0.3, 0.4, 0.5])

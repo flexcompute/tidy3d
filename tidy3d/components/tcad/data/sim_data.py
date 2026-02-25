@@ -45,6 +45,28 @@ if TYPE_CHECKING:
     from tidy3d.components.types import Ax, RealFieldVal
 
 
+def _auto_sel_kwargs_for_zero_size_dims(
+    monitor: Any,
+    simulation: Any,
+    sel_kwargs: dict,
+) -> dict:
+    """Find the first zero-size spatial dimension to auto-select on.
+
+    For 2D simulations or 2D monitors producing 3D unstructured data, this detects
+    which spatial dimension is collapsed and returns the appropriate sel kwarg
+    so that a TetrahedralGridDataset can be sliced to a TriangularGridDataset.
+    """
+    for dim in range(3):
+        dim_name = "xyz"[dim]
+        if dim_name in sel_kwargs:
+            continue
+        if monitor.size[dim] == 0:
+            return {dim_name: monitor.center[dim]}
+        if simulation.size[dim] == 0:
+            return {dim_name: simulation.center[dim]}
+    return {}
+
+
 def _compute_monitor_axis_limits(
     monitor: Any,
     sim_bounds: tuple,
@@ -236,6 +258,13 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
             field_data = field_data.sel(**sel_kwargs)
 
         if isinstance(field_data, TetrahedralGridDataset):
+            auto_sel = _auto_sel_kwargs_for_zero_size_dims(
+                monitor_data.monitor, self.simulation, sel_kwargs
+            )
+            if auto_sel:
+                field_data = field_data.sel(**auto_sel)
+
+        if isinstance(field_data, TetrahedralGridDataset):
             raise DataError(
                 "Must select a two-dimensional slice of unstructured dataset for plotting"
                 " on a plane."
@@ -421,6 +450,13 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         # it could produce either SpatialDataArray or UnstructuredGridDatasetType
         if isinstance(field_data, UnstructuredGridDataset) and len(sel_kwargs) > 0:
             field_data = field_data.sel(**sel_kwargs)
+
+        if isinstance(field_data, TetrahedralGridDataset):
+            auto_sel = _auto_sel_kwargs_for_zero_size_dims(
+                monitor_data.monitor, self.simulation, sel_kwargs
+            )
+            if auto_sel:
+                field_data = field_data.sel(**auto_sel)
 
         if isinstance(field_data, TetrahedralGridDataset):
             raise DataError(

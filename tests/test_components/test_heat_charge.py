@@ -1449,6 +1449,7 @@ def test_mesh_plotting(simulation_data):
 
     # Plotting mesh from unstructured temperature data
     heat_sim_data.plot_mesh("tri")
+    heat_sim_data.plot_mesh("tri", y=0)  # redundant normal-axis sel should be a no-op
     heat_sim_data.plot_mesh("tet", y=0.5)
 
     # Plotting mesh from unstructured voltage data
@@ -1479,6 +1480,87 @@ def test_mesh_plotting(simulation_data):
     # Test plotting with invalid field_name
     with pytest.raises(DataError):
         mesh_data.plot_mesh("mesh_test", z=0, field_name="wrong")
+
+
+def test_plot_mesh_2d_auto_sel():
+    """Test that plot_mesh auto-selects the collapsed dimension for 2D simulations."""
+
+    solid_medium = td.Medium(
+        permittivity=2.0,
+        heat_spec=td.SolidSpec(conductivity=1, capacity=1),
+        name="solid",
+    )
+    fluid_medium = td.Medium(permittivity=3.0, heat_spec=td.FluidSpec(), name="fluid")
+    structure = td.Structure(
+        geometry=td.Box(size=(0.5, 0.5, 0.5), center=(0, 0, 0)),
+        medium=solid_medium,
+        name="box",
+    )
+
+    temp_mnt_2d = td.TemperatureMonitor(
+        center=(0, 0, 0), size=(0.8, 0, 0.8), name="temp_2d", unstructured=True
+    )
+    mesh_mnt_2d = td.VolumeMeshMonitor(center=(0, 0, 0), size=(0.8, 0, 0.8), name="mesh_2d")
+
+    heat_sim_2d = td.HeatChargeSimulation(
+        medium=fluid_medium,
+        structures=[structure],
+        center=(0, 0, 0),
+        size=(1, 0, 1),
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        sources=[td.HeatSource(rate=1, structures=["box"])],
+        boundary_spec=[
+            td.HeatChargeBoundarySpec(
+                placement=td.StructureBoundary(structure="box"),
+                condition=td.TemperatureBC(temperature=500),
+            )
+        ],
+        monitors=[temp_mnt_2d],
+    )
+
+    tet_grid_points = td.PointDataArray(
+        [
+            [0.0, -0.01, 0.0],
+            [0.4, -0.01, 0.0],
+            [0.0, -0.01, 0.4],
+            [0.4, -0.01, 0.4],
+            [0.2, 0.01, 0.2],
+        ],
+        dims=("index", "axis"),
+    )
+    tet_grid_cells = td.CellDataArray(
+        [[0, 1, 2, 4], [1, 2, 3, 4]],
+        dims=("cell_index", "vertex_index"),
+    )
+    tet_grid_values = td.IndexedDataArray(
+        [300.0, 310.0, 320.0, 330.0, 340.0],
+        dims=("index",),
+        name="T",
+    )
+    tet_grid = td.TetrahedralGridDataset(
+        points=tet_grid_points, cells=tet_grid_cells, values=tet_grid_values
+    )
+
+    sim_data_2d = td.HeatChargeSimulationData(
+        simulation=heat_sim_2d,
+        data=[td.TemperatureData(monitor=temp_mnt_2d, temperature=tet_grid)],
+    )
+
+    # Should auto-detect the zero-size y dimension and slice without needing y=0
+    sim_data_2d.plot_mesh("temp_2d")
+    plt.close()
+
+    # Also test plot_field auto-selection
+    sim_data_2d.plot_field("temp_2d")
+    plt.close()
+
+    # VolumeMesherData case
+    mesh_mnt_data = td.VolumeMeshData(monitor=mesh_mnt_2d, mesh=tet_grid)
+    mesher_data_2d = td.VolumeMesherData(
+        simulation=heat_sim_2d, data=[mesh_mnt_data], monitors=[mesh_mnt_2d]
+    )
+    mesher_data_2d.plot_mesh("mesh_2d")
+    plt.close()
 
 
 def test_conduction_simulation_has_conductors(conduction_simulation, structures):
