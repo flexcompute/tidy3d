@@ -307,7 +307,6 @@ class CustomFieldSource(FieldSource, PlanarSource):
         center = tuple(self.center)
         e_adj = derivative_info.E_adj or {}
         h_adj = derivative_info.H_adj or {}
-        eps_data = derivative_info.eps_data or {}
         if self.injection_axis is None:
             return {tuple(path): 0.0 for path in derivative_info.paths}
 
@@ -359,9 +358,6 @@ class CustomFieldSource(FieldSource, PlanarSource):
             source_scale = source_scale_factor(
                 adjoint_field=adjoint_field,
                 field_data=field_data,
-                component_axis=component_axis,
-                eps_data=eps_data,
-                center=center,
             )
 
             # Keep source gradients stable against simulation grid-refinement changes.

@@ -1168,15 +1168,8 @@ def source_grid_step(
 def source_scale_factor(
     adjoint_field: SpatialDataArray,
     field_data: ScalarFieldDataArray,
-    component_axis: int,
-    eps_data: Optional[PermittivityData] = None,
-    center: Optional[tuple[float, float, float]] = None,
 ) -> float:
     """Compute the multiplicative source VJP scale factor."""
-    # Keep optional permittivity inputs in signature for forward compatibility and to
-    # preserve the calling contract from source derivative paths.
-    _ = (component_axis, eps_data, center)
-
     grid_step = source_grid_step(adjoint_field, field_data)
     return 2.0 * np.pi * grid_step
 

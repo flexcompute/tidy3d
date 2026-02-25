@@ -266,7 +266,6 @@ class CustomCurrentSource(ReverseInterpolatedSource):
         center = tuple(self.center)
         h_adj = derivative_info.H_adj or {}
         e_adj = derivative_info.E_adj or {}
-        eps_data = derivative_info.eps_data or {}
 
         for field_path in derivative_info.paths:
             field_path = tuple(field_path)
@@ -302,13 +301,9 @@ class CustomCurrentSource(ReverseInterpolatedSource):
             adjoint_on_dataset = transpose_interp_field_to_dataset(
                 adjoint_field, field_data, center=center
             )
-            component_axis = "xyz".index(field_name[1])
             source_scale = source_scale_factor(
                 adjoint_field=adjoint_field,
                 field_data=field_data,
-                component_axis=component_axis,
-                eps_data=eps_data,
-                center=center,
             )
             # Keep source gradients stable against simulation grid-refinement changes.
             vjp_field = np.real(component_sign * source_scale * adjoint_on_dataset)

@@ -131,6 +131,17 @@ def _get_freq_coords(field_data: td.FieldData) -> np.ndarray:
     return np.array(first_field_component.coords["f"].values)
 
 
+def _sort_by_freq_ascending(
+    dataset: Union[td.PermittivityData, td.FieldData],
+) -> Union[td.PermittivityData, td.FieldData]:
+    """Sort all field components by ascending frequency coordinates."""
+    dataset_sorted = {}
+    for key, val in dataset.field_components.items():
+        dataset_sorted[key] = val.sortby("f", ascending=True)
+
+    return dataset.updated_copy(**dataset_sorted)
+
+
 def _validate_adjoint_frequencies(
     *,
     adjoint_frequencies: np.ndarray,
@@ -263,6 +274,7 @@ def _process_source_gradients(
 
     fld_adj = sim_data_adj[monitor_name]
     fld_adj = fld_adj.grid_corrected_copy
+    fld_adj = _sort_by_freq_ascending(fld_adj)
 
     adjoint_frequencies = _get_freq_coords(fld_adj)
     monitor_freqs = np.array(fld_adj.monitor.freqs)
@@ -331,20 +343,11 @@ def _process_structure_gradients(
     fld_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="fld")
     eps_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="eps")
 
-    def sort_by_freq_ascending(
-        dataset: Union[td.PermittivityData, td.FieldData],
-    ) -> Union[td.PermittivityData, td.FieldData]:
-        dataset_sort = {}
-        for key, val in dataset.field_components.items():
-            dataset_sort[key] = val.sortby("f", ascending=True)
-
-        return dataset.updated_copy(**dataset_sort)
-
     # sort data by ascending frequency value to ensure data ordering is consistent
-    fld_fwd = sort_by_freq_ascending(fld_fwd)
-    eps_fwd = sort_by_freq_ascending(eps_fwd)
-    fld_adj = sort_by_freq_ascending(fld_adj)
-    eps_adj = sort_by_freq_ascending(eps_adj)
+    fld_fwd = _sort_by_freq_ascending(fld_fwd)
+    eps_fwd = _sort_by_freq_ascending(eps_fwd)
+    fld_adj = _sort_by_freq_ascending(fld_adj)
+    eps_adj = _sort_by_freq_ascending(eps_adj)
 
     freqs_adj = np.array(fld_adj.monitor.freqs)
 
