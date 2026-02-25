@@ -336,6 +336,66 @@ def test_VariantItemFreqRangeDielectric_paired_field_lengths():
             reference=reference,
         )
 
+    # Test case 10: Empty lists - should raise ValidationError (fail-fast)
+    with pytest.raises(ValidationError, match="cannot be empty"):
+        _ = VariantItemFreqRangeDielectric(
+            prefitted_medium=pole_res,
+            loss_tangent=[],  # empty list
+            eps_real=[],  # empty list
+            measurement_frequencies=[],  # empty list
+            reference=reference,
+        )
+
+    # Test case 11: Empty tuple - should raise ValidationError
+    with pytest.raises(ValidationError, match="cannot be empty"):
+        _ = VariantItemFreqRangeDielectric(
+            prefitted_medium=pole_res,
+            loss_tangent=(),  # empty tuple
+            eps_real=(),  # empty tuple
+            measurement_frequencies=(),  # empty tuple
+            reference=reference,
+        )
+
+    # Test case 12: Empty numpy array - should raise ValidationError
+    with pytest.raises(ValidationError, match="cannot be empty"):
+        _ = VariantItemFreqRangeDielectric(
+            prefitted_medium=pole_res,
+            loss_tangent=np.array([]),  # empty array
+            eps_real=np.array([]),  # empty array
+            measurement_frequencies=np.array([]),  # empty array
+            reference=reference,
+        )
+
+    # Test case 13: Single NaN value - should raise ValidationError
+    with pytest.raises(ValidationError, match="contains NaN values"):
+        _ = VariantItemFreqRangeDielectric(
+            prefitted_medium=pole_res,
+            loss_tangent=float("nan"),
+            eps_real=2.5,
+            measurement_frequencies=1e9,
+            reference=reference,
+        )
+
+    # Test case 14: NaN in list - should raise ValidationError
+    with pytest.raises(ValidationError, match="contains NaN values"):
+        _ = VariantItemFreqRangeDielectric(
+            prefitted_medium=pole_res,
+            loss_tangent=[0.001, float("nan")],
+            eps_real=[2.5, 2.6],
+            measurement_frequencies=[1e9, 2e9],
+            reference=reference,
+        )
+
+    # Test case 15: NaN in numpy array - should raise ValidationError
+    with pytest.raises(ValidationError, match="contains NaN values"):
+        _ = VariantItemFreqRangeDielectric(
+            prefitted_medium=pole_res,
+            loss_tangent=np.array([0.001, float("nan")]),
+            eps_real=np.array([2.5, 2.6]),
+            measurement_frequencies=np.array([1e9, 2e9]),
+            reference=reference,
+        )
+
 
 def test_VariantItemFreqRangeDielectric_summarize_mediums():
     """Test VariantItemFreqRangeDielectric.summarize_mediums property."""

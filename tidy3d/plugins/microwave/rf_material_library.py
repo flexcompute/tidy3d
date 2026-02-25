@@ -114,15 +114,28 @@ class VariantItemFreqRangeDielectric(AbstractVariantItemFreqRange):
 
     @model_validator(mode="after")
     def _validate_paired_field_lengths(self) -> VariantItemFreqRangeDielectric:
-        """Validate that paired fields (``loss_tangent``, ``eps_real``, ``measurement_frequencies``) all have the same length."""
+        """Validate that paired fields (``loss_tangent``, ``eps_real``, ``measurement_frequencies``) all have the same length, are not empty, and contain no NaN values."""
         # Get length of each field (single values have length 1, lists/tuples/arrays have their actual length)
         field_lengths = {}
         for name in ["loss_tangent", "eps_real", "measurement_frequencies"]:
             value = getattr(self, name)
             if isinstance(value, (list, tuple, np.ndarray)):
-                field_lengths[name] = len(value)
+                length = len(value)
+                if length == 0:
+                    raise ValidationError(
+                        f"Field '{name}' cannot be empty. "
+                        f"Paired fields (loss_tangent, eps_real, measurement_frequencies) must contain at least one measurement."
+                    )
+                field_lengths[name] = length
             else:
                 field_lengths[name] = 1  # Single value has implicit length 1
+
+            # Check for NaN values (works for both scalars and arrays)
+            if np.any(np.isnan(value)):
+                raise ValidationError(
+                    f"Field '{name}' contains NaN values. "
+                    f"Paired fields (loss_tangent, eps_real, measurement_frequencies) must contain valid numeric measurements."
+                )
 
         # All fields must have the same length
         unique_lengths = set(field_lengths.values())

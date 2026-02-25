@@ -791,6 +791,15 @@ def test_nonlinear_medium():
         _ = sim.updated_copy(medium=med, path="structures/0")
 
 
+def test_nonlinear_spec_empty_dict_is_ignored():
+    assert td.Medium(nonlinear_spec=td.NonlinearSpec()).nonlinear_spec is not None
+
+    medium_dict = td.Medium().model_dump()
+    medium_dict["nonlinear_spec"] = {}
+
+    assert td.Medium.model_validate(medium_dict).nonlinear_spec is None
+
+
 def test_custom_medium():
     Nx, Ny, Nz, Nf = 4, 3, 1, 1
     X = np.linspace(-1, 1, Nx)
