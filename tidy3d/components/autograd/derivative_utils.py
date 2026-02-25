@@ -1275,6 +1275,13 @@ def transpose_interp_field_to_dataset(
             target_freqs, source_freqs, rtol=1e-12, atol=0.0
         ):
             return field
+        if target_freqs.size == 1 and source_freqs.size > 1:
+            # Source datasets are single-frequency by construction. When adjoint
+            # fields carry multiple frequencies, gradients must accumulate all
+            # frequency contributions onto that single source-frequency slot.
+            summed = field.sum(dim="f")
+            summed = summed.expand_dims({"f": target_freqs}, axis=-1)
+            return summed.transpose(*field.dims)
         method = "nearest" if target_freqs.size <= 1 or source_freqs.size <= 1 else "linear"
         return field.interp(
             {"f": target_freqs},

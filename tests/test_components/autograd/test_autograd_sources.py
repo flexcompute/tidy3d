@@ -15,6 +15,7 @@ Test coverage:
 from __future__ import annotations
 
 import sys
+from types import SimpleNamespace
 
 import autograd as ag
 import autograd.numpy as anp
@@ -213,6 +214,39 @@ class TestSpatialWeights:
         )
         npt.assert_allclose(result.values, 1.0)
 
+    def test_transpose_interp_single_target_frequency_accumulates_all_inputs(self):
+        """Single-frequency source datasets must accumulate all adjoint-frequency contributions."""
+        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
+
+        adjoint_coords = {
+            "x": np.array([0.0]),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2.0e14, 3.0e14, 4.0e14]),
+        }
+        adjoint_field = td.ScalarFieldDataArray(
+            np.array([[[[1.0, 2.0, 3.0]]]]),
+            coords=adjoint_coords,
+            dims=("x", "y", "z", "f"),
+        )
+
+        dataset_coords = {
+            "x": np.array([0.0]),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2.5e14]),
+        }
+        dataset_field = td.ScalarFieldDataArray(
+            np.array([[[[1.0]]]]),
+            coords=dataset_coords,
+            dims=("x", "y", "z", "f"),
+        )
+
+        result = transpose_interp_field_to_dataset(
+            adjoint_field, dataset_field, center=(0.0, 0.0, 0.0)
+        )
+        npt.assert_allclose(result.values, np.array([[[[6.0]]]]), rtol=1e-12, atol=1e-12)
+
 
 def analytical_uniform_source_gradient(
     source_bounds: tuple[tuple[float, float, float], tuple[float, float, float]],
@@ -296,9 +330,8 @@ class TestCustomCurrentSourceUniform:
     def test_uniform_adjoint_field(self, source, source_bounds):
         """Test with uniform adjoint field."""
         # Create uniform adjoint field
-        adjoint_field_value = -1j * 2.0
-        source_scale = 2.0
-        E_adj = {"Ex": source_scale * create_adjoint_field_dataarray(adjoint_field_value)}
+        adjoint_field_value = 2.0
+        E_adj = {"Ex": create_adjoint_field_dataarray(adjoint_field_value)}
 
         di = DummySourceDI(
             paths=[("current_dataset", "Ex")],
@@ -310,16 +343,64 @@ class TestCustomCurrentSourceUniform:
         results = source._compute_derivatives(di)
 
         field_data = source.current_dataset.Ex
-        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
+        from tidy3d.components.autograd.derivative_utils import (
+            source_scale_factor,
+            transpose_interp_field_to_dataset,
+        )
 
         adjoint_on_dataset = transpose_interp_field_to_dataset(
             E_adj["Ex"], field_data, center=source.center
         )
-        expected_gradient = 0.5 * np.sum(np.real(adjoint_on_dataset).values)
+        source_scale = source_scale_factor(E_adj["Ex"], field_data)
+        expected_gradient = np.sum(np.real(source_scale * adjoint_on_dataset).values)
 
         grad = results[("current_dataset", "Ex")]
         assert grad.shape == source.current_dataset.Ex.shape
+        assert not np.isclose(expected_gradient, 0.0)
+        assert not np.isclose(np.sum(grad), 0.0)
         npt.assert_allclose(np.sum(grad), expected_gradient, rtol=1e-2)
+
+    def test_multi_frequency_adjoint_accumulates_for_single_frequency_dataset(self):
+        """Current-source VJP must sum contributions from all adjoint frequencies."""
+        coords = {
+            "x": np.array([0.0]),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2.5e14]),
+        }
+        source = td.CustomCurrentSource(
+            center=(0.0, 0.0, 0.0),
+            size=(0.0, 0.0, 0.0),
+            source_time=td.GaussianPulse(freq0=3.0e14, fwidth=1.0e14),
+            current_dataset=td.FieldDataset(
+                Ex=td.ScalarFieldDataArray(
+                    np.array([[[[1.0]]]]), coords=coords, dims=("x", "y", "z", "f")
+                )
+            ),
+        )
+
+        adjoint_coords = {
+            "x": np.array([0.0]),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2.0e14, 3.0e14, 4.0e14]),
+        }
+        E_adj = {
+            "Ex": td.ScalarFieldDataArray(
+                np.array([[[[1.0, 2.0, 3.0]]]]),
+                coords=adjoint_coords,
+                dims=("x", "y", "z", "f"),
+            )
+        }
+        di = DummySourceDI(
+            paths=[("current_dataset", "Ex")],
+            E_adj=E_adj,
+            frequencies=adjoint_coords["f"],
+            bounds=source.geometry.bounds,
+        )
+
+        grad = source._compute_derivatives(di)[("current_dataset", "Ex")]
+        npt.assert_allclose(grad, np.array([[[[12.0 * np.pi]]]]), rtol=1e-12, atol=1e-12)
 
     def test_uniform_adjoint_field_with_permittivity_scaling(self, source, source_bounds):
         """Current-source gradients are invariant to supplied epsilon data."""
@@ -417,7 +498,7 @@ class TestCustomCurrentSourceUniform:
 
     def test_multiple_field_components(self, source, source_bounds):
         """Test with multiple field components."""
-        adjoint_field_value = -1j * 1.5
+        adjoint_field_value = 1.5
         E_adj = {
             "Ex": create_adjoint_field_dataarray(adjoint_field_value),
             "Ey": create_adjoint_field_dataarray(0.5 * adjoint_field_value),
@@ -434,7 +515,10 @@ class TestCustomCurrentSourceUniform:
 
         # Check each component
         field_data = source.current_dataset.Ex
-        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
+        from tidy3d.components.autograd.derivative_utils import (
+            source_scale_factor,
+            transpose_interp_field_to_dataset,
+        )
 
         adjoint_on_dataset_ex = transpose_interp_field_to_dataset(
             E_adj["Ex"], field_data, center=source.center
@@ -443,10 +527,14 @@ class TestCustomCurrentSourceUniform:
             E_adj["Ey"], field_data, center=source.center
         )
 
-        expected_ex = 0.5 * np.sum(np.real(adjoint_on_dataset_ex).values)
-        expected_ey = 0.5 * np.sum(np.real(adjoint_on_dataset_ey).values)
+        source_scale_ex = source_scale_factor(E_adj["Ex"], field_data)
+        source_scale_ey = source_scale_factor(E_adj["Ey"], field_data)
+        expected_ex = np.sum(np.real(source_scale_ex * adjoint_on_dataset_ex).values)
+        expected_ey = np.sum(np.real(source_scale_ey * adjoint_on_dataset_ey).values)
         expected_ez = 0.0
 
+        assert not np.isclose(expected_ex, 0.0)
+        assert not np.isclose(expected_ey, 0.0)
         npt.assert_allclose(np.sum(results[("current_dataset", "Ex")]), expected_ex, rtol=1e-2)
         npt.assert_allclose(np.sum(results[("current_dataset", "Ey")]), expected_ey, rtol=1e-2)
         npt.assert_allclose(np.sum(results[("current_dataset", "Ez")]), expected_ez, rtol=1e-10)
@@ -477,7 +565,7 @@ class TestCustomFieldSourceUniform:
     def test_uniform_adjoint_field(self, source, source_bounds):
         """Test with uniform adjoint field."""
         # Create uniform adjoint field
-        adjoint_field_value = 1j * 2.0
+        adjoint_field_value = 2.0
         E_adj = {}
         H_adj = {"Hy": create_adjoint_field_dataarray(adjoint_field_value)}
 
@@ -492,16 +580,20 @@ class TestCustomFieldSourceUniform:
         results = source._compute_derivatives(di)
 
         # Analytical solution
-        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
-        from tidy3d.constants import EPSILON_0
+        from tidy3d.components.autograd.derivative_utils import (
+            source_scale_factor,
+            transpose_interp_field_to_dataset,
+        )
 
-        omega = 2 * np.pi * 2e14
         field_data = source.field_dataset.Ex
         adjoint_on_dataset = transpose_interp_field_to_dataset(
             H_adj["Hy"], field_data, center=source.center
         )
-        expected_gradient = 0.5 * np.sum(np.real(omega * EPSILON_0 * adjoint_on_dataset).values)
+        source_scale = source_scale_factor(H_adj["Hy"], field_data)
+        expected_gradient = np.sum(np.real(source_scale * adjoint_on_dataset).values)
 
+        assert not np.isclose(expected_gradient, 0.0)
+        assert not np.isclose(np.sum(results[("field_dataset", "Ex")]), 0.0)
         npt.assert_allclose(np.sum(results[("field_dataset", "Ex")]), expected_gradient, rtol=1e-2)
 
     def test_uniform_adjoint_field_invariant_to_dataset_spacing(self, source_bounds):
@@ -701,7 +793,7 @@ class TestCustomCurrentSourceGaussian:
     def test_gaussian_adjoint_field(self, source, source_bounds):
         """Test with Gaussian adjoint field."""
         # Create Gaussian adjoint field
-        adjoint_amplitude = -1j * 1.0
+        adjoint_amplitude = 1.0
         sigma = 0.1
         x = np.linspace(-0.25, 0.25, 10)
         y = np.linspace(-0.25, 0.25, 10)
@@ -729,15 +821,21 @@ class TestCustomCurrentSourceGaussian:
 
         results = source._compute_derivatives(di)
 
-        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
+        from tidy3d.components.autograd.derivative_utils import (
+            source_scale_factor,
+            transpose_interp_field_to_dataset,
+        )
 
         adjoint_on_dataset = transpose_interp_field_to_dataset(
             adjoint_field,
             source.current_dataset.Ex,
             center=source.center,
         )
-        expected_gradient = 0.5 * np.sum(np.real(adjoint_on_dataset).values)
+        source_scale = source_scale_factor(adjoint_field, source.current_dataset.Ex)
+        expected_gradient = np.sum(np.real(source_scale * adjoint_on_dataset).values)
 
+        assert not np.isclose(expected_gradient, 0.0)
+        assert not np.isclose(np.sum(results[("current_dataset", "Ex")]), 0.0)
         npt.assert_allclose(
             np.sum(results[("current_dataset", "Ex")]), expected_gradient, rtol=5e-1
         )
@@ -1035,6 +1133,37 @@ def test_mixed_structure_source_adjoint_monitors():
                 break
 
     assert source_monitor_found, "No source monitor found in adjoint monitors"
+
+
+def test_split_adjoint_data_logs_mixed_source_structure_counts(monkeypatch):
+    """Adjoint split log should report field/eps counts without assuming 1:1 pairing."""
+    from tidy3d.components.data import sim_data as sim_data_module
+
+    monitors = [
+        td.FieldMonitor(center=(0, 0, 0), size=(0, 0, 0), freqs=[2e14], name="orig"),
+        td.FieldMonitor(center=(0, 0, 0), size=(0, 0, 0), freqs=[2e14], name="adjoint_fld_0"),
+        td.FieldMonitor(center=(0, 0, 0), size=(0, 0, 0), freqs=[2e14], name="source_adjoint_0"),
+        td.PermittivityMonitor(
+            center=(0, 0, 0), size=(0, 0, 0), freqs=[2e14], name="adjoint_eps_0"
+        ),
+    ]
+    dummy_sim_data = SimpleNamespace(
+        data=["orig_data", "adj_fld_data", "source_adj_data", "adj_eps_data"],
+        simulation=SimpleNamespace(monitors=monitors),
+    )
+
+    messages = []
+    monkeypatch.setattr(sim_data_module.log, "info", lambda msg: messages.append(msg))
+
+    data_original, data_adjoint = sim_data_module.SimulationData._split_adjoint_data(
+        dummy_sim_data, num_mnts_original=1
+    )
+
+    assert data_original == ["orig_data"]
+    assert data_adjoint == ["adj_fld_data", "source_adj_data", "adj_eps_data"]
+    assert any(
+        "1 monitors, 2 adjoint field monitors, 1 adjoint eps monitors." in msg for msg in messages
+    )
 
 
 def _make_uniform_field_dataset(val, data_shape=(10, 10, 1, 1), freq=2e14):
