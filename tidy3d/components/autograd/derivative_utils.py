@@ -1190,6 +1190,7 @@ def transpose_interp_axis(
     if method not in ("linear", "nearest"):
         raise ValueError(f"Unsupported interpolation method: {method!r}.")
 
+    param_coords_1d = np.asarray(param_coords_1d, dtype=float)
     n_param = param_coords_1d.size
     n_field = field_values.shape[0]
     field_values_2d = field_values.reshape(n_field, -1)
@@ -1265,8 +1266,28 @@ def transpose_interp_field_to_dataset(
     dataset_field: SpatialDataArray,
     *,
     center: tuple[float, float, float],
+    method: str | dict[str, str] = "linear",
 ) -> SpatialDataArray:
     """Accumulate adjoint fields onto dataset coordinates using adjoint interpolation."""
+
+    allowed_methods = ("linear", "nearest")
+    if isinstance(method, str):
+        method_by_dim = dict.fromkeys("xyz", method)
+    elif isinstance(method, dict):
+        invalid_dims = set(method) - set("xyz")
+        if invalid_dims:
+            raise ValueError(
+                f"Unsupported interpolation axis keys: {sorted(invalid_dims)!r}. "
+                "Expected subset of ('x', 'y', 'z')."
+            )
+        method_by_dim = {dim: method.get(dim, "linear") for dim in "xyz"}
+    else:
+        raise TypeError("Interpolation method must be a string or a dict keyed by 'x', 'y', 'z'.")
+    for dim, interp_method in method_by_dim.items():
+        if interp_method not in allowed_methods:
+            raise ValueError(
+                f"Unsupported interpolation method {interp_method!r} for axis '{dim}'."
+            )
 
     def _align_freq(field: SpatialDataArray, target: SpatialDataArray) -> SpatialDataArray:
         target_freqs = np.asarray(target.coords["f"].data)
@@ -1290,19 +1311,24 @@ def transpose_interp_field_to_dataset(
         ).fillna(0.0)
 
     def _interp_axis(
-        arr: np.ndarray, axis: int, field_axis: np.ndarray, param_axis: np.ndarray
+        arr: np.ndarray,
+        axis: int,
+        field_axis: np.ndarray,
+        param_axis: np.ndarray,
+        interp_method: str,
     ) -> np.ndarray:
         moved = np.moveaxis(arr, axis, 0)
         moved = transpose_interp_axis(
             moved,
             field_axis,
             param_axis,
-            method="linear",
+            method=interp_method,
         )
         return np.moveaxis(moved, 0, axis)
 
+    dataset_field_sorted = dataset_field._spatially_sorted
     center = tuple(get_static(val) for val in center)
-    aligned = _align_freq(adjoint_field, dataset_field)
+    aligned = _align_freq(adjoint_field, dataset_field_sorted)
     weights = compute_spatial_weights(aligned, dims=tuple("xyz"))
     if weights.size > 1:
         weights = weights.transpose(*weights.dims)
@@ -1313,8 +1339,8 @@ def transpose_interp_field_to_dataset(
     }
     param_coords = {}
     for axis, dim in enumerate("xyz"):
-        if dim in dataset_field.coords:
-            param_coords[dim] = np.asarray(dataset_field.coords[dim].data) + center[axis]
+        if dim in dataset_field_sorted.coords:
+            param_coords[dim] = np.asarray(dataset_field_sorted.coords[dim].data) + center[axis]
 
     crop_slices = {}
     for dim in "xyz":
@@ -1343,11 +1369,38 @@ def transpose_interp_field_to_dataset(
         if dim not in field_coords or dim not in param_coords:
             continue
         axis_index = dims.index(dim)
-        values = _interp_axis(values, axis_index, field_coords[dim], param_coords[dim])
+        values = _interp_axis(
+            values,
+            axis_index,
+            field_coords[dim],
+            param_coords[dim],
+            method_by_dim[dim],
+        )
 
-    out_coords = {dim: np.asarray(dataset_field.coords[dim].data) for dim in dataset_field.dims}
+    out_coords = {
+        dim: np.asarray(dataset_field_sorted.coords[dim].data) for dim in dataset_field_sorted.dims
+    }
     result = SpatialDataArray(values, coords=out_coords, dims=tuple(dims))
-    if tuple(dims) != tuple(dataset_field.dims):
+    if tuple(dims) != tuple(dataset_field_sorted.dims):
+        result = result.transpose(*dataset_field_sorted.dims)
+
+    needs_restore_order = any(
+        dim in dataset_field.coords
+        and not np.array_equal(
+            np.asarray(dataset_field.coords[dim].data),
+            np.asarray(dataset_field_sorted.coords[dim].data),
+        )
+        for dim in "xyz"
+    )
+    if needs_restore_order:
+        selection = {}
+        for dim in "xyz":
+            if dim in dataset_field.coords:
+                selection[dim] = np.asarray(dataset_field.coords[dim].data)
+        if selection:
+            result = result.sel(selection)
+
+    if tuple(result.dims) != tuple(dataset_field.dims):
         result = result.transpose(*dataset_field.dims)
     return result
 

@@ -247,62 +247,20 @@ class TestSpatialWeights:
         )
         npt.assert_allclose(result.values, np.array([[[[6.0]]]]), rtol=1e-12, atol=1e-12)
 
+    def test_transpose_interp_axis_requires_sorted_coordinates(self):
+        """Axis-level transpose interpolation should enforce sorted source coordinates."""
+        from tidy3d.components.autograd.derivative_utils import transpose_interp_axis
 
-def analytical_uniform_source_gradient(
-    source_bounds: tuple[tuple[float, float, float], tuple[float, float, float]],
-    adjoint_field_value: complex,
-    source_scale: complex,
-    field_component: str = "Ex",
-) -> float:
-    """
-    Analytical gradient for uniform source with uniform adjoint field.
+        field_values = np.ones((3, 1), dtype=float)
+        field_coords = np.array([0.0, 0.5, 1.0])
+        unsorted_param_coords = np.array([0.0, -0.5, 0.5])
 
-    The gradient is the volume integral of the scaled adjoint field.
-    """
-    (x_min, y_min, z_min), (x_max, y_max, z_max) = source_bounds
-    volume = (x_max - x_min) * (y_max - y_min) * (z_max - z_min)
-    return np.real(1j * source_scale * adjoint_field_value) * volume
-
-
-def analytical_gaussian_source_gradient(
-    source_bounds: tuple[tuple[float, float, float], tuple[float, float, float]],
-    adjoint_amplitude: complex,
-    source_scale: complex,
-    sigma: float = 0.1,
-    field_component: str = "Ex",
-) -> float:
-    """
-    Analytical gradient for uniform source with Gaussian adjoint field.
-
-    The gradient is the volume integral of the Gaussian adjoint field.
-    For a Gaussian centered at the source center, we compute the actual
-    integral over the source bounds.
-    """
-    (x_min, y_min, z_min), (x_max, y_max, z_max) = source_bounds
-
-    # For a Gaussian field exp(-(x^2 + y^2 + z^2)/(2*sigma^2)), the integral
-    # over a rectangular domain can be approximated by the sum of field values
-    # times the volume element, which is what the numerical integration does.
-
-    # Since the test uses a 10x10x1 grid over the bounds, we can compute
-    # the expected value by sampling the Gaussian at those points
-    x = np.linspace(x_min, x_max, 10)
-    y = np.linspace(y_min, y_max, 10)
-    z = np.array([0.0])  # Single z point as in the test
-
-    X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
-    r_sq = (X**2 + Y**2 + Z**2) / (2 * sigma**2)
-    field_data = adjoint_amplitude * np.exp(-r_sq)
-
-    # Compute the volume element
-    dx = x[1] - x[0]
-    dy = y[1] - y[0]
-
-    # The integral is the sum of field values times the area element (2D integral)
-    # since z has only one point, integrate_within_bounds only integrates over x and y
-    integral = np.sum(np.real(1j * source_scale * field_data)) * dx * dy
-
-    return integral
+        with pytest.raises(ValueError, match="must be sorted"):
+            transpose_interp_axis(
+                field_values=field_values,
+                field_coords_1d=field_coords,
+                param_coords_1d=unsorted_param_coords,
+            )
 
 
 class TestCustomCurrentSourceUniform:
@@ -402,8 +360,210 @@ class TestCustomCurrentSourceUniform:
         grad = source._compute_derivatives(di)[("current_dataset", "Ex")]
         npt.assert_allclose(grad, np.array([[[[12.0 * np.pi]]]]), rtol=1e-12, atol=1e-12)
 
-    def test_uniform_adjoint_field_with_permittivity_scaling(self, source, source_bounds):
-        """Current-source gradients are invariant to supplied epsilon data."""
+    def test_interpolate_flag_changes_vjp_projection_on_zero_size_axis(self):
+        """Current-source VJP should switch to nearest only along zero-size source axes."""
+        coords = {
+            "x": np.array([-0.4, -0.1, 0.2, 0.5]),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2e14]),
+        }
+        dataset = td.FieldDataset(
+            Ex=td.ScalarFieldDataArray(
+                np.ones((4, 1, 1, 1)),
+                coords=coords,
+                dims=("x", "y", "z", "f"),
+            )
+        )
+        source_linear = td.CustomCurrentSource(
+            center=(0.0, 0.0, 0.0),
+            size=(0.0, 0.5, 0.0),
+            source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+            current_dataset=dataset,
+            interpolate=True,
+        )
+        source_nearest = source_linear.updated_copy(interpolate=False)
+
+        adjoint_coords = {
+            "x": np.array([-0.5, 0.0, 0.5]),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2e14]),
+        }
+        E_adj = {
+            "Ex": td.ScalarFieldDataArray(
+                np.array([[[[1.0]]], [[[2.0]]], [[[3.0]]]]),
+                coords=adjoint_coords,
+                dims=("x", "y", "z", "f"),
+            )
+        }
+        di = DummySourceDI(
+            paths=[("current_dataset", "Ex")],
+            E_adj=E_adj,
+            frequencies=adjoint_coords["f"],
+            bounds=source_linear.geometry.bounds,
+        )
+
+        grad_linear = source_linear._compute_derivatives(di)[("current_dataset", "Ex")]
+        grad_nearest = source_nearest._compute_derivatives(di)[("current_dataset", "Ex")]
+        assert not np.allclose(grad_linear, grad_nearest)
+
+    def test_interpolate_flag_keeps_linear_projection_on_nonzero_axis(self):
+        """Current-source VJP should stay linear on nonzero-size source axes."""
+        coords = {
+            "x": np.array([-0.4, -0.1, 0.2, 0.5]),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2e14]),
+        }
+        dataset = td.FieldDataset(
+            Ex=td.ScalarFieldDataArray(
+                np.ones((4, 1, 1, 1)),
+                coords=coords,
+                dims=("x", "y", "z", "f"),
+            )
+        )
+        source_linear = td.CustomCurrentSource(
+            center=(0.0, 0.0, 0.0),
+            size=(0.5, 0.0, 0.0),
+            source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+            current_dataset=dataset,
+            interpolate=True,
+        )
+        source_nearest = source_linear.updated_copy(interpolate=False)
+
+        adjoint_coords = {
+            "x": np.array([-0.5, 0.0, 0.5]),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2e14]),
+        }
+        E_adj = {
+            "Ex": td.ScalarFieldDataArray(
+                np.array([[[[1.0]]], [[[2.0]]], [[[3.0]]]]),
+                coords=adjoint_coords,
+                dims=("x", "y", "z", "f"),
+            )
+        }
+        di = DummySourceDI(
+            paths=[("current_dataset", "Ex")],
+            E_adj=E_adj,
+            frequencies=adjoint_coords["f"],
+            bounds=source_linear.geometry.bounds,
+        )
+
+        grad_linear = source_linear._compute_derivatives(di)[("current_dataset", "Ex")]
+        grad_nearest = source_nearest._compute_derivatives(di)[("current_dataset", "Ex")]
+        npt.assert_allclose(grad_nearest, grad_linear, rtol=1e-12, atol=1e-12)
+
+    def test_confine_to_bounds_masks_out_of_bounds_dataset_points(self):
+        """VJP should be zeroed at out-of-bounds dataset points when ``confine_to_bounds=True``."""
+        coords = {
+            "x": np.array([-1.0, 0.0, 1.0]),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2e14]),
+        }
+        dataset = td.FieldDataset(
+            Ex=td.ScalarFieldDataArray(
+                np.ones((3, 1, 1, 1)),
+                coords=coords,
+                dims=("x", "y", "z", "f"),
+            )
+        )
+        source = td.CustomCurrentSource(
+            center=(0.0, 0.0, 0.0),
+            size=(1.0, 1.0, 0.0),
+            source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+            current_dataset=dataset,
+            confine_to_bounds=False,
+        )
+        source_confined = source.updated_copy(confine_to_bounds=True)
+
+        adjoint_coords = {
+            "x": np.linspace(-1.0, 1.0, 9),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2e14]),
+        }
+        E_adj = {
+            "Ex": td.ScalarFieldDataArray(
+                np.ones((9, 1, 1, 1)),
+                coords=adjoint_coords,
+                dims=("x", "y", "z", "f"),
+            )
+        }
+        di = DummySourceDI(
+            paths=[("current_dataset", "Ex")],
+            E_adj=E_adj,
+            frequencies=adjoint_coords["f"],
+            bounds=source.geometry.bounds,
+        )
+
+        grad_full = source._compute_derivatives(di)[("current_dataset", "Ex")]
+        grad_confined = source_confined._compute_derivatives(di)[("current_dataset", "Ex")]
+
+        assert not np.isclose(grad_full[0, 0, 0, 0], 0.0)
+        assert not np.isclose(grad_full[2, 0, 0, 0], 0.0)
+        npt.assert_allclose(grad_confined[0, 0, 0, 0], 0.0, atol=1e-12)
+        npt.assert_allclose(grad_confined[2, 0, 0, 0], 0.0, atol=1e-12)
+        assert np.isclose(grad_confined[1, 0, 0, 0], grad_full[1, 0, 0, 0])
+
+    def test_unsorted_dataset_coords_supported(self):
+        """Current-source VJP should support unsorted dataset coordinates by sorting internally."""
+        coords = {
+            "x": np.array([0.5, 0.0, -0.5]),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2e14]),
+        }
+        source = td.CustomCurrentSource(
+            center=(0.0, 0.0, 0.0),
+            size=(1.0, 0.0, 0.0),
+            source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+            current_dataset=td.FieldDataset(
+                Ex=td.ScalarFieldDataArray(
+                    np.ones((3, 1, 1, 1)),
+                    coords=coords,
+                    dims=("x", "y", "z", "f"),
+                )
+            ),
+        )
+        adjoint_coords = {
+            "x": np.array([-0.5, 0.0, 0.5]),
+            "y": np.array([0.0]),
+            "z": np.array([0.0]),
+            "f": np.array([2e14]),
+        }
+        E_adj = {
+            "Ex": td.ScalarFieldDataArray(
+                np.ones((3, 1, 1, 1)),
+                coords=adjoint_coords,
+                dims=("x", "y", "z", "f"),
+            )
+        }
+        di = DummySourceDI(
+            paths=[("current_dataset", "Ex")],
+            E_adj=E_adj,
+            frequencies=adjoint_coords["f"],
+            bounds=source.geometry.bounds,
+        )
+
+        grad = source._compute_derivatives(di)[("current_dataset", "Ex")]
+        assert grad.shape == (3, 1, 1, 1)
+        assert np.all(np.isfinite(grad))
+
+    @pytest.mark.parametrize(
+        ("shift_coords", "label"),
+        (
+            (False, "current_permittivity_scaling"),
+            (True, "current_permittivity_shifted_coords"),
+        ),
+    )
+    def test_uniform_adjoint_field_permittivity_invariance(
+        self, source, source_bounds, shift_coords, label
+    ):
+        """Current-source gradients are invariant to supplied epsilon data and coordinate shifts."""
         adjoint_field_value = 2.0
         E_adj = {"Ex": create_adjoint_field_dataarray(adjoint_field_value)}
         field_data = source.current_dataset.Ex
@@ -416,11 +576,14 @@ class TestCustomCurrentSourceUniform:
         )
 
         eps_rel = 2.25
+        coord_offset = 8e-3 if shift_coords else 0.0
+        z_offset = -8e-3 if shift_coords else 0.0
+        freq_scale = 1 + 1e-9 if shift_coords else 1.0
         eps_coords = {
-            "x": np.asarray(field_data.coords["x"].data) + source.center[0],
-            "y": np.asarray(field_data.coords["y"].data) + source.center[1],
-            "z": np.asarray(field_data.coords["z"].data) + source.center[2],
-            "f": np.asarray(field_data.coords["f"].data),
+            "x": np.asarray(field_data.coords["x"].data) + source.center[0] + coord_offset,
+            "y": np.asarray(field_data.coords["y"].data) + source.center[1] + coord_offset,
+            "z": np.asarray(field_data.coords["z"].data) + source.center[2] + z_offset,
+            "f": np.asarray(field_data.coords["f"].data) * freq_scale,
         }
         eps_values = eps_rel * np.ones(field_data.shape)
         eps_data = td.ScalarFieldDataArray(eps_values, coords=eps_coords, dims=field_data.dims)
@@ -438,46 +601,7 @@ class TestCustomCurrentSourceUniform:
 
         assert not np.isclose(grad_air, 0.0)
         assert not np.isclose(grad_eps, 0.0)
-        print(f"[current_permittivity_scaling] ratio = {ratio}", file=sys.stderr)
-        npt.assert_allclose(ratio, 1.0, rtol=1e-3)
-
-    def test_uniform_adjoint_field_with_shifted_eps_coords(self, source, source_bounds):
-        """Shifted epsilon coordinates should not change current-source gradients."""
-        adjoint_field_value = 2.0
-        E_adj = {"Ex": create_adjoint_field_dataarray(adjoint_field_value)}
-        field_data = source.current_dataset.Ex
-
-        di_air = DummySourceDI(
-            paths=[("current_dataset", "Ex")],
-            E_adj=E_adj,
-            frequencies=np.array([2e14]),
-            bounds=source_bounds,
-        )
-
-        eps_rel = 2.25
-        eps_coords = {
-            "x": np.asarray(field_data.coords["x"].data) + source.center[0] + 8e-3,
-            "y": np.asarray(field_data.coords["y"].data) + source.center[1] + 8e-3,
-            "z": np.asarray(field_data.coords["z"].data) + source.center[2] - 8e-3,
-            "f": np.asarray(field_data.coords["f"].data) * (1 + 1e-9),
-        }
-        eps_values = eps_rel * np.ones(field_data.shape)
-        eps_data = td.ScalarFieldDataArray(eps_values, coords=eps_coords, dims=field_data.dims)
-        di_eps = DummySourceDI(
-            paths=[("current_dataset", "Ex")],
-            E_adj=E_adj,
-            frequencies=np.array([2e14]),
-            bounds=source_bounds,
-            eps_data={"eps": eps_data},
-        )
-
-        grad_air = np.sum(source._compute_derivatives(di_air)[("current_dataset", "Ex")])
-        grad_eps = np.sum(source._compute_derivatives(di_eps)[("current_dataset", "Ex")])
-        ratio = grad_air / grad_eps
-
-        assert not np.isclose(grad_air, 0.0)
-        assert not np.isclose(grad_eps, 0.0)
-        print(f"[current_permittivity_shifted_coords] ratio = {ratio}", file=sys.stderr)
+        print(f"[{label}] ratio = {ratio}", file=sys.stderr)
         npt.assert_allclose(ratio, 1.0, rtol=1e-3)
 
     def test_zero_adjoint_field(self, source, source_bounds):
@@ -632,8 +756,17 @@ class TestCustomFieldSourceUniform:
         print(f"[field_spacing_invariance] ratio = {spacing_ratio}", file=sys.stderr)
         npt.assert_allclose(spacing_ratio, 1.0, rtol=2e-2)
 
-    def test_uniform_adjoint_field_with_permittivity_scaling(self, source, source_bounds):
-        """Field-source gradients are invariant to supplied epsilon data."""
+    @pytest.mark.parametrize(
+        ("shift_coords", "label"),
+        (
+            (False, "field_permittivity_scaling"),
+            (True, "field_permittivity_shifted_coords"),
+        ),
+    )
+    def test_uniform_adjoint_field_permittivity_invariance(
+        self, source, source_bounds, shift_coords, label
+    ):
+        """Field-source gradients are invariant to supplied epsilon data and coordinate shifts."""
         adjoint_field_value = 2.0
         H_adj = {"Hy": create_adjoint_field_dataarray(adjoint_field_value)}
         field_data = source.field_dataset.Ex
@@ -647,11 +780,14 @@ class TestCustomFieldSourceUniform:
         )
 
         eps_rel = 2.25
+        coord_offset = 8e-3 if shift_coords else 0.0
+        z_offset = -8e-3 if shift_coords else 0.0
+        freq_scale = 1 + 1e-9 if shift_coords else 1.0
         eps_coords = {
-            "x": np.asarray(field_data.coords["x"].data) + source.center[0],
-            "y": np.asarray(field_data.coords["y"].data) + source.center[1],
-            "z": np.asarray(field_data.coords["z"].data) + source.center[2],
-            "f": np.asarray(field_data.coords["f"].data),
+            "x": np.asarray(field_data.coords["x"].data) + source.center[0] + coord_offset,
+            "y": np.asarray(field_data.coords["y"].data) + source.center[1] + coord_offset,
+            "z": np.asarray(field_data.coords["z"].data) + source.center[2] + z_offset,
+            "f": np.asarray(field_data.coords["f"].data) * freq_scale,
         }
         eps_values = eps_rel * np.ones(field_data.shape)
         eps_data = td.ScalarFieldDataArray(eps_values, coords=eps_coords, dims=field_data.dims)
@@ -670,49 +806,53 @@ class TestCustomFieldSourceUniform:
 
         assert not np.isclose(grad_air, 0.0)
         assert not np.isclose(grad_eps, 0.0)
-        print(f"[field_permittivity_scaling] ratio = {ratio}", file=sys.stderr)
+        print(f"[{label}] ratio = {ratio}", file=sys.stderr)
         npt.assert_allclose(ratio, 1.0, rtol=1e-3)
 
-    def test_uniform_adjoint_field_with_shifted_eps_coords(self, source, source_bounds):
-        """Shifted epsilon coordinates should not change field-source gradients."""
-        adjoint_field_value = 2.0
-        H_adj = {"Hy": create_adjoint_field_dataarray(adjoint_field_value)}
-        field_data = source.field_dataset.Ex
-
-        di_air = DummySourceDI(
-            paths=[("field_dataset", "Ex")],
-            E_adj={},
-            H_adj=H_adj,
-            frequencies=np.array([2e14]),
-            bounds=source_bounds,
-        )
-
-        eps_rel = 2.25
-        eps_coords = {
-            "x": np.asarray(field_data.coords["x"].data) + source.center[0] + 8e-3,
-            "y": np.asarray(field_data.coords["y"].data) + source.center[1] + 8e-3,
-            "z": np.asarray(field_data.coords["z"].data) + source.center[2] - 8e-3,
-            "f": np.asarray(field_data.coords["f"].data) * (1 + 1e-9),
+    def test_unsorted_dataset_coords_supported(self):
+        """Field-source VJP should support unsorted dataset coordinates by sorting internally."""
+        coords = {
+            "x": np.array([0.5, 0.0, -0.5]),
+            "y": np.array([-0.5, 0.0, 0.5]),
+            "z": np.array([0.0]),
+            "f": np.array([2e14]),
         }
-        eps_values = eps_rel * np.ones(field_data.shape)
-        eps_data = td.ScalarFieldDataArray(eps_values, coords=eps_coords, dims=field_data.dims)
-        di_eps = DummySourceDI(
+        source = td.CustomFieldSource(
+            center=(0.0, 0.0, 0.0),
+            size=(1.0, 1.0, 0.0),
+            source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+            field_dataset=td.FieldDataset(
+                Ex=td.ScalarFieldDataArray(
+                    np.ones((3, 3, 1, 1)),
+                    coords=coords,
+                    dims=("x", "y", "z", "f"),
+                )
+            ),
+        )
+        adjoint_coords = {
+            "x": np.array([-0.5, 0.0, 0.5]),
+            "y": np.array([-0.5, 0.0, 0.5]),
+            "z": np.array([0.0]),
+            "f": np.array([2e14]),
+        }
+        H_adj = {
+            "Hy": td.ScalarFieldDataArray(
+                np.ones((3, 3, 1, 1)),
+                coords=adjoint_coords,
+                dims=("x", "y", "z", "f"),
+            )
+        }
+        di = DummySourceDI(
             paths=[("field_dataset", "Ex")],
             E_adj={},
             H_adj=H_adj,
-            frequencies=np.array([2e14]),
-            bounds=source_bounds,
-            eps_data={"eps": eps_data},
+            frequencies=adjoint_coords["f"],
+            bounds=source.geometry.bounds,
         )
 
-        grad_air = np.sum(source._compute_derivatives(di_air)[("field_dataset", "Ex")])
-        grad_eps = np.sum(source._compute_derivatives(di_eps)[("field_dataset", "Ex")])
-        ratio = grad_air / grad_eps
-
-        assert not np.isclose(grad_air, 0.0)
-        assert not np.isclose(grad_eps, 0.0)
-        print(f"[field_permittivity_shifted_coords] ratio = {ratio}", file=sys.stderr)
-        npt.assert_allclose(ratio, 1.0, rtol=1e-3)
+        grad = source._compute_derivatives(di)[("field_dataset", "Ex")]
+        assert grad.shape == (3, 3, 1, 1)
+        assert np.all(np.isfinite(grad))
 
 
 @pytest.mark.parametrize(
@@ -839,148 +979,6 @@ class TestCustomCurrentSourceGaussian:
         npt.assert_allclose(
             np.sum(results[("current_dataset", "Ex")]), expected_gradient, rtol=5e-1
         )
-
-
-def test_source_autograd(use_emulated_run):  # noqa: F811
-    """Test autograd differentiation with respect to CustomCurrentSource parameters."""
-
-    def make_sim_with_traced_source(val):
-        """Create a simulation with a traced CustomCurrentSource."""
-
-        # Create a simple simulation
-        sim = td.Simulation(
-            size=(2.0, 2.0, 2.0),
-            run_time=1e-12,
-            grid_spec=td.GridSpec.uniform(dl=0.1),
-            sources=[],
-            monitors=[
-                td.FieldMonitor(
-                    size=(1.0, 1.0, 0.0), center=(0, 0, 0), freqs=[2e14], name="field_monitor"
-                )
-            ],
-        )
-
-        data_shape = (10, 10, 1, 1)
-
-        # Create a traced CustomCurrentSource
-        x = np.linspace(-0.5, 0.5, data_shape[0])
-        y = np.linspace(-0.5, 0.5, data_shape[1])
-        z = np.array([0])
-        f = [2e14]
-        coords = {"x": x, "y": y, "z": z, "f": f}
-
-        # Create traced field data
-        field_data = val * np.ones(data_shape)
-        scalar_field = td.ScalarFieldDataArray(field_data, coords=coords)
-
-        # Create field dataset with traced data
-        field_dataset = td.FieldDataset(Ex=scalar_field)
-
-        # Create CustomCurrentSource with traced dataset
-        custom_source = td.CustomCurrentSource(
-            center=(0, 0, 0),
-            size=(1.0, 1.0, 0.0),
-            source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
-            current_dataset=field_dataset,
-        )
-
-        # Add source to simulation
-        sim = sim.updated_copy(sources=[custom_source])
-
-        return sim
-
-    def objective(val):
-        """Objective function that depends on source parameters."""
-
-        sim = make_sim_with_traced_source(val)
-
-        # Run simulation
-        sim_data = run(sim, task_name="test_source_autograd")
-
-        # Extract field data from monitor
-        field_data = sim_data.load_field_monitor("field_monitor")
-        Ex_field = field_data.Ex
-
-        # Compute objective (e.g., field intensity at a point)
-        objective_value = anp.abs(Ex_field.isel(x=5, y=5, z=0, f=0).values) ** 2
-
-        return objective_value
-
-    # Compute gradient
-    grad = ag.grad(objective)(1.0)
-
-    assert anp.all(grad != 0.0), "some gradients are 0"
-
-
-def test_field_source_autograd(use_emulated_run):  # noqa: F811
-    """Test autograd differentiation with respect to CustomFieldSource parameters."""
-
-    def make_sim_with_traced_field_source(val):
-        """Create a simulation with a traced CustomFieldSource."""
-
-        # Create a simple simulation
-        sim = td.Simulation(
-            size=(2.0, 2.0, 2.0),
-            run_time=1e-12,
-            grid_spec=td.GridSpec.uniform(dl=0.1),
-            sources=[],
-            monitors=[
-                td.FieldMonitor(
-                    size=(1.0, 1.0, 0.0), center=(0, 0, 0), freqs=[2e14], name="field_monitor"
-                )
-            ],
-        )
-
-        data_shape = (10, 10, 1, 1)
-
-        # Create a traced CustomFieldSource
-        x = np.linspace(-0.5, 0.5, data_shape[0])
-        y = np.linspace(-0.5, 0.5, data_shape[1])
-        z = np.array([0])
-        f = [2e14]
-        coords = {"x": x, "y": y, "z": z, "f": f}
-
-        # Create traced field data
-        field_data = val * np.ones(data_shape)
-        scalar_field = td.ScalarFieldDataArray(field_data, coords=coords)
-
-        # Create field dataset with traced data
-        field_dataset = td.FieldDataset(Ex=scalar_field)
-
-        # Create CustomFieldSource with traced dataset
-        custom_source = td.CustomFieldSource(
-            center=(0, 0, 0),
-            size=(1.0, 1.0, 0.0),
-            source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
-            field_dataset=field_dataset,
-        )
-
-        # Add source to simulation
-        sim = sim.updated_copy(sources=[custom_source])
-
-        return sim
-
-    def objective(val):
-        """Objective function that depends on source parameters."""
-
-        sim = make_sim_with_traced_field_source(val)
-
-        # Run simulation
-        sim_data = run(sim, task_name="test_field_source_autograd")
-
-        # Extract field data from monitor
-        field_data = sim_data.load_field_monitor("field_monitor")
-        Ex_field = field_data.Ex
-
-        # Compute objective (e.g., field intensity at a point)
-        objective_value = anp.abs(Ex_field.isel(x=5, y=5, z=0, f=0).values) ** 2
-
-        return objective_value
-
-    # Compute gradient
-    grad = ag.grad(objective)(1.0)
-
-    assert anp.all(grad != 0.0), "some gradients are 0"
 
 
 @pytest.mark.parametrize(
@@ -1236,3 +1234,4 @@ def test_traced_source_derivative_computation(use_emulated_run, kind, make_sourc
 
     assert grad is not None
     assert isinstance(grad, (float, np.ndarray))
+    assert np.all(np.asarray(grad) != 0.0), "some gradients are 0"
