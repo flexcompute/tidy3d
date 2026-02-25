@@ -249,26 +249,6 @@ def _compute_source_time_scaling(
     return FreqDataArray(scale, coords={"f": frequencies})
 
 
-def _compute_source_eps_data(
-    simulation: td.Simulation,
-    source: td.Source,
-    frequencies: np.ndarray,
-) -> ScalarFieldDataArray:
-    """Compute spatially resolved relative permittivity at source locations."""
-    eps_source_by_f = [
-        simulation.epsilon(box=source.geometry, coord_key="centers", freq=f) for f in frequencies
-    ]
-    eps_source = xr.concat(eps_source_by_f, dim="f").assign_coords(f=frequencies)
-    if not {"x", "y", "z", "f"}.issubset(eps_source.dims):
-        raise ValueError(
-            "Source permittivity data must include dimensions ('x', 'y', 'z', 'f'), "
-            f"got {eps_source.dims}."
-        )
-    eps_source = eps_source.transpose("x", "y", "z", "f")
-    coords = {dim: np.asarray(eps_source.coords[dim].data) for dim in ("x", "y", "z", "f")}
-    return td.ScalarFieldDataArray(np.asarray(eps_source.data), coords=coords)
-
-
 def _process_source_gradients(
     sim_data_adj: td.SimulationData,
     sim_data_orig: td.SimulationData,
@@ -306,16 +286,8 @@ def _process_source_gradients(
     e_adj = {k: v for k, v in fld_adj.field_components.items() if k.startswith("E")}
     h_adj = {k: v for k, v in fld_adj.field_components.items() if k.startswith("H")}
 
-    # Spatially resolved relative permittivity at source locations, inferred from the
-    # simulation object (no extra monitor required).
-    eps_source = _compute_source_eps_data(
-        simulation=sim_data_orig.simulation,
-        source=source,
-        frequencies=adjoint_frequencies,
-    )
-
     bounds = source.geometry.bounds
-    # Source VJP uses spatially resolved `eps_data`.
+    # Source VJP currently does not use permittivity data.
     derivative_info = DerivativeInfo(
         paths=source_paths,
         E_der_map={},
@@ -326,7 +298,7 @@ def _process_source_gradients(
         D_adj={},
         H_fwd={},
         H_adj=h_adj,
-        eps_data={"eps": eps_source},
+        eps_data={},
         frequencies=adjoint_frequencies,
         bounds=bounds,
         bounds_intersect=bounds,

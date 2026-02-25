@@ -251,6 +251,48 @@ class CustomFieldSource(FieldSource, PlanarSource):
                     return self
         raise SetupError("No tangential field found in the suppled 'field_dataset'.")
 
+    @staticmethod
+    def _get_adjoint_and_sign(
+        *,
+        field_name: str,
+        injection_axis: int,
+        component_axis: int,
+        e_adj: dict[str, ScalarFieldDataArray],
+        h_adj: dict[str, ScalarFieldDataArray],
+    ) -> tuple[Optional[ScalarFieldDataArray], float]:
+        """Return coupled adjoint field and orientation sign for a source component."""
+        # n x e determines which orthogonal component couples (and its sign)
+        n_vec = np.eye(3)[injection_axis]
+        e_vec = np.eye(3)[component_axis]
+        cross = np.cross(n_vec, e_vec)
+
+        if not np.any(cross):
+            return None, 0.0  # indicates "no gradient"
+
+        target_axis = int(np.flatnonzero(cross)[0])
+        component_sign = float(cross[target_axis])
+
+        if field_name.startswith("E"):
+            target_component = f"H{'xyz'[target_axis]}"
+            try:
+                adjoint_field = h_adj[target_component]
+            except KeyError as exc:
+                raise ValueError(
+                    "Missing adjoint field component "
+                    f"'{target_component}' required by CustomFieldSource derivative."
+                ) from exc
+        else:
+            target_component = f"E{'xyz'[target_axis]}"
+            try:
+                adjoint_field = e_adj[target_component]
+            except KeyError as exc:
+                raise ValueError(
+                    "Missing adjoint field component "
+                    f"'{target_component}' required by CustomFieldSource derivative."
+                ) from exc
+
+        return adjoint_field, component_sign
+
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute derivatives with respect to CustomFieldSource parameters."""
         from tidy3d.components.autograd.derivative_utils import (
@@ -298,47 +340,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 derivative_map[field_path] = np.zeros_like(field_data.data)
                 continue
 
-            def _get_adjoint_and_sign(
-                *,
-                field_name: str,
-                injection_axis: int,
-                component_axis: int,
-                e_adj: dict[str, ScalarFieldDataArray],
-                h_adj: dict[str, ScalarFieldDataArray],
-            ) -> tuple[Optional[ScalarFieldDataArray], float]:
-                # n x e determines which orthogonal component couples (and its sign)
-                n_vec = np.eye(3)[injection_axis]
-                e_vec = np.eye(3)[component_axis]
-                cross = np.cross(n_vec, e_vec)
-
-                if not np.any(cross):
-                    return None, 0.0  # indicates "no gradient"
-
-                target_axis = int(np.flatnonzero(cross)[0])
-                component_sign = float(cross[target_axis])
-
-                if field_name.startswith("E"):
-                    target_component = f"H{'xyz'[target_axis]}"
-                    try:
-                        adjoint_field = h_adj[target_component]
-                    except KeyError as exc:
-                        raise ValueError(
-                            "Missing adjoint field component "
-                            f"'{target_component}' required by CustomFieldSource derivative."
-                        ) from exc
-                else:
-                    target_component = f"E{'xyz'[target_axis]}"
-                    try:
-                        adjoint_field = e_adj[target_component]
-                    except KeyError as exc:
-                        raise ValueError(
-                            "Missing adjoint field component "
-                            f"'{target_component}' required by CustomFieldSource derivative."
-                        ) from exc
-
-                return adjoint_field, component_sign
-
-            adjoint_field, component_sign = _get_adjoint_and_sign(
+            adjoint_field, component_sign = self._get_adjoint_and_sign(
                 field_name=field_name,
                 injection_axis=self.injection_axis,
                 component_axis=component_axis,
