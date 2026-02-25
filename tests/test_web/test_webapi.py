@@ -1113,20 +1113,16 @@ def test_batch_upload_and_start_streams_ready_start_before_all_uploads(monkeypat
     monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(Batch, "_check_folder", staticmethod(lambda *args, **kwargs: None))
 
-    sims = {"task_a": make_sim(), "task_b": make_sim()}
+    sims = {f"task_{idx}": make_sim() for idx in range(70)}
     batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False, num_workers=1)
     batch._cached_properties = {}
     batch._cached_properties["jobs"] = {
-        "task_a": UploadEstimateFakeJob(
-            "task_a_id",
+        task_name: UploadEstimateFakeJob(
+            f"{task_name}_id",
             events,
             metadata_statuses=["processed"],
-        ),
-        "task_b": UploadEstimateFakeJob(
-            "task_b_id",
-            events,
-            metadata_statuses=["processed"],
-        ),
+        )
+        for task_name in sims
     }
 
     batch._upload_and_start(priority=9)
@@ -1152,7 +1148,7 @@ def test_batch_upload_and_start_respects_num_workers_bound(monkeypatch):
     monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(Batch, "_check_folder", staticmethod(lambda *args, **kwargs: None))
 
-    sims = {f"task_{idx}": make_sim() for idx in range(6)}
+    sims = {f"task_{idx}": make_sim() for idx in range(120)}
     batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False, num_workers=2)
     batch._cached_properties = {}
     batch._cached_properties["jobs"] = {
@@ -1166,7 +1162,8 @@ def test_batch_upload_and_start_respects_num_workers_bound(monkeypatch):
 
     batch._upload_and_start(priority=3)
 
-    assert max_active_futures[0] <= batch.num_workers
+    assert max_active_futures[0] <= 64
+    assert max_active_futures[0] > batch.num_workers
 
 
 def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):

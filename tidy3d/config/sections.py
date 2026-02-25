@@ -376,6 +376,15 @@ class WebConfig(ConfigSection):
         le=300,
     )
 
+    default_num_workers: PositiveInt = Field(
+        10,
+        title="Default batch workers",
+        description=(
+            "Default worker count for ``Batch`` thread pools when ``num_workers`` is not provided."
+        ),
+        json_schema_extra={"persist": True},
+    )
+
     ssl_version: Optional[str] = Field(
         None,
         title="SSL/TLS version",

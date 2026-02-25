@@ -56,12 +56,11 @@ if TYPE_CHECKING:
     from tidy3d.components.types.workflow import WorkflowDataType
     from tidy3d.web.core.task_info import RunInfo, TaskInfo
 
-# Max # of workers for parallel upload / download: above 10, performance is same but with warnings
-DEFAULT_NUM_WORKERS = 10
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
 BATCH_PROGRESS_REFRESH_TIME = 0.02
 ESTIMATE_POLL_INTERVAL = 1.0
+UPLOAD_START_NUM_WORKERS = 64
 
 BatchCategoryType = Literal[
     "tidy3d",
@@ -72,6 +71,11 @@ BatchCategoryType = Literal[
     "autograd_fwd",
     "autograd_bwd",
 ]
+
+
+def _default_batch_num_workers() -> int:
+    """Default worker count from runtime config."""
+    return config.web.default_num_workers
 
 
 class WebContainer(Tidy3dBaseModel, ABC):
@@ -833,12 +837,12 @@ class Batch(WebContainer):
     )
 
     num_workers: Optional[PositiveInt] = Field(
-        DEFAULT_NUM_WORKERS,
+        default_factory=_default_batch_num_workers,
         title="Number of Workers",
-        description="Number of workers for multi-threading upload and download of batch. "
+        description="Number of workers for batch multi-threading where configurable. "
         "Corresponds to ``max_workers`` argument passed to "
-        "``concurrent.futures.ThreadPoolExecutor``. When left ``None``, will pass the maximum "
-        "number of threads available on the system.",
+        "``concurrent.futures.ThreadPoolExecutor``. Defaults to "
+        "``config.web.default_num_workers``.",
     )
 
     reduce_simulation: Literal["auto", True, False] = Field(
@@ -1120,10 +1124,13 @@ class Batch(WebContainer):
         if not jobs_to_upload:
             return
 
-        on_started = on_started or (lambda: None)
-        worker_limit = self.num_workers
-        if worker_limit is None:
-            worker_limit = min(32, (os.cpu_count() or 1) + 4)
+        if on_started is None:
+
+            def _on_started_noop() -> None:
+                return None
+
+            on_started = _on_started_noop
+        worker_limit = UPLOAD_START_NUM_WORKERS
 
         def _upload_job(job: Job) -> Job:
             if isinstance(job, Job):
