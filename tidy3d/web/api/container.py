@@ -60,6 +60,7 @@ DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
 BATCH_PROGRESS_REFRESH_TIME = 0.02
 ESTIMATE_POLL_INTERVAL = 1.0
+# Upload/start requests are network I/O-bound, so use a dedicated concurrency cap.
 UPLOAD_START_NUM_WORKERS = 64
 
 BatchCategoryType = Literal[
