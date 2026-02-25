@@ -374,6 +374,26 @@ def test_data_array_to_hdf5(tmp_path):
     flux.to_hdf5(fname=path, group_path="test")
 
 
+def test_data_array_to_hdf5_string_coords(tmp_path):
+    """Test HDF5 round-trip for DataArray with string coordinates."""
+    from tidy3d.components.data.data_array import FreqTerminalTerminalDataArray
+
+    f = [1e9, 2e9]
+    terminal_label_out = ["t0", "t1"]
+    terminal_label_in = ["t0", "t1"]
+    coords = {
+        "f": f,
+        "terminal_label_out": terminal_label_out,
+        "terminal_label_in": terminal_label_in,
+    }
+    data = FreqTerminalTerminalDataArray((1 + 1j) * np.random.random((2, 2, 2)), coords=coords)
+
+    path = str(tmp_path / "terminal.hdf5")
+    data.to_hdf5(fname=path, group_path="test")
+    loaded = FreqTerminalTerminalDataArray.from_hdf5(fname=path, group_path="test")
+    assert data == loaded
+
+
 def test_inf_attrs(tmp_path):
     """But if infinity added to attrs."""
 

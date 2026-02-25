@@ -14,6 +14,7 @@ import tidy3d.plugins.smatrix.utils
 from tidy3d import SimulationDataMap
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.smatrix import (
     CoaxialLumpedPort,
@@ -31,6 +32,8 @@ from tidy3d.plugins.smatrix.utils import s_to_z, validate_square_matrix
 
 from ...utils import AssertLogLevel, AssertLogStr, run_emulated
 from .terminal_component_modeler_def import (
+    Rinner,
+    Router,
     make_basic_filter_terminals,
     make_coaxial_component_modeler,
     make_component_modeler,
@@ -2782,3 +2785,138 @@ def test_renormalize_none_is_default(monkeypatch):
     # Should be able to call smatrix normally
     s = modeler_data.smatrix()
     assert s.data.values.shape[1] == 2
+
+
+def test_wave_port_mode_spec_resolution():
+    """Unit test WavePort._mode_spec for three resolution branches."""
+    # Shared geometry for WavePort construction
+    center = (0, 0, 0)
+    size = (2 * Router, 2 * Router, 0)
+
+    # Build a voltage spec that lies within the port bounds
+    mean_radius = (Router + Rinner) / 2
+    voltage_spec = td.AxisAlignedVoltageIntegralSpec(
+        center=(mean_radius, 0, 0),
+        size=(Router - Rinner, 0, 0),
+        extrapolate_to_endpoints=True,
+        snap_path_to_grid=True,
+        sign="+",
+    )
+    custom_impedance = td.CustomImpedanceSpec(voltage_spec=voltage_spec)
+
+    # Case 1: explicit integer num_modes — returns mode_spec as-is
+    spec_explicit = td.MicrowaveModeSpec(
+        num_modes=1,
+        impedance_specs=(custom_impedance,),
+    )
+    port_explicit = WavePort(
+        center=center, size=size, direction="+", name="explicit", mode_spec=spec_explicit
+    )
+    resolved = port_explicit._mode_spec
+    assert resolved is not None
+    assert resolved.num_modes == 1
+
+    # Case 2: num_modes="auto" with a tuple of impedance_specs — infer from length
+    spec_auto_tuple = td.MicrowaveModeSpec(
+        num_modes="auto",
+        impedance_specs=(custom_impedance, custom_impedance),
+    )
+    port_auto_tuple = WavePort(
+        center=center, size=size, direction="+", name="auto_tuple", mode_spec=spec_auto_tuple
+    )
+    resolved_tuple = port_auto_tuple._mode_spec
+    assert resolved_tuple is not None
+    assert resolved_tuple.num_modes == 2
+
+    # Case 3: num_modes="auto" with AutoImpedanceSpec — cannot resolve, returns None
+    spec_auto_default = td.MicrowaveModeSpec(num_modes="auto")
+    port_auto_default = WavePort(
+        center=center, size=size, direction="+", name="auto_default", mode_spec=spec_auto_default
+    )
+    assert port_auto_default._mode_spec is None
+
+
+def test_wave_port_auto_num_modes_modeler():
+    """Integration test: auto num_modes detection for WavePort via TerminalComponentModeler."""
+    # Build a single-strip stripline: one signal trace between two ground planes.
+    # PEC boundary on y ensures ground planes touching y-boundary are filtered out,
+    # leaving only the signal strip as a floating conductor.
+    mil = 25.4
+    w = 3.2 * mil  # signal strip width
+    t = 0.7 * mil  # conductor thickness
+    h = 10.7 * mil  # substrate thickness
+    L = 4000 * mil  # line length
+    len_inf = 1e6
+    f_max = 70e9
+
+    med_sub = td.Medium(permittivity=4.4)
+    med_metal = td.PEC
+
+    str_sub = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(len_inf, h, L)), medium=med_sub)
+    str_signal = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(w, t, L)), medium=med_metal)
+    str_gnd_top = td.Structure(
+        geometry=td.Box(center=(0, h / 2 + t / 2, 0), size=(len_inf, t, L)),
+        medium=med_metal,
+    )
+    str_gnd_bot = td.Structure(
+        geometry=td.Box(center=(0, -h / 2 - t / 2, 0), size=(len_inf, t, L)),
+        medium=med_metal,
+    )
+
+    lr_spec = td.LayerRefinementSpec.from_structures(
+        structures=[str_signal],
+        axis=1,
+        min_steps_along_axis=10,
+        refinement_inside_sim_only=False,
+        bounds_snapping="bounds",
+        corner_refinement=td.GridRefinement(dl=t / 10, num_cells=2),
+    )
+    lr_spec_top = lr_spec.updated_copy(center=(0, h / 2 + t / 2, 0), size=(len_inf, t, L))
+    lr_spec_bot = lr_spec.updated_copy(center=(0, -h / 2 - t / 2, 0), size=(len_inf, t, L))
+
+    grid_spec = td.GridSpec.auto(
+        wavelength=td.C_0 / f_max,
+        min_steps_per_wvl=30,
+        layer_refinement_specs=[lr_spec, lr_spec_top, lr_spec_bot],
+    )
+
+    sim = td.Simulation(
+        size=(50 * mil, h + 2 * t, 1.05 * L),
+        center=(0, 0, 0),
+        grid_spec=grid_spec,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(), y=td.Boundary.pec(), z=td.Boundary.pml()
+        ),
+        structures=[str_sub, str_signal, str_gnd_top, str_gnd_bot],
+        monitors=[],
+        run_time=2e-9,
+        shutoff=1e-7,
+    )
+
+    port = WavePort(
+        center=(0, 0, -L / 2),
+        size=(len_inf, len_inf, 0),
+        direction="+",
+        name="wave_auto",
+        mode_spec=td.MicrowaveModeSpec(num_modes="auto"),
+    )
+
+    freqs = np.array([1e9, 10e9])
+    modeler = TerminalComponentModeler(simulation=sim, ports=[port], freqs=freqs)
+
+    # Modeler should identify 1 wave port
+    assert len(modeler._wave_ports) == 1
+
+    # Should detect 1 floating isolated conductor (signal strip;
+    # ground planes filtered because they touch the PEC boundary on y)
+    conductors = modeler._floating_isolated_conductors_at_waveport["wave_auto"]
+    assert len(conductors) == 1
+
+    # Resolved mode spec should have num_modes == 1
+    resolved = modeler._resolved_mode_specs["wave_auto"]
+    assert isinstance(resolved, td.MicrowaveModeSpec)
+    assert resolved.num_modes == 1
+
+    # mode_solver_for_port should return a ModeSolver
+    ms = modeler.mode_solver_for_port("wave_auto")
+    assert isinstance(ms, ModeSolver)

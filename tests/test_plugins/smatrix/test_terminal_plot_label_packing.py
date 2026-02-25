@@ -18,6 +18,7 @@ def _assert_non_overlapping_centers(
 
 
 def test_pack_label_centers_1d_non_overlapping_and_in_bounds():
+    """Packed labels stay non-overlapping and within the given bounds."""
     anchors = np.array([10.0, 11.0, 12.0])
     widths = np.array([10.0, 10.0, 10.0])
     x_min, x_max = 0.0, 40.0
@@ -33,6 +34,7 @@ def test_pack_label_centers_1d_non_overlapping_and_in_bounds():
 
 
 def test_pack_label_centers_1d_handles_right_overflow():
+    """Labels anchored near the right edge are shifted left to stay in bounds."""
     anchors = np.array([30.0, 31.0, 32.0])
     widths = np.array([12.0, 12.0, 12.0])
     x_min, x_max = 0.0, 40.0

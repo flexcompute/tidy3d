@@ -161,7 +161,12 @@ def merging_geometries_on_plane(
                 if not unionized.is_empty:
                     merged_parts.append(unionized)
             if zero_area:
-                unionized = linemerge(shapely.union_all(zero_area)).normalize()
+                merged = shapely.union_all(zero_area)
+                unionized = (
+                    linemerge(merged).normalize()
+                    if merged.geom_type == "MultiLineString"
+                    else merged.normalize()
+                )
                 if not unionized.is_empty:
                     merged_parts.append(unionized)
             if len(merged_parts) == 1:
