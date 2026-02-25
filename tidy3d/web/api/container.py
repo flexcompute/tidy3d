@@ -28,6 +28,7 @@ from tidy3d.exceptions import DataError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api import webapi as web
 from tidy3d.web.api.states import (
+    ALL_POST_VALIDATE_STATES,
     COMPLETED_PERCENT,
     COMPLETED_STATES,
     DRAFT_STATES,
@@ -60,6 +61,7 @@ DEFAULT_NUM_WORKERS = 10
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
 BATCH_PROGRESS_REFRESH_TIME = 0.02
+ESTIMATE_POLL_INTERVAL = 1.0
 
 BatchCategoryType = Literal[
     "tidy3d",
@@ -371,22 +373,33 @@ class Job(WebContainer):
         self._check_folder(self.folder_name)
         return self._upload(verbose_estimate_cost=False)
 
-    def _upload(self, verbose_estimate_cost: Optional[bool] = None) -> TaskId:
+    def _upload(
+        self,
+        verbose_estimate_cost: Optional[bool] = None,
+        wait_for_estimate_cost: bool = True,
+    ) -> TaskId:
         """Upload this job and return the task ID for handling."""
         # upload kwargs with all fields except task_id
         upload_kwargs = {key: getattr(self, key) for key in self._upload_fields}
         if verbose_estimate_cost is not None:
             upload_kwargs["verbose_estimate_cost"] = verbose_estimate_cost
+        upload_kwargs["wait_for_estimate_cost"] = wait_for_estimate_cost
         task_id = web.upload(**upload_kwargs)
         return task_id
 
-    def upload(self) -> None:
+    def upload(self, wait_for_estimate_cost: bool = True) -> None:
         """Upload this ``Job`` if not already got cached results."""
         if self.load_if_cached:
             return
-        if self.verbose:
-            self.estimate_cost(verbose=True)
-        _ = self.task_id
+        if self.task_id_cached:
+            return
+        self._check_folder(self.folder_name)
+        verbose_estimate_cost = self.verbose if wait_for_estimate_cost else False
+        task_id = self._upload(
+            verbose_estimate_cost=verbose_estimate_cost,
+            wait_for_estimate_cost=wait_for_estimate_cost,
+        )
+        self._cached_properties["task_id"] = task_id
 
     def get_info(self) -> TaskInfo:
         """Return information about a :class:`Job`.
@@ -924,7 +937,6 @@ class Batch(WebContainer):
             try:
                 self._upload_and_start(priority=priority)
             finally:
-                # Persist any known task IDs even if upload/start raises midway.
                 self.to_file(batch_path)
             self.monitor(
                 path_dir=path_dir,
@@ -1084,25 +1096,142 @@ class Batch(WebContainer):
                 for fut in concurrent.futures.as_completed(futures):
                     fut.result()
 
-    def _upload_and_start(self, priority: Optional[int] = None) -> None:
-        """Optimized run path: start each task immediately after its upload finishes."""
+    @staticmethod
+    def _job_metadata_status(job: Job) -> Optional[str]:
+        """Return metadata validation status if available, otherwise ``None``."""
+        get_info_fn = getattr(job, "get_info", None)
+        if not callable(get_info_fn):
+            return None
 
-        def _fn(job: Job) -> None:
-            job.upload()
-            job.start(priority=priority)
+        info = get_info_fn()
+        metadata_status = getattr(info, "metadataStatus", None)
+        if metadata_status is None:
+            return None
+        return str(metadata_status).lower()
+
+    def _wait_estimate_and_start(
+        self,
+        *,
+        pending_jobs: dict[TaskId, Job],
+        priority: Optional[int] = None,
+        on_started: Optional[Callable[[], None]] = None,
+    ) -> None:
+        """Poll metadata status and start each job once estimate-cost is post-validated."""
+        if not pending_jobs:
+            return
+
+        on_started = on_started or (lambda: None)
+
+        with ThreadPoolExecutor(max_workers=self.num_workers) as shared_executor:
+            while pending_jobs:
+                status_futures = {
+                    shared_executor.submit(self._job_metadata_status, job): (task_id, job)
+                    for task_id, job in pending_jobs.items()
+                }
+
+                jobs_ready_to_start: list[tuple[TaskId, Job]] = []
+                for fut in concurrent.futures.as_completed(status_futures):
+                    task_id, job = status_futures[fut]
+                    metadata_status = fut.result()
+
+                    # Support lightweight test doubles that don't expose metadata status.
+                    if metadata_status is None:
+                        jobs_ready_to_start.append((task_id, job))
+                        continue
+
+                    if metadata_status not in ALL_POST_VALIDATE_STATES:
+                        continue
+
+                    if metadata_status in ERROR_STATES:
+                        if isinstance(job, Job):
+                            # Reuse existing error handling path to surface validation details.
+                            web.estimate_cost(
+                                task_id=job.task_id,
+                                verbose=False,
+                                solver_version=job.solver_version,
+                            )
+                        raise DataError(
+                            "Failed cost estimation before start for "
+                            f"task_id='{task_id}' (metadataStatus='{metadata_status}')."
+                        )
+
+                    jobs_ready_to_start.append((task_id, job))
+
+                if jobs_ready_to_start:
+                    start_futures = {
+                        shared_executor.submit(job.start, priority=priority): task_id
+                        for task_id, job in jobs_ready_to_start
+                    }
+                    for fut in concurrent.futures.as_completed(start_futures):
+                        task_id = start_futures[fut]
+                        fut.result()
+                        pending_jobs.pop(task_id, None)
+                        on_started()
+
+                if pending_jobs:
+                    time.sleep(ESTIMATE_POLL_INTERVAL)
+
+    def _upload_and_start(self, priority: Optional[int] = None) -> None:
+        """Optimized run path: upload jobs, estimate costs concurrently, then start when ready."""
 
         jobs_to_upload = self._prepare_uncached_jobs(
             check_folder=True,
             log_cached_jobs=True,
         )
-        self._run_job_pool(
-            jobs=jobs_to_upload,
-            fn=_fn,
-            progress_message=(
-                f"Upload and start {len(jobs_to_upload)} "
-                f"task{'s' if len(jobs_to_upload) > 1 else ''}"
-            ),
-        )
+        if not jobs_to_upload:
+            return
+
+        def _upload_job(job: Job) -> Job:
+            if isinstance(job, Job):
+                job.upload(wait_for_estimate_cost=False)
+            else:  # test doubles
+                upload_fn = job.upload
+                try:
+                    upload_fn(wait_for_estimate_cost=False)
+                except TypeError:
+                    upload_fn()
+            return job
+
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            upload_futures = [executor.submit(_upload_job, job) for job in jobs_to_upload]
+            uploaded_jobs = [fut.result() for fut in upload_futures]
+
+        pending_jobs: dict[TaskId, Job] = {job.task_id: job for job in uploaded_jobs}
+
+        if self.verbose:
+            console = get_logging_console()
+            progress_columns = (
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                TimeElapsedColumn(),
+            )
+            with Progress(*progress_columns, console=console, transient=False) as progress:
+                pbar = progress.add_task(
+                    f"Upload and start {len(jobs_to_upload)} "
+                    f"task{'s' if len(jobs_to_upload) > 1 else ''}",
+                    total=len(jobs_to_upload),
+                    completed=0,
+                )
+                completed_starts = [0]
+
+                def _on_started() -> None:
+                    completed_starts[0] += 1
+                    progress.update(pbar, completed=completed_starts[0])
+
+                self._wait_estimate_and_start(
+                    pending_jobs=pending_jobs,
+                    priority=priority,
+                    on_started=_on_started,
+                )
+                progress.refresh()
+                time.sleep(BATCH_PROGRESS_REFRESH_TIME)
+        else:
+            self._wait_estimate_and_start(
+                pending_jobs=pending_jobs,
+                priority=priority,
+                on_started=None,
+            )
 
     def upload(self) -> None:
         """Upload a series of tasks associated with this ``Batch`` using multi-threading."""
@@ -1357,6 +1486,9 @@ class Batch(WebContainer):
                             desc, total=COMPLETED_PERCENT, completed=completed
                         )
                     else:
+                        if status is None and job.load_if_cached:
+                            status = "success"
+                            _remember_terminal_status(task_name, job, status)
                         schedule_download(task_name, job, status=status)
 
                 while any(

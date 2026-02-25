@@ -473,6 +473,7 @@ def upload(
     solver_version: Optional[str] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     verbose_estimate_cost: Optional[bool] = None,
+    wait_for_estimate_cost: bool = True,
 ) -> TaskId:
     """
     Upload simulation to server, but do not start running :class:`.Simulation`.
@@ -504,6 +505,9 @@ def upload(
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     verbose_estimate_cost : Optional[bool] = None
         Determines if cost estimation should be printed. If ``None``, defaults to ``verbose`` argument.
+    wait_for_estimate_cost : bool = True
+        If ``True``, blocks until metadata validation for cost estimation reaches a post-validate
+        state. If ``False``, only triggers metadata estimation asynchronously and returns immediately.
 
     Returns
     -------
@@ -579,7 +583,12 @@ def upload(
     )
 
     verbose_estimate_cost = verbose if verbose_estimate_cost is None else verbose_estimate_cost
-    estimate_cost(task_id=resource_id, solver_version=solver_version, verbose=verbose_estimate_cost)
+    estimate_cost(
+        task_id=resource_id,
+        solver_version=solver_version,
+        verbose=verbose_estimate_cost,
+        wait_for_completion=wait_for_estimate_cost,
+    )
 
     task.validate_post_upload(parent_tasks=parent_tasks)
 
@@ -1474,8 +1483,11 @@ def get_tasks(
 
 @wait_for_connection
 def estimate_cost(
-    task_id: str, verbose: bool = True, solver_version: Optional[str] = None
-) -> float:
+    task_id: str,
+    verbose: bool = True,
+    solver_version: Optional[str] = None,
+    wait_for_completion: bool = True,
+) -> Optional[float]:
     """Compute the maximum FlexCredit charge for a given task.
 
     Parameters
@@ -1486,11 +1498,15 @@ def estimate_cost(
         Whether to log the cost and helpful messages.
     solver_version : str = None
         Target solver version.
+    wait_for_completion : bool = True
+        If ``True``, waits until metadata processing reaches a post-validate state and returns
+        the estimated cost. If ``False``, only triggers metadata estimation and returns ``None``.
 
     Returns
     -------
-    float
-        Estimated maximum cost for :class:`.Simulation` associated with given ``task_id``.
+    Optional[float]
+        Estimated maximum cost for :class:`.Simulation` associated with given ``task_id`` when
+        ``wait_for_completion=True``; otherwise ``None``.
 
     Note
     ----
@@ -1533,6 +1549,8 @@ def estimate_cost(
     if isinstance(task, BatchTask):
         check_task_type = "FDTD" if detail.taskType == "MODAL_CM" else "RF_FDTD"
         task.check(solver_version=solver_version, check_task_type=check_task_type)
+        if not wait_for_completion:
+            return None
         detail = task.detail()
         status = detail.status.lower()
         while status not in ALL_POST_VALIDATE_STATES:
@@ -1551,6 +1569,8 @@ def estimate_cost(
 
     # simulation path
     task.estimate_cost(solver_version=solver_version)
+    if not wait_for_completion:
+        return None
     task_info = get_info(task_id)
     status = task_info.metadataStatus
 

@@ -122,6 +122,36 @@ class UploadStartFakeJob:
         self.events.append((self.task_id, "start", priority))
 
 
+class UploadEstimateFakeJob:
+    def __init__(
+        self,
+        task_id: str,
+        events: list[tuple],
+        metadata_statuses: list[str],
+    ):
+        self.task_id = task_id
+        self.events = events
+        self._metadata_statuses = metadata_statuses
+        self._metadata_idx = 0
+
+    @property
+    def load_if_cached(self):
+        return False
+
+    def upload(self, wait_for_estimate_cost=True):
+        self.events.append((self.task_id, "upload", wait_for_estimate_cost))
+
+    def get_info(self):
+        status = self._metadata_statuses[self._metadata_idx]
+        if self._metadata_idx < len(self._metadata_statuses) - 1:
+            self._metadata_idx += 1
+        self.events.append((self.task_id, "metadata", status))
+        return SimpleNamespace(metadataStatus=status)
+
+    def start(self, priority=None):
+        self.events.append((self.task_id, "start", priority))
+
+
 class LoadStatusFakeJob:
     def __init__(self, task_id: str, status: str, simulation: td.Simulation):
         self.task_id = task_id
@@ -865,11 +895,31 @@ def test_batch_run_saves_file_when_upload_and_start_fails(tmp_path, monkeypatch)
     monkeypatch.setattr(Batch, "to_file", track_to_file)
     monkeypatch.setattr(Batch, "_upload_and_start", mock_upload_and_start_fail)
 
-    with pytest.raises(RuntimeError, match="Simulated failure"):
+    with pytest.raises(RuntimeError, match="Simulated failure during upload/start"):
         batch.run(path_dir=str(tmp_path))
 
     assert batch_file_saved["saved"]
     assert os.path.exists(batch._batch_path(path_dir=str(tmp_path)))
+
+
+def test_batch_run_surfaces_to_file_error_when_upload_and_start_succeeds(tmp_path, monkeypatch):
+    sims = {TASK_NAME: make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME)
+
+    monkeypatch.setattr(Batch, "_upload_and_start", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        Batch,
+        "to_file",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("to_file failed")),
+    )
+    monkeypatch.setattr(
+        Batch,
+        "monitor",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("monitor should not run")),
+    )
+
+    with pytest.raises(RuntimeError, match="to_file failed"):
+        batch.run(path_dir=str(tmp_path))
 
 
 def test_batch_monitor_downloads_on_success(monkeypatch, tmp_path):
@@ -951,12 +1001,16 @@ def test_batch_upload_and_start_starts_each_task_after_upload(monkeypatch):
 
     batch._upload_and_start(priority=6)
 
-    assert events == [
+    assert events[:2] == [
         ("task_a_id", "upload"),
-        ("task_a_id", "start", 6),
         ("task_b_id", "upload"),
-        ("task_b_id", "start", 6),
     ]
+    assert sorted(events[2:]) == sorted(
+        [
+            ("task_a_id", "start", 6),
+            ("task_b_id", "start", 6),
+        ]
+    )
 
 
 def test_batch_upload_and_start_skips_cached_jobs(monkeypatch):
@@ -979,6 +1033,76 @@ def test_batch_upload_and_start_skips_cached_jobs(monkeypatch):
         ("running_id", "upload"),
         ("running_id", "start", 3),
     ]
+
+
+def test_batch_upload_and_start_waits_for_metadata_and_disables_blocking_estimate(monkeypatch):
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(Batch, "_check_folder", staticmethod(lambda *args, **kwargs: None))
+
+    sims = {"task_a": make_sim(), "task_b": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        "task_a": UploadEstimateFakeJob(
+            "task_a_id",
+            events,
+            metadata_statuses=["validating", "processed"],
+        ),
+        "task_b": UploadEstimateFakeJob(
+            "task_b_id",
+            events,
+            metadata_statuses=["validating", "validating", "processed"],
+        ),
+    }
+
+    batch._upload_and_start(priority=5)
+
+    upload_events = [event for event in events if event[1] == "upload"]
+    start_events = [event for event in events if event[1] == "start"]
+    metadata_events = [event for event in events if event[1] == "metadata"]
+
+    assert upload_events == [
+        ("task_a_id", "upload", False),
+        ("task_b_id", "upload", False),
+    ]
+    assert sorted(start_events) == sorted(
+        [
+            ("task_a_id", "start", 5),
+            ("task_b_id", "start", 5),
+        ]
+    )
+    assert len(metadata_events) >= 3
+
+    first_start_idx = min(i for i, event in enumerate(events) if event[1] == "start")
+    last_upload_idx = max(i for i, event in enumerate(events) if event[1] == "upload")
+    assert last_upload_idx < first_start_idx
+
+
+def test_batch_upload_and_start_raises_when_metadata_errors(monkeypatch):
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(Batch, "_check_folder", staticmethod(lambda *args, **kwargs: None))
+
+    sims = {"task_a": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        "task_a": UploadEstimateFakeJob(
+            "task_a_id",
+            events,
+            metadata_statuses=["error"],
+        ),
+    }
+
+    with pytest.raises(DataError, match="Failed cost estimation before start"):
+        batch._upload_and_start(priority=4)
+
+    assert ("task_a_id", "start", 4) not in events
 
 
 def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
@@ -1035,6 +1159,40 @@ def test_batch_monitor_skips_get_info_for_cached(monkeypatch, tmp_path):
 
     # Cached job would have raised AssertionError if get_info() was called.
     # Verify the non-cached job still downloaded normally.
+    downloads = [e for e in events if e[1] == "download"]
+    assert any(e[0] == "running_id" for e in downloads)
+
+
+def test_batch_monitor_quiet_mode_skips_status_poll_for_cached(monkeypatch, tmp_path):
+    """Quiet monitor mode should not access ``status`` for cached jobs."""
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+
+    class CachedNoStatusJob(FakeJob):
+        @property
+        def load_if_cached(self):
+            return True
+
+        @property
+        def status(self):
+            raise AssertionError("status should not be polled for cached jobs")
+
+        def get_info(self):
+            raise AssertionError("get_info() should not be called for cached jobs")
+
+    sims = {"cached_task": make_sim(), "running_task": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        "cached_task": CachedNoStatusJob("cached_id", ["success"], events),
+        "running_task": FakeJob("running_id", ["running", "success", "success"], events),
+    }
+
+    batch.monitor(download_on_success=True, path_dir=str(tmp_path))
+
+    # Cached job would have raised AssertionError if status/get_info was touched.
     downloads = [e for e in events if e[1] == "download"]
     assert any(e[0] == "running_id" for e in downloads)
 
@@ -1215,6 +1373,7 @@ def test_batch_run_uses_optimized_upload_and_start(monkeypatch, tmp_path):
             return False
 
     upload_start_calls = {"count": 0, "priority": None}
+    run_calls = []
     load_kwargs = {}
 
     def _raise_legacy_upload(*args, **kwargs):
@@ -1234,8 +1393,8 @@ def test_batch_run_uses_optimized_upload_and_start(monkeypatch, tmp_path):
     monkeypatch.setattr(Batch, "upload", _raise_legacy_upload)
     monkeypatch.setattr(Batch, "start", _raise_legacy_start)
     monkeypatch.setattr(Batch, "_upload_and_start", _track_upload_and_start)
-    monkeypatch.setattr(Batch, "to_file", lambda *args, **kwargs: None)
-    monkeypatch.setattr(Batch, "monitor", lambda *args, **kwargs: None)
+    monkeypatch.setattr(Batch, "to_file", lambda *args, **kwargs: run_calls.append("to_file"))
+    monkeypatch.setattr(Batch, "monitor", lambda *args, **kwargs: run_calls.append("monitor"))
     monkeypatch.setattr(Batch, "load", _fake_load)
 
     batch = Batch(simulations={"task_a": make_sim()}, folder_name=PROJECT_NAME, verbose=False)
@@ -1246,6 +1405,7 @@ def test_batch_run_uses_optimized_upload_and_start(monkeypatch, tmp_path):
     assert result == {"ok": True}
     assert upload_start_calls["count"] == 1
     assert upload_start_calls["priority"] == 8
+    assert run_calls == ["to_file", "monitor"]
     assert load_kwargs == {"path_dir": str(tmp_path), "skip_download": True}
 
 
