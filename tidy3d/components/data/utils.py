@@ -168,8 +168,8 @@ def _dot_numpy(
 ) -> np.ndarray:
     """Compute modal overlap integral.
 
-    By default computes the bidirectional overlap: 1/4 * integral(E1 x H2* + H1 x E2*) dS.
-    With bidirectional=False, computes just: 1/2 * integral(E1 x H2*) dS.
+    By default computes the bidirectional overlap: 1/4 * integral(E1* x H2 + H1* x E2) dS.
+    With bidirectional=False, computes just: 1/2 * integral(E1* x H2) dS.
 
     Parameters
     ----------
@@ -185,10 +185,10 @@ def _dot_numpy(
         Area elements at the two Yee grid locations, each shape ``(nu, nv)``.
         ``dS[0]`` is for Eu/Hv location, ``dS[1]`` for Ev/Hu location.
     conjugate : bool
-        If True, conjugate the second set of fields (E2, H2) before computing overlap.
+        If True, conjugate the first set of fields (E1, H1) before computing overlap.
     bidirectional : bool
-        If True (default), computes symmetric overlap 1/4 * (E1 x H2* + H1 x E2*).
-        If False, computes just 1/2 * (E1 x H2*).
+        If True (default), computes symmetric overlap 1/4 * (E1* x H2 + H1* x E2).
+        If False, computes just 1/2 * (E1* x H2).
 
     Returns
     -------
@@ -203,12 +203,12 @@ def _dot_numpy(
     H2u, H2v = H2
 
     if conjugate:
-        E2u, E2v = np.conj(E2u), np.conj(E2v)
-        H2u, H2v = np.conj(H2u), np.conj(H2v)
+        E1u, E1v = np.conj(E1u), np.conj(E1v)
+        H1u, H1v = np.conj(H1u), np.conj(H1v)
 
     # Group terms by grid location for proper area weighting
     if bidirectional:
-        # Bidirectional: 0.25 * integral(E1 x H2* + H1 x E2*) dS
+        # Bidirectional: 0.25 * integral(E1* x H2 + H1* x E2) dS
         # At Eu/Hv location: E1u * H2v + H1v * E2u
         # At Ev/Hu location: E1v * H2u + H1u * E2v
         term_EuHv = (E1u * H2v + H1v * E2u) * dS_EuHv
@@ -216,7 +216,7 @@ def _dot_numpy(
         # Sum over spatial dimensions (last two)
         return 0.25 * np.sum(term_EuHv - term_EvHu, axis=(-2, -1))
     else:
-        # Non-bidirectional: 0.5 * integral(E1 x H2*) dS
+        # Non-bidirectional: 0.5 * integral(E1* x H2) dS
         # At Eu/Hv location: E1u * H2v
         # At Ev/Hu location: E1v * H2u
         term_EuHv = (E1u * H2v) * dS_EuHv
@@ -237,8 +237,8 @@ def _outer_dot_numpy(
     """Compute pairwise modal overlap matrix.
 
     Computes all elements of the overlap matrix S[i,j] = <mode_i | mode_j>.
-    By default computes the bidirectional overlap: 1/4 * integral(E1 x H2* + H1 x E2*) dS.
-    With bidirectional=False, computes just: 1/2 * integral(E1 x H2*) dS.
+    By default computes the bidirectional overlap: 1/4 * integral(E1* x H2 + H1* x E2) dS.
+    With bidirectional=False, computes just: 1/2 * integral(E1* x H2) dS.
 
     Parameters
     ----------
@@ -255,10 +255,10 @@ def _outer_dot_numpy(
         Area elements at the two Yee grid locations, each shape ``(nu, nv)``.
         ``dS[0]`` is for Eu/Hv location, ``dS[1]`` for Ev/Hu location.
     conjugate : bool
-        If True, conjugate the second set of fields (E2, H2) before computing overlap.
+        If True, conjugate the first set of fields (E1, H1) before computing overlap.
     bidirectional : bool
-        If True (default), computes symmetric overlap 1/4 * (E1 x H2* + H1 x E2*).
-        If False, computes just 1/2 * (E1 x H2*).
+        If True (default), computes symmetric overlap 1/4 * (E1* x H2 + H1* x E2).
+        If False, computes just 1/2 * (E1* x H2).
 
     Returns
     -------
@@ -296,10 +296,10 @@ def _outer_dot_numpy(
     if n_modes_1 == 0 or n_modes_2 == 0:
         return S
 
-    # Conjugate outside loop to avoid copies
+    # Conjugate outside loop to avoid repeated copies
     if conjugate:
-        E2u, E2v = np.conj(E2u), np.conj(E2v)
-        H2u, H2v = np.conj(H2u), np.conj(H2v)
+        E1u, E1v = np.conj(E1u), np.conj(E1v)
+        H1u, H1v = np.conj(H1u), np.conj(H1v)
 
     # Heuristic: choose mode block size targeting bounded temporary allocations.
     itemsize = np.dtype(dtype).itemsize
