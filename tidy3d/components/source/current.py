@@ -6,6 +6,7 @@ from abc import ABC
 from math import cos, isclose, sin
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
+import numpy as np
 from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
@@ -20,6 +21,8 @@ from .base import Source
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
+    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.types.time import SourceTimeType
 
 
@@ -248,3 +251,68 @@ class CustomCurrentSource(ReverseInterpolatedSource):
     _current_dataset_none_warning = warn_if_dataset_none("current_dataset")
     _current_dataset_single_freq = assert_single_freq_in_range("current_dataset")
     _can_interpolate = validate_can_interpolate("current_dataset")
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute derivatives with respect to CustomCurrentSource parameters."""
+        from tidy3d.components.autograd.derivative_utils import (
+            source_scale_factor,
+            transpose_interp_field_to_dataset,
+        )
+
+        if self.current_dataset is None:
+            return {tuple(path): 0.0 for path in derivative_info.paths}
+
+        derivative_map = {}
+        center = tuple(self.center)
+        h_adj = derivative_info.H_adj or {}
+        e_adj = derivative_info.E_adj or {}
+        eps_data = derivative_info.eps_data or {}
+
+        for field_path in derivative_info.paths:
+            field_path = tuple(field_path)
+            self._validate_traced_source_path(field_path, dataset_key="current_dataset")
+            if len(field_path) < 2:
+                raise ValueError(
+                    "Current source derivative paths must include dataset component names, "
+                    f"got '{field_path}'."
+                )
+
+            field_name = field_path[1]
+            if (
+                len(field_name) != 2
+                or field_name[0] not in ("E", "H")
+                or field_name[1] not in ("x", "y", "z")
+            ):
+                raise ValueError(
+                    f"Unsupported field component '{field_name}' in CustomCurrentSource. "
+                    "Expected one of Ex, Ey, Ez, Hx, Hy, Hz."
+                )
+
+            field_data = getattr(self.current_dataset, field_name, None)
+            if field_data is None:
+                raise ValueError(f"Cannot find field '{field_name}' in current dataset.")
+
+            if field_name.startswith("H"):
+                adjoint_field = h_adj[field_name]
+                component_sign = -1.0
+            else:  # "E" case
+                adjoint_field = e_adj[field_name]
+                component_sign = 1.0
+
+            adjoint_on_dataset = transpose_interp_field_to_dataset(
+                adjoint_field, field_data, center=center
+            )
+            component_axis = "xyz".index(field_name[1])
+            source_scale = source_scale_factor(
+                adjoint_field=adjoint_field,
+                field_data=field_data,
+                component_axis=component_axis,
+                eps_data=eps_data,
+                center=center,
+            )
+            # Keep source gradients stable against simulation grid-refinement changes.
+            vjp_field = np.real(component_sign * source_scale * adjoint_on_dataset)
+
+            derivative_map[field_path] = vjp_field.transpose(*field_data.dims).values
+
+        return derivative_map

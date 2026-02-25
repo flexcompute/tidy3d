@@ -1532,14 +1532,17 @@ class Tidy3dBaseModel(BaseModel):
         return self.model_dump_json(indent=INDENT, exclude_unset=False)
 
     def _strip_traced_fields(
-        self, starting_path: tuple[str, ...] = (), include_untraced_data_arrays: bool = False
+        self,
+        starting_paths: tuple[tuple[str, ...], ...] = (),
+        include_untraced_data_arrays: bool = False,
     ) -> AutogradFieldMap:
         """Extract a dictionary mapping paths in the model to the data traced by ``autograd``.
 
         Parameters
         ----------
-        starting_path : tuple[str, ...] = ()
-            If provided, starts recursing in self.model_dump() from this path of field names
+        starting_paths : tuple[tuple[str, ...], ...] = ()
+            If provided, starts recursing in self.model_dump() from these paths of field names.
+            Can be a single path tuple or multiple path tuples.
         include_untraced_data_arrays : bool = False
             Whether to include ``DataArray`` objects without tracers.
             We need to include these when returning data, but are unnecessary for structures.
@@ -1551,7 +1554,7 @@ class Tidy3dBaseModel(BaseModel):
 
         """
 
-        path = tuple(starting_path)
+        paths = tuple(starting_paths)
         if self._has_tracers is False and not include_untraced_data_arrays:
             return TracedDict()
 
@@ -1585,19 +1588,31 @@ class Tidy3dBaseModel(BaseModel):
         # recursively parse the dictionary of this object
         self_dict = self.model_dump(round_trip=True)
 
-        # if an include_only string was provided, only look at that subset of the dict
-        if path:
-            for key in path:
-                self_dict = self_dict[key]
+        # Handle multiple starting paths
+        if paths:
+            # If paths is a single tuple, convert to tuple of tuples
+            if isinstance(paths[0], str):
+                paths = (paths,)
 
-        handle_value(self_dict, path=path)
+            # Process each starting path
+            for starting_path in paths:
+                # Navigate to the starting path in the dictionary
+                current_dict = self_dict
+                for key in starting_path:
+                    current_dict = current_dict[key]
+
+                # Handle the subtree starting from this path
+                handle_value(current_dict, path=starting_path)
+        else:
+            # No starting paths specified, process entire dictionary
+            handle_value(self_dict, path=())
 
         if field_mapping:
             if not include_untraced_data_arrays:
                 self._has_tracers = True
             return TracedDict(field_mapping)
 
-        if not include_untraced_data_arrays and not path:
+        if not include_untraced_data_arrays and not paths:
             self._has_tracers = False
         return TracedDict()
 

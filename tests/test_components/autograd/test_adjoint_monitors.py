@@ -7,7 +7,7 @@ import pytest
 
 import tidy3d as td
 
-SIM_FIELDS_KEYS = [("dummy", 0, "geometry")]
+SIM_FIELDS_KEYS = [("structures", 0, "geometry")]
 
 POLY_VERTS_2D: np.ndarray = np.array(
     [

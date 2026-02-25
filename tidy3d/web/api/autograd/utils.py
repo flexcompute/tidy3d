@@ -10,7 +10,21 @@ import tidy3d as td
 if TYPE_CHECKING:
     from typing import Optional, Union
 
+    from tidy3d.components.data.data_array import DataArray
+
 """ E and D field gradient map calculation helpers. """
+
+
+def scale_field_data(
+    fld_data: td.FieldData,
+    scale: Union[float, complex, DataArray],
+) -> td.FieldData:
+    """Scale all field components in a ``FieldData`` object."""
+
+    field_components = {
+        name: component * scale for name, component in fld_data.field_components.items()
+    }
+    return fld_data.updated_copy(**field_components)
 
 
 def get_derivative_maps(

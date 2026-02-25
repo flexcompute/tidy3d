@@ -32,6 +32,9 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from tidy3d.compat import Self
+    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.data.data_array import ScalarFieldDataArray
     from tidy3d.components.types import Ax, Coordinate
 
 # width of Chebyshev grid used for broadband sources (in units of pulse width)
@@ -247,6 +250,123 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 if tangential_field in val.field_components:
                     return self
         raise SetupError("No tangential field found in the suppled 'field_dataset'.")
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute derivatives with respect to CustomFieldSource parameters."""
+        from tidy3d.components.autograd.derivative_utils import (
+            source_scale_factor,
+            transpose_interp_field_to_dataset,
+        )
+
+        if self.field_dataset is None:
+            return {tuple(path): 0.0 for path in derivative_info.paths}
+
+        derivative_map = {}
+        center = tuple(self.center)
+        e_adj = derivative_info.E_adj or {}
+        h_adj = derivative_info.H_adj or {}
+        eps_data = derivative_info.eps_data or {}
+        if self.injection_axis is None:
+            return {tuple(path): 0.0 for path in derivative_info.paths}
+
+        for field_path in derivative_info.paths:
+            field_path = tuple(field_path)
+            self._validate_traced_source_path(field_path, dataset_key="field_dataset")
+            if len(field_path) < 2:
+                raise ValueError(
+                    "Field source derivative paths must include dataset component names, "
+                    f"got '{field_path}'."
+                )
+
+            field_name = field_path[1]
+            field_data = getattr(self.field_dataset, field_name, None)
+            if field_data is None:
+                raise ValueError(f"Cannot find field '{field_name}' in field dataset.")
+
+            if (
+                len(field_name) != 2
+                or field_name[0] not in ("E", "H")
+                or field_name[1] not in ("x", "y", "z")
+            ):
+                raise ValueError(
+                    f"Unsupported field component '{field_name}' in CustomFieldSource. "
+                    "Expected one of Ex, Ey, Ez, Hx, Hy, Hz."
+                )
+
+            component_axis = "xyz".index(field_name[1])
+            if component_axis == self.injection_axis:
+                derivative_map[field_path] = np.zeros_like(field_data.data)
+                continue
+
+            def _get_adjoint_and_sign(
+                *,
+                field_name: str,
+                injection_axis: int,
+                component_axis: int,
+                e_adj: dict[str, ScalarFieldDataArray],
+                h_adj: dict[str, ScalarFieldDataArray],
+            ) -> tuple[Optional[ScalarFieldDataArray], float]:
+                # n x e determines which orthogonal component couples (and its sign)
+                n_vec = np.eye(3)[injection_axis]
+                e_vec = np.eye(3)[component_axis]
+                cross = np.cross(n_vec, e_vec)
+
+                if not np.any(cross):
+                    return None, 0.0  # indicates "no gradient"
+
+                target_axis = int(np.flatnonzero(cross)[0])
+                component_sign = float(cross[target_axis])
+
+                if field_name.startswith("E"):
+                    target_component = f"H{'xyz'[target_axis]}"
+                    try:
+                        adjoint_field = h_adj[target_component]
+                    except KeyError as exc:
+                        raise ValueError(
+                            "Missing adjoint field component "
+                            f"'{target_component}' required by CustomFieldSource derivative."
+                        ) from exc
+                else:
+                    target_component = f"E{'xyz'[target_axis]}"
+                    try:
+                        adjoint_field = e_adj[target_component]
+                    except KeyError as exc:
+                        raise ValueError(
+                            "Missing adjoint field component "
+                            f"'{target_component}' required by CustomFieldSource derivative."
+                        ) from exc
+
+                return adjoint_field, component_sign
+
+            adjoint_field, component_sign = _get_adjoint_and_sign(
+                field_name=field_name,
+                injection_axis=self.injection_axis,
+                component_axis=component_axis,
+                e_adj=e_adj,
+                h_adj=h_adj,
+            )
+
+            if component_sign == 0.0:
+                # no gradient for injection_axis == component_axis
+                derivative_map[field_path] = np.zeros_like(field_data.data)
+                continue
+
+            adjoint_on_dataset = transpose_interp_field_to_dataset(
+                adjoint_field, field_data, center=center
+            )
+            source_scale = source_scale_factor(
+                adjoint_field=adjoint_field,
+                field_data=field_data,
+                component_axis=component_axis,
+                eps_data=eps_data,
+                center=center,
+            )
+
+            # Keep source gradients stable against simulation grid-refinement changes.
+            vjp_field = np.real(component_sign * source_scale * adjoint_on_dataset)
+            derivative_map[field_path] = vjp_field.transpose(*field_data.dims).values
+
+        return derivative_map
 
 
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""

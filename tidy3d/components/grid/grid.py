@@ -33,6 +33,18 @@ MIN_CELL_SIZE_TOLERANCE = 0.05  # 5%
 MAX_MIN_SIZE_LOCATIONS = 10
 
 
+def _compute_1d_cell_sizes(coord: np.ndarray) -> np.ndarray:
+    """Compute 1D cell sizes from coordinate centers."""
+    if coord.size <= 1:
+        return np.array([1.0], dtype=float)
+
+    diff = coord[1:] - coord[:-1]
+    diff_left = np.pad(diff, ((1, 0)), mode="edge")
+    diff_right = np.pad(diff, ((0, 1)), mode="edge")
+
+    return 0.5 * (diff_left + diff_right)
+
+
 class Coords(Tidy3dBaseModel):
     """Holds data about a set of x,y,z positions on a grid.
 
@@ -76,16 +88,10 @@ class Coords(Tidy3dBaseModel):
 
         coord_dict = self.to_dict
         for dim in "xyz":
-            if len(coord_dict[dim]) > 1:
-                diff = coord_dict[dim][1:] - coord_dict[dim][0:-1]
-
-                diff_left = np.pad(diff, ((1, 0)), mode="edge")
-                diff_right = np.pad(diff, ((0, 1)), mode="edge")
-
-                diff_avg = 0.5 * (diff_left + diff_right)
-                cell_sizes[dim] = diff_avg
-            else:
+            if len(coord_dict[dim]) <= 1:
                 cell_sizes[dim] = 1
+            else:
+                cell_sizes[dim] = _compute_1d_cell_sizes(np.asarray(coord_dict[dim]))
 
         return cell_sizes
 

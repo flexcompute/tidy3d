@@ -12,7 +12,7 @@ from tidy3d.components.base_sim.source import AbstractSource
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.components.types.time import SourceTimeType
-from tidy3d.components.validators import _assert_min_freq, _warn_unsupported_traced_argument
+from tidy3d.components.validators import _assert_min_freq
 from tidy3d.components.viz import (
     ARROW_ALPHA,
     ARROW_COLOR_POLARIZATION,
@@ -23,6 +23,8 @@ from tidy3d.components.viz import (
 if TYPE_CHECKING:
     from typing import Optional
 
+    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.types import Ax
     from tidy3d.components.viz import PlotParams
 
@@ -62,8 +64,30 @@ class Source(Box, AbstractSource, ABC):
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
 
-    _warn_traced_center = _warn_unsupported_traced_argument("center")
-    _warn_traced_size = _warn_unsupported_traced_argument("size")
+    _unsupported_traced_source_fields = ("center", "size", "source_time")
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute adjoint derivatives for source parameters."""
+        raise NotImplementedError(f"Can't compute derivative for 'Source': '{type(self)}'.")
+
+    def _validate_traced_source_path(self, field_path: tuple[Any, ...], dataset_key: str) -> None:
+        """Validate traced source path, raising when unsupported source fields are traced."""
+        if not field_path:
+            raise ValueError(f"Empty traced source path encountered in '{type(self).__name__}'.")
+
+        field_root = field_path[0]
+        if field_root in self._unsupported_traced_source_fields:
+            raise ValueError(
+                f"Automatic differentiation with respect to source field '{field_root}' is not "
+                f"supported for '{type(self).__name__}'. Only '{dataset_key}' field components "
+                "are differentiable."
+            )
+
+        if field_root != dataset_key:
+            raise ValueError(
+                f"Unsupported traced source path '{field_path}' for '{type(self).__name__}'. "
+                f"Only '{dataset_key}' field components are differentiable."
+            )
 
     @field_validator("source_time")
     @classmethod

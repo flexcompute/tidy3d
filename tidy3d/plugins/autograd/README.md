@@ -190,6 +190,7 @@ The following components are traceable as inputs to the `td.Simulation`
 | dispersive materials                                              | `PoleResidue.eps_inf`, `PoleResidue.poles`              |
 | spatially dependent dispersive materials                          | `CustomPoleResidue.eps_inf`, `CustomPoleResidue.poles`  |
 | cylinders                                                         | `Cylinder.radius`, `Cylinder.center`                    |
+| sources                                                           | `CustomCurrentSource.current_dataset`, `CustomFieldSource.field_dataset`|
 
 The following components are traceable as outputs of the `td.SimulationData`
 
@@ -223,12 +224,6 @@ We currently have the following restrictions:
   This can cause unnecessary data usage during the forward pass, especially if the monitors contain many frequencies that are not relevant for the objective function (i.e., they are not being differentiated w.r.t.).
   To avoid this, restrict the frequencies in the monitors only to the ones that are relevant for differentiation during optimization.
 
-### To be supported soon
-
-Next on our roadmap (targeting 2.8 and 2.9, 2025) is to support:
-
-- `TriangleMesh`.
-- `GUI` integration of invdes plugin.
 
 ### Finally
 
