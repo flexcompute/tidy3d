@@ -1109,77 +1109,21 @@ class Batch(WebContainer):
             return None
         return str(metadata_status).lower()
 
-    def _wait_estimate_and_start(
+    def _stream_upload_and_start(
         self,
         *,
-        pending_jobs: dict[TaskId, Job],
+        jobs_to_upload: list[Job],
         priority: Optional[int] = None,
         on_started: Optional[Callable[[], None]] = None,
     ) -> None:
-        """Poll metadata status and start each job once estimate-cost is post-validated."""
-        if not pending_jobs:
+        """Stream uploads and start tasks as soon as metadata estimate is ready."""
+        if not jobs_to_upload:
             return
 
         on_started = on_started or (lambda: None)
-
-        with ThreadPoolExecutor(max_workers=self.num_workers) as shared_executor:
-            while pending_jobs:
-                status_futures = {
-                    shared_executor.submit(self._job_metadata_status, job): (task_id, job)
-                    for task_id, job in pending_jobs.items()
-                }
-
-                jobs_ready_to_start: list[tuple[TaskId, Job]] = []
-                for fut in concurrent.futures.as_completed(status_futures):
-                    task_id, job = status_futures[fut]
-                    metadata_status = fut.result()
-
-                    # Support lightweight test doubles that don't expose metadata status.
-                    if metadata_status is None:
-                        jobs_ready_to_start.append((task_id, job))
-                        continue
-
-                    if metadata_status not in ALL_POST_VALIDATE_STATES:
-                        continue
-
-                    if metadata_status in ERROR_STATES:
-                        if isinstance(job, Job):
-                            # Reuse existing error handling path to surface validation details.
-                            web.estimate_cost(
-                                task_id=job.task_id,
-                                verbose=False,
-                                solver_version=job.solver_version,
-                            )
-                        raise DataError(
-                            "Failed cost estimation before start for "
-                            f"task_id='{task_id}' (metadataStatus='{metadata_status}')."
-                        )
-
-                    jobs_ready_to_start.append((task_id, job))
-
-                if jobs_ready_to_start:
-                    start_futures = {
-                        shared_executor.submit(job.start, priority=priority): task_id
-                        for task_id, job in jobs_ready_to_start
-                    }
-                    for fut in concurrent.futures.as_completed(start_futures):
-                        task_id = start_futures[fut]
-                        fut.result()
-                        pending_jobs.pop(task_id, None)
-                        on_started()
-
-                if pending_jobs:
-                    time.sleep(ESTIMATE_POLL_INTERVAL)
-
-    def _upload_and_start(self, priority: Optional[int] = None) -> None:
-        """Optimized run path: upload jobs, estimate costs concurrently, then start when ready."""
-
-        jobs_to_upload = self._prepare_uncached_jobs(
-            check_folder=True,
-            log_cached_jobs=True,
-        )
-        if not jobs_to_upload:
-            return
+        worker_limit = self.num_workers
+        if worker_limit is None:
+            worker_limit = min(32, (os.cpu_count() or 1) + 4)
 
         def _upload_job(job: Job) -> Job:
             if isinstance(job, Job):
@@ -1192,11 +1136,122 @@ class Batch(WebContainer):
                     upload_fn()
             return job
 
-        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-            upload_futures = [executor.submit(_upload_job, job) for job in jobs_to_upload]
-            uploaded_jobs = [fut.result() for fut in upload_futures]
+        upload_futures: dict[concurrent.futures.Future, Job] = {}
+        poll_futures: dict[concurrent.futures.Future, tuple[TaskId, Job]] = {}
+        start_futures: dict[concurrent.futures.Future, TaskId] = {}
+        pending_jobs: dict[TaskId, Job] = {}
+        ready_to_start: list[tuple[TaskId, Job]] = []
+        polling_inflight: set[TaskId] = set()
+        jobs_iter = iter(jobs_to_upload)
+        uploads_exhausted = False
+        last_poll_s = 0.0
 
-        pending_jobs: dict[TaskId, Job] = {job.task_id: job for job in uploaded_jobs}
+        with ThreadPoolExecutor(max_workers=worker_limit) as shared_executor:
+            while True:
+                active_futures = len(upload_futures) + len(poll_futures) + len(start_futures)
+
+                # Start-ready tasks first, then continue filling uploads.
+                while ready_to_start and active_futures < worker_limit:
+                    task_id, job = ready_to_start.pop()
+                    fut = shared_executor.submit(job.start, priority=priority)
+                    start_futures[fut] = task_id
+                    active_futures += 1
+
+                now_s = time.monotonic()
+                if pending_jobs and (now_s - last_poll_s) >= ESTIMATE_POLL_INTERVAL:
+                    poll_submitted = False
+                    for task_id, job in list(pending_jobs.items()):
+                        if task_id in polling_inflight or active_futures >= worker_limit:
+                            continue
+                        fut = shared_executor.submit(self._job_metadata_status, job)
+                        poll_futures[fut] = (task_id, job)
+                        polling_inflight.add(task_id)
+                        active_futures += 1
+                        poll_submitted = True
+                    if poll_submitted:
+                        last_poll_s = now_s
+
+                while (
+                    not ready_to_start and not uploads_exhausted and active_futures < worker_limit
+                ):
+                    try:
+                        job = next(jobs_iter)
+                    except StopIteration:
+                        uploads_exhausted = True
+                        break
+                    fut = shared_executor.submit(_upload_job, job)
+                    upload_futures[fut] = job
+                    active_futures += 1
+
+                all_futures = [
+                    *upload_futures.keys(),
+                    *poll_futures.keys(),
+                    *start_futures.keys(),
+                ]
+                if not all_futures:
+                    if uploads_exhausted and not pending_jobs and not ready_to_start:
+                        break
+                    time.sleep(BATCH_PROGRESS_REFRESH_TIME)
+                    continue
+
+                done, _ = concurrent.futures.wait(
+                    all_futures,
+                    timeout=BATCH_PROGRESS_REFRESH_TIME,
+                    return_when=concurrent.futures.FIRST_COMPLETED,
+                )
+                for fut in done:
+                    if fut in upload_futures:
+                        upload_futures.pop(fut)
+                        uploaded_job = fut.result()
+                        task_id = uploaded_job.task_id
+                        pending_jobs[task_id] = uploaded_job
+                        continue
+
+                    if fut in poll_futures:
+                        task_id, job = poll_futures.pop(fut)
+                        polling_inflight.discard(task_id)
+                        metadata_status = fut.result()
+
+                        # Support lightweight test doubles that don't expose metadata status.
+                        if metadata_status is None:
+                            pending_jobs.pop(task_id, None)
+                            ready_to_start.append((task_id, job))
+                            continue
+
+                        if metadata_status not in ALL_POST_VALIDATE_STATES:
+                            continue
+
+                        if metadata_status in ERROR_STATES:
+                            if isinstance(job, Job):
+                                # Reuse existing error handling path to surface validation details.
+                                web.estimate_cost(
+                                    task_id=job.task_id,
+                                    verbose=False,
+                                    solver_version=job.solver_version,
+                                )
+                            raise DataError(
+                                "Failed cost estimation before start for "
+                                f"task_id='{task_id}' (metadataStatus='{metadata_status}')."
+                            )
+
+                        pending_jobs.pop(task_id, None)
+                        ready_to_start.append((task_id, job))
+                        continue
+
+                    task_id = start_futures.pop(fut)
+                    fut.result()
+                    pending_jobs.pop(task_id, None)
+                    on_started()
+
+    def _upload_and_start(self, priority: Optional[int] = None) -> None:
+        """Optimized run path: stream upload/estimate/start with bounded concurrency."""
+
+        jobs_to_upload = self._prepare_uncached_jobs(
+            check_folder=True,
+            log_cached_jobs=True,
+        )
+        if not jobs_to_upload:
+            return
 
         if self.verbose:
             console = get_logging_console()
@@ -1219,16 +1274,16 @@ class Batch(WebContainer):
                     completed_starts[0] += 1
                     progress.update(pbar, completed=completed_starts[0])
 
-                self._wait_estimate_and_start(
-                    pending_jobs=pending_jobs,
+                self._stream_upload_and_start(
+                    jobs_to_upload=jobs_to_upload,
                     priority=priority,
                     on_started=_on_started,
                 )
                 progress.refresh()
                 time.sleep(BATCH_PROGRESS_REFRESH_TIME)
         else:
-            self._wait_estimate_and_start(
-                pending_jobs=pending_jobs,
+            self._stream_upload_and_start(
+                jobs_to_upload=jobs_to_upload,
                 priority=priority,
                 on_started=None,
             )

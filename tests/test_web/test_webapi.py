@@ -1,6 +1,7 @@
 # Tests webapi and things that depend on it
 from __future__ import annotations
 
+import concurrent.futures
 import os
 import posixpath
 from concurrent.futures import Future
@@ -1103,6 +1104,69 @@ def test_batch_upload_and_start_raises_when_metadata_errors(monkeypatch):
         batch._upload_and_start(priority=4)
 
     assert ("task_a_id", "start", 4) not in events
+
+
+def test_batch_upload_and_start_streams_ready_start_before_all_uploads(monkeypatch):
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(Batch, "_check_folder", staticmethod(lambda *args, **kwargs: None))
+
+    sims = {"task_a": make_sim(), "task_b": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False, num_workers=1)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        "task_a": UploadEstimateFakeJob(
+            "task_a_id",
+            events,
+            metadata_statuses=["processed"],
+        ),
+        "task_b": UploadEstimateFakeJob(
+            "task_b_id",
+            events,
+            metadata_statuses=["processed"],
+        ),
+    }
+
+    batch._upload_and_start(priority=9)
+
+    upload_indices = [i for i, event in enumerate(events) if event[1] == "upload"]
+    start_indices = [i for i, event in enumerate(events) if event[1] == "start"]
+    assert upload_indices
+    assert start_indices
+    assert min(start_indices) < max(upload_indices)
+
+
+def test_batch_upload_and_start_respects_num_workers_bound(monkeypatch):
+    events = []
+    max_active_futures = [0]
+    original_wait = concurrent.futures.wait
+
+    def tracking_wait(fs, *args, **kwargs):
+        max_active_futures[0] = max(max_active_futures[0], len(fs))
+        return original_wait(fs, *args, **kwargs)
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.concurrent.futures.wait", tracking_wait)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(Batch, "_check_folder", staticmethod(lambda *args, **kwargs: None))
+
+    sims = {f"task_{idx}": make_sim() for idx in range(6)}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False, num_workers=2)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        task_name: UploadEstimateFakeJob(
+            f"{task_name}_id",
+            events,
+            metadata_statuses=["processed"],
+        )
+        for task_name in sims
+    }
+
+    batch._upload_and_start(priority=3)
+
+    assert max_active_futures[0] <= batch.num_workers
 
 
 def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
