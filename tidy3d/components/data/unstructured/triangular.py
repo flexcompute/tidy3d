@@ -175,12 +175,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         # detect zero size dimension
         bounds = np.max(points_numpy, axis=0) - np.min(points_numpy, axis=0)
-        # VTU slices can accumulate small floating-point jitter in the nominally
-        # zero-thickness direction. Scale tolerance with geometry extent (rather than
-        # absolute coordinate value) to avoid origin-dependent behavior.
-        size_scale = float(np.max(bounds)) if bounds.size > 0 else 0.0
-        zero_dim_tol = max(1e-6, 2e-8 * size_scale)
-        zero_dims = np.where(np.isclose(bounds, 0, atol=zero_dim_tol))[0]
+        zero_dims = np.where(np.isclose(bounds, 0, atol=1e-6))[0]
 
         if len(zero_dims) != 1:
             raise DataError(
@@ -496,6 +491,9 @@ class TriangularGridDataset(UnstructuredGridDataset):
         axes = [ind for ind, comp in enumerate(xyz) if comp is not None]
         num_provided = len(axes)
 
+        if num_provided == 0 and len(sel_kwargs) == 0:
+            raise DataError("At least one dimension for selection must be provided.")
+
         if self.normal_axis in axes:
             if xyz[self.normal_axis] != self.normal_pos:
                 raise DataError(
@@ -506,9 +504,6 @@ class TriangularGridDataset(UnstructuredGridDataset):
             if num_provided < 3:
                 num_provided -= 1
                 axes.remove(self.normal_axis)
-
-        if num_provided == 0 and len(sel_kwargs) == 0:
-            raise DataError("At least one dimension for selection must be provided.")
 
         self_after_non_spatial_sel = self._non_spatial_sel(method=method, **sel_kwargs)
 

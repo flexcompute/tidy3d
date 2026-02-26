@@ -294,6 +294,10 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         result = tri_grid.sel(x=np.linspace(0, 1, 3), y=tri_grid.normal_pos, z=[0.3, 0.4, 0.5])
         assert result.name == ds_name
 
+        # selecting only along the normal axis is a no-op and should return self
+        result_normal_only = tri_grid.sel(y=tri_grid.normal_pos)
+        assert result_normal_only == tri_grid
+
         # can't select out of plane
         with pytest.raises(DataError):
             _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=1.2, z=[0.3, 0.4, 0.5])
@@ -777,105 +781,6 @@ def test_from_vtk():
 
     with pytest.raises(DataError):
         _ = td.TriangularGridDataset.from_vtk("tests/data/gmsh_2d.vtk")
-
-
-def test_triangular_from_vtu_near_planar_large_coordinates(tmp_path):
-    """Regression for large-coordinate planar slices with small normal-axis jitter."""
-    pytest.importorskip("vtk")
-    import vtk
-
-    import tidy3d as td
-
-    tri_grid = td.TriangularGridDataset(
-        normal_axis=1,
-        normal_pos=0.0,
-        points=td.PointDataArray(
-            [
-                [100000.0, 0.0],
-                [101000.0, 0.0],
-                [100000.0, 690.0],
-                [101000.0, 690.0],
-            ],
-            dims=("index", "axis"),
-        ),
-        cells=td.CellDataArray([[0, 1, 2], [1, 2, 3]], dims=("cell_index", "vertex_index")),
-        values=td.IndexedDataArray(
-            [1.0, 2.0, 3.0, 4.0], coords={"index": np.arange(4)}, name="temp"
-        ),
-    )
-
-    vtu_path = tmp_path / "near_planar_large_coords.vtu"
-    tri_grid.to_vtu(vtu_path)
-
-    # Inject tiny jitter in the nominally planar normal direction.
-    reader = vtk.vtkXMLUnstructuredGridReader()
-    reader.SetFileName(str(vtu_path))
-    reader.Update()
-    grid = reader.GetOutput()
-    points = grid.GetPoints()
-    for ind in range(points.GetNumberOfPoints()):
-        x, _, z = points.GetPoint(ind)
-        points.SetPoint(ind, x, 6e-6 if (ind % 2) == 0 else -6e-6, z)
-    points.Modified()
-
-    writer = vtk.vtkXMLUnstructuredGridWriter()
-    writer.SetFileName(str(vtu_path))
-    writer.SetInputData(grid)
-    writer.Write()
-
-    loaded = td.TriangularGridDataset.from_vtu(vtu_path, field="temp")
-    assert loaded.normal_axis == 1
-    assert abs(float(loaded.normal_pos)) < 1e-4
-    assert loaded.points.sizes["index"] == 4
-
-
-def test_triangular_from_vtu_far_from_origin_small_extent(tmp_path):
-    """Regression: tolerance must depend on extent, not absolute position."""
-    pytest.importorskip("vtk")
-    import vtk
-
-    import tidy3d as td
-
-    tri_grid = td.TriangularGridDataset(
-        normal_axis=1,
-        normal_pos=0.0,
-        points=td.PointDataArray(
-            [
-                [1e9, -2e9],
-                [1e9 + 2.0, -2e9],
-                [1e9, -2e9 + 1.0],
-                [1e9 + 2.0, -2e9 + 1.0],
-            ],
-            dims=("index", "axis"),
-        ),
-        cells=td.CellDataArray([[0, 1, 2], [1, 2, 3]], dims=("cell_index", "vertex_index")),
-        values=td.IndexedDataArray(
-            [1.0, 2.0, 3.0, 4.0], coords={"index": np.arange(4)}, name="temp"
-        ),
-    )
-
-    vtu_path = tmp_path / "far_origin_small_extent.vtu"
-    tri_grid.to_vtu(vtu_path)
-
-    reader = vtk.vtkXMLUnstructuredGridReader()
-    reader.SetFileName(str(vtu_path))
-    reader.Update()
-    grid = reader.GetOutput()
-    points = grid.GetPoints()
-    for ind in range(points.GetNumberOfPoints()):
-        x, _, z = points.GetPoint(ind)
-        points.SetPoint(ind, x, 2e-7 if (ind % 2) == 0 else -2e-7, z)
-    points.Modified()
-
-    writer = vtk.vtkXMLUnstructuredGridWriter()
-    writer.SetFileName(str(vtu_path))
-    writer.SetInputData(grid)
-    writer.Write()
-
-    loaded = td.TriangularGridDataset.from_vtu(vtu_path, field="temp")
-    assert loaded.normal_axis == 1
-    assert abs(float(loaded.normal_pos)) < 1e-5
-    assert loaded.points.sizes["index"] == 4
 
 
 def test_tetrahedral_from_vtk_obj_without_cell_types_array():
