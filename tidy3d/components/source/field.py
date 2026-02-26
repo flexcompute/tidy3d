@@ -274,34 +274,16 @@ class CustomFieldSource(FieldSource, PlanarSource):
 
         if field_name.startswith("E"):
             target_component = f"H{'xyz'[target_axis]}"
-            try:
-                adjoint_field = h_adj[target_component]
-            except KeyError as exc:
-                raise ValueError(
-                    "Missing adjoint field component "
-                    f"'{target_component}' required by CustomFieldSource derivative."
-                ) from exc
+            adjoint_field = h_adj[target_component]
         else:
             target_component = f"E{'xyz'[target_axis]}"
-            try:
-                adjoint_field = e_adj[target_component]
-            except KeyError as exc:
-                raise ValueError(
-                    "Missing adjoint field component "
-                    f"'{target_component}' required by CustomFieldSource derivative."
-                ) from exc
+            adjoint_field = e_adj[target_component]
 
         return adjoint_field, component_sign
 
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute derivatives with respect to CustomFieldSource parameters."""
-        from tidy3d.components.autograd.derivative_utils import (
-            source_scale_factor,
-            transpose_interp_field_to_dataset,
-        )
-
-        if self.field_dataset is None:
-            return {tuple(path): 0.0 for path in derivative_info.paths}
+        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
 
         derivative_map = {}
         center = tuple(self.center)
@@ -355,13 +337,9 @@ class CustomFieldSource(FieldSource, PlanarSource):
             adjoint_on_dataset = transpose_interp_field_to_dataset(
                 adjoint_field, field_data, center=center
             )
-            source_scale = source_scale_factor(
-                adjoint_field=adjoint_field,
-                field_data=field_data,
-            )
 
             # Keep source gradients stable against simulation grid-refinement changes.
-            vjp_field = np.real(component_sign * source_scale * adjoint_on_dataset)
+            vjp_field = np.real(component_sign * adjoint_on_dataset)
             derivative_map[field_path] = vjp_field.transpose(*field_data.dims).values
 
         return derivative_map

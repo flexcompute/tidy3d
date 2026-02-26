@@ -1126,54 +1126,6 @@ def compute_spatial_weights(
     return SpatialDataArray(weights_data, coords=coords, dims=tuple(weight_dims))
 
 
-def source_grid_step(
-    adjoint_field: SpatialDataArray,
-    field_data: SpatialDataArray,
-) -> float:
-    """Compute a source-adjoint grid step used in source VJP normalization.
-
-    Uses the minimum positive spacing found on the adjoint field grid across spatial
-    coordinates, and falls back to the source dataset grid when the adjoint grid is
-    degenerate.
-    """
-
-    steps: list[float] = []
-
-    for dim in "xyz":
-        if dim not in adjoint_field.coords:
-            continue
-        coord = np.asarray(adjoint_field.coords[dim].data, dtype=float)
-        if coord.size <= 1:
-            continue
-        diffs = np.abs(np.diff(coord))
-        diffs = diffs[np.isfinite(diffs) & (diffs > 0.0)]
-        if diffs.size:
-            steps.append(float(np.min(diffs)))
-
-    if not steps:
-        for dim in "xyz":
-            if dim not in field_data.coords:
-                continue
-            coord = np.asarray(field_data.coords[dim].data, dtype=float)
-            if coord.size <= 1:
-                continue
-            diffs = np.abs(np.diff(coord))
-            diffs = diffs[np.isfinite(diffs) & (diffs > 0.0)]
-            if diffs.size:
-                steps.append(float(np.min(diffs)))
-
-    return float(min(steps)) if steps else 1.0
-
-
-def source_scale_factor(
-    adjoint_field: SpatialDataArray,
-    field_data: ScalarFieldDataArray,
-) -> float:
-    """Compute the multiplicative source VJP scale factor."""
-    grid_step = source_grid_step(adjoint_field, field_data)
-    return 2.0 * np.pi * grid_step
-
-
 def transpose_interp_axis(
     field_values: np.ndarray,
     field_coords_1d: np.ndarray,
@@ -1300,6 +1252,8 @@ def transpose_interp_field_to_dataset(
             # Source datasets are single-frequency by construction. When adjoint
             # fields carry multiple frequencies, gradients must accumulate all
             # frequency contributions onto that single source-frequency slot.
+            # Any source-spectrum weighting has already been applied upstream
+            # to the adjoint fields in ``_process_source_gradients``.
             summed = field.sum(dim="f")
             summed = summed.expand_dims({"f": target_freqs}, axis=-1)
             return summed.transpose(*field.dims)
@@ -1410,8 +1364,6 @@ __all__ = [
     "bounds_slice",
     "compute_spatial_weights",
     "integrate_within_bounds",
-    "source_grid_step",
-    "source_scale_factor",
     "transpose_interp_axis",
     "transpose_interp_field_to_dataset",
 ]

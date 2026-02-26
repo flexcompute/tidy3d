@@ -282,13 +282,7 @@ class CustomCurrentSource(ReverseInterpolatedSource):
 
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute derivatives with respect to CustomCurrentSource parameters."""
-        from tidy3d.components.autograd.derivative_utils import (
-            source_scale_factor,
-            transpose_interp_field_to_dataset,
-        )
-
-        if self.current_dataset is None:
-            return {tuple(path): 0.0 for path in derivative_info.paths}
+        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
 
         derivative_map = {}
         center = tuple(self.center)
@@ -336,12 +330,8 @@ class CustomCurrentSource(ReverseInterpolatedSource):
             if self.confine_to_bounds:
                 adjoint_on_dataset = adjoint_on_dataset * self._confine_mask(field_data)
 
-            source_scale = source_scale_factor(
-                adjoint_field=adjoint_field,
-                field_data=field_data,
-            )
             # Keep source gradients stable against simulation grid-refinement changes.
-            vjp_field = np.real(component_sign * source_scale * adjoint_on_dataset)
+            vjp_field = np.real(component_sign * adjoint_on_dataset)
 
             derivative_map[field_path] = vjp_field.transpose(*field_data.dims).values
 

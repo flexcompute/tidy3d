@@ -24,6 +24,11 @@ import numpy.testing as npt
 import pytest
 
 import tidy3d as td
+from tidy3d.components.autograd.derivative_utils import (
+    compute_spatial_weights,
+    transpose_interp_axis,
+    transpose_interp_field_to_dataset,
+)
 from tidy3d.web import run
 
 from .test_autograd import use_emulated_run  # noqa: F401
@@ -148,8 +153,6 @@ class TestSpatialWeights:
 
     def test_compute_spatial_weights_cell_sizes(self):
         """Cell-size weights should match averaged coordinate spacing."""
-        from tidy3d.components.autograd.derivative_utils import compute_spatial_weights
-
         coords = {"x": np.array([0.0, 1.0, 2.0]), "y": np.array([0.0, 2.0]), "z": np.array([0.0])}
         values = np.zeros((3, 2, 1))
         arr = td.ScalarFieldDataArray(values, coords=coords, dims=("x", "y", "z"))
@@ -161,11 +164,6 @@ class TestSpatialWeights:
 
     def test_transpose_interp_identity(self):
         """Adjoint interpolation should preserve weighted values on identical grids."""
-        from tidy3d.components.autograd.derivative_utils import (
-            compute_spatial_weights,
-            transpose_interp_field_to_dataset,
-        )
-
         coords = {
             "x": np.array([0.0, 1.0]),
             "y": np.array([0.0, 2.0]),
@@ -186,8 +184,6 @@ class TestSpatialWeights:
 
     def test_transpose_interp_collapsed_axis(self):
         """Collapsed dataset axis should respect source-bounds cropping."""
-        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
-
         adjoint_coords = {
             "x": np.array([0.0, 1.0]),
             "y": np.array([0.0]),
@@ -216,8 +212,6 @@ class TestSpatialWeights:
 
     def test_transpose_interp_single_target_frequency_accumulates_all_inputs(self):
         """Single-frequency source datasets must accumulate all adjoint-frequency contributions."""
-        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
-
         adjoint_coords = {
             "x": np.array([0.0]),
             "y": np.array([0.0]),
@@ -249,8 +243,6 @@ class TestSpatialWeights:
 
     def test_transpose_interp_axis_requires_sorted_coordinates(self):
         """Axis-level transpose interpolation should enforce sorted source coordinates."""
-        from tidy3d.components.autograd.derivative_utils import transpose_interp_axis
-
         field_values = np.ones((3, 1), dtype=float)
         field_coords = np.array([0.0, 0.5, 1.0])
         unsorted_param_coords = np.array([0.0, -0.5, 0.5])
@@ -301,16 +293,11 @@ class TestCustomCurrentSourceUniform:
         results = source._compute_derivatives(di)
 
         field_data = source.current_dataset.Ex
-        from tidy3d.components.autograd.derivative_utils import (
-            source_scale_factor,
-            transpose_interp_field_to_dataset,
-        )
 
         adjoint_on_dataset = transpose_interp_field_to_dataset(
             E_adj["Ex"], field_data, center=source.center
         )
-        source_scale = source_scale_factor(E_adj["Ex"], field_data)
-        expected_gradient = np.sum(np.real(source_scale * adjoint_on_dataset).values)
+        expected_gradient = np.sum(np.real(adjoint_on_dataset).values)
 
         grad = results[("current_dataset", "Ex")]
         assert grad.shape == source.current_dataset.Ex.shape
@@ -358,7 +345,9 @@ class TestCustomCurrentSourceUniform:
         )
 
         grad = source._compute_derivatives(di)[("current_dataset", "Ex")]
-        npt.assert_allclose(grad, np.array([[[[12.0 * np.pi]]]]), rtol=1e-12, atol=1e-12)
+        # Source-wide constant scaling is applied upstream in backward.py.
+        # Here we only verify accumulation over adjoint frequencies.
+        npt.assert_allclose(grad, np.array([[[[6.0]]]]), rtol=1e-12, atol=1e-12)
 
     def test_interpolate_flag_changes_vjp_projection_on_zero_size_axis(self):
         """Current-source VJP should switch to nearest only along zero-size source axes."""
@@ -639,10 +628,6 @@ class TestCustomCurrentSourceUniform:
 
         # Check each component
         field_data = source.current_dataset.Ex
-        from tidy3d.components.autograd.derivative_utils import (
-            source_scale_factor,
-            transpose_interp_field_to_dataset,
-        )
 
         adjoint_on_dataset_ex = transpose_interp_field_to_dataset(
             E_adj["Ex"], field_data, center=source.center
@@ -651,10 +636,8 @@ class TestCustomCurrentSourceUniform:
             E_adj["Ey"], field_data, center=source.center
         )
 
-        source_scale_ex = source_scale_factor(E_adj["Ex"], field_data)
-        source_scale_ey = source_scale_factor(E_adj["Ey"], field_data)
-        expected_ex = np.sum(np.real(source_scale_ex * adjoint_on_dataset_ex).values)
-        expected_ey = np.sum(np.real(source_scale_ey * adjoint_on_dataset_ey).values)
+        expected_ex = np.sum(np.real(adjoint_on_dataset_ex).values)
+        expected_ey = np.sum(np.real(adjoint_on_dataset_ey).values)
         expected_ez = 0.0
 
         assert not np.isclose(expected_ex, 0.0)
@@ -662,6 +645,46 @@ class TestCustomCurrentSourceUniform:
         npt.assert_allclose(np.sum(results[("current_dataset", "Ex")]), expected_ex, rtol=1e-2)
         npt.assert_allclose(np.sum(results[("current_dataset", "Ey")]), expected_ey, rtol=1e-2)
         npt.assert_allclose(np.sum(results[("current_dataset", "Ez")]), expected_ez, rtol=1e-10)
+
+    def test_uniform_adjoint_field_resolution_scaling_matches_formula(self, source, source_bounds):
+        """Current-source VJP across adjoint grids should match the explicit formula."""
+        grad_sums = {}
+        expected_sums = {}
+
+        field_data = source.current_dataset.Ex
+        for nx in (10, 20):
+            ny = nx
+            coords = {
+                "x": np.linspace(-0.5, 0.5, nx),
+                "y": np.linspace(-0.5, 0.5, ny),
+                "z": np.array([0.0]),
+                "f": [2e14],
+            }
+            E_adj = {
+                "Ex": td.ScalarFieldDataArray(
+                    2.0 * np.ones((nx, ny, 1, 1)),
+                    coords=coords,
+                    dims=("x", "y", "z", "f"),
+                )
+            }
+            di = DummySourceDI(
+                paths=[("current_dataset", "Ex")],
+                E_adj=E_adj,
+                frequencies=np.array([2e14]),
+                bounds=source_bounds,
+            )
+            grad_sums[nx] = np.sum(source._compute_derivatives(di)[("current_dataset", "Ex")])
+            adjoint_on_dataset = transpose_interp_field_to_dataset(
+                E_adj["Ex"], field_data, center=source.center
+            )
+            expected_sums[nx] = np.sum(np.real(adjoint_on_dataset).values)
+            npt.assert_allclose(grad_sums[nx], expected_sums[nx], rtol=1e-2)
+
+        assert not np.isclose(grad_sums[10], 0.0)
+        resolution_ratio = grad_sums[20] / grad_sums[10]
+        print(f"[current_adjoint_grid_invariance] ratio = {resolution_ratio}", file=sys.stderr)
+        expected_ratio = expected_sums[20] / expected_sums[10]
+        npt.assert_allclose(resolution_ratio, expected_ratio, rtol=1e-2)
 
 
 class TestCustomFieldSourceUniform:
@@ -704,17 +727,11 @@ class TestCustomFieldSourceUniform:
         results = source._compute_derivatives(di)
 
         # Analytical solution
-        from tidy3d.components.autograd.derivative_utils import (
-            source_scale_factor,
-            transpose_interp_field_to_dataset,
-        )
-
         field_data = source.field_dataset.Ex
         adjoint_on_dataset = transpose_interp_field_to_dataset(
             H_adj["Hy"], field_data, center=source.center
         )
-        source_scale = source_scale_factor(H_adj["Hy"], field_data)
-        expected_gradient = np.sum(np.real(source_scale * adjoint_on_dataset).values)
+        expected_gradient = np.sum(np.real(adjoint_on_dataset).values)
 
         assert not np.isclose(expected_gradient, 0.0)
         assert not np.isclose(np.sum(results[("field_dataset", "Ex")]), 0.0)
@@ -755,6 +772,47 @@ class TestCustomFieldSourceUniform:
         spacing_ratio = grad_sums[20] / grad_sums[10]
         print(f"[field_spacing_invariance] ratio = {spacing_ratio}", file=sys.stderr)
         npt.assert_allclose(spacing_ratio, 1.0, rtol=2e-2)
+
+    def test_uniform_adjoint_field_resolution_scaling_matches_formula(self, source, source_bounds):
+        """Field-source VJP across adjoint grids should match the explicit formula."""
+        grad_sums = {}
+        expected_sums = {}
+
+        field_data = source.field_dataset.Ex
+        for nx in (10, 20):
+            ny = nx
+            coords = {
+                "x": np.linspace(-0.5, 0.5, nx),
+                "y": np.linspace(-0.5, 0.5, ny),
+                "z": np.array([0.0]),
+                "f": [2e14],
+            }
+            H_adj = {
+                "Hy": td.ScalarFieldDataArray(
+                    2.0 * np.ones((nx, ny, 1, 1)),
+                    coords=coords,
+                    dims=("x", "y", "z", "f"),
+                )
+            }
+            di = DummySourceDI(
+                paths=[("field_dataset", "Ex")],
+                E_adj={},
+                H_adj=H_adj,
+                frequencies=np.array([2e14]),
+                bounds=source_bounds,
+            )
+            grad_sums[nx] = np.sum(source._compute_derivatives(di)[("field_dataset", "Ex")])
+            adjoint_on_dataset = transpose_interp_field_to_dataset(
+                H_adj["Hy"], field_data, center=source.center
+            )
+            expected_sums[nx] = np.sum(np.real(adjoint_on_dataset).values)
+            npt.assert_allclose(grad_sums[nx], expected_sums[nx], rtol=1e-2)
+
+        assert not np.isclose(grad_sums[10], 0.0)
+        resolution_ratio = grad_sums[20] / grad_sums[10]
+        print(f"[field_adjoint_grid_invariance] ratio = {resolution_ratio}", file=sys.stderr)
+        expected_ratio = expected_sums[20] / expected_sums[10]
+        npt.assert_allclose(resolution_ratio, expected_ratio, rtol=1e-2)
 
     @pytest.mark.parametrize(
         ("shift_coords", "label"),
@@ -961,18 +1019,12 @@ class TestCustomCurrentSourceGaussian:
 
         results = source._compute_derivatives(di)
 
-        from tidy3d.components.autograd.derivative_utils import (
-            source_scale_factor,
-            transpose_interp_field_to_dataset,
-        )
-
         adjoint_on_dataset = transpose_interp_field_to_dataset(
             adjoint_field,
             source.current_dataset.Ex,
             center=source.center,
         )
-        source_scale = source_scale_factor(adjoint_field, source.current_dataset.Ex)
-        expected_gradient = np.sum(np.real(source_scale * adjoint_on_dataset).values)
+        expected_gradient = np.sum(np.real(adjoint_on_dataset).values)
 
         assert not np.isclose(expected_gradient, 0.0)
         assert not np.isclose(np.sum(results[("current_dataset", "Ex")]), 0.0)

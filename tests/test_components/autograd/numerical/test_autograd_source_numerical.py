@@ -32,6 +32,9 @@ SIM_RUN_TIME = 1e-12
 MONITOR_CENTER = (-0.3, 0.1, 0.2)
 MONITOR_SIZE = (0.5, 0.5, 0.0)
 FLUX_MONITOR_NAME = "flux_monitor"
+FAR_CORNER_BLOCK_SIZE = (0.1, 0.1, 0.1)
+FAR_CORNER_BLOCK_PERMITTIVITY = 100.0
+FAR_CORNER_BLOCK_OFFSET_FACTOR = 1.35
 
 DATASET_SPACING_VALUES = (0.25, 0.125, 0.0625)
 MIN_STEPS_PER_WVL_VALUES = (40, 60, 80)
@@ -110,6 +113,7 @@ class SweepConfig:
     background_permittivity: float = 1.0
     source_structure_permittivity: float | None = None
     source_structure_custom_medium: bool = False
+    add_far_corner_structure: bool = False
 
 
 @dataclass(frozen=True)
@@ -236,6 +240,18 @@ def _source_host_custom_medium(source: td.Source) -> td.Structure:
     )
 
 
+def _far_corner_structure(wvl0: float) -> td.Structure:
+    """Create a tiny high-index block near a far corner of the simulation domain."""
+    center_val = FAR_CORNER_BLOCK_OFFSET_FACTOR * wvl0
+    return td.Structure(
+        geometry=td.Box(
+            center=(center_val, center_val, center_val),
+            size=FAR_CORNER_BLOCK_SIZE,
+        ),
+        medium=td.Medium(permittivity=FAR_CORNER_BLOCK_PERMITTIVITY),
+    )
+
+
 def _make_sim(
     source: td.Source,
     config: SweepConfig,
@@ -258,6 +274,8 @@ def _make_sim(
         structures.append(_source_host_structure(source, config.source_structure_permittivity))
     if config.source_structure_custom_medium:
         structures.append(_source_host_custom_medium(source))
+    if config.add_far_corner_structure:
+        structures.append(_far_corner_structure(config.wvl0))
 
     sim_size = (3 * config.wvl0, 3 * config.wvl0, 3 * config.wvl0)
     return td.Simulation(
@@ -500,3 +518,40 @@ def test_custom_source_gradient_in_nonuniform_custom_medium(_enable_local_cache,
         label=f"{case.name}_source_in_custom_medium",
     )
     _assert_fd_agreement(custom_medium_metrics, label=f"{case.name}_source_in_custom_medium")
+
+
+@pytest.mark.numerical
+def test_custom_source_gradient_stable_with_remote_dt_constraint(_enable_local_cache, tmp_path):
+    """Source gradients should stay stable when unrelated remote cells constrain global dt."""
+    case = next(candidate for candidate in SOURCE_CASES if candidate.name == "custom_current_vec_h")
+    base_config = replace(SweepConfig(), source_structure_permittivity=4.0)
+    constrained_config = replace(base_config, add_far_corner_structure=True)
+
+    base_metrics = _run_gradient_case(
+        tmp_path,
+        case,
+        base_config,
+        label=f"{case.name}_inside_structure_base",
+    )
+    constrained_metrics = _run_gradient_case(
+        tmp_path,
+        case,
+        constrained_config,
+        label=f"{case.name}_inside_structure_remote_dt",
+    )
+
+    _assert_fd_agreement(base_metrics, label=f"{case.name}_inside_structure_base")
+    _assert_fd_agreement(constrained_metrics, label=f"{case.name}_inside_structure_remote_dt")
+
+    np.testing.assert_allclose(
+        constrained_metrics.fd_norm,
+        base_metrics.fd_norm,
+        rtol=0.1,
+        atol=NORM_ATOL,
+    )
+    np.testing.assert_allclose(
+        constrained_metrics.adjoint_norm,
+        base_metrics.adjoint_norm,
+        rtol=0.1,
+        atol=NORM_ATOL,
+    )

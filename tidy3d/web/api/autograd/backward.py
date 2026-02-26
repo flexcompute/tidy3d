@@ -256,7 +256,7 @@ def _compute_source_time_scaling(
         simulation.dt,
     )
     spectrum = np.asarray(spectrum)
-    scale = (4.0 * np.sqrt(np.pi) * spectrum) / simulation.dt
+    scale = 2.0 * np.pi * 4.0 * np.sqrt(np.pi) * td.C_0 * np.sqrt(3.0) * spectrum
     return FreqDataArray(scale, coords={"f": frequencies})
 
 
