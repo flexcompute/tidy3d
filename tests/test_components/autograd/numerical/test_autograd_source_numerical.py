@@ -49,6 +49,7 @@ PERMITTIVITY_VALUES = (
     (2.0, None),
     (4.0, None),
 )
+SIM_DIMS_VALUES = (3, 2)
 
 
 def _axis_coords(size: float, spacing: float) -> np.ndarray:
@@ -109,6 +110,7 @@ class SweepConfig:
     min_steps_per_wvl: int = BASE_MIN_STEPS_PER_WVL
     wvl0: float = BASE_WVL0
     source_size: tuple[float, float, float] = BASE_SOURCE_SIZE
+    sim_dims: int = 3
     amplitude_scale: float = 1.0
     background_permittivity: float = 1.0
     source_structure_permittivity: float | None = None
@@ -122,6 +124,7 @@ class SourceCase:
     monitor_components: tuple[str, str, str]
     source_kind: str
     field_prefix: str
+    source_size_mask: tuple[bool, bool, bool]
     delta: float = 1e-4
 
 
@@ -140,26 +143,73 @@ SOURCE_CASES = (
         monitor_components=("Ex", "Ey", "Ez"),
         source_kind="field",
         field_prefix="E",
+        source_size_mask=(True, True, False),
     ),
     SourceCase(
         name="custom_field_vec_h",
         monitor_components=("Hx", "Hy", "Hz"),
         source_kind="field",
         field_prefix="H",
+        source_size_mask=(True, True, False),
     ),
     SourceCase(
         name="custom_current_vec_e",
         monitor_components=("Ex", "Ey", "Ez"),
         source_kind="current",
         field_prefix="E",
+        source_size_mask=(True, True, True),
     ),
     SourceCase(
         name="custom_current_vec_h",
         monitor_components=("Hx", "Hy", "Hz"),
         source_kind="current",
         field_prefix="H",
+        source_size_mask=(True, True, True),
+    ),
+    SourceCase(
+        name="custom_current_vec_e_1d",
+        monitor_components=("Ex", "Ey", "Ez"),
+        source_kind="current",
+        field_prefix="E",
+        source_size_mask=(True, False, False),
+    ),
+    SourceCase(
+        name="custom_current_vec_e_0d",
+        monitor_components=("Ex", "Ey", "Ez"),
+        source_kind="current",
+        field_prefix="E",
+        source_size_mask=(False, False, False),
     ),
 )
+
+
+def _source_size_for_case(
+    case: SourceCase, source_size: tuple[float, float, float], sim_dims: int
+) -> tuple[float, float, float]:
+    masked_size = tuple(
+        source_size[axis] if case.source_size_mask[axis] else 0.0 for axis in range(3)
+    )
+    if sim_dims == 2:
+        if case.source_kind == "field":
+            # Keep CustomFieldSource planar in 2D: collapse y and use the second
+            # in-plane extent on z.
+            return (masked_size[0], 0.0, masked_size[1])
+        return (masked_size[0], 0.0, masked_size[2])
+    return masked_size
+
+
+def _collapse_y_size(size: tuple[float, float, float], sim_dims: int) -> tuple[float, float, float]:
+    if sim_dims == 2:
+        return (size[0], 0.0, size[2])
+    return size
+
+
+def _collapse_y_center(
+    center: tuple[float, float, float], sim_dims: int
+) -> tuple[float, float, float]:
+    if sim_dims == 2:
+        return (center[0], 0.0, center[2])
+    return center
 
 
 def _make_source(
@@ -169,23 +219,25 @@ def _make_source(
     freq0: float,
     pulse: td.GaussianPulse,
 ) -> td.Source:
+    source_size = _source_size_for_case(case, config.source_size, config.sim_dims)
+    source_center = _collapse_y_center(BASE_SOURCE_CENTER, config.sim_dims)
+
     if case.source_kind == "field":
-        source_size = (config.source_size[0], config.source_size[1], 0.0)
         coords = _make_coords(source_size, config.dataset_spacing, freq0)
         field_dataset = _make_field_dataset(case.field_prefix, amplitudes, coords)
         return td.CustomFieldSource(
-            center=BASE_SOURCE_CENTER,
+            center=source_center,
             size=source_size,
             source_time=pulse,
             field_dataset=field_dataset,
         )
 
     if case.source_kind == "current":
-        coords = _make_coords(config.source_size, config.dataset_spacing, freq0)
+        coords = _make_coords(source_size, config.dataset_spacing, freq0)
         current_dataset = _make_field_dataset(case.field_prefix, amplitudes, coords)
         return td.CustomCurrentSource(
-            center=BASE_SOURCE_CENTER,
-            size=config.source_size,
+            center=source_center,
+            size=source_size,
             source_time=pulse,
             current_dataset=current_dataset,
         )
@@ -196,34 +248,45 @@ def _make_source(
 def _source_host_structure(
     source: td.Source,
     source_structure_permittivity: float,
+    sim_dims: int,
 ) -> td.Structure:
     """Create the enclosing structure ("host") that contains the source."""
     source_size = tuple(float(value) for value in source.size)
-    host_size = (
-        source_size[0] + 0.2,
-        source_size[1] + 0.2,
-        max(source_size[2] + 0.2, 0.3),
+    host_size = _collapse_y_size(
+        (
+            source_size[0] + 0.2,
+            source_size[1] + 0.2,
+            max(source_size[2] + 0.2, 0.3),
+        ),
+        sim_dims,
     )
+    host_center = _collapse_y_center(tuple(float(value) for value in source.center), sim_dims)
     return td.Structure(
-        geometry=td.Box(center=source.center, size=host_size),
+        geometry=td.Box(center=host_center, size=host_size),
         medium=td.Medium(permittivity=source_structure_permittivity),
     )
 
 
-def _source_host_custom_medium(source: td.Source) -> td.Structure:
+def _source_host_custom_medium(source: td.Source, sim_dims: int) -> td.Structure:
     """Create a nonuniform custom-medium host structure that encloses the source."""
     source_size = tuple(float(value) for value in source.size)
-    host_size = (
-        source_size[0] + 0.2,
-        source_size[1] + 0.2,
-        max(source_size[2] + 0.2, 0.3),
+    host_size = _collapse_y_size(
+        (
+            source_size[0] + 0.2,
+            source_size[1] + 0.2,
+            max(source_size[2] + 0.2, 0.3),
+        ),
+        sim_dims,
     )
-    host_center = tuple(float(value) for value in source.center)
+    host_center = _collapse_y_center(tuple(float(value) for value in source.center), sim_dims)
     host_bounds_min = [c - 0.5 * s for c, s in zip(host_center, host_size)]
     host_bounds_max = [c + 0.5 * s for c, s in zip(host_center, host_size)]
 
     x = np.linspace(host_bounds_min[0], host_bounds_max[0], 9)
-    y = np.linspace(host_bounds_min[1], host_bounds_max[1], 9)
+    if sim_dims == 2:
+        y = np.array([host_center[1]], dtype=float)
+    else:
+        y = np.linspace(host_bounds_min[1], host_bounds_max[1], 9)
     z = np.linspace(host_bounds_min[2], host_bounds_max[2], 5)
     X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
     eps = 2.5 + 0.2 * (X - host_center[0]) + 0.15 * (Y - host_center[1]) ** 2
@@ -240,13 +303,15 @@ def _source_host_custom_medium(source: td.Source) -> td.Structure:
     )
 
 
-def _far_corner_structure(wvl0: float) -> td.Structure:
+def _far_corner_structure(wvl0: float, sim_dims: int) -> td.Structure:
     """Create a tiny high-index block near a far corner of the simulation domain."""
     center_val = FAR_CORNER_BLOCK_OFFSET_FACTOR * wvl0
+    center = _collapse_y_center((center_val, center_val, center_val), sim_dims)
+    size = _collapse_y_size(FAR_CORNER_BLOCK_SIZE, sim_dims)
     return td.Structure(
         geometry=td.Box(
-            center=(center_val, center_val, center_val),
-            size=FAR_CORNER_BLOCK_SIZE,
+            center=center,
+            size=size,
         ),
         medium=td.Medium(permittivity=FAR_CORNER_BLOCK_PERMITTIVITY),
     )
@@ -257,10 +322,12 @@ def _make_sim(
     config: SweepConfig,
 ) -> td.Simulation:
     freq0 = td.C_0 / config.wvl0
+    monitor_center = _collapse_y_center(MONITOR_CENTER, config.sim_dims)
+    monitor_size = _collapse_y_size(MONITOR_SIZE, config.sim_dims)
     monitor = td.FieldMonitor(
         name=FLUX_MONITOR_NAME,
-        center=MONITOR_CENTER,
-        size=MONITOR_SIZE,
+        center=monitor_center,
+        size=monitor_size,
         freqs=[freq0],
     )
     structures = []
@@ -271,13 +338,17 @@ def _make_sim(
         )
 
     if config.source_structure_permittivity is not None:
-        structures.append(_source_host_structure(source, config.source_structure_permittivity))
+        structures.append(
+            _source_host_structure(source, config.source_structure_permittivity, config.sim_dims)
+        )
     if config.source_structure_custom_medium:
-        structures.append(_source_host_custom_medium(source))
+        structures.append(_source_host_custom_medium(source, config.sim_dims))
     if config.add_far_corner_structure:
-        structures.append(_far_corner_structure(config.wvl0))
+        structures.append(_far_corner_structure(config.wvl0, config.sim_dims))
 
-    sim_size = (3 * config.wvl0, 3 * config.wvl0, 3 * config.wvl0)
+    sim_size = _collapse_y_size(
+        (3 * config.wvl0, 3 * config.wvl0, 3 * config.wvl0), config.sim_dims
+    )
     return td.Simulation(
         size=sim_size,
         run_time=SIM_RUN_TIME,
@@ -293,8 +364,10 @@ def _make_sim(
     )
 
 
-def _eval_objective_flux(sim_data: td.SimulationData) -> float:
+def _eval_objective(sim_data: td.SimulationData, sim_dims: int) -> float:
     field_data = sim_data.load_field_monitor(FLUX_MONITOR_NAME)
+    if sim_dims == 2:
+        return np.sum(field_data.intensity.values)
     return field_data.flux.values
 
 
@@ -321,7 +394,7 @@ def _run_gradient_case(
             local_gradient=True,
             verbose=False,
         )
-        return _eval_objective_flux(sim_data)
+        return _eval_objective(sim_data, config.sim_dims)
 
     grad_adjoint = np.array(
         [
@@ -351,10 +424,14 @@ def _run_gradient_case(
     grad_fd = np.zeros(3, dtype=float)
     for idx, axis in enumerate("xyz"):
         obj_plus = float(
-            np.asarray(_eval_objective_flux(sim_data_map[f"{label}_fd_{axis}_plus"])).squeeze()
+            np.asarray(
+                _eval_objective(sim_data_map[f"{label}_fd_{axis}_plus"], config.sim_dims)
+            ).squeeze()
         )
         obj_minus = float(
-            np.asarray(_eval_objective_flux(sim_data_map[f"{label}_fd_{axis}_minus"])).squeeze()
+            np.asarray(
+                _eval_objective(sim_data_map[f"{label}_fd_{axis}_minus"], config.sim_dims)
+            ).squeeze()
         )
         grad_fd[idx] = (obj_plus - obj_minus) / (2 * case.delta)
 
@@ -393,24 +470,33 @@ def _assert_fd_agreement(metrics: GradientMetrics, *, label: str) -> None:
 def _run_variation_sweep(
     tmp_path,
     case: SourceCase,
+    sim_dims: int,
     variation_name: str,
     values: tuple,
     update_config: Callable[[SweepConfig, object], SweepConfig],
 ) -> None:
-    base_config = SweepConfig()
+    base_config = replace(SweepConfig(), sim_dims=sim_dims)
     for value in values:
         config = update_config(base_config, value)
-        label = f"{case.name}_{variation_name}_{value}"
+        label = f"{case.name}_{variation_name}_{value}_{sim_dims}d"
         metrics = _run_gradient_case(tmp_path, case, config, label=label)
         _assert_fd_agreement(metrics, label=label)
 
 
+def _skip_2d_field_cases(sim_dims: int, case: SourceCase) -> None:
+    if sim_dims == 2 and case.source_kind == "field":
+        pytest.skip("2D variation sweeps are only run for CustomCurrentSource cases.")
+
+
 @pytest.mark.numerical
+@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_dataset_spacing(_enable_local_cache, tmp_path, case):
+def test_custom_source_gradient_vs_dataset_spacing(_enable_local_cache, tmp_path, case, sim_dims):
+    _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
+        sim_dims,
         "dataset_spacing",
         DATASET_SPACING_VALUES,
         lambda base, value: replace(base, dataset_spacing=value),
@@ -418,11 +504,14 @@ def test_custom_source_gradient_vs_dataset_spacing(_enable_local_cache, tmp_path
 
 
 @pytest.mark.numerical
+@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_grid_resolution(_enable_local_cache, tmp_path, case):
+def test_custom_source_gradient_vs_grid_resolution(_enable_local_cache, tmp_path, case, sim_dims):
+    _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
+        sim_dims,
         "min_steps_per_wvl",
         MIN_STEPS_PER_WVL_VALUES,
         lambda base, value: replace(base, min_steps_per_wvl=value),
@@ -430,11 +519,14 @@ def test_custom_source_gradient_vs_grid_resolution(_enable_local_cache, tmp_path
 
 
 @pytest.mark.numerical
+@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_source_size(_enable_local_cache, tmp_path, case):
+def test_custom_source_gradient_vs_source_size(_enable_local_cache, tmp_path, case, sim_dims):
+    _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
+        sim_dims,
         "source_size_xy",
         SOURCE_SIZE_XY_VALUES,
         lambda base, value: replace(base, source_size=(value, value, 0.0)),
@@ -442,11 +534,14 @@ def test_custom_source_gradient_vs_source_size(_enable_local_cache, tmp_path, ca
 
 
 @pytest.mark.numerical
+@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_amplitude(_enable_local_cache, tmp_path, case):
+def test_custom_source_gradient_vs_amplitude(_enable_local_cache, tmp_path, case, sim_dims):
+    _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
+        sim_dims,
         "amplitude_scale",
         AMPLITUDE_SCALE_VALUES,
         lambda base, value: replace(base, amplitude_scale=value),
@@ -454,11 +549,14 @@ def test_custom_source_gradient_vs_amplitude(_enable_local_cache, tmp_path, case
 
 
 @pytest.mark.numerical
+@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_permittivity(_enable_local_cache, tmp_path, case):
+def test_custom_source_gradient_vs_permittivity(_enable_local_cache, tmp_path, case, sim_dims):
+    _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
+        sim_dims,
         "permittivity",
         PERMITTIVITY_VALUES,
         lambda base, value: replace(
@@ -470,11 +568,14 @@ def test_custom_source_gradient_vs_permittivity(_enable_local_cache, tmp_path, c
 
 
 @pytest.mark.numerical
+@pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_wavelength(_enable_local_cache, tmp_path, case):
+def test_custom_source_gradient_vs_wavelength(_enable_local_cache, tmp_path, case, sim_dims):
+    _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
+        sim_dims,
         "wvl0",
         WVL0_VALUES,
         lambda base, value: replace(base, wvl0=value),
