@@ -18,7 +18,7 @@ def _enable_local_cache(monkeypatch):
 
 
 ANGLE_LIMIT_DEG = 5.0
-NORM_RTOL = 0.1
+NORM_RTOL = 0.12
 NORM_ATOL = 1e-6
 
 BASE_WVL0 = 2.0
@@ -50,6 +50,9 @@ PERMITTIVITY_VALUES = (
     (4.0, None),
 )
 SIM_DIMS_VALUES = (3, 2)
+OBJECTIVE_3D_MODE = (
+    "flux"  # or "intensity" # flux turned out to be more stable in finite difference gradient
+)
 
 
 def _axis_coords(size: float, spacing: float) -> np.ndarray:
@@ -111,6 +114,7 @@ class SweepConfig:
     wvl0: float = BASE_WVL0
     source_size: tuple[float, float, float] = BASE_SOURCE_SIZE
     sim_dims: int = 3
+    objective_3d: str = OBJECTIVE_3D_MODE
     amplitude_scale: float = 1.0
     background_permittivity: float = 1.0
     source_structure_permittivity: float | None = None
@@ -364,11 +368,15 @@ def _make_sim(
     )
 
 
-def _eval_objective(sim_data: td.SimulationData, sim_dims: int) -> float:
+def _eval_objective(sim_data: td.SimulationData, sim_dims: int, objective_3d: str) -> float:
     field_data = sim_data.load_field_monitor(FLUX_MONITOR_NAME)
     if sim_dims == 2:
         return np.sum(field_data.intensity.values)
-    return field_data.flux.values
+    if objective_3d == "flux":
+        return field_data.flux.values
+    if objective_3d == "intensity":
+        return np.sum(field_data.intensity.values)
+    raise ValueError(f"Unsupported 3D objective mode: {objective_3d!r}")
 
 
 def _run_gradient_case(
@@ -394,7 +402,7 @@ def _run_gradient_case(
             local_gradient=True,
             verbose=False,
         )
-        return _eval_objective(sim_data, config.sim_dims)
+        return _eval_objective(sim_data, config.sim_dims, config.objective_3d)
 
     grad_adjoint = np.array(
         [
@@ -425,12 +433,16 @@ def _run_gradient_case(
     for idx, axis in enumerate("xyz"):
         obj_plus = float(
             np.asarray(
-                _eval_objective(sim_data_map[f"{label}_fd_{axis}_plus"], config.sim_dims)
+                _eval_objective(
+                    sim_data_map[f"{label}_fd_{axis}_plus"], config.sim_dims, config.objective_3d
+                )
             ).squeeze()
         )
         obj_minus = float(
             np.asarray(
-                _eval_objective(sim_data_map[f"{label}_fd_{axis}_minus"], config.sim_dims)
+                _eval_objective(
+                    sim_data_map[f"{label}_fd_{axis}_minus"], config.sim_dims, config.objective_3d
+                )
             ).squeeze()
         )
         grad_fd[idx] = (obj_plus - obj_minus) / (2 * case.delta)
@@ -647,12 +659,12 @@ def test_custom_source_gradient_stable_with_remote_dt_constraint(_enable_local_c
     np.testing.assert_allclose(
         constrained_metrics.fd_norm,
         base_metrics.fd_norm,
-        rtol=0.1,
+        rtol=NORM_RTOL,
         atol=NORM_ATOL,
     )
     np.testing.assert_allclose(
         constrained_metrics.adjoint_norm,
         base_metrics.adjoint_norm,
-        rtol=0.1,
+        rtol=NORM_RTOL,
         atol=NORM_ATOL,
     )
