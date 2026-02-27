@@ -105,23 +105,6 @@ def insert_numerical_structures_static(
     return updated_simulation
 
 
-def _normalize_simulations_input(
-    simulations: Union[dict[str, td.Simulation], tuple[td.Simulation], list[td.Simulation]],
-) -> dict[str, td.Simulation]:
-    """Normalize simulations to a dict keyed by task name."""
-
-    if isinstance(simulations, dict):
-        return simulations
-
-    normalized: dict[str, td.Simulation] = {}
-
-    for idx, sim in enumerate(simulations):
-        task_name = Tidy3dStub(simulation=sim).get_default_task_name() + f"_{idx + 1}"
-        normalized[task_name] = sim
-
-    return normalized
-
-
 def has_traced_numerical_structures(
     numerical_structures: Union[
         tuple[NumericalStructureConfig, ...],
@@ -137,6 +120,10 @@ def has_traced_numerical_structures(
         else numerical_structures
     )
     for cfg in iterable_structures:
+        if not isinstance(cfg, NumericalStructureConfig):
+            raise AdjointError(
+                "Entries in 'numerical_structures' must be NumericalStructureConfig instances."
+            )
         parameters = cfg.parameters
         if hasbox(parameters):
             return True
@@ -746,6 +733,13 @@ def run_async_custom(
             validate_numerical_structure_parameters(
                 numerical_structures=numerical_structures_configs
             )
+        if any(numerical_structures.values()) and not all(
+            isinstance(sim, td.Simulation) for sim in sim_dict.values()
+        ):
+            raise AdjointError(
+                "numerical_structures is only supported for 'Simulation' workflows in "
+                "run_async_custom."
+            )
 
     custom_vjp = _expand_spec(
         fn_arg=custom_vjp,
@@ -755,18 +749,14 @@ def run_async_custom(
         arg_name="custom_vjp",
     )
 
-    simulations = sim_dict
-
     path_dir = Path(path_dir)
-
-    simulations_norm = _normalize_simulations_input(simulations)
 
     traced_numerical_structures = bool(numerical_structures) and any(
         has_traced_numerical_structures(numerical_structure)
         for _, numerical_structure in numerical_structures.items()
     )
     should_use_autograd_async = (
-        is_valid_for_autograd_async(simulations_norm) or traced_numerical_structures
+        is_valid_for_autograd_async(sim_dict) or traced_numerical_structures
     )
 
     if should_use_autograd_async:
@@ -782,13 +772,13 @@ def run_async_custom(
             expanded_custom_vjp_dict = {}
             for sim_key, custom_vjp_entry in custom_vjp.items():
                 expanded_custom_vjp_dict[sim_key] = expand_custom_vjp(
-                    custom_vjp_entry, simulations_norm[sim_key]
+                    custom_vjp_entry, sim_dict[sim_key]
                 )
         else:
             expanded_custom_vjp_dict = None
 
         return _run_async(
-            simulations=simulations_norm,
+            simulations=sim_dict,
             folder_name=folder_name,
             path_dir=path_dir,
             callback_url=callback_url,
@@ -811,16 +801,16 @@ def run_async_custom(
         simulations_static = {
             name: (
                 insert_numerical_structures_static(
-                    simulation=simulations_norm[name],
+                    simulation=sim_dict[name],
                     numerical_structures=numerical_structures[name],
                 )
                 if numerical_structures[name]
-                else simulations_norm[name]
+                else sim_dict[name]
             )
-            for name in simulations_norm
+            for name in sim_dict
         }
     else:
-        simulations_static = simulations_norm
+        simulations_static = sim_dict
 
     return asynchronous_webapi.run_async(
         simulations=simulations_static,

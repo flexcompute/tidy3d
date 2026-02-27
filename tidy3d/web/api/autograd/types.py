@@ -3,17 +3,20 @@ from __future__ import annotations
 import inspect
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional, Union
 
 import numpy as np
 
 from tidy3d.exceptions import AdjointError
 
 if TYPE_CHECKING:
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.autograd.types import PathType
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.geometry.utils import GeometryType
     from tidy3d.components.medium import MediumType
     from tidy3d.components.simulation import Simulation
+    from tidy3d.components.structure import Structure
     from tidy3d.components.types import ArrayLike
 
 
@@ -45,10 +48,10 @@ class NumericalStructureConfig:
         )
     """
 
-    create: Callable
+    create: Callable[[ArrayLike], Structure]
     """Function that creates the structure from static ``parameters``."""
 
-    compute_derivatives: Callable
+    compute_derivatives: Callable[[ArrayLike, DerivativeInfo], dict[PathType, Any]]
     """Function that computes numerical gradients for ``("numerical", index, param_i)`` paths.
     Signature: ``compute_derivatives(parameters, derivative_info) -> dict[path, gradient]``.
     """
@@ -57,11 +60,18 @@ class NumericalStructureConfig:
     """1D parameter vector consumed by ``create`` and ``compute_derivatives``."""
 
     def __post_init__(self) -> None:
+        self._validate_callables()
+        self._validate_create_signature()
+        self._validate_compute_derivatives_signature()
+        self._validate_parameters()
+
+    def _validate_callables(self) -> None:
         if not callable(self.create):
             raise AdjointError("NumericalStructureConfig.create must be callable.")
         if not callable(self.compute_derivatives):
             raise AdjointError("NumericalStructureConfig.compute_derivatives must be callable.")
 
+    def _validate_create_signature(self) -> None:
         create_sig = inspect.signature(self.create)
         create_arg_names = list(create_sig.parameters.keys())
         if len(create_arg_names) != 1:
@@ -71,6 +81,7 @@ class NumericalStructureConfig:
                 f"accepts {len(create_arg_names)} arguments."
             )
 
+    def _validate_compute_derivatives_signature(self) -> None:
         vjp_sig = inspect.signature(self.compute_derivatives)
         vjp_arg_names = list(vjp_sig.parameters.keys())
         if len(vjp_arg_names) != 2:
@@ -87,6 +98,7 @@ class NumericalStructureConfig:
                 f"{vjp_arg_names[1]} but it should be derivative_info."
             )
 
+    def _validate_parameters(self) -> None:
         try:
             array_params = np.asarray(self.parameters)
         except Exception as exc:
@@ -126,7 +138,7 @@ class CustomVJPConfig:
     Can be an index or a geometry/medium type (expanded to matching indices).
     """
 
-    compute_derivatives: Callable
+    compute_derivatives: Callable[[GeometryType | MediumType, DerivativeInfo], dict[PathType, Any]]
     """Function for computing the targeted vjp value. The function should accept the geometry or medium in the
     structure depending on if this is a geometry or medium path (see path_key) as the first argument. The second
     argument should accept a DerivativeInfo object that contains important for computing the gradient. The function
@@ -141,15 +153,23 @@ class CustomVJPConfig:
     """
 
     def __post_init__(self) -> None:
+        self._validate_callable()
+        self._validate_compute_derivatives_signature()
+
+    def _validate_callable(self) -> None:
         if not callable(self.compute_derivatives):
             raise AdjointError("CustomVJPConfig.compute_derivatives must be callable.")
 
+    def _validate_compute_derivatives_signature(self) -> None:
         vjp_sig = inspect.signature(self.compute_derivatives)
         vjp_arg_names = list(vjp_sig.parameters.keys())
         if len(vjp_arg_names) != 2:
             raise AdjointError(
                 "CustomVJPConfig compute_derivatives function should accept two arguments "
-                f"and it currently accepts {len(vjp_arg_names)} arguments."
+                "(target, derivative_info), and it currently accepts "
+                f"{len(vjp_arg_names)} arguments. The target is the geometry or medium "
+                "instance selected by path_key, and derivative_info contains the field "
+                "data and path metadata needed to compute the VJP."
             )
         if vjp_arg_names[1] != "derivative_info":
             raise AdjointError(

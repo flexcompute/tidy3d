@@ -1386,7 +1386,10 @@ def test_autograd_error_custom_vjp_function():
 
     with pytest.raises(
         td.exceptions.AdjointError,
-        match="CustomVJPConfig compute_derivatives function should accept two arguments and it currently accepts 3 arguments.",
+        match=(
+            "CustomVJPConfig compute_derivatives function should accept two arguments "
+            r"\(target, derivative_info\), and it currently accepts 3 arguments\."
+        ),
     ):
         CustomVJPConfig(
             structure=td.PolySlab,
