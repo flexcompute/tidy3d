@@ -37,6 +37,7 @@ SOURCES = [
 ]
 FIELDS = ("Ex", "Ey", "Ez", "Hx", "Hz")
 AUX_FIELDS = ("Nfz",)
+SURFACE_FIELDS = ("E", "H")
 INTERVAL = 2
 ORDERS_X = list(range(-1, 2))
 ORDERS_Y = list(range(-2, 3))
@@ -89,6 +90,12 @@ DIRECTIVITY_MONITOR = td.DirectivityMonitor(
     phi=list(PHIS),
     theta=list(THETAS),
     proj_distance=PD,
+)
+SURFACE_FIELD_MONITOR = td.SurfaceFieldMonitor(
+    size=SIZE_3D, fields=SURFACE_FIELDS, name="surface_field", freqs=FREQS
+)
+SURFACE_FIELD_TIME_MONITOR = td.SurfaceFieldTimeMonitor(
+    size=SIZE_3D, fields=SURFACE_FIELDS, name="surface_field_time", interval=INTERVAL
 )
 
 MONITORS = [
@@ -254,6 +261,50 @@ def make_diffraction_data_array():
             values, coords={"orders_x": ORDERS_X, "orders_y": ORDERS_Y, "f": FS}
         ),
     )
+
+
+def make_surface_triangular_dataset():
+    """Create a mock triangular surface dataset for testing."""
+    # Create simple triangular mesh points
+    points = td.PointDataArray([[0, 0, 0], [1, 0, 0], [0.5, 1, 0]], dims=["index", "axis"])
+    # Define one triangle using the three points
+    cells = td.CellDataArray([[0, 1, 2]], dims=["cell_index", "vertex_index"])
+    return points, cells
+
+
+def make_surface_field_data_array(time: bool = False):
+    """Create surface field (time or freq) data array for testing."""
+    points, cells = make_surface_triangular_dataset()
+    if time:
+        # Create field values on both sides of surface for time domain
+        values = (1 + 1j) * np.random.random((3, 2, 3, len(TS)))  # index, side, axis, t
+        field_values = td.IndexedSurfaceFieldTimeDataArray(
+            values,
+            coords={"index": [0, 1, 2], "side": ["outside", "inside"], "axis": [0, 1, 2], "t": TS},
+        )
+    else:
+        # Create field values on both sides of surface for frequency domain
+        values = (1 + 1j) * np.random.random((3, 2, 3, len(FREQS)))  # index, side, axis, f
+        field_values = td.IndexedSurfaceFieldDataArray(
+            values,
+            coords={
+                "index": [0, 1, 2],
+                "side": ["outside", "inside"],
+                "axis": [0, 1, 2],
+                "f": FREQS,
+            },
+        )
+    return td.TriangularSurfaceDataset(points=points, cells=cells, values=field_values)
+
+
+def make_surface_normal_data_array():
+    """Create surface normal vector data array for testing."""
+    points, cells = make_surface_triangular_dataset()
+
+    # Simple normal vectors (pointing in z direction)
+    normal_values = td.PointDataArray([[0, 0, 1], [0, 0, 1], [0, 0, 1]], dims=["index", "axis"])
+
+    return td.TriangularSurfaceDataset(points=points, cells=cells, values=normal_values)
 
 
 """ Test that they work """

@@ -61,6 +61,8 @@ List of Monitor Data Types
    tidy3d.DiffractionData
    tidy3d.rf.DirectivityData
    tidy3d.AuxFieldTimeData
+   tidy3d.SurfaceFieldData
+   tidy3d.SurfaceFieldTimeData
 
 
 ~~~~
@@ -88,3 +90,8 @@ List of Dataset Types
    tidy3d.FieldProjectionKSpaceDataArray
    tidy3d.DiffractionDataArray
    tidy3d.SteadyVoltageDataArray
+   tidy3d.IndexedSurfaceFieldDataArray
+   tidy3d.IndexedSurfaceFieldTimeDataArray
+   tidy3d.IndexedSurfaceFreqDataArray
+   tidy3d.IndexedSurfaceTimeDataArray
+   tidy3d.TriangularSurfaceDataset

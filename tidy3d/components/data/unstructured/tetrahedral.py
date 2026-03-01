@@ -37,6 +37,9 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
     Example
     -------
+    >>> import numpy as np
+    >>> from tidy3d.components.data.data_array import PointDataArray, CellDataArray, IndexedDataArray
+    >>>
     >>> tet_grid_points = PointDataArray(
     ...     [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
     ...     coords=dict(index=np.arange(4), axis=np.arange(3)),
@@ -198,7 +201,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
             slice_vtk,
             remove_degenerate_cells=True,
             remove_unused_points=True,
-            field=self._values_coords_dict,
+            field=self._non_spatial_coords_dict,
             values_type=self._values_type,
             expect_complex=self.is_complex,
         )
@@ -317,7 +320,6 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
     """ Data selection """
 
-    @requires_vtk
     def sel(
         self,
         x: Union[float, ArrayLike] = None,

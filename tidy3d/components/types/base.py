@@ -277,6 +277,7 @@ Direction = Literal["+", "-"]
 
 
 EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
+EMSurfaceField = Literal["E", "H"]
 FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FreqArray = ArrayFloat1D
 ObsGridArray = FreqArray

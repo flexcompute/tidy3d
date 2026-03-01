@@ -32,11 +32,13 @@ from .types import (
     Coordinate,
     Direction,
     EMField,
+    EMSurfaceField,
     FreqArray,
     ObsGridArray,
 )
 from .validators import (
     assert_plane,
+    assert_volumetric,
     validate_freqs_min,
     validate_freqs_not_empty,
 )
@@ -1839,3 +1841,176 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of intermediate data recorded by the monitor during a solver run."""
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 6
+
+
+class AbstractSurfaceMonitor(Monitor, ABC):
+    """:class:`Monitor` that records electromagnetic field data as a function of x,y,z on PEC and lossy metal surfaces."""
+
+    fields: tuple[EMSurfaceField, ...] = Field(
+        ["E", "H"],
+        title="Field Components",
+        description="Collection of field components to store in the monitor.",
+    )
+
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
+        (1, 1, 1),
+        title="Spatial Interval",
+        description="Number of grid step intervals between monitor recordings. "
+        "Only the value of 1 (no downsampling) is currently supported for surface monitors.",
+    )
+
+    colocate: Literal[True] = Field(
+        True,
+        title="Colocate Fields",
+        description="For surface monitors fields are always colocated on surface.",
+    )
+
+    _check_volumetic = assert_volumetric()
+
+    @model_validator(mode="after")
+    def _warn_beta_stage(self) -> Self:
+        """Warn that surface monitors are in beta stage."""
+
+        log.warning(
+            "Surface monitors are currently in beta stage. Please exercise caution when analyzing "
+            "surface monitor data and verify results carefully. If you encounter any issues, "
+            "please report them to our support team.",
+            log_once=True,
+        )
+        return self
+
+
+class SurfaceFieldMonitor(AbstractSurfaceMonitor, FreqMonitor):
+    """:class:`Monitor` that records electromagnetic fields in the frequency domain on PEC and lossy metal surfaces.
+
+    Notes
+    -----
+
+        :class:`SurfaceFieldMonitor` objects operate by running a discrete Fourier transform of the fields at a given set of
+        frequencies to perform the calculation "in-place" with the time stepping. These monitors are designed
+        to record fields on PEC (:class:`PECMedium`) and lossy metal (:class:`LossyMetalMedium`) surfaces,
+        storing the normal E and tangential H fields.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> old_logging_level = td.config.logging_level
+    >>> td.config.logging_level = "ERROR"
+    >>> monitor = SurfaceFieldMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     fields=['E', 'H'],
+    ...     freqs=[250e12, 300e12],
+    ...     name='surface_monitor')
+    >>> td.config.logging_level = old_logging_level
+    """
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization.
+        In general, this is severely overestimated for surface monitors.
+        """
+
+        # estimation based on triangulated surface when it crosses cells in xy plane
+        num_tris = num_cells * 6
+        num_points = num_cells * 4
+
+        # storing 3 coordinate components per point
+        storage = 3 * BYTES_REAL * num_points
+
+        # storing 3 indices per triangle
+        storage += 3 * BYTES_REAL * num_tris
+
+        # EH field values + normal field
+        storage += (
+            BYTES_COMPLEX * num_points * len(self.freqs) * len(self.fields) * 3
+            + 3 * num_points * BYTES_REAL
+        )
+
+        return storage
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+
+        # fields
+        storage = BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields) * 3
+
+        # fields valid map
+        storage += BYTES_REAL * num_cells * len(self.freqs) * len(self.fields) * 3
+
+        # auxiliary variables (normals and locations)
+        storage += BYTES_REAL * num_cells * 7 * 4
+
+        return storage
+
+
+class SurfaceFieldTimeMonitor(AbstractSurfaceMonitor, TimeMonitor):
+    """:class:`Monitor` that records electromagnetic fields in the time domain on PEC and lossy metal surfaces.
+
+    Notes
+    -----
+
+        :class:`SurfaceFieldTimeMonitor` objects are best used to monitor the time dependence of the fields
+        on PEC (:class:`PECMedium`) and lossy metal (:class:`LossyMetalMedium`) surfaces. They can also be used to create
+        “animations” of the field pattern evolution.
+
+        To create an animation, we need to capture the frames at different time instances of the simulation. This can
+        be done by using a :class:`SurfaceFieldTimeMonitor`. Usually a FDTD simulation contains a large number of time steps
+        and grid points. Recording the field at every time step and grid point will result in a large dataset. For
+        the purpose of making animations, this is usually unnecessary.
+
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> old_logging_level = td.config.logging_level
+    >>> td.config.logging_level = "ERROR"
+    >>> monitor = SurfaceFieldTimeMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     fields=['H'],
+    ...     start=1e-13,
+    ...     stop=5e-13,
+    ...     interval=2,
+    ...     name='movie_monitor')
+    >>> td.config.logging_level = old_logging_level
+    """
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization.
+        In general, this is severely overestimated for surface monitors.
+        """
+        num_steps = self.num_steps(tmesh)
+
+        # estimation based on triangulated surface when it crosses cells in xy plane
+        num_tris = num_cells * 6
+        num_points = num_cells * 4
+
+        # storing 3 coordinate components per point
+        storage = 3 * BYTES_REAL * num_points
+
+        # storing 3 indices per triangle
+        storage += 3 * BYTES_REAL * num_tris
+
+        # EH field values + normal field
+        storage += (
+            BYTES_COMPLEX * num_points * num_steps * len(self.fields) * 3
+            + 3 * num_points * BYTES_REAL
+        )
+
+        return storage
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+
+        num_steps = self.num_steps(tmesh)
+
+        # fields
+        storage = BYTES_COMPLEX * num_cells * num_steps * len(self.fields) * 3
+
+        # fields valid map
+        storage += BYTES_REAL * num_cells * num_steps * len(self.fields) * 3
+
+        # auxiliary variables (normals and locations)
+        storage += BYTES_REAL * num_cells * 7 * 4
+
+        return storage

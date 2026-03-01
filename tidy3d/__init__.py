@@ -139,7 +139,6 @@ from tidy3d.components.tcad.types import (
 from .components.apodization import ApodizationSpec
 
 # boundary placement for other solvers
-# boundary placement for other solvers
 from .components.bc_placement import (
     MediumMediumInterface,
     SimulationBoundary,
@@ -201,7 +200,14 @@ from .components.data.data_array import (
     GroupIndexDataArray,
     HeatDataArray,
     IndexedDataArray,
+    IndexedFieldDataArray,
+    IndexedFieldTimeDataArray,
     IndexedFieldVoltageDataArray,
+    IndexedFreqDataArray,
+    IndexedSurfaceFieldDataArray,
+    IndexedSurfaceFieldTimeDataArray,
+    IndexedSurfaceFreqDataArray,
+    IndexedSurfaceTimeDataArray,
     IndexedTimeDataArray,
     IndexedVoltageDataArray,
     ModeAmpsDataArray,
@@ -239,8 +245,11 @@ from .components.data.monitor_data import (
     ModeData,
     ModeSolverData,
     PermittivityData,
+    SurfaceFieldData,
+    SurfaceFieldTimeData,
 )
 from .components.data.sim_data import DATA_TYPE_MAP, SimulationData
+from .components.data.unstructured.surface import TriangularSurfaceDataset
 from .components.data.utils import (
     TetrahedralGridDataset,
     TriangularGridDataset,
@@ -391,6 +400,8 @@ from .components.monitor import (
     ModeSolverMonitor,
     Monitor,
     PermittivityMonitor,
+    SurfaceFieldMonitor,
+    SurfaceFieldTimeMonitor,
 )
 
 # nonlinear
@@ -722,7 +733,14 @@ __all__ = [
     "ImpedanceCalculator",
     "IndexPerturbation",
     "IndexedDataArray",
+    "IndexedFieldDataArray",
+    "IndexedFieldTimeDataArray",
     "IndexedFieldVoltageDataArray",
+    "IndexedFreqDataArray",
+    "IndexedSurfaceFieldDataArray",
+    "IndexedSurfaceFieldTimeDataArray",
+    "IndexedSurfaceFreqDataArray",
+    "IndexedSurfaceTimeDataArray",
     "IndexedTimeDataArray",
     "IndexedVoltageDataArray",
     "InsulatingBC",
@@ -851,6 +869,10 @@ __all__ = [
     "StructureSimulationBoundary",
     "StructureStructureInterface",
     "SubpixelSpec",
+    "SurfaceFieldData",
+    "SurfaceFieldMonitor",
+    "SurfaceFieldTimeData",
+    "SurfaceFieldTimeMonitor",
     "SurfaceImpedance",
     "SurfaceImpedanceFitterParam",
     "TemperatureBC",
@@ -861,6 +883,7 @@ __all__ = [
     "Transformed",
     "TriangleMesh",
     "TriangularGridDataset",
+    "TriangularSurfaceDataset",
     "TwoPhotonAbsorption",
     "UniformCurrentSource",
     "UniformGrid",

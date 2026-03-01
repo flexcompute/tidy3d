@@ -480,3 +480,62 @@ def test_directivity_monitor():
             name="directivity",
             far_field_approx=False,
         )
+
+
+def test_surface_monitors():
+    pec_sphere = td.Structure(geometry=td.Sphere(radius=0.5), medium=td.PECMedium())
+
+    surf_mnt = td.SurfaceFieldMonitor(size=(1, 1, 1), freqs=[td.C_0], name="surface")
+
+    _ = td.Simulation(
+        size=(2, 2, 2),
+        structures=[pec_sphere],
+        monitors=[surf_mnt],
+        run_time=1e-12,
+        grid_spec=td.GridSpec.auto(wavelength=1),
+    )
+
+    # background is PEC with dielectric sphere
+    _ = td.Simulation(
+        size=(2, 2, 2),
+        medium=td.PECMedium(),
+        structures=[pec_sphere.updated_copy(medium=td.Medium())],
+        monitors=[surf_mnt],
+        run_time=1e-12,
+        grid_spec=td.GridSpec.auto(wavelength=1),
+    )
+
+    # monitor doesn't overlap any pec structure
+    with pytest.raises(
+        pd.ValidationError,
+        match="Surface monitor surface does not cross any PEC or LossyMetalMedium structures.",
+    ):
+        surf_mnt = td.SurfaceFieldMonitor(
+            size=(0.2, 1, 1), center=(0.8, 0, 0), freqs=[td.C_0], name="surface"
+        )
+
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            structures=[pec_sphere],
+            monitors=[surf_mnt],
+            run_time=1e-12,
+            grid_spec=td.GridSpec.auto(wavelength=1),
+        )
+
+    # monitor must be volumetric
+    with pytest.raises(pd.ValidationError, match="must be volumetric"):
+        surf_mnt = td.SurfaceFieldMonitor(size=(1, 0, 1), freqs=[td.C_0], name="surface")
+
+    # surface monitors are not allowed in 2D simulations
+    with pytest.raises(
+        pd.ValidationError,
+        match="Simulation domain has size zero along at least one dimension; surface monitors are not allowed in this case.",
+    ):
+        surf_mnt = td.SurfaceFieldMonitor(size=(1, 1, 1), freqs=[td.C_0], name="surface")
+        _ = td.Simulation(
+            size=(1, 1, 0),
+            structures=[pec_sphere],
+            monitors=[surf_mnt],
+            run_time=1e-12,
+            grid_spec=td.GridSpec.auto(wavelength=1),
+        )

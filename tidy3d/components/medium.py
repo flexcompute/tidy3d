@@ -812,6 +812,11 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return False
 
     @cached_property
+    def is_pec_like(self) -> bool:
+        """Whether the medium is treated as a PEC medium in surface monitors."""
+        return self.is_pec
+
+    @cached_property
     def is_pmc(self) -> bool:
         """Whether the medium is a PMC."""
         return False
@@ -5914,6 +5919,11 @@ class LossyMetalMedium(Medium):
             if freq <= 0:
                 raise ValidationError("Values in 'frequency_range' must be positive.")
         return val
+
+    @cached_property
+    def is_pec_like(self) -> bool:
+        """Whether the medium is treated as a PEC medium in surface monitors."""
+        return True
 
     @cached_property
     def _fitting_result(self) -> tuple[PoleResidue, float]:

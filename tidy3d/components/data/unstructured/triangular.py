@@ -254,7 +254,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         values = self._get_values_from_vtk(
             slice_vtk,
             len(points_numpy),
-            field=self._values_coords_dict,
+            field=self._non_spatial_coords_dict,
             values_type=self._values_type,
             expect_complex=self.is_complex,
         )
@@ -268,7 +268,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         coords[self.normal_axis] = [self.normal_pos]
         coords[slice_axis] = points_numpy[:, slice_axis]
         coords_dict = dict(zip("xyz", coords))
-        coords_dict.update(self._values_coords_dict)
+        coords_dict.update(self._non_spatial_coords_dict)
 
         # reshape values from a 1d array into a 3d array
         new_shape = [1, 1, 1]
@@ -282,11 +282,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
     @requires_vtk
     def reflect(
-        self, axis: Axis, center: float, reflection_only: bool = False
+        self, axis: Axis, center: float, reflection_only: bool = False, symmetry: float = 1.0
     ) -> UnstructuredGridDataset:
         """Reflect unstructured data across the plane define by parameters ``axis`` and ``center``.
         By default the original data is preserved, setting ``reflection_only`` to ``True`` will
-        produce only deflected data.
+        produce only reflected data.
 
         Parameters
         ----------
@@ -296,6 +296,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
             Location of the reflection plane along its normal direction.
         reflection_only : bool = False
             Return only reflected data.
+        symmetry : float = 1.0
+            Symmetry factor to apply to the data.
 
         Returns
         -------
@@ -306,13 +308,21 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # disallow reflecting along normal direction
         if axis == self.normal_axis:
             if reflection_only:
-                return self.updated_copy(normal_pos=2 * center - self.normal_pos)
+                return self.updated_copy(
+                    values=self.values * symmetry, normal_pos=2 * center - self.normal_pos
+                )
             else:
                 raise DataError(
                     "Reflection in the normal direction to the grid is prohibited unless 'reflection_only=True'."
                 )
 
-        return super().reflect(axis=axis, center=center, reflection_only=reflection_only)
+        tan_dims = [0, 1, 2]
+        tan_dims.remove(self.normal_axis)
+        tan_axis = tan_dims.index(axis)
+
+        return super().reflect(
+            axis=tan_axis, center=center, reflection_only=reflection_only, symmetry=symmetry
+        )
 
     """ Interpolation """
 
@@ -390,13 +400,14 @@ class TriangularGridDataset(UnstructuredGridDataset):
             max_cells_per_step=max_cells_per_step,
         )
         interp_broadcasted = np.broadcast_to(
-            interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]] + self._fields_shape
+            interp_inplane,
+            [len(np.atleast_1d(comp)) for comp in [x, y, z]] + self._non_spatial_shape,
         )
 
         coords_dict = {"x": x, "y": y, "z": z}
-        coords_dict.update(self._values_coords_dict)
+        coords_dict.update(self._non_spatial_coords_dict)
 
-        if len(self._values_coords_dict) == 0:
+        if len(self._non_spatial_coords_dict) == 0:
             return SpatialDataArray(interp_broadcasted, coords=coords_dict, name=self.values.name)
         else:
             return XrDataArray(interp_broadcasted, coords=coords_dict, name=self.values.name)
@@ -645,7 +656,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
                 raise DataError(
                     "Unstructured dataset contains more than 1 field. "
                     "Use '.sel()' to select a single field from available dimensions "
-                    f"{self._values_coords_dict} before plotting."
+                    f"{self._non_spatial_coords_dict} before plotting."
                 )
             plot_obj = ax.tripcolor(
                 self._triangulation_obj,

@@ -14971,6 +14971,236 @@
       },
       "type": "object"
     },
+    "SurfaceFieldMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "apodization": {
+          "$ref": "#/$defs/ApodizationSpec"
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {},
+                {},
+                {}
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "colocate": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
+        },
+        "fields": {
+          "default": [
+            "E",
+            "H"
+          ],
+          "items": {
+            "enum": [
+              "E",
+              "H"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freqs": {
+          "type": "ArrayLike",
+          "x-array-dtype": "<f8",
+          "x-array-forbid_nan": true,
+          "x-array-ndim": 1,
+          "x-array-scalar_to_1d": true,
+          "x-array-shape": null,
+          "x-array-strict": false
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "size": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
+        },
+        "type": {
+          "const": "SurfaceFieldMonitor",
+          "default": "SurfaceFieldMonitor",
+          "type": "string"
+        }
+      },
+      "required": [
+        "freqs",
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
+    "SurfaceFieldTimeMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {},
+                {},
+                {}
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "colocate": {
+          "const": true,
+          "default": true,
+          "type": "boolean"
+        },
+        "fields": {
+          "default": [
+            "E",
+            "H"
+          ],
+          "items": {
+            "enum": [
+              "E",
+              "H"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "interval": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            },
+            {
+              "const": 1,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "size": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {},
+            {},
+            {}
+          ],
+          "type": "array"
+        },
+        "start": {
+          "default": 0.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "stop": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "SurfaceFieldTimeMonitor",
+          "default": "SurfaceFieldTimeMonitor",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
     "SurfaceImpedance": {
       "additionalProperties": false,
       "properties": {
@@ -15198,6 +15428,27 @@
             },
             {
               "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
             }
           ]
         }
@@ -15387,6 +15638,27 @@
         },
         "values": {
           "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
             {
               "type": "string"
             },
@@ -15926,7 +16198,9 @@
             "MicrowaveModeSolverMonitor": "#/$defs/MicrowaveModeSolverMonitor",
             "ModeMonitor": "#/$defs/ModeMonitor",
             "ModeSolverMonitor": "#/$defs/ModeSolverMonitor",
-            "PermittivityMonitor": "#/$defs/PermittivityMonitor"
+            "PermittivityMonitor": "#/$defs/PermittivityMonitor",
+            "SurfaceFieldMonitor": "#/$defs/SurfaceFieldMonitor",
+            "SurfaceFieldTimeMonitor": "#/$defs/SurfaceFieldTimeMonitor"
           },
           "propertyName": "type"
         },
@@ -15984,6 +16258,12 @@
           },
           {
             "$ref": "#/$defs/PermittivityMonitor"
+          },
+          {
+            "$ref": "#/$defs/SurfaceFieldMonitor"
+          },
+          {
+            "$ref": "#/$defs/SurfaceFieldTimeMonitor"
           }
         ]
       },

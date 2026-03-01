@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import sys
+import types
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pytest
@@ -15,6 +18,7 @@ from tidy3d.components.viz import (
     flex_style,
     set_default_labels_and_title,
 )
+from tidy3d.components.viz.axes_utils import _is_notebook, add_plotter_if_none
 from tidy3d.constants import inf
 from tidy3d.exceptions import Tidy3dKeyError
 
@@ -362,3 +366,168 @@ def test_tidy3d_matplotlib_style_application_on_import(monkeypatch):
         mpl.rcParams.get("axes.prop_cycle").by_key()["color"][0]
         == mpl.rcParamsDefault.get("axes.prop_cycle").by_key()["color"][0]
     )
+
+
+# --- Tests for add_plotter_if_none decorator ---
+
+
+class FakePlotter:
+    """Minimal stand-in for pyvista.Plotter used in decorator tests."""
+
+    def __init__(self, **kwargs):
+        self.init_kwargs = kwargs
+        self.show_called = False
+
+    def show(self):
+        self.show_called = True
+        return "show_result"
+
+
+class FakePyvista:
+    """Fake pyvista module exposing a Plotter constructor."""
+
+    Plotter = FakePlotter
+
+
+@pytest.fixture()
+def patch_pyvista(monkeypatch):
+    """Inject FakePyvista into the packaging dict used by the decorator."""
+    import tidy3d.packaging as pkg
+
+    monkeypatch.setitem(pkg.pyvista, "mod", FakePyvista())
+
+
+def make_decorated_plotter_func():
+    """Return a decorated function and a list that records its calls."""
+    calls = []
+
+    @add_plotter_if_none
+    def func(self, plotter=None, extra=1):
+        calls.append({"plotter": plotter, "extra": extra})
+        return plotter
+
+    return func, calls
+
+
+@pytest.mark.parametrize(
+    "call_args, call_kwargs",
+    [
+        (("self_arg",), {}),
+        (("self_arg",), {"plotter": None}),
+        (("self_arg", None), {}),
+    ],
+    ids=["plotter_omitted", "plotter_none_keyword", "plotter_none_positional"],
+)
+def test_add_plotter_if_none_creates_plotter(patch_pyvista, call_args, call_kwargs):
+    """
+    When plotter is None or omitted the decorator creates a new plotter and
+    calls show by default.
+    """
+    func, calls = make_decorated_plotter_func()
+    result = func(*call_args, **call_kwargs)
+
+    assert len(calls) == 1
+    assert isinstance(calls[0]["plotter"], FakePlotter)
+    assert result == "show_result"
+
+
+@pytest.mark.parametrize(
+    "call_args, call_kwargs",
+    [
+        (("self_arg",), {"plotter": "REAL"}),
+        (("self_arg", "REAL"), {}),
+    ],
+    ids=["plotter_keyword", "plotter_positional"],
+)
+def test_add_plotter_if_none_forwards_provided(patch_pyvista, call_args, call_kwargs):
+    """
+    A user-provided plotter is forwarded unchanged and show is not called.
+    """
+    real_plotter = FakePlotter()
+    call_args = tuple(real_plotter if a == "REAL" else a for a in call_args)
+    call_kwargs = {k: real_plotter if v == "REAL" else v for k, v in call_kwargs.items()}
+
+    func, calls = make_decorated_plotter_func()
+    result = func(*call_args, **call_kwargs)
+
+    assert len(calls) == 1
+    assert calls[0]["plotter"] is real_plotter
+    assert result is real_plotter
+    assert not real_plotter.show_called
+
+
+def test_add_plotter_if_none_show_false(patch_pyvista):
+    """
+    show=False with auto-created plotter returns the plotter, not show() result.
+    """
+    func, calls = make_decorated_plotter_func()
+    result = func("self_arg", show=False)
+
+    assert isinstance(result, FakePlotter)
+    assert not result.show_called
+
+
+def test_add_plotter_if_none_show_true_provided(patch_pyvista):
+    """
+    show=True with user-provided plotter does NOT call show.
+    """
+    func, calls = make_decorated_plotter_func()
+    real_plotter = FakePlotter()
+    result = func("self_arg", plotter=real_plotter, show=True)
+
+    assert result is real_plotter
+    assert not real_plotter.show_called
+
+
+def test_add_plotter_if_none_extra_kwargs(patch_pyvista):
+    """
+    Non-decorator kwargs are forwarded to the wrapped function.
+    """
+    func, calls = make_decorated_plotter_func()
+    func("self_arg", extra=42, show=False)
+
+    assert calls[0]["extra"] == 42
+
+
+def test_add_plotter_if_none_positional_with_extra_kwarg(patch_pyvista):
+    """
+    Positional plotter combined with keyword extra arg works.
+    """
+    func, calls = make_decorated_plotter_func()
+    real_plotter = FakePlotter()
+    result = func("self_arg", real_plotter, extra=99)
+
+    assert calls[0]["plotter"] is real_plotter
+    assert calls[0]["extra"] == 99
+    assert result is real_plotter
+
+
+def _patch_fake_ipython(monkeypatch, shell):
+    """Patch a lightweight fake IPython module with get_ipython()."""
+    ipython_mod = types.ModuleType("IPython")
+    ipython_mod.get_ipython = lambda: shell
+    monkeypatch.setitem(sys.modules, "IPython", ipython_mod)
+    monkeypatch.delitem(sys.modules, "google.colab", raising=False)
+
+
+def test_is_notebook_false_for_terminal_ipython(monkeypatch):
+    """TerminalInteractiveShell-like sessions should not be treated as notebooks."""
+
+    class FakeTerminalShell:
+        execution_count = 1
+        config = {}
+        __module__ = "IPython.terminal.interactiveshell"
+
+    _patch_fake_ipython(monkeypatch, FakeTerminalShell())
+    assert not _is_notebook()
+
+
+def test_is_notebook_true_for_kernel_ipython(monkeypatch):
+    """Kernel-backed IPython sessions should be detected as notebooks."""
+
+    class FakeKernelShell:
+        config = {"IPKernelApp": True}
+        __module__ = "ipykernel.zmqshell"
+
+    _patch_fake_ipython(monkeypatch, FakeKernelShell())
+    assert _is_notebook()
