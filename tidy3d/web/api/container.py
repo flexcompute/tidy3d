@@ -404,7 +404,6 @@ class Job(WebContainer):
             if wait_for_estimate_cost and self.verbose:
                 self.estimate_cost(verbose=True)
             return
-        self._check_folder(self.folder_name)
 
         # Preserve the legacy blocking path semantics while keeping idempotency.
         if wait_for_estimate_cost:
@@ -414,6 +413,7 @@ class Job(WebContainer):
                 _ = self.task_id
             return
 
+        self._check_folder(self.folder_name)
         task_id = self._upload(
             verbose_estimate_cost=False,
             wait_for_estimate_cost=False,
@@ -856,7 +856,8 @@ class Batch(WebContainer):
         title="Number of Workers",
         description="Number of workers for batch multi-threading where configurable. "
         "Corresponds to ``max_workers`` argument passed to "
-        "``concurrent.futures.ThreadPoolExecutor``. Defaults to "
+        "``concurrent.futures.ThreadPoolExecutor``. Upload/start polling workers use "
+        f"a fixed value of {UPLOAD_START_NUM_WORKERS}. Defaults to "
         "``config.web.default_num_workers``.",
     )
 
@@ -953,10 +954,8 @@ class Batch(WebContainer):
         self._check_path_dir(path_dir)
         if not all(loaded):
             batch_path = self._batch_path(path_dir=path_dir)
-            try:
-                self._upload_and_start(priority=priority)
-            finally:
-                self.to_file(batch_path)
+            self._upload_and_start(priority=priority)
+            self.to_file(batch_path)
             self.monitor(
                 path_dir=path_dir,
                 download_on_success=True,
@@ -1148,14 +1147,7 @@ class Batch(WebContainer):
         worker_limit = UPLOAD_START_NUM_WORKERS
 
         def _upload_job(job: Job) -> Job:
-            if isinstance(job, Job):
-                job.upload(wait_for_estimate_cost=False)
-            else:  # test doubles
-                upload_fn = job.upload
-                try:
-                    upload_fn(wait_for_estimate_cost=False)
-                except TypeError:
-                    upload_fn()
+            job.upload(wait_for_estimate_cost=False)
             return job
 
         upload_futures: dict[concurrent.futures.Future, Job] = {}
@@ -1234,10 +1226,9 @@ class Batch(WebContainer):
                         polling_inflight.discard(task_id)
                         metadata_status = fut.result()
 
-                        # Support lightweight test doubles that don't expose metadata status.
                         if metadata_status is None:
-                            pending_jobs.pop(task_id, None)
-                            ready_to_start.append((task_id, job))
+                            # Missing metadata status can be transient right after upload.
+                            # Keep polling until validation reaches a known post-validate state.
                             continue
 
                         if metadata_status not in ALL_POST_VALIDATE_STATES:
@@ -1265,7 +1256,10 @@ class Batch(WebContainer):
                     pending_jobs.pop(task_id, None)
                     on_started()
 
-    def _upload_and_start(self, priority: Optional[int] = None) -> None:
+    def _upload_and_start(
+        self,
+        priority: Optional[int] = None,
+    ) -> None:
         """Optimized run path: stream upload/estimate/start with bounded concurrency."""
 
         jobs_to_upload = self._prepare_uncached_jobs(
@@ -1437,7 +1431,7 @@ class Batch(WebContainer):
 
             status_by_task[task_name] = status
             self._terminal_status_by_task[task_name] = status
-            if "error" in status:
+            if status in ERROR_STATES:
                 return
 
             # Keep task IDs around to avoid re-querying status/id in a following load().
@@ -1548,6 +1542,7 @@ class Batch(WebContainer):
                             _remember_terminal_status(task_name, job, status)
                         elif status in END_STATES:
                             completed = STATE_PROGRESS_PERCENTAGE.get(status, COMPLETED_PERCENT)
+                            _remember_terminal_status(task_name, job, status)
                         else:
                             info = job.get_info()
                             status = info.status
@@ -1565,6 +1560,8 @@ class Batch(WebContainer):
                     else:
                         if status is None and job.load_if_cached:
                             status = "success"
+                            _remember_terminal_status(task_name, job, status)
+                        elif status in END_STATES:
                             _remember_terminal_status(task_name, job, status)
                         schedule_download(task_name, job, status=status)
 
@@ -1741,7 +1738,7 @@ class Batch(WebContainer):
         fns = []
 
         for task_name, job in self.jobs.items():
-            if "error" in job.status:
+            if job.status in ERROR_STATES:
                 log.warning(f"Not downloading '{task_name}' as the task errored.")
                 continue
 
@@ -1852,12 +1849,6 @@ class Batch(WebContainer):
             if task_id_cached is not None:
                 return task_id_cached
 
-            # Support lightweight job doubles in tests without touching real Job.task_id.
-            if not isinstance(job, Job):
-                task_id = getattr(job, "task_id", None)
-                if task_id is not None:
-                    return task_id
-
             if job.load_if_cached:
                 return getattr(job, "_cached_task_id", None)
 
@@ -1868,7 +1859,7 @@ class Batch(WebContainer):
         ) -> tuple[TaskName, str, Optional[TaskId]]:
             terminal_status = terminal_status_by_task.get(task_name)
             if terminal_status in END_STATES:
-                if "error" in terminal_status:
+                if terminal_status in ERROR_STATES:
                     return task_name, terminal_status, None
 
                 task_id = _known_task_id(task_name, job)
@@ -1893,7 +1884,7 @@ class Batch(WebContainer):
                 )
 
             status = job.status
-            if "error" in status:
+            if status in ERROR_STATES:
                 return task_name, status, None
             return task_name, status, task_id
 
@@ -1912,7 +1903,7 @@ class Batch(WebContainer):
 
         for task_name, _job in jobs_items:
             status = status_by_task[task_name]
-            if "error" in status:
+            if status in ERROR_STATES:
                 log.warning(f"Not loading '{task_name}' as the task errored.")
                 continue
 
@@ -1923,7 +1914,7 @@ class Batch(WebContainer):
         for task_name, status in status_by_task.items():
             if status in END_STATES:
                 self._terminal_status_by_task[task_name] = status
-                if "error" not in status and task_name in task_id_by_task:
+                if status not in ERROR_STATES and task_name in task_id_by_task:
                     self._terminal_task_id_by_task[task_name] = task_id_by_task[task_name]
 
         loaded_from_cache = {task_name: job.load_if_cached for task_name, job in self.jobs.items()}

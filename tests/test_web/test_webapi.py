@@ -1,7 +1,6 @@
 # Tests webapi and things that depend on it
 from __future__ import annotations
 
-import concurrent.futures
 import os
 import posixpath
 from concurrent.futures import Future
@@ -90,6 +89,10 @@ class FakeJob:
     def get_info(self):
         return SimpleNamespace(status=self.status)
 
+    @property
+    def task_id_cached(self):
+        return self.task_id
+
     def download(self, path: PathLike):
         self.events.append((self.task_id, "download", str(path)))
 
@@ -116,8 +119,11 @@ class UploadStartFakeJob:
     def load_if_cached(self):
         return self._cached
 
-    def upload(self):
+    def upload(self, wait_for_estimate_cost=True):
         self.events.append((self.task_id, "upload"))
+
+    def get_info(self):
+        return SimpleNamespace(metadataStatus="processed")
 
     def start(self, priority=None):
         self.events.append((self.task_id, "start", priority))
@@ -166,6 +172,10 @@ class LoadStatusFakeJob:
     @property
     def load_if_cached(self):
         return False
+
+    @property
+    def task_id_cached(self):
+        return self.task_id
 
 
 class ImmediateExecutor:
@@ -847,7 +857,7 @@ def test_create_output_dirs(mock_webapi, tmp_path, monkeypatch):
 
 @responses.activate
 def test_batch_run_saves_file_after_upload(mock_webapi, mock_job_status, tmp_path, monkeypatch):
-    """Test that batch.run() saves batch file with task_ids immediately after upload."""
+    """Test that batch.run() saves batch file with task_ids before monitor()."""
     sims = {TASK_NAME: make_sim()}
     batch = Batch(simulations=sims, folder_name=PROJECT_NAME)
 
@@ -879,48 +889,49 @@ def test_batch_run_saves_file_after_upload(mock_webapi, mock_job_status, tmp_pat
         batch.run(path_dir=str(tmp_path))
 
 
-def test_batch_run_saves_file_when_upload_and_start_fails(tmp_path, monkeypatch):
+def test_batch_run_does_not_save_file_when_upload_and_start_fails_early(tmp_path, monkeypatch):
     sims = {TASK_NAME: make_sim()}
     batch = Batch(simulations=sims, folder_name=PROJECT_NAME)
 
-    batch_file_saved = {"saved": False}
-    original_to_file = Batch.to_file
-
-    def track_to_file(self, fname):
-        batch_file_saved["saved"] = True
-        return original_to_file(self, fname)
+    monitor_called = {"value": False}
 
     def mock_upload_and_start_fail(self, *args, **kwargs):
         raise RuntimeError("Simulated failure during upload/start")
 
-    monkeypatch.setattr(Batch, "to_file", track_to_file)
     monkeypatch.setattr(Batch, "_upload_and_start", mock_upload_and_start_fail)
+    monkeypatch.setattr(Batch, "monitor", lambda *args, **kwargs: monitor_called.update(value=True))
 
     with pytest.raises(RuntimeError, match="Simulated failure during upload/start"):
         batch.run(path_dir=str(tmp_path))
 
-    assert batch_file_saved["saved"]
-    assert os.path.exists(batch._batch_path(path_dir=str(tmp_path)))
+    assert not os.path.exists(batch._batch_path(path_dir=str(tmp_path)))
+    assert not monitor_called["value"]
 
 
 def test_batch_run_surfaces_to_file_error_when_upload_and_start_succeeds(tmp_path, monkeypatch):
     sims = {TASK_NAME: make_sim()}
     batch = Batch(simulations=sims, folder_name=PROJECT_NAME)
+    monitor_called = {"value": False}
 
-    monkeypatch.setattr(Batch, "_upload_and_start", lambda *args, **kwargs: None)
+    def _fake_upload_and_start(self, priority=None):
+        return
+
+    monkeypatch.setattr(Batch, "_upload_and_start", _fake_upload_and_start)
     monkeypatch.setattr(
         Batch,
         "to_file",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("to_file failed")),
     )
-    monkeypatch.setattr(
-        Batch,
-        "monitor",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("monitor should not run")),
-    )
+
+    def _track_monitor(*args, **kwargs):
+        monitor_called["value"] = True
+
+    monkeypatch.setattr(Batch, "monitor", _track_monitor)
 
     with pytest.raises(RuntimeError, match="to_file failed"):
         batch.run(path_dir=str(tmp_path))
+
+    assert not monitor_called["value"]
 
 
 def test_batch_monitor_downloads_on_success(monkeypatch, tmp_path):
@@ -984,6 +995,49 @@ def test_batch_monitor_does_not_repoll_completed_jobs(monkeypatch, tmp_path):
     slow_status_calls = sum(1 for event in events if event[0] == "slow_id" and event[1] == "status")
     assert done_status_calls == 1
     assert slow_status_calls >= 3
+
+
+def test_batch_monitor_verbose_refreshes_terminal_cache_for_cached_end_state(monkeypatch, tmp_path):
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(Batch, "estimate_cost", lambda *args, **kwargs: None)
+
+    sims = {"done_task": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=True)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        "done_task": FakeJob("done_id", ["success"], events),
+    }
+    batch._terminal_status_by_task = {"done_task": "success"}
+    batch._terminal_task_id_by_task = {}
+
+    batch.monitor(download_on_success=False, path_dir=str(tmp_path))
+
+    assert batch._terminal_status_by_task["done_task"] == "success"
+    assert batch._terminal_task_id_by_task["done_task"] == "done_id"
+
+
+def test_batch_monitor_quiet_refreshes_terminal_cache_for_cached_end_state(monkeypatch, tmp_path):
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+
+    sims = {"done_task": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+    batch._cached_properties = {}
+    batch._cached_properties["jobs"] = {
+        "done_task": FakeJob("done_id", ["success"], events),
+    }
+    batch._terminal_status_by_task = {"done_task": "success"}
+    batch._terminal_task_id_by_task = {}
+
+    batch.monitor(download_on_success=False, path_dir=str(tmp_path))
+
+    assert batch._terminal_status_by_task["done_task"] == "success"
+    assert batch._terminal_task_id_by_task["done_task"] == "done_id"
 
 
 def test_batch_upload_and_start_starts_each_task_after_upload(monkeypatch):
@@ -1082,6 +1136,47 @@ def test_batch_upload_and_start_waits_for_metadata_and_disables_blocking_estimat
     assert last_upload_idx < first_start_idx
 
 
+def test_batch_upload_and_start_waits_when_metadata_status_missing(monkeypatch):
+    events = []
+
+    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
+    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(Batch, "_check_folder", staticmethod(lambda *args, **kwargs: None))
+    metadata_polls = {}
+
+    def fake_upload(self, wait_for_estimate_cost=True):
+        task_id = f"{self.task_name}_id"
+        self._cached_properties["task_id"] = task_id
+        events.append((task_id, "upload", wait_for_estimate_cost))
+
+    def fake_start(self, priority=None):
+        events.append((self.task_id, "start", priority))
+
+    def fake_job_metadata_status(job):
+        task_id = job.task_id
+        poll_count = metadata_polls.get(task_id, 0)
+        status = None if poll_count == 0 else "processed"
+        metadata_polls[task_id] = poll_count + 1
+        events.append((task_id, "metadata", status))
+        return status
+
+    monkeypatch.setattr(Job, "upload", fake_upload)
+    monkeypatch.setattr(Job, "start", fake_start)
+    monkeypatch.setattr(Batch, "_job_metadata_status", staticmethod(fake_job_metadata_status))
+
+    sims = {"task_a": make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False)
+
+    batch._upload_and_start(priority=4)
+
+    none_idx = next(i for i, event in enumerate(events) if event == ("task_a_id", "metadata", None))
+    processed_idx = next(
+        i for i, event in enumerate(events) if event == ("task_a_id", "metadata", "processed")
+    )
+    start_idx = next(i for i, event in enumerate(events) if event == ("task_a_id", "start", 4))
+    assert none_idx < processed_idx < start_idx
+
+
 def test_batch_upload_and_start_raises_when_metadata_errors(monkeypatch):
     events = []
 
@@ -1132,38 +1227,6 @@ def test_batch_upload_and_start_streams_ready_start_before_all_uploads(monkeypat
     assert upload_indices
     assert start_indices
     assert min(start_indices) < max(upload_indices)
-
-
-def test_batch_upload_and_start_respects_num_workers_bound(monkeypatch):
-    events = []
-    max_active_futures = [0]
-    original_wait = concurrent.futures.wait
-
-    def tracking_wait(fs, *args, **kwargs):
-        max_active_futures[0] = max(max_active_futures[0], len(fs))
-        return original_wait(fs, *args, **kwargs)
-
-    monkeypatch.setattr("tidy3d.web.api.container.ThreadPoolExecutor", ImmediateExecutor)
-    monkeypatch.setattr("tidy3d.web.api.container.concurrent.futures.wait", tracking_wait)
-    monkeypatch.setattr("tidy3d.web.api.container.time.sleep", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(Batch, "_check_folder", staticmethod(lambda *args, **kwargs: None))
-
-    sims = {f"task_{idx}": make_sim() for idx in range(120)}
-    batch = Batch(simulations=sims, folder_name=PROJECT_NAME, verbose=False, num_workers=2)
-    batch._cached_properties = {}
-    batch._cached_properties["jobs"] = {
-        task_name: UploadEstimateFakeJob(
-            f"{task_name}_id",
-            events,
-            metadata_statuses=["processed"],
-        )
-        for task_name in sims
-    }
-
-    batch._upload_and_start(priority=3)
-
-    assert max_active_futures[0] <= 64
-    assert max_active_futures[0] > batch.num_workers
 
 
 def test_batch_monitor_skips_existing_download(monkeypatch, tmp_path):
@@ -1315,7 +1378,7 @@ def test_batch_load_parallel_status_collection(monkeypatch, tmp_path):
     batch._cached_properties = {
         "jobs": {
             "ok_task": LoadStatusFakeJob("ok_task_id", "success", sims["ok_task"]),
-            "bad_task": LoadStatusFakeJob("bad_task_id", "error", sims["bad_task"]),
+            "bad_task": LoadStatusFakeJob("bad_task_id", "blocked", sims["bad_task"]),
         }
     }
 
@@ -1767,6 +1830,31 @@ def test_job_upload_nonblocking_is_idempotent(monkeypatch):
     assert second_task_id == TASK_ID
     assert len(upload_calls) == 1
     assert upload_calls[0]["wait_for_estimate_cost"] is False
+
+
+def test_job_upload_blocking_checks_folder_once(monkeypatch):
+    upload_calls = []
+    check_folder_calls = []
+
+    def fake_upload(**kwargs):
+        upload_calls.append(kwargs)
+        return TASK_ID
+
+    def fake_check_folder(*args, **kwargs):
+        check_folder_calls.append((args, kwargs))
+        return True
+
+    monkeypatch.setattr(f"{api_path}.upload", fake_upload)
+    monkeypatch.setattr(WebContainer, "_check_folder", fake_check_folder)
+
+    job = Job(simulation=make_sim(), task_name=TASK_NAME, folder_name=PROJECT_NAME, verbose=False)
+
+    job.upload(wait_for_estimate_cost=True)
+    job.upload(wait_for_estimate_cost=True)
+
+    assert len(check_folder_calls) == 1
+    assert len(upload_calls) == 1
+    assert upload_calls[0]["wait_for_estimate_cost"] is True
 
 
 def test_job_estimate_cost_logging(monkeypatch, tmp_path, capsys):
