@@ -248,16 +248,50 @@ def _compute_source_time_scaling(
     source: td.Source,
     simulation: td.Simulation,
     frequencies: np.ndarray,
+    source_dataset_freq: float,
 ) -> FreqDataArray:
     """Compute frequency-dependent source-time scale for source VJP processing."""
+
+    freqs = np.asarray(frequencies, dtype=float)
+    spectrum_freqs = np.full_like(freqs, source_dataset_freq)
     spectrum = source.source_time.spectrum(
         simulation.tmesh,
-        frequencies,
+        spectrum_freqs,
         simulation.dt,
     )
-    spectrum = np.asarray(spectrum)
-    scale = 2.0 * (2.0 * np.pi) ** 2 * td.C_0 * spectrum
-    return FreqDataArray(scale, coords={"f": frequencies})
+    spectrum = np.asarray(spectrum, dtype=complex)
+
+    # - 2.0: real-objective / one-sided-frequency adjoint convention.
+    # - 2*pi (f -> omega): convert Hz-based quantities to angular-frequency form.
+    # - 2*pi (domega = 2*pi*df): Fourier measure conversion for the current convention.
+    # - c0: wavelength/frequency conversion (omega * lambda = 2*pi*c0).
+    real_objective_factor = 2.0
+    hz_to_omega_factor = 2.0 * np.pi
+    fourier_measure_factor = 2.0 * np.pi
+    wavelength_frequency_factor = td.C_0
+    scale_prefactor = (
+        real_objective_factor
+        * hz_to_omega_factor
+        * fourier_measure_factor
+        * wavelength_frequency_factor
+    )
+    scale = scale_prefactor * spectrum * (source_dataset_freq / freqs)
+    return FreqDataArray(scale, coords={"f": freqs})
+
+
+def _get_source_dataset_frequency(source: td.Source) -> float:
+    """Get source-dataset frequency for custom sources."""
+    if isinstance(source, td.CustomFieldSource):
+        dataset = source.field_dataset
+    elif isinstance(source, td.CustomCurrentSource):
+        dataset = source.current_dataset
+    else:
+        raise TypeError(
+            f"Source dataset frequency is only defined for custom sources, got '{source.type}'."
+        )
+    component = next(iter(dataset.field_components.values()))
+    freqs = np.asarray(component.coords["f"].data, dtype=float).reshape(-1)
+    return float(freqs[0])
 
 
 def _process_source_gradients(
@@ -285,10 +319,12 @@ def _process_source_gradients(
         component_index=source_index,
     )
 
+    source_dataset_freq = _get_source_dataset_frequency(source)
     source_time_scaling = _compute_source_time_scaling(
         source=source,
         simulation=sim_data_orig.simulation,
         frequencies=adjoint_frequencies,
+        source_dataset_freq=source_dataset_freq,
     )
 
     # Apply both adjoint post-normalization and source-time scaling in one pass.

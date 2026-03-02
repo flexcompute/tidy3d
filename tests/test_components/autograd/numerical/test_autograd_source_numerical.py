@@ -53,6 +53,7 @@ SIM_DIMS_VALUES = (3, 2)
 OBJECTIVE_3D_MODE = (
     "flux"  # or "intensity" # flux turned out to be more stable in finite difference gradient
 )
+OFF_CENTER_MONITOR_FREQ_SCALE = 0.95
 
 
 def _axis_coords(size: float, spacing: float) -> np.ndarray:
@@ -115,6 +116,7 @@ class SweepConfig:
     source_size: tuple[float, float, float] = BASE_SOURCE_SIZE
     sim_dims: int = 3
     objective_3d: str = OBJECTIVE_3D_MODE
+    monitor_freq_scale: float = 1.0
     amplitude_scale: float = 1.0
     background_permittivity: float = 1.0
     source_structure_permittivity: float | None = None
@@ -326,13 +328,14 @@ def _make_sim(
     config: SweepConfig,
 ) -> td.Simulation:
     freq0 = td.C_0 / config.wvl0
+    monitor_freq = config.monitor_freq_scale * freq0
     monitor_center = _collapse_y_center(MONITOR_CENTER, config.sim_dims)
     monitor_size = _collapse_y_size(MONITOR_SIZE, config.sim_dims)
     monitor = td.FieldMonitor(
         name=FLUX_MONITOR_NAME,
         center=monitor_center,
         size=monitor_size,
-        freqs=[freq0],
+        freqs=[monitor_freq],
     )
     structures = []
     if config.source_structure_permittivity is not None and config.source_structure_custom_medium:
@@ -592,6 +595,27 @@ def test_custom_source_gradient_vs_wavelength(_enable_local_cache, tmp_path, cas
         WVL0_VALUES,
         lambda base, value: replace(base, wvl0=value),
     )
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize("case_name", ("custom_field_vec_e", "custom_current_vec_e"))
+def test_custom_source_gradient_off_center_monitor_frequency(
+    _enable_local_cache, tmp_path, case_name
+):
+    """Check source gradients when objective frequency is offset from source center frequency."""
+    case = next(candidate for candidate in SOURCE_CASES if candidate.name == case_name)
+    config = replace(
+        SweepConfig(sim_dims=3),
+        monitor_freq_scale=OFF_CENTER_MONITOR_FREQ_SCALE,
+    )
+    label = f"{case.name}_monitor_freq_scale_{OFF_CENTER_MONITOR_FREQ_SCALE}_3d"
+    metrics = _run_gradient_case(
+        tmp_path,
+        case,
+        config,
+        label=label,
+    )
+    _assert_fd_agreement(metrics, label=label)
 
 
 @pytest.mark.numerical
