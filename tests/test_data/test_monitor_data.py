@@ -11,6 +11,7 @@ from pydantic import ValidationError
 import tidy3d as td
 from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
 from tidy3d.components.data.monitor_data import (
+    AXIAL_RATIO_CAP,
     AuxFieldTimeData,
     DiffractionData,
     DirectivityData,
@@ -567,6 +568,75 @@ def test_directivity_data(planar_monitor):
     # Test helpers to slice data along a constant phi
     DirectivityData.get_phi_slice(data.Etheta, phi=0)
     DirectivityData.get_phi_slice(data.Etheta, phi=np.pi, symmetric=True)
+
+
+def test_axial_ratio_known_polarizations():
+    """Test axial ratio for known polarization states: circular (AR=1),
+    linear (AR→∞), and an intermediate elliptical case."""
+    theta = np.array([0.0])
+    phi = np.array([0.0])
+    freqs = np.array([1e9])
+    r_proj = np.array([1e6])
+    coords = {"r": r_proj, "theta": theta, "phi": phi, "f": freqs}
+
+    def _make_data(etheta_val, ephi_val):
+        etheta = td.FieldProjectionAngleDataArray(np.array([[[[etheta_val]]]]), coords=coords)
+        ephi = td.FieldProjectionAngleDataArray(np.array([[[[ephi_val]]]]), coords=coords)
+        monitor = td.DirectivityMonitor(
+            size=(2, 2, 2),
+            center=(0, 0, 0),
+            freqs=freqs,
+            name="test_monitor",
+            proj_distance=r_proj,
+            theta=theta,
+            phi=phi,
+        )
+        zero_field = td.FieldProjectionAngleDataArray(np.zeros_like(etheta.values), coords=coords)
+        flux = td.FluxDataArray(np.array([1.0]), coords={"f": freqs})
+        return DirectivityData(
+            monitor=monitor,
+            flux=flux,
+            Er=zero_field,
+            Etheta=etheta,
+            Ephi=ephi,
+            Hr=zero_field,
+            Htheta=zero_field,
+            Hphi=zero_field,
+            projection_surfaces=monitor.projection_surfaces,
+        )
+
+    # Circular polarization: Etheta = 1, Ephi = j → AR = 1
+    data = _make_data(1.0 + 0j, 1j)
+    ar = float(data.axial_ratio.values.flat[0])
+    assert ar == pytest.approx(1.0, abs=1e-10)
+
+    # Near-linear polarization: Etheta = 1, Ephi = delta*j for small delta.
+    # True AR = 1/delta. The naive formula computes AR_denominator = (A+B) - |C|
+    # where A+B = 1+delta², |C| = |1-delta²|. In float64, for delta=1e-9,
+    # delta²=1e-18 is well below machine epsilon (~2.2e-16), so both
+    # 1+delta² and 1-delta² round to 1.0, making the subtraction exactly 0
+    # (catastrophic cancellation). The cross-product reformulation computes
+    # cross = delta exactly, giving AR = 1/delta with no cancellation.
+    # The result is capped at AXIAL_RATIO_CAP = 1e5.
+    delta = 1e-9
+    data = _make_data(1.0 + 0j, delta * 1j)
+    ar = float(data.axial_ratio.values.flat[0])
+    # Verify the old formula would fail: the subtraction cancels to zero
+    A_plus_B = 1.0 + delta**2
+    abs_C = abs(1.0 - delta**2)
+    old_denominator = A_plus_B - abs_C
+    assert old_denominator == 0.0, "Old formula should lose precision here"
+    # The reformulation computes the correct value (1e9) but the cap limits it
+    assert ar == pytest.approx(AXIAL_RATIO_CAP, rel=1e-10)
+
+    # Elliptical polarization: Etheta = 1, Ephi = 0.5j
+    # cross = Re(Etheta)*Im(Ephi) - Im(Etheta)*Re(Ephi) = 1*0.5 - 0*0 = 0.5
+    # |Etheta|² = 1, |Ephi|² = 0.25, |Etheta²+Ephi²| = |1 - 0.25| = 0.75
+    # AR_numerator = 1 + 0.25 + 0.75 = 2.0
+    # AR_inverse = 2*|0.5| / 2.0 = 0.5 → AR = 2.0
+    data = _make_data(1.0 + 0j, 0.5j)
+    ar = float(data.axial_ratio.values.flat[0])
+    assert ar == pytest.approx(2.0, rel=1e-10)
 
 
 def test_directivity_data_from_projected_fields():
