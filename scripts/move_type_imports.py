@@ -23,14 +23,19 @@ import argparse
 import ast
 import subprocess
 import sys
-from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import libcst as cst
 from libcst import matchers as m
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
 SKIP_COMMENT = "# noqa: TC"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PACKAGE_ROOT = PROJECT_ROOT / "tidy3d"
 
 
 @dataclass
@@ -156,12 +161,15 @@ def iter_python_files(paths: Iterable[Path]) -> Iterable[Path]:
 
 
 def path_to_module(path: Path) -> str | None:
-    try:
-        idx = path.parts.index("tidy3d")
-    except ValueError:
-        return None
-    parts = list(path.with_suffix("").parts[idx:])
-    return ".".join(parts)
+    candidates = [path] if path.is_absolute() else [Path.cwd() / path, PROJECT_ROOT / path]
+    for candidate in candidates:
+        abs_path = candidate.resolve()
+        try:
+            rel = abs_path.relative_to(PACKAGE_ROOT)
+        except ValueError:
+            continue
+        return ".".join(("tidy3d", *rel.with_suffix("").parts))
+    return None
 
 
 def resolve_import_target(current_module: str | None, node: ast.ImportFrom) -> str | None:
@@ -513,7 +521,7 @@ def _changed_python_files() -> list[Path]:
             continue
         for line in result.stdout.splitlines():
             path = Path(line.strip())
-            if path.suffix == ".py" and path.exists() and path.parts[0] == "tidy3d":
+            if path.suffix == ".py" and path.exists() and path_to_module(path) is not None:
                 candidates.add(path)
     return sorted(candidates)
 
@@ -522,13 +530,16 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Move type-only imports behind TYPE_CHECKING")
     parser.add_argument("--mode", choices=["check_on_change", "fix"], required=True, default="fix")
     parser.add_argument("--only-changed", action="store_true", help="Limit to git-changed files")
+    parser.add_argument("paths", nargs="*", type=Path, help="Optional files/directories to process")
     args = parser.parse_args(argv[1:])
 
-    if args.only_changed:
+    if args.paths:
+        files = list(dict.fromkeys(iter_python_files(args.paths)))
+    elif args.only_changed:
         files = _changed_python_files()
     else:
         files = list(dict.fromkeys(iter_python_files([Path("tidy3d")])))
-    files = [f for f in files if f.parts and f.parts[0] == "tidy3d"]
+    files = [f for f in files if f.suffix == ".py" and f.exists() and path_to_module(f) is not None]
     if not files:
         print("No Python files to process.")
         return 0
