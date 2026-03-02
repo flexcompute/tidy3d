@@ -38,7 +38,7 @@ from tidy3d.plugins.smatrix import ComponentModeler, Port
 from tidy3d.plugins.smatrix.run import _run_local
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd import autograd as autograd_module
-from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom
+from tidy3d.web.api.autograd.autograd import run_async_custom, run_custom, verify_custom_vjp
 from tidy3d.web.api.autograd.types import CustomVJPConfig
 
 from ...utils import SIM_FULL, AssertLogLevel, custom_poleresidue_u, run_emulated, tracer_arr
@@ -1315,6 +1315,28 @@ def test_autograd_cm_custom_vjp(
         assert np.isclose(
             np.sum(np.abs(grad * (custom_vjp_val_scale / custom_vjp_val) - grad_scale)), 0.0
         ), "Gradients were not set by the user vjp"
+
+
+def test_verify_custom_vjp_ignores_source_traces():
+    """Custom VJP validation must only consider traced structures, not traced sources."""
+
+    def _dummy_vjp(_field, derivative_info):
+        return dict.fromkeys(derivative_info.paths, 0.0)
+
+    traced_fields = {("sources", 0, "current_dataset", "Ex"): np.array([1.0])}
+    custom_vjp = (
+        CustomVJPConfig(
+            structure=0,
+            compute_derivatives=_dummy_vjp,
+            path_key=("geometry", "vertices"),
+        ),
+    )
+
+    with pytest.raises(
+        AdjointError,
+        match="CustomVJPConfig structure index 0 not in traced structure indices.",
+    ):
+        verify_custom_vjp(custom_vjp, traced_fields)
 
 
 @pytest.mark.skipif(not RUN_NUMERICAL, reason="Numerical gradient tests runs through web API.")

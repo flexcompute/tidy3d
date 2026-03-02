@@ -41,7 +41,12 @@ from tidy3d.constants import (
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
-from .autograd.derivative_utils import integrate_within_bounds
+from .autograd.derivative_utils import (
+    bounds_slice,
+    compute_spatial_weights,
+    integrate_within_bounds,
+    transpose_interp_axis,
+)
 from .autograd.types import TracedFloat, TracedPolesAndResidues, TracedPositiveFloat
 from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
@@ -127,8 +132,6 @@ LOSSY_METAL_DEFAULT_MAX_POLES = 5
 LOSSY_METAL_DEFAULT_TOLERANCE_RMS = 1e-3
 
 ALLOWED_INTERP_METHODS = get_args(InterpMethod)
-
-CUSTOM_MEDIUM_BOUNDARY_COORDINATE_TOLERANCE = 1e-12
 
 
 def ensure_freq_in_range(
@@ -1159,163 +1162,47 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         if E_der_dim is None or np.all(E_der_dim.values == 0):
             return np.zeros(eps_shape, dtype=dtype_out)
 
-        field_coords = {axis: np.asarray(E_der_dim.coords[axis]) for axis in "xyz"}
-        # copy here to avoid modifying the derivative_info object data in E_der_map
-        values = E_der_dim.values.copy()
-
-        def _bounds_slice(axis: NDArray, vmin: float, vmax: float, *, name: str) -> slice:
-            n = axis.size
-
-            # protect against field value coordinates right at the structure boundary being
-            # exluded due to numerical precision
-            vmin -= CUSTOM_MEDIUM_BOUNDARY_COORDINATE_TOLERANCE
-            vmax += CUSTOM_MEDIUM_BOUNDARY_COORDINATE_TOLERANCE
-
-            i0 = int(np.searchsorted(axis, vmin, side="left"))
-            i1 = int(np.searchsorted(axis, vmax, side="right"))
-            if i1 <= i0 and n:
-                old = (i0, i1)
-                if i1 < n:
-                    i1 = i0 + 1  # expand right
-                elif i0 > 0:
-                    i0 = i1 - 1  # expand left
-                log.warning(
-                    f"Empty bounds crop on '{name}' while computing CustomMedium parameter gradients "
-                    f"(adjoint field grid -> medium grid): bounds=[{vmin!r}, {vmax!r}], "
-                    f"grid=[{axis[0]!r}, {axis[-1]!r}] -> indices {old}; using ({i0}, {i1}).",
-                    log_once=True,
-                )
-            return slice(i0, i1)
+        field_values_da = E_der_dim
 
         if bounds is not None:
             (xmin, ymin, zmin), (xmax, ymax, zmax) = bounds
+            warning_context = "CustomMedium parameter gradients (adjoint field grid -> medium grid)"
+            sx = bounds_slice(
+                np.asarray(field_values_da.coords["x"]),
+                xmin,
+                xmax,
+                name="x",
+                warning_context=warning_context,
+            )
+            sy = bounds_slice(
+                np.asarray(field_values_da.coords["y"]),
+                ymin,
+                ymax,
+                name="y",
+                warning_context=warning_context,
+            )
+            sz = bounds_slice(
+                np.asarray(field_values_da.coords["z"]),
+                zmin,
+                zmax,
+                name="z",
+                warning_context=warning_context,
+            )
+            field_values_da = field_values_da.isel(x=sx, y=sy, z=sz)
 
-            sx = _bounds_slice(field_coords["x"], xmin, xmax, name="x")
-            sy = _bounds_slice(field_coords["y"], ymin, ymax, name="y")
-            sz = _bounds_slice(field_coords["z"], zmin, zmax, name="z")
-
-            field_coords = {k: field_coords[k][s] for k, s in (("x", sx), ("y", sy), ("z", sz))}
-            values = values[sx, sy, sz, :]
-
-        def _axis_sizes(coords: NDArray) -> NDArray:
-            if coords.size <= 1:
-                return np.array([1.0])
-            mid_points = (coords[1:] + coords[:-1]) / 2.0
-            dists = np.diff(mid_points)
-            sizes = np.zeros(coords.size)
-            sizes[1:-1] = dists
-            sizes[0] = 2 * abs(mid_points[0] - coords[0])
-            sizes[-1] = 2 * abs(coords[-1] - mid_points[-1])
-            return sizes
-
-        size_x = _axis_sizes(field_coords["x"])
-        size_y = _axis_sizes(field_coords["y"])
-        size_z = _axis_sizes(field_coords["z"])
-        scale = (
-            size_x[:, None, None, None] * size_y[None, :, None, None] * size_z[None, None, :, None]
-        )
-        np.multiply(values, scale, out=values)
+        field_coords = {axis: np.asarray(field_values_da.coords[axis]) for axis in "xyz"}
+        weights = compute_spatial_weights(field_values_da, dims=("x", "y", "z"))
+        weighted_values_da = field_values_da * weights
+        # Copy to avoid modifying underlying data through in-place operations below.
+        values = weighted_values_da.values.copy()
 
         method = interp_method if interp_method is not None else self.interp_method
 
-        def _transpose_interp_axis(
-            field_values: NDArray, field_coords_1d: NDArray, param_coords_1d: NDArray
-        ) -> NDArray:
-            """
-            Transpose (adjoint) of 1D interpolation along one axis.
-
-            Parameters
-            ----------
-            field_values : np.ndarray
-                Array of values sampled on the field grid along this axis.
-                Shape: (n_field, ...rest...).
-                Notes:
-                  - The first axis corresponds to `field_coords_1d`.
-                  - The remaining axes (...rest...) are treated as batch dimensions and are
-                    carried through unchanged.
-
-            field_coords_1d : np.ndarray
-                1D coordinates of the field grid along this axis.
-                Shape: (n_field,).
-
-            param_coords_1d : np.ndarray
-                1D coordinates of the parameter grid along this axis.
-                Shape: (n_param,). Must be sorted ascending for the searchsorted-based logic.
-
-            Returns
-            -------
-            param_values : np.ndarray
-                Field contributions accumulated onto the parameter grid along this axis.
-                Shape: (n_param, ...rest...).
-
-            Implementation note
-            -------------------
-            For efficient accumulation, we flatten the trailing dimensions (...rest...) into a single
-            dimension so we can run a vectorized `np.add.at` on a 2D buffer of shape (n_param, n_rest),
-            then reshape back to (n_param, ...rest...).
-            """
-            # Single-point parameter grid: every field sample maps to the only parameter entry,
-            if param_coords_1d.size == 1:
-                return field_values.sum(axis=0, keepdims=True)
-
-            # Ensure parameter coordinates are sorted for searchsorted-based binning.
-            if np.any(param_coords_1d[1:] < param_coords_1d[:-1]):
-                raise ValueError("Spatial coordinates must be sorted before computing derivatives.")
-            param_coords_sorted = param_coords_1d
-
-            n_param = param_coords_sorted.size
-            if method not in ALLOWED_INTERP_METHODS:
-                raise ValueError(
-                    f"Unsupported interpolation method: {method!r}. "
-                    f"Choose one of: {', '.join(ALLOWED_INTERP_METHODS)}."
-                )
-
-            # Flatten trailing dimensions into a single "rest" dimension for vectorized accumulation.
-            n_field = field_values.shape[0]
-            field_values_2d = field_values.reshape(n_field, -1)
-
-            if method == "nearest":
-                # Midpoints define bin edges between adjacent parameter coordinates.
-                param_midpoints = (param_coords_sorted[1:] + param_coords_sorted[:-1]) / 2.0
-                # Map each field coordinate to a nearest parameter-bin index.
-                param_index_nearest = np.searchsorted(param_midpoints, field_coords_1d)
-
-                # Accumulate all field samples into their assigned parameter bins.
-                param_values_2d = npo.zeros(
-                    (n_param, field_values_2d.shape[1]), dtype=field_values.dtype
-                )
-                npo.add.at(param_values_2d, param_index_nearest, field_values_2d)
-
-                param_values = param_values_2d.reshape((n_param,) + field_values.shape[1:])
-                return param_values
-
-            # linear
-            # Find bracketing parameter indices for each field coordinate.
-            param_index_upper = np.searchsorted(param_coords_sorted, field_coords_1d, side="right")
-            param_index_upper = np.clip(param_index_upper, 1, n_param - 1)
-            param_index_lower = param_index_upper - 1
-
-            # Compute interpolation fraction within the bracketing segment.
-            segment_width = (
-                param_coords_sorted[param_index_upper] - param_coords_sorted[param_index_lower]
+        if method not in ALLOWED_INTERP_METHODS:
+            raise ValueError(
+                f"Unsupported interpolation method: {method!r}. "
+                f"Choose one of: {', '.join(ALLOWED_INTERP_METHODS)}."
             )
-            segment_width = np.where(segment_width == 0, 1.0, segment_width)
-            frac_upper = (field_coords_1d - param_coords_sorted[param_index_lower]) / segment_width
-            frac_upper = np.clip(frac_upper, 0.0, 1.0)
-
-            # Weights per field sample (broadcast across the flattened trailing dimensions).
-            w_lower = (1.0 - frac_upper)[:, None]
-            w_upper = frac_upper[:, None]
-
-            # Accumulate contributions into both bracketing parameter indices.
-            param_values_2d = npo.zeros(
-                (n_param, field_values_2d.shape[1]), dtype=field_values.dtype
-            )
-            npo.add.at(param_values_2d, param_index_lower, field_values_2d * w_lower)
-            npo.add.at(param_values_2d, param_index_upper, field_values_2d * w_upper)
-
-            param_values = param_values_2d.reshape((n_param,) + field_values.shape[1:])
-            return param_values
 
         def _interp_axis(
             arr: NDArray, axis: int, field_axis: NDArray, param_axis: NDArray
@@ -1326,14 +1213,19 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             to map from ``field_axis`` (n_field) to ``param_axis`` (n_param), then moves the axis back.
             """
             moved = np.moveaxis(arr, axis, 0)
-            moved = _transpose_interp_axis(moved, field_axis, param_axis)
+            moved = transpose_interp_axis(
+                moved,
+                field_axis,
+                param_axis,
+                method=method,
+            )
             return np.moveaxis(moved, 0, axis)
 
         values = _interp_axis(values, 0, field_coords["x"], param_coords["x"])
         values = _interp_axis(values, 1, field_coords["y"], param_coords["y"])
         values = _interp_axis(values, 2, field_coords["z"], param_coords["z"])
 
-        freqs_da = np.asarray(E_der_dim.coords["f"])
+        freqs_da = np.asarray(field_values_da.coords["f"])
         if component == "sigma":
             values = values.imag * (-1.0 / (2.0 * np.pi * freqs_da * EPSILON_0))
         elif component == "imag":

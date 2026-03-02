@@ -5102,10 +5102,21 @@ class Simulation(AbstractYeeGridSimulation):
     def _make_adjoint_monitors(self, sim_fields_keys: list) -> tuple[list, list]:
         """Get lists of field and permittivity monitors for this simulation."""
 
-        index_to_keys = defaultdict(list)
+        # Separate structures and sources into different dictionaries
+        structure_index_to_keys = defaultdict(list)
+        source_index_to_keys = defaultdict(list)
 
-        for _, index, *fields in sim_fields_keys:
-            index_to_keys[index].append(fields)
+        for component_type, index, *fields in sim_fields_keys:
+            if component_type == "structures":
+                structure_index_to_keys[index].append(fields)
+            elif component_type == "sources":
+                source_index_to_keys[index].append(fields)
+            else:
+                raise ValueError(
+                    f"Unknown component type '{component_type}' encountered while "
+                    "constructing adjoint monitors. "
+                    "Expected one of: 'structures', 'sources'."
+                )
 
         freqs = self._freqs_adjoint
         sim_plane = self if self.size.count(0.0) == 1 else None
@@ -5113,24 +5124,43 @@ class Simulation(AbstractYeeGridSimulation):
         adjoint_monitors_fld = []
         adjoint_monitors_eps = []
 
-        # make a field and permittivity monitor for every structure needing one
-        for i, field_keys in index_to_keys.items():
+        # Handle structures first
+        for i, field_keys in structure_index_to_keys.items():
             structure = self.structures[i]
-
             mnt_fld, mnt_eps = structure._make_adjoint_monitors(
                 freqs=freqs, index=i, field_keys=field_keys, plane=sim_plane
             )
-
             adjoint_monitors_fld.append(mnt_fld)
             adjoint_monitors_eps.append(mnt_eps)
+
+        # Handle sources
+        for i, _field_keys in source_index_to_keys.items():
+            source = self.sources[i]
+
+            # For sources, we only need field monitors (no permittivity monitors)
+            # Create a field monitor that covers the source region
+            source_center = source.center
+            source_size = source.size
+
+            # Create field monitor for the source
+            field_monitor = FieldMonitor(
+                center=source_center,
+                size=source_size,
+                freqs=freqs,
+                name=f"source_adjoint_{i}",
+            )
+
+            # For sources, we only return field monitors (no permittivity monitors)
+            adjoint_monitors_fld.append(field_monitor)
 
         return adjoint_monitors_fld, adjoint_monitors_eps
 
     def _check_custom_medium_geometry_overlap(self, sim_fields_keys: AutogradFieldMap) -> None:
         index_to_keys = defaultdict(list)
 
-        for _, index, *fields in sim_fields_keys:
-            index_to_keys[index].append(fields)
+        for path_type, index, *fields in sim_fields_keys:
+            if path_type == "structures":
+                index_to_keys[index].append(fields)
 
         for structure_index, gradient_paths in index_to_keys.items():
             if self.structures[structure_index].medium.is_custom:

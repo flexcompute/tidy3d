@@ -6,6 +6,7 @@ from abc import ABC
 from math import cos, isclose, sin
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
+import numpy as np
 from pydantic import Field, model_validator
 
 from tidy3d.components.base import cached_property
@@ -20,6 +21,9 @@ from .base import Source
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
+    from tidy3d.components.autograd import AutogradFieldMap
+    from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+    from tidy3d.components.data.data_array import ScalarFieldDataArray
     from tidy3d.components.types.time import SourceTimeType
 
 
@@ -248,3 +252,87 @@ class CustomCurrentSource(ReverseInterpolatedSource):
     _current_dataset_none_warning = warn_if_dataset_none("current_dataset")
     _current_dataset_single_freq = assert_single_freq_in_range("current_dataset")
     _can_interpolate = validate_can_interpolate("current_dataset")
+
+    def _confine_mask(self, field_data: ScalarFieldDataArray) -> np.ndarray:
+        """Mask selecting dataset points inside source bounds on nonzero-size axes."""
+        mask = np.ones(field_data.shape, dtype=float)
+        for dim in "xyz":
+            if dim not in field_data.coords:
+                continue
+            axis = "xyz".index(dim)
+            half_size = 0.5 * float(self.size[axis])
+            if half_size <= 0.0:
+                continue
+            coords = np.asarray(field_data.coords[dim].data, dtype=float)
+            inside = np.abs(coords) <= (half_size + 1e-12)
+            reshape = [1] * mask.ndim
+            reshape[field_data.dims.index(dim)] = coords.size
+            mask *= inside.reshape(reshape)
+        return mask
+
+    def _adjoint_interp_methods(self) -> dict[str, str]:
+        """Interpolation mode per axis for source VJP projection."""
+        if self.interpolate:
+            return dict.fromkeys("xyz", "linear")
+
+        axis_methods = {}
+        for axis, dim in enumerate("xyz"):
+            axis_methods[dim] = "nearest" if np.isclose(self.size[axis], 0.0) else "linear"
+        return axis_methods
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute derivatives with respect to CustomCurrentSource parameters."""
+        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
+
+        derivative_map = {}
+        center = tuple(self.center)
+        interp_methods = self._adjoint_interp_methods()
+        h_adj = derivative_info.H_adj or {}
+        e_adj = derivative_info.E_adj or {}
+
+        for field_path in derivative_info.paths:
+            field_path = tuple(field_path)
+            self._validate_traced_source_path(field_path, dataset_key="current_dataset")
+            if len(field_path) < 2:
+                raise ValueError(
+                    "Current source derivative paths must include dataset component names, "
+                    f"got '{field_path}'."
+                )
+
+            field_name = field_path[1]
+            if (
+                len(field_name) != 2
+                or field_name[0] not in ("E", "H")
+                or field_name[1] not in ("x", "y", "z")
+            ):
+                raise ValueError(
+                    f"Unsupported field component '{field_name}' in CustomCurrentSource. "
+                    "Expected one of Ex, Ey, Ez, Hx, Hy, Hz."
+                )
+
+            field_data = getattr(self.current_dataset, field_name, None)
+            if field_data is None:
+                raise ValueError(f"Cannot find field '{field_name}' in current dataset.")
+
+            if field_name.startswith("H"):
+                adjoint_field = h_adj[field_name]
+                component_sign = -1.0
+            else:  # "E" case
+                adjoint_field = e_adj[field_name]
+                component_sign = 1.0
+
+            adjoint_on_dataset = transpose_interp_field_to_dataset(
+                adjoint_field,
+                field_data,
+                center=center,
+                method=interp_methods,
+            )
+            if self.confine_to_bounds:
+                adjoint_on_dataset = adjoint_on_dataset * self._confine_mask(field_data)
+
+            # Keep source gradients stable against simulation grid-refinement changes.
+            vjp_field = np.real(component_sign * adjoint_on_dataset)
+
+            derivative_map[field_path] = vjp_field.transpose(*field_data.dims).values
+
+        return derivative_map

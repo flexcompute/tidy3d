@@ -1048,10 +1048,15 @@ class SimulationData(AbstractYeeGridSimulationData):
         """Split data list into original, adjoint field, and adjoint permittivity."""
 
         data_all = list(self.data)
-        num_mnts_adjoint = (len(data_all) - num_mnts_original) // 2
+        adjoint_monitors = list(self.simulation.monitors[num_mnts_original:])
+        num_mnts_adjoint = len(adjoint_monitors)
+        num_mnts_eps = sum(
+            getattr(monitor, "name", "").startswith("adjoint_eps_") for monitor in adjoint_monitors
+        )
+        num_mnts_fld = num_mnts_adjoint - num_mnts_eps
 
         log.info(
-            f" -> {num_mnts_original} monitors, {num_mnts_adjoint} adjoint field monitors, {num_mnts_adjoint} adjoint eps monitors."
+            f" -> {num_mnts_original} monitors, {num_mnts_fld} adjoint field monitors, {num_mnts_eps} adjoint eps monitors."
         )
 
         data_original, data_adjoint = split_list(data_all, index=num_mnts_original)

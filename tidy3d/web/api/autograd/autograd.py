@@ -76,7 +76,7 @@ def is_valid_for_autograd(simulation: td.Simulation) -> bool:
 
     # if no tracers just use regular web.run()
     traced_fields = simulation._strip_traced_fields(
-        include_untraced_data_arrays=False, starting_path=("structures",)
+        include_untraced_data_arrays=False, starting_paths=(("structures",), ("sources",))
     )
     if not traced_fields:
         return False
@@ -178,8 +178,11 @@ def verify_custom_vjp(
     argument is named derivative_info.
     """
 
-    custom_vjp_index_options = [full_path[1] for full_path in traced_fields]
-    custom_vjp_path_options = [full_path[2:4] for full_path in traced_fields]
+    traced_structure_fields = [
+        full_path for full_path in traced_fields if full_path and full_path[0] == "structures"
+    ]
+    custom_vjp_index_options = [full_path[1] for full_path in traced_structure_fields]
+    custom_vjp_path_options = [full_path[2:4] for full_path in traced_structure_fields]
 
     for vjp_config in custom_vjp:
         sig = inspect.signature(vjp_config.compute_derivatives)
@@ -841,7 +844,7 @@ def setup_run(simulation: td.Simulation) -> SetupRunResult:
 
     # get a mapping of all the traced fields in the provided simulation
     sim_fields_map = simulation._strip_traced_fields(
-        include_untraced_data_arrays=False, starting_path=("structures",)
+        include_untraced_data_arrays=False, starting_paths=(("structures",), ("sources",))
     )
 
     return SetupRunResult(
@@ -925,7 +928,7 @@ def _run_primitive(
         aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
         aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
         field_map = sim_data_orig._strip_traced_fields(
-            include_untraced_data_arrays=True, starting_path=("data",)
+            include_untraced_data_arrays=True, starting_paths=(("data",),)
         )
 
     return field_map
@@ -990,7 +993,7 @@ def _run_async_primitive(
             aux_data_dict[task_name][AUX_KEY_FWD_TASK_ID] = task_id_fwd
             aux_data_dict[task_name][AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
             field_map = sim_data_orig._strip_traced_fields(
-                include_untraced_data_arrays=True, starting_path=("data",)
+                include_untraced_data_arrays=True, starting_paths=(("data",),)
             )
             field_map_fwd_dict[task_name] = field_map
 
