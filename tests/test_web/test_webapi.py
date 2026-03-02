@@ -1745,6 +1745,30 @@ def test_batch_run_accepts_pathlike_dir(monkeypatch, tmp_path, dir_builder):
     assert batch_file.is_file()
 
 
+def test_job_upload_nonblocking_is_idempotent(monkeypatch):
+    upload_calls = []
+
+    def fake_upload(**kwargs):
+        upload_calls.append(kwargs)
+        return TASK_ID
+
+    monkeypatch.setattr(f"{api_path}.upload", fake_upload)
+    monkeypatch.setattr(WebContainer, "_check_folder", lambda *a, **k: True)
+
+    job = Job(simulation=make_sim(), task_name=TASK_NAME, folder_name=PROJECT_NAME, verbose=False)
+
+    job.upload(wait_for_estimate_cost=False)
+    first_task_id = job.task_id
+    job.upload(wait_for_estimate_cost=False)
+    job.upload(wait_for_estimate_cost=True)
+    second_task_id = job.task_id
+
+    assert first_task_id == TASK_ID
+    assert second_task_id == TASK_ID
+    assert len(upload_calls) == 1
+    assert upload_calls[0]["wait_for_estimate_cost"] is False
+
+
 def test_job_estimate_cost_logging(monkeypatch, tmp_path, capsys):
     def assert_estimate_cost_prints(count: int) -> None:
         out, err = capsys.readouterr()

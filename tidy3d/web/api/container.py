@@ -373,6 +373,9 @@ class Job(WebContainer):
         """The task ID for this ``Job``. Uploads the ``Job`` if it hasn't already been uploaded."""
         if self.load_if_cached:
             return self._cached_task_id
+        task_id = self._cached_properties.get("task_id")
+        if task_id is not None:
+            return task_id
         if self.task_id_cached:
             return self.task_id_cached
         self._check_folder(self.folder_name)
@@ -396,13 +399,24 @@ class Job(WebContainer):
         """Upload this ``Job`` if not already got cached results."""
         if self.load_if_cached:
             return
-        if self.task_id_cached:
+        cached_task_id = self._cached_properties.get("task_id")
+        if cached_task_id is not None or self.task_id_cached:
+            if wait_for_estimate_cost and self.verbose:
+                self.estimate_cost(verbose=True)
             return
         self._check_folder(self.folder_name)
-        verbose_estimate_cost = self.verbose if wait_for_estimate_cost else False
+
+        # Preserve the legacy blocking path semantics while keeping idempotency.
+        if wait_for_estimate_cost:
+            if self.verbose:
+                self.estimate_cost(verbose=True)
+            else:
+                _ = self.task_id
+            return
+
         task_id = self._upload(
-            verbose_estimate_cost=verbose_estimate_cost,
-            wait_for_estimate_cost=wait_for_estimate_cost,
+            verbose_estimate_cost=False,
+            wait_for_estimate_cost=False,
         )
         self._cached_properties["task_id"] = task_id
 
