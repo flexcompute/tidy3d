@@ -636,6 +636,49 @@ def test_tetrahedral_dataset(tmp_path, ds_name, values_type, no_vtk=False):
         with pytest.raises(AttributeError):
             td.TetrahedralGridDataset.from_vtu(tmp_path / "tet_grid_test.vtu", field="blah")
 
+    # plotting
+    if not no_vtk:
+        from tidy3d.exceptions import DataError as _DataError
+
+        if len(extra_dims) > 0:
+            tet_grid_one_field = tet_grid.sel(
+                **{key: value[0] for key, value in extra_dims.items()}
+            )
+        else:
+            tet_grid_one_field = tet_grid
+
+        _ = tet_grid_one_field.plot(z=0.5)
+        plt.close()
+
+        _ = tet_grid_one_field.plot(x=0.5, grid=False)
+        plt.close()
+
+        _ = tet_grid_one_field.plot(y=0.5, cmap="hot", vmin=-1, vmax=2)
+        plt.close()
+
+        _ = tet_grid_one_field.plot(z=0.5, cbar_kwargs={"label": "test"})
+        plt.close()
+
+        _ = tet_grid_one_field.plot(z=0.5, cbar=False, shading="flat")
+        plt.close()
+
+        # verify axis limits are clipped to tet bounds
+        ax = tet_grid_one_field.plot(x=0.5)
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        tet_bounds = tet_grid_one_field.bounds
+        assert np.isclose(xlim[0], tet_bounds[0][1])
+        assert np.isclose(xlim[1], tet_bounds[1][1])
+        assert np.isclose(ylim[0], tet_bounds[0][2])
+        assert np.isclose(ylim[1], tet_bounds[1][2])
+        plt.close()
+
+        # must provide exactly one spatial kwarg
+        with pytest.raises(_DataError):
+            tet_grid_one_field.plot()
+        with pytest.raises(_DataError):
+            tet_grid_one_field.plot(x=0.5, y=0.5)
+
     # test ariphmetic operations
     def operation(arr):
         return 5 + (arr * 2 + arr.imag / 3) ** 2 / arr.real + np.log10(arr.abs)

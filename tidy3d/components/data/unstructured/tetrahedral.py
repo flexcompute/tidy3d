@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from xarray import DataArray
     from xarray import DataArray as XrDataArray
 
-    from tidy3d.components.types import ArrayLike, Axis, Bound, Coordinate
+    from tidy3d.components.types import ArrayLike, Ax, Axis, Bound, Coordinate
 
 
 class TetrahedralGridDataset(UnstructuredGridDataset):
@@ -386,6 +386,62 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
             return self_after_non_spatial_sel.interp(x=x, y=y, z=z)
 
         return self_after_non_spatial_sel
+
+    def plot(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Ax:
+        """Plot a 2D slice of the tetrahedral grid data.
+
+        Exactly one of ``x``, ``y``, or ``z`` must be provided to select the
+        slicing plane.  The slice produces a :class:`.TriangularGridDataset`
+        whose ``.plot()`` method is then called with the remaining keyword
+        arguments.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of the slicing plane along the x-axis.
+        y : float = None
+            Position of the slicing plane along the y-axis.
+        z : float = None
+            Position of the slicing plane along the z-axis.
+        **kwargs : dict
+            Keyword arguments forwarded to :meth:`TriangularGridDataset.plot`.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        sel_kwargs = {}
+        if x is not None:
+            sel_kwargs["x"] = x
+        if y is not None:
+            sel_kwargs["y"] = y
+        if z is not None:
+            sel_kwargs["z"] = z
+
+        if len(sel_kwargs) != 1:
+            raise DataError(
+                "Exactly one of 'x', 'y', or 'z' must be provided to select a 2D slice "
+                "for plotting."
+            )
+
+        axis = list("xyz").index(next(iter(sel_kwargs)))
+        tri_data = self.sel(**sel_kwargs)
+        ax = tri_data.plot(**kwargs)
+
+        # Clip axis limits to the original tetrahedral domain bounds so that
+        # triangles straddling the boundary don't stretch the plot extent.
+        in_plane = [d for d in range(3) if d != axis]
+        tet_bounds = self.bounds
+        ax.set_xlim(tet_bounds[0][in_plane[0]], tet_bounds[1][in_plane[0]])
+        ax.set_ylim(tet_bounds[0][in_plane[1]], tet_bounds[1][in_plane[1]])
+        return ax
 
     def get_cell_volumes(self) -> DataArray:
         """Get the volumes associated to each cell in the grid"""
