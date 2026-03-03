@@ -359,8 +359,8 @@ class Scene(Tidy3dBaseModel):
     @staticmethod
     def intersecting_media(
         test_object: Box, structures: tuple[Structure, ...]
-    ) -> tuple[StructureMediumType, ...]:
-        """From a given list of structures, returns a list of :class:`.AbstractMedium` associated
+    ) -> set[StructureMediumType]:
+        """From a given list of structures, returns a set of :class:`.AbstractMedium` associated
         with those structures that intersect with the ``test_object``, if it is a surface, or its
         surfaces, if it is a volume.
 
@@ -368,12 +368,12 @@ class Scene(Tidy3dBaseModel):
         -------
         test_object : :class:`.Box`
             Object for which intersecting media are to be detected.
-        structures : list[:class:`.AbstractMedium`]
-            List of structures whose media will be tested.
+        structures : tuple[:class:`.Structure`, ...]
+            Tuple of structures whose media will be tested.
 
         Returns
         -------
-        list[:class:`.AbstractMedium`]
+        set[:class:`.AbstractMedium`]
             Set of distinct mediums that intersect with the given planar object.
         """
         structures = [s.to_static() for s in structures]

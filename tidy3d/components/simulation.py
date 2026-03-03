@@ -54,6 +54,7 @@ from .boundary import (
 from .data.data_array import FreqDataArray, IndexedDataArray
 from .data.unstructured.tetrahedral import TetrahedralGridDataset
 from .data.unstructured.triangular import TriangularGridDataset
+from .diffraction import diffraction_monitor_storage_size, diffraction_order_grid_size
 from .frequency_extrapolation import LowFrequencySmoothingSpec
 from .geometry.base import Box, Geometry, GeometryGroup
 from .geometry.mesh import TriangleMesh
@@ -175,6 +176,9 @@ MIN_GRIDS_PER_WVL = 6.0
 
 # maximum number of sources
 MAX_NUM_SOURCES = 1000
+
+# maximum number of raw diffraction order combinations before postprocess becomes unsafe
+MAX_DIFFRACTION_ORDER_GRID_SIZE = 100_000_000
 
 # restrictions on simulation number of cells and number of time steps
 MAX_TIME_STEPS = 1e7
@@ -3153,6 +3157,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._error_surface_monitors_with_zero_size()
         self._warn_grid_size_too_small()
         self._source_homogeneous_isotropic()
+        self._diffraction_monitor_order_grid_size()
         self._check_normalize_index()
         self._validate_low_freq_smoothing()
         self._validate_scene()
@@ -4059,6 +4064,28 @@ class Simulation(AbstractYeeGridSimulation):
                 _, index_k = medium.nk_model(frequency=freqs)
                 if not np.all(index_k == 0):
                     raise SetupError(f"'{monitor.type}' must not lie in a lossy medium.")
+        return self
+
+    def _diffraction_monitor_order_grid_size(self) -> Self:
+        """Error if a diffraction monitor would generate an excessively large order grid."""
+
+        for monitor in self.monitors:
+            if not isinstance(monitor, DiffractionMonitor):
+                continue
+
+            medium = self.monitor_medium(monitor)
+            total_orders = diffraction_order_grid_size(self, monitor, medium)
+            if total_orders > MAX_DIFFRACTION_ORDER_GRID_SIZE:
+                raise SetupError(
+                    f"The 'DiffractionMonitor' {monitor.name} would generate "
+                    f"{total_orders} diffraction order combinations, which exceeds "
+                    f"the supported limit of {MAX_DIFFRACTION_ORDER_GRID_SIZE}. "
+                    "Verify that units are set correctly (by default, lengths are specified "
+                    "in microns and frequencies in Hz). Reduce the monitor frequencies, "
+                    "the refractive index on the monitor plane, or the simulation size "
+                    "along the transverse directions."
+                )
+
         return self
 
     @classmethod
@@ -4981,8 +5008,12 @@ class Simulation(AbstractYeeGridSimulation):
         """Dictionary mapping monitor names to their estimated storage size in bytes."""
         data_size = {}
         for monitor in self.monitors:
-            num_cells = self._monitor_num_cells(monitor)
-            storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=self.tmesh))
+            if isinstance(monitor, DiffractionMonitor):
+                medium = self.monitor_medium(monitor)
+                storage_size = float(diffraction_monitor_storage_size(self, monitor, medium))
+            else:
+                num_cells = self._monitor_num_cells(monitor)
+                storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=self.tmesh))
             data_size[monitor.name] = storage_size
         return data_size
 

@@ -1604,6 +1604,92 @@ def test_diffraction_medium():
         )
 
 
+def test_diffraction_monitor_order_grid_size():
+    """Make sure overly large diffraction order grids fail during simulation creation."""
+
+    monitor = td.DiffractionMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[td.C_0 / 1.5],
+        name="monitor_diffraction",
+        normal_dir="+",
+    )
+
+    with pytest.raises(ValidationError, match="100000000"):
+        _ = td.Simulation(
+            size=(2000, 2000, 1),
+            medium=td.Medium(permittivity=16),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=500),
+            monitors=(monitor,),
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+
+
+def test_diffraction_monitor_storage_size():
+    """Make sure diffraction monitors use the standard storage-size validation."""
+
+    monitor = td.DiffractionMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=np.linspace(td.C_0 / 1.55, td.C_0 / 1.45, 11),
+        name="monitor_diffraction",
+        normal_dir="+",
+    )
+
+    sim = td.Simulation(
+        size=(1800, 1800, 1),
+        medium=td.Medium(permittivity=16),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=500),
+        monitors=(monitor,),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+
+    with pytest.raises(SetupError, match="maximum of 50.00GB"):
+        sim.validate_pre_upload(source_required=False)
+
+
+def test_diffraction_monitor_fixed_angle_source_setup():
+    """Make sure fixed-angle sources don't crash diffraction setup."""
+
+    freq0 = td.C_0
+    fwidth = freq0 / 5
+
+    source = td.PlaneWave(
+        angle_phi=np.pi / 6,
+        angle_theta=np.pi / 5,
+        angular_spec=td.FixedAngleSpec(),
+        direction="+",
+        center=(-0.4, 0, 0),
+        size=(0, td.inf, td.inf),
+        pol_angle=np.pi / 4,
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
+    )
+    monitor = td.DiffractionMonitor(
+        center=(0, 0, 0),
+        size=(0, td.inf, td.inf),
+        freqs=[freq0],
+        name="monitor_diffraction",
+        normal_dir="+",
+    )
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        sources=(source,),
+        monitors=(monitor,),
+        run_time=10 / fwidth,
+        grid_spec=td.GridSpec.auto(min_steps_per_wvl=10),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.absorber(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.periodic(),
+        ),
+    )
+
+    assert sim._is_fixed_angle
+
+
 @pytest.mark.parametrize(
     "box_size,log_level",
     [
