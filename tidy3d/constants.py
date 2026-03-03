@@ -161,6 +161,12 @@ NEPERPERMETER = "Np/m"
 SI unit for attenuation constant.
 """
 
+# frequency ranges
+MICROWAVE_FREQUENCY_RANGE = (0.3e9, 300e9)
+"""
+Microwave frequency range: 300 MHz to 300 GHz [Hz]
+"""
+
 
 ELECTRON_VOLT = "eV"
 """

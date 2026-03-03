@@ -34,7 +34,7 @@ The following sections discuss:
 
 * `TerminalComponentModeler`_: The core simulation object in microwave/RF models
 * `RF Materials Models`_: Typical material types in microwave/RF simulation
-* `RF Materials Library`_: The RF material library contains various dispersive models for real-world RF materials.
+* `RF Material Library`_: The RF material library contains various dispersive models for real-world RF materials.
 * `Layer-based Grid Refinement`_: Automated grid refinement strategy for planar structures (e.g. printed circuit boards)
 * `Path Integrals`_: Tools for computing voltage and current from electromagnetic fields
 * `Impedance Calculator`_: Post-processing tool for impedance calculation from electromagnetic fields
