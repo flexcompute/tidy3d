@@ -5107,7 +5107,7 @@ class Simulation(AbstractYeeGridSimulation):
         source_index_to_keys = defaultdict(list)
 
         for component_type, index, *fields in sim_fields_keys:
-            if component_type == "structures":
+            if component_type in ("structures", "numerical"):
                 structure_index_to_keys[index].append(fields)
             elif component_type == "sources":
                 source_index_to_keys[index].append(fields)
@@ -5115,7 +5115,7 @@ class Simulation(AbstractYeeGridSimulation):
                 raise ValueError(
                     f"Unknown component type '{component_type}' encountered while "
                     "constructing adjoint monitors. "
-                    "Expected one of: 'structures', 'sources'."
+                    "Expected one of: 'structures', 'sources', 'numerical'."
                 )
 
         freqs = self._freqs_adjoint
