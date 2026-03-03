@@ -137,13 +137,26 @@ class BeamProfile(Box):
         return data_raw.updated_copy(**fields_norm)
 
     def _field_data_on_grid(
-        self, grid: Grid, background_n: NDArray, colocate: bool = True
+        self,
+        grid: Grid,
+        background_n: NDArray,
+        colocate: bool = True,
+        field_components: Optional[tuple[str, ...]] = None,
     ) -> dict[str, ScalarFieldDataArray]:
         """Compute the field data for each field component on a grid for the beam.
         A dictionary of the scalar field data arrays is returned, not yet packaged as ``FieldData``.
         """
 
-        field_components = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
+        all_field_components = ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")
+        if field_components is None:
+            field_components = all_field_components
+        else:
+            invalid_components = [
+                field for field in field_components if field not in all_field_components
+            ]
+            if invalid_components:
+                invalid_components_str = ", ".join(invalid_components)
+                raise ValueError(f"Invalid field components requested: {invalid_components_str}")
         if colocate:
             # Just sample at the grid boundaries for each field component
             # We skip the last boundary because that's how things also work in the solver (no
@@ -156,14 +169,14 @@ class BeamProfile(Box):
 
         # Compute each field component over the beam grid
         scalar_fields = {}
-        for comp, field in enumerate(field_components):
+        for field in field_components:
             x, y, z = grid_dict[field].to_list
             # Center component grid at beam center
             x_c, y_c, z_c = (coords - cent for coords, cent in zip((x, y, z), self.center))
             # Stack E and H fields
             field_vals = self.analytic_beam(x_c, y_c, z_c, background_n, field=field[0])
             # Get the current field component
-            field_vals = field_vals[comp % 3]
+            field_vals = field_vals["xyz".index(field[1])]
             # Make the ScalarFieldDataArray for the current component
             coords = {"x": x, "y": y, "z": z, "f": np.array(self.freqs)}
             field_data = ScalarFieldDataArray(field_vals, coords=coords)
