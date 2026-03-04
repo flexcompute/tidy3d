@@ -10,12 +10,13 @@ import xarray as xr
 import tidy3d as td
 from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
 from tidy3d.packaging import disable_local_subpixel
 
-from .utils import E_to_D, get_derivative_maps, scale_field_data
+from .utils import E_to_D, filter_vjp_map, get_derivative_maps, scale_field_data
 
 if TYPE_CHECKING:
     from typing import Callable, Optional, Union
@@ -38,22 +39,7 @@ def setup_adj(
 
     td.log.info("Running custom vjp (adjoint) pipeline.")
 
-    # filter out any data_fields_vjp with exact all 0's
-    data_fields_vjp_static = {}
-    for k, v in data_fields_vjp.items():
-        v_static = get_static(v)
-        if np.count_nonzero(v_static) == 0:
-            continue
-        data_fields_vjp_static[k] = v_static
-    data_fields_vjp = data_fields_vjp_static
-
-    for k, v in data_fields_vjp.items():
-        if np.any(np.isnan(v)):
-            raise AdjointError(
-                f"NaN values detected for data field {k} in the adjoint pipeline. This may be "
-                f"due to NaN values in the simulation data or the computed value of your "
-                f"objective function."
-            )
+    data_fields_vjp = filter_vjp_map(data_fields_vjp)
 
     # if all entries are zero, there is no adjoint sim to run
     if not data_fields_vjp:
@@ -691,15 +677,7 @@ def _process_structure_gradients(
             vjp_chunk = structure._compute_derivatives(derivative_info, vjp_fns=custom_vjp)
 
             # accumulate results
-            for path, value in vjp_chunk.items():
-                if path in vjp_value_map:
-                    val = vjp_value_map[path]
-                    if isinstance(val, (list, tuple)) and isinstance(value, (list, tuple)):
-                        vjp_value_map[path] = type(val)(x + y for x, y in zip(val, value))
-                    else:
-                        vjp_value_map[path] = val + value
-                else:
-                    vjp_value_map[path] = value
+            _accumulate_field_map(vjp_value_map, vjp_chunk)
 
         if use_numerical_vjp:
             gradients = numerical_vjp_fn(numerical_params_static, derivative_info=derivative_info)

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from numpy.typing import ArrayLike, NDArray
 
 __all__ = [
+    "accumulate_field_map",
     "asarray1d",
     "contains",
     "get_static",
@@ -82,3 +83,16 @@ def asarray1d(x: Union[ArrayLike, ArrayBox]) -> Union[NDArray, ArrayBox]:
     """Autograd-friendly 1D flatten: returns ndarray of shape (-1,)."""
     x = anp.array(x)
     return x if x.ndim == 1 else anp.ravel(x)
+
+
+def accumulate_field_map(target: dict, addition: dict) -> None:
+    """Accumulate an autograd field map into target in-place."""
+    for k, v in addition.items():
+        if k in target:
+            existing = target[k]
+            if isinstance(existing, (list, tuple)) and isinstance(v, (list, tuple)):
+                target[k] = type(existing)(x + y for x, y in zip(existing, v))
+            else:
+                target[k] = existing + v
+        else:
+            target[k] = v
