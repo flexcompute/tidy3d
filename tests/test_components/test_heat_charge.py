@@ -1411,6 +1411,10 @@ def test_sim_data_plotting(simulation_data):
     heat_sim_data.plot_field("tri")
     heat_sim_data.plot_field("tet", y=0.5)
 
+    # grid=True on structured data should raise a helpful error
+    with pytest.raises(DataError, match="only supported for unstructured"):
+        heat_sim_data["test"].temperature.sel(z=0).plot(grid=True)
+
     # Plotting voltage data
     cond_sim_data.plot_field("v_test", z=0)
     cond_sim_data.plot_field("v_tri")

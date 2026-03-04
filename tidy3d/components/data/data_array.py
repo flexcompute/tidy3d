@@ -665,6 +665,31 @@ class AbstractSpatialDataArray(DataArray, ABC):
     _dims = ("x", "y", "z")
     _data_attrs = {"long_name": "field value"}
 
+    def plot(self, *args: Any, field: bool = True, grid: bool = False, **kwargs: Any) -> Any:
+        """Plot the spatial data.
+
+        Accepts the same arguments as xarray's ``DataArray.plot()``.  The extra
+        ``grid`` and ``field`` keyword arguments are accepted for API
+        compatibility with :meth:`TriangularGridDataset.plot` but grid overlay
+        is not supported on structured data.
+
+        Parameters
+        ----------
+        field : bool = True
+            Whether to plot the data field.  Must be ``True`` for structured
+            data.
+        grid : bool = False
+            Not supported for structured data.  Raises ``DataError`` if
+            ``True``.
+        """
+        if grid:
+            raise DataError("The 'grid' argument is only supported for unstructured data.")
+        if not field:
+            raise DataError("The 'field' argument is only supported for unstructured data.")
+
+        PlotAccessor = xr.DataArray.plot
+        return PlotAccessor(self)(*args, **kwargs)
+
     @property
     def _spatially_sorted(self) -> Self:
         """Check whether sorted and sort if not."""

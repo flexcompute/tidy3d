@@ -665,3 +665,31 @@ def test_interpn_with_extrapolation(rng, method):
 
     data = rng.random((1, 3, 4, 5), dtype=np.float64)
     check_grads(f, order=1, modes=["rev"])(data)
+
+
+def test_spatial_data_array_plot_grid():
+    """Test that SpatialDataArray.plot() raises helpful errors for grid/field kwargs."""
+    import matplotlib.pyplot as plt
+
+    x = np.linspace(0, 1, 5)
+    y = np.linspace(0, 2, 4)
+    z = [0.0]
+    data_2d = td.SpatialDataArray(
+        np.random.random((5, 4, 1)),
+        coords={"x": x, "y": y, "z": z},
+    )
+
+    _, ax = plt.subplots()
+    data_2d.sel(z=0.0).plot(ax=ax)
+    plt.close()
+
+    with pytest.raises(DataError, match="only supported for unstructured"):
+        data_2d.sel(z=0.0).plot(grid=True)
+
+    with pytest.raises(DataError, match="only supported for unstructured"):
+        data_2d.sel(z=0.0).plot(field=False)
+
+    with pytest.raises(DataError, match="only supported for unstructured"):
+        data_2d.sel(z=0.0).plot(grid=True, field=False)
+
+    plt.close("all")
