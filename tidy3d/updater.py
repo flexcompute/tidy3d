@@ -209,6 +209,36 @@ def iterate_update_dict(update_dict: Any, update_types: dict[str, TransformFn]) 
             iterate_update_dict(item, update_types)
 
 
+@updates_from_version("2.10")
+def update_2_10(sim_dict: dict[str, Any]) -> dict[str, Any]:
+    """Updates version 2.10."""
+
+    def normalize_mode_sort_spec(ms_dict: dict[str, Any]) -> dict[str, Any]:
+        # Legacy 2.10 payloads may encode ``sort_spec`` as null; drop it so defaults apply.
+        sort_spec = ms_dict.get("sort_spec")
+        if sort_spec is None:
+            ms_dict.pop("sort_spec", None)
+            return ms_dict
+
+        # Older files may store ``sort_key`` as null. Drop all sort fields and let
+        # current ModeSortSpec defaults resolve sorting while preserving filtering.
+        if isinstance(sort_spec, dict) and sort_spec.get("sort_key") is None:
+            sort_spec.pop("sort_key", None)
+            sort_spec.pop("sort_reference", None)
+            sort_spec.pop("sort_order", None)
+        return ms_dict
+
+    iterate_update_dict(
+        update_dict=sim_dict,
+        update_types={
+            "ModeSpec": normalize_mode_sort_spec,
+            "EMEModeSpec": normalize_mode_sort_spec,
+            "MicrowaveModeSpec": normalize_mode_sort_spec,
+        },
+    )
+    return sim_dict
+
+
 @updates_from_version("1.8")
 def update_1_8(sim_dict: dict[str, Any]) -> dict[str, Any]:
     """Updates version 1.8."""

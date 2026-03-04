@@ -252,6 +252,71 @@ def test_simulation_updater(sim_file):
     assert sim_loaded.scene is not None
 
 
+def test_simulation_updater_v2_10_mode_spec_sort_key_none(tmp_path):
+    """Ensure v2.10 files with ``sort_spec.sort_key: null`` still load in current version."""
+    sim = td.Simulation(
+        size=(2, 2, 2),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        monitors=(
+            td.ModeMonitor(
+                center=(0, 0, 0),
+                size=(1, 1, 0),
+                freqs=[2e14],
+                mode_spec=td.ModeSpec(),
+                name="mode",
+            ),
+        ),
+    )
+    sim_dict = json.loads(sim.model_dump_json())
+    sim_dict["version"] = "2.10.0"
+    sim_dict["monitors"][0]["mode_spec"]["sort_spec"]["sort_key"] = None
+    sim_dict["monitors"][0]["mode_spec"]["sort_spec"]["sort_order"] = "ascending"
+
+    sim_path = tmp_path / "sim_v2_10_sort_key_none.json"
+    sim_path.write_text(json.dumps(sim_dict), encoding="utf-8")
+
+    sim_loaded = td.Simulation.from_file(sim_path)
+    mode_monitor = next(monitor for monitor in sim_loaded.monitors if monitor.type == "ModeMonitor")
+    assert mode_monitor.mode_spec.sort_spec.sort_key == "n_eff"
+    assert mode_monitor.mode_spec.sort_spec.sort_order == "descending"
+    assert sim_loaded.version == __version__
+
+
+def test_simulation_updater_v2_10_mode_spec_sort_key_none_with_reference(tmp_path):
+    """Ensure legacy null ``sort_key`` falls back to defaults even if sort fields are present."""
+    sim = td.Simulation(
+        size=(2, 2, 2),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        monitors=(
+            td.ModeMonitor(
+                center=(0, 0, 0),
+                size=(1, 1, 0),
+                freqs=[2e14],
+                mode_spec=td.ModeSpec(),
+                name="mode",
+            ),
+        ),
+    )
+    sim_dict = json.loads(sim.model_dump_json())
+    sim_dict["version"] = "2.10.0"
+    sort_spec = sim_dict["monitors"][0]["mode_spec"]["sort_spec"]
+    sort_spec["sort_key"] = None
+    sort_spec["sort_reference"] = 1.5
+    sort_spec["sort_order"] = "ascending"
+
+    sim_path = tmp_path / "sim_v2_10_sort_key_none_sort_reference.json"
+    sim_path.write_text(json.dumps(sim_dict), encoding="utf-8")
+
+    sim_loaded = td.Simulation.from_file(sim_path)
+    mode_monitor = next(monitor for monitor in sim_loaded.monitors if monitor.type == "ModeMonitor")
+    assert mode_monitor.mode_spec.sort_spec.sort_key == "n_eff"
+    assert mode_monitor.mode_spec.sort_spec.sort_reference is None
+    assert mode_monitor.mode_spec.sort_spec.sort_order == "descending"
+    assert sim_loaded.version == __version__
+
+
 def test_yaml(tmp_path):
     path = str(tmp_path / "simulation.json")
     SIM.to_file(path)
