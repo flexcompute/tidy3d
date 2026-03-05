@@ -317,6 +317,75 @@ def test_simulation_updater_v2_10_mode_spec_sort_key_none_with_reference(tmp_pat
     assert sim_loaded.version == __version__
 
 
+def _make_mode_solver_for_legacy_sort_spec_tests() -> td.plugins.mode.ModeSolver:
+    sim = td.Simulation(
+        size=(2, 2, 2),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+    )
+    return td.plugins.mode.ModeSolver(
+        simulation=sim,
+        plane=td.Box(center=(0, 0, 0), size=(1, 1, 0)),
+        mode_spec=td.ModeSpec(),
+        freqs=[2e14],
+    )
+
+
+def test_mode_solver_load_legacy_sort_key_none_without_version(tmp_path):
+    """Ensure ModeSolver loads legacy ``sort_key: null`` even without a top-level version."""
+    mode_solver = _make_mode_solver_for_legacy_sort_spec_tests()
+    mode_solver_dict = json.loads(mode_solver.model_dump_json())
+
+    assert "version" not in mode_solver_dict
+    sort_spec = mode_solver_dict["mode_spec"]["sort_spec"]
+    sort_spec["sort_key"] = None
+    sort_spec["sort_reference"] = 1.5
+    sort_spec["sort_order"] = "ascending"
+
+    file_path = tmp_path / "mode_solver_sort_key_none.json"
+    file_path.write_text(json.dumps(mode_solver_dict), encoding="utf-8")
+
+    loaded = td.plugins.mode.ModeSolver.from_file(file_path)
+    assert loaded.mode_spec.sort_spec.sort_key == "n_eff"
+    assert loaded.mode_spec.sort_spec.sort_reference is None
+    assert loaded.mode_spec.sort_spec.sort_order == "descending"
+
+
+def test_mode_solver_load_legacy_sort_spec_none_without_version(tmp_path):
+    """Ensure ModeSolver loads legacy ``sort_spec: null`` even without a top-level version."""
+    mode_solver = _make_mode_solver_for_legacy_sort_spec_tests()
+    mode_solver_dict = json.loads(mode_solver.model_dump_json())
+
+    assert "version" not in mode_solver_dict
+    mode_solver_dict["mode_spec"]["sort_spec"] = None
+
+    file_path = tmp_path / "mode_solver_sort_spec_none.json"
+    file_path.write_text(json.dumps(mode_solver_dict), encoding="utf-8")
+
+    loaded = td.plugins.mode.ModeSolver.from_file(file_path)
+    assert loaded.mode_spec.sort_spec.sort_key == "n_eff"
+    assert loaded.mode_spec.sort_spec.sort_order == "descending"
+
+
+def test_mode_solver_load_missing_sort_key_preserves_sort_fields(tmp_path):
+    """Ensure valid payloads omitting ``sort_key`` keep explicit sort fields."""
+    mode_solver = _make_mode_solver_for_legacy_sort_spec_tests()
+    mode_solver_dict = json.loads(mode_solver.model_dump_json())
+
+    sort_spec = mode_solver_dict["mode_spec"]["sort_spec"]
+    sort_spec.pop("sort_key", None)
+    sort_spec["sort_reference"] = 1.5
+    sort_spec["sort_order"] = "ascending"
+
+    file_path = tmp_path / "mode_solver_missing_sort_key.json"
+    file_path.write_text(json.dumps(mode_solver_dict), encoding="utf-8")
+
+    loaded = td.plugins.mode.ModeSolver.from_file(file_path)
+    assert loaded.mode_spec.sort_spec.sort_key == "n_eff"
+    assert loaded.mode_spec.sort_spec.sort_reference == 1.5
+    assert loaded.mode_spec.sort_spec.sort_order == "ascending"
+
+
 def test_yaml(tmp_path):
     path = str(tmp_path / "simulation.json")
     SIM.to_file(path)

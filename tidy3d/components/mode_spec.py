@@ -697,6 +697,32 @@ class AbstractModeSpec(Tidy3dBaseModel, ABC):
         "not be ``None``) to ensure consistent mode ordering across frequencies.",
     )
 
+    @staticmethod
+    def _normalize_legacy_mode_sort_spec(mode_spec_dict: dict[str, Any]) -> None:
+        """Normalize legacy ``sort_spec`` payloads before ``ModeSortSpec`` validation."""
+        sort_spec = mode_spec_dict.get("sort_spec")
+        if sort_spec is None:
+            mode_spec_dict.pop("sort_spec", None)
+            return
+
+        if (
+            isinstance(sort_spec, dict)
+            and "sort_key" in sort_spec
+            and sort_spec["sort_key"] is None
+        ):
+            sort_spec.pop("sort_key", None)
+            sort_spec.pop("sort_reference", None)
+            sort_spec.pop("sort_order", None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_mode_spec_before_validate(cls, data: Any) -> Any:
+        """Apply compatibility normalization for legacy mode spec dictionaries."""
+        if not isinstance(data, dict):
+            return data
+        cls._normalize_legacy_mode_sort_spec(data)
+        return data
+
     @model_validator(mode="after")
     def _keep_modes_at_most_num_modes(self: Self) -> Self:
         val = self.sort_spec

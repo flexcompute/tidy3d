@@ -30,6 +30,23 @@ MODE_MONITOR_WITH_FIELDS = td.ModeSolverMonitor(
 f, AX = plt.subplots()
 
 
+def test_legacy_mode_sort_spec_normalization():
+    """Legacy ``sort_key=None`` should be normalized, while absent ``sort_key`` is preserved."""
+    legacy_sort_spec = {
+        "sort_spec": {"sort_key": None, "sort_reference": 1.5, "sort_order": "ascending"}
+    }
+    mode_spec = td.ModeSpec.model_validate(legacy_sort_spec)
+    assert mode_spec.sort_spec.sort_key == "n_eff"
+    assert mode_spec.sort_spec.sort_reference is None
+    assert mode_spec.sort_spec.sort_order == "descending"
+
+    explicit_default_sort_spec = {"sort_spec": {"sort_reference": 1.5, "sort_order": "ascending"}}
+    mode_spec_explicit_default = td.ModeSpec.model_validate(explicit_default_sort_spec)
+    assert mode_spec_explicit_default.sort_spec.sort_key == "n_eff"
+    assert mode_spec_explicit_default.sort_spec.sort_reference == 1.5
+    assert mode_spec_explicit_default.sort_spec.sort_order == "ascending"
+
+
 def test_modes():
     _ = td.ModeSpec(num_modes=2)
     _ = td.ModeSpec(num_modes=1, target_neff=1.0)

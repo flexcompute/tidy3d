@@ -237,6 +237,50 @@ def get_port_data_array(monkeypatch, modeler: ModalComponentModeler):
     return modeler_data.smatrix().data
 
 
+def test_legacy_port_mode_spec_sort_spec_load():
+    """Legacy ``sort_key=None`` in port mode specs should load through model validation."""
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        structures=[],
+        sources=[],
+        monitors=[],
+        grid_spec=td.GridSpec(
+            grid_x=td.UniformGrid(dl=0.1),
+            grid_y=td.UniformGrid(dl=0.1),
+            grid_z=td.UniformGrid(dl=0.1),
+        ),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.periodic(),
+        ),
+    )
+    legacy_sort_spec = {"sort_key": None, "sort_reference": 1.5, "sort_order": "ascending"}
+
+    port = Port(
+        center=(0, 0, 0),
+        size=(1, 1, 0),
+        mode_spec=td.ModeSpec(),
+        direction="+",
+        name="P0",
+    )
+    port_dict = port.model_dump(mode="json")
+    port_dict["mode_spec"]["sort_spec"] = legacy_sort_spec
+    loaded_port = Port.model_validate(port_dict)
+    assert loaded_port.mode_spec.sort_spec.sort_key == "n_eff"
+    assert loaded_port.mode_spec.sort_spec.sort_reference is None
+    assert loaded_port.mode_spec.sort_spec.sort_order == "descending"
+
+    modeler = ModalComponentModeler(simulation=sim, ports=[port], freqs=[2e14])
+    modeler_dict = modeler.model_dump(mode="json")
+    modeler_dict["ports"][0]["mode_spec"]["sort_spec"] = legacy_sort_spec
+    loaded_modeler = ModalComponentModeler.model_validate(modeler_dict)
+    assert loaded_modeler.ports[0].mode_spec.sort_spec.sort_key == "n_eff"
+    assert loaded_modeler.ports[0].mode_spec.sort_spec.sort_reference is None
+    assert loaded_modeler.ports[0].mode_spec.sort_spec.sort_order == "descending"
+
+
 def test_validate_no_sources():
     modeler = make_component_modeler()
     source = td.PointDipole(

@@ -222,7 +222,11 @@ def update_2_10(sim_dict: dict[str, Any]) -> dict[str, Any]:
 
         # Older files may store ``sort_key`` as null. Drop all sort fields and let
         # current ModeSortSpec defaults resolve sorting while preserving filtering.
-        if isinstance(sort_spec, dict) and sort_spec.get("sort_key") is None:
+        if (
+            isinstance(sort_spec, dict)
+            and "sort_key" in sort_spec
+            and sort_spec["sort_key"] is None
+        ):
             sort_spec.pop("sort_key", None)
             sort_spec.pop("sort_reference", None)
             sort_spec.pop("sort_order", None)
