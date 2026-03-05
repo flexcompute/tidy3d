@@ -166,9 +166,11 @@ def main() -> int:
 
     previous_version = None
     if args.previous_version:
-        previous_version = args.previous_version.strip().removeprefix("v")
+        previous_version = DEV_SUFFIX_RE.sub("", args.previous_version.strip().removeprefix("v"))
         if not previous_version:
             raise ValueError("Previous release version is empty after normalization.")
+        if previous_version == new_version:
+            previous_version = None
     if previous_version is None:
         try:
             previous_version = _find_previous_version(new_version)
