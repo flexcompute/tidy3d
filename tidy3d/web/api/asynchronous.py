@@ -32,6 +32,7 @@ def run_async(
     pay_type: Union[PayType, str] = PayType.AUTO,
     priority: Optional[int] = None,
     lazy: bool = False,
+    vgpu_allocation: Optional[int] = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -67,6 +68,10 @@ def run_async(
     lazy : bool = False
         Whether to load the actual data (``lazy=False``) or return a proxy that loads
         the data when accessed (``lazy=True``).
+    vgpu_allocation : int = None
+        Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+        Only applies to vGPU license users. If not specified, the system
+        automatically determines the optimal GPU count.
 
     Returns
     ------
@@ -106,5 +111,5 @@ def run_async(
         lazy=lazy,
     )
 
-    batch_data = batch.run(path_dir=path_dir, priority=priority)
+    batch_data = batch.run(path_dir=path_dir, priority=priority, vgpu_allocation=vgpu_allocation)
     return batch_data

@@ -29,12 +29,13 @@ def _run_tidy3d(
         upload_sim_fields_keys(run_kwargs["sim_fields_keys"], task_id=job.task_id, verbose=verbose)
     path = Path(run_kwargs.get("path", DEFAULT_DATA_PATH))
     priority = run_kwargs.get("priority")
+    vgpu_allocation = run_kwargs.get("vgpu_allocation")
     if task_name.endswith("_adjoint"):
         suffixes = "".join(path.suffixes)
         base_name = path.name
         base_without_suffix = base_name[: -len(suffixes)] if suffixes else base_name
         path = path.with_name(f"{base_without_suffix}_adjoint{suffixes}")
-    data = job.run(path, priority=priority)
+    data = job.run(path, priority=priority, vgpu_allocation=vgpu_allocation)
     return data, job.task_id
 
 
@@ -46,6 +47,7 @@ def _run_async_tidy3d(
     batch_init_kwargs = parse_run_kwargs(**run_kwargs)
     path_dir = run_kwargs.pop("path_dir", None)
     priority = run_kwargs.get("priority")
+    vgpu_allocation = run_kwargs.get("vgpu_allocation")
     batch = Batch(simulations=simulations, **batch_init_kwargs)
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d()'")
 
@@ -65,9 +67,9 @@ def _run_async_tidy3d(
             upload_sim_fields_keys(sim_fields_keys, task_id=task_id, verbose=verbose)
 
     if path_dir is not None:
-        batch_data = batch.run(path_dir, priority=priority)
+        batch_data = batch.run(path_dir, priority=priority, vgpu_allocation=vgpu_allocation)
     else:
-        batch_data = batch.run(priority=priority)
+        batch_data = batch.run(priority=priority, vgpu_allocation=vgpu_allocation)
 
     task_ids = {key: job.task_id for key, job in batch.jobs.items()}
     return batch_data, task_ids
@@ -85,7 +87,8 @@ def _run_async_tidy3d_bwd(
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d_bwd()'")
 
     priority = run_kwargs.get("priority")
-    batch.start(priority=priority)
+    vgpu_allocation = run_kwargs.get("vgpu_allocation")
+    batch.start(priority=priority, vgpu_allocation=vgpu_allocation)
     batch.monitor()
 
     vjp_traced_fields_dict = {}

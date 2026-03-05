@@ -311,6 +311,7 @@ class Job(WebContainer):
         self,
         path: PathLike = DEFAULT_DATA_PATH,
         priority: Optional[int] = None,
+        vgpu_allocation: Optional[int] = None,
     ) -> WorkflowDataType:
         """Run :class:`Job` all the way through and return data.
 
@@ -321,6 +322,11 @@ class Job(WebContainer):
         priority: int = None
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
             It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
+        vgpu_allocation : int = None
+            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+            Only applies to vGPU license users. If not specified, the system
+            automatically determines the optimal GPU count.
+
         Returns
         -------
         :class:`WorkflowDataType`
@@ -331,10 +337,7 @@ class Job(WebContainer):
         loaded_from_cache = self.load_if_cached
         if not loaded_from_cache:
             self.upload()
-            if priority is None:
-                self.start()
-            else:
-                self.start(priority=priority)
+            self.start(priority=priority, vgpu_allocation=vgpu_allocation)
             self.monitor()
         data = self.load(path=path)
 
@@ -405,7 +408,11 @@ class Job(WebContainer):
             return "success"
         return self.get_info().status
 
-    def start(self, priority: Optional[int] = None) -> None:
+    def start(
+        self,
+        priority: Optional[int] = None,
+        vgpu_allocation: Optional[int] = None,
+    ) -> None:
         """Start running a :class:`Job`.
 
         Parameters
@@ -414,6 +421,11 @@ class Job(WebContainer):
         priority: int = None
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
             It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
+        vgpu_allocation : int = None
+            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+            Only applies to vGPU license users. If not specified, the system
+            automatically determines the optimal GPU count.
+
         Note
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
@@ -426,6 +438,7 @@ class Job(WebContainer):
                 solver_version=self.solver_version,
                 pay_type=self.pay_type,
                 priority=priority,
+                vgpu_allocation=vgpu_allocation,
             )
 
     def get_run_info(self) -> RunInfo:
@@ -879,6 +892,7 @@ class Batch(WebContainer):
         path_dir: PathLike = DEFAULT_DATA_DIR,
         priority: Optional[int] = None,
         replace_existing: bool = False,
+        vgpu_allocation: Optional[int] = None,
     ) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
 
@@ -892,6 +906,11 @@ class Batch(WebContainer):
         replace_existing : bool = False
             Downloads the data even if path exists (overwriting the existing). Applies when
             downloading cached results or when `download_on_success=True`.
+        vgpu_allocation : int = None
+            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+            Only applies to vGPU license users. If not specified, the system
+            automatically determines the optimal GPU count.
+
         Returns
         ------
         :class:`BatchData`
@@ -920,10 +939,7 @@ class Batch(WebContainer):
         if not all(loaded):
             self.upload()
             self.to_file(self._batch_path(path_dir=path_dir))
-            if priority is None:
-                self.start()
-            else:
-                self.start(priority=priority)
+            self.start(priority=priority, vgpu_allocation=vgpu_allocation)
             self.monitor(
                 path_dir=path_dir,
                 download_on_success=True,
@@ -1065,6 +1081,7 @@ class Batch(WebContainer):
     def start(
         self,
         priority: Optional[int] = None,
+        vgpu_allocation: Optional[int] = None,
     ) -> None:
         """Start running all tasks in the :class:`Batch`.
 
@@ -1074,6 +1091,11 @@ class Batch(WebContainer):
         priority: int = None
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
             It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
+        vgpu_allocation : int = None
+            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+            Only applies to vGPU license users. If not specified, the system
+            automatically determines the optimal GPU count.
+
         Note
         ----
         To monitor the running simulations, can call :meth:`Batch.monitor`.
@@ -1084,10 +1106,7 @@ class Batch(WebContainer):
 
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             for _, job in self.jobs.items():
-                if priority is None:
-                    executor.submit(job.start)
-                else:
-                    executor.submit(job.start, priority=priority)
+                executor.submit(job.start, priority=priority, vgpu_allocation=vgpu_allocation)
 
     def get_run_info(self) -> dict[TaskName, RunInfo]:
         """get information about a each of the tasks in the :class:`Batch`.

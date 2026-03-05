@@ -303,6 +303,7 @@ def run_custom(
         Union[NumericalStructureConfig, tuple[NumericalStructureConfig, ...]]
     ] = None,
     custom_vjp: Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig, ...]]] = None,
+    vgpu_allocation: Optional[int] = None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -358,6 +359,10 @@ def run_custom(
     custom_vjp : Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig, ...]]] = None
         Replacement hook for existing traced structure paths. Each config overrides derivative computation
         for matching structure/path targets in the standard ``("structures", ...)`` path namespace.
+    vgpu_allocation : int = None
+        Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+        Only applies to vGPU license users. If not specified, the system
+        automatically determines the optimal GPU count.
 
     Returns
     -------
@@ -506,6 +511,7 @@ def run_custom(
             custom_vjp=expanded_custom_vjp,
             pay_type=pay_type,
             priority=priority,
+            vgpu_allocation=vgpu_allocation,
             lazy=lazy,
         )
 
@@ -534,6 +540,7 @@ def run_custom(
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
         priority=priority,
+        vgpu_allocation=vgpu_allocation,
         lazy=lazy,
     )
 
@@ -564,6 +571,7 @@ def run_async_custom(
         ]
     ] = None,
     custom_vjp: Optional[CustomVJPSpec] = None,
+    vgpu_allocation: Optional[int] = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -621,6 +629,10 @@ def run_async_custom(
         A single config is broadcast to all simulations. A dict or sequence with single configs sets one
         config for each simulation. Multiple custom VJPs can be specified for each
         simulation by specifying a dict with sequence values or a sequence of sequences.
+    vgpu_allocation : int = None
+        Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+        Only applies to vGPU license users. If not specified, the system
+        automatically determines the optimal GPU count.
 
     Returns
     ------
@@ -791,6 +803,7 @@ def run_async_custom(
             custom_vjp=expanded_custom_vjp_dict,
             pay_type=pay_type,
             priority=priority,
+            vgpu_allocation=vgpu_allocation,
             lazy=lazy,
         )
 
@@ -823,6 +836,7 @@ def run_async_custom(
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
         priority=priority,
+        vgpu_allocation=vgpu_allocation,
         lazy=lazy,
     )
 
@@ -849,6 +863,7 @@ def run(
     pay_type: Union[PayType, str] = PayType.AUTO,
     priority: Optional[int] = None,
     lazy: Optional[bool] = None,
+    vgpu_allocation: Optional[int] = None,
 ) -> WorkflowDataType:
     """Wrapper for run_custom for usage without numerical_structures or custom_vjp for public facing API."""
     return run_custom(
@@ -869,6 +884,7 @@ def run(
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
         priority=priority,
+        vgpu_allocation=vgpu_allocation,
         lazy=lazy,
         numerical_structures=None,
         custom_vjp=None,
@@ -891,6 +907,7 @@ def run_async(
     pay_type: Union[PayType, str] = PayType.AUTO,
     priority: Optional[int] = None,
     lazy: Optional[bool] = None,
+    vgpu_allocation: Optional[int] = None,
 ) -> BatchData:
     """Wrapper for run_async_custom for usage without numerical_structures or custom_vjp for public facing API."""
     return run_async_custom(
@@ -908,6 +925,7 @@ def run_async(
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
         priority=priority,
+        vgpu_allocation=vgpu_allocation,
         lazy=lazy,
         numerical_structures=None,
         custom_vjp=None,

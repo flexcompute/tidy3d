@@ -172,6 +172,7 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
                     "enableCaching": Env.current.enable_caching,
                     "payType": PayType.AUTO,
                     "priority": None,
+                    "vgpuAllocation": None,
                 }
             )
         ],

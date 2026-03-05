@@ -593,6 +593,7 @@ class SimulationTask(WebTask):
         worker_group: Optional[str] = None,
         pay_type: Union[PayType, str] = PayType.AUTO,
         priority: Optional[int] = None,
+        vgpu_allocation: Optional[int] = None,
     ) -> None:
         """Kick off this task.
 
@@ -611,6 +612,10 @@ class SimulationTask(WebTask):
         priority: int = None
             Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
             It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
+        vgpu_allocation : int = None
+            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+            Only applies to vGPU license users. If not specified, the system
+            automatically determines the optimal GPU count.
         """
         pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
 
@@ -628,6 +633,7 @@ class SimulationTask(WebTask):
                 "enableCaching": config.web.enable_caching,
                 "payType": pay_type.value,
                 "priority": priority,
+                "vgpuAllocation": vgpu_allocation,
             },
         )
 

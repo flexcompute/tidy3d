@@ -239,7 +239,7 @@ def mock_get_info(monkeypatch, set_api_key):
 def mock_start(monkeypatch, set_api_key, mock_get_info):
     """Mocks webapi.start."""
 
-    def add_mock_response(priority=None):
+    def add_mock_response(priority=None, vgpu_allocation=None):
         expected_body = {
             "solverVersion": None,
             "workerGroup": None,
@@ -247,6 +247,7 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
             "enableCaching": Env.current.enable_caching,
             "payType": PayType.AUTO,
             "priority": priority,
+            "vgpuAllocation": vgpu_allocation,
         }
 
         responses.add(
@@ -263,12 +264,16 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
             status=200,
         )
 
-    # Add response for calls without priority
+    # Add response for calls without priority or vgpu_allocation
     add_mock_response(None)
 
     # Add responses for calls with specific priority values
     for priority in [1, 5, 10]:
-        add_mock_response(priority)
+        add_mock_response(priority=priority)
+
+    # Add responses for calls with specific vgpu_allocation values
+    for vgpu_alloc in [1, 2, 4, 8]:
+        add_mock_response(vgpu_allocation=vgpu_alloc)
 
 
 @pytest.fixture
@@ -407,6 +412,39 @@ def test_run_with_valid_priority(mock_webapi, monkeypatch, priority):
     monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
     sim = make_sim()
     run(sim, TASK_NAME, folder_name=PROJECT_NAME, priority=priority)
+
+
+@responses.activate
+@pytest.mark.parametrize("vgpu_allocation", [1, 2, 4, 8, None])
+def test_start_with_valid_vgpu_allocation(mock_start, vgpu_allocation):
+    """Test start with valid vgpu_allocation values."""
+    start(TASK_ID, vgpu_allocation=vgpu_allocation)
+
+
+@responses.activate
+@pytest.mark.parametrize("vgpu_allocation", [0, -1, 3, 5, 9])
+def test_start_with_invalid_vgpu_allocation(mock_start, vgpu_allocation):
+    """Test start with invalid vgpu_allocation values."""
+    with pytest.raises(ValueError, match="vgpu_allocation must be one of"):
+        start(TASK_ID, vgpu_allocation=vgpu_allocation)
+
+
+@responses.activate
+@pytest.mark.parametrize("vgpu_allocation", [4, None])
+def test_run_with_valid_vgpu_allocation(mock_webapi, monkeypatch, vgpu_allocation):
+    """Test run with valid vgpu_allocation parameter."""
+    monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
+    sim = make_sim()
+    run(sim, TASK_NAME, folder_name=PROJECT_NAME, vgpu_allocation=vgpu_allocation)
+
+
+@responses.activate
+@pytest.mark.parametrize("vgpu_allocation", [0, -1, 3, 9])
+def test_run_with_invalid_vgpu_allocation(mock_webapi, vgpu_allocation):
+    """Test run with invalid vgpu_allocation values."""
+    sim = make_sim()
+    with pytest.raises(ValueError, match="vgpu_allocation must be one of"):
+        run(sim, TASK_NAME, folder_name=PROJECT_NAME, vgpu_allocation=vgpu_allocation)
 
 
 @responses.activate

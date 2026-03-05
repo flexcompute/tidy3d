@@ -308,6 +308,7 @@ def run(
     pay_type: Union[PayType, str] = PayType.AUTO,
     priority: Optional[int] = None,
     lazy: bool = False,
+    vgpu_allocation: Optional[int] = None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -348,6 +349,10 @@ def run(
     lazy : bool = False
         Whether to load the actual data (``lazy=False``) or return a proxy that loads
         the data when accessed (``lazy=True``).
+    vgpu_allocation : int = None
+        Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+        Only applies to vGPU license users. If not specified, the system
+        automatically determines the optimal GPU count.
 
     Returns
     -------
@@ -419,6 +424,7 @@ def run(
             worker_group=worker_group,
             pay_type=pay_type,
             priority=priority,
+            vgpu_allocation=vgpu_allocation,
         )
         monitor(task_id, verbose=verbose)
     else:
@@ -675,6 +681,7 @@ def start(
     worker_group: Optional[str] = None,
     pay_type: Union[PayType, str] = PayType.AUTO,
     priority: Optional[int] = None,
+    vgpu_allocation: Optional[int] = None,
 ) -> None:
     """Start running the simulation associated with task.
 
@@ -694,6 +701,11 @@ def start(
     priority: int = None
         Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
         It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
+    vgpu_allocation : int = None
+        Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+        Only applies to vGPU license users. If not specified, the system
+        automatically determines the optimal GPU count.
+
     Note
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
@@ -701,6 +713,12 @@ def start(
 
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
+
+    _valid_vgpu_allocations = {1, 2, 4, 8}
+    if vgpu_allocation is not None and vgpu_allocation not in _valid_vgpu_allocations:
+        raise ValueError(
+            f"vgpu_allocation must be one of {sorted(_valid_vgpu_allocations)} if specified."
+        )
 
     task = TaskFactory.get(task_id)
     if not task:
@@ -710,6 +728,7 @@ def start(
         worker_group=worker_group,
         pay_type=pay_type,
         priority=priority,
+        vgpu_allocation=vgpu_allocation,
     )
 
 

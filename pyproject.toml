@@ -382,6 +382,7 @@ env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1", "TIDY3D_MICROWAVE__SUPPRESS_RF_LIC
 doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
 norecursedirs = [
   "tests/_test_local",
+  "tests/_integration",
   "tests/test_cli",
   "tests/_test_data",
   "tests/_test_notebooks",

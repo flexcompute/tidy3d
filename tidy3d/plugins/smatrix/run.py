@@ -248,9 +248,12 @@ def _run_local(
         }
     }
     batch = create_batch(modeler=modeler, **batch_kwargs)
+    run_kwargs: dict[str, Any] = {"path_dir": path_dir}
     priority = kwargs.get("priority")
-    if priority is None:
-        batch_data = batch.run(path_dir=path_dir)
-    else:
-        batch_data = batch.run(path_dir=path_dir, priority=priority)
+    if priority is not None:
+        run_kwargs["priority"] = priority
+    vgpu_allocation = kwargs.get("vgpu_allocation")
+    if vgpu_allocation is not None:
+        run_kwargs["vgpu_allocation"] = vgpu_allocation
+    batch_data = batch.run(**run_kwargs)
     return compose_modeler_data_from_batch_data(modeler=modeler, batch_data=batch_data)
