@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
-from pydantic import Field, PositiveFloat, field_validator, model_validator
+from pydantic import Field, PositiveFloat, field_validator
 from pyroots import Brentq
 
 from tidy3d.components.base import cached_property
@@ -701,16 +701,10 @@ class BroadbandPulse(SourceTime):
             )
         return val
 
-    @model_validator(mode="before")
-    @classmethod
-    def _check_broadband_pulse_available(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Check if BroadbandPulse is available."""
-        check_tidy3d_extras_licensed_feature("BroadbandPulse")
-        return values
-
     @cached_property
     def _source(self) -> Any:
         """Implementation of broadband pulse."""
+        check_tidy3d_extras_licensed_feature("BroadbandPulse")
         return tidy3d_extras["mod"].extension.BroadbandPulse(
             fmin=self.freq_range[0],
             fmax=self.freq_range[1],
