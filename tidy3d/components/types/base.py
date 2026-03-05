@@ -222,6 +222,27 @@ def _parse_complex(v: Any) -> complex:
     return v
 
 
+_COMPLEX_JSON_SCHEMA_OBJECT = {
+    "type": "object",
+    "properties": {"real": {"type": "number"}, "imag": {"type": "number"}},
+    "required": ["real", "imag"],
+    "additionalProperties": False,
+}
+
+_COMPLEX_JSON_SCHEMA_VALIDATION = {
+    "anyOf": [
+        {"type": "number"},
+        {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [{"type": "number"}, {"type": "number"}],
+        },
+        _COMPLEX_JSON_SCHEMA_OBJECT,
+    ]
+}
+
+
 Complex = Annotated[
     complex,
     BeforeValidator(_parse_complex),
@@ -230,6 +251,8 @@ Complex = Annotated[
         when_used="json",
         return_type=dict,
     ),
+    WithJsonSchema(_COMPLEX_JSON_SCHEMA_VALIDATION, mode="validation"),
+    WithJsonSchema(_COMPLEX_JSON_SCHEMA_OBJECT, mode="serialization"),
 ]
 
 """ symmetry """

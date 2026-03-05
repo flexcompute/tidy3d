@@ -2348,8 +2348,41 @@
           "type": "boolean"
         },
         "impedance": {
-          "default": 50,
-          "type": "string"
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "imag": {
+                  "type": "number"
+                },
+                "real": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "imag",
+                "real"
+              ],
+              "type": "object"
+            },
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "default": 50
         },
         "inner_diameter": {
           "exclusiveMinimum": 0,
@@ -9231,10 +9264,36 @@
         "coeff": {
           "anyOf": [
             {
-              "type": "number"
+              "additionalProperties": false,
+              "properties": {
+                "imag": {
+                  "type": "number"
+                },
+                "real": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "imag",
+                "real"
+              ],
+              "type": "object"
             },
             {
-              "type": "string"
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "number"
             }
           ]
         },
@@ -9785,8 +9844,41 @@
           "type": "boolean"
         },
         "impedance": {
-          "default": 50,
-          "type": "string"
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "imag": {
+                  "type": "number"
+                },
+                "real": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "imag",
+                "real"
+              ],
+              "type": "object"
+            },
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "default": 50
         },
         "name": {
           "minLength": 1,
@@ -17012,7 +17104,40 @@
             "type": "array"
           },
           {
-            "type": "string"
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "imag": {
+                    "type": "number"
+                  },
+                  "real": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "imag",
+                  "real"
+                ],
+                "type": "object"
+              },
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "number"
+              }
+            ]
           }
         ],
         "type": "array"

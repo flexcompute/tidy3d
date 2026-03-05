@@ -226,3 +226,23 @@ def test_complex_type():
         assert model.model_dump(mode="json")["val"] == expected_json_val, (
             f"Input for serialization: {input_val}"
         )
+
+
+def test_complex_json_schema_shapes():
+    """Ensure Complex JSON schema matches accepted validation inputs and JSON serialization."""
+
+    class ComplexDefaultModel(Tidy3dBaseModel):
+        val: Complex = 50
+
+    validation_property_schema = ComplexDefaultModel.model_json_schema(mode="validation")[
+        "properties"
+    ]["val"]
+    assert validation_property_schema["default"] == 50
+    assert {"type": "number"} in validation_property_schema["anyOf"]
+    assert any(option.get("type") == "object" for option in validation_property_schema["anyOf"])
+
+    serialization_property_schema = ComplexDefaultModel.model_json_schema(mode="serialization")[
+        "properties"
+    ]["val"]
+    assert serialization_property_schema["type"] == "object"
+    assert serialization_property_schema["required"] == ["real", "imag"]
