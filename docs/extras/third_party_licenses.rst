@@ -743,6 +743,23 @@ HDF5
    
     -----------------------------------------------------------------------------
 
+Eigen
+-----
+
+`Eigen <https://eigen.tuxfamily.org/>`_
+
+::
+
+    Mozilla Public License Version 2.0
+
+    Copyright (c) Eigen contributors
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+    The full text of the MPL 2.0 is reproduced above under the CDT entry.
+
 GCC Runtime Libraries
 ---------------------
 

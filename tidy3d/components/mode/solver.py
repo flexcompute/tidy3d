@@ -44,6 +44,16 @@ GOOD_CONDUCTOR_CUT_OFF = 1e70
 # Consider a material to be good conductor if |ep| (or |mu|) > GOOD_CONDUCTOR_THRESHOLD * |pec_val|
 GOOD_CONDUCTOR_THRESHOLD = 0.9
 
+# Error message for tensorial solver when tidy3d-extras is not available or disabled
+TENSORIAL_SOLVER_ERROR_MSG = (
+    "The fully tensorial mode solver is required for fully anisotropic media "
+    "or non-zero 'angle_theta' in the 'ModeSpec', but it is not available in the base "
+    "'tidy3d' package. To run locally, please install 'tidy3d-extras' using "
+    r"'pip install tidy3d\[extras]' and ensure 'config.simulation.use_local_subpixel' "
+    "is not set to 'False'. Alternatively, you can run the mode solver "
+    "through the Tidy3D server using 'web.run(...)'."
+)
+
 ArrayFloat = NDArray[np.floating]
 ArrayComplex = NDArray[np.complexfloating]
 
@@ -777,132 +787,15 @@ class EigSolver(Tidy3dBaseModel):
         Nxy: Optional[tuple[int, int]] = None,
         dmin_pmc: Optional[Sequence[bool]] = None,
     ) -> tuple[ArrayComplex, ArrayComplex, ArrayFloat, ArrayFloat]:
-        """EM eigenmode solver assuming ``eps`` or ``mu`` have off-diagonal elements."""
-        import scipy.sparse as sp
+        """EM eigenmode solver assuming ``eps`` or ``mu`` have off-diagonal elements.
 
-        mode_solver_type = "tensorial"
-        N = eps.shape[-1]
-        dxf, dxb, dyf, dyb = der_mats
-
-        # Compute all blocks of the matrix for diagonalization
-        inv_eps_zz = sp.spdiags(1 / eps[2, 2, :], [0], N, N)
-        inv_mu_zz = sp.spdiags(1 / mu[2, 2, :], [0], N, N)
-        axax = -dxf.dot(sp.spdiags(eps[2, 0, :] / eps[2, 2, :], [0], N, N)) - sp.spdiags(
-            mu[1, 2, :] / mu[2, 2, :], [0], N, N
-        ).dot(dyf)
-        axay = -dxf.dot(sp.spdiags(eps[2, 1, :] / eps[2, 2, :], [0], N, N)) + sp.spdiags(
-            mu[1, 2, :] / mu[2, 2, :], [0], N, N
-        ).dot(dxf)
-        axbx = -dxf.dot(inv_eps_zz).dot(dyb) + sp.spdiags(
-            mu[1, 0, :] - mu[1, 2, :] * mu[2, 0, :] / mu[2, 2, :], [0], N, N
-        )
-        axby = dxf.dot(inv_eps_zz).dot(dxb) + sp.spdiags(
-            mu[1, 1, :] - mu[1, 2, :] * mu[2, 1, :] / mu[2, 2, :], [0], N, N
-        )
-        ayax = -dyf.dot(sp.spdiags(eps[2, 0, :] / eps[2, 2, :], [0], N, N)) + sp.spdiags(
-            mu[0, 2, :] / mu[2, 2, :], [0], N, N
-        ).dot(dyf)
-        ayay = -dyf.dot(sp.spdiags(eps[2, 1, :] / eps[2, 2, :], [0], N, N)) - sp.spdiags(
-            mu[0, 2, :] / mu[2, 2, :], [0], N, N
-        ).dot(dxf)
-        aybx = -dyf.dot(inv_eps_zz).dot(dyb) + sp.spdiags(
-            -mu[0, 0, :] + mu[0, 2, :] * mu[2, 0, :] / mu[2, 2, :], [0], N, N
-        )
-        ayby = dyf.dot(inv_eps_zz).dot(dxb) + sp.spdiags(
-            -mu[0, 1, :] + mu[0, 2, :] * mu[2, 1, :] / mu[2, 2, :], [0], N, N
-        )
-        bxbx = -dxb.dot(sp.spdiags(mu[2, 0, :] / mu[2, 2, :], [0], N, N)) - sp.spdiags(
-            eps[1, 2, :] / eps[2, 2, :], [0], N, N
-        ).dot(dyb)
-        bxby = -dxb.dot(sp.spdiags(mu[2, 1, :] / mu[2, 2, :], [0], N, N)) + sp.spdiags(
-            eps[1, 2, :] / eps[2, 2, :], [0], N, N
-        ).dot(dxb)
-        bxax = -dxb.dot(inv_mu_zz).dot(dyf) + sp.spdiags(
-            eps[1, 0, :] - eps[1, 2, :] * eps[2, 0, :] / eps[2, 2, :], [0], N, N
-        )
-        bxay = dxb.dot(inv_mu_zz).dot(dxf) + sp.spdiags(
-            eps[1, 1, :] - eps[1, 2, :] * eps[2, 1, :] / eps[2, 2, :], [0], N, N
-        )
-        bybx = -dyb.dot(sp.spdiags(mu[2, 0, :] / mu[2, 2, :], [0], N, N)) + sp.spdiags(
-            eps[0, 2, :] / eps[2, 2, :], [0], N, N
-        ).dot(dyb)
-        byby = -dyb.dot(sp.spdiags(mu[2, 1, :] / mu[2, 2, :], [0], N, N)) - sp.spdiags(
-            eps[0, 2, :] / eps[2, 2, :], [0], N, N
-        ).dot(dxb)
-        byax = -dyb.dot(inv_mu_zz).dot(dyf) + sp.spdiags(
-            -eps[0, 0, :] + eps[0, 2, :] * eps[2, 0, :] / eps[2, 2, :], [0], N, N
-        )
-        byay = dyb.dot(inv_mu_zz).dot(dxf) + sp.spdiags(
-            -eps[0, 1, :] + eps[0, 2, :] * eps[2, 1, :] / eps[2, 2, :], [0], N, N
-        )
-
-        mat = sp.bmat(
-            [
-                [axax, axay, axbx, axby],
-                [ayax, ayay, aybx, ayby],
-                [bxax, bxay, bxbx, bxby],
-                [byax, byay, bybx, byby],
-            ]
-        )
-
-        # The eigenvalues for the matrix above are 1j * (neff + 1j * keff)
-        # Multiply the matrix by -1j, so that eigenvalues are (neff + 1j * keff)
-        mat *= -1j
-
-        # change matrix sign for backward direction
-        if direction == "-":
-            mat *= -1
-
-        # Cast matrix to target data type
-        mat_dtype = cls.matrix_data_type(eps, mu, der_mats, mat_precision, is_tensorial=True)
-        mat = cls.type_conversion(mat, mat_dtype)
-
-        # Trim small values in single precision case
-        if mat_precision == "single":
-            cls.trim_small_values(mat, tol=fp_eps)
-
-        # Casting starting vector to target data type
-        vec_init = cls.type_conversion(vec_init, mat_dtype)
-
-        # Starting eigenvalue guess in target data type
-        eig_guess = cls.type_conversion(np.array([neff_guess]), mat_dtype)[0]
-
-        # Call the eigensolver.
-        vals, vecs = cls.solver_eigs(
-            mat,
-            num_modes,
-            vec_init,
-            guess_value=eig_guess,
-            mode_solver_type=mode_solver_type,
-        )
-        neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
-        # Sort by descending real part
-        sort_inds = np.argsort(neff)[::-1]
-        neff = neff[sort_inds]
-        keff = keff[sort_inds]
-        vecs = vecs[:, sort_inds]
-
-        # Field components from eigenvectors
-        Ex = vecs[:N, :]
-        Ey = vecs[N : 2 * N, :]
-        Hx = vecs[2 * N : 3 * N, :]
-        Hy = vecs[3 * N :, :]
-
-        # Get the other field components
-        hxy_term = (-mu[2, 0, :] * Hx.T - mu[2, 1, :] * Hy.T).T
-        Hz = inv_mu_zz.dot(dxf.dot(Ey) - dyf.dot(Ex) + hxy_term)
-        exy_term = (-eps[2, 0, :] * Ex.T - eps[2, 1, :] * Ey.T).T
-        Ez = inv_eps_zz.dot(dxb.dot(Hy) - dyb.dot(Hx) + exy_term)
-
-        # Bundle up
-        E = np.stack((Ex, Ey, Ez), axis=0)
-        H = np.stack((Hx, Hy, Hz), axis=0)
-
-        # Return to standard H field units (see CEM notes for H normalization used in solver)
-        # The minus sign here is suspicious, need to check how modes are used in Mode objects
-        H *= -1j / ETA_0
-
-        return E, H, neff, keff
+        Note
+        ----
+        The fully tensorial mode solver implementation has been moved to ``tidy3d-extras``.
+        This base implementation raises an error directing users to install the extras package
+        or run through the server.
+        """
+        raise NotImplementedError(TENSORIAL_SOLVER_ERROR_MSG)
 
     @classmethod
     def solver_eigs(

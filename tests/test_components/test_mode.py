@@ -579,3 +579,102 @@ def test_filter_pol_with_default_sort_spec():
             filter_pol="te",
             sort_spec=td.ModeSortSpec(sort_reference=1.5),
         )
+
+
+def _make_tensorial_mode_sim():
+    """Helper to create a ModeSimulation requiring the tensorial solver."""
+    # Fully anisotropic medium requires tensorial solver
+    aniso_medium = td.FullyAnisotropicMedium(
+        permittivity=np.eye(3) * 2.25 + np.array([[0, 0.1, 0], [0.1, 0, 0], [0, 0, 0]])
+    )
+    return td.ModeSimulation(
+        size=(2, 2, 0),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        structures=[
+            td.Structure(geometry=td.Box(size=(1, 1, td.inf)), medium=aniso_medium),
+        ],
+        mode_spec=td.ModeSpec(num_modes=1),
+        freqs=[td.C_0 / 1.55],
+    )
+
+
+def test_tensorial_mode_solver_error_without_extras(monkeypatch):
+    """Test that tensorial mode solver raises NotImplementedError when tidy3d-extras is unavailable."""
+    from tidy3d.packaging import tidy3d_extras
+
+    # Disable local subpixel to force use of base solver
+    monkeypatch.setitem(tidy3d_extras, "use_local_subpixel", False)
+
+    mode_sim = _make_tensorial_mode_sim()
+
+    with pytest.raises(NotImplementedError, match="fully tensorial mode solver"):
+        mode_sim.run_local()
+
+
+def test_tensorial_mode_solver_with_angled_mode_spec(monkeypatch):
+    """Test that non-zero angle_theta also triggers tensorial solver error."""
+    from tidy3d.packaging import tidy3d_extras
+
+    # Disable local subpixel to force use of base solver
+    monkeypatch.setitem(tidy3d_extras, "use_local_subpixel", False)
+
+    mode_sim = td.ModeSimulation(
+        size=(2, 2, 0),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        structures=[
+            td.Structure(geometry=td.Box(size=(1, 1, td.inf)), medium=td.Medium(permittivity=2.25)),
+        ],
+        mode_spec=td.ModeSpec(num_modes=1, angle_theta=0.1),
+        freqs=[td.C_0 / 1.55],
+    )
+
+    with pytest.raises(NotImplementedError, match="fully tensorial mode solver"):
+        mode_sim.run_local()
+
+
+def test_diagonal_mode_solver_works_without_extras(monkeypatch):
+    """Test that diagonal (non-tensorial) mode solves still work without tidy3d-extras."""
+    from tidy3d.packaging import tidy3d_extras
+
+    # Disable local subpixel to force use of base solver
+    monkeypatch.setitem(tidy3d_extras, "use_local_subpixel", False)
+
+    # Simple isotropic waveguide - should use diagonal solver
+    mode_sim = td.ModeSimulation(
+        size=(2, 2, 0),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(0.5, 0.5, td.inf)), medium=td.Medium(permittivity=2.25)
+            ),
+        ],
+        mode_spec=td.ModeSpec(num_modes=1),
+        freqs=[td.C_0 / 1.55],
+    )
+
+    # Should succeed without raising NotImplementedError
+    result = mode_sim.run_local()
+    assert result.modes_raw.n_eff is not None
+
+
+def test_tensorial_mode_solver_integration():
+    """Integration test: tensorial solver behavior depends on tidy3d-extras availability."""
+    from tidy3d.packaging import _check_tidy3d_extras_available, tidy3d_extras
+
+    mode_sim = _make_tensorial_mode_sim()
+
+    # Check if tidy3d-extras is available and licensed
+    try:
+        _check_tidy3d_extras_available(quiet=True)
+        extras_available = tidy3d_extras["mod"] is not None
+    except Exception:
+        extras_available = False
+
+    if extras_available:
+        # With extras available, tensorial solve should succeed
+        result = mode_sim.run_local()
+        assert result.modes_raw.n_eff is not None
+    else:
+        # Without extras, tensorial solve should raise NotImplementedError
+        with pytest.raises(NotImplementedError, match="fully tensorial mode solver"):
+            mode_sim.run_local()
