@@ -2431,6 +2431,19 @@ class Simulation(AbstractYeeGridSimulation):
 
         See further parameter explanations below.
 
+        **Practical Advice**
+
+        Use :class:`~tidy3d.RunTimeSpec` instead of a hardcoded ``run_time`` to automatically determine simulation
+        duration based on field decay::
+
+            sim = Simulation(..., run_time=td.RunTimeSpec(quality_factor=10))
+
+        For grid resolution, use ``min_steps_per_wvl >= 20`` in :class:`AutoGrid` for standard simulations. The
+        default value of 10 is suitable only for quick sanity checks. See :class:`AutoGrid` for detailed guidance.
+
+        All lengths are in micrometers (μm), times in seconds (s), and frequencies in Hz. Convert wavelength to
+        frequency with ``freq = td.C_0 / wavelength_um``.
+
     Example
     -------
     >>> from tidy3d import Sphere, Cylinder, PolySlab

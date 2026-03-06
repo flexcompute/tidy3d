@@ -54,11 +54,42 @@ Watch these demonstration videos to see Tidy3D + AI capabilities in action. Each
 
 For more comprehensive tutorials and the complete video series, visit our `Tidy3D + AI Video Playlist <https://www.youtube.com/playlist?list=PL7kxN4u_N9HHb1QBPXhTlYEMjIt2SY1re>`_.
 
+Using Tidy3D with AI Coding Agents
+-----------------------------------
+
+The FlexAgent MCP works with any MCP-compatible AI coding agent — not just the Tidy3D IDE extensions. To get started:
+
+1. **Set up the MCP** — follow the instructions in `FlexAgent MCP — Standalone MCP Client <flex_agent.html#standalone-mcp-client>`_ for your client (Claude Code, Codex CLI, Cursor, Gemini CLI, etc.).
+2. **Add a bootstrap file** — save the markdown below as ``AGENTS.md`` (or ``CLAUDE.md`` for Claude Code) in your project root directory. This tells the agent how to use the MCP effectively.
+3. **Review the simulation tips** — the `Simulation Tips for AI Agents <simulation_tips.html>`_ page covers workflow patterns, parameter sweeps, inverse design, and common pitfalls.
+
+.. code-block:: markdown
+
+   # Tidy3D Agent Instructions
+
+   ## MCP Setup
+
+   If the Tidy3D MCP server is not already configured, see:
+   https://docs.flexcompute.com/projects/tidy3d/en/latest/ai/flex_agent.html#standalone-mcp-client
+
+   ## Workflow
+
+   Use `search_flexcompute_docs` and `fetch_flexcompute_doc` from the Tidy3D MCP as
+   your primary documentation source throughout the session. Before writing simulation
+   code:
+
+   1. Search for "Simulation Tips for AI Agents" — workflow patterns, pitfalls,
+      and checklists.
+   2. Search for the relevant class docstrings — they contain selection guides,
+      extraction patterns, and practical advice.
+   3. Search for example notebooks related to the device or workflow you are building.
+
 
 .. toctree::
 
     flex_agent
     3d_viewer
+    simulation_tips
     cursor_extension
     vscode_extension
 

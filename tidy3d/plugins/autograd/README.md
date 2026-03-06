@@ -171,9 +171,83 @@ def objective(params: np.ndarray) -> float:
     return norm_intensity  # no .item() needed
 ```
 
-## Feature Roadmap
+## Optimization Tips
 
-Please check out our [Adjoint Master Plan](https://github.com/flexcompute/tidy3d/issues/1548) on GitHub if you want to stay updated on the progress of planned features and contribute to the discussion.
+### Filter & Project for Manufacturing Constraints
+
+For topology optimization, use filtering and projection to enforce minimum feature sizes:
+
+```py
+from tidy3d.plugins.autograd import make_filter_and_project, rescale
+
+grid_size = 0.1  # μm
+filter_radius = 0.25  # 2-3x grid size for proper smoothing
+
+filter_project = make_filter_and_project(filter_radius, grid_size, padding="constant")
+
+def objective(params, beta):
+    processed = filter_project(params, beta=beta)
+    eps = rescale(processed, eps_min=1.0, eps_max=12.11)
+    sim = make_sim_with_eps(eps)
+    sim_data = web.run(sim, task_name="opt", verbose=False)
+    power = anp.abs(sim_data["mode"].amps.sel(direction="+", mode_index=0).values) ** 2
+    return -anp.sum(power)  # negative for minimization
+```
+
+### Beta Scheduling (Binarization)
+
+Gradually increase projection sharpness over the course of optimization to push the design toward binary (fabricable) permittivity values:
+
+```py
+beta_min, beta_max = 1, 30
+for epoch in range(num_epochs):
+    progress = epoch / (num_epochs - 1)
+    beta = beta_min + (beta_max - beta_min) * progress
+    val, grad = value_and_grad(objective)(params, beta)
+    # update params...
+```
+
+### Learning Rate Guidelines
+
+| Optimization Type  | Learning Rate | Rationale                  |
+| ------------------ | ------------- | -------------------------- |
+| Topology / density | 0.1 – 0.3    | Parameters normalized [0,1]|
+| Shape optimization | 0.01 – 0.05  | ~10–50 nm steps            |
+| Level set          | 0.01 – 0.02  | Similar to shape           |
+
+### Gradient Sign Convention
+
+Be sure to check your optimizer's sign conventions for the gradient update step and adjust your optimizer or objective function appropriately. After the first few iterations, check that progress is moving in the direction you expect.
+
+### Fixed Simulation Domain
+
+The simulation size, grid, sources, and monitors must **not** depend on traced parameters — only structure geometry and material properties should be traced.
+
+If you need to use a traced value in a non-differentiable context (e.g. setting simulation size, printing, or logging), you can strip the tracer with `getval` from autograd — but this removes the value from the computation graph, so no gradient will flow through it:
+
+```py
+from autograd.tracer import getval
+
+traced_val = ...  # some traced parameter
+plain_val = getval(traced_val)  # numpy scalar, no longer traced
+```
+
+Use this sparingly and only for values that should not contribute to the gradient.
+
+```py
+# WRONG — sim size depends on traced parameter
+def make_sim(length):
+    return td.Simulation(size=(length + 2, 5, 2), ...)
+
+# CORRECT — fixed domain, geometry is traced
+def make_sim(length):
+    return td.Simulation(
+        size=(22, 5, 2),
+        structures=[td.Structure(geometry=td.Box(size=(length, 1, 1)), ...)],
+    )
+```
+
+## Feature Roadmap
 
 ### Currently Supported
 

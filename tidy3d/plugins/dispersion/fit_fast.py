@@ -44,7 +44,25 @@ OMEGA_POLE_CLOSE_ATOL = 1e-10
 
 class FastDispersionFitter(DispersionFitter):
     """Tool for fitting refractive index data to get a
-    dispersive medium described by :class:`.PoleResidue` model."""
+    dispersive medium described by :class:`.PoleResidue` model.
+
+    Notes
+    -----
+
+        **Practical Advice**
+
+        **Typical Usage**::
+
+            fitter = FastDispersionFitter(wvl_um=wavelengths, n_data=n_values, k_data=k_values)
+            medium, rms_error = fitter.fit(min_num_poles=1, max_num_poles=5, tolerance_rms=1e-2)
+
+        **Tips**
+
+        - Start with fewer poles (1-2) and increase only if the RMS error is too high.
+        - Use ``wvl_range`` to focus the fit on your wavelength range of interest.
+        - For PML stability, verify that the fitted model is passive (no gain).
+        - Visualize the fit with ``fitter.plot(medium)`` before using it in a simulation.
+    """
 
     def fit(
         self,

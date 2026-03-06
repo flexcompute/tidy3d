@@ -1360,6 +1360,33 @@ class Medium(AbstractMedium):
 
             D(t) = \\epsilon E(t)
 
+        The ``permittivity`` parameter is the relative permittivity (dimensionless). The ``conductivity``
+        parameter has units of S/μm (siemens per micrometer), consistent with Tidy3D's micrometer-based unit
+        system. To convert from standard S/m, divide by 1e6.
+
+        **Practical Advice**
+
+        **Choosing a Material Type**
+
+        - Material is in ``td.material_library``? → Use it directly
+          (e.g. ``td.material_library['cSi']['Li1993_293K']``).
+        - Lossless, wavelength-independent refractive index? → ``td.Medium(permittivity=n**2)``.
+        - Known n and k at a specific frequency? → ``td.Medium.from_nk(n=2.4, k=0.01, freq=freq0)``.
+          Note: when k > 0, the resulting medium has wavelength-independent n but wavelength-dependent k.
+        - You have n,k data vs wavelength? → Use ``FastDispersionFitter`` from
+          ``tidy3d.plugins.dispersion`` to fit a pole-residue model.
+        - Permittivity varies spatially? → Use ``CustomMedium`` with a ``SpatialDataArray``.
+        - Need an analytical dispersive model? → Use ``Sellmeier``, ``Lorentz``, ``Drude``,
+          ``Debye``, or ``PoleResidue`` directly.
+
+        **Common Library Materials (telecom, ~1.55 μm)**
+
+        - Silicon: ``td.material_library['cSi']['Li1993_293K']`` (n ≈ 3.48)
+        - SiO2: ``td.material_library['SiO2']['Palik_Lossless']`` (n ≈ 1.44)
+        - Si3N4: ``td.material_library['Si3N4']['Luke2015PMLStable']`` (n ≈ 2.0)
+        - Gold: ``td.material_library['Au']['JohnsonChristy1972']``
+        - Silver: ``td.material_library['Ag']['JohnsonChristy1972']``
+
     Example
     -------
     >>> dielectric = Medium(permittivity=4.0, name='my_medium')
@@ -1746,6 +1773,35 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
 
 class CustomMedium(AbstractCustomMedium):
     """:class:`.Medium` with user-supplied permittivity distribution.
+
+    Notes
+    -----
+
+        **Practical Advice**
+
+        Use ``CustomMedium`` when permittivity varies spatially — for example, graded-index
+        (GRIN) lenses or topology-optimized design regions. Define the permittivity on a
+        rectangular grid using ``SpatialDataArray``::
+
+            from tidy3d import SpatialDataArray
+            import numpy as np
+
+            x = np.linspace(-5, 5, 100)
+            y = np.linspace(-5, 5, 100)
+            z = [0]  # 2D variation
+            X, Y = np.meshgrid(x, y, indexing="ij")
+            eps_data = 1 + 3 * np.exp(-(X**2 + Y**2) / 4)
+            eps_data = eps_data[:, :, np.newaxis]
+
+            permittivity = SpatialDataArray(eps_data, coords=dict(x=x, y=y, z=z))
+            custom_medium = CustomMedium(permittivity=permittivity)
+
+        For uniform pixelated grids (e.g. topology optimization), consider the convenience method
+        :meth:`Structure.from_permittivity_array`, which creates a ``Structure`` with a ``CustomMedium``
+        directly from a 3D numpy array and a geometry.
+
+        For wavelength-independent homogeneous materials, use :class:`Medium` instead.
+        For dispersive materials, use :class:`FastDispersionFitter` or an analytical model.
 
     Example
     -------

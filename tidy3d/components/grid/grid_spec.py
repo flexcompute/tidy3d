@@ -894,6 +894,22 @@ class QuasiUniformGrid(AbstractAutoGrid):
 class AutoGrid(AbstractAutoGrid):
     """Specification for non-uniform grid along a given dimension.
 
+    Notes
+    -----
+
+        **Practical Advice**
+
+        Recommended ``min_steps_per_wvl`` values:
+
+        - **10** (default): Quick estimates and sanity checks only.
+        - **15-20**: Good accuracy for most simulations. Verify convergence by comparing results
+          at two resolutions.
+        - **Higher**: Only if convergence tests show the result hasn't settled. Can be expensive —
+          use judiciously.
+
+        Ensure that geometric features (thin slabs, narrow gaps) are covered by at least 2 grid cells.
+        For a typical 220 nm SOI waveguide, fewer than 10 cells in z is often sufficient.
+
     Example
     -------
     >>> grid_1d = AutoGrid(min_steps_per_wvl=16, max_scale=1.4)
@@ -2421,6 +2437,17 @@ class LayerRefinementSpec(Box):
 
 class GridSpec(Tidy3dBaseModel):
     """Collective grid specification for all three dimensions.
+
+    Notes
+    -----
+
+        **Practical Advice**
+
+        When using :class:`AutoGrid`, the ``wavelength`` parameter determines the scale for automatic meshing.
+        If omitted, it is inferred from sources in the simulation. For simulations without sources or where
+        finer control is needed, set it explicitly::
+
+            grid_spec = GridSpec.auto(min_steps_per_wvl=20, wavelength=1.55)
 
     Example
     -------

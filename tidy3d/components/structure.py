@@ -204,6 +204,28 @@ class Structure(AbstractStructure):
         intersect with absorbing boundaries or simulation edges should extend all the way through. In many such
         cases, an “infinite” size :class:`td.inf` can be used to define the size along that dimension.
 
+        **Practical Advice**
+
+        For example, a waveguide extending along ``x`` should use ``td.inf`` to ensure it passes fully through
+        PML regions::
+
+            waveguide = Structure(
+                geometry=Box(center=(0, 0, 0), size=(td.inf, 0.5, 0.22)),
+                medium=Medium(permittivity=3.48**2),
+            )
+
+        Structures that terminate inside PML can cause evanescent fields at the interface to be amplified
+        by the absorber, potentially leading to simulation divergence.
+
+        For uniform pixelated design regions (e.g. topology optimization), use the convenience method
+        :meth:`Structure.from_permittivity_array`, which creates a ``Structure`` with a ``CustomMedium``
+        from a 3D numpy array of permittivity values and a geometry defining the region::
+
+            design_region = td.Box(center=(0, 0, 0), size=(2, 2, 0.22))
+            structure = Structure.from_permittivity_array(
+                geometry=design_region, eps_data=eps_array
+            )
+
     Example
     -------
     >>> from tidy3d import Box, Medium

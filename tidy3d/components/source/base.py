@@ -30,7 +30,29 @@ if TYPE_CHECKING:
 
 
 class Source(Box, AbstractSource, ABC):
-    """Abstract base class for all sources."""
+    """Abstract base class for all sources.
+
+    Notes
+    -----
+
+        **Practical Advice**
+
+        **Choosing a Source Type**
+
+        - ``ModeSource`` — excite a specific waveguide mode. Normalized to inject 1W at the
+          center frequency. Place in a waveguide section with uniform cross-section (or
+          constant bend radius). Typical: waveguides, PICs, couplers.
+        - ``PlaneWave`` — uniform illumination across the full simulation cross-section.
+          Requires periodic or Bloch boundaries in the tangential dimensions.
+          Typical: metasurfaces, thin films, gratings.
+        - ``TFSF`` — localized plane wave that can be placed inside the simulation domain
+          with PML on all sides. Separates total-field (inside) from scattered-field (outside).
+          Typical: nanoparticle scattering, RCS calculations.
+        - ``GaussianBeam`` — focused beam with a finite waist.
+          Typical: fiber coupling, free-space optics.
+        - ``PointDipole`` — single-point current source for emission or LDOS calculations.
+          Typical: Purcell factor, spontaneous emission.
+    """
 
     source_time: SourceTimeType = Field(
         title="Source Time",

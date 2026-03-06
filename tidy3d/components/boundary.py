@@ -802,8 +802,15 @@ class PML(AbsorberSpec):
     Note
     ----
 
-        For best results, structures that intersect with the PML or simulation edges should extend extend all the way
-        through. In many such cases, an “infinite” size ``td.inf`` can be used to define the size along that dimension.
+        **Practical Advice**
+
+        For best results, structures that intersect with the PML or simulation edges should extend all the way
+        through using ``td.inf``::
+
+            Structure(geometry=Box(size=(td.inf, width, height)), medium=core)
+
+        Structures that terminate inside PML can cause evanescent fields at the interface to be
+        amplified by the absorber, potentially leading to simulation divergence.
 
     Example
     -------
@@ -1373,6 +1380,16 @@ class BoundarySpec(Tidy3dBaseModel):
         x=False, y=False, z=False)``. This will put :class:`PML` along the dimensions defined as ``True``,
         and set periodic boundaries along the other dimensions.
 
+        **Practical Advice**
+
+        Common boundary configurations:
+
+        - **PML on all sides**: Default for most devices (waveguides, resonators, scatterers).
+        - **Periodic in x/y, PML in z**: Infinite planar arrays (gratings, metasurfaces).
+        - **Bloch in x/y, PML in z**: Oblique incidence on periodic structures.
+
+        Use :meth:`BoundarySpec.pml` as a convenience to set PML along selected dimensions and periodic
+        along the rest.
 
     See Also
     --------

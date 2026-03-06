@@ -464,6 +464,13 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
 
         .. image:: ../../_static/img/mode_vs_dipole_source.png
 
+        **Practical Advice**
+
+        Place mode sources in waveguide sections with a uniform cross-section. The mode profile is
+        computed assuming translational invariance (or constant bend radius) along the injection axis.
+        For bent waveguides, set ``bend_radius`` and ``bend_axis`` accordingly. Avoid placing mode
+        sources at tapers, junctions, or other locations where the cross-section is changing.
+
         .. TODO improve links to other APIs functionality here.
 
     Example

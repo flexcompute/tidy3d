@@ -64,7 +64,28 @@ WINDOW_FACTOR = 15
 
 
 class Monitor(AbstractMonitor):
-    """Abstract base class for monitors."""
+    """Abstract base class for monitors.
+
+    Notes
+    -----
+
+        **Practical Advice**
+
+        **Choosing a Monitor Type**
+
+        - ``FluxMonitor`` — total power flow through a surface.
+          Output: ``sim_data["name"].flux`` (xarray DataArray indexed by frequency).
+        - ``ModeMonitor`` — decompose fields into waveguide mode amplitudes.
+          Output: ``sim_data["name"].amps.sel(direction="+", mode_index=0)``.
+          Size should be 3-4x the waveguide width in each transverse dimension.
+        - ``FieldMonitor`` — record E/H field components in the frequency domain.
+          Output: ``sim_data["name"].Ex``, ``.Ey``, etc.
+        - ``FieldTimeMonitor`` — record E/H fields vs time. Useful for animations
+          and time-domain decay analysis (Q-factor extraction).
+        - ``DiffractionMonitor`` — grating diffraction order efficiencies.
+        - ``FieldProjectionAngleMonitor`` — far-field radiation pattern via
+          near-to-far-field transformation.
+    """
 
     interval_space: tuple[Literal[1], Literal[1], Literal[1]] = Field(
         (1, 1, 1),
@@ -675,6 +696,7 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
         frequencies to perform the calculation “in-place” with the time stepping. :class:`FieldMonitor`  objects are
         useful for investigating the steady-state field distribution in 2D and 3D regions of the simulation.
 
+
     Example
     -------
     >>> monitor = FieldMonitor(
@@ -939,6 +961,23 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
         the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
         integrating the flux over all box surfaces (except the ones defined in ``exclude_surfaces``).
 
+        **Practical Advice**
+
+        If measured transmission exceeds 1.0 or is negative, verify that the monitor normal axis
+        aligns with the expected power flow direction. A common mistake is placing a flux monitor
+        with its normal pointing opposite to the propagation direction.
+
+        **Extracting transmission**::
+
+            sim_data = web.run(sim, task_name="my_sim")
+            flux = sim_data["flux_monitor"].flux  # xarray DataArray indexed by frequency
+
+            # If source injects 1W (ModeSource at center frequency), flux IS the transmission
+            T = flux.values
+
+            # For normalization against a reference simulation:
+            # T = flux_device / flux_reference
+
     Example
     -------
     >>> monitor = FluxMonitor(
@@ -1002,6 +1041,22 @@ class ModeMonitor(AbstractModeMonitor):
 
         We can also use the mode amplitudes recorded in the mode monitor to reveal the decomposition
         of the radiated power into forward- and backward-propagating modes, respectively.
+
+        **Practical Advice**
+
+        For reliable mode decomposition, place mode monitors in straight waveguide sections where the mode
+        profile is well-defined. The monitor should be large enough to capture the full mode profile including
+        evanescent tails — a typical sizing is 3-4x the waveguide width in each transverse dimension.
+
+        **Extracting mode amplitudes**::
+
+            amps = sim_data["mode_monitor"].amps
+
+            # Forward-propagating power in fundamental mode
+            T_mode0 = np.abs(amps.sel(direction="+", mode_index=0).values) ** 2
+
+            # Backward-propagating (reflection)
+            R_mode0 = np.abs(amps.sel(direction="-", mode_index=0).values) ** 2
 
         .. TODO give an example of how to extract the data from this mode.
 
