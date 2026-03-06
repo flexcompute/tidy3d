@@ -175,7 +175,12 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         # detect zero size dimension
         bounds = np.max(points_numpy, axis=0) - np.min(points_numpy, axis=0)
-        zero_dims = np.where(np.isclose(bounds, 0, atol=1e-6))[0]
+        # VTU slices can accumulate small floating-point jitter in the nominally
+        # zero-thickness direction. Scale tolerance with geometry extent (rather than
+        # absolute coordinate value) to avoid origin-dependent behavior.
+        size_scale = float(np.max(bounds)) if bounds.size > 0 else 0.0
+        zero_dim_tol = max(1e-6, 2e-8 * size_scale)
+        zero_dims = np.where(np.isclose(bounds, 0, atol=zero_dim_tol))[0]
 
         if len(zero_dims) != 1:
             raise DataError(

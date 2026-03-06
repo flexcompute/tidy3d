@@ -4,12 +4,8 @@ import os
 
 
 def process_robots_txt(app, exception):
-    if exception:
-        return
     # Get the path to the robots.txt file
     robots_file = os.path.join(app.outdir, "robots.txt")
-    if not os.path.isfile(robots_file):
-        return
     with open(robots_file) as f:
         contents = f.read()
 
