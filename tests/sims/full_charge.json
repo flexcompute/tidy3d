@@ -112,12 +112,12 @@
                 "N_c": {
                     "attrs": {},
                     "type": "ConstantEffectiveDOS",
-                    "N": 2e+19
+                    "N": 2e19
                 },
                 "N_v": {
                     "attrs": {},
                     "type": "ConstantEffectiveDOS",
-                    "N": 2e+19
+                    "N": 2e19
                 },
                 "E_g": {
                     "attrs": {},
@@ -135,7 +135,7 @@
                     "mu": 470.5,
                     "exp_2": -2.33,
                     "exp_N": 0.719,
-                    "ref_N": 2.23e+17,
+                    "ref_N": 2.23e17,
                     "exp_1": -0.57,
                     "exp_3": 2.4,
                     "exp_4": -0.146,
@@ -144,8 +144,8 @@
                 "R": [
                     {
                         "attrs": {},
-                        "tau_n": 3.3e-06,
-                        "tau_p": 4e-06,
+                        "tau_n": 3.3e-6,
+                        "tau_p": 4e-6,
                         "type": "ShockleyReedHallRecombination"
                     },
                     {
@@ -163,7 +163,7 @@
                 "delta_E_g": {
                     "attrs": {},
                     "v1": 0.00692,
-                    "n2": 1.3e+17,
+                    "n2": 1.3e17,
                     "c2": 0.5,
                     "min_N": 1000000000000000.0,
                     "type": "SlotboomBandGapNarrowing"
@@ -182,7 +182,7 @@
                             "Infinity",
                             "Infinity"
                         ],
-                        "concentration": 1e+18
+                        "concentration": 1e18
                     }
                 ],
                 "N_d": [
@@ -239,12 +239,12 @@
                 "N_c": {
                     "attrs": {},
                     "type": "ConstantEffectiveDOS",
-                    "N": 2e+19
+                    "N": 2e19
                 },
                 "N_v": {
                     "attrs": {},
                     "type": "ConstantEffectiveDOS",
-                    "N": 2e+19
+                    "N": 2e19
                 },
                 "E_g": {
                     "attrs": {},
@@ -262,7 +262,7 @@
                     "mu": 470.5,
                     "exp_2": -2.33,
                     "exp_N": 0.719,
-                    "ref_N": 2.23e+17,
+                    "ref_N": 2.23e17,
                     "exp_1": -0.57,
                     "exp_3": 2.4,
                     "exp_4": -0.146,
@@ -271,8 +271,8 @@
                 "R": [
                     {
                         "attrs": {},
-                        "tau_n": 3.3e-06,
-                        "tau_p": 4e-06,
+                        "tau_n": 3.3e-6,
+                        "tau_p": 4e-6,
                         "type": "ShockleyReedHallRecombination"
                     },
                     {
@@ -290,7 +290,7 @@
                 "delta_E_g": {
                     "attrs": {},
                     "v1": 0.00692,
-                    "n2": 1.3e+17,
+                    "n2": 1.3e17,
                     "c2": 0.5,
                     "min_N": 1000000000000000.0,
                     "type": "SlotboomBandGapNarrowing"
@@ -326,7 +326,7 @@
                             "Infinity",
                             "Infinity"
                         ],
-                        "concentration": 1e+18
+                        "concentration": 1e18
                     }
                 ]
             }
@@ -464,14 +464,15 @@
     "grid_spec": {
         "attrs": {},
         "relative_min_dl": 0.0,
+        "remove_fragments": false,
         "type": "UniformUnstructuredGrid",
         "dl": 0.05,
         "min_edges_per_circumference": 15.0,
         "min_edges_per_side": 2.0,
         "non_refined_structures": []
     },
-    "version": "2.11.0.dev0",
-    "plot_length_units": "\u03bcm",
+    "version": "2.11.0.dev2",
+    "plot_length_units": "μm",
     "structure_priority_mode": "equal",
     "analysis_spec": {
         "attrs": {},

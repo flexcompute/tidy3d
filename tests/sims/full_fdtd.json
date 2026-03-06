@@ -950,7 +950,7 @@
                         },
                         {
                             "real": -0.0,
-                            "imag": -3.311074436985222e+16
+                            "imag": -3.311074436985222e16
                         }
                     ]
                 ]
@@ -1247,10 +1247,10 @@
                 "eps_dataset": null,
                 "permittivity": {
                     "attrs": {},
-                    "type": "TetrahedralGridDataset",
                     "points": "PointDataArray",
                     "values": "IndexedDataArray",
-                    "cells": "CellDataArray"
+                    "cells": "CellDataArray",
+                    "type": "TetrahedralGridDataset"
                 },
                 "conductivity": null
             }
@@ -1288,26 +1288,26 @@
                 "type": "CustomDrude",
                 "eps_inf": {
                     "attrs": {},
-                    "type": "TetrahedralGridDataset",
                     "points": "PointDataArray",
                     "values": "IndexedDataArray",
-                    "cells": "CellDataArray"
+                    "cells": "CellDataArray",
+                    "type": "TetrahedralGridDataset"
                 },
                 "coeffs": [
                     [
                         {
                             "attrs": {},
-                            "type": "TetrahedralGridDataset",
                             "points": "PointDataArray",
                             "values": "IndexedDataArray",
-                            "cells": "CellDataArray"
+                            "cells": "CellDataArray",
+                            "type": "TetrahedralGridDataset"
                         },
                         {
                             "attrs": {},
-                            "type": "TetrahedralGridDataset",
                             "points": "PointDataArray",
                             "values": "IndexedDataArray",
-                            "cells": "CellDataArray"
+                            "cells": "CellDataArray",
+                            "type": "TetrahedralGridDataset"
                         }
                     ]
                 ],
@@ -1349,33 +1349,33 @@
                 "type": "CustomLorentz",
                 "eps_inf": {
                     "attrs": {},
-                    "type": "TetrahedralGridDataset",
                     "points": "PointDataArray",
                     "values": "IndexedDataArray",
-                    "cells": "CellDataArray"
+                    "cells": "CellDataArray",
+                    "type": "TetrahedralGridDataset"
                 },
                 "coeffs": [
                     [
                         {
                             "attrs": {},
-                            "type": "TetrahedralGridDataset",
                             "points": "PointDataArray",
                             "values": "IndexedDataArray",
-                            "cells": "CellDataArray"
+                            "cells": "CellDataArray",
+                            "type": "TetrahedralGridDataset"
                         },
                         {
                             "attrs": {},
-                            "type": "TetrahedralGridDataset",
                             "points": "PointDataArray",
                             "values": "IndexedDataArray",
-                            "cells": "CellDataArray"
+                            "cells": "CellDataArray",
+                            "type": "TetrahedralGridDataset"
                         },
                         {
                             "attrs": {},
-                            "type": "TetrahedralGridDataset",
                             "points": "PointDataArray",
                             "values": "IndexedDataArray",
-                            "cells": "CellDataArray"
+                            "cells": "CellDataArray",
+                            "type": "TetrahedralGridDataset"
                         }
                     ]
                 ],
@@ -1417,26 +1417,26 @@
                 "type": "CustomDebye",
                 "eps_inf": {
                     "attrs": {},
-                    "type": "TetrahedralGridDataset",
                     "points": "PointDataArray",
                     "values": "IndexedDataArray",
-                    "cells": "CellDataArray"
+                    "cells": "CellDataArray",
+                    "type": "TetrahedralGridDataset"
                 },
                 "coeffs": [
                     [
                         {
                             "attrs": {},
-                            "type": "TetrahedralGridDataset",
                             "points": "PointDataArray",
                             "values": "IndexedDataArray",
-                            "cells": "CellDataArray"
+                            "cells": "CellDataArray",
+                            "type": "TetrahedralGridDataset"
                         },
                         {
                             "attrs": {},
-                            "type": "TetrahedralGridDataset",
                             "points": "PointDataArray",
                             "values": "IndexedDataArray",
-                            "cells": "CellDataArray"
+                            "cells": "CellDataArray",
+                            "type": "TetrahedralGridDataset"
                         }
                     ]
                 ],
@@ -1478,26 +1478,26 @@
                 "type": "CustomPoleResidue",
                 "eps_inf": {
                     "attrs": {},
-                    "type": "TetrahedralGridDataset",
                     "points": "PointDataArray",
                     "values": "IndexedDataArray",
-                    "cells": "CellDataArray"
+                    "cells": "CellDataArray",
+                    "type": "TetrahedralGridDataset"
                 },
                 "poles": [
                     [
                         {
                             "attrs": {},
-                            "type": "TetrahedralGridDataset",
                             "points": "PointDataArray",
                             "values": "IndexedDataArray",
-                            "cells": "CellDataArray"
+                            "cells": "CellDataArray",
+                            "type": "TetrahedralGridDataset"
                         },
                         {
                             "attrs": {},
-                            "type": "TetrahedralGridDataset",
                             "points": "PointDataArray",
                             "values": "IndexedDataArray",
-                            "cells": "CellDataArray"
+                            "cells": "CellDataArray",
+                            "type": "TetrahedralGridDataset"
                         }
                     ]
                 ],
@@ -1541,17 +1541,17 @@
                     [
                         {
                             "attrs": {},
-                            "type": "TetrahedralGridDataset",
                             "points": "PointDataArray",
                             "values": "IndexedDataArray",
-                            "cells": "CellDataArray"
+                            "cells": "CellDataArray",
+                            "type": "TetrahedralGridDataset"
                         },
                         {
                             "attrs": {},
-                            "type": "TetrahedralGridDataset",
                             "points": "PointDataArray",
                             "values": "IndexedDataArray",
-                            "cells": "CellDataArray"
+                            "cells": "CellDataArray",
+                            "type": "TetrahedralGridDataset"
                         }
                     ]
                 ],
@@ -1718,7 +1718,7 @@
                         },
                         {
                             "real": -0.0,
-                            "imag": -3.311074436985222e+16
+                            "imag": -3.311074436985222e16
                         }
                     ]
                 ]
@@ -2004,7 +2004,8 @@
             },
             "interpolate": true,
             "confine_to_bounds": false,
-            "polarization": "Hx"
+            "polarization": "Hx",
+            "current_amplitude_definition": "total"
         },
         {
             "attrs": {},
@@ -2333,7 +2334,8 @@
             },
             "interpolate": true,
             "confine_to_bounds": false,
-            "polarization": "Hx"
+            "polarization": "Hx",
+            "current_amplitude_definition": "total"
         }
     ],
     "boundary_spec": {
@@ -2357,7 +2359,8 @@
                     "alpha_order": 1,
                     "alpha_min": 0.0,
                     "alpha_max": 0.0
-                }
+                },
+                "extrude_structures": true
             },
             "minus": {
                 "attrs": {},
@@ -2370,7 +2373,8 @@
                     "sigma_min": 0.0,
                     "sigma_max": 6.4,
                     "type": "AbsorberParams"
-                }
+                },
+                "extrude_structures": false
             },
             "type": "Boundary"
         },
@@ -2654,6 +2658,8 @@
                 "width": null,
                 "type": "ApodizationSpec"
             },
+            "store_fields_direction": null,
+            "conjugated_dot_product": true,
             "mode_spec": {
                 "attrs": {},
                 "num_modes": 1,
@@ -2686,9 +2692,7 @@
                 },
                 "interp_spec": null,
                 "type": "ModeSpec"
-            },
-            "store_fields_direction": null,
-            "conjugated_dot_product": true
+            }
         },
         {
             "attrs": {},
@@ -2995,7 +2999,7 @@
                 2.0,
                 3.0
             ],
-            "far_field_approx": true,
+            "far_field_approx": false,
             "window_size": [
                 0.0,
                 0.0
@@ -3463,8 +3467,8 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.11.0.dev0",
-    "plot_length_units": "\u03bcm",
+    "version": "2.11.0.dev2",
+    "plot_length_units": "μm",
     "structure_priority_mode": "equal",
     "lumped_elements": [
         {
@@ -3526,7 +3530,7 @@
                 "type": "RLCNetwork",
                 "resistance": null,
                 "capacitance": 1e-11,
-                "inductance": 1e-09,
+                "inductance": 1e-9,
                 "network_topology": "parallel"
             },
             "dist_type": "on"

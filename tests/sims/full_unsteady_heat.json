@@ -170,7 +170,7 @@
                     "name": null,
                     "type": "SolidMedium",
                     "capacity": 1.0,
-                    "conductivity": 1e-06,
+                    "conductivity": 1e-6,
                     "density": 1e-18
                 },
                 "charge": {
@@ -282,14 +282,15 @@
     "grid_spec": {
         "attrs": {},
         "relative_min_dl": 0.001,
+        "remove_fragments": false,
         "type": "UniformUnstructuredGrid",
         "dl": 0.05,
         "min_edges_per_circumference": 15.0,
         "min_edges_per_side": 2.0,
         "non_refined_structures": []
     },
-    "version": "2.11.0.dev0",
-    "plot_length_units": "\u03bcm",
+    "version": "2.11.0.dev2",
+    "plot_length_units": "μm",
     "structure_priority_mode": "equal",
     "analysis_spec": {
         "attrs": {},
