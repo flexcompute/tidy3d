@@ -2,7 +2,11 @@ name: "public/tidy3d/python-client-tests"
 
 on:
   merge_group:
-  
+
+  push:
+    branches:
+      - develop
+
   workflow_dispatch:
     inputs:
       remote_tests:
@@ -110,6 +114,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/develop' }}
 
 env:
   VERIFICATIONS_PY_VERSION: '3.11'
@@ -715,6 +723,7 @@ jobs:
         fetch-depth: 0
         submodules: false
         persist-credentials: false
+        lfs: true
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
@@ -724,6 +733,7 @@ jobs:
         fetch-depth: 0
         submodules: false
         persist-credentials: false
+        lfs: true
 
     - name: compute-testmon-cache-key
       id: testmon-cache-key
@@ -976,6 +986,7 @@ jobs:
         fetch-depth: 1
         submodules: false
         persist-credentials: false
+        lfs: true
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
@@ -985,6 +996,7 @@ jobs:
         fetch-depth: 1
         submodules: false
         persist-credentials: false
+        lfs: true
 
     - name: compute-testmon-cache-key
       id: testmon-cache-key

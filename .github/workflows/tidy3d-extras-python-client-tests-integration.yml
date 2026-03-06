@@ -80,6 +80,7 @@ jobs:
         fetch-depth: 1
         submodules: false
         persist-credentials: false
+        lfs: true
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
@@ -89,6 +90,7 @@ jobs:
         fetch-depth: 1
         submodules: false
         persist-credentials: false
+        lfs: true
 
     - name: set-python-${{ matrix.python-version }}
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -227,6 +229,7 @@ jobs:
         fetch-depth: 1
         submodules: false
         persist-credentials: false
+        lfs: true
 
     - name: checkout-tag
       if: ${{ env.RELEASE_TAG }}
@@ -236,6 +239,7 @@ jobs:
         fetch-depth: 1
         submodules: false
         persist-credentials: false
+        lfs: true
 
     - name: set-python-${{ matrix.python-version }}
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
