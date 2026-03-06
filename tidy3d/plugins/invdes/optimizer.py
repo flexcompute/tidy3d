@@ -13,6 +13,7 @@ from pydantic import Field, PositiveFloat, PositiveInt
 import tidy3d as td
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.exceptions import SetupError
+from tidy3d.plugins.autograd.optimizers import Adam, apply_updates
 
 from .base import InvdesBaseModel
 from .design import InverseDesignType
@@ -282,34 +283,24 @@ class AdamOptimizer(AbstractOptimizer):
         description="Epsilon parameter in the Adam optimization method.",
     )
 
+    def _make_adam(self) -> Adam:
+        """Create a standalone ``Adam`` instance with matching hyperparameters."""
+        return Adam(
+            learning_rate=self.learning_rate,
+            beta1=self.beta1,
+            beta2=self.beta2,
+            eps=self.eps,
+        )
+
     def initial_state(self, parameters: np.ndarray) -> dict:
         """initial state of the optimizer"""
-        zeros = np.zeros_like(parameters)
-        return {"m": zeros, "v": zeros, "t": 0}
+        return self._make_adam().init(parameters)
 
     def update(
         self, parameters: np.ndarray, gradient: np.ndarray, state: Optional[dict] = None
     ) -> tuple[np.ndarray, dict]:
         if state is None:
             state = self.initial_state(parameters)
-
-        # get state
-        m = np.array(state["m"])
-        v = np.array(state["v"])
-        t = int(state["t"])
-
-        # update time step
-        t = t + 1
-
-        # update moment variables
-        m = self.beta1 * m + (1 - self.beta1) * gradient
-        v = self.beta2 * v + (1 - self.beta2) * (gradient**2)
-
-        # compute bias-corrected moment variables
-        m_ = m / (1 - self.beta1**t)
-        v_ = v / (1 - self.beta2**t)
-
-        # update parameters and state
-        parameters = parameters - self.learning_rate * m_ / (np.sqrt(v_) + self.eps)
-        state = {"m": m, "v": v, "t": t}
-        return parameters, state
+        adam = self._make_adam()
+        updates, new_state = adam.update(gradient, state, parameters)
+        return apply_updates(parameters, updates), new_state

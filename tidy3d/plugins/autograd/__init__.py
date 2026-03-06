@@ -42,16 +42,20 @@ from .invdes import (
     symmetrize_rotation,
     tanh_projection,
 )
+from .optimizers import Adam, adam, apply_updates, optimize
 from .primitives import gaussian_filter, interpolate_spline
 from .utilities import chain, get_kernel_size_px, make_kernel, scalar_objective
 
 __all__ = [
+    "Adam",
     "CircularFilter",
     "ConicFilter",
     "ErosionDilationPenalty",
     "FilterAndProject",
     "GaussianFilter",
+    "adam",
     "add_at",
+    "apply_updates",
     "chain",
     "convolve",
     "gaussian_filter",
@@ -77,6 +81,7 @@ __all__ = [
     "morphological_gradient",
     "morphological_gradient_external",
     "morphological_gradient_internal",
+    "optimize",
     "pad",
     "ramp_projection",
     "rescale",
