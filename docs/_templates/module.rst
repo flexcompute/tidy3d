@@ -50,9 +50,3 @@
    {% endif %}
    {% endif %}
    {% endblock %}
-
-
-   .. rubric:: Inherited Common Usage
-
-   .. include:: ../_custom_autosummary/{{ fullname }}.rst
-      :optional:
