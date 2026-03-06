@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess
 import sys
 from collections import OrderedDict
 from pathlib import Path
@@ -16,19 +15,7 @@ import toml
 
 REFERENCE_RE = re.compile(r"^\[([^\]]+)\]:\s+(\S+)\s*$")
 RELEASE_HEADING_RE = re.compile(r"^##\s+\[([^\]]+)\]")
-DEV_SUFFIX_RE = re.compile(r"\.dev\d+$")
-RELEASE_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
-
-
-def _run_git_command(*args: str) -> str:
-    """Run a git command and return stdout."""
-    completed = subprocess.run(
-        ["git", *args],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return completed.stdout.strip()
+RELEASE_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(\.dev\d+)?$")
 
 
 def _read_pyproject_version(pyproject_path: Path) -> str:
@@ -41,27 +28,8 @@ def _read_pyproject_version(pyproject_path: Path) -> str:
 
 
 def _derive_release_version(pyproject_path: Path) -> str:
-    """Derive a release version by stripping any .devN suffix."""
-    version = _read_pyproject_version(pyproject_path)
-    return DEV_SUFFIX_RE.sub("", version)
-
-
-def _find_previous_version(new_version: str) -> str:
-    """Find the latest reachable stable vX.Y.Z tag excluding the new version."""
-    tags = _run_git_command(
-        "tag", "--merged", "HEAD", "--list", "v*", "--sort=-v:refname"
-    ).splitlines()
-    for tag in tags:
-        tag = tag.strip()
-        if not tag:
-            continue
-        candidate_version = tag.removeprefix("v")
-        if not RELEASE_VERSION_RE.fullmatch(candidate_version):
-            continue
-        if candidate_version == new_version:
-            continue
-        return candidate_version
-    raise RuntimeError("Could not determine previous stable vX.Y.Z tag reachable from HEAD.")
+    """Derive a release version from pyproject.toml."""
+    return _read_pyproject_version(pyproject_path)
 
 
 def _find_previous_version_from_changelog(changelog_path: Path, new_version: str) -> str:
@@ -124,14 +92,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--version",
-        help="New release version (for example: 2.11.0). Defaults to pyproject version without .devN.",
+        help="New release version (for example: 2.11.0 or 2.11.0.dev1). Defaults to pyproject version.",
     )
     parser.add_argument(
         "--previous-version",
         help=(
             "Previous release version (with or without leading v). "
-            "Defaults to latest reachable stable vX.Y.Z tag; if unavailable, "
-            "falls back to latest stable release heading in CHANGELOG.md."
+            "Defaults to latest stable release heading in CHANGELOG.md."
         ),
     )
     parser.add_argument(
@@ -160,30 +127,19 @@ def main() -> int:
         raise FileNotFoundError(f"pyproject path does not exist: {pyproject_path}")
 
     new_version = args.version or _derive_release_version(pyproject_path)
-    new_version = DEV_SUFFIX_RE.sub("", new_version).strip().removeprefix("v")
+    new_version = new_version.strip().removeprefix("v")
     if not new_version:
         raise ValueError("New release version is empty.")
 
     previous_version = None
     if args.previous_version:
-        previous_version = DEV_SUFFIX_RE.sub("", args.previous_version.strip().removeprefix("v"))
+        previous_version = args.previous_version.strip().removeprefix("v")
         if not previous_version:
             raise ValueError("Previous release version is empty after normalization.")
         if previous_version == new_version:
             previous_version = None
     if previous_version is None:
-        try:
-            previous_version = _find_previous_version(new_version)
-        except (RuntimeError, subprocess.CalledProcessError):
-            previous_version = _find_previous_version_from_changelog(changelog_path, new_version)
-            print(
-                (
-                    "No stable git tag found; "
-                    f"falling back to latest stable release in {changelog_path}: "
-                    f"{previous_version}"
-                ),
-                file=sys.stderr,
-            )
+        previous_version = _find_previous_version_from_changelog(changelog_path, new_version)
     if previous_version == new_version:
         raise ValueError("Previous version must differ from new version.")
 

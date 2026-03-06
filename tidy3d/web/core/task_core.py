@@ -920,6 +920,7 @@ class BatchTask(WebTask):
         worker_group: Optional[str] = None,
         pay_type: Union[PayType, str] = PayType.AUTO,
         priority: Optional[int] = None,
+        vgpu_allocation: Optional[int] = None,
     ) -> requests.Response:
         """Submits the batch for execution on the server.
 
@@ -931,6 +932,8 @@ class BatchTask(WebTask):
             The data protocol version. Defaults to the current version.
         worker_group : Optional[str], default=None
             Optional identifier for a specific worker group to run on.
+        vgpu_allocation : Optional[int], default=None
+            Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
 
         Returns
         -------
@@ -938,7 +941,7 @@ class BatchTask(WebTask):
             The server's response to the submit request.
         """
 
-        # TODO: add support for pay_type and priority arguments
+        # TODO: add support for pay_type, priority, and vgpu_allocation arguments
         if pay_type != PayType.AUTO:
             raise NotImplementedError(
                 "The 'pay_type' argument is not yet supported and will be ignored."
@@ -946,6 +949,10 @@ class BatchTask(WebTask):
         if priority is not None:
             raise NotImplementedError(
                 "The 'priority' argument is not yet supported and will be ignored."
+            )
+        if vgpu_allocation is not None:
+            raise NotImplementedError(
+                "The 'vgpu_allocation' argument is not yet supported and will be ignored."
             )
 
         if protocol_version is None:

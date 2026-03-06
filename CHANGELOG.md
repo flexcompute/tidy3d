@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- towncrier release notes start -->
 
+## [2.11.0.dev1] - 2026-03-06
+
+### Added
+
+- Added `SurfaceFieldMonitor` and `SurfaceFieldTimeMonitor` for recording electromagnetic fields on PEC surfaces in frequency and time domains, along with corresponding data classes (`SurfaceFieldData`, `SurfaceFieldTimeData`) and documentation.
+- - Add ``numerical_structures`` hook to custom autograd run paths for user-defined structure creation and gradients in simulation and component-modeler workflows.
+- Added frequency-parametrized lossy dielectrics and lossy metals to the RF material library. Users can access the default medium via the ``medium`` property (fitted for the default microwave frequency range of 0.3-300 GHz) or get a medium fitted for a specific frequency range via ``medium_in_range(frequency_range)``. For dielectrics, if the requested range extends beyond the original fitting range, a new model is created with averaged properties and a warning is issued.
+- Added autograd support for custom source gradients with respect to `field_dataset` and `current_dataset`.
+- Added optional `vgpu_allocation` parameter to `web.run`, `web.run_async`, `Job`, and `Batch` to control virtual GPU allocation for cloud task submission.
+
+### Changed
+
+- Improved charge simulation documentation: clarified 2D vs 3D output units, added unit metadata to monitor data fields, and fixed docstring formatting and formula inaccuracies across TCAD components.
+- Changed field decay checking from percentage-based intervals to a fixed number of time steps (default 400), enabling quicker automatic shutoff in long-running simulations.
+- `Scene.perturbed_mediums_copy()` now generates unique medium names based on structure names, eliminating duplicate medium name warnings.
+- Refactored adjoint source and monitor preparation internals to support parallel adjoint workflows.
+
+### Fixed
+
+- Fixed premature simulation shutoff when sources have a delayed peak (e.g. large GaussianPulse offset), where zero field energy before the source activates was incorrectly interpreted as full decay.
+- Improved KLayout executable discovery on macOS for Homebrew cask app-suite installs under `/Applications/KLayout`.
+- Fixed angled mode-solving for ModeMonitor runs with GaussianBeam sources by preventing rotated-reference simulations from revalidating retained sources.
+- Fixed loading of medium settings so empty `NonlinearSpec` inputs are ignored instead of unintentionally enabling nonlinearity.
+- Reformulated axial ratio calculation to avoid catastrophic cancellation for near-linear polarization, and raised the safety-net cap from 100 (40 dB) to 1e5 (100 dB).
+
 ## [2.11.0.dev0] - 2026-02-19
 
 ### Added
@@ -2016,6 +2041,7 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[2.11.0.dev1]: https://github.com/flexcompute/tidy3d/compare/v2.11.0.dev0...v2.11.0.dev1
 [2.11.0]: https://github.com/flexcompute/tidy3d/compare/v2.10.2...v2.11.0
 [2.10.2]: https://github.com/flexcompute/tidy3d/compare/v2.10.1...v2.10.2
 [2.10.1]: https://github.com/flexcompute/tidy3d/compare/v2.10.0...v2.10.1

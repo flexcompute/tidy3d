@@ -7,6 +7,7 @@
 
 ## Workflow & Tooling
 - Make sure your local environment is bootstrapped with `poetry install --extras dev` and `poetry run pre-commit install`; once that’s done on a machine, you shouldn’t need to repeat it unless dependencies change.
+- The `dev` extra is the superset that includes **all** optional dependencies (pyvista, trimesh, gdstk, vtk, etc.) needed for testing. Always use `poetry install --extras dev` to get the full test environment. When adding a new optional dependency, add it to `dev` as well.
 - Prefix every repo command with `poetry run` to match CI.
 - Re-run `poetry run pytest` locally as part of your development loop; `pyproject.toml` already wires markers, doctests, coverage, and env vars.
 - The pre-commit hooks you enabled during onboarding run automatically; still run `poetry run pre-commit run --all-files` before opening a PR or when new hooks land so your tree matches `.pre-commit-config.yaml` and the checks in `.github/workflows/tidy3d-python-client-tests.yml` (covers `ruff format`, `ruff check`, doc hooks).
