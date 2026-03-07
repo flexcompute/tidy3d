@@ -128,6 +128,7 @@ class ImpedanceCalculator(MicrowaveBaseModel):
         # the input field is in frequency domain, where flux indicates the time-averaged power
         # 0.5*Re(V*conj(I)).
         # We explicitly take the real part, in case Bloch BCs were used in the simulation.
+
         flux_sign = 1.0
         # Determine flux sign
         if isinstance(em_field.monitor, ModeSolverMonitor):
@@ -136,16 +137,18 @@ class ImpedanceCalculator(MicrowaveBaseModel):
             flux_sign = 1 if em_field.monitor.store_fields_direction == "+" else -1
 
         if self.voltage_integral is None:
-            flux = flux_sign * em_field.complex_flux
             if isinstance(em_field, FieldTimeData):
+                flux = flux_sign * em_field.flux
                 impedance = flux / np.real(current) ** 2
             else:
+                flux = flux_sign * em_field.complex_flux
                 impedance = 2 * flux / (current * np.conj(current))
         elif self.current_integral is None:
-            flux = flux_sign * em_field.complex_flux
             if isinstance(em_field, FieldTimeData):
+                flux = flux_sign * em_field.flux
                 impedance = np.real(voltage) ** 2 / flux
             else:
+                flux = flux_sign * em_field.complex_flux
                 impedance = (voltage * np.conj(voltage)) / (2 * np.conj(flux))
         else:
             if isinstance(em_field, FieldTimeData):

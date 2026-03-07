@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import tracemalloc
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -9,7 +11,7 @@ import xarray as xr
 from pydantic import ValidationError
 
 import tidy3d as td
-from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
+from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray, MixedModeDataArray
 from tidy3d.components.data.monitor_data import (
     AXIAL_RATIO_CAP,
     AuxFieldTimeData,
@@ -27,6 +29,7 @@ from tidy3d.components.data.monitor_data import (
     SurfaceFieldData,
     SurfaceFieldTimeData,
 )
+from tidy3d.components.data.utils import _dot_numpy, _outer_dot_numpy
 from tidy3d.components.data.zbf import ZBFData
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.constants import UnitScaling
@@ -45,12 +48,15 @@ from .test_data_arrays import (
     FLUX_MONITOR,
     FLUX_TIME_MONITOR,
     FREQS,
+    FS,
     MEDIUM_MONITOR,
+    MODE_INDICES,
     MODE_MONITOR,
     MODE_MONITOR_WITH_FIELDS,
     MODE_SOLVER_MONITOR,
     PERMITTIVITY_MONITOR,
     SIM,
+    SIM_2D,
     SIM_SYM,
     SURFACE_FIELD_MONITOR,
     SURFACE_FIELD_TIME_MONITOR,
@@ -1364,9 +1370,6 @@ def test_symmetry_expansion_no_interpolation_warning():
         _ = field_data.symmetry_expanded_copy
 
 
-import pytest
-
-
 @pytest.mark.parametrize("time", [False, True])
 def test_surface_field_data_unified(time):
     """Test SurfaceFieldData and SurfaceFieldTimeData functionality."""
@@ -1465,3 +1468,684 @@ def test_surface_field_data_symmetry_expanded_copy_parametrized(time):
     data = data.updated_copy(symmetry=(1, 0, -1))
     data_sym = data.symmetry_expanded_copy
     assert data != data_sym, f"Failed for time={time} with symmetry (1, 0, -1)"
+
+
+@pytest.mark.parametrize("colocate", [True, False])
+@pytest.mark.parametrize("sim_2d", [False, True])
+def test_diff_area_elements(colocate, sim_2d):
+    """Test differential area elements for different colocate and simulation dimension settings.
+
+    Tests that:
+    1. All 4 area elements are returned with correct shapes
+    2. For colocate=True, all 4 elements are identical
+    3. Total integrated area is consistent between methods
+    4. For 2D simulations (1 grid point in y), the unit handling (size=1.0) works correctly
+    5. Non-uniform mesh produces different primal/dual cell sizes (for non-colocated)
+    """
+    # Set up simulation and monitor sizes
+    if sim_2d:
+        # 2D simulation: y=0 means only 1 grid point in y direction
+        # Monitor is in x=0 plane with tangential dims y and z
+        # The y dimension will have only 1 grid point, triggering the 2D handling
+        sim_size = (4.0, 0, 3.0)
+        monitor_size = (0, td.inf, 3.0)  # inf in y to cover full sim
+    else:
+        # 3D simulation: both y and z dimensions are nonzero
+        sim_size = (4.0, 2.0, 3.0)
+        monitor_size = (0, 2.0 - np.pi / 10, 3.0 - np.pi / 10)
+    monitor_center = (0, 0, 0)
+
+    # Create a structure to induce non-uniform meshing
+    # A small box near the edge will cause mesh refinement in that region
+    structure = td.Structure(
+        geometry=td.Box(center=(0, 0.3, 0.5), size=(0.5, 0.3, 0.3)),
+        medium=td.Medium(permittivity=4.0),
+    )
+
+    # Use GridSpec.auto with override to create non-uniform mesh
+    # The structure will cause finer mesh near it, coarser elsewhere
+    grid_spec = td.GridSpec.auto(
+        wavelength=3.0,  # Large wavelength for coarse base mesh
+        min_steps_per_wvl=6,
+        override_structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0.3, 0.5), size=(0.6, 0.4, 0.4)),
+                medium=td.Medium(permittivity=4.0),
+            )
+        ],
+    )
+
+    # Create simulation with non-uniform grid
+    sim = td.Simulation(
+        size=sim_size,
+        run_time=1e-12,
+        grid_spec=grid_spec,
+        structures=[structure],
+        sources=[
+            td.PointDipole(
+                source_time=td.GaussianPulse(freq0=1e14, fwidth=1e13),
+                polarization="Ez",
+                center=(0.1, 0, 0),
+            )
+        ],
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+
+    # Create field monitor
+    monitor = td.FieldMonitor(
+        size=monitor_size,
+        center=monitor_center,
+        freqs=[1e14],
+        name="field_monitor",
+        colocate=colocate,
+    )
+
+    # Get grid for monitor
+    grid = sim.discretize_monitor(monitor)
+
+    # Create field data arrays with appropriate coordinates
+    def make_field_array(field_name):
+        x, y, z = grid[field_name].to_list
+        shape = (len(x), len(y), len(z), 1)
+        data = np.random.rand(*shape) + 1j * np.random.rand(*shape)
+        return td.ScalarFieldDataArray(data, coords={"x": x, "y": y, "z": z, "f": [1e14]})
+
+    field_data = FieldData(
+        monitor=monitor,
+        Ex=make_field_array("Ex"),
+        Ey=make_field_array("Ey"),
+        Ez=make_field_array("Ez"),
+        Hx=make_field_array("Hx"),
+        Hy=make_field_array("Hy"),
+        Hz=make_field_array("Hz"),
+        symmetry=(0, 0, 0),
+        symmetry_center=(0, 0, 0),
+        grid_expanded=grid,
+    )
+
+    # Get tangential dimensions
+    tan_dims = field_data._tangential_dims
+    assert len(tan_dims) == 2
+
+    # Test _diff_area returns a single DataArray (colocated boundary-based)
+    diff_area = field_data._diff_area
+    assert set(diff_area.dims) == set(tan_dims), f"Area dimensions should be {tan_dims}"
+    assert np.all(diff_area.values >= 0), "All area elements should be non-negative"
+
+    # Test total integrated area consistency
+    # For a rectangular monitor, the total area should be approximately monitor_size[1] * monitor_size[2]
+    # For 2D sims (y=0), the y dimension has size 1.0 for unit handling (W/um instead of W)
+    if sim_2d:
+        expected_area = 1.0 * monitor_size[2]  # y=1.0, z=monitor_size[2]
+    else:
+        expected_area = monitor_size[1] * monitor_size[2]
+
+    # Total area from _diff_area (colocated boundary method)
+    total_area_boundaries = float(diff_area.sum())
+
+    # Total area from Yee positions method (used by dot/outer_dot)
+    dS_yee = field_data._diff_area_at_yee_positions(truncate_to_monitor_bounds=True)
+    assert len(dS_yee) == 4, "Should return 4 area elements"
+    dS_EuHv, dS_EvHu, dS_Ez, dS_Hz = dS_yee
+
+    # Check dimensions and non-negativity
+    for dS in dS_yee:
+        assert set(dS.dims) == set(tan_dims), f"Area dimensions should be {tan_dims}"
+        assert np.all(dS.values >= 0), "All area elements should be non-negative"
+
+    # All Yee position total areas should match expected monitor area
+    rtol = 1e-12
+    total_area_EuHv = float(dS_yee[0].sum())
+    total_area_EvHu = float(dS_yee[1].sum())
+    total_area_Ez = float(dS_yee[2].sum())
+    total_area_Hz = float(dS_yee[3].sum())
+
+    np.testing.assert_allclose(total_area_boundaries, expected_area, rtol=rtol)
+    np.testing.assert_allclose(total_area_EuHv, expected_area, rtol=rtol)
+    np.testing.assert_allclose(total_area_EvHu, expected_area, rtol=rtol)
+    np.testing.assert_allclose(total_area_Ez, expected_area, rtol=rtol)
+    np.testing.assert_allclose(total_area_Hz, expected_area, rtol=rtol)
+
+    # For non-colocated 3D monitors with non-uniform mesh, the 4 Yee differential areas
+    # should be different from each other (cell×dual ≠ dual×cell ≠ cell×cell ≠ dual×dual)
+    if not colocate and not sim_2d:
+        assert not np.allclose(dS_EuHv.values, dS_EvHu.values), (
+            "Non-uniform mesh should produce different areas for EuHv vs EvHu"
+        )
+        assert not np.allclose(dS_Ez.values, dS_Hz.values), (
+            "Non-uniform mesh should produce different areas for Ez vs Hz"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Helpers for dot / outer_dot broadcasting and consistency tests
+# ---------------------------------------------------------------------------
+
+
+def _make_dot_test_mode_solver_data(
+    sim: td.Simulation,
+    freqs: np.ndarray = FS,
+    mode_indices: np.ndarray = MODE_INDICES,
+    colocate: bool = False,
+) -> ModeSolverData:
+    """Build a ModeSolverData with random fields for dot product testing."""
+    sim_2d = 0 in sim.size
+    if sim_2d:
+        monitor_size = (0, td.inf, 3.0)
+    else:
+        monitor_size = (0, 2.0 - np.pi / 10, 3.0 - np.pi / 10)
+
+    mode_spec = td.ModeSpec(num_modes=len(mode_indices))
+    monitor = td.ModeSolverMonitor(
+        size=monitor_size,
+        center=(0, 0, 0),
+        freqs=list(freqs),
+        name="dot_test_mode_solver",
+        mode_spec=mode_spec,
+        direction="+",
+        colocate=colocate,
+    )
+
+    grid = sim.discretize_monitor(monitor)
+    n_complex = td.ModeIndexDataArray(
+        (1 + 0.1j) * np.random.random((len(freqs), len(mode_indices))),
+        coords={"f": freqs, "mode_index": mode_indices},
+    )
+
+    grid_factors, _ = ModeSolver._grid_correction(
+        simulation=sim,
+        plane=monitor,
+        mode_spec=mode_spec,
+        n_complex=n_complex,
+        direction=monitor.direction,
+    )
+
+    def make_field(field_name):
+        x, y, z = grid[field_name].to_list
+        shape = (len(x), len(y), len(z), len(freqs), len(mode_indices))
+        data = np.random.rand(*shape) + 1j * np.random.rand(*shape)
+        return td.ScalarModeFieldDataArray(
+            data, coords={"x": x, "y": y, "z": z, "f": freqs, "mode_index": mode_indices}
+        )
+
+    amps = td.ModeAmpsDataArray(
+        (1 + 1j) * np.random.random((2, len(mode_indices), len(freqs))),
+        coords={"direction": ["+", "-"], "mode_index": mode_indices, "f": freqs},
+    )
+
+    mode_data = ModeSolverData(
+        monitor=monitor,
+        Ex=make_field("Ex"),
+        Ey=make_field("Ey"),
+        Ez=make_field("Ez"),
+        Hx=make_field("Hx"),
+        Hy=make_field("Hy"),
+        Hz=make_field("Hz"),
+        symmetry=(0, 0, 0),
+        symmetry_center=(0, 0, 0),
+        grid_expanded=grid,
+        n_complex=n_complex,
+        grid_primal_correction=grid_factors[0],
+        grid_dual_correction=grid_factors[1],
+        amps=amps,
+    )
+
+    # Normalize
+    scaling = np.sqrt(np.abs(mode_data.symmetry_expanded_copy.flux))
+    norm_data_dict = {key: val / scaling for key, val in mode_data.field_components.items()}
+    return mode_data.copy(update=norm_data_dict)
+
+
+def _make_dot_test_field_data(
+    sim: td.Simulation,
+    freqs: np.ndarray = FS,
+    colocate: bool = False,
+) -> FieldData:
+    """Build a FieldData (no mode_index) with random fields for dot product testing."""
+    sim_2d = 0 in sim.size
+    if sim_2d:
+        monitor_size = (0, td.inf, 3.0)
+    else:
+        monitor_size = (0, 2.0 - np.pi / 10, 3.0 - np.pi / 10)
+
+    monitor = td.FieldMonitor(
+        size=monitor_size,
+        center=(0, 0, 0),
+        freqs=list(freqs),
+        name="dot_test_field",
+        colocate=colocate,
+    )
+
+    grid = sim.discretize_monitor(monitor)
+
+    def make_field(field_name):
+        x, y, z = grid[field_name].to_list
+        shape = (len(x), len(y), len(z), len(freqs))
+        data = np.random.rand(*shape) + 1j * np.random.rand(*shape)
+        return td.ScalarFieldDataArray(data, coords={"x": x, "y": y, "z": z, "f": freqs})
+
+    return FieldData(
+        monitor=monitor,
+        Ex=make_field("Ex"),
+        Ey=make_field("Ey"),
+        Ez=make_field("Ez"),
+        Hx=make_field("Hx"),
+        Hy=make_field("Hy"),
+        Hz=make_field("Hz"),
+        symmetry=(0, 0, 0),
+        symmetry_center=(0, 0, 0),
+        grid_expanded=grid,
+    )
+
+
+def _isel_freq(data, indices):
+    """Select a frequency subset from FieldData, ModeData, or ModeSolverData."""
+    updates = {k: v.isel(f=indices) for k, v in data.field_components.items()}
+    if isinstance(data, ModeData):
+        updates["n_complex"] = data.n_complex.isel(f=indices)
+        updates["grid_primal_correction"] = data.grid_primal_correction.isel(f=indices)
+        updates["grid_dual_correction"] = data.grid_dual_correction.isel(f=indices)
+        updates["amps"] = data.amps.isel(f=indices)
+    return data.updated_copy(**updates, validate=False)
+
+
+def _isel_mode(data, indices):
+    """Select a mode_index subset from ModeData or ModeSolverData."""
+    updates = {k: v.isel(mode_index=indices) for k, v in data.field_components.items()}
+    updates["n_complex"] = data.n_complex.isel(mode_index=indices)
+    updates["grid_primal_correction"] = data.grid_primal_correction.isel(mode_index=indices)
+    updates["grid_dual_correction"] = data.grid_dual_correction.isel(mode_index=indices)
+    updates["amps"] = data.amps.isel(mode_index=indices)
+    return data.updated_copy(**updates, validate=False)
+
+
+# ---------------------------------------------------------------------------
+# Test 1: outer_dot vs element-wise dot consistency
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("conjugate", [True, False])
+@pytest.mark.parametrize("sim_2d", [False, True])
+def test_dot_outer_dot_consistency(conjugate, sim_2d):
+    """Verify outer_dot[i,j] == dot(A.isel(mode=[i]), B.isel(mode=[j])) for all mode pairs."""
+    sim = SIM_2D if sim_2d else SIM
+    A = _make_dot_test_mode_solver_data(sim)
+    B = _make_dot_test_mode_solver_data(sim)
+
+    od = A.outer_dot(B, conjugate=conjugate)
+
+    a_modes = A.Ex.coords["mode_index"].values
+    b_modes = B.Ex.coords["mode_index"].values
+
+    for i in a_modes:
+        for j in b_modes:
+            A_i = _isel_mode(A, [int(np.searchsorted(a_modes, i))])
+            B_j = _isel_mode(B, [int(np.searchsorted(b_modes, j))])
+            d = A_i.dot(B_j, conjugate=conjugate)
+            od_val = od.sel(mode_index_0=i, mode_index_1=j).values
+            np.testing.assert_allclose(od_val, d.values.squeeze(), rtol=1e-12)
+
+
+def test_dot_numpy_bounded_temporaries():
+    """Peak temporaries during _dot_numpy should not exceed much more than one full input array."""
+    rng = np.random.default_rng(0)
+    n_freqs = 5
+    n_modes = 40
+    nu, nv = 300, 400
+    shape = (n_freqs, n_modes, nu, nv)
+    grid_points = nu * nv
+
+    left = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+    right = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+    dS = (np.ones((nu, nv), dtype=np.float64), np.ones((nu, nv), dtype=np.float64))
+
+    E1 = (left, left)
+    H1 = (left, left)
+    E2 = (right, right)
+    H2 = (right, right)
+
+    tracemalloc.start()
+    result = _dot_numpy(E1, H1, E2, H2, dS, conjugate=False)
+    current, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
+    temp_peak = peak - current
+    one_full_array = n_freqs * n_modes * grid_points * np.dtype(np.complex128).itemsize
+    assert temp_peak < 1.25 * one_full_array, (
+        f"Peak temporaries {temp_peak / 1e6:.1f} MB exceed 1.25x one full array "
+        f"{1.25 * one_full_array / 1e6:.1f} MB"
+    )
+
+
+def test_outer_dot_numpy_bounded_temporaries():
+    """Peak temporaries during _outer_dot_numpy should not exceed much more than one full input array."""
+    rng = np.random.default_rng(0)
+    n_freqs = 5
+    n_modes = 40
+    nu, nv = 300, 400
+    shape = (n_freqs, n_modes, nu, nv)
+    grid_points = nu * nv
+
+    left = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+    right = rng.standard_normal(shape) + 1j * rng.standard_normal(shape)
+    dS = (np.ones((nu, nv), dtype=np.float64), np.ones((nu, nv), dtype=np.float64))
+
+    E1 = (left, left)
+    H1 = (left, left)
+    E2 = (right, right)
+    H2 = (right, right)
+
+    tracemalloc.start()
+    result = _outer_dot_numpy(E1, H1, E2, H2, dS, conjugate=False)
+    current, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+
+    temp_peak = peak - current
+    one_full_array = n_freqs * n_modes * grid_points * np.dtype(np.complex128).itemsize
+    assert temp_peak < 1.25 * one_full_array, (
+        f"Peak temporaries {temp_peak / 1e6:.1f} MB exceed 1.25x one full array "
+        f"{1.25 * one_full_array / 1e6:.1f} MB"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 2: dot() broadcasting combinations
+# ---------------------------------------------------------------------------
+
+_DOT_BROADCAST_CASES = [
+    # (self_f_idx, other_f_idx, self_m_idx, other_m_idx,
+    #  expected_f_size, expected_m_size, is_other_field, is_self_field)
+    pytest.param(
+        slice(None), slice(None), slice(None), slice(None), 5, 4, False, False, id="same_f_same_m"
+    ),
+    pytest.param(
+        slice(None), slice(0, 1), slice(None), slice(None), 5, 4, False, False, id="other_1freq"
+    ),
+    pytest.param(
+        slice(None), slice(None), slice(None), slice(0, 1), 5, 4, False, False, id="other_1mode"
+    ),
+    pytest.param(
+        slice(None),
+        slice(0, 1),
+        slice(None),
+        slice(0, 1),
+        5,
+        4,
+        False,
+        False,
+        id="other_1freq_1mode",
+    ),
+    pytest.param(
+        slice(None),
+        slice(1, 3),
+        slice(None),
+        slice(None),
+        2,
+        4,
+        False,
+        False,
+        id="freq_intersection",
+    ),
+    pytest.param(
+        slice(None),
+        slice(None),
+        slice(None),
+        slice(1, 3),
+        5,
+        2,
+        False,
+        False,
+        id="mode_intersection",
+    ),
+    pytest.param(
+        slice(None),
+        slice(1, 3),
+        slice(None),
+        slice(1, 3),
+        2,
+        2,
+        False,
+        False,
+        id="both_intersection",
+    ),
+    pytest.param(slice(None), slice(None), slice(None), None, 5, 4, True, False, id="other_field"),
+    pytest.param(slice(None), slice(None), None, slice(None), 5, 4, False, True, id="self_field"),
+    pytest.param(slice(None), slice(None), None, None, 5, None, True, True, id="both_field"),
+]
+
+
+@pytest.mark.parametrize("bidirectional", [True, False])
+@pytest.mark.parametrize("sim_2d", [False, True])
+@pytest.mark.parametrize(
+    "self_f_idx,other_f_idx,self_m_idx,other_m_idx,"
+    "expected_f_size,expected_m_size,is_other_field,is_self_field",
+    _DOT_BROADCAST_CASES,
+)
+def test_dot_broadcasting_combinations(
+    sim_2d,
+    self_f_idx,
+    other_f_idx,
+    self_m_idx,
+    other_m_idx,
+    expected_f_size,
+    expected_m_size,
+    is_other_field,
+    is_self_field,
+    bidirectional,
+):
+    """Systematically test dot() broadcasting rules across freq/mode combinations."""
+    sim = SIM_2D if sim_2d else SIM
+
+    # Build self data
+    if is_self_field:
+        self_data = _make_dot_test_field_data(sim)
+        self_data = _isel_freq(self_data, self_f_idx)
+    else:
+        self_data = _make_dot_test_mode_solver_data(sim)
+        self_data = _isel_freq(self_data, self_f_idx)
+        if self_m_idx is not None:
+            self_data = _isel_mode(self_data, self_m_idx)
+
+    # Build other data
+    if is_other_field:
+        other_data = _make_dot_test_field_data(sim)
+        other_data = _isel_freq(other_data, other_f_idx)
+    else:
+        other_data = _make_dot_test_mode_solver_data(sim)
+        other_data = _isel_freq(other_data, other_f_idx)
+        if other_m_idx is not None:
+            other_data = _isel_mode(other_data, other_m_idx)
+
+    result = self_data.dot(other_data, bidirectional=bidirectional)
+
+    # Check frequency dimension
+    assert result.sizes["f"] == expected_f_size
+
+    # Check mode_index dimension and return type
+    if expected_m_size is None:
+        # Both FieldData → FreqDataArray, no mode_index
+        assert "mode_index" not in result.dims
+        assert isinstance(result, FreqDataArray)
+    else:
+        assert result.sizes["mode_index"] == expected_m_size
+        assert isinstance(result, FreqModeDataArray)
+
+
+# ---------------------------------------------------------------------------
+# Test 3: outer_dot() broadcasting combinations
+# ---------------------------------------------------------------------------
+
+_OUTER_DOT_CASES = [
+    # (self_f_idx, other_f_idx, self_m_idx, other_m_idx,
+    #  expected_f_size, expected_mi0_size, expected_mi1_size,
+    #  is_other_field, is_self_field)
+    pytest.param(
+        slice(None),
+        slice(None),
+        slice(None),
+        slice(None),
+        5,
+        4,
+        4,
+        False,
+        False,
+        id="same_f_same_m",
+    ),
+    pytest.param(
+        slice(None),
+        slice(1, 3),
+        slice(None),
+        slice(0, 2),
+        2,
+        4,
+        2,
+        False,
+        False,
+        id="freq_mode_intersection",
+    ),
+    pytest.param(
+        slice(None), "reverse", slice(None), slice(None), 5, 4, 4, False, False, id="reversed_freqs"
+    ),
+    pytest.param(
+        slice(None), slice(None), None, slice(None), 5, None, 4, False, True, id="self_field"
+    ),
+    pytest.param(
+        slice(None), slice(None), slice(None), None, 5, 4, None, True, False, id="other_field"
+    ),
+    pytest.param(slice(None), slice(None), None, None, 5, None, None, True, True, id="both_field"),
+]
+
+
+@pytest.mark.parametrize("bidirectional", [True, False])
+@pytest.mark.parametrize("sim_2d", [False, True])
+@pytest.mark.parametrize(
+    "self_f_idx,other_f_idx,self_m_idx,other_m_idx,"
+    "expected_f_size,expected_mi0_size,expected_mi1_size,"
+    "is_other_field,is_self_field",
+    _OUTER_DOT_CASES,
+)
+def test_outer_dot_broadcasting_combinations(
+    sim_2d,
+    self_f_idx,
+    other_f_idx,
+    self_m_idx,
+    other_m_idx,
+    expected_f_size,
+    expected_mi0_size,
+    expected_mi1_size,
+    is_other_field,
+    is_self_field,
+    bidirectional,
+):
+    """Systematically test outer_dot() intersection rules across freq/mode combinations."""
+    sim = SIM_2D if sim_2d else SIM
+
+    # Build self data
+    if is_self_field:
+        self_data = _make_dot_test_field_data(sim)
+        self_data = _isel_freq(self_data, self_f_idx)
+    else:
+        self_data = _make_dot_test_mode_solver_data(sim)
+        self_data = _isel_freq(self_data, self_f_idx)
+        if self_m_idx is not None:
+            self_data = _isel_mode(self_data, self_m_idx)
+
+    # Build other data (handle "reverse" as a special case)
+    if is_other_field:
+        other_data = _make_dot_test_field_data(sim)
+        if other_f_idx != "reverse":
+            other_data = _isel_freq(other_data, other_f_idx)
+    else:
+        other_data = _make_dot_test_mode_solver_data(sim)
+        if other_f_idx == "reverse":
+            n_freqs = other_data.Ex.sizes["f"]
+            reversed_indices = list(range(n_freqs - 1, -1, -1))
+            other_data = _isel_freq(other_data, reversed_indices)
+        else:
+            other_data = _isel_freq(other_data, other_f_idx)
+        if other_m_idx is not None:
+            other_data = _isel_mode(other_data, other_m_idx)
+
+    result = self_data.outer_dot(other_data, bidirectional=bidirectional)
+
+    # Check frequency dimension
+    assert result.sizes["f"] == expected_f_size
+
+    # For reversed-freq case, verify output follows self's freq order
+    if other_f_idx == "reverse":
+        self_freqs = self_data.Ex.coords["f"].values
+        np.testing.assert_array_equal(result.coords["f"].values, self_freqs)
+
+    # Check mode_index_0
+    if expected_mi0_size is None:
+        assert "mode_index_0" not in result.dims
+    else:
+        assert result.sizes["mode_index_0"] == expected_mi0_size
+
+    # Check mode_index_1
+    if expected_mi1_size is None:
+        assert "mode_index_1" not in result.dims
+    else:
+        assert result.sizes["mode_index_1"] == expected_mi1_size
+
+    # Check return type
+    if expected_mi0_size is None and expected_mi1_size is None:
+        assert isinstance(result, FreqDataArray)
+    else:
+        assert isinstance(result, MixedModeDataArray)
+
+
+def test_normalize_modes_zero_mode():
+    """Test that _normalize_modes warns when a mode cannot be normalized."""
+    # Start from a working ModeSolverData (uses MODE_SOLVER_MONITOR with 4 modes)
+    mode_data = make_mode_solver_data()
+
+    # Zero out all fields for mode_index=1
+    zero_mode = 1
+    zeroed_fields = {}
+    for comp, field in mode_data.field_components.items():
+        values = field.values.copy()
+        values[:, :, :, :, zero_mode] = 0.0
+        zeroed_fields[comp] = field.copy(data=values)
+    mode_data = mode_data.copy(update=zeroed_fields)
+
+    with AssertLogLevel("WARNING", contains_str="Mode indices [1]"):
+        mode_data._normalize_modes()
+
+    # Non-zero modes should remain finite (no division by zero)
+    for field in mode_data.field_components.values():
+        assert np.all(np.isfinite(field.sel(mode_index=0).values)), (
+            "Non-zero mode fields should remain finite after normalization"
+        )
+
+    # Zero mode should remain zero (normalization skipped)
+    for field in mode_data.field_components.values():
+        assert np.allclose(field.sel(mode_index=zero_mode).values, 0.0), (
+            "Zero mode should remain zero after normalization"
+        )
+
+
+def test_dot_coord_mismatch_fallback():
+    """Test that dot/outer_dot fall back to colocated when tangential coords don't match."""
+    self_data = _make_dot_test_mode_solver_data(SIM, colocate=False)
+    other_data = _make_dot_test_mode_solver_data(SIM, colocate=False)
+
+    # Shift spatial coordinates of other_data so Yee grids differ
+    shifted_fields = {}
+    for comp, field in other_data.field_components.items():
+        new_coords = dict(field.coords)
+        for dim in ("y", "z"):
+            if dim in new_coords:
+                new_coords[dim] = new_coords[dim].values + 1e-6
+        shifted_fields[comp] = field.copy(data=field.values).assign_coords(new_coords)
+    other_data = other_data.updated_copy(**shifted_fields, validate=False)
+
+    # dot should warn and fall back to colocated
+    with AssertLogLevel("WARNING", contains_str="switching to colocated"):
+        result = self_data.dot(other_data)
+    assert "f" in result.dims
+
+    # outer_dot should also warn and fall back
+    with AssertLogLevel("WARNING", contains_str="switching to colocated"):
+        result = self_data.outer_dot(other_data)
+    assert "f" in result.dims

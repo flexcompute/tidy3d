@@ -8315,6 +8315,10 @@
           "const": "ModeSource",
           "default": "ModeSource",
           "type": "string"
+        },
+        "use_colocated_normalization": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [

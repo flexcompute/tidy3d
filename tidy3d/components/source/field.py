@@ -57,6 +57,16 @@ class PlanarSource(Source, ABC):
 
     _plane_validator = assert_plane()
 
+    use_colocated_normalization: bool = Field(
+        True,
+        title="Use Colocated Normalization",
+        description="If ``True`` (default), source power normalization uses fields interpolated "
+        "to grid cell boundaries, matching monitors with ``colocate=True``. If ``False``, "
+        "uses fields at native Yee grid positions, matching monitors with ``colocate=False``. "
+        "Flux agreement between source normalization and monitors is much better when both "
+        "use the same colocation setting.",
+    )
+
     @cached_property
     def injection_axis(self) -> Axis:
         """Injection axis of the source."""
@@ -806,6 +816,16 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
         description="Specifies the injection axis. The plane of incidence is defined via this "
         "``injection_axis`` and the ``direction``. The popagation axis is defined with respect "
         "to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
+    )
+
+    use_colocated_normalization: bool = Field(
+        True,
+        title="Use Colocated Normalization",
+        description="If ``True`` (default), source power normalization uses fields interpolated "
+        "to grid cell boundaries, matching monitors with ``colocate=True``. If ``False``, "
+        "uses fields at native Yee grid positions, matching monitors with ``colocate=False``. "
+        "Flux agreement between source normalization and monitors is much better when both "
+        "use the same colocation setting.",
     )
 
     @cached_property

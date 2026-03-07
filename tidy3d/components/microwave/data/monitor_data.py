@@ -381,15 +381,27 @@ class MicrowaveModeDataBase(MicrowaveBaseModel):
         """
         self._check_fields_stored(["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"])
 
-        tan_fields = self._colocated_tangential_fields
         dim1, dim2 = self._tangential_dims
-        e1 = tan_fields["E" + dim1]
-        e2 = tan_fields["E" + dim2]
-        diff_area = self._diff_area
-        field_int = [np.abs(e_field) ** 2 for e_field in [e1, e2]]
-        tangential_intensity = (diff_area * (field_int[0] + field_int[1])).sum(
-            dim=self._tangential_dims
-        )
+
+        if self.monitor.colocate:
+            fields = self._colocated_tangential_fields
+            diff_area = self._diff_area
+            e1 = fields["E" + dim1]
+            e2 = fields["E" + dim2]
+            tangential_intensity = (diff_area * (np.abs(e1) ** 2 + np.abs(e2) ** 2)).sum(
+                dim=self._tangential_dims
+            )
+        else:
+            fields = self._tangential_fields
+            dS_E1H2, dS_E2H1, _, _ = self._diff_area_at_yee_positions(
+                truncate_to_monitor_bounds=True
+            )
+            e1 = fields["E" + dim1]
+            e2 = fields["E" + dim2]
+            intensity_E1 = (np.abs(e1) ** 2 * dS_E1H2).sum(dim=self._tangential_dims)
+            intensity_E2 = (np.abs(e2) ** 2 * dS_E2H1).sum(dim=self._tangential_dims)
+            tangential_intensity = intensity_E1 + intensity_E2
+
         direction = self.monitor.store_fields_direction
         P = self.complex_flux if direction == "+" else -self.complex_flux
         Z_wave = tangential_intensity / P / 2
