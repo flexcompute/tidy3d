@@ -255,5 +255,8 @@ def _run_local(
     vgpu_allocation = kwargs.get("vgpu_allocation")
     if vgpu_allocation is not None:
         run_kwargs["vgpu_allocation"] = vgpu_allocation
+    ignore_memory_limit = kwargs.get("ignore_memory_limit")
+    if ignore_memory_limit is not None:
+        run_kwargs["ignore_memory_limit"] = ignore_memory_limit
     batch_data = batch.run(**run_kwargs)
     return compose_modeler_data_from_batch_data(modeler=modeler, batch_data=batch_data)

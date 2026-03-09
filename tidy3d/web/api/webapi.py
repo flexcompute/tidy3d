@@ -682,6 +682,7 @@ def start(
     pay_type: Union[PayType, str] = PayType.AUTO,
     priority: Optional[int] = None,
     vgpu_allocation: Optional[int] = None,
+    ignore_memory_limit: Optional[bool] = None,
 ) -> None:
     """Start running the simulation associated with task.
 
@@ -705,7 +706,8 @@ def start(
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
         Only applies to vGPU license users. If not specified, the system
         automatically determines the optimal GPU count.
-
+    ignore_memory_limit : bool = None
+        Whether to ignore memory usage limits.
     Note
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
@@ -729,6 +731,7 @@ def start(
         pay_type=pay_type,
         priority=priority,
         vgpu_allocation=vgpu_allocation,
+        ignore_memory_limit=ignore_memory_limit,
     )
 
 

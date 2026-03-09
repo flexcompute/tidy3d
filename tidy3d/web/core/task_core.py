@@ -594,6 +594,7 @@ class SimulationTask(WebTask):
         pay_type: Union[PayType, str] = PayType.AUTO,
         priority: Optional[int] = None,
         vgpu_allocation: Optional[int] = None,
+        ignore_memory_limit: Optional[bool] = None,
     ) -> None:
         """Kick off this task.
 
@@ -616,6 +617,9 @@ class SimulationTask(WebTask):
             Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
+        ignore_memory_limit: bool = None
+            Whether to ignore memory limits.
+
         """
         pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
 
@@ -634,6 +638,7 @@ class SimulationTask(WebTask):
                 "payType": pay_type.value,
                 "priority": priority,
                 "vgpuAllocation": vgpu_allocation,
+                "ignoreMemoryLimit": ignore_memory_limit,
             },
         )
 
@@ -921,6 +926,7 @@ class BatchTask(WebTask):
         pay_type: Union[PayType, str] = PayType.AUTO,
         priority: Optional[int] = None,
         vgpu_allocation: Optional[int] = None,
+        ignore_memory_limit: Optional[bool] = None,
     ) -> requests.Response:
         """Submits the batch for execution on the server.
 
@@ -934,6 +940,8 @@ class BatchTask(WebTask):
             Optional identifier for a specific worker group to run on.
         vgpu_allocation : Optional[int], default=None
             Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+        ignore_memory_limit : Optional[bool], default=None
+            Whether or not to ignore memory limits.
 
         Returns
         -------
@@ -963,6 +971,8 @@ class BatchTask(WebTask):
                 "solverVersion": solver_version,
                 "protocolVersion": protocol_version,
                 "workerGroup": worker_group,
+                "vgpu_allocation": vgpu_allocation,
+                "ignore_memory_limit": ignore_memory_limit,
             },
         )
 

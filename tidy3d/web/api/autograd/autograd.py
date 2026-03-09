@@ -304,6 +304,7 @@ def run_custom(
     ] = None,
     custom_vjp: Optional[Union[CustomVJPConfig, tuple[CustomVJPConfig, ...]]] = None,
     vgpu_allocation: Optional[int] = None,
+    ignore_memory_limit: Optional[bool] = None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -363,6 +364,8 @@ def run_custom(
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
         Only applies to vGPU license users. If not specified, the system
         automatically determines the optimal GPU count.
+    ignore_memory_limit: Optional[bool] = None
+         Whether to ignore memory usage limits. Defaults to ``None``.
 
     Returns
     -------
@@ -472,6 +475,7 @@ def run_custom(
                 max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
                 numerical_structures=numerical_structures,
                 custom_vjp=custom_vjp,
+                ignore_memory_limit=ignore_memory_limit,
             )
 
     should_use_autograd = False
@@ -572,6 +576,7 @@ def run_async_custom(
     ] = None,
     custom_vjp: Optional[CustomVJPSpec] = None,
     vgpu_allocation: Optional[int] = None,
+    ignore_memory_limit: Optional[bool] = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -633,7 +638,8 @@ def run_async_custom(
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
         Only applies to vGPU license users. If not specified, the system
         automatically determines the optimal GPU count.
-
+    ignore_memory_limit: Optional[bool] = None
+        Whether to ignore memory limitations. Defaults to ``None``
     Returns
     ------
     :class:`BatchData`
@@ -805,6 +811,7 @@ def run_async_custom(
             priority=priority,
             vgpu_allocation=vgpu_allocation,
             lazy=lazy,
+            ignore_memory_limit=ignore_memory_limit,
         )
 
     # insert numerical_structures even if not traced
@@ -864,6 +871,7 @@ def run(
     priority: Optional[int] = None,
     lazy: Optional[bool] = None,
     vgpu_allocation: Optional[int] = None,
+    ignore_memory_limit: Optional[bool] = None,
 ) -> WorkflowDataType:
     """Wrapper for run_custom for usage without numerical_structures or custom_vjp for public facing API."""
     return run_custom(
@@ -888,6 +896,7 @@ def run(
         lazy=lazy,
         numerical_structures=None,
         custom_vjp=None,
+        ignore_memory_limit=ignore_memory_limit,
     )
 
 
@@ -908,6 +917,7 @@ def run_async(
     priority: Optional[int] = None,
     lazy: Optional[bool] = None,
     vgpu_allocation: Optional[int] = None,
+    ignore_memory_limit: Optional[bool] = None,
 ) -> BatchData:
     """Wrapper for run_async_custom for usage without numerical_structures or custom_vjp for public facing API."""
     return run_async_custom(
@@ -929,6 +939,7 @@ def run_async(
         lazy=lazy,
         numerical_structures=None,
         custom_vjp=None,
+        ignore_memory_limit=ignore_memory_limit,
     )
 
 
