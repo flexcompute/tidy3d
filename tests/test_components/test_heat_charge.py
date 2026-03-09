@@ -3016,3 +3016,70 @@ def test_cylinder_small_radius_warning():
             grid_spec=td.UniformUnstructuredGrid(dl=0.1),
             monitors=[td.TemperatureMonitor(size=(1, 1, 1), name="tmp")],
         )
+
+
+@pytest.mark.parametrize(
+    "geometry,expect_error",
+    [
+        (
+            td.PolySlab(
+                vertices=((0, 0), (1, 0), (1, 1), (0, 1)),
+                bulges=[0.3, 0, 0, 0],
+                slab_bounds=(-0.5, 0.5),
+                axis=2,
+            ),
+            True,
+        ),
+        (
+            td.PolySlab(
+                vertices=((0, 0), (1, 0), (1, 1), (0, 1)),
+                bulges=[0.3, 0, 0, 0],
+                slab_bounds=(-0.5, 0.5),
+                axis=2,
+            ).translated(x=0.1, y=0.0, z=0.0),
+            True,
+        ),
+        (
+            td.PolySlab(
+                vertices=((0, 0), (1, 0), (1, 1), (0, 1)),
+                slab_bounds=(-0.5, 0.5),
+                axis=2,
+            ),
+            False,
+        ),
+        (
+            td.PolySlab(
+                vertices=((0, 0), (1, 0), (1, 1), (0, 1)),
+                bulges=[0, 0, 0, 0],
+                slab_bounds=(-0.5, 0.5),
+                axis=2,
+            ),
+            False,
+        ),
+    ],
+)
+def test_polyslab_arc_unsupported(geometry, expect_error):
+    """Curved PolySlabs should be rejected by TCAD simulation validation."""
+    solid = td.MultiPhysicsMedium(
+        heat=td.SolidSpec(conductivity=1, capacity=1),
+        name="solid",
+    )
+    background = td.MultiPhysicsMedium(
+        heat=td.FluidSpec(),
+        name="background",
+    )
+    structure = td.Structure(geometry=geometry, medium=solid, name="poly")
+    kwargs = {
+        "center": (0, 0, 0),
+        "size": (2, 2, 2),
+        "medium": background,
+        "structures": [structure],
+        "grid_spec": td.UniformUnstructuredGrid(dl=0.1),
+        "monitors": [td.TemperatureMonitor(size=(1, 1, 1), name="tmp")],
+    }
+
+    if expect_error:
+        with pytest.raises(ValidationError, match="arc segments in 'PolySlab'"):
+            td.HeatChargeSimulation(**kwargs)
+    else:
+        td.HeatChargeSimulation(**kwargs)

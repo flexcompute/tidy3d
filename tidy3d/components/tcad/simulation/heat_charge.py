@@ -17,6 +17,7 @@ from tidy3d.components.bc_placement import (
     StructureStructureInterface,
 )
 from tidy3d.components.geometry.base import Box, Transformed
+from tidy3d.components.geometry.polyslab import PolySlab
 from tidy3d.components.geometry.primitives import Cylinder
 from tidy3d.components.geometry.utils import flatten_groups
 from tidy3d.components.material.tcad.charge import (
@@ -416,6 +417,16 @@ class HeatChargeSimulation(AbstractSimulation):
                 raise SetupError(
                     f"'HeatSimulation' does not currently support structures with dimensions of zero size ('structures[{ind}]')."
                 )
+            for geometry in flatten_groups(
+                structure.geometry, flatten_nonunion_type=True, flatten_transformed=True
+            ):
+                base_geometry = geometry.geometry if isinstance(geometry, Transformed) else geometry
+                if isinstance(base_geometry, PolySlab) and base_geometry._has_arc_segments:
+                    raise SetupError(
+                        f"'HeatChargeSimulation' does not currently support arc segments in "
+                        f"'PolySlab' geometries ('structures[{ind}]'). Set all 'bulges' to 0 "
+                        "to use a straight-edge polyslab."
+                    )
         return val
 
     @field_validator("structures")
