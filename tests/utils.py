@@ -1887,7 +1887,7 @@ def get_nested_shape(nested_obj: Any) -> Any:
         else:
             return {key: get_nested_shape(nested_obj[key]) for key in nested_obj}
 
-    # Tuple of dicts, enter and continue iteration
+    # Tuples/lists: recurse while preserving the container type
     elif isinstance(nested_obj, (tuple, list)):
         if len(nested_obj) == 0:
             return None
