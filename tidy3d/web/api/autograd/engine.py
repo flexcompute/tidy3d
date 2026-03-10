@@ -16,6 +16,16 @@ def parse_run_kwargs(**run_kwargs: Any) -> dict[str, Any]:
     return job_init_kwargs
 
 
+def _build_batch(
+    simulations: dict[str, td.Simulation], *, num_workers: int | None, **kwargs: Any
+) -> Batch:
+    """Construct ``Batch`` while preserving the model default when ``num_workers`` is omitted."""
+    batch_kwargs = dict(simulations=simulations, **kwargs)
+    if num_workers is not None:
+        batch_kwargs["num_workers"] = num_workers
+    return Batch(**batch_kwargs)
+
+
 def _run_tidy3d(
     simulation: td.Simulation, task_name: str, **run_kwargs: Any
 ) -> tuple[td.SimulationData, str]:
@@ -48,7 +58,8 @@ def _run_async_tidy3d(
     path_dir = run_kwargs.pop("path_dir", None)
     priority = run_kwargs.get("priority")
     vgpu_allocation = run_kwargs.get("vgpu_allocation")
-    batch = Batch(simulations=simulations, **batch_init_kwargs)
+    num_workers = run_kwargs.get("num_workers")
+    batch = _build_batch(simulations=simulations, num_workers=num_workers, **batch_init_kwargs)
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d()'")
 
     if batch.simulation_type == "autograd_fwd":
@@ -83,7 +94,8 @@ def _run_async_tidy3d_bwd(
 
     batch_init_kwargs = parse_run_kwargs(**run_kwargs)
     _ = run_kwargs.pop("path_dir", None)
-    batch = Batch(simulations=simulations, **batch_init_kwargs)
+    num_workers = run_kwargs.get("num_workers")
+    batch = _build_batch(simulations=simulations, num_workers=num_workers, **batch_init_kwargs)
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d_bwd()'")
 
     priority = run_kwargs.get("priority")

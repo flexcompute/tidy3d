@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import atexit
 import concurrent
+import hashlib
 import os
 import shutil
 import tempfile
@@ -55,11 +56,11 @@ if TYPE_CHECKING:
     from tidy3d.components.types.workflow import WorkflowDataType
     from tidy3d.web.core.task_info import RunInfo, TaskInfo
 
-# Max # of workers for parallel upload / download: above 10, performance is same but with warnings
-DEFAULT_NUM_WORKERS = 10
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
 BATCH_PROGRESS_REFRESH_TIME = 0.02
+# Upload/start requests are network I/O-bound, so use a fixed concurrency cap.
+UPLOAD_START_NUM_WORKERS = 64
 
 BatchCategoryType = Literal[
     "tidy3d",
@@ -70,6 +71,11 @@ BatchCategoryType = Literal[
     "autograd_fwd",
     "autograd_bwd",
 ]
+
+
+def _default_batch_num_workers() -> int:
+    """Default worker count from runtime config."""
+    return config.web.default_num_workers
 
 
 class WebContainer(Tidy3dBaseModel, ABC):
@@ -369,12 +375,18 @@ class Job(WebContainer):
         """The task ID for this ``Job``. Uploads the ``Job`` if it hasn't already been uploaded."""
         if self.load_if_cached:
             return self._cached_task_id
+        task_id = self._cached_properties.get("task_id")
+        if task_id is not None:
+            return task_id
         if self.task_id_cached:
             return self.task_id_cached
         self._check_folder(self.folder_name)
         return self._upload(verbose_estimate_cost=False)
 
-    def _upload(self, verbose_estimate_cost: Optional[bool] = None) -> TaskId:
+    def _upload(
+        self,
+        verbose_estimate_cost: Optional[bool] = None,
+    ) -> TaskId:
         """Upload this job and return the task ID for handling."""
         # upload kwargs with all fields except task_id
         upload_kwargs = {key: getattr(self, key) for key in self._upload_fields}
@@ -387,9 +399,15 @@ class Job(WebContainer):
         """Upload this ``Job`` if not already got cached results."""
         if self.load_if_cached:
             return
-        if self.verbose:
-            self.estimate_cost(verbose=True)
-        _ = self.task_id
+        cached_task_id = self._cached_properties.get("task_id")
+        if cached_task_id is not None or self.task_id_cached:
+            return
+
+        self._check_folder(self.folder_name)
+        task_id = self._upload(
+            verbose_estimate_cost=self.verbose,
+        )
+        self._cached_properties["task_id"] = task_id
 
     def get_info(self) -> TaskInfo:
         """Return information about a :class:`Job`.
@@ -833,12 +851,13 @@ class Batch(WebContainer):
     )
 
     num_workers: Optional[PositiveInt] = Field(
-        DEFAULT_NUM_WORKERS,
+        default_factory=_default_batch_num_workers,
         title="Number of Workers",
-        description="Number of workers for multi-threading upload and download of batch. "
+        description="Number of workers for batch multi-threading where configurable. "
         "Corresponds to ``max_workers`` argument passed to "
-        "``concurrent.futures.ThreadPoolExecutor``. When left ``None``, will pass the maximum "
-        "number of threads available on the system.",
+        "``concurrent.futures.ThreadPoolExecutor``. Upload/start use a fixed "
+        f"concurrency of {UPLOAD_START_NUM_WORKERS}. Defaults to "
+        "``config.web.default_num_workers``.",
     )
 
     reduce_simulation: Literal["auto", True, False] = Field(
@@ -869,6 +888,8 @@ class Batch(WebContainer):
     )
 
     _job_type: type = PrivateAttr(Job)
+    _terminal_status_by_task: dict[TaskName, str] = PrivateAttr(default_factory=dict)
+    _terminal_task_id_by_task: dict[TaskName, TaskId] = PrivateAttr(default_factory=dict)
 
     @field_validator("simulations", mode="before")
     @classmethod
@@ -1023,27 +1044,69 @@ class Batch(WebContainer):
         """Number of jobs in the batch."""
         return len(self.jobs)
 
+    def _partition_jobs_by_cache(self) -> tuple[list[Job], list[Job]]:
+        """Return ``(cached_jobs, uncached_jobs)`` for the current batch."""
+        jobs_from_cache = []
+        jobs_uncached = []
+        for job in self.jobs.values():
+            if job.load_if_cached:
+                jobs_from_cache.append(job)
+            else:
+                jobs_uncached.append(job)
+        return jobs_from_cache, jobs_uncached
+
+    def _log_cached_jobs(self, jobs_from_cache: list[Job]) -> None:
+        """Log how many jobs were restored from cache."""
+        if not self.verbose:
+            return
+
+        n_cached = len(jobs_from_cache)
+        if n_cached <= 0:
+            return
+
+        console = get_logging_console()
+        console.log(f"Got {n_cached} simulation{'s' if n_cached > 1 else ''} from cache.")
+
+    def _prepare_uncached_jobs(
+        self,
+        *,
+        check_folder: bool = False,
+        log_cached_jobs: bool = False,
+    ) -> list[Job]:
+        """Prepare uncached jobs with shared cache/folder handling."""
+        if check_folder:
+            self._check_folder(self.folder_name)
+
+        jobs_from_cache, jobs_uncached = self._partition_jobs_by_cache()
+        if log_cached_jobs:
+            self._log_cached_jobs(jobs_from_cache)
+
+        return jobs_uncached
+
+    @staticmethod
+    def _cached_fallback_task_id(task_name: TaskName, job: Job) -> str:
+        """Filesystem-safe fallback ID for cached jobs without known server task IDs."""
+        simulation_hash = job.simulation._hash_self()
+        task_name_hash = hashlib.md5(str(task_name).encode("utf-8")).hexdigest()
+        return f"cached_{simulation_hash}_{task_name_hash}"
+
     def upload(self) -> None:
         """Upload a series of tasks associated with this ``Batch`` using multi-threading."""
-        self._check_folder(self.folder_name)
-        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-            jobs_from_cache = [job for job in self.jobs.values() if job.load_if_cached]
-            jobs_to_upload = [job for job in self.jobs.values() if not job.load_if_cached]
-            futures = [executor.submit(job.upload) for job in jobs_to_upload]
+        jobs_to_upload = self._prepare_uncached_jobs(
+            check_folder=True,
+            log_cached_jobs=True,
+        )
+        with ThreadPoolExecutor(max_workers=UPLOAD_START_NUM_WORKERS) as executor:
+            upload_futures: dict[concurrent.futures.Future[Any], Job] = {}
+            for job in jobs_to_upload:
+                fut = executor.submit(job.upload)
+                upload_futures[fut] = job
 
-            # progressbar (number of tasks uploaded)
-            if self.verbose:
-                console = get_logging_console()
-                n_cached = len(jobs_from_cache)
-                if n_cached > 0:
-                    console.log(
-                        f"Got {n_cached} simulation{'s' if n_cached > 1 else ''} from cache."
-                    )
-
-            if len(futures) == 0:  # got all jobs from cache
+            if len(upload_futures) == 0:
                 return
 
             if self.verbose:
+                console = get_logging_console()
                 progress_columns = (
                     TextColumn("[progress.description]{task.description}"),
                     BarColumn(),
@@ -1051,18 +1114,39 @@ class Batch(WebContainer):
                     TimeElapsedColumn(),
                 )
                 with Progress(*progress_columns, console=console, transient=False) as progress:
-                    pbar_message = f"Uploading data for {len(jobs_to_upload)} task{'s' if len(jobs_to_upload) > 1 else ''}"
+                    pbar_message = (
+                        f"Uploading data for {len(jobs_to_upload)} "
+                        f"task{'s' if len(jobs_to_upload) > 1 else ''}"
+                    )
                     pbar = progress.add_task(pbar_message, total=len(jobs_to_upload))
                     completed = 0
-                    for _ in concurrent.futures.as_completed(futures):
+                    for fut in concurrent.futures.as_completed(upload_futures):
+                        job = upload_futures[fut]
+                        try:
+                            fut.result()
+                        except Exception as exc:
+                            task_name = getattr(job, "task_name", "<unknown>")
+                            log.error(
+                                f"Failed to upload task '{task_name}': "
+                                f"{exc.__class__.__name__}: {exc}"
+                            )
+                            raise
                         completed += 1
                         progress.update(pbar, completed=completed)
 
                     progress.refresh()
                     time.sleep(BATCH_PROGRESS_REFRESH_TIME)
             else:
-                for _ in concurrent.futures.as_completed(futures):
-                    pass
+                for fut in concurrent.futures.as_completed(upload_futures):
+                    job = upload_futures[fut]
+                    try:
+                        fut.result()
+                    except Exception as exc:
+                        task_name = getattr(job, "task_name", "<unknown>")
+                        log.error(
+                            f"Failed to upload task '{task_name}': {exc.__class__.__name__}: {exc}"
+                        )
+                        raise
 
     def get_info(self) -> dict[TaskName, TaskInfo]:
         """Get information about each task in the :class:`Batch`.
@@ -1103,10 +1187,27 @@ class Batch(WebContainer):
         if self.verbose:
             console = get_logging_console()
             console.log(f"Started working on Batch containing {self.num_jobs} tasks.")
+        jobs_to_start = self._prepare_uncached_jobs()
+        with ThreadPoolExecutor(max_workers=UPLOAD_START_NUM_WORKERS) as executor:
+            start_futures: dict[concurrent.futures.Future[Any], Job] = {}
+            for job in jobs_to_start:
+                fut = executor.submit(
+                    job.start,
+                    priority=priority,
+                    vgpu_allocation=vgpu_allocation,
+                )
+                start_futures[fut] = job
 
-        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-            for _, job in self.jobs.items():
-                executor.submit(job.start, priority=priority, vgpu_allocation=vgpu_allocation)
+            for fut in concurrent.futures.as_completed(start_futures):
+                job = start_futures[fut]
+                try:
+                    fut.result()
+                except Exception as exc:
+                    task_name = getattr(job, "task_name", "<unknown>")
+                    log.error(
+                        f"Failed to start task '{task_name}': {exc.__class__.__name__}: {exc}"
+                    )
+                    raise
 
     def get_run_info(self) -> dict[TaskName, RunInfo]:
         """get information about a each of the tasks in the :class:`Batch`.
@@ -1148,6 +1249,21 @@ class Batch(WebContainer):
             Downloads the data even if path exists (overwriting the existing). Only used when
             ``download_on_success`` is ``True``.
         """
+        jobs = self.jobs
+        jobs_items = list(jobs.items())
+        active_task_names = set(jobs)
+        self._terminal_status_by_task = {
+            task_name: status
+            for task_name, status in self._terminal_status_by_task.items()
+            if task_name in active_task_names and status in END_STATES
+        }
+        self._terminal_task_id_by_task = {
+            task_name: task_id
+            for task_name, task_id in self._terminal_task_id_by_task.items()
+            if task_name in active_task_names and task_id is not None
+        }
+        status_by_task = dict(self._terminal_status_by_task)
+
         # ----- download scheduling ---------------------------------------------------
         downloads_started: set[str] = set()
         download_futures: dict[TaskId, concurrent.futures.Future] = {}
@@ -1157,10 +1273,54 @@ class Batch(WebContainer):
             self._check_path_dir(path_dir=path_dir)
             download_executor = ThreadPoolExecutor(max_workers=self.num_workers)
 
-        def schedule_download(job: Job) -> None:
-            if download_executor is None or job.status not in COMPLETED_STATES:
+        def _remember_terminal_status(task_name: TaskName, job: Job, status: str) -> None:
+            if status not in END_STATES:
                 return
-            task_id = job.task_id
+
+            status_by_task[task_name] = status
+            self._terminal_status_by_task[task_name] = status
+            if status in ERROR_STATES:
+                return
+
+            # Keep task IDs around to avoid re-querying status/id in a following load().
+            task_id = self._terminal_task_id_by_task.get(task_name)
+            if task_id is None:
+                task_id = job.task_id
+            if task_id is None:
+                self._terminal_task_id_by_task.pop(task_name, None)
+                return
+            self._terminal_task_id_by_task[task_name] = task_id
+
+        def _get_status(task_name: TaskName, job: Job) -> str:
+            cached_status = status_by_task.get(task_name)
+            if cached_status in END_STATES:
+                return cached_status
+
+            status = job.status
+            status_by_task[task_name] = status
+            _remember_terminal_status(task_name, job, status)
+            return status
+
+        def schedule_download(
+            task_name: TaskName,
+            job: Job,
+            status: Optional[str] = None,
+        ) -> None:
+            if download_executor is None:
+                return
+
+            if status is None:
+                status = _get_status(task_name, job)
+            if status not in COMPLETED_STATES:
+                return
+
+            task_id = self._terminal_task_id_by_task.get(task_name)
+            if task_id is None:
+                task_id = job.task_id
+            if task_id is None:
+                if not job.load_if_cached:
+                    return
+                task_id = self._cached_fallback_task_id(task_name, job)
             if task_id in downloads_started:
                 return
 
@@ -1179,10 +1339,11 @@ class Batch(WebContainer):
             download_futures[task_id] = download_executor.submit(job.download, job_path)
 
         # ----- continue condition & status formatting -------------------------------
-        def check_continue_condition(job: Job) -> bool:
+        def check_continue_condition(task_name: TaskName, job: Job) -> bool:
             if job.load_if_cached:
+                _remember_terminal_status(task_name, job, "success")
                 return False
-            return job.status not in END_STATES
+            return _get_status(task_name, job) not in END_STATES
 
         def pbar_description(
             task_name: str, status: str, max_name_length: int, status_width: int
@@ -1227,32 +1388,62 @@ class Batch(WebContainer):
                 *progress_columns, console=console, transient=False, disable=not self.verbose
             ) as progress:
                 pbar_tasks: dict[str, TaskID] = {}
-                for task_name, job in self.jobs.items():
-                    schedule_download(job)
+                for task_name, job in jobs_items:
+                    status = status_by_task.get(task_name)
                     if self.verbose:
+                        display_status = status
                         if job.load_if_cached:
                             status = "success"
+                            display_status = status
                             completed = COMPLETED_PERCENT
+                            _remember_terminal_status(task_name, job, status)
+                        elif status in END_STATES:
+                            display_status = status
+                            completed = STATE_PROGRESS_PERCENTAGE.get(status, COMPLETED_PERCENT)
+                            _remember_terminal_status(task_name, job, status)
                         else:
                             info = job.get_info()
                             status = info.status
+                            display_status = status
+                            status_by_task[task_name] = status
+                            _remember_terminal_status(task_name, job, status)
                             if isinstance(info, BatchDetail):
-                                status, _, completed = _batch_detail_progress(info)
+                                display_status, _, completed = _batch_detail_progress(info)
                             else:
                                 completed = STATE_PROGRESS_PERCENTAGE.get(status, 0)
-                        desc = pbar_description(task_name, status, max_name_length, 0)
+                        schedule_download(task_name, job, status=status)
+                        desc = pbar_description(task_name, display_status, max_name_length, 0)
                         pbar_tasks[task_name] = progress.add_task(
                             desc, total=COMPLETED_PERCENT, completed=completed
                         )
+                    else:
+                        if status is None:
+                            if job.load_if_cached:
+                                status = "success"
+                                _remember_terminal_status(task_name, job, status)
+                            else:
+                                status = _get_status(task_name, job)
+                        elif status in END_STATES:
+                            _remember_terminal_status(task_name, job, status)
+                        schedule_download(task_name, job, status=status)
 
-                while any(check_continue_condition(job) for job in self.jobs.values()):
-                    for task_name, job in self.jobs.items():
+                while any(
+                    check_continue_condition(task_name, job) for task_name, job in jobs_items
+                ):
+                    for task_name, job in jobs_items:
                         if job.load_if_cached:
                             continue
+                        status = status_by_task.get(task_name)
+                        if status in END_STATES:
+                            schedule_download(task_name, job, status=status)
+                            continue
+
                         info = job.get_info()
                         status = info.status
+                        status_by_task[task_name] = status
+                        _remember_terminal_status(task_name, job, status)
 
-                        schedule_download(job)
+                        schedule_download(task_name, job, status=status)
 
                         if self.verbose:
                             # choose display status & percent
@@ -1280,16 +1471,28 @@ class Batch(WebContainer):
                         time.sleep(web.REFRESH_TIME)
 
                 # final render to terminal state for all bars
-                for task_name, job in self.jobs.items():
-                    schedule_download(job)
+                for task_name, job in jobs_items:
+                    status = status_by_task.get(task_name)
+                    if status is None:
+                        if job.load_if_cached:
+                            status = "success"
+                            _remember_terminal_status(task_name, job, status)
+                        else:
+                            status = _get_status(task_name, job)
+                    schedule_download(task_name, job, status=status)
 
                     if self.verbose:
                         if job.load_if_cached:
                             display_status = "success"
                             pct = COMPLETED_PERCENT
+                        elif status in END_STATES:
+                            display_status = status
+                            pct = STATE_PROGRESS_PERCENTAGE.get(status, COMPLETED_PERCENT)
                         else:
                             info = job.get_info()
                             status = info.status
+                            status_by_task[task_name] = status
+                            _remember_terminal_status(task_name, job, status)
                             if isinstance(info, BatchDetail):
                                 display_status, _, pct = _batch_detail_progress(info)
                             elif status != "run_success":
@@ -1379,11 +1582,22 @@ class Batch(WebContainer):
         self._check_path_dir(path_dir=path_dir)
         self.to_file(self._batch_path(path_dir=path_dir))
 
+        def _task_id_for_download_path(task_name: TaskName, job: Job) -> str:
+            task_id = job.task_id
+            if task_id is None and job.load_if_cached:
+                return self._cached_fallback_task_id(task_name, job)
+            return str(task_id)
+
         # Warn about already-existing files if we won't overwrite them
         if not replace_existing:
             num_existing = sum(
-                os.path.exists(self._job_data_path(task_id=job.task_id, path_dir=path_dir))
-                for job in self.jobs.values()
+                os.path.exists(
+                    self._job_data_path(
+                        task_id=_task_id_for_download_path(task_name, job),
+                        path_dir=path_dir,
+                    )
+                )
+                for task_name, job in self.jobs.items()
             )
             if num_existing > 0:
                 files_plural = "files have" if num_existing > 1 else "file has"
@@ -1397,11 +1611,18 @@ class Batch(WebContainer):
         fns = []
 
         for task_name, job in self.jobs.items():
-            if "error" in job.status:
+            status = self._terminal_status_by_task.get(task_name)
+            if status is None:
+                status = job.status
+                if status in END_STATES:
+                    self._terminal_status_by_task[task_name] = status
+
+            if status in ERROR_STATES:
                 log.warning(f"Not downloading '{task_name}' as the task errored.")
                 continue
 
-            job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+            task_id_for_path = _task_id_for_download_path(task_name, job)
+            job_path = self._job_data_path(task_id=task_id_for_path, path_dir=path_dir)
 
             if job_path.exists():
                 if replace_existing:
@@ -1480,13 +1701,73 @@ class Batch(WebContainer):
 
         task_paths = {}
         task_ids = {}
-        for task_name, job in self.jobs.items():
-            if "error" in job.status:
+        jobs_items = list(self.jobs.items())
+        terminal_status_by_task = {
+            task_name: status
+            for task_name, status in self._terminal_status_by_task.items()
+            if task_name in self.jobs and status in END_STATES
+        }
+        terminal_task_id_by_task = {
+            task_name: task_id
+            for task_name, task_id in self._terminal_task_id_by_task.items()
+            if task_name in self.jobs and task_id is not None
+        }
+
+        def _known_task_id(task_name: TaskName, job: Job) -> Optional[TaskId]:
+            """Return a known task id without triggering uploads."""
+            task_id = terminal_task_id_by_task.get(task_name)
+            if task_id is not None:
+                return task_id
+
+            cached_properties = getattr(job, "_cached_properties", None)
+            if isinstance(cached_properties, dict):
+                task_id = cached_properties.get("task_id")
+                if task_id is not None:
+                    return task_id
+
+            task_id_cached = getattr(job, "task_id_cached", None)
+            if task_id_cached is not None:
+                return task_id_cached
+
+            if job.load_if_cached:
+                return getattr(job, "_cached_task_id", None)
+
+            return None
+
+        status_by_task: dict[TaskName, str] = {}
+        for task_name, job in jobs_items:
+            status = terminal_status_by_task.get(task_name)
+            task_id = _known_task_id(task_name, job)
+            loaded_from_cache_job = job.load_if_cached
+
+            if status is None:
+                if loaded_from_cache_job:
+                    status = "success"
+                elif task_id is None:
+                    log.warning(f"Not loading '{task_name}' as the task hasn't been uploaded.")
+                    continue
+                else:
+                    status = job.status
+
+            status_by_task[task_name] = status
+            if status in END_STATES:
+                self._terminal_status_by_task[task_name] = status
+
+            if status in ERROR_STATES:
                 log.warning(f"Not loading '{task_name}' as the task errored.")
                 continue
 
-            task_paths[task_name] = str(self._job_data_path(task_id=job.task_id, path_dir=path_dir))
-            task_ids[task_name] = self.jobs[task_name].task_id
+            if task_id is None and not loaded_from_cache_job:
+                log.warning(f"Not loading '{task_name}' as the task hasn't been uploaded.")
+                continue
+
+            task_id_str = (
+                self._cached_fallback_task_id(task_name, job) if task_id is None else str(task_id)
+            )
+            if task_id is not None:
+                self._terminal_task_id_by_task[task_name] = task_id
+            task_paths[task_name] = str(self._job_data_path(task_id=task_id_str, path_dir=path_dir))
+            task_ids[task_name] = task_id_str
 
         loaded_from_cache = {task_name: job.load_if_cached for task_name, job in self.jobs.items()}
 
@@ -1503,6 +1784,8 @@ class Batch(WebContainer):
         )
 
         for task_name, job in self.jobs.items():
+            if task_name not in task_paths:
+                continue
             if isinstance(job.simulation, ModeSolver):
                 job_data = data[task_name]
                 if not loaded_from_cache[task_name]:

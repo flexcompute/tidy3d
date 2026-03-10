@@ -376,6 +376,15 @@ class WebConfig(ConfigSection):
         le=300,
     )
 
+    default_num_workers: PositiveInt = Field(
+        10,
+        title="Default batch workers",
+        description=(
+            "Default worker count for configurable ``Batch`` thread pools when ``num_workers`` "
+            "is not provided. Upload/start uses a fixed concurrency of 64 workers."
+        ),
+    )
+
     ssl_version: Optional[str] = Field(
         None,
         title="SSL/TLS version",

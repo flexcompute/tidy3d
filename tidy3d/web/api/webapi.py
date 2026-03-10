@@ -585,7 +585,11 @@ def upload(
     )
 
     verbose_estimate_cost = verbose if verbose_estimate_cost is None else verbose_estimate_cost
-    estimate_cost(task_id=resource_id, solver_version=solver_version, verbose=verbose_estimate_cost)
+    estimate_cost(
+        task_id=resource_id,
+        solver_version=solver_version,
+        verbose=verbose_estimate_cost,
+    )
 
     task.validate_post_upload(parent_tasks=parent_tasks)
 
@@ -1493,7 +1497,9 @@ def get_tasks(
 
 @wait_for_connection
 def estimate_cost(
-    task_id: str, verbose: bool = True, solver_version: Optional[str] = None
+    task_id: str,
+    verbose: bool = True,
+    solver_version: Optional[str] = None,
 ) -> float:
     """Compute the maximum FlexCredit charge for a given task.
 
@@ -1505,7 +1511,6 @@ def estimate_cost(
         Whether to log the cost and helpful messages.
     solver_version : str = None
         Target solver version.
-
     Returns
     -------
     float
