@@ -1197,8 +1197,18 @@ def test_split_adjoint_data_logs_mixed_source_structure_counts(monkeypatch):
             center=(0, 0, 0), size=(0, 0, 0), freqs=[2e14], name="adjoint_eps_0"
         ),
     ]
+
+    data_entries = [
+        SimpleNamespace(monitor=SimpleNamespace(name="orig"), payload="orig_data"),
+        SimpleNamespace(monitor=SimpleNamespace(name="adjoint_fld_0"), payload="adj_fld_data"),
+        SimpleNamespace(
+            monitor=SimpleNamespace(name="source_adjoint_0"), payload="source_adj_data"
+        ),
+        SimpleNamespace(monitor=SimpleNamespace(name="adjoint_eps_0"), payload="adj_eps_data"),
+    ]
     dummy_sim_data = SimpleNamespace(
-        data=["orig_data", "adj_fld_data", "source_adj_data", "adj_eps_data"],
+        data=data_entries,
+        monitor_data={entry.monitor.name: entry for entry in data_entries},
         simulation=SimpleNamespace(monitors=monitors),
     )
 
@@ -1209,10 +1219,16 @@ def test_split_adjoint_data_logs_mixed_source_structure_counts(monkeypatch):
         dummy_sim_data, num_mnts_original=1
     )
 
-    assert data_original == ["orig_data"]
-    assert data_adjoint == ["adj_fld_data", "source_adj_data", "adj_eps_data"]
+    assert [entry.payload for entry in data_original] == ["orig_data"]
+    assert [entry.payload for entry in data_adjoint] == [
+        "adj_fld_data",
+        "source_adj_data",
+        "adj_eps_data",
+    ]
     assert any(
-        "1 monitors, 2 adjoint field monitors, 1 adjoint eps monitors." in msg for msg in messages
+        "1 monitors, 1 adjoint field monitors, 1 source adjoint monitors, 1 adjoint eps monitors."
+        in msg
+        for msg in messages
     )
 
 

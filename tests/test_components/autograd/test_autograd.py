@@ -2206,6 +2206,113 @@ def test_no_freq_adjoint(monkeypatch, use_emulated_run):
         ag.grad(objective)(params0)
 
 
+def _make_mock_combined_sim_data(
+    sim_original: td.Simulation,
+    task_name: str,
+    include_eps_monitor: bool = True,
+) -> td.SimulationData:
+    """Build deterministic combined SimulationData with named adjoint monitors."""
+    sim_data_original = run_emulated(sim_original, task_name=task_name)
+    template_monitor = sim_original.monitors[0]
+    template_data = sim_data_original.data[0]
+
+    adjoint_monitors = [template_monitor.updated_copy(name="adjoint_fld_0")]
+    adjoint_data = [template_data.updated_copy(monitor=adjoint_monitors[0])]
+
+    if include_eps_monitor:
+        adjoint_monitors.append(template_monitor.updated_copy(name="adjoint_eps_0"))
+        adjoint_data.append(template_data.updated_copy(monitor=adjoint_monitors[-1]))
+
+    sim_combined = sim_original.updated_copy(monitors=(*sim_original.monitors, *adjoint_monitors))
+    sim_data_combined = sim_data_original.updated_copy(
+        simulation=sim_combined,
+        data=(*sim_data_original.data, *adjoint_data),
+    )
+    return sim_data_combined
+
+
+def test_split_adjoint_data_warns_on_missing_original_monitor_data():
+    """Warn if combined SimulationData does not contain all expected original monitor data."""
+    monitor, _ = make_monitors()["field_point"]
+    structure = make_structures(params0)["custom_med"]
+    sim_original = SIM_BASE.updated_copy(
+        structures=(*SIM_BASE.structures, structure),
+        monitors=(*SIM_BASE.monitors, monitor),
+    )
+    sim_data_combined = _make_mock_combined_sim_data(
+        sim_original, task_name="missing_original_monitor_data"
+    )
+
+    removed_name = sim_original.monitors[0].name
+    sim_data_missing = sim_data_combined.updated_copy(
+        data=tuple(data for data in sim_data_combined.data if data.monitor.name != removed_name)
+    )
+
+    with AssertLogLevel("WARNING", contains_str="missing expected original monitor data"):
+        sim_data_missing._split_adjoint_data(num_mnts_original=len(sim_original.monitors))
+
+
+def test_split_adjoint_data_warns_on_missing_adjoint_monitor_data():
+    """Warn if combined SimulationData does not contain all expected adjoint monitor data."""
+    monitor, _ = make_monitors()["field_point"]
+    structure = make_structures(params0)["custom_med"]
+    sim_original = SIM_BASE.updated_copy(
+        structures=(*SIM_BASE.structures, structure),
+        monitors=(*SIM_BASE.monitors, monitor),
+    )
+    sim_data_combined = _make_mock_combined_sim_data(
+        sim_original, task_name="missing_adjoint_monitor_data"
+    )
+
+    removed_name = "adjoint_fld_0"
+    sim_data_missing = sim_data_combined.updated_copy(
+        data=tuple(data for data in sim_data_combined.data if data.monitor.name != removed_name)
+    )
+
+    with AssertLogLevel("WARNING", contains_str="missing expected adjoint monitor data"):
+        sim_data_missing._split_adjoint_data(num_mnts_original=len(sim_original.monitors))
+
+
+def test_split_adjoint_data_warns_on_unordered_monitor_data():
+    """Warn if monitor data order differs from combined simulation monitor order."""
+    monitor, _ = make_monitors()["field_point"]
+    structure = make_structures(params0)["custom_med"]
+    sim_original = SIM_BASE.updated_copy(
+        structures=(*SIM_BASE.structures, structure),
+        monitors=(*SIM_BASE.monitors, monitor),
+    )
+    sim_data_combined = _make_mock_combined_sim_data(
+        sim_original, task_name="unordered_monitor_data"
+    )
+
+    assert len(sim_data_combined.data) >= 2, (
+        "Expected at least two monitor datasets to test ordering."
+    )
+    data_unordered = tuple(reversed(sim_data_combined.data))
+    sim_data_unordered = sim_data_combined.updated_copy(data=data_unordered)
+
+    with AssertLogLevel(
+        "WARNING",
+        contains_str="monitor data order does not match combined simulation monitor order",
+    ):
+        sim_data_unordered._split_adjoint_data(num_mnts_original=len(sim_original.monitors))
+
+
+def test_split_adjoint_data_preserves_raw_monitor_data_under_symmetry():
+    """Regression test: _split_adjoint_data should not apply symmetry_expanded_copy via __getitem__."""
+    sim_symmetry = SIM_BASE.updated_copy(symmetry=(0, 1, 0))
+    sim_data = run_emulated(sim_symmetry, task_name="split_adjoint_data_raw_symmetry")
+
+    data_original, _ = sim_data._split_adjoint_data(num_mnts_original=len(sim_symmetry.monitors))
+
+    monitor_name = sim_symmetry.monitors[0].name
+    raw_monitor_data = sim_data.monitor_data[monitor_name]
+    split_monitor_data = next(data for data in data_original if data.monitor.name == monitor_name)
+
+    assert split_monitor_data is raw_monitor_data
+    assert sim_data[monitor_name] is not raw_monitor_data
+
+
 def test_adjoint_src_width():
     """Test the adjoint source width for single sources decays by f=0."""
 
