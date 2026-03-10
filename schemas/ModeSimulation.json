@@ -8202,6 +8202,14 @@
           "additionalProperties": true,
           "type": "object"
         },
+        "broadband_method": {
+          "default": "chebyshev",
+          "enum": [
+            "chebyshev",
+            "pole_residue"
+          ],
+          "type": "string"
+        },
         "center": {
           "anyOf": [
             {
@@ -8273,7 +8281,7 @@
         },
         "num_freqs": {
           "default": 1,
-          "maximum": 20,
+          "maximum": 50,
           "minimum": 1,
           "type": "integer"
         },

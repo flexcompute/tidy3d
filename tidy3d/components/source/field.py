@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 import numpy as np
 from pydantic import Field, NonNegativeInt, PositiveFloat, field_validator, model_validator
@@ -113,20 +113,51 @@ class BroadbandSource(Source, ABC):
         1,
         title="Number of Frequency Points",
         description="Number of points used to approximate the frequency dependence of the injected "
-        "field. A Chebyshev interpolation is used, thus, only a small number of points is "
-        "typically sufficient to obtain converged results. Note that larger values of 'num_freqs' "
-        "could spread out the source time signal and introduce numerical noise, or prevent timely  "
-        "field decay.",
+        "field. For 'chebyshev', a Chebyshev interpolation is used with 'num_freqs' terms "
+        "(max 20). For 'pole_residue', the mode solver samples at 'num_freqs' uniform "
+        "frequencies and fits ceil((num_freqs - 1) / 3) poles; higher values provide denser "
+        "sampling and more poles for the fit (max 50).",
         ge=1,
-        le=20,
+        le=50,
     )
+
+    broadband_method: Literal["chebyshev", "pole_residue"] = Field(
+        "chebyshev",
+        title="Broadband Method",
+        description="Method for representing the frequency dependence of the injected field. "
+        "'chebyshev' uses Chebyshev polynomial interpolation (default). "
+        "'pole_residue' uses a pole-residue (vector fitting) decomposition with "
+        "auxiliary differential equation (ADE) time stepping. The pole-residue method "
+        "can be more accurate for highly dispersive modes and uses fewer broadband terms "
+        "than frequency samples.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_num_freqs_limit(self) -> Self:
+        """Enforce method-specific bounds on num_freqs."""
+        if self.broadband_method == "chebyshev" and self.num_freqs > 20:
+            raise SetupError(
+                f"For broadband_method='chebyshev', 'num_freqs' must be <= 20, got {self.num_freqs}."
+            )
+        if self.broadband_method == "pole_residue" and self.num_freqs < 3:
+            raise SetupError(
+                f"For broadband_method='pole_residue', 'num_freqs' must be >= 3, got {self.num_freqs}. "
+                "The vector fitting algorithm requires more frequency samples than fit coefficients."
+            )
+        return self
 
     @cached_property
     def frequency_grid(self) -> NDArray:
-        """A Chebyshev grid used to approximate frequency dependence."""
+        """Frequency grid used to approximate frequency dependence.
+
+        For Chebyshev: returns ``num_freqs`` Chebyshev-spaced points.
+        For pole_residue: returns ``num_freqs`` uniformly spaced points.
+        """
         if self.num_freqs == 1:
             return np.array([self.source_time._freq0])
         freq_min, freq_max = self.source_time.frequency_range_sigma(sigma=CHEB_GRID_WIDTH)
+        if self.broadband_method == "pole_residue":
+            return np.linspace(freq_min, freq_max, self.num_freqs)
         return self._chebyshev_freq_grid(freq_min, freq_max)
 
     def _chebyshev_freq_grid(self, freq_min: float, freq_max: float) -> NDArray:
@@ -627,6 +658,12 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         le=20,
     )
 
+    broadband_method: Literal["chebyshev"] = Field(
+        "chebyshev",
+        title="Broadband Method",
+        description="PlaneWave only supports the Chebyshev broadband method.",
+    )
+
     @cached_property
     def _is_fixed_angle(self) -> bool:
         """Whether the plane wave is at a fixed non-zero angle."""
@@ -713,7 +750,7 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         "Note that larger values of 'num_freqs' could spread out the source time signal and "
         "introduce numerical noise, or prevent timely field decay.",
         ge=1,
-        le=20,
+        le=50,
     )
     _backward_waist_warning = warn_backward_waist_distance("waist_distance")
 
@@ -773,7 +810,7 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         "Note that larger values of 'num_freqs' could spread out the source time signal and "
         "introduce numerical noise, or prevent timely field decay.",
         ge=1,
-        le=20,
+        le=50,
     )
     backward_waist_warning = warn_backward_waist_distance("waist_distances")
 
@@ -810,6 +847,22 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
         * `Defining a total-field scattered-field (TFSF) plane wave source <../../notebooks/TFSF.html>`_
         * `Nanoparticle Scattering <../../notebooks/PlasmonicNanoparticle.html>`_: To force a uniform grid in the TFSF region and avoid the warnings, a mesh override structure can be used as illustrated here.
     """
+
+    num_freqs: int = Field(
+        1,
+        title="Number of Frequency Points",
+        description="Number of points used to approximate the frequency dependence of the injected "
+        "field. A Chebyshev interpolation is used, thus, only a small number of points is "
+        "typically sufficient to obtain converged results.",
+        ge=1,
+        le=20,
+    )
+
+    broadband_method: Literal["chebyshev"] = Field(
+        "chebyshev",
+        title="Broadband Method",
+        description="TFSF only supports the Chebyshev broadband method.",
+    )
 
     injection_axis: Axis = Field(
         title="Injection Axis",

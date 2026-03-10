@@ -545,6 +545,133 @@ def test_broadband_source():
         )
 
 
+def test_pole_residue_broadband_source():
+    """Test pole_residue broadband method on various source types."""
+    g = td.GaussianPulse(freq0=2e14, fwidth=1e14)
+    mode_spec = td.ModeSpec(num_modes=2)
+
+    # ModeSource with pole_residue returns num_freqs uniformly-spaced points
+    num_freqs = 6
+    s_pr = td.ModeSource(
+        size=(0, 1, 1),
+        direction="+",
+        source_time=g,
+        mode_spec=mode_spec,
+        mode_index=0,
+        num_freqs=num_freqs,
+        broadband_method="pole_residue",
+    )
+    freq_grid_pr = s_pr.frequency_grid
+    assert len(freq_grid_pr) == num_freqs
+    diffs = np.diff(freq_grid_pr)
+    assert np.allclose(diffs, diffs[0], rtol=1e-12), "pole_residue grid must be uniform"
+
+    # GaussianBeam with pole_residue
+    s_gb = td.GaussianBeam(
+        size=(0, 1, 1),
+        source_time=g,
+        pol_angle=np.pi / 2,
+        direction="+",
+        num_freqs=5,
+        broadband_method="pole_residue",
+    )
+    assert len(s_gb.frequency_grid) == 5
+
+    # AstigmaticGaussianBeam with pole_residue
+    s_agb = td.AstigmaticGaussianBeam(
+        size=(0, 1, 1),
+        source_time=g,
+        pol_angle=np.pi / 2,
+        direction="+",
+        waist_sizes=(0.2, 0.4),
+        waist_distances=(0.1, 0.3),
+        num_freqs=8,
+        broadband_method="pole_residue",
+    )
+    assert len(s_agb.frequency_grid) == 8
+
+    # pole_residue allows num_freqs up to 50
+    s_pr_high = td.ModeSource(
+        size=(0, 1, 1),
+        direction="+",
+        source_time=g,
+        mode_spec=mode_spec,
+        mode_index=0,
+        num_freqs=50,
+        broadband_method="pole_residue",
+    )
+    assert len(s_pr_high.frequency_grid) == 50
+
+    # Chebyshev rejects num_freqs > 20
+    with pytest.raises(ValidationError):
+        td.ModeSource(
+            size=(0, 1, 1),
+            direction="+",
+            source_time=g,
+            mode_spec=mode_spec,
+            mode_index=0,
+            num_freqs=25,
+            broadband_method="chebyshev",
+        )
+
+    # pole_residue rejects num_freqs > 50 (pydantic le=50)
+    with pytest.raises(ValidationError):
+        td.ModeSource(
+            size=(0, 1, 1),
+            direction="+",
+            source_time=g,
+            mode_spec=mode_spec,
+            mode_index=0,
+            num_freqs=51,
+            broadband_method="pole_residue",
+        )
+
+    # pole_residue rejects num_freqs < 3 (underdetermined system)
+    with pytest.raises(ValidationError):
+        td.ModeSource(
+            size=(0, 1, 1),
+            direction="+",
+            source_time=g,
+            mode_spec=mode_spec,
+            mode_index=0,
+            num_freqs=2,
+            broadband_method="pole_residue",
+        )
+
+    # Literal type rejects invalid broadband_method
+    with pytest.raises(ValidationError):
+        td.ModeSource(
+            size=(0, 1, 1),
+            direction="+",
+            source_time=g,
+            mode_spec=mode_spec,
+            mode_index=0,
+            num_freqs=5,
+            broadband_method="invalid",
+        )
+
+    # PlaneWave rejects pole_residue (only chebyshev is supported)
+    with pytest.raises(ValidationError):
+        td.PlaneWave(
+            size=(0, 1, 1),
+            source_time=g,
+            direction="+",
+            num_freqs=5,
+            broadband_method="pole_residue",
+        )
+
+    # TFSF rejects pole_residue (only chebyshev is supported)
+    with pytest.raises(ValidationError):
+        td.TFSF(
+            size=(1, 1, 1),
+            source_time=g,
+            direction="+",
+            injection_axis=0,
+            num_freqs=5,
+            broadband_method="pole_residue",
+        )
+
+
 def test_custom_source_time():
     ts = np.linspace(0, 30e-12, 1001)
     amp_time = ts / max(ts)
