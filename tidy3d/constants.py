@@ -317,3 +317,18 @@ UnitScaling = MappingProxyType(
     }
 )
 """Immutable dictionary for converting microns to another spatial unit, eg. nm = um * UnitScaling["nm"]."""
+
+SpiceUnitScaling = MappingProxyType(
+    {
+        "F": 1e-15,
+        "P": 1e-12,
+        "N": 1e-9,
+        "U": 1e-6,
+        "M": 1e-3,
+        "K": 1e3,
+        "MEG": 1e6,
+        "G": 1e9,
+        "T": 1e12,
+    }
+)
+"""SPICE-style scale suffixes for numeric values (e.g. 1K, 10n, 2.5p). Keys are uppercase; M is milli, MEG is mega."""

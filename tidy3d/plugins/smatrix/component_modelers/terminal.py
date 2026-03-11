@@ -19,6 +19,7 @@ from tidy3d.components.geometry.bound_ops import bounds_union
 from tidy3d.components.geometry.utils import _shift_object
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.index import SimulationMap
+from tidy3d.components.lumped_element import CircuitImpedanceModel, LinearLumpedElement
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.monitor import DirectivityMonitor, ModeMonitor
 from tidy3d.components.source.time import GaussianPulse
@@ -49,6 +50,70 @@ AUTO_RADIATION_MONITOR_NAME = "radiation"
 AUTO_RADIATION_MONITOR_BUFFER = 2
 AUTO_RADIATION_MONITOR_NUM_POINTS_THETA = 100
 AUTO_RADIATION_MONITOR_NUM_POINTS_PHI = 200
+
+
+def _inject_fit_freqs_into_lumped_elements(
+    lumped_elements: list, freqs: Union[tuple[float, ...], np.ndarray, list[float]]
+) -> list:
+    """Inject frequency range into lumped elements that need it for structure conversion.
+
+    For each :class:`LinearLumpedElement` whose network is a :class:`CircuitImpedanceModel`
+    with :attr:`freq_range` ``None``, replaces the network with a copy whose
+    :attr:`freq_range` is set to ``(min(freqs), max(freqs))``. Other elements are returned
+    unchanged. Used by :class:`TerminalComponentModeler` so conversion to structures uses
+    the modeler's frequencies without adding a run_freqs field to the simulation.
+
+    When ``freqs`` has only one distinct value (min == max), a narrow range around that
+    frequency is used so that :attr:`CircuitImpedanceModel.freq_range` validation
+    (0 < f_min < f_max) passes. If that single frequency is zero or negative,
+    :exc:`ValueError` is raised.
+
+    Parameters
+    ----------
+    lumped_elements : list
+        List of lumped elements (e.g. from simulation + port loads).
+    freqs : tuple[float, ...] or np.ndarray or list[float]
+        Frequencies in Hz from the modeler. Must be non-empty if any element needs injection.
+
+    Returns
+    -------
+    list
+        New list with elements unchanged except those with CircuitImpedanceModel(freq_range=None),
+        which get a copy with freq_range set.
+
+    Raises
+    ------
+    ValueError
+        If there is only one distinct frequency and it is <= 0.
+    """
+    result = []
+    freqs_arr = np.atleast_1d(np.asarray(freqs, dtype=float)).ravel()
+    if freqs_arr.size == 0:
+        return list(lumped_elements)
+    f_min, f_max = float(np.min(freqs_arr)), float(np.max(freqs_arr))
+    if f_min == f_max:
+        # Single distinct frequency: use a narrow range so CircuitImpedanceModel.freq_range validator (f_min < f_max) passes
+        f = f_min
+        if f <= 0:
+            raise ValueError(
+                "TerminalComponentModeler has a single frequency that is zero or negative; "
+                "CircuitImpedanceModel requires a positive frequency range. "
+                "Provide at least two distinct positive frequencies, or a range with f_min > 0."
+            )
+        freq_range = (f * 0.99, f * 1.01)
+    else:
+        freq_range = (f_min, f_max)
+    for el in lumped_elements:
+        if isinstance(el, LinearLumpedElement) and isinstance(el.network, CircuitImpedanceModel):
+            net = el.network
+            if net.freq_range is None:
+                new_network = net.model_copy(update={"freq_range": freq_range})
+                result.append(el.model_copy(update={"network": new_network}))
+            else:
+                result.append(el)
+        else:
+            result.append(el)
+    return result
 
 
 class DirectivityMonitorSpec(MicrowaveBaseModel):
@@ -468,9 +533,12 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
         new_mnts = list(self.simulation.monitors) + field_monitors
 
-        new_lumped_elements = list(self.simulation.lumped_elements) + [
+        base_lumped = list(self.simulation.lumped_elements) + [
             port.to_load(snap_center=snap_centers[port.name]) for port in self._lumped_ports
         ]
+        # Inject modeler freqs into any CircuitImpedanceModel(freq_range=None) so conversion
+        # to structures uses this range without adding run_freqs to Simulation schema.
+        new_lumped_elements = _inject_fit_freqs_into_lumped_elements(base_lumped, self.freqs)
 
         # Add mesh overrides for any wave ports present
         mesh_overrides = list(sim_wo_source.grid_spec.override_structures)

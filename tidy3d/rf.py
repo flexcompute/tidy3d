@@ -17,8 +17,10 @@ from tidy3d.components.grid.grid_spec import CornerFinderSpec, LayerRefinementSp
 # Lumped elements
 from tidy3d.components.lumped_element import (
     AdmittanceNetwork,
+    CircuitImpedanceModel,
     CoaxialLumpedResistor,
     LinearLumpedElement,
+    LumpedCircuitComponent,
     LumpedResistor,
     RectangularLumpedElement,
     RLCNetwork,
@@ -164,6 +166,7 @@ __all__ = [
     "BlackmanHarrisWindow",
     "BlackmanWindow",
     "ChebWindow",
+    "CircuitImpedanceModel",
     "CoaxialLumpedPort",
     "CoaxialLumpedResistor",
     "ComponentModelerDataType",
@@ -193,6 +196,7 @@ __all__ = [
     "LobeMeasurer",
     "LossyMetalMedium",
     "LowFrequencySmoothingSpec",
+    "LumpedCircuitComponent",
     "LumpedPort",
     "LumpedResistor",
     "MicrowaveModeData",
