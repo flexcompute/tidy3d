@@ -1959,9 +1959,35 @@ def test_wave_port_extrusion_coaxial():
     # update component modeler
     tcm = tcm.updated_copy(ports=[port_1, port_2])
 
-    # make sure that
+    # make sure that SetupError is raised when port does not intersect any structure
     with pytest.raises(SetupError):
         sim = tcm.base_sim
+
+
+def test_wave_port_extrusion_named_structures_no_duplicate_names():
+    """With extrude_structures=True, extruded structures must have unique names when originals are named."""
+    tcm = make_coaxial_component_modeler(
+        length=100000,
+        port_types=(WavePort, WavePort),
+    )
+    # Give structures explicit names so that extrusion would duplicate names without the fix
+    sim = tcm.simulation
+    structures_named = [
+        sim.structures[0].updated_copy(name="inner_conductor"),
+        sim.structures[1].updated_copy(name="outer_shell"),
+    ]
+    sim = sim.updated_copy(structures=structures_named)
+    tcm = tcm.updated_copy(simulation=sim)
+
+    port_1 = tcm.ports[0].updated_copy(center=(0, 0, -50000), extrude_structures=True)
+    port_2 = tcm.ports[1].updated_copy(center=(0, 0, 50000), extrude_structures=True)
+    tcm = tcm.updated_copy(ports=[port_1, port_2])
+
+    base_sim = tcm.base_sim
+    names = [s.name for s in base_sim.structures if s.name is not None]
+    assert len(names) == len(set(names)), (
+        f"Duplicate structure names found after waveport extrusion: {names}."
+    )
 
 
 def test_wave_port_extrusion_differential_stripline():

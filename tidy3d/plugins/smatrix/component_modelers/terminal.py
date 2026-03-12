@@ -1080,9 +1080,14 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                         # append extruded geometry
                         new_geoms.append(extruded_slab_new)
                     if len(polygon_list) != 0:
-                        # update structure and add it to the list
+                        # update structure and add it to the list; assign unique name to avoid
+                        # duplicate structure names (which would fail simulation validation)
+                        extruded_name = (
+                            f"{structure.name}_extruded_{port.name}" if structure.name else None
+                        )
                         new_struct = structure.updated_copy(
-                            geometry=GeometryGroup(geometries=new_geoms)
+                            geometry=GeometryGroup(geometries=new_geoms),
+                            name=extruded_name,
                         )
                         new_structures.append(new_struct)
 
