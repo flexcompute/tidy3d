@@ -378,7 +378,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
             )
 
             # Keep source gradients stable against simulation grid-refinement changes.
-            vjp_field = np.real(component_sign * adjoint_on_dataset)
+            vjp_field = component_sign * adjoint_on_dataset
             derivative_map[field_path] = vjp_field.transpose(*field_data.dims).values
 
         return derivative_map

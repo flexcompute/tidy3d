@@ -297,7 +297,7 @@ class TestCustomCurrentSourceUniform:
         adjoint_on_dataset = transpose_interp_field_to_dataset(
             E_adj["Ex"], field_data, center=source.center
         )
-        expected_gradient = np.sum(np.real(adjoint_on_dataset).values)
+        expected_gradient = np.sum(adjoint_on_dataset.values)
 
         grad = results[("current_dataset", "Ex")]
         assert grad.shape == source.current_dataset.Ex.shape
@@ -636,8 +636,8 @@ class TestCustomCurrentSourceUniform:
             E_adj["Ey"], field_data, center=source.center
         )
 
-        expected_ex = np.sum(np.real(adjoint_on_dataset_ex).values)
-        expected_ey = np.sum(np.real(adjoint_on_dataset_ey).values)
+        expected_ex = np.sum(adjoint_on_dataset_ex.values)
+        expected_ey = np.sum(adjoint_on_dataset_ey.values)
         expected_ez = 0.0
 
         assert not np.isclose(expected_ex, 0.0)
@@ -677,7 +677,7 @@ class TestCustomCurrentSourceUniform:
             adjoint_on_dataset = transpose_interp_field_to_dataset(
                 E_adj["Ex"], field_data, center=source.center
             )
-            expected_sums[nx] = np.sum(np.real(adjoint_on_dataset).values)
+            expected_sums[nx] = np.sum(adjoint_on_dataset.values)
             npt.assert_allclose(grad_sums[nx], expected_sums[nx], rtol=1e-2)
 
         assert not np.isclose(grad_sums[10], 0.0)
@@ -731,7 +731,7 @@ class TestCustomFieldSourceUniform:
         adjoint_on_dataset = transpose_interp_field_to_dataset(
             H_adj["Hy"], field_data, center=source.center
         )
-        expected_gradient = np.sum(np.real(adjoint_on_dataset).values)
+        expected_gradient = np.sum(adjoint_on_dataset.values)
 
         assert not np.isclose(expected_gradient, 0.0)
         assert not np.isclose(np.sum(results[("field_dataset", "Ex")]), 0.0)
@@ -805,7 +805,7 @@ class TestCustomFieldSourceUniform:
             adjoint_on_dataset = transpose_interp_field_to_dataset(
                 H_adj["Hy"], field_data, center=source.center
             )
-            expected_sums[nx] = np.sum(np.real(adjoint_on_dataset).values)
+            expected_sums[nx] = np.sum(adjoint_on_dataset.values)
             npt.assert_allclose(grad_sums[nx], expected_sums[nx], rtol=1e-2)
 
         assert not np.isclose(grad_sums[10], 0.0)
@@ -966,6 +966,104 @@ def test_unsupported_traced_paths_raise_error(
         source._compute_derivatives(di)
 
 
+@pytest.mark.parametrize(
+    ("source_ctor", "dataset_key", "source_size", "adj_component"),
+    (
+        (td.CustomCurrentSource, "current_dataset", (1.0, 1.0, 0.1), "Ex"),
+        (td.CustomFieldSource, "field_dataset", (1.0, 1.0, 0.0), "Hy"),
+    ),
+)
+def test_complex_source_vjp_has_nonzero_real_and_imag_parts(
+    source_ctor,
+    dataset_key,
+    source_size,
+    adj_component,
+):
+    """Complex traced source data should produce complex-valued nontrivial VJPs."""
+    center = (0.0, 0.0, 0.0)
+    field_dataset = create_uniform_field_data(center, source_size, field_value=1.0 + 1.0j)
+    source = source_ctor(
+        center=center,
+        size=source_size,
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        **{dataset_key: field_dataset},
+    )
+
+    E_adj = {}
+    H_adj = {}
+    if adj_component.startswith("E"):
+        E_adj[adj_component] = create_adjoint_field_dataarray(1.0 + 2.0j)
+    else:
+        H_adj[adj_component] = create_adjoint_field_dataarray(1.0 + 2.0j)
+
+    path = (dataset_key, "Ex")
+    di = DummySourceDI(
+        paths=[path],
+        E_adj=E_adj,
+        H_adj=H_adj,
+        frequencies=np.array([2e14]),
+        bounds=source.geometry.bounds,
+    )
+
+    grad = source._compute_derivatives(di)[path]
+    assert np.iscomplexobj(grad)
+    assert not np.allclose(np.real(grad), 0.0, rtol=0.0, atol=1e-12)
+    assert not np.allclose(np.imag(grad), 0.0, rtol=0.0, atol=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("source_ctor", "dataset_key", "source_size", "adj_component"),
+    (
+        (td.CustomCurrentSource, "current_dataset", (1.0, 1.0, 0.1), "Ex"),
+        (td.CustomFieldSource, "field_dataset", (1.0, 1.0, 0.0), "Hy"),
+    ),
+)
+def test_source_vjp_phase_equivariance_under_global_j_phase(
+    source_ctor,
+    dataset_key,
+    source_size,
+    adj_component,
+    redirect_stdout_to_stderr,
+):
+    """A global ``1j`` phase on adjoint fields rotates source VJPs by ``1j``."""
+    center = (0.0, 0.0, 0.0)
+    field_dataset = create_uniform_field_data(center, source_size, field_value=1.0 + 0.0j)
+    source = source_ctor(
+        center=center,
+        size=source_size,
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        **{dataset_key: field_dataset},
+    )
+
+    path = (dataset_key, "Ex")
+    base_adj = create_adjoint_field_dataarray(1.5 - 0.25j)
+    phase_adj = 1j * base_adj
+
+    def _grad_for_adjoint(adjoint_data: td.ScalarFieldDataArray) -> np.ndarray:
+        E_adj = {}
+        H_adj = {}
+        if adj_component.startswith("E"):
+            E_adj[adj_component] = adjoint_data
+        else:
+            H_adj[adj_component] = adjoint_data
+        di = DummySourceDI(
+            paths=[path],
+            E_adj=E_adj,
+            H_adj=H_adj,
+            frequencies=np.array([2e14]),
+            bounds=source.geometry.bounds,
+        )
+        return source._compute_derivatives(di)[path]
+
+    grad_base = _grad_for_adjoint(base_adj)
+    grad_phase = _grad_for_adjoint(phase_adj)
+
+    # This test calls ``_compute_derivatives`` directly, where the source VJP map is linear
+    # in the supplied adjoint fields. Therefore a global ``1j`` phase on adjoint inputs
+    # rotates the returned VJP by ``+1j``.
+    npt.assert_allclose(grad_phase, 1j * grad_base, rtol=1e-12, atol=1e-12)
+
+
 class TestCustomCurrentSourceGaussian:
     """Test CustomCurrentSource with Gaussian field distributions."""
 
@@ -1024,7 +1122,7 @@ class TestCustomCurrentSourceGaussian:
             source.current_dataset.Ex,
             center=source.center,
         )
-        expected_gradient = np.sum(np.real(adjoint_on_dataset).values)
+        expected_gradient = np.sum(adjoint_on_dataset.values)
 
         assert not np.isclose(expected_gradient, 0.0)
         assert not np.isclose(np.sum(results[("current_dataset", "Ex")]), 0.0)

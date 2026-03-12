@@ -469,6 +469,40 @@ def _run_gradient_case(
     )
 
 
+def _run_adjoint_only_gradient_case(
+    tmp_path,
+    case: SourceCase,
+    config: SweepConfig,
+    *,
+    label: str,
+    params: tuple[complex, complex, complex],
+) -> np.ndarray:
+    """Compute source-parameter adjoint gradients without finite differences."""
+    freq0 = td.C_0 / config.wvl0
+    pulse = td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10)
+
+    def objective_adj(ax: complex, ay: complex, az: complex):
+        source = _make_source(case, (ax, ay, az), config, freq0, pulse)
+        sim = _make_sim(source, config)
+        sim_data = web.run(
+            sim,
+            task_name=f"{label}_adj_only",
+            path=tmp_path / f"{label}_adj_only.hdf5",
+            local_gradient=True,
+            verbose=False,
+        )
+        return _eval_objective(sim_data, config.sim_dims, config.objective_3d)
+
+    return np.array(
+        [
+            ag.grad(objective_adj, 0)(*params),
+            ag.grad(objective_adj, 1)(*params),
+            ag.grad(objective_adj, 2)(*params),
+        ],
+        dtype=complex,
+    )
+
+
 def _assert_fd_agreement(metrics: GradientMetrics, *, label: str) -> None:
     assert metrics.angle_deg < ANGLE_LIMIT_DEG, label
     assert np.isfinite(metrics.adjoint_norm), label
@@ -692,3 +726,38 @@ def test_custom_source_gradient_stable_with_remote_dt_constraint(_enable_local_c
         rtol=NORM_RTOL,
         atol=NORM_ATOL,
     )
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize("case_name", ("custom_field_vec_e", "custom_current_vec_e"))
+def test_custom_source_intensity_gradient_global_phase_equivariance(
+    _enable_local_cache, tmp_path, case_name, redirect_stdout_to_stderr
+):
+    """Intensity objective gradients should rotate with a global ``1j`` source phase."""
+    case = next(candidate for candidate in SOURCE_CASES if candidate.name == case_name)
+    config = replace(SweepConfig(sim_dims=3), objective_3d="intensity")
+
+    base_params = tuple(np.asarray(BASE_PARAM_AMPLITUDES, dtype=complex))
+    phased_params = tuple(1j * np.asarray(BASE_PARAM_AMPLITUDES, dtype=complex))
+
+    grad_base = _run_adjoint_only_gradient_case(
+        tmp_path,
+        case,
+        config,
+        label=f"{case.name}_intensity_phase_base",
+        params=base_params,
+    )
+    grad_phased = _run_adjoint_only_gradient_case(
+        tmp_path,
+        case,
+        config,
+        label=f"{case.name}_intensity_phase_j",
+        params=phased_params,
+    )
+
+    assert not np.allclose(grad_base.real, 0.0, rtol=0.0, atol=1e-12)
+    assert not np.allclose(grad_base.imag, 0.0, rtol=0.0, atol=1e-12)
+    # This test differentiates a real-valued intensity objective through the full adjoint chain,
+    # not just the direct source VJP map. Under this convention, a global ``1j`` phase on the
+    # traced source parameters rotates the gradient by ``-1j``.
+    np.testing.assert_allclose(grad_phased, -1j * grad_base, rtol=1e-2, atol=1e-6)

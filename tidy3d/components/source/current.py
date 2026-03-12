@@ -331,7 +331,7 @@ class CustomCurrentSource(ReverseInterpolatedSource):
                 adjoint_on_dataset = adjoint_on_dataset * self._confine_mask(field_data)
 
             # Keep source gradients stable against simulation grid-refinement changes.
-            vjp_field = np.real(component_sign * adjoint_on_dataset)
+            vjp_field = component_sign * adjoint_on_dataset
 
             derivative_map[field_path] = vjp_field.transpose(*field_data.dims).values
 
