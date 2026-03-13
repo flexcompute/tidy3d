@@ -35,7 +35,7 @@ PermittivityData = dict[str, ScalarFieldDataArray]
 EpsType = ScalarFieldDataArray
 ArrayFloat = NDArray[np.floating]
 ArrayComplex = NDArray[np.complexfloating]
-TRANSPOSE_INTERP_COORDINATE_TOLERANCE = 1e-12
+AUTOGRAD_COORDINATE_TOLERANCE = 1e-12
 
 
 class LazyInterpolator:
@@ -1132,7 +1132,7 @@ def transpose_interp_axis(
     param_coords_1d: np.ndarray,
     *,
     method: str = "linear",
-    coordinate_tolerance: float = TRANSPOSE_INTERP_COORDINATE_TOLERANCE,
+    coordinate_tolerance: float = AUTOGRAD_COORDINATE_TOLERANCE,
 ) -> np.ndarray:
     """Transpose (adjoint) of 1D interpolation along one axis."""
     if param_coords_1d.size == 1:
@@ -1193,8 +1193,8 @@ def bounds_slice(
     axis = np.asarray(axis, dtype=float)
     n = axis.size
 
-    vmin_tol = vmin - TRANSPOSE_INTERP_COORDINATE_TOLERANCE
-    vmax_tol = vmax + TRANSPOSE_INTERP_COORDINATE_TOLERANCE
+    vmin_tol = vmin - AUTOGRAD_COORDINATE_TOLERANCE
+    vmax_tol = vmax + AUTOGRAD_COORDINATE_TOLERANCE
 
     i0 = int(np.searchsorted(axis, vmin_tol, side="left"))
     i1 = int(np.searchsorted(axis, vmax_tol, side="right"))
@@ -1241,29 +1241,6 @@ def transpose_interp_field_to_dataset(
                 f"Unsupported interpolation method {interp_method!r} for axis '{dim}'."
             )
 
-    def _align_freq(field: SpatialDataArray, target: SpatialDataArray) -> SpatialDataArray:
-        target_freqs = np.asarray(target.coords["f"].data)
-        if target_freqs.size == 1:
-            # Source datasets are single-frequency by construction. When adjoint
-            # fields carry multiple frequencies, gradients must accumulate all
-            # frequency contributions onto that single source-frequency slot.
-            # Any source-spectrum weighting has already been applied upstream
-            # to the adjoint fields in ``_process_source_gradients``.
-            summed = field.sum(dim="f")
-            summed = summed.expand_dims({"f": target_freqs}, axis=-1)
-            return summed.transpose(*field.dims)
-        source_freqs = np.asarray(field.coords["f"].data)
-        if target_freqs.size == source_freqs.size and np.allclose(
-            target_freqs, source_freqs, rtol=1e-12, atol=0.0
-        ):
-            return field
-        freq_interp_method = "nearest" if source_freqs.size <= 1 else "linear"
-        return field.interp(
-            {"f": target_freqs},
-            method=freq_interp_method,
-            kwargs={"bounds_error": False, "fill_value": 0.0},
-        ).fillna(0.0)
-
     def _interp_axis(
         arr: np.ndarray,
         axis: int,
@@ -1279,6 +1256,22 @@ def transpose_interp_field_to_dataset(
             method=interp_method,
         )
         return np.moveaxis(moved, 0, axis)
+
+    def _align_freq(field: SpatialDataArray, target: SpatialDataArray) -> SpatialDataArray:
+        target_freqs = np.asarray(target.coords["f"].data)
+        source_freqs = np.asarray(field.coords["f"].data)
+        if target_freqs.size == source_freqs.size and np.allclose(
+            target_freqs, source_freqs, rtol=1e-12, atol=0.0
+        ):
+            return field
+        if target_freqs.size == 1:
+            summed = field.sum(dim="f")
+            summed = summed.expand_dims({"f": target_freqs}, axis=-1)
+            return summed.transpose(*field.dims)
+        raise ValueError(
+            "Failed to align source/adjoint frequencies in source-gradient processing: "
+            f"source={source_freqs}, target={target_freqs}."
+        )
 
     dataset_field_sorted = dataset_field._spatially_sorted
     center = tuple(get_static(val) for val in center)

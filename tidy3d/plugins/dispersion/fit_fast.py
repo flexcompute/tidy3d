@@ -6,11 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from tidy3d.components.dispersion_fitter import (
-    AdvancedFastFitterParam,
-    constant_loss_tangent_model,
-    fit,
-)
+from tidy3d.components.dispersion_fitter import constant_loss_tangent_model, fit
 from tidy3d.components.medium import PoleResidue
 from tidy3d.constants import HBAR
 
@@ -20,6 +16,8 @@ if TYPE_CHECKING:
     from typing import Optional
 
     from pydantic import NonNegativeFloat, PositiveInt
+
+    from tidy3d.components.dispersion_fitter import AdvancedFastFitterParam
 
 # numerical tolerance for pole relocation for fast fitter
 TOL = 1e-8

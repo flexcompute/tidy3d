@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 import numpy as np
 from pydantic import Field, NonNegativeInt, PositiveFloat, field_validator, model_validator
 
+from tidy3d.components.autograd.derivative_utils import (
+    transpose_interp_field_to_dataset,
+)
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
@@ -26,6 +29,13 @@ from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, inf
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
+from .adjoint_helpers import (
+    accumulate_center_vjp,
+    assign_center_path_derivatives,
+    parse_source_field_component,
+    split_source_paths,
+    validate_no_zero_dim_center_paths,
+)
 from .base import Source
 
 if TYPE_CHECKING:
@@ -34,7 +44,6 @@ if TYPE_CHECKING:
     from tidy3d.compat import Self
     from tidy3d.components.autograd import AutogradFieldMap
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-    from tidy3d.components.data.data_array import ScalarFieldDataArray
     from tidy3d.components.types import Ax, Coordinate
 
 # width of Chebyshev grid used for broadband sources (in units of pulse width)
@@ -43,6 +52,33 @@ CHEB_GRID_WIDTH = 1.5
 # ``CRITICAL_FREQUENCY_FACTOR * f_crit``, where ``f_crit`` is the critical frequency
 # (oblique propagation).
 CRITICAL_FREQUENCY_FACTOR = 1.15
+
+
+def _get_curl_coupled_source_adjoint_and_sign(
+    *,
+    field_name: str,
+    injection_axis: int,
+    e_adj: dict[str, Any],
+    h_adj: dict[str, Any],
+    source_name: str,
+) -> tuple[Any, float]:
+    """Get adjoint field/sign for curl-coupled ``CustomFieldSource`` gradients."""
+    field_type, component_axis = parse_source_field_component(field_name, source_name=source_name)
+    if component_axis == injection_axis:
+        raise ValueError(
+            f"Field component '{field_name}' is normal to injection axis '{'xyz'[injection_axis]}'."
+        )
+
+    n_vec = np.eye(3, dtype=float)[injection_axis]
+    e_vec = np.eye(3, dtype=float)[component_axis]
+    cross = np.cross(n_vec, e_vec)
+    target_axis = int(np.flatnonzero(cross)[0])
+    component_sign = float(cross[target_axis])
+
+    target_component = f"{'H' if field_type == 'E' else 'E'}{'xyz'[target_axis]}"
+    if field_type == "E":
+        return h_adj[target_component], component_sign
+    return e_adj[target_component], component_sign
 
 
 class FieldSource(Source, ABC):
@@ -56,7 +92,6 @@ class PlanarSource(Source, ABC):
     """A source defined on a 2D plane."""
 
     _plane_validator = assert_plane()
-
     use_colocated_normalization: bool = Field(
         True,
         title="Use Colocated Normalization",
@@ -292,48 +327,18 @@ class CustomFieldSource(FieldSource, PlanarSource):
                     return self
         raise SetupError("No tangential field found in the suppled 'field_dataset'.")
 
-    @staticmethod
-    def _get_adjoint_and_sign(
+    def _compute_dataset_derivatives(
+        self,
+        dataset_paths: list[tuple],
         *,
-        field_name: str,
-        injection_axis: int,
-        component_axis: int,
-        e_adj: dict[str, ScalarFieldDataArray],
-        h_adj: dict[str, ScalarFieldDataArray],
-    ) -> tuple[Optional[ScalarFieldDataArray], float]:
-        """Return coupled adjoint field and orientation sign for a source component."""
-        # n x e determines which orthogonal component couples (and its sign)
-        n_vec = np.eye(3)[injection_axis]
-        e_vec = np.eye(3)[component_axis]
-        cross = np.cross(n_vec, e_vec)
-
-        if not np.any(cross):
-            return None, 0.0  # indicates "no gradient"
-
-        target_axis = int(np.flatnonzero(cross)[0])
-        component_sign = float(cross[target_axis])
-
-        if field_name.startswith("E"):
-            target_component = f"H{'xyz'[target_axis]}"
-            adjoint_field = h_adj[target_component]
-        else:
-            target_component = f"E{'xyz'[target_axis]}"
-            adjoint_field = e_adj[target_component]
-
-        return adjoint_field, component_sign
-
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute derivatives with respect to CustomFieldSource parameters."""
-        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
-
-        derivative_map = {}
-        center = tuple(self.center)
-        e_adj = derivative_info.E_adj or {}
-        h_adj = derivative_info.H_adj or {}
-
-        for field_path in derivative_info.paths:
+        center: tuple[float, float, float],
+        e_adj: dict[str, Any],
+        h_adj: dict[str, Any],
+    ) -> AutogradFieldMap:
+        """Compute derivatives for traced ``field_dataset`` paths."""
+        derivative_map: AutogradFieldMap = {}
+        for field_path in dataset_paths:
             field_path = tuple(field_path)
-            self._validate_traced_source_path(field_path, dataset_key="field_dataset")
             if len(field_path) < 2:
                 raise ValueError(
                     "Field source derivative paths must include dataset component names, "
@@ -341,37 +346,24 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 )
 
             field_name = field_path[1]
+            _, component_axis = parse_source_field_component(
+                field_name, source_name=type(self).__name__
+            )
             field_data = getattr(self.field_dataset, field_name, None)
             if field_data is None:
                 raise ValueError(f"Cannot find field '{field_name}' in field dataset.")
 
-            if (
-                len(field_name) != 2
-                or field_name[0] not in ("E", "H")
-                or field_name[1] not in ("x", "y", "z")
-            ):
-                raise ValueError(
-                    f"Unsupported field component '{field_name}' in CustomFieldSource. "
-                    "Expected one of Ex, Ey, Ez, Hx, Hy, Hz."
-                )
-
-            component_axis = "xyz".index(field_name[1])
             if component_axis == self.injection_axis:
                 derivative_map[field_path] = np.zeros_like(field_data.data)
                 continue
 
-            adjoint_field, component_sign = self._get_adjoint_and_sign(
+            adjoint_field, component_sign = _get_curl_coupled_source_adjoint_and_sign(
                 field_name=field_name,
                 injection_axis=self.injection_axis,
-                component_axis=component_axis,
                 e_adj=e_adj,
                 h_adj=h_adj,
+                source_name=type(self).__name__,
             )
-
-            if component_sign == 0.0:
-                # no gradient for injection_axis == component_axis
-                derivative_map[field_path] = np.zeros_like(field_data.data)
-                continue
 
             adjoint_on_dataset = transpose_interp_field_to_dataset(
                 adjoint_field, field_data, center=center
@@ -380,6 +372,97 @@ class CustomFieldSource(FieldSource, PlanarSource):
             # Keep source gradients stable against simulation grid-refinement changes.
             vjp_field = component_sign * adjoint_on_dataset
             derivative_map[field_path] = vjp_field.transpose(*field_data.dims).values
+
+        return derivative_map
+
+    def _compute_center_derivatives(
+        self,
+        center_paths: list[tuple],
+        *,
+        center: tuple[float, float, float],
+        bounds: Any,
+        e_adj: dict[str, Any],
+        h_adj: dict[str, Any],
+    ) -> AutogradFieldMap:
+        """Compute derivatives for traced ``center`` paths."""
+        derivative_map: AutogradFieldMap = {}
+        if not center_paths:
+            return derivative_map
+
+        center_field_components = {}
+        for field_name, field_data in self.field_dataset.field_components.items():
+            _, component_axis = parse_source_field_component(
+                field_name, source_name=type(self).__name__
+            )
+            if component_axis != self.injection_axis:
+                center_field_components[field_name] = field_data
+
+        def _get_adjoint_and_sign(field_name: str) -> tuple[Any, float]:
+            return _get_curl_coupled_source_adjoint_and_sign(
+                field_name=field_name,
+                injection_axis=self.injection_axis,
+                e_adj=e_adj,
+                h_adj=h_adj,
+                source_name=type(self).__name__,
+            )
+
+        vjp_center = accumulate_center_vjp(
+            field_components=center_field_components,
+            center=center,
+            bounds=bounds,
+            source_size=tuple(self.size),
+            label_prefix=type(self).__name__,
+            get_adjoint_and_sign=_get_adjoint_and_sign,
+        )
+
+        assign_center_path_derivatives(
+            derivative_map,
+            center_paths,
+            vjp_center=vjp_center,
+        )
+        return derivative_map
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute derivatives with respect to CustomFieldSource parameters."""
+        derivative_map = {}
+        center = tuple(self.center)
+        e_adj = derivative_info.E_adj or {}
+        h_adj = derivative_info.H_adj or {}
+
+        supported_roots = ("field_dataset", "center")
+        for field_path in derivative_info.paths:
+            self._validate_traced_source_path(
+                tuple(field_path),
+                dataset_key="field_dataset",
+                supported_roots=supported_roots,
+            )
+
+        dataset_paths, center_paths = split_source_paths(
+            derivative_info.paths, dataset_tag="field_dataset"
+        )
+        validate_no_zero_dim_center_paths(
+            center_paths,
+            source_size=tuple(self.size),
+            source_name=type(self).__name__,
+        )
+
+        derivative_map.update(
+            self._compute_dataset_derivatives(
+                dataset_paths,
+                center=center,
+                e_adj=e_adj,
+                h_adj=h_adj,
+            )
+        )
+        derivative_map.update(
+            self._compute_center_derivatives(
+                center_paths,
+                center=center,
+                bounds=derivative_info.bounds,
+                e_adj=e_adj,
+                h_adj=h_adj,
+            )
+        )
 
         return derivative_map
 

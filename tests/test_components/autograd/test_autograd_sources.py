@@ -923,7 +923,7 @@ class TestCustomFieldSourceUniform:
         "adjoint_value",
     ),
     (
-        (td.CustomCurrentSource, "current_dataset", (1.0, 1.0, 0.1), ("center", 0), "Ex", -1j),
+        (td.CustomCurrentSource, "current_dataset", (1.0, 1.0, 0.1), ("size", 0), "Ex", -1j),
         (td.CustomFieldSource, "field_dataset", (1.0, 1.0, 0.0), ("size", 0), "Hy", 1j),
     ),
 )

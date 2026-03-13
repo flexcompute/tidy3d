@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
+from numbers import Integral
 from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, field_validator
@@ -86,30 +87,60 @@ class Source(Box, AbstractSource, ABC):
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
 
-    _unsupported_traced_source_fields = ("center", "size", "source_time")
+    _unsupported_traced_source_fields = ("source_time", "size")
 
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint derivatives for source parameters."""
         raise NotImplementedError(f"Can't compute derivative for 'Source': '{type(self)}'.")
 
-    def _validate_traced_source_path(self, field_path: tuple[Any, ...], dataset_key: str) -> None:
-        """Validate traced source path, raising when unsupported source fields are traced."""
+    def _validate_traced_source_path(
+        self,
+        field_path: tuple[Any, ...],
+        *,
+        dataset_key: str,
+        supported_roots: tuple[str, ...],
+    ) -> None:
+        """Validate traced source path against explicitly supported top-level source fields."""
         if not field_path:
             raise ValueError(f"Empty traced source path encountered in '{type(self).__name__}'.")
 
         field_root = field_path[0]
+        supported_roots_str = ", ".join(repr(root) for root in supported_roots)
         if field_root in self._unsupported_traced_source_fields:
             raise ValueError(
                 f"Automatic differentiation with respect to source field '{field_root}' is not "
-                f"supported for '{type(self).__name__}'. Only '{dataset_key}' field components "
-                "are differentiable."
+                f"supported for '{type(self).__name__}'. Supported top-level fields are "
+                f"{supported_roots_str}."
             )
 
-        if field_root != dataset_key:
+        if field_root not in supported_roots:
             raise ValueError(
                 f"Unsupported traced source path '{field_path}' for '{type(self).__name__}'. "
-                f"Only '{dataset_key}' field components are differentiable."
+                f"Supported top-level fields are {supported_roots_str}."
             )
+
+        if field_root == dataset_key:
+            if len(field_path) < 2:
+                raise ValueError(
+                    f"Traced source path '{field_path}' for '{type(self).__name__}' is missing "
+                    f"a '{dataset_key}' component key."
+                )
+            return
+
+        if field_root == "center":
+            if len(field_path) > 2:
+                raise ValueError(
+                    f"Unsupported traced source path '{field_path}' for '{type(self).__name__}'. "
+                    "Only full-vector paths or single-axis paths are supported for "
+                    f"'{field_root}'."
+                )
+            if len(field_path) == 2:
+                axis = field_path[1]
+                if not isinstance(axis, Integral) or int(axis) not in (0, 1, 2):
+                    raise ValueError(
+                        f"Unsupported axis index '{axis}' in traced source path '{field_path}'. "
+                        "Axis must be one of 0, 1, 2."
+                    )
 
     @field_validator("source_time")
     @classmethod

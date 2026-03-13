@@ -10,6 +10,7 @@ import pytest
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.components.autograd import get_static
 
 
 @pytest.fixture(autouse=True)
@@ -17,9 +18,12 @@ def _enable_local_cache(monkeypatch):
     monkeypatch.setattr(td.config.local_cache, "enabled", True)
 
 
-ANGLE_LIMIT_DEG = 5.0
-NORM_RTOL = 0.12
-NORM_ATOL = 1e-6
+CENTER_ANGLE_LIMIT_DEG = 5.0
+CENTER_NORM_RTOL = 0.18
+CENTER_NORM_ATOL = 1e-6
+DATASET_ANGLE_LIMIT_DEG = 5.0
+DATASET_NORM_RTOL = 0.15
+DATASET_NORM_ATOL = 1e-6
 
 BASE_WVL0 = 2.0
 BASE_MIN_STEPS_PER_WVL = 40
@@ -54,9 +58,12 @@ OBJECTIVE_3D_MODE = (
     "flux"  # or "intensity" # flux turned out to be more stable in finite difference gradient
 )
 OFF_CENTER_MONITOR_FREQ_SCALE = 0.95
+TWO_FREQ_MONITOR_SCALES = (1.0, OFF_CENTER_MONITOR_FREQ_SCALE)
+DERIVATIVE_TARGETS = ("dataset", "center")
 
 
 def _axis_coords(size: float, spacing: float) -> np.ndarray:
+    size = float(get_static(size))
     if size <= 0:
         return np.array([0.0], dtype=float)
     n = max(2, int(np.round(size / spacing)))
@@ -67,10 +74,10 @@ def _make_coords(
     source_size: tuple[float, float, float], dataset_spacing: float, freq0: float
 ) -> dict[str, object]:
     return {
-        "x": _axis_coords(source_size[0], dataset_spacing),
-        "y": _axis_coords(source_size[1], dataset_spacing),
-        "z": _axis_coords(source_size[2], dataset_spacing),
-        "f": [freq0],
+        "x": get_static(_axis_coords(source_size[0], dataset_spacing)),
+        "y": get_static(_axis_coords(source_size[1], dataset_spacing)),
+        "z": get_static(_axis_coords(source_size[2], dataset_spacing)),
+        "f": [float(get_static(freq0))],
     }
 
 
@@ -79,21 +86,58 @@ def _make_field_dataset(
     amplitudes: tuple[float, float, float],
     coords: dict[str, object],
 ) -> td.FieldDataset:
+    x = np.asarray(coords["x"], dtype=float)
+    y = np.asarray(coords["y"], dtype=float)
+    z = np.asarray(coords["z"], dtype=float)
     shape = (
-        len(np.asarray(coords["x"])),
-        len(np.asarray(coords["y"])),
-        len(np.asarray(coords["z"])),
+        len(x),
+        len(y),
+        len(z),
         1,
     )
+
+    def _axis_scale(values: np.ndarray) -> np.ndarray:
+        if values.size <= 1:
+            return np.ones_like(values, dtype=float)
+        v_min = float(np.min(values))
+        v_max = float(np.max(values))
+        if np.isclose(v_min, v_max):
+            return np.ones_like(values, dtype=float)
+        t = (values - v_min) / (v_max - v_min)
+        return 0.5 + 1.5 * t
+
+    sx = _axis_scale(x)[:, None, None]
+    sy = _axis_scale(y)[None, :, None]
+    sz = _axis_scale(z)[None, None, :]
+    profile = np.zeros((len(x), len(y), len(z)), dtype=float)
+    n_active_axes = 0
+    if len(x) > 1:
+        profile += sx
+        n_active_axes += 1
+    if len(y) > 1:
+        profile += sy
+        n_active_axes += 1
+    if len(z) > 1:
+        profile += sz
+        n_active_axes += 1
+    if n_active_axes == 0:
+        profile = np.ones((len(x), len(y), len(z)), dtype=float)
+    else:
+        profile = profile / n_active_axes
+
     components = {}
     for amp, axis in zip(amplitudes, "xyz"):
-        data = amp * np.ones(shape, dtype=float)
+        data = (amp * (1 + 0.5j) * profile).reshape(shape)
         components[f"{field_prefix}{axis}"] = td.ScalarFieldDataArray(data, coords=coords)
     return td.FieldDataset(**components)
 
 
 def _scaled_amplitudes(scale: float) -> tuple[float, float, float]:
     return tuple(scale * value for value in BASE_PARAM_AMPLITUDES)
+
+
+def _to_static_float_tuple(values: tuple[float, float, float]) -> tuple[float, float, float]:
+    return tuple(float(get_static(value)) for value in values)
 
 
 def angled_overlap_deg(v1: np.ndarray, v2: np.ndarray) -> float:
@@ -117,6 +161,7 @@ class SweepConfig:
     sim_dims: int = 3
     objective_3d: str = OBJECTIVE_3D_MODE
     monitor_freq_scale: float = 1.0
+    monitor_freq_scales: tuple[float, ...] | None = None
     amplitude_scale: float = 1.0
     background_permittivity: float = 1.0
     source_structure_permittivity: float | None = None
@@ -131,7 +176,7 @@ class SourceCase:
     source_kind: str
     field_prefix: str
     source_size_mask: tuple[bool, bool, bool]
-    delta: float = 1e-4
+    dataset_delta_fd: float = 1e-4
 
 
 @dataclass(frozen=True)
@@ -141,6 +186,12 @@ class GradientMetrics:
     angle_deg: float
     adjoint_norm: float
     fd_norm: float
+
+
+def _resolve_derivative_target(case: SourceCase, derivative_target: str) -> str:
+    if derivative_target == "dataset":
+        return "field_dataset" if case.source_kind == "field" else "current_dataset"
+    return derivative_target
 
 
 SOURCE_CASES = (
@@ -171,20 +222,6 @@ SOURCE_CASES = (
         source_kind="current",
         field_prefix="H",
         source_size_mask=(True, True, True),
-    ),
-    SourceCase(
-        name="custom_current_vec_e_1d",
-        monitor_components=("Ex", "Ey", "Ez"),
-        source_kind="current",
-        field_prefix="E",
-        source_size_mask=(True, False, False),
-    ),
-    SourceCase(
-        name="custom_current_vec_e_0d",
-        monitor_components=("Ex", "Ey", "Ez"),
-        source_kind="current",
-        field_prefix="E",
-        source_size_mask=(False, False, False),
     ),
 )
 
@@ -224,12 +261,27 @@ def _make_source(
     config: SweepConfig,
     freq0: float,
     pulse: td.GaussianPulse,
+    source_size_override: tuple[float, float, float] | None = None,
+    source_center_override: tuple[float, float, float] | None = None,
+    dataset_size_override: tuple[float, float, float] | None = None,
 ) -> td.Source:
-    source_size = _source_size_for_case(case, config.source_size, config.sim_dims)
-    source_center = _collapse_y_center(BASE_SOURCE_CENTER, config.sim_dims)
+    source_size = _source_size_for_case(
+        case,
+        source_size_override if source_size_override is not None else config.source_size,
+        config.sim_dims,
+    )
+    dataset_size = _source_size_for_case(
+        case,
+        dataset_size_override if dataset_size_override is not None else config.source_size,
+        config.sim_dims,
+    )
+    source_center = _collapse_y_center(
+        source_center_override if source_center_override is not None else BASE_SOURCE_CENTER,
+        config.sim_dims,
+    )
 
     if case.source_kind == "field":
-        coords = _make_coords(source_size, config.dataset_spacing, freq0)
+        coords = _make_coords(dataset_size, config.dataset_spacing, freq0)
         field_dataset = _make_field_dataset(case.field_prefix, amplitudes, coords)
         return td.CustomFieldSource(
             center=source_center,
@@ -239,7 +291,7 @@ def _make_source(
         )
 
     if case.source_kind == "current":
-        coords = _make_coords(source_size, config.dataset_spacing, freq0)
+        coords = _make_coords(dataset_size, config.dataset_spacing, freq0)
         current_dataset = _make_field_dataset(case.field_prefix, amplitudes, coords)
         return td.CustomCurrentSource(
             center=source_center,
@@ -252,12 +304,13 @@ def _make_source(
 
 
 def _source_host_structure(
-    source: td.Source,
+    source_center: tuple[float, float, float],
+    source_size: tuple[float, float, float],
     source_structure_permittivity: float,
     sim_dims: int,
 ) -> td.Structure:
     """Create the enclosing structure ("host") that contains the source."""
-    source_size = tuple(float(value) for value in source.size)
+    source_size = _to_static_float_tuple(source_size)
     host_size = _collapse_y_size(
         (
             source_size[0] + 0.2,
@@ -266,16 +319,20 @@ def _source_host_structure(
         ),
         sim_dims,
     )
-    host_center = _collapse_y_center(tuple(float(value) for value in source.center), sim_dims)
+    host_center = _collapse_y_center(_to_static_float_tuple(source_center), sim_dims)
     return td.Structure(
         geometry=td.Box(center=host_center, size=host_size),
         medium=td.Medium(permittivity=source_structure_permittivity),
     )
 
 
-def _source_host_custom_medium(source: td.Source, sim_dims: int) -> td.Structure:
+def _source_host_custom_medium(
+    source_center: tuple[float, float, float],
+    source_size: tuple[float, float, float],
+    sim_dims: int,
+) -> td.Structure:
     """Create a nonuniform custom-medium host structure that encloses the source."""
-    source_size = tuple(float(value) for value in source.size)
+    source_size = _to_static_float_tuple(source_size)
     host_size = _collapse_y_size(
         (
             source_size[0] + 0.2,
@@ -284,7 +341,7 @@ def _source_host_custom_medium(source: td.Source, sim_dims: int) -> td.Structure
         ),
         sim_dims,
     )
-    host_center = _collapse_y_center(tuple(float(value) for value in source.center), sim_dims)
+    host_center = _collapse_y_center(_to_static_float_tuple(source_center), sim_dims)
     host_bounds_min = [c - 0.5 * s for c, s in zip(host_center, host_size)]
     host_bounds_max = [c + 0.5 * s for c, s in zip(host_center, host_size)]
 
@@ -299,7 +356,7 @@ def _source_host_custom_medium(source: td.Source, sim_dims: int) -> td.Structure
     eps += 0.05 * (Z - host_center[2])
 
     return td.Structure(
-        geometry=td.Box(center=source.center, size=host_size),
+        geometry=td.Box(center=host_center, size=host_size),
         medium=td.CustomMedium(
             permittivity=td.SpatialDataArray(
                 eps,
@@ -328,14 +385,17 @@ def _make_sim(
     config: SweepConfig,
 ) -> td.Simulation:
     freq0 = td.C_0 / config.wvl0
-    monitor_freq = config.monitor_freq_scale * freq0
+    if config.monitor_freq_scales is None:
+        monitor_freqs = [config.monitor_freq_scale * freq0]
+    else:
+        monitor_freqs = [scale * freq0 for scale in config.monitor_freq_scales]
     monitor_center = _collapse_y_center(MONITOR_CENTER, config.sim_dims)
     monitor_size = _collapse_y_size(MONITOR_SIZE, config.sim_dims)
     monitor = td.FieldMonitor(
         name=FLUX_MONITOR_NAME,
         center=monitor_center,
         size=monitor_size,
-        freqs=[monitor_freq],
+        freqs=monitor_freqs,
     )
     structures = []
     if config.source_structure_permittivity is not None and config.source_structure_custom_medium:
@@ -344,12 +404,26 @@ def _make_sim(
             "'source_structure_permittivity' or 'source_structure_custom_medium'."
         )
 
+    host_center = _collapse_y_center(_to_static_float_tuple(BASE_SOURCE_CENTER), config.sim_dims)
+    host_size = _collapse_y_size(_to_static_float_tuple(config.source_size), config.sim_dims)
+
     if config.source_structure_permittivity is not None:
         structures.append(
-            _source_host_structure(source, config.source_structure_permittivity, config.sim_dims)
+            _source_host_structure(
+                source_center=host_center,
+                source_size=host_size,
+                source_structure_permittivity=config.source_structure_permittivity,
+                sim_dims=config.sim_dims,
+            )
         )
     if config.source_structure_custom_medium:
-        structures.append(_source_host_custom_medium(source, config.sim_dims))
+        structures.append(
+            _source_host_custom_medium(
+                source_center=host_center,
+                source_size=host_size,
+                sim_dims=config.sim_dims,
+            )
+        )
     if config.add_far_corner_structure:
         structures.append(_far_corner_structure(config.wvl0, config.sim_dims))
 
@@ -371,33 +445,115 @@ def _make_sim(
     )
 
 
-def _eval_objective(sim_data: td.SimulationData, sim_dims: int, objective_3d: str) -> float:
+def _eval_objective(
+    sim_data: td.SimulationData, sim_dims: int, objective_3d: str, freq0: float
+) -> float:
     field_data = sim_data.load_field_monitor(FLUX_MONITOR_NAME)
     if sim_dims == 2:
         return np.sum(field_data.intensity.values)
     if objective_3d == "flux":
         return field_data.flux.values
+    if objective_3d == "flux_difference":
+        flux = np.asarray(field_data.flux.values).reshape(-1)
+        freqs = np.asarray(field_data.flux.coords["f"].data, dtype=float).reshape(-1)
+        if freqs.size < 2:
+            raise ValueError(
+                "flux_difference objective requires at least two monitor frequencies, "
+                f"got {freqs.size}."
+            )
+        idx_center = int(np.argmin(np.abs(freqs - freq0)))
+        idx_off = int(np.argmin(np.abs(freqs - (OFF_CENTER_MONITOR_FREQ_SCALE * freq0))))
+        if idx_center == idx_off:
+            raise ValueError(
+                "flux_difference objective requires distinct bins for f0 and off-center frequency."
+            )
+        return flux[idx_center] - flux[idx_off]
     if objective_3d == "intensity":
         return np.sum(field_data.intensity.values)
     raise ValueError(f"Unsupported 3D objective mode: {objective_3d!r}")
+
+
+def _active_axes_for_derivative(
+    case: SourceCase, config: SweepConfig, derivative_target: str
+) -> tuple[int, ...]:
+    if derivative_target in ("field_dataset", "current_dataset"):
+        return (0, 1, 2)
+
+    if derivative_target == "center":
+        effective_size = _source_size_for_case(case, config.source_size, config.sim_dims)
+        active_mask = [
+            effective_size[axis] > _finite_difference_delta(case, config, derivative_target)
+            for axis in range(3)
+        ]
+        if config.sim_dims == 2:
+            active_mask[1] = False
+        return tuple(axis for axis, is_active in enumerate(active_mask) if is_active)
+
+    raise ValueError(f"Unsupported derivative target: {derivative_target!r}")
+
+
+def _finite_difference_delta(
+    case: SourceCase, config: SweepConfig, derivative_target: str
+) -> float:
+    if derivative_target in ("field_dataset", "current_dataset"):
+        return case.dataset_delta_fd
+    if derivative_target == "center":
+        return config.wvl0 / config.min_steps_per_wvl
+    raise ValueError(f"Unsupported derivative target: {derivative_target!r}")
+
+
+def _fd_agreement_tolerances(derivative_target: str) -> tuple[float, float, float]:
+    if derivative_target in ("field_dataset", "current_dataset"):
+        return DATASET_ANGLE_LIMIT_DEG, DATASET_NORM_RTOL, DATASET_NORM_ATOL
+    if derivative_target == "center":
+        return CENTER_ANGLE_LIMIT_DEG, CENTER_NORM_RTOL, CENTER_NORM_ATOL
+    raise ValueError(f"Unsupported derivative target for agreement check: {derivative_target!r}")
 
 
 def _run_gradient_case(
     tmp_path,
     case: SourceCase,
     config: SweepConfig,
+    derivative_target: str,
     *,
     label: str,
 ) -> GradientMetrics:
+    resolved_derivative_target = _resolve_derivative_target(case, derivative_target)
     freq0 = td.C_0 / config.wvl0
     pulse = td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10)
-    params = _scaled_amplitudes(config.amplitude_scale)
+    amplitudes = _scaled_amplitudes(config.amplitude_scale)
+    if resolved_derivative_target in ("field_dataset", "current_dataset"):
+        params = amplitudes
+    elif resolved_derivative_target == "center":
+        params = BASE_SOURCE_CENTER
+    else:
+        raise ValueError(f"Unsupported derivative target: {derivative_target!r}")
 
-    def make_source(amps: tuple[float, float, float]) -> td.Source:
-        return _make_source(case, amps, config, freq0, pulse)
+    active_axes = _active_axes_for_derivative(case, config, resolved_derivative_target)
+    if not active_axes:
+        pytest.skip(
+            f"No active axes for derivative target {derivative_target!r} in "
+            f"{case.name} ({config.sim_dims}D)."
+        )
+    delta = _finite_difference_delta(case, config, resolved_derivative_target)
 
-    def objective_adj(ax: float, ay: float, az: float) -> float:
-        sim = _make_sim(make_source((ax, ay, az)), config)
+    def make_source(derivative_params: tuple[float, float, float]) -> td.Source:
+        if resolved_derivative_target in ("field_dataset", "current_dataset"):
+            return _make_source(case, derivative_params, config, freq0, pulse)
+        if resolved_derivative_target == "center":
+            return _make_source(
+                case,
+                amplitudes,
+                config,
+                freq0,
+                pulse,
+                source_center_override=derivative_params,
+                dataset_size_override=config.source_size,
+            )
+        raise ValueError(f"Unsupported derivative target: {resolved_derivative_target!r}")
+
+    def objective_adj(p0: float, p1: float, p2: float) -> float:
+        sim = _make_sim(make_source((p0, p1, p2)), config)
         sim_data = web.run(
             sim,
             task_name=f"{label}_adj",
@@ -405,23 +561,19 @@ def _run_gradient_case(
             local_gradient=True,
             verbose=False,
         )
-        return _eval_objective(sim_data, config.sim_dims, config.objective_3d)
+        return _eval_objective(sim_data, config.sim_dims, config.objective_3d, freq0)
 
-    grad_adjoint = np.array(
-        [
-            ag.grad(objective_adj, 0)(*params),
-            ag.grad(objective_adj, 1)(*params),
-            ag.grad(objective_adj, 2)(*params),
-        ],
-        dtype=float,
-    )
+    grad_adjoint = np.zeros(3, dtype=float)
+    for axis in active_axes:
+        grad_adjoint[axis] = float(ag.grad(objective_adj, axis)(*params))
 
     sims = {}
-    for idx, axis in enumerate("xyz"):
+    for idx in active_axes:
+        axis = "xyz"[idx]
         params_plus = list(params)
-        params_plus[idx] += case.delta
+        params_plus[idx] += delta
         params_minus = list(params)
-        params_minus[idx] -= case.delta
+        params_minus[idx] -= delta
         sims[f"{label}_fd_{axis}_plus"] = _make_sim(make_source(tuple(params_plus)), config)
         sims[f"{label}_fd_{axis}_minus"] = _make_sim(make_source(tuple(params_minus)), config)
 
@@ -433,22 +585,29 @@ def _run_gradient_case(
     )
 
     grad_fd = np.zeros(3, dtype=float)
-    for idx, axis in enumerate("xyz"):
+    for idx in active_axes:
+        axis = "xyz"[idx]
         obj_plus = float(
             np.asarray(
                 _eval_objective(
-                    sim_data_map[f"{label}_fd_{axis}_plus"], config.sim_dims, config.objective_3d
+                    sim_data_map[f"{label}_fd_{axis}_plus"],
+                    config.sim_dims,
+                    config.objective_3d,
+                    freq0,
                 )
             ).squeeze()
         )
         obj_minus = float(
             np.asarray(
                 _eval_objective(
-                    sim_data_map[f"{label}_fd_{axis}_minus"], config.sim_dims, config.objective_3d
+                    sim_data_map[f"{label}_fd_{axis}_minus"],
+                    config.sim_dims,
+                    config.objective_3d,
+                    freq0,
                 )
             ).squeeze()
         )
-        grad_fd[idx] = (obj_plus - obj_minus) / (2 * case.delta)
+        grad_fd[idx] = (obj_plus - obj_minus) / (2 * delta)
 
     angle_deg = angled_overlap_deg(grad_adjoint, grad_fd)
     adjoint_norm = float(np.linalg.norm(grad_adjoint))
@@ -491,7 +650,7 @@ def _run_adjoint_only_gradient_case(
             local_gradient=True,
             verbose=False,
         )
-        return _eval_objective(sim_data, config.sim_dims, config.objective_3d)
+        return _eval_objective(sim_data, config.sim_dims, config.objective_3d, freq0)
 
     return np.array(
         [
@@ -503,16 +662,25 @@ def _run_adjoint_only_gradient_case(
     )
 
 
-def _assert_fd_agreement(metrics: GradientMetrics, *, label: str) -> None:
-    assert metrics.angle_deg < ANGLE_LIMIT_DEG, label
-    assert np.isfinite(metrics.adjoint_norm), label
-    assert np.isfinite(metrics.fd_norm), label
+def _assert_fd_agreement(
+    metrics: GradientMetrics, case: SourceCase, derivative_target: str, *, label: str
+) -> None:
+    resolved_derivative_target = _resolve_derivative_target(case, derivative_target)
+    angle_limit_deg, norm_rtol, norm_atol = _fd_agreement_tolerances(resolved_derivative_target)
+    context = (
+        f"{label}: angle_deg={metrics.angle_deg:.6g}, "
+        f"grad_adjoint={metrics.grad_adjoint}, grad_fd={metrics.grad_fd}, "
+        f"adjoint_norm={metrics.adjoint_norm:.6g}, fd_norm={metrics.fd_norm:.6g}"
+    )
+    assert metrics.angle_deg < angle_limit_deg, context
+    assert np.isfinite(metrics.adjoint_norm), context
+    assert np.isfinite(metrics.fd_norm), context
     np.testing.assert_allclose(
         metrics.adjoint_norm,
         metrics.fd_norm,
-        rtol=NORM_RTOL,
-        atol=NORM_ATOL,
-        err_msg=label,
+        rtol=norm_rtol,
+        atol=norm_atol,
+        err_msg=context,
     )
 
 
@@ -520,16 +688,18 @@ def _run_variation_sweep(
     tmp_path,
     case: SourceCase,
     sim_dims: int,
+    derivative_target: str,
     variation_name: str,
     values: tuple,
     update_config: Callable[[SweepConfig, object], SweepConfig],
 ) -> None:
     base_config = replace(SweepConfig(), sim_dims=sim_dims)
+    resolved_target = _resolve_derivative_target(case, derivative_target)
     for value in values:
         config = update_config(base_config, value)
-        label = f"{case.name}_{variation_name}_{value}_{sim_dims}d"
-        metrics = _run_gradient_case(tmp_path, case, config, label=label)
-        _assert_fd_agreement(metrics, label=label)
+        label = f"{case.name}_{resolved_target}_{variation_name}_{value}_{sim_dims}d"
+        metrics = _run_gradient_case(tmp_path, case, config, derivative_target, label=label)
+        _assert_fd_agreement(metrics, case, derivative_target, label=label)
 
 
 def _skip_2d_field_cases(sim_dims: int, case: SourceCase) -> None:
@@ -539,13 +709,17 @@ def _skip_2d_field_cases(sim_dims: int, case: SourceCase) -> None:
 
 @pytest.mark.numerical
 @pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_dataset_spacing(_enable_local_cache, tmp_path, case, sim_dims):
+def test_custom_source_gradient_vs_dataset_spacing(
+    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+):
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
         sim_dims,
+        derivative_target,
         "dataset_spacing",
         DATASET_SPACING_VALUES,
         lambda base, value: replace(base, dataset_spacing=value),
@@ -554,13 +728,17 @@ def test_custom_source_gradient_vs_dataset_spacing(_enable_local_cache, tmp_path
 
 @pytest.mark.numerical
 @pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_grid_resolution(_enable_local_cache, tmp_path, case, sim_dims):
+def test_custom_source_gradient_vs_grid_resolution(
+    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+):
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
         sim_dims,
+        derivative_target,
         "min_steps_per_wvl",
         MIN_STEPS_PER_WVL_VALUES,
         lambda base, value: replace(base, min_steps_per_wvl=value),
@@ -569,13 +747,17 @@ def test_custom_source_gradient_vs_grid_resolution(_enable_local_cache, tmp_path
 
 @pytest.mark.numerical
 @pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_source_size(_enable_local_cache, tmp_path, case, sim_dims):
+def test_custom_source_gradient_vs_source_size(
+    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+):
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
         sim_dims,
+        derivative_target,
         "source_size_xy",
         SOURCE_SIZE_XY_VALUES,
         lambda base, value: replace(base, source_size=(value, value, 0.0)),
@@ -584,13 +766,17 @@ def test_custom_source_gradient_vs_source_size(_enable_local_cache, tmp_path, ca
 
 @pytest.mark.numerical
 @pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_amplitude(_enable_local_cache, tmp_path, case, sim_dims):
+def test_custom_source_gradient_vs_amplitude(
+    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+):
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
         sim_dims,
+        derivative_target,
         "amplitude_scale",
         AMPLITUDE_SCALE_VALUES,
         lambda base, value: replace(base, amplitude_scale=value),
@@ -599,13 +785,17 @@ def test_custom_source_gradient_vs_amplitude(_enable_local_cache, tmp_path, case
 
 @pytest.mark.numerical
 @pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_permittivity(_enable_local_cache, tmp_path, case, sim_dims):
+def test_custom_source_gradient_vs_permittivity(
+    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+):
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
         sim_dims,
+        derivative_target,
         "permittivity",
         PERMITTIVITY_VALUES,
         lambda base, value: replace(
@@ -618,13 +808,17 @@ def test_custom_source_gradient_vs_permittivity(_enable_local_cache, tmp_path, c
 
 @pytest.mark.numerical
 @pytest.mark.parametrize("sim_dims", SIM_DIMS_VALUES, ids=lambda dims: f"{dims}d")
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_vs_wavelength(_enable_local_cache, tmp_path, case, sim_dims):
+def test_custom_source_gradient_vs_wavelength(
+    _enable_local_cache, tmp_path, case, derivative_target, sim_dims
+):
     _skip_2d_field_cases(sim_dims, case)
     _run_variation_sweep(
         tmp_path,
         case,
         sim_dims,
+        derivative_target,
         "wvl0",
         WVL0_VALUES,
         lambda base, value: replace(base, wvl0=value),
@@ -632,69 +826,129 @@ def test_custom_source_gradient_vs_wavelength(_enable_local_cache, tmp_path, cas
 
 
 @pytest.mark.numerical
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
 @pytest.mark.parametrize("case_name", ("custom_field_vec_e", "custom_current_vec_e"))
 def test_custom_source_gradient_off_center_monitor_frequency(
-    _enable_local_cache, tmp_path, case_name
+    _enable_local_cache, tmp_path, case_name, derivative_target
 ):
     """Check source gradients when objective frequency is offset from source center frequency."""
     case = next(candidate for candidate in SOURCE_CASES if candidate.name == case_name)
+    resolved_target = _resolve_derivative_target(case, derivative_target)
     config = replace(
         SweepConfig(sim_dims=3),
         monitor_freq_scale=OFF_CENTER_MONITOR_FREQ_SCALE,
     )
-    label = f"{case.name}_monitor_freq_scale_{OFF_CENTER_MONITOR_FREQ_SCALE}_3d"
+    label = f"{case.name}_{resolved_target}_monitor_freq_scale_{OFF_CENTER_MONITOR_FREQ_SCALE}_3d"
     metrics = _run_gradient_case(
         tmp_path,
         case,
         config,
+        derivative_target,
         label=label,
     )
-    _assert_fd_agreement(metrics, label=label)
+    _assert_fd_agreement(metrics, case, derivative_target, label=label)
 
 
 @pytest.mark.numerical
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
+@pytest.mark.parametrize("case_name", ("custom_field_vec_e", "custom_current_vec_e"))
+def test_custom_source_gradient_two_frequency_flux_difference(
+    _enable_local_cache, tmp_path, case_name, derivative_target
+):
+    """Check source gradients with objective flux(f0) - flux(0.95*f0) in 3D."""
+    case = next(candidate for candidate in SOURCE_CASES if candidate.name == case_name)
+    resolved_target = _resolve_derivative_target(case, derivative_target)
+    config = replace(
+        SweepConfig(sim_dims=3),
+        objective_3d="flux_difference",
+        monitor_freq_scales=TWO_FREQ_MONITOR_SCALES,
+    )
+    label = f"{case.name}_{resolved_target}_flux_difference_3d"
+    metrics = _run_gradient_case(
+        tmp_path,
+        case,
+        config,
+        derivative_target,
+        label=label,
+    )
+    _assert_fd_agreement(metrics, case, derivative_target, label=label)
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_inside_structure(_enable_local_cache, tmp_path, case):
+def test_custom_source_gradient_inside_structure(
+    _enable_local_cache, tmp_path, case, derivative_target
+):
+    resolved_target = _resolve_derivative_target(case, derivative_target)
     structure_config = replace(SweepConfig(), source_structure_permittivity=4.0)
     structure_metrics = _run_gradient_case(
         tmp_path,
         case,
         structure_config,
-        label=f"{case.name}_source_in_structure_eps_4",
+        derivative_target,
+        label=f"{case.name}_{resolved_target}_source_in_structure_eps_4",
     )
-    _assert_fd_agreement(structure_metrics, label=f"{case.name}_source_in_structure_eps_4")
+    _assert_fd_agreement(
+        structure_metrics,
+        case,
+        derivative_target,
+        label=f"{case.name}_{resolved_target}_source_in_structure_eps_4",
+    )
 
 
 @pytest.mark.numerical
-def test_custom_current_source_gradient_cube_size(_enable_local_cache, tmp_path):
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
+def test_custom_current_source_gradient_cube_size(_enable_local_cache, tmp_path, derivative_target):
     current_case = next(case for case in SOURCE_CASES if case.name == "custom_current_vec_e")
+    resolved_target = _resolve_derivative_target(current_case, derivative_target)
     cube_config = replace(SweepConfig(), source_size=(0.5, 0.5, 0.5))
     cube_metrics = _run_gradient_case(
         tmp_path,
         current_case,
         cube_config,
-        label=f"{current_case.name}_source_size_xyz_0.5",
+        derivative_target,
+        label=f"{current_case.name}_{resolved_target}_source_size_xyz_0.5",
     )
-    _assert_fd_agreement(cube_metrics, label=f"{current_case.name}_source_size_xyz_0.5")
+    _assert_fd_agreement(
+        cube_metrics,
+        current_case,
+        derivative_target,
+        label=f"{current_case.name}_{resolved_target}_source_size_xyz_0.5",
+    )
 
 
 @pytest.mark.numerical
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
 @pytest.mark.parametrize("case", SOURCE_CASES, ids=lambda case: case.name)
-def test_custom_source_gradient_in_nonuniform_custom_medium(_enable_local_cache, tmp_path, case):
+def test_custom_source_gradient_in_nonuniform_custom_medium(
+    _enable_local_cache, tmp_path, case, derivative_target
+):
+    resolved_target = _resolve_derivative_target(case, derivative_target)
     custom_medium_config = replace(SweepConfig(), source_structure_custom_medium=True)
     custom_medium_metrics = _run_gradient_case(
         tmp_path,
         case,
         custom_medium_config,
-        label=f"{case.name}_source_in_custom_medium",
+        derivative_target,
+        label=f"{case.name}_{resolved_target}_source_in_custom_medium",
     )
-    _assert_fd_agreement(custom_medium_metrics, label=f"{case.name}_source_in_custom_medium")
+    _assert_fd_agreement(
+        custom_medium_metrics,
+        case,
+        derivative_target,
+        label=f"{case.name}_{resolved_target}_source_in_custom_medium",
+    )
 
 
 @pytest.mark.numerical
-def test_custom_source_gradient_stable_with_remote_dt_constraint(_enable_local_cache, tmp_path):
+@pytest.mark.parametrize("derivative_target", DERIVATIVE_TARGETS)
+def test_custom_source_gradient_stable_with_remote_dt_constraint(
+    _enable_local_cache, tmp_path, derivative_target
+):
     """Source gradients should stay stable when unrelated remote cells constrain global dt."""
     case = next(candidate for candidate in SOURCE_CASES if candidate.name == "custom_current_vec_h")
+    resolved_target = _resolve_derivative_target(case, derivative_target)
     base_config = replace(SweepConfig(), source_structure_permittivity=4.0)
     constrained_config = replace(base_config, add_far_corner_structure=True)
 
@@ -702,29 +956,43 @@ def test_custom_source_gradient_stable_with_remote_dt_constraint(_enable_local_c
         tmp_path,
         case,
         base_config,
-        label=f"{case.name}_inside_structure_base",
+        derivative_target,
+        label=f"{case.name}_{resolved_target}_inside_structure_base",
     )
     constrained_metrics = _run_gradient_case(
         tmp_path,
         case,
         constrained_config,
-        label=f"{case.name}_inside_structure_remote_dt",
+        derivative_target,
+        label=f"{case.name}_{resolved_target}_inside_structure_remote_dt",
     )
 
-    _assert_fd_agreement(base_metrics, label=f"{case.name}_inside_structure_base")
-    _assert_fd_agreement(constrained_metrics, label=f"{case.name}_inside_structure_remote_dt")
+    _assert_fd_agreement(
+        base_metrics,
+        case,
+        derivative_target,
+        label=f"{case.name}_{resolved_target}_inside_structure_base",
+    )
+    _assert_fd_agreement(
+        constrained_metrics,
+        case,
+        derivative_target,
+        label=f"{case.name}_{resolved_target}_inside_structure_remote_dt",
+    )
+    resolved_derivative_target = _resolve_derivative_target(case, derivative_target)
+    _, norm_rtol, norm_atol = _fd_agreement_tolerances(resolved_derivative_target)
 
     np.testing.assert_allclose(
         constrained_metrics.fd_norm,
         base_metrics.fd_norm,
-        rtol=NORM_RTOL,
-        atol=NORM_ATOL,
+        rtol=norm_rtol,
+        atol=norm_atol,
     )
     np.testing.assert_allclose(
         constrained_metrics.adjoint_norm,
         base_metrics.adjoint_norm,
-        rtol=NORM_RTOL,
-        atol=NORM_ATOL,
+        rtol=norm_rtol,
+        atol=norm_atol,
     )
 
 

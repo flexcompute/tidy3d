@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from tidy3d.components.dispersion_fitter import AdvancedFastFitterParam
+
 from .fit import DispersionFitter
-from .fit_fast import AdvancedFastFitterParam, FastDispersionFitter
+from .fit_fast import FastDispersionFitter
 from .web import AdvancedFitterParam, StableDispersionFitter
 
 __all__ = [

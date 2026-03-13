@@ -45,7 +45,9 @@ if TYPE_CHECKING:
     from xarray.core.types import InterpOptions, Self
 
     from tidy3d.components.autograd import InterpolationType
+    from tidy3d.components.grid.grid import Coords
     from tidy3d.components.types import Axis, Bound
+    from tidy3d.components.types.base import Coordinate
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -695,8 +697,8 @@ class AbstractSpatialDataArray(DataArray, ABC):
         """Check whether sorted and sort if not."""
         needs_sorting = []
         for axis in "xyz":
-            axis_coords = self.coords[axis].values
-            if len(axis_coords) > 1 and np.any(axis_coords[1:] < axis_coords[:-1]):
+            axis_coords = np.atleast_1d(self.coords[axis].values)
+            if axis_coords.size > 1 and np.any(axis_coords[1:] < axis_coords[:-1]):
                 needs_sorting.append(axis)
 
         if len(needs_sorting) > 0:
@@ -704,7 +706,33 @@ class AbstractSpatialDataArray(DataArray, ABC):
 
         return self
 
-    def sel_inside(self, bounds: Bound) -> Self:
+    def shifted_spatial_coords(self, center: Coordinate) -> Self:
+        """Return a copy with spatial coordinates shifted by ``center``."""
+        shifted = self
+        for axis, dim in enumerate("xyz"):
+            if dim in shifted.coords:
+                coord_vals = np.asarray(shifted.coords[dim].data)
+                shifted = shifted.assign_coords({dim: coord_vals + center[axis]})
+        return shifted
+
+    def interpolate_to_grid(
+        self,
+        grid: Coords,
+        *,
+        offset: Optional[Coordinate] = None,
+        method: InterpOptions = "linear",
+        target_dims: Optional[tuple[str, ...]] = None,
+    ) -> Self:
+        """Interpolate onto a target grid, with optional spatial offset and output ordering."""
+        if offset is None:
+            interpolated = grid.spatial_interp(self, method)
+        else:
+            interpolated = grid.spatial_interp(self.shifted_spatial_coords(offset), method)
+        if target_dims is not None and tuple(interpolated.dims) != tuple(target_dims):
+            interpolated = interpolated.transpose(*target_dims)
+        return interpolated
+
+    def sel_inside(self, bounds: Bound, *, include_interp_padding: bool = True) -> Self:
         """Return a new SpatialDataArray that contains the minimal amount data necessary to cover
         a spatial region defined by ``bounds``. Note that the returned data is sorted with respect
         to spatial coordinates.
@@ -719,6 +747,9 @@ class AbstractSpatialDataArray(DataArray, ABC):
         -------
         SpatialDataArray
             Extracted spatial data array.
+        include_interp_padding : bool = True
+            If ``True`` (default), include neighbor points around bounds to support interpolation.
+            If ``False``, keep only points whose coordinates are inside bounds.
         """
         if any(bmin > bmax for bmin, bmax in zip(*bounds)):
             raise DataError(
@@ -727,6 +758,20 @@ class AbstractSpatialDataArray(DataArray, ABC):
 
         # make sure data is sorted with respect to coordinates
         sorted_self = self._spatially_sorted
+
+        if not include_interp_padding:
+            selected = sorted_self
+            for coord, smin, smax, dim in zip(
+                (sorted_self.x, sorted_self.y, sorted_self.z),
+                bounds[0],
+                bounds[1],
+                "xyz",
+            ):
+                coord_vals = np.atleast_1d(coord.values)
+                if coord_vals.size <= 1:
+                    continue
+                selected = selected.sel({dim: slice(smin, smax)})
+            return selected
 
         inds_list = []
 

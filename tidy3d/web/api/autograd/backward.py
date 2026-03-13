@@ -12,6 +12,9 @@ from tidy3d.components.autograd import get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.utils import accumulate_field_map as _accumulate_field_map
 from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.source.adjoint_helpers import (
+    collapse_source_adjoint_to_dataset_frequency,
+)
 from tidy3d.config import config
 from tidy3d.exceptions import AdjointError
 from tidy3d.packaging import disable_local_subpixel
@@ -356,6 +359,7 @@ def _process_source_gradients(
     # Apply both adjoint post-normalization and source-time scaling in one pass.
     combined_scale = sim_data_adj.simulation.post_norm * source_time_scaling
     fld_adj = scale_field_data(fld_adj, combined_scale)
+    fld_adj = collapse_source_adjoint_to_dataset_frequency(fld_adj, source_dataset_freq)
 
     e_adj = {k: v for k, v in fld_adj.field_components.items() if k.startswith("E")}
     h_adj = {k: v for k, v in fld_adj.field_components.items() if k.startswith("H")}
@@ -373,7 +377,7 @@ def _process_source_gradients(
         H_fwd={},
         H_adj=h_adj,
         eps_data={},
-        frequencies=adjoint_frequencies,
+        frequencies=_get_freq_coords(fld_adj),
         bounds=bounds,
         bounds_intersect=bounds,
         simulation_bounds=sim_data_orig.simulation.bounds,

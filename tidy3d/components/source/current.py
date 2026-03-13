@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING, Any, Literal, Optional
 import numpy as np
 from pydantic import Field, model_validator
 
+from tidy3d.components.autograd.derivative_utils import (
+    transpose_interp_field_to_dataset,
+)
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
@@ -17,6 +20,13 @@ from tidy3d.components.validators import assert_single_freq_in_range, warn_if_da
 from tidy3d.constants import MICROMETER
 from tidy3d.log import log
 
+from .adjoint_helpers import (
+    accumulate_center_vjp,
+    assign_center_path_derivatives,
+    parse_source_field_component,
+    split_source_paths,
+    validate_no_zero_dim_center_paths,
+)
 from .base import Source
 
 if TYPE_CHECKING:
@@ -25,6 +35,20 @@ if TYPE_CHECKING:
     from tidy3d.components.autograd.derivative_utils import DerivativeInfo
     from tidy3d.components.data.data_array import ScalarFieldDataArray
     from tidy3d.components.types.time import SourceTimeType
+
+
+def _get_direct_source_adjoint_and_sign(
+    field_name: str,
+    *,
+    e_adj: dict[str, Any],
+    h_adj: dict[str, Any],
+    source_name: str,
+) -> tuple[Any, float]:
+    """Get adjoint field/sign for direct ``CustomCurrentSource`` gradients."""
+    field_type, _ = parse_source_field_component(field_name, source_name=source_name)
+    if field_type == "H":
+        return h_adj[field_name], -1.0
+    return e_adj[field_name], 1.0
 
 
 class CurrentSource(Source, ABC):
@@ -280,19 +304,19 @@ class CustomCurrentSource(ReverseInterpolatedSource):
             axis_methods[dim] = "nearest" if np.isclose(self.size[axis], 0.0) else "linear"
         return axis_methods
 
-    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute derivatives with respect to CustomCurrentSource parameters."""
-        from tidy3d.components.autograd.derivative_utils import transpose_interp_field_to_dataset
-
-        derivative_map = {}
-        center = tuple(self.center)
-        interp_methods = self._adjoint_interp_methods()
-        h_adj = derivative_info.H_adj or {}
-        e_adj = derivative_info.E_adj or {}
-
-        for field_path in derivative_info.paths:
+    def _compute_dataset_derivatives(
+        self,
+        dataset_paths: list[tuple],
+        *,
+        center: tuple[float, float, float],
+        interp_methods: dict[str, str],
+        e_adj: dict[str, Any],
+        h_adj: dict[str, Any],
+    ) -> AutogradFieldMap:
+        """Compute derivatives for traced ``current_dataset`` paths."""
+        derivative_map: AutogradFieldMap = {}
+        for field_path in dataset_paths:
             field_path = tuple(field_path)
-            self._validate_traced_source_path(field_path, dataset_key="current_dataset")
             if len(field_path) < 2:
                 raise ValueError(
                     "Current source derivative paths must include dataset component names, "
@@ -300,26 +324,17 @@ class CustomCurrentSource(ReverseInterpolatedSource):
                 )
 
             field_name = field_path[1]
-            if (
-                len(field_name) != 2
-                or field_name[0] not in ("E", "H")
-                or field_name[1] not in ("x", "y", "z")
-            ):
-                raise ValueError(
-                    f"Unsupported field component '{field_name}' in CustomCurrentSource. "
-                    "Expected one of Ex, Ey, Ez, Hx, Hy, Hz."
-                )
-
+            parse_source_field_component(field_name, source_name=type(self).__name__)
             field_data = getattr(self.current_dataset, field_name, None)
             if field_data is None:
                 raise ValueError(f"Cannot find field '{field_name}' in current dataset.")
 
-            if field_name.startswith("H"):
-                adjoint_field = h_adj[field_name]
-                component_sign = -1.0
-            else:  # "E" case
-                adjoint_field = e_adj[field_name]
-                component_sign = 1.0
+            adjoint_field, component_sign = _get_direct_source_adjoint_and_sign(
+                field_name,
+                e_adj=e_adj,
+                h_adj=h_adj,
+                source_name=type(self).__name__,
+            )
 
             adjoint_on_dataset = transpose_interp_field_to_dataset(
                 adjoint_field,
@@ -332,7 +347,90 @@ class CustomCurrentSource(ReverseInterpolatedSource):
 
             # Keep source gradients stable against simulation grid-refinement changes.
             vjp_field = component_sign * adjoint_on_dataset
-
             derivative_map[field_path] = vjp_field.transpose(*field_data.dims).values
+
+        return derivative_map
+
+    def _compute_center_derivatives(
+        self,
+        center_paths: list[tuple],
+        *,
+        center: tuple[float, float, float],
+        bounds: Any,
+        e_adj: dict[str, Any],
+        h_adj: dict[str, Any],
+    ) -> AutogradFieldMap:
+        """Compute derivatives for traced ``center`` paths."""
+        derivative_map: AutogradFieldMap = {}
+        if not center_paths:
+            return derivative_map
+
+        def _get_adjoint_and_sign(field_name: str) -> tuple[Any, float]:
+            return _get_direct_source_adjoint_and_sign(
+                field_name,
+                e_adj=e_adj,
+                h_adj=h_adj,
+                source_name=type(self).__name__,
+            )
+
+        vjp_center = accumulate_center_vjp(
+            field_components=self.current_dataset.field_components,
+            center=center,
+            bounds=bounds,
+            source_size=tuple(self.size),
+            label_prefix=type(self).__name__,
+            get_adjoint_and_sign=_get_adjoint_and_sign,
+        )
+
+        assign_center_path_derivatives(
+            derivative_map,
+            center_paths,
+            vjp_center=vjp_center,
+        )
+        return derivative_map
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute derivatives with respect to CustomCurrentSource parameters."""
+        derivative_map = {}
+        center = tuple(self.center)
+        interp_methods = self._adjoint_interp_methods()
+        h_adj = derivative_info.H_adj or {}
+        e_adj = derivative_info.E_adj or {}
+
+        supported_roots = ("current_dataset", "center")
+        for field_path in derivative_info.paths:
+            self._validate_traced_source_path(
+                tuple(field_path),
+                dataset_key="current_dataset",
+                supported_roots=supported_roots,
+            )
+
+        dataset_paths, center_paths = split_source_paths(
+            derivative_info.paths, dataset_tag="current_dataset"
+        )
+        validate_no_zero_dim_center_paths(
+            center_paths,
+            source_size=tuple(self.size),
+            source_name=type(self).__name__,
+        )
+
+        derivative_map.update(
+            self._compute_dataset_derivatives(
+                dataset_paths,
+                center=center,
+                interp_methods=interp_methods,
+                e_adj=e_adj,
+                h_adj=h_adj,
+            )
+        )
+        derivative_map.update(
+            self._compute_center_derivatives(
+                center_paths,
+                center=center,
+                bounds=derivative_info.bounds,
+                e_adj=e_adj,
+                h_adj=h_adj,
+            )
+        )
 
         return derivative_map

@@ -264,7 +264,7 @@ The following components are traceable as inputs to the `td.Simulation`
 | dispersive materials                                              | `PoleResidue.eps_inf`, `PoleResidue.poles`              |
 | spatially dependent dispersive materials                          | `CustomPoleResidue.eps_inf`, `CustomPoleResidue.poles`  |
 | cylinders                                                         | `Cylinder.radius`, `Cylinder.center`                    |
-| sources                                                           | `CustomCurrentSource.current_dataset`, `CustomFieldSource.field_dataset`|
+| sources                                                           | `CustomCurrentSource.center`, `CustomCurrentSource.current_dataset`, `CustomFieldSource.center`, `CustomFieldSource.field_dataset` |
 
 The following components are traceable as outputs of the `td.SimulationData`
 
