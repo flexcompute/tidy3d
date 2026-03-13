@@ -18,15 +18,11 @@ You can find your API key in the web http://tidy3d.simulation.cloud
 
 ## Publishing Package
 
-First, configure poetry to work with test.PyPI. Give it a name of `test-pypi`.
+Build and upload to TestPyPI with uv:
 
-``poetry config repositories.test-pypi https://test.pypi.org/legacy/``
+``uv build --sdist --wheel``
 
-``poetry config pypi-token.test-pypi <<test.pypi TOKEN>>``
-
-Then, build and upload, make sure to specify repository `-r` of `test-pypi`.
-
-``poetry publish --build -r test-pypi``
+``uv publish --publish-url https://test.pypi.org/legacy/ --check-url https://test.pypi.org/simple/ --token <<test.pypi TOKEN>>``
 
 The changes should be reflected on test PyPI https://test.pypi.org/project/tidy3d-beta/1.8.0/
 
@@ -95,13 +91,12 @@ ModuleNotFoundError: No module named 'click'
 
 So I added `click` with 
 
-``poetry add click``
+``uv add click``
 
-This changed the `poetry.lock` and `pyproject.toml`.
+This changed the `uv.lock` and `pyproject.toml`.
 
 I then bumped the version in `version.py` and `pyproject.toml` to `1.8.1` (otherwise, could not upload again to PyPI for same version) and repeated the publishing steps from above again.
 
 Testing the newly pip-installed version I was able to successfully import tidy3d and run a simulation!
-
 
 

@@ -12,13 +12,13 @@ Run ``ruff format`` to format all Python files:
 
 .. code-block:: bash
 
-   poetry run ruff format .
+   uv run ruff format .
 
 Run ``ruff check`` to check for style and other issues. Many common warnings can be automatically fixed with the ``--fix`` flag:
 
 .. code-block:: bash
 
-   poetry run ruff check tidy3d --fix
+   uv run ruff check tidy3d --fix
 
 The configuration defining what ``ruff`` will correct lives in ``pyproject.toml`` under the ``[tool.ruff]`` section.
 
@@ -45,7 +45,7 @@ To run all of the tests, call:
 
 .. code-block:: bash
 
-   poetry run pytest -rA tests
+   uv run pytest -rA tests
 
 This command will trigger ``pytest`` to go through each file in ``tests/`` called ``test*.py`` and run each function in that file with a name starting with ``test``.
 

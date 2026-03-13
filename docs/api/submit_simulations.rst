@@ -29,7 +29,6 @@ Download Utilities
    :template: module.rst
 
    tidy3d.web.download_json
-   tidy3d.web.download_hdf5
    tidy3d.web.download_log
    tidy3d.web.load_simulation
 

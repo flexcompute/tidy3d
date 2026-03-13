@@ -24,8 +24,8 @@ For ubuntu:
     tidy3d develop # Read all the new development helper commands
     # tidy3d develop uninstall-dev-envrionment # in case you need to reset your environment
     tidy3d develop install-dev-environment # install all requirements that you don't have and verify the exisiting ones
-    poetry run tidy3d develop verify-dev-environment # reproducibly verify development envrionment
-    # poetry run tidy3d develop build-docs # eg. reproducibly build documentation
+    uv run tidy3d develop verify-dev-environment # reproducibly verify development envrionment
+    # uv run tidy3d develop build-docs # eg. reproducibly build documentation
 
 Now you can run the following ``tidy3d`` cli commands to test them.
 
@@ -37,19 +37,19 @@ If you are transitioning from the old development flow, to this new one, there a
 
 .. code::
 
-    # Automatically check and install requirements like pipx, poetry, pandoc
+    # Automatically check and install requirements like pipx, uv, pandoc
     tidy3d develop install-dev-environment
 
 Note that this is just a automatic script implementation of the :ref:`The Detailed Lane` instructions. It is intended to help you and raise warnings with suggestions of how to fix an environment setup issue. You do not have to use this helper function and can just follow the instructions in  :ref:`The Detailed Lane`. All commands are echo-ed in the terminal so you will be able to observe and reproduce what is failing if you desire.
 
 The way this command works is dependent on the operating system you are running. There are some prerequisites for each platform, but the command line tool will help you identify and install the tools it requires. You should rerun the command after you have installed any prerequisite as it will just progress with the rest of the tools installation. If you already have the tool installed, it will verify that it conforms to the supported versions.
 
-This command will first check if you already have installed the development requirements, and if not, it will run the installation scripts for ``pipx``, ``poetry``, and ask you to install the required version of ``pandoc``. It will also install the development requirements and ``tidy3d`` package in a specific ``poetry`` environment.
+This command will first check if you already have installed the development requirements, and if not, it will run the installation scripts for ``pipx``, ``uv``, and ask you to install the required version of ``pandoc``. It will also install the development requirements and ``tidy3d`` package in a specific ``uv`` environment.
 
 Environment Verification
 """"""""""""""""""""""""""""
 
-If you rather install ``poetry``, ``pipx`` and ``pandoc`` yourself, you can run the following command to verify that your environment conforms to the reproducible development environment which would be equivalent to the one installed automatically above and described in :ref:`The Detailed Lane`.
+If you rather install ``uv``, ``pipx`` and ``pandoc`` yourself, you can run the following command to verify that your environment conforms to the reproducible development environment which would be equivalent to the one installed automatically above and described in :ref:`The Detailed Lane`.
 
 .. code::
 
@@ -97,41 +97,41 @@ Make sure you have installed ``pipx``. We provide common installation flows belo
             pipx ensurepath
 
 
-Then install ``poetry``:
+Then install ``uv``:
 
 .. tabs::
 
    .. group-tab:: Ubuntu 22.04
 
-        Further instructions in the `poetry installation instructions <https://python-poetry.org/docs/#installation>`_
+        Further instructions in the `uv installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_
 
         .. code-block:: bash
 
-            python3 -m pipx install poetry
+            python3 -m pipx install uv
 
    .. group-tab:: macOS
 
-        Further instructions in the `poetry installation instructions <https://python-poetry.org/docs/#installation>`_
+        Further instructions in the `uv installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_
 
         .. code-block:: bash
 
-            pipx install poetry
+            pipx install uv
 
    .. group-tab:: Windows
 
-        Further instructions in the `poetry installation instructions <https://python-poetry.org/docs/#installation>`_
+        Further instructions in the `uv installation instructions <https://docs.astral.sh/uv/getting-started/installation/>`_
 
         .. code-block:: bash
 
-            pipx install poetry
+            pipx install uv
 
 
-After restarting the bash terminal, you should be able to find ``poetry`` in your ``PATH`` if it has been installed correctly:
+After restarting the bash terminal, you should be able to find ``uv`` in your ``PATH`` if it has been installed correctly:
 
 .. code::
 
-    poetry --version
-    poetry # prints all commands
+    uv --version
+    uv # prints all commands
 
 
 If you want to locally build documentation, then it is required to install ``pandoc<3``.
@@ -149,7 +149,7 @@ If you want to locally build documentation, then it is required to install ``pan
 
    .. group-tab:: macOS
 
-        Further instructions in the `poetry installation instructions <https://pandoc.org/installing.html#macos>`_
+        Further instructions in the `pandoc installation instructions <https://pandoc.org/installing.html#macos>`_
 
         .. code-block:: bash
 
@@ -157,19 +157,19 @@ If you want to locally build documentation, then it is required to install ``pan
 
    .. group-tab:: Windows
 
-        This installation flow uses `Chocolatey <https://chocolatey.org/>`_. Further instructions in the `poetry installation instructions <https://pandoc.org/installing.html#windows>`_
+        This installation flow uses `Chocolatey <https://chocolatey.org/>`_. Further instructions in the `pandoc installation instructions <https://pandoc.org/installing.html#windows>`_
 
         .. code-block:: bash
 
            choco install pandoc --version="2.9"
 
-Now you need to install the package in the reproducible poetry environment in development mode:
+Now you need to install the package in the reproducible uv environment in development mode:
 
 .. code::
 
-    poetry install -E dev
+    uv sync --frozen --extra dev
 
-Congratulations! Now you have all the required tools installed, you can now use all the ``poetry run tidy3d develop`` commands reproducibly.
+Congratulations! Now you have all the required tools installed, you can now use all the ``uv run tidy3d develop`` commands reproducibly.
 
 If you want to contribute to the project, read the following section:
 
@@ -181,7 +181,7 @@ If you want to contribute to the development of ``tidy3d``, you can follow the i
 
 .. code::
 
-    poetry run pre-commit install
+    uv run pre-commit install
 
 This will run a few file checks on your code before you commit it. After this whenever you commit, the pre-commit hooks will run automatically. If any of the checks fail, you will have to fix the issues before you can commit. If for some reason, it's a check you want to waive, you can follow the instructions of the tool to automatically waive them or you can run the following command to skip the checks **only on minimal circumstances**:
 
@@ -193,21 +193,20 @@ You can also run the checks manually on all files by running the following comma
 
 .. code::
 
-    poetry run pre-commit run --all-files
+    uv run pre-commit run --all-files
 
 
 Packaging Equivalent Functionality
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This package installation process should be  approximately equivalent to the previous ``setup.py`` installation flow. Independent of the ``poetry`` development flow, it is possible to run any of the following commands in any particular virtual environment you have configured:
+This package installation process should be  approximately equivalent to the previous ``setup.py`` installation flow. Independent of the ``uv`` development flow, it is possible to run any of the following commands in any particular virtual environment you have configured:
 
 .. code::
 
     pip install tidy3d[dev]
     pip install tidy3d[docs]
-    pip install tidy3d[web]
-    ...
-    pip install tidy3d[jax]
+    pip install tidy3d[extras]
+    pip install tidy3d[trimesh]
+    pip install tidy3d[pytorch]
 
-All these options can be found inside the ``pyproject.toml`` ``tool.poetry.extras`` section. Each has a corresponding list of dependencies whose versions are defined on the ``tool.poetry.dependencies`` section of the file.
-
+All these options can be found in the ``[project.optional-dependencies]`` section of ``pyproject.toml``. Core dependencies and their version ranges are defined in ``[project.dependencies]``.

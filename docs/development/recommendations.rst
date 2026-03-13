@@ -94,4 +94,4 @@ We have a set of utilties to verify this.
 
 .. code::
 
-    poetry run tidy3d develop benchmark-timing-operations
+    uv run tidy3d develop benchmark-timing-operations

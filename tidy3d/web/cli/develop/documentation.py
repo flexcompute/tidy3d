@@ -2,15 +2,15 @@
 These are common operations CLI tools for the documentation build process.
 These functions are used to build the documentation. They are called from the CLI using the following command:
 
-    poetry run tidy3d develop build-docs
+    uv run tidy3d develop build-docs
 
 The functions are also used to update the notebooks submodule and build the documentation using the following command:
 
-    poetry run tidy3d develop build-docs-remote-notebooks
+    uv run tidy3d develop build-docs-remote-notebooks
 
 The functions are also used to convert all Markdown files to RST format using the following command:
 
-    poetry run tidy3d develop convert-all-markdown-to-rst
+    uv run tidy3d develop convert-all-markdown-to-rst
 """
 
 from __future__ import annotations
@@ -171,7 +171,7 @@ def build_documentation(args: Any = None) -> None:
     """
     Build the Sphinx documentation.
 
-    This command triggers the Sphinx documentation build process in the current poetry environment.
+    This command triggers the Sphinx documentation build process in the current uv environment.
 
     Parameters
     ----------
@@ -180,7 +180,20 @@ def build_documentation(args: Any = None) -> None:
     """
     # Runs a clean doc build to avoid stale doctrees after refactors.
     echo_and_check_subprocess(
-        ["poetry", "run", "python", "-m", "sphinx", "-E", "-a", "-j", "auto", "docs/", "_docs/"]
+        [
+            "uv",
+            "run",
+            "--frozen",
+            "python",
+            "-m",
+            "sphinx",
+            "-E",
+            "-a",
+            "-j",
+            "auto",
+            "docs/",
+            "_docs/",
+        ]
     )
     return 0
 
@@ -198,9 +211,9 @@ def build_documentation(args: Any = None) -> None:
 #     args : optional
 #         Additional arguments for the PDF documentation build process.
 #     """
-#     # Runs the documentation build from the poetry environment
+#     # Runs the documentation build from the uv environment.
 #     echo_and_run_subprocess(
-#         ["poetry", "run", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"]
+#         ["uv", "run", "--frozen", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"]
 #     )
 #     return 0
 
@@ -225,11 +238,13 @@ def build_documentation_from_remote_notebooks(args: Any = None) -> int:
     args : optional
         Additional arguments for the process of updating notebooks and building documentation.
     """
-    # Runs the documentation build from the poetry environment
+    # Runs the documentation build from the uv environment.
     echo_and_check_subprocess(["git", "submodule", "update", "--remote"])
 
     print("Notebook submodule updated from remote.")
-    echo_and_check_subprocess(["poetry", "run", "python", "-m", "sphinx", "docs/", "_docs/"])
+    echo_and_check_subprocess(
+        ["uv", "run", "--frozen", "python", "-m", "sphinx", "docs/", "_docs/"]
+    )
     return 0
 
 
@@ -321,8 +336,8 @@ def replace_in_files_command(
 
     Usage:
 
-        poetry run tidy3d develop replace-in-files -d ./ -j ./docs/versions/test_replace_in_files.json -v 0.18.0 --dry-run True
-        poetry run tidy3d develop replace-in-files --directory ./ --json-dictionary ./docs/versions/test_replace_in_files.json --selected-version 0.18.0 --dry-run True
+        uv run tidy3d develop replace-in-files -d ./ -j ./docs/versions/test_replace_in_files.json -v 0.18.0 --dry-run True
+        uv run tidy3d develop replace-in-files --directory ./ --json-dictionary ./docs/versions/test_replace_in_files.json --selected-version 0.18.0 --dry-run True
 
     Args:
     - directory (str): The directory path to search for files.

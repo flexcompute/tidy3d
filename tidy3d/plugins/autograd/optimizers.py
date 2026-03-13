@@ -64,9 +64,9 @@ class Adam(Tidy3dBaseModel):
 
     Example
     -------
-    >>> opt = adam(learning_rate=0.01)
-    >>> state = opt.init(params)
-    >>> for step in range(100):
+    >>> opt = adam(learning_rate=0.01)  # doctest: +SKIP
+    >>> state = opt.init(params)  # doctest: +SKIP
+    >>> for step in range(100):  # doctest: +SKIP
     ...     val, grad = value_and_grad(obj_fn)(params)
     ...     updates, state = opt.update(grad, state, params)
     ...     params = apply_updates(params, updates)

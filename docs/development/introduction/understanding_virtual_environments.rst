@@ -18,7 +18,7 @@ Benefits
 Prerequisites
 ^^^^^^^^^^^^^^
 
-Make sure that you have ``poetry`` installed. This can be done system-wide with ``pipx`` or within a ``conda`` environment. Note that we use ``conda`` only for setting up the interpreter (Python version) and ``poetry``, not for managing dependencies.
+Make sure that you have ``uv`` installed. This can be done system-wide with ``pipx`` or within a ``conda`` environment. Note that we use ``conda`` only for setting up the interpreter (Python version) and ``uv``, not for managing dependencies.
 Refer to the official development guide for detailed instructions:
 
 `https://docs.flexcompute.com/projects/tidy3d/en/stable/development/index.html#installation <https://docs.flexcompute.com/projects/tidy3d/en/stable/development/index.html#installation>`_
@@ -36,23 +36,22 @@ Setting Up a New Environment
 
    .. code-block:: bash
 
-      conda create -n branch_env python=3.11 poetry
+      conda create -n branch_env python=3.11
       conda activate branch_env
-      poetry env use system
-      poetry env info # verify you're running the right environment now
+      python --version
 
-3. Install dependencies with ``poetry``:
+3. Install dependencies with ``uv``:
 
    .. code-block:: bash
 
-      poetry install -E dev
-      poetry run pre-commit install
+      uv sync --active --frozen --extra dev
+      uv run pre-commit install
 
 4. Update the environment when switching to a different branch:
 
    .. code-block:: bash
 
-      poetry install -E dev
+      uv sync --active --frozen --extra dev
 
 
 

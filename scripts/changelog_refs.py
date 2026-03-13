@@ -19,12 +19,12 @@ RELEASE_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(\.dev\d+)?$")
 
 
 def _read_pyproject_version(pyproject_path: Path) -> str:
-    """Read the Poetry version from pyproject.toml."""
+    """Read the project version from pyproject.toml."""
     if tomllib is not None:
         data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     else:
         data = toml.loads(pyproject_path.read_text(encoding="utf-8"))
-    return data["tool"]["poetry"]["version"]
+    return data["project"]["version"]
 
 
 def _derive_release_version(pyproject_path: Path) -> str:

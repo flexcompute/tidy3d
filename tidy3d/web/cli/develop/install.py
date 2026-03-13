@@ -20,34 +20,24 @@ if TYPE_CHECKING:
     from typing import Optional
 
 __all__ = [
-    "activate_correct_poetry_python",
+    "activate_uv_python",
     "configure_submodules",
     "get_install_directory_command",
     "install_development_environment",
-    "install_in_poetry",
+    "install_in_uv",
     "uninstall_development_environment",
     "update_submodules_remote",
     "verify_development_environment",
     "verify_pandoc_is_installed_and_version_less_than_3",
     "verify_pipx_is_installed",
-    "verify_poetry_is_installed",
     "verify_sphinx_is_installed",
+    "verify_uv_is_installed",
 ]
 
 
-def activate_correct_poetry_python() -> None:
-    """
-    Activate the correct Python environment for Poetry based on the operating system.
-    """
-    if platform.system() == "Windows" or platform.system() == "Darwin":
-        echo_and_run_subprocess(["poetry", "env", "use", "python"])
-    elif platform.system() == "Linux":
-        try:
-            echo_and_run_subprocess(["poetry", "env", "use", "python"])
-        except subprocess.CalledProcessError:
-            echo_and_run_subprocess(["poetry", "env", "use", "python"])
-        except:  # NOQA: E722
-            print("Do you have a python available in your terminal?")
+def activate_uv_python() -> None:
+    """Ensure uv is available from the current shell."""
+    echo_and_check_subprocess(["uv", "--version"])
 
 
 def configure_submodules(args: Any = None) -> None:
@@ -69,12 +59,12 @@ def configure_submodules(args: Any = None) -> None:
 
 def verify_pandoc_is_installed_and_version_less_than_3() -> bool:
     """
-    Check if Pandoc is installed and its version is less than 3.
+    Check if Pandoc is installed and its version can be determined.
 
     Returns
     -------
     bool
-        True if Pandoc is installed and its version is less than 3, False otherwise.
+        True if Pandoc is installed and its version can be determined, False otherwise.
     """
     try:
         # Running 'pandoc --version' command
@@ -86,17 +76,12 @@ def verify_pandoc_is_installed_and_version_less_than_3() -> bool:
         version_match = re.search(r"pandoc\s+(\d+\.\d+.\d+)", result.stdout)
         if version_match:
             version = version_match.group(1)
-            major_version = int(version.split(".")[0])
-
-            if major_version < 3:
-                print(f"Pandoc is installed with version {version}, which is less than 3.")
-                return True
-            print(f"Pandoc version {version} is installed, but it is not less than 3.")
-            return False
+            print(f"Pandoc is installed with version {version}.")
+            return True
         print("Pandoc version number could not be determined.")
         return False
 
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         # This exception is raised if the command returned a non-zero exit status
         print("Pandoc is not installed or not found in the system PATH.")
         return False
@@ -119,59 +104,61 @@ def verify_pipx_is_installed() -> Optional[bool]:
         # If the command was successful, it means pipx is installed
         print("pipx is installed: " + result.stdout)
         return True
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         # This exception is raised if the command returned a non-zero exit status
         print("pipx is not installed or not found in the system PATH.")
         return False
 
 
-def verify_poetry_is_installed() -> bool:
+def verify_uv_is_installed() -> bool:
     """
-    Check if Poetry is installed on the system.
+    Check if uv is installed on the system.
 
     Returns
     -------
     bool
-        True if Poetry is installed, raises `OSError` otherwise.
+        True if uv is installed, raises `OSError` otherwise.
 
     Raises
     ------
     OSError
-        If Poetry is not installed or not found in the system PATH.
+        If uv is not installed or not found in the system PATH.
     """
     try:
-        # Running 'poetry --version' command
+        # Running 'uv --version' command
         result = echo_and_run_subprocess(
-            ["poetry", "--version"], capture_output=True, text=True, check=True
+            ["uv", "--version"], capture_output=True, text=True, check=True
         )
         # If the command was successful, we'll get the version info
-        print("Poetry is installed: " + result.stdout)
+        print("uv is installed: " + result.stdout)
         return True
-    except subprocess.CalledProcessError as exc:
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
         # This exception is raised if the command returned a non-zero exit status
-        raise OSError("Poetry is not installed or not found in the system PATH.") from exc
+        raise OSError("uv is not installed or not found in the system PATH.") from exc
 
 
 def verify_sphinx_is_installed() -> None:
     """
-    Verify if Sphinx is installed in the poetry environment.
+    Verify if Sphinx is installed in the uv environment.
 
     Raises
     ------
     OSError
-        If Sphinx is not installed or not found in the poetry environment.
+        If Sphinx is not installed or not found in the uv environment.
     """
     try:
-        # Running 'poetry --version' command
-        activate_correct_poetry_python()
+        activate_uv_python()
         result = echo_and_run_subprocess(
-            ["poetry", "run", "python -m", "sphinx --version"],
+            ["uv", "run", "--frozen", "python", "-m", "sphinx", "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
         )
         # If the command was successful, we'll get the version info
         print("sphinx is installed: " + result.stdout)
     except subprocess.CalledProcessError as exc:
         # This exception is raised if the command returned a non-zero exit status
-        raise OSError("sphinx is not installed or not found in the poetry environment.") from exc
+        raise OSError("sphinx is not installed or not found in the uv environment.") from exc
 
 
 @develop.command(name="get-install-directory", help="Gets the TIDY3D base directory.")
@@ -192,7 +179,7 @@ def get_install_directory_command() -> int:
 def install_development_environment(args: Any = None) -> None:
     """Install and configure the full required development environment.
 
-    This command automates the installation of development tools like pipx, poetry, and pandoc, and sets up
+    This command automates the installation of development tools like pipx, uv, and pandoc, and sets up
     the development environment according to 'The Detailed Lane' instructions. It is dependent on the
     operating system and may require user interaction for certain steps.
 
@@ -201,10 +188,8 @@ def install_development_environment(args: Any = None) -> None:
     args : optional
         Additional arguments for the installation process.
     """
-    # Verify and install pipx if required
-    try:
-        verify_pipx_is_installed()
-    except Exception as exc:
+    # Verify and install pipx if required.
+    if not verify_pipx_is_installed():
         if platform.system() == "Windows":
             echo_and_check_subprocess(["scoop", "install", "pipx"])
             echo_and_check_subprocess(["pipx", "ensurepath"])
@@ -218,37 +203,33 @@ def install_development_environment(args: Any = None) -> None:
             raise OSError(
                 "Unsupported operating system installation flow. Verify the subprocess commands in "
                 "tidy3d develop are compatible with your operating system."
-            ) from exc
+            )
 
-    # Verify and install poetry if required
+    # Verify and install uv if required.
     try:
-        verify_poetry_is_installed()
-    except Exception as exc:
+        verify_uv_is_installed()
+    except OSError as exc:
         if platform.system() == "Windows" or platform.system() == "Darwin":
-            echo_and_check_subprocess(["pipx", "install", "poetry"])
+            echo_and_check_subprocess(["pipx", "install", "uv"])
         elif platform.system() == "Linux":
-            echo_and_check_subprocess(["python3", "-m", "pipx", "install", "poetry"])
+            echo_and_check_subprocess(["python3", "-m", "pipx", "install", "uv"])
         else:
             raise OSError(
                 "Unsupported operating system installation flow. Verify the subprocess commands in "
                 "tidy3d develop are compatible with your operating system."
             ) from exc
 
-    # Verify pandoc is installed
-    try:
-        verify_pandoc_is_installed_and_version_less_than_3()
-    except Exception as exc:
+    # Verify pandoc is installed.
+    if not verify_pandoc_is_installed_and_version_less_than_3():
         raise OSError(
-            "Please install pandoc < 3 depending on your platform: https://pandoc.org/installing.html . Then run this "
+            "Please install pandoc depending on your platform: https://pandoc.org/installing.html . Then run this "
             "command again. You can also follow our detailed instructions under the development guide."
-        ) from exc
+        )
 
-    # Makes sure that poetry uses the python environment active on the terminal.
-
-    activate_correct_poetry_python()
-    # Makes sure the package has installed all the development dependencies.
-    echo_and_check_subprocess(["poetry", "install", "-E", "dev"])
-    echo_and_check_subprocess(["poetry", "run", "pre-commit", "install"])
+    # Install all development dependencies from the lockfile.
+    activate_uv_python()
+    echo_and_check_subprocess(["uv", "sync", "--frozen", "--extra", "dev"])
+    echo_and_check_subprocess(["uv", "run", "--frozen", "pre-commit", "install"])
 
     # Configure notebook submodule
     try:
@@ -262,27 +243,26 @@ def install_development_environment(args: Any = None) -> None:
 @click.option(
     "--env",
     default="dev",
-    help="Poetry environment to install. Defaults to 'dev'.",
+    help="Extra set to install. Defaults to 'dev'.",
     type=str,
 )
 @develop.command(
-    name="install-in-poetry", help="Just installs the tidy3d development package in poetry."
+    name="install-in-uv", help="Installs tidy3d in the uv-managed development environment."
 )
-def install_in_poetry(env: str = "dev") -> int:
+def install_in_uv(env: str = "dev") -> int:
     """
-    Install the tidy3d development package in the poetry environment with the specified extra option, by default 'dev'.
+    Install the tidy3d development package in the uv environment with the specified extra option, by default 'dev'.
 
     This command ensures that the tidy3d package along with its development dependencies is installed in the current
-    poetry environment.
+    uv environment.
 
     Parameters
     ----------
     env : str
-        The extra option to pass to poetry for installation. Defaults to 'dev'.
+        The extra option to pass to uv for installation. Defaults to 'dev'.
     """
-    # Runs the documentation build from the poetry environment
-    activate_correct_poetry_python()
-    echo_and_run_subprocess(["poetry", "install", "-E", env])
+    activate_uv_python()
+    echo_and_run_subprocess(["uv", "sync", "--frozen", "--extra", env])
     return 0
 
 
@@ -293,7 +273,7 @@ def uninstall_development_environment(args: Any = None) -> int:
     """
     Uninstall the development environment and the tools installed by this CLI.
 
-    This command provides a clean-up mechanism to remove development tools like poetry, pipx, and pandoc
+    This command provides a clean-up mechanism to remove development tools like uv, pipx, and pandoc
     that were installed using this CLI. User confirmation is required before uninstallation.
 
     Parameters
@@ -302,7 +282,7 @@ def uninstall_development_environment(args: Any = None) -> int:
         Additional arguments for the uninstallation process.
     """
     answer = input(
-        "This function will uninstall poetry, pipx and request you to uninstall pandoc. Are you sure you want to continue?"
+        "This function will uninstall uv, pipx and request you to uninstall pandoc. Are you sure you want to continue?"
     )
     if answer.lower() in ["y", "yes"]:
         pass
@@ -311,22 +291,22 @@ def uninstall_development_environment(args: Any = None) -> int:
     else:
         exit("Nothing has been uninstalled.")
 
-    # Verify and uninstall poetry if required
-    if verify_poetry_is_installed():
+    # Verify and uninstall uv if required.
+    if verify_uv_is_installed():
         if platform.system() == "Windows":
-            echo_and_run_subprocess(["pipx", "uninstall", "poetry"])
+            echo_and_run_subprocess(["pipx", "uninstall", "uv"])
         elif platform.system() == "Darwin":
-            echo_and_run_subprocess(["brew", "uninstall", "poetry"])
-            echo_and_run_subprocess(["pipx", "uninstall", "poetry"])
+            echo_and_run_subprocess(["brew", "uninstall", "uv"])
+            echo_and_run_subprocess(["pipx", "uninstall", "uv"])
         elif platform.system() == "Linux":
-            echo_and_run_subprocess(["python3", "-m", "pipx", "uninstall", "poetry"])
+            echo_and_run_subprocess(["python3", "-m", "pipx", "uninstall", "uv"])
         else:
             raise OSError(
                 "Unsupported operating system installation flow. Verify the subprocess commands in "
                 "tidy3d develop are compatible with your operating system."
             )
     else:
-        print("poetry is not found on the PATH. It is already uninstalled from PATH.")
+        print("uv is not found on the PATH. It is already uninstalled from PATH.")
 
     # Verify and install pipx if required
     if verify_pipx_is_installed():
@@ -351,7 +331,7 @@ def uninstall_development_environment(args: Any = None) -> int:
     # Verify pandoc is installed
     if verify_pandoc_is_installed_and_version_less_than_3():
         raise OSError(
-            "Please uninstall pandoc < 3 depending on your platform: https://pandoc.org/installing.html . Then run this "
+            "Please uninstall pandoc depending on your platform: https://pandoc.org/installing.html . Then run this "
             "command again. You can also follow our detailed instructions under the development guide."
         )
     print("pandoc is not found on the PATH. It is already uninstalled from PATH.")
@@ -371,7 +351,7 @@ def update_submodules_remote(args: Any = None) -> int:
     args : optional
         Additional arguments for the update process.
     """
-    # Runs the documentation build from the poetry environment
+    # Updates submodules in the current repository.
     echo_and_check_subprocess(["git", "submodule", "update", "--remote"])
     return 0
 
@@ -381,8 +361,8 @@ def verify_development_environment(args: Any = None) -> int:
     """
     Verify that the current development environment conforms to the specified requirements.
 
-    This command checks various development dependencies like pipx, poetry, and pandoc, and ensures
-    they are properly installed and configured. It also performs a dry run of poetry installation to check
+    This command checks various development dependencies like pipx, uv, and pandoc, and ensures
+    they are properly installed and configured. It also performs a dry run of uv sync to check
     package configurations.
 
     Parameters
@@ -394,14 +374,15 @@ def verify_development_environment(args: Any = None) -> int:
     # Checks all the other development dependencies are properly installed
     # Verify pipx is installed
     verify_pipx_is_installed()
-    # Verify poetry is installed
-    verify_poetry_is_installed()
+    # Verify uv is installed.
+    verify_uv_is_installed()
     # Verify pandoc is installed
     verify_pandoc_is_installed_and_version_less_than_3()
-    # Dry run the poetry install to understand the configuration
-    activate_correct_poetry_python()
-    echo_and_check_subprocess(["poetry", "install", "-E", "dev", "--dry-run"])
+    # Dry run uv sync to verify lockfile compatibility.
+    activate_uv_python()
+    echo_and_check_subprocess(["uv", "sync", "--frozen", "--extra", "dev", "--dry-run"])
     print(
-        "'poetry install -E dev' dry run on the 'poetry.lock' complete.\nManually verify packages are properly installed."
+        "'uv sync --frozen --extra dev' dry run on the 'uv.lock' complete.\n"
+        "Manually verify packages are properly installed."
     )
     return 0

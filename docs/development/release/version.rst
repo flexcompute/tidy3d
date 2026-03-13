@@ -150,10 +150,10 @@ Before running the release workflow, generate release notes from ``changelog.d``
 
 .. code-block:: bash
 
-   RELVER=$(poetry version -s | sed -E 's/\.dev[0-9]+$//')
+   RELVER=$(uv version --short | sed -E 's/\.dev[0-9]+$//')
    RELDATE=$(date -u +%F)
-   poetry run towncrier build --yes --version "${RELVER}" --date "${RELDATE}"
-   poetry run python scripts/changelog_refs.py --version "${RELVER}"
+   uv run towncrier build --yes --version "${RELVER}" --date "${RELDATE}"
+   uv run python scripts/changelog_refs.py --version "${RELVER}"
 
 This sequence:
 

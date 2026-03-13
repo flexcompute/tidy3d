@@ -1,7 +1,7 @@
 """Move imports used only for typing behind ``TYPE_CHECKING`` guards.
 
 Usage:
-    poetry run python scripts/move_type_imports.py --mode [fix | check_on_change] [--only-changed]
+    uv run python scripts/move_type_imports.py --mode [fix | check_on_change] [--only-changed]
 
 The script scans module-level imports and moves those referenced only in
 annotations or existing ``if TYPE_CHECKING`` blocks into a consolidated

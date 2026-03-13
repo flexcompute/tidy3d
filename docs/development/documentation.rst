@@ -4,11 +4,11 @@ Documentation
 Getting Started
 ---------------
 
-Assuming you already have ``poetry`` and the ``tidy3d develop`` commands installed (see the instructions if not), then building the documentation is easy:
+Assuming you already have ``uv`` and the ``tidy3d develop`` commands installed (see the instructions if not), then building the documentation is easy:
 
 .. code::
 
-        poetry run tidy3d develop build-docs
+        uv run tidy3d develop build-docs
 
 The output of the build will be in ``_docs/`` and you can view it by opening ``_docs/index.html`` in your browser. You might just have to click the ``index.html`` file to open it in your browser within a File Explorer.
 
@@ -43,7 +43,7 @@ Example usage:
 
 .. code::
 
-    poetry run tidy3d develop replace-in-files -d ./ -j ./docs/versions/test_replace_in_files.json -v 0.18.0 --dry-run True
+    uv run tidy3d develop replace-in-files -d ./ -j ./docs/versions/test_replace_in_files.json -v 0.18.0 --dry-run True
 
 
 **Command Details**
@@ -72,13 +72,13 @@ Example JSON structure:
     }
 
 
-The command can be executed using the ``poetry run`` command. It requires specifying the directory, JSON dictionary, and the selected version. The ``--dry-run`` option allows you to preview changes without applying them.
+The command can be executed using the ``uv run`` command. It requires specifying the directory, JSON dictionary, and the selected version. The ``--dry-run`` option allows you to preview changes without applying them.
 
 **Example Command**
 
 .. code::
 
-    poetry run tidy3d develop replace-in-files -d ./ -j ./docs/versions/test_replace_in_files.json -v 0.18.0 --dry-run True
+    uv run tidy3d develop replace-in-files -d ./ -j ./docs/versions/test_replace_in_files.json -v 0.18.0 --dry-run True
 
 This example will process files in the current directory (``./``), using the replacement rules specified in ``test_replace_in_files.json`` for version ``0.18.0``. The ``--dry-run`` flag set to ``True`` ensures that changes are not actually applied, allowing for a safe preview of potential modifications.
 

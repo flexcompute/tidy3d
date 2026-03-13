@@ -23,11 +23,11 @@ As of ``tidy3d>=2.6``, the frontend has been restructured to improve the develop
         # python source code
     ...
     pyproject.toml # python packaging
-    poetry.lock # environment management
+    uv.lock # environment management
 
 It is important to note the new tools we are using to manage our development environment and workflow.
 
-- ``poetry``
+- ``uv``
 - ``pipx``
 
 Important Branches

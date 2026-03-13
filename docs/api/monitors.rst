@@ -17,8 +17,7 @@ The types of monitors in Tidy3D include:
 * `Diffraction`_: Records diffraction coefficient(s) in a periodic simulation
 * `Far-field`_: Various monitors for calculating far-field projection and radiation characteristics
 * `Surface`_: Records EM fields on PEC and lossy metal surfaces in a 3D region at specified time or frequency points
-* `Permittivity`_: Records material permittivity properties within a given region
-* `Medium`_: Records material permittivity and permeability properties within a given region
+* `Permittivity and Permeability`_: Records material permittivity or permeability properties within a given region
 
 .. seealso::
 
@@ -350,6 +349,4 @@ Apodization
 
    tidy3d.ApodizationSpec
 
-The ``ApodizationSpec`` is used to specify apodization specifications for frequency-domain monitors. Typically, the default Tidy3D settings are acceptable and it is not necessary to define a custom instance. Please refer to the documentation page for more details. 
-
-~~~~
+The ``ApodizationSpec`` is used to specify apodization specifications for frequency-domain monitors. Typically, the default Tidy3D settings are acceptable and it is not necessary to define a custom instance. Please refer to the documentation page for more details.

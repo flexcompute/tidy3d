@@ -245,7 +245,7 @@ While you can view simulations without a local Python setup, notebook execution 
 
 - ``uv`` (recommended for new projects)
 - ``conda`` / ``micromamba``
-- ``poetry``, ``rye``, ``hatch``
+- ``rye`` / ``hatch``
 - ``venv`` (Python standard library)
 
 **Example with uv:**
@@ -351,4 +351,3 @@ Getting Help
 **Proprietary** – Flexcompute Inc.
 
 The Tidy3D for Cursor extension is proprietary software developed and maintained by Flexcompute Inc. All rights reserved.
-

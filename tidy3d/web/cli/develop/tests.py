@@ -8,7 +8,7 @@ from __future__ import annotations
 import click
 
 from .index import develop
-from .install import install_in_poetry
+from .install import install_in_uv
 from .utils import echo_and_run_subprocess
 
 __all__ = [
@@ -27,9 +27,11 @@ def test_options(options: list) -> None:
         A list of options for which tests to run. Options are 'base' and 'notebooks'.
     """
     if "base" in options:
-        echo_and_run_subprocess(["poetry", "run", "pytest", "-rA", "tests"])
+        echo_and_run_subprocess(["uv", "run", "--frozen", "pytest", "-rA", "tests"])
     if "notebooks" in options:
-        echo_and_run_subprocess(["poetry", "run", "pytest", "-rA", "tests/full_test_notebooks.py"])
+        echo_and_run_subprocess(
+            ["uv", "run", "--frozen", "pytest", "-rA", "tests/full_test_notebooks.py"]
+        )
 
 
 @click.option(
@@ -41,16 +43,14 @@ def test_options(options: list) -> None:
 @click.option(
     "--env",
     default="dev",
-    help="Poetry environment to install. Defaults to 'dev'.",
+    help="Dependency extra to install. Defaults to 'dev'.",
     type=str,
 )
-@develop.command(
-    name="test-in-envrionment", help="Installs the specified poetry environment and tests"
-)
+@develop.command(name="test-in-envrionment", help="Installs the specified uv environment and tests")
 def test_in_environment_command(types: list, env: str = "dev") -> None:
     """
-    Installs a poetry environment specified by the extra definition in pyproject.toml and runs tests with pytest and
-    any additional arguments. Requires a poetry installation so make sure to verify the installation previously.
+    Installs a uv environment specified by the extra definition in pyproject.toml and runs tests with pytest and
+    any additional arguments. Requires uv to be installed and configured.
 
     If the environment is already installed, it will be reinstalled to ensure the latest version of a reproducible
     envrionment is used.
@@ -60,7 +60,7 @@ def test_in_environment_command(types: list, env: str = "dev") -> None:
     types : list
         A list of options for which tests to run.
     env : str
-        The name of the poetry environment to install. Defaults to 'dev'. See pyproject.toml
+        The extra set to install. Defaults to 'dev'. See pyproject.toml.
     """
-    install_in_poetry(env)
+    install_in_uv(env)
     test_options(types)

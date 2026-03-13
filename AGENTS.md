@@ -6,16 +6,16 @@
 - Prefer extending existing utilities in `scripts/` before adding new helper modules.
 
 ## Workflow & Tooling
-- Make sure your local environment is bootstrapped with `poetry install --extras dev` and `poetry run pre-commit install`; once that’s done on a machine, you shouldn’t need to repeat it unless dependencies change.
-- The `dev` extra is the superset that includes **all** optional dependencies (pyvista, trimesh, gdstk, vtk, etc.) needed for testing. Always use `poetry install --extras dev` to get the full test environment. When adding a new optional dependency, add it to `dev` as well.
-- Prefix every repo command with `poetry run` to match CI.
-- Re-run `poetry run pytest` locally as part of your development loop; `pyproject.toml` already wires markers, doctests, coverage, and env vars.
-- The pre-commit hooks you enabled during onboarding run automatically; still run `poetry run pre-commit run --all-files` before opening a PR or when new hooks land so your tree matches `.pre-commit-config.yaml` and the checks in `.github/workflows/tidy3d-python-client-tests.yml` (covers `ruff format`, `ruff check`, doc hooks).
+- Make sure your local environment is bootstrapped with `uv sync --frozen --extra dev` and `uv run pre-commit install`; once that’s done on a machine, you shouldn’t need to repeat it unless dependencies change.
+- The `dev` extra is the superset that includes **all** optional dependencies (pyvista, trimesh, gdstk, vtk, etc.) needed for testing. Always use `uv sync --frozen --extra dev` to get the full test environment. When adding a new optional dependency, add it to `dev` as well.
+- Use uv-managed commands (`uv run`, `uv sync`, `uv lock`, `uv build`) to match CI.
+- Re-run `uv run pytest` locally as part of your development loop; `pyproject.toml` already wires markers, doctests, coverage, and env vars.
+- The pre-commit hooks you enabled during onboarding run automatically; still run `uv run pre-commit run --all-files` before opening a PR or when new hooks land so your tree matches `.pre-commit-config.yaml` and the checks in `.github/workflows/public_tidy3d-python-client-tests.yml` (covers `ruff format`, `ruff check`, doc hooks).
 - When editing YAML, Python, or docs, match the surrounding indentation exactly; never re-indent or reformat lines you didn’t otherwise modify.
 
 ### Do / Don't
-- **Do** run `poetry run pre-commit run --all-files` before opening a PR; **don't** skip it even if individual hooks passed earlier.
-- **Do** stick to `poetry run …` commands; **don't** invoke tools outside Poetry, since that drifts from CI environments.
+- **Do** run `uv run pre-commit run --all-files` before opening a PR; **don't** skip it even if individual hooks passed earlier.
+- **Do** stick to uv-managed commands (`uv run …`, `uv sync …`, `uv lock …`); **don't** install dependencies outside uv, since that drifts from CI environments.
 - **Do** reuse `scripts/` utilities; **don't** add new helper modules without checking for an existing script first.
 
 ## Coding Style & Naming
@@ -31,24 +31,24 @@
 ## Testing Guidelines
 - Mirror the source tree with `test_<feature>.py`, add a short module docstring, and import `tidy3d as td`; keep single-use fixtures local but upstream broadly useful helpers into `tests/conftest.py`.
 - Lean on `tests/conftest.py` for RNG seeding, matplotlib cleanup, logger reset, and autograd helpers, and use pytest’s `tmp_path` for artifacts.
-- `poetry run pytest` is the canonical entry point; the `pyproject` config already selects markers, doctests, coverage, xdist, and env vars, so reproduce CI locally before opening a PR.
+- `uv run pytest` is the canonical entry point; the `pyproject` config already selects markers, doctests, coverage, xdist, and env vars, so reproduce CI locally before opening a PR.
 - Prefer pytest primitives (`pytest.raises`, `pytest.approx`, `@pytest.mark.parametrize`) for coverage, and add doctest snippets for new public APIs to keep docs and runtime behavior aligned.
 - Mock all external/web APIs in tests (e.g., `web.run`, HTTP clients) and assert the contract instead of hitting live services; CI must stay hermetic.
-- Numerical tests require explicit maintainer confirmation. They run real simulations and are excluded by default (`-m 'not numerical'`). When approved, run selectively via `poetry run pytest -m numerical path/to/test.py -k specific_case`.
-- Scope tests by path: `poetry run pytest -q tests/test_web/` or `poetry run pytest -q tidy3d/components/geometry/`.
-- Scope tests by keyword: `poetry run pytest -q -k "feature_name or module_name"`.
-- Keep repo defaults (incl. xdist); for speed disable coverage and mute warnings: `poetry run pytest -q --no-cov -W ignore tests/... --maxfail=1`.
-- Doctest a single module quickly: `poetry run pytest -q --no-cov -W ignore tidy3d/components/foo.py`.
+- Numerical tests require explicit maintainer confirmation. They run real simulations and are excluded by default (`-m 'not numerical'`). When approved, run selectively via `uv run pytest -m numerical path/to/test.py -k specific_case`.
+- Scope tests by path: `uv run pytest -q tests/test_web/` or `uv run pytest -q tidy3d/components/geometry/`.
+- Scope tests by keyword: `uv run pytest -q -k "feature_name or module_name"`.
+- Keep repo defaults (incl. xdist); for speed disable coverage and mute warnings: `uv run pytest -q --no-cov -W ignore tests/... --maxfail=1`.
+- Doctest a single module quickly: `uv run pytest -q --no-cov -W ignore tidy3d/components/foo.py`.
 
 ## Schema Assets
 - Files under `schemas/` are generated artifacts; never edit them manually.
-- Run `poetry run python scripts/regenerate_schema.py` after model/serialization changes, and commit the output alongside the code.
+- Run `uv run python scripts/regenerate_schema.py` after model/serialization changes, and commit the output alongside the code.
 - CI reruns the script and fails the PR whenever checked-in schemas drift from regenerated results.
 
 ## Commit & Pull Request Guidelines
 - Follow Conventional Commits per `.commitlintrc.json`.
 - Branch names must use an allowed prefix (`chore`, `hotfix`, `daily-chore`) or include a Jira key to satisfy CI.
-- PRs should link issues, summarize behavior changes, list the `poetry run …` checks you executed, and call out docs/schema updates.
+- PRs should link issues, summarize behavior changes, list the `uv run …` checks you executed, and call out docs/schema updates.
 - For user-facing changes (new features, bug fixes, breaking changes), add a changelog fragment under `changelog.d/` using the pattern `<PR_NUMBER>.<type>.md` (for example `1234.added.md`) instead of editing `CHANGELOG.md` directly; CI rejects direct `CHANGELOG.md` edits on regular PR branches.
 - Release managers can use the GitHub Actions workflow `public/tidy3d/python-client-build-changelog-pr` to generate `CHANGELOG.md` from fragments and open a PR (defaults source/target to `develop`).
 

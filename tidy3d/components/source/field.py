@@ -503,7 +503,7 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         propagation distance before the mode settles into a perfect TE mode profile. During this process,
         there is radiation into the substrate.
 
-        .. image:: ../../_static/img/mode_vs_dipole_source.png
+        .. image:: /_static/img/mode_vs_dipole_source.png
 
         **Practical Advice**
 

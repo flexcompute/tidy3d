@@ -19,11 +19,6 @@ RUN apt-get update && apt-get install -y zip unzip curl \
     && ./aws/install \
     && rm -rf aws awscliv2.zip
 
-ENV POETRY_HOME=/opt/poetry
-RUN curl -sSL https://install.python-poetry.org | python3 -
-ENV PATH="/root/.local/bin:${POETRY_HOME}/bin:${PATH}"
-RUN poetry self add poetry-codeartifact-login
-
 RUN apt-get update && DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" apt-get install -y curl \
     && curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz \
     && tar -C /opt -xzf nvim-linux-x86_64.tar.gz \

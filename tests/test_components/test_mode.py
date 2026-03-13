@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 
 import tidy3d as td
 from tidy3d.components.mode.mode_solver import ModeSolver
-from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.exceptions import SetupError, Tidy3dImportError, ValidationError
 
 from ..test_data.test_data_arrays import (
     FS,
@@ -598,12 +598,24 @@ def _make_tensorial_mode_sim():
     )
 
 
+def _mock_tidy3d_extras_unavailable(monkeypatch):
+    """Force local mode solves down the no-extras code path."""
+    from tidy3d import packaging
+
+    def _raise_missing_feature(feature_name: str, quiet: bool = False) -> None:
+        raise Tidy3dImportError(
+            f"The package 'tidy3d-extras' is required for this feature '{feature_name}'.",
+            log_error=not quiet,
+        )
+
+    monkeypatch.setitem(packaging.tidy3d_extras, "mod", None)
+    monkeypatch.setitem(packaging.tidy3d_extras, "use_local_subpixel", None)
+    monkeypatch.setattr(packaging, "check_tidy3d_extras_licensed_feature", _raise_missing_feature)
+
+
 def test_tensorial_mode_solver_error_without_extras(monkeypatch):
     """Test that tensorial mode solver raises NotImplementedError when tidy3d-extras is unavailable."""
-    from tidy3d.packaging import tidy3d_extras
-
-    # Disable local subpixel to force use of base solver
-    monkeypatch.setitem(tidy3d_extras, "use_local_subpixel", False)
+    _mock_tidy3d_extras_unavailable(monkeypatch)
 
     mode_sim = _make_tensorial_mode_sim()
 
@@ -613,10 +625,7 @@ def test_tensorial_mode_solver_error_without_extras(monkeypatch):
 
 def test_tensorial_mode_solver_with_angled_mode_spec(monkeypatch):
     """Test that non-zero angle_theta also triggers tensorial solver error."""
-    from tidy3d.packaging import tidy3d_extras
-
-    # Disable local subpixel to force use of base solver
-    monkeypatch.setitem(tidy3d_extras, "use_local_subpixel", False)
+    _mock_tidy3d_extras_unavailable(monkeypatch)
 
     mode_sim = td.ModeSimulation(
         size=(2, 2, 0),

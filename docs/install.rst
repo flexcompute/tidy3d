@@ -153,9 +153,9 @@ Some users or systems may require a more specialized installation, which we will
 
         .. note:: Please pay attention to any warning or error messages during the installation process as your system configuration might be different. If you are experiencing difficulty in the installation, please reach out to us for help. We would gladly assist you for Tidy3D installation.
 
-    .. group-tab:: Poetry |:musical_note:|
+    .. group-tab:: uv |:musical_note:|
 
-        See the development installation `instructions <../development/index.html>`_. You can install ``tidy3d`` within reproducible environment guaranteed by the developers using the ``poetry.lock`` installation and the ``poetry`` toolchain.
+        See the development installation `instructions <../development/index.html>`_. You can install ``tidy3d`` within reproducible environment guaranteed by the developers using the ``uv.lock`` installation and the ``uv`` toolchain.
 
 Optional Dependencies
 =====================

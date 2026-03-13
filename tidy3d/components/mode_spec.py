@@ -944,7 +944,7 @@ class ModeSpec(AbstractModeSpec):
         found by popping the injection axis from ``{x,y,z}``. For example, if injection axis is ``y``, the planar
         axes are ordered ``{x,z}``.
 
-        .. image:: ../../notebooks/img/ring_modes.png
+        .. image:: /notebooks/img/ring_modes.png
 
         The :attr:`bend_axis` is the axis normal to the plane in which the bend lies, (``z`` in the diagram below). In
         the mode specification, it is defined locally for the mode plane as one of the two axes tangential to the
@@ -954,7 +954,7 @@ class ModeSpec(AbstractModeSpec):
         along the tangential axis perpendicular to the bend axis. This radius can also be negative, if the center of
         the mode plane is smaller than the center of the bend.
 
-        .. image:: ../../notebooks/img/mode_angled.png
+        .. image:: /notebooks/img/mode_angled.png
 
     Example
     -------

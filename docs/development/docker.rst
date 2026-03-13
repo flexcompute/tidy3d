@@ -20,7 +20,7 @@ The Docker development environment provides:
 **What's included:**
 
 * Python 3.11 with ``uv`` package manager
-* Poetry for dependency management
+* uv for dependency management
 * AWS CLI for CodeArtifact access
 * Neovim, git, pandoc for documentation
 * Jupyter Lab for notebook development
@@ -118,7 +118,7 @@ The image includes:
 
 * Debian base with Python 3.11
 * ``uv`` for fast package installation
-* Poetry for dependency management
+* uv for dependency management
 * AWS CLI, git, pandoc, neovim
 * ``flexdaemon`` user (UID 1000, GID 1000)
 
@@ -500,7 +500,7 @@ Optional: AWS CodeArtifact Access (Internal Developers Only)
     This is a simple 2-step process per development session:
 
     1. ``aws sso login`` - Opens browser for authentication (~30 seconds)
-    2. ``poetry aws-login`` - Automatic token management
+    2. Export ``UV_INDEX_CODEARTIFACT_*`` credentials from AWS CodeArtifact
 
 Why CodeArtifact?
 ^^^^^^^^^^^^^^^^^
@@ -517,23 +517,17 @@ A: Flexcompute security policy requires time-limited credentials. Long-lived tok
 
 A: Use the Docker development environment, which matches our CI setup exactly. Or if you're only working on the open-source client, you don't need CodeArtifact at all.
 
-Supported Path: Poetry with AWS Login Plugin
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Supported Path: uv with AWS CLI Credentials
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The development container includes the ``poetry-codeartifact-login`` plugin for simplified authentication.
+The development container includes AWS CLI v2, which is enough to authenticate uv against CodeArtifact.
 
 .. note::
-    **For non-Docker users**: If you're not using the Docker container, you'll need to install the plugin first:
+    **For non-Docker users**: Ensure AWS CLI v2 is installed on your system:
 
     .. code-block:: bash
 
-        # Install the Poetry plugin (one-time, outside Docker)
-        poetry self add poetry-codeartifact-login
-
-        # Also ensure AWS CLI v2 is installed on your system
         aws --version  # Should show version 2.x
-
-    Docker users can skip this step - the plugin is pre-installed in the dev container.
 
 **One-Time Setup**
 
@@ -574,20 +568,25 @@ Each day when you start development, run these two commands:
     # Step 1: Login to AWS SSO (opens browser on host for authentication)
     aws sso login --profile flexcompute-pypi
 
-    # Step 2: Configure Poetry with CodeArtifact
-    poetry aws-login codeartifact --profile flexcompute-pypi
+    # Step 2: Export CodeArtifact credentials for uv
+    export UV_INDEX_CODEARTIFACT_USERNAME=aws
+    export UV_INDEX_CODEARTIFACT_PASSWORD="$(aws codeartifact get-authorization-token \
+        --domain flexcompute \
+        --domain-owner 625554095313 \
+        --region us-east-1 \
+        --profile flexcompute-pypi \
+        --query authorizationToken \
+        --output text)"
 
-    # That's it! Now you can install internal packages
-    poetry install -E extras
+    # Install project dependencies (including the extras plugin)
+    uv sync --frozen --extra dev --extra extras
 
 .. note::
-    **How it works**: The ``poetry aws-login`` command automatically:
+    **How it works**: the exported uv credentials:
 
     * Generates a short-lived CodeArtifact authentication token
-    * Configures Poetry to use the token for the ``codeartifact`` source
-    * Stores credentials securely (no manual token passing required)
-
-    The plugin handles all token management internally, so you never see or copy tokens manually.
+    * Configure uv to use that token for the ``codeartifact`` source
+    * Expire automatically after the AWS CodeArtifact token lifetime
 
 Persisting AWS Credentials
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -609,10 +608,10 @@ This way, you only need to run ``aws configure sso`` once on your host machine.
 Alternative Package Managers (Self-Support)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you prefer ``pip``, ``uv``, or other package managers instead of Poetry, you'll need to configure
+If you prefer ``pip`` or another package manager, you'll need to configure
 CodeArtifact authentication yourself.
 
-**The officially supported development path uses Poetry.** For other package managers:
+**The officially supported development path uses uv.** For other package managers:
 
 * See `AWS CodeArtifact pip documentation <https://docs.aws.amazon.com/codeartifact/latest/ug/python-configure-pip.html>`_
 * Use ``aws codeartifact login --tool pip`` for manual setup
@@ -674,7 +673,8 @@ Command Cheatsheet
 
     # CodeArtifact (internal developers only)
     aws sso login --profile flexcompute-pypi                    # Daily: Login to AWS
-    poetry aws-login codeartifact --profile flexcompute-pypi    # Daily: Configure Poetry
+    export UV_INDEX_CODEARTIFACT_USERNAME=aws
+    export UV_INDEX_CODEARTIFACT_PASSWORD="$(aws codeartifact get-authorization-token --domain flexcompute --domain-owner 625554095313 --region us-east-1 --profile flexcompute-pypi --query authorizationToken --output text)"
 
 Directory Structure
 ^^^^^^^^^^^^^^^^^^^
@@ -687,7 +687,7 @@ Directory Structure
     ├── tests/               # Test suite (mounted)
     ├── docs/                # Documentation (mounted)
     ├── .venv/               # Virtual env (created inside, persists)
-    ├── pyproject.toml       # Poetry config (mounted)
+    ├── pyproject.toml       # uv config (mounted)
     └── dev.Dockerfile       # Docker image definition
 
     Container:
@@ -807,12 +807,12 @@ Test Failures
 
 .. code-block:: bash
 
-    uv pip install -e .[dev,jax,vtk,trimesh,gdstk]
+    uv pip install -e .[dev,vtk,trimesh,gdstk,pytorch]
 
 CodeArtifact Authentication Issues
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**Problem**: ``poetry install -E extras`` fails with "Unable to find tidy3d-extras" or authentication error
+**Problem**: ``uv sync --frozen --extra dev --extra extras`` fails with authentication errors
 
 **Solution**: Verify SSO session is active and re-authenticate:
 
@@ -823,10 +823,17 @@ CodeArtifact Authentication Issues
 
     # If expired or fails, re-authenticate (2-step process)
     aws sso login --profile flexcompute-pypi
-    poetry aws-login codeartifact --profile flexcompute-pypi
+    export UV_INDEX_CODEARTIFACT_USERNAME=aws
+    export UV_INDEX_CODEARTIFACT_PASSWORD="$(aws codeartifact get-authorization-token \
+        --domain flexcompute \
+        --domain-owner 625554095313 \
+        --region us-east-1 \
+        --profile flexcompute-pypi \
+        --query authorizationToken \
+        --output text)"
 
     # Retry installation
-    poetry install -E extras
+    uv sync --frozen --extra dev --extra extras
 
 **Problem**: ``aws sso login`` doesn't work, times out, or fails
 
@@ -837,23 +844,12 @@ CodeArtifact Authentication Issues
 * Your SSO credentials are correct
 * You have the ``codeartifact-readonly`` role assigned
 
-**Problem**: ``poetry aws-login`` command not found
+**Problem**: I use pip, not uv. How do I authenticate?
 
-**Solution**: The plugin is pre-installed in the dev container. If missing:
+**Solution**: The officially supported path is uv with CodeArtifact credentials in
+``UV_INDEX_CODEARTIFACT_USERNAME`` and ``UV_INDEX_CODEARTIFACT_PASSWORD``.
 
-.. code-block:: bash
-
-    # Check if plugin is installed
-    poetry self show plugins
-
-    # Reinstall if needed
-    poetry self add poetry-codeartifact-login
-
-**Problem**: I use pip/uv, not Poetry. How do I authenticate?
-
-**Solution**: The officially supported path is Poetry with the ``poetry aws-login`` command.
-
-For pip/uv users, you must self-support using AWS documentation.
+For pip users, you must self-support using AWS documentation.
 
 **Option 1 (for pip users):**
 
@@ -885,18 +881,18 @@ Note: Tokens expire after 12 hours, requiring daily re-authentication.
 
 Alternatively, use the Docker development environment.
 
-**Problem**: ``poetry lock`` or ``poetry update`` hangs
+**Problem**: ``uv lock`` or ``uv update`` hangs
 
-**Solution**: Clear Poetry cache and retry:
+**Solution**: Clear uv cache and retry:
 
 .. code-block:: bash
 
-    # Clear Poetry cache
-    poetry cache clear pypi --all
-    poetry cache clear codeartifact --all
+    # Clear uv cache
+    uv cache clear pypi --all
+    uv cache clear codeartifact --all
 
     # Retry operation
-    poetry update --lock
+    uv lock --upgrade
 
 Jupyter Issues
 ^^^^^^^^^^^^^^

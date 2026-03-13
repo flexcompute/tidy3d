@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Helper utilities for profiling ``pytest`` runs inside the Poetry env.
+"""Helper utilities for profiling ``pytest`` runs inside the uv environment.
 
 This script can:
 * run the full test suite (default) while surfacing the slowest tests via ``--durations``;
@@ -40,7 +40,7 @@ DURATION_LINE_RE = re.compile(r"^\s*(?P<secs>\d+(?:\.\d+)?)s\s+\w+\s+(?P<nodeid>
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Profile pytest executions launched via Poetry.",
+        description="Profile pytest executions launched via uv.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -104,13 +104,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def ensure_poetry_available() -> None:
-    if shutil.which("poetry") is None:
-        raise SystemExit("'poetry' command not found in PATH.")
+def ensure_uv_available() -> None:
+    if shutil.which("uv") is None:
+        raise SystemExit("'uv' command not found in PATH.")
 
 
 def build_pytest_base(profile: bool, profile_output: Path) -> list[str]:
-    base_cmd = ["poetry", "run"]
+    base_cmd = ["uv", "run", "--frozen"]
     if profile:
         base_cmd += [
             "python",
@@ -127,7 +127,7 @@ def build_pytest_base(profile: bool, profile_output: Path) -> list[str]:
 
 
 def collect_node_ids(extra_args: Iterable[str], tests: Iterable[str]) -> list[str]:
-    cmd = ["poetry", "run", "pytest", "--collect-only", "-q"]
+    cmd = ["uv", "run", "--frozen", "pytest", "--collect-only", "-q"]
     cmd.extend(extra_args)
     cmd.extend(tests)
     print(f"Collecting tests via: {' '.join(shlex.quote(part) for part in cmd)}")
@@ -251,7 +251,7 @@ def export_to_file(result, args, filtered_stdout, durations):
 
 def main() -> int:
     args = parse_args()
-    ensure_poetry_available()
+    ensure_uv_available()
 
     if args.debug and args.debug_limit <= 0:
         raise SystemExit("--debug-limit must be a positive integer.")

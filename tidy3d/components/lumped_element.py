@@ -1915,11 +1915,11 @@ class LinearLumpedElement(RectangularLumpedElement):
 
     Example
     -------
-    >>> RL_series = RLCNetwork(resistance=75,
+    >>> RL_series = RLCNetwork(resistance=75,  # doctest: +SKIP
     ...                        inductance=1e-9,
     ...                        network_topology="series"
     ...             )
-    >>> linear_element = LinearLumpedElement(
+    >>> linear_element = LinearLumpedElement(  # doctest: +SKIP
     ...                         center=[0, 0, 0],
     ...                         size=[2, 0, 3],
     ...                         voltage_axis=0,

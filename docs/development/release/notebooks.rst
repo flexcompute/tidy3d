@@ -7,6 +7,6 @@ Say, you have done some changes onto the repository in `tidy3d-notebooks` and pr
 
 .. code-block::
 
-    poetry run tidy3d develop build-docs-from-remote-notebooks
+    uv run tidy3d develop build-docs-remote-notebooks
 
 This command will pull the latest changes onto your notebook submodule and build the documentation.

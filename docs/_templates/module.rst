@@ -1,4 +1,5 @@
 :html_theme.sidebar_secondary.remove:
+
 {{ fullname | escape | underline}}
 
 .. autoclass:: {{ fullname }}
@@ -50,9 +51,3 @@
    {% endif %}
    {% endif %}
    {% endblock %}
-
-
-   .. rubric:: Inherited Common Usage
-
-   .. include:: ../_custom_autosummary/{{ fullname }}.rst
-      :optional:
