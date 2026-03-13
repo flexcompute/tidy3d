@@ -16,32 +16,11 @@ def _extension_can_load() -> bool:
     try:
         import tidy3d_extras
 
-        # Check if the extension module is actually available
-        return hasattr(tidy3d_extras, "extension")
+        # __init__.py always defines `extension`; only a non-None value means
+        # the native module loaded successfully on this platform.
+        return getattr(tidy3d_extras, "extension", None) is not None
     except Exception:
         return False
-
-
-def _local_subpixel_works_with_bad_key() -> bool:
-    """Return True if local subpixel succeeds even with a bad API key."""
-    sim = td.Simulation(
-        size=(1, 0, 0),
-        grid_spec=td.GridSpec.auto(wavelength=1),
-        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
-        run_time=1e-30,
-    )
-    prev_pref = td.config.simulation.use_local_subpixel
-    td.config.simulation.use_local_subpixel = True
-    try:
-        _ = sim.epsilon_on_grid(
-            grid=sim.discretize(sim.geometry),
-            freq=td.C_0 / 1.55,
-        )
-        return True
-    except td.exceptions.Tidy3dImportError:
-        return False
-    finally:
-        td.config.simulation.use_local_subpixel = prev_pref
 
 
 def test_license_check(monkeypatch, caplog):
