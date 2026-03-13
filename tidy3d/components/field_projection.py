@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from itertools import product
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional, TypeVar, Union
 
 import autograd.numpy as anp
 import numpy as np
@@ -53,6 +53,26 @@ PTS_PER_WVL = 10
 # Numpy float array and related array types
 
 ArrayLikeN2F = Union[float, tuple[float, ...], ArrayComplex4D]
+_TrackedItem = TypeVar("_TrackedItem")
+
+
+def _track_if_verbose(
+    iterable: Iterable[_TrackedItem],
+    *,
+    verbose: bool,
+    description: str,
+    total: int | None = None,
+) -> Iterable[_TrackedItem]:
+    """Wrap an iterable in a progress tracker only when requested."""
+
+    if not verbose:
+        return iterable
+    return track(
+        iterable,
+        description=description,
+        total=total,
+        console=get_logging_console(),
+    )
 
 
 def _trapz_weights_1d(points: np.ndarray) -> np.ndarray:
@@ -691,7 +711,9 @@ class FieldProjector(Tidy3dBaseModel):
         return new_currents
 
     def project_fields(
-        self, proj_monitor: AbstractFieldProjectionMonitor
+        self,
+        proj_monitor: AbstractFieldProjectionMonitor,
+        verbose: bool = True,
     ) -> AbstractFieldProjectionData:
         """Compute projected fields.
 
@@ -701,6 +723,8 @@ class FieldProjector(Tidy3dBaseModel):
             Instance of :class:`~tidy3d.components.monitor.AbstractFieldProjectionMonitor` defining
             the projection
             observation grid.
+        verbose : bool = True
+            Whether to display local progress bars while computing the projection.
 
         Returns
         -------
@@ -708,13 +732,13 @@ class FieldProjector(Tidy3dBaseModel):
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         if isinstance(proj_monitor, FieldProjectionAngleMonitor):
-            return self._project_fields_angular(proj_monitor)
+            return self._project_fields_angular(proj_monitor, verbose=verbose)
         if isinstance(proj_monitor, FieldProjectionCartesianMonitor):
-            return self._project_fields_cartesian(proj_monitor)
-        return self._project_fields_kspace(proj_monitor)
+            return self._project_fields_cartesian(proj_monitor, verbose=verbose)
+        return self._project_fields_kspace(proj_monitor, verbose=verbose)
 
     def _project_fields_angular(
-        self, monitor: FieldProjectionAngleMonitor
+        self, monitor: FieldProjectionAngleMonitor, verbose: bool = True
     ) -> FieldProjectionAngleData:
         """Compute projected fields on an angle-based grid in spherical coordinates.
 
@@ -766,10 +790,10 @@ class FieldProjector(Tidy3dBaseModel):
                     for i, _theta in enumerate(theta)
                     for j, _phi in enumerate(phi)
                 ]
-                for (_theta, _phi), (i, j) in track(
+                for (_theta, _phi), (i, j) in _track_if_verbose(
                     iter_coords,
+                    verbose=verbose,
                     description=f"Processing surface monitor '{surface.monitor.name}'...",
-                    console=get_logging_console(),
                 ):
                     _x, _y, _z = monitor.sph_2_car(monitor.proj_distance, _theta, _phi)
                     _fields = self._fields_for_surface_exact(
@@ -793,7 +817,7 @@ class FieldProjector(Tidy3dBaseModel):
         )
 
     def _project_fields_cartesian(
-        self, monitor: FieldProjectionCartesianMonitor
+        self, monitor: FieldProjectionCartesianMonitor, verbose: bool = True
     ) -> FieldProjectionCartesianData:
         """Compute projected fields on a Cartesian grid in spherical coordinates.
 
@@ -828,11 +852,11 @@ class FieldProjector(Tidy3dBaseModel):
         total_points = len(x) * len(y) * len(z)
 
         point_fields = []
-        for _x, _y, _z in track(
+        for _x, _y, _z in _track_if_verbose(
             product(x, y, z),
+            verbose=verbose,
             description="Computing projected fields",
             total=total_points,
-            console=get_logging_console(),
         ):
             r, theta, phi = monitor.car_2_sph(_x, _y, _z)
 
@@ -886,7 +910,7 @@ class FieldProjector(Tidy3dBaseModel):
         )
 
     def _project_fields_kspace(
-        self, monitor: FieldProjectionKSpaceMonitor
+        self, monitor: FieldProjectionKSpaceMonitor, verbose: bool = True
     ) -> FieldProjectionKSpaceData:
         """Compute projected fields on a k-space grid in spherical coordinates.
 
@@ -924,11 +948,11 @@ class FieldProjector(Tidy3dBaseModel):
         total_points = len(ux) * len(uy)
 
         point_fields = []
-        for _ux, _uy in track(
+        for _ux, _uy in _track_if_verbose(
             product(ux, uy),
+            verbose=verbose,
             description="Computing projected fields",
             total=total_points,
-            console=get_logging_console(),
         ):
             theta, phi = monitor.kspace_2_sph(_ux, _uy, monitor.proj_axis)
 

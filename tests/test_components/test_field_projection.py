@@ -9,6 +9,7 @@ from autograd import make_vjp
 from pydantic import ValidationError
 
 import tidy3d as td
+import tidy3d.components.field_projection as field_projection
 from tidy3d.components.field_projection import FieldProjector, _far_field_integral
 from tidy3d.exceptions import DataError
 
@@ -275,12 +276,9 @@ def test_proj_data(tmp_path):
     )
 
 
-def test_proj_clientside():
-    """Make sure the client-side near-to-far class can be created."""
+def make_clientside_projector(center, size, f0, num_points=10):
+    """Helper to build a client-side field projector from the shared synthetic setup."""
 
-    center = (0, 0, 0)
-    size = (2, 2, 0)
-    f0 = 1e13
     monitor = td.FieldMonitor(size=size, center=center, freqs=[f0], name="near_field")
 
     sim_size = (5, 5, 5)
@@ -291,13 +289,13 @@ def test_proj_clientside():
         run_time=1e-12,
     )
 
-    x = np.linspace(-1, 1, 10)
-    y = np.linspace(-1, 1, 10)
+    x = np.linspace(-1, 1, num_points)
+    y = np.linspace(-1, 1, num_points)
     z = np.array([0.0])
     f = [f0]
     coords = {"x": x, "y": y, "z": z, "f": f}
     scalar_field = td.ScalarFieldDataArray(
-        (1 + 1j) * np.random.random((10, 10, 1, 1)), coords=coords
+        (1 + 1j) * np.random.random((num_points, num_points, 1, 1)), coords=coords
     )
     data = td.FieldData(
         monitor=monitor,
@@ -311,12 +309,38 @@ def test_proj_clientside():
         symmetry_center=sim.center,
         grid_expanded=sim.discretize_monitor(monitor),
     )
-
     sim_data = td.SimulationData(simulation=sim, data=(data,))
-
-    proj = td.FieldProjector.from_near_field_monitors(
-        sim_data=sim_data, near_monitors=[monitor], normal_dirs=["+"]
+    return td.FieldProjector.from_near_field_monitors(
+        sim_data=sim_data,
+        near_monitors=[monitor],
+        normal_dirs=["+"],
     )
+
+
+def make_single_point_cart_monitor(center, size, f0, name):
+    """Helper to make a one-point Cartesian projection monitor."""
+
+    return td.FieldProjectionCartesianMonitor(
+        center=center,
+        size=size,
+        freqs=[f0],
+        name=name,
+        custom_origin=center,
+        x=[0.0],
+        y=[0.0],
+        proj_axis=0,
+        proj_distance=R_FAR,
+        normal_dir="+",
+    )
+
+
+def test_proj_clientside():
+    """Make sure the client-side near-to-far class can be created."""
+
+    center = (0, 0, 0)
+    size = (2, 2, 0)
+    f0 = 1e13
+    proj = make_clientside_projector(center, size, f0)
 
     # make near-to-far monitors
     (
@@ -381,6 +405,33 @@ def test_proj_clientside():
         val.sel(f=f0)
     with pytest.raises(DataError):
         exact_fields_cartesian.renormalize_fields(proj_distance=5e6)
+
+
+def test_proj_clientside_verbose_flag(monkeypatch):
+    """Make sure local projection progress output can be disabled."""
+
+    center = (0, 0, 0)
+    size = (2, 2, 0)
+    f0 = 1e13
+    projector = make_clientside_projector(center, size, f0, num_points=4)
+    proj_monitor = make_single_point_cart_monitor(center, size, f0, name="n2f_cart_quiet")
+
+    track_calls = []
+
+    def fake_track(iterable, *args, **kwargs):
+        track_calls.append(kwargs)
+        return iterable
+
+    monkeypatch.setattr(field_projection, "track", fake_track)
+
+    projector.project_fields(proj_monitor)
+    assert len(track_calls) == 1
+    assert track_calls[0]["description"] == "Computing projected fields"
+    assert track_calls[0]["total"] == 1
+
+    projected_fields = projector.project_fields(proj_monitor, verbose=False)
+    assert len(track_calls) == 1
+    assert projected_fields.monitor.name == proj_monitor.name
 
 
 def make_2d_proj_monitors(center, size, freqs, plane):
