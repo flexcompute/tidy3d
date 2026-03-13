@@ -1137,42 +1137,6 @@ def test_vertical_natural_convection():
         )
 
 
-def test_unstructured_default_warning():
-    """Test that warning is issued when unstructured uses default (not explicitly set)."""
-    # Should warn: unstructured not set (defaults to False)
-    with AssertLogLevel("WARNING", contains_str="default value of 'unstructured'"):
-        td.TemperatureMonitor(size=(1, 1, 1), name="test1")
-
-    # Should NOT warn: unstructured explicitly set to False
-    with AssertLogLevel(None):
-        td.TemperatureMonitor(size=(1, 1, 1), name="test2", unstructured=False)
-
-    # Should NOT warn: unstructured explicitly set to True
-    with AssertLogLevel(None):
-        td.TemperatureMonitor(size=(1, 1, 1), name="test3", unstructured=True)
-
-    # Should warn: SteadyPotentialMonitor with default unstructured (not explicitly set)
-    with AssertLogLevel("WARNING", contains_str="default value of 'unstructured'"):
-        td.SteadyPotentialMonitor(size=(1, 1, 1), name="test4")
-
-    # Should NOT warn: SteadyPotentialMonitor with unstructured explicitly set to False
-    with AssertLogLevel(None):
-        td.SteadyPotentialMonitor(size=(1, 1, 1), name="test5", unstructured=False)
-
-    # Should NOT warn: SteadyPotentialMonitor with unstructured explicitly set to True
-    with AssertLogLevel(None):
-        td.SteadyPotentialMonitor(size=(1, 1, 1), name="test6", unstructured=True)
-
-    # Should NOT warn: monitors with unstructured: Literal[True] (always unstructured=True)
-    with AssertLogLevel(None):
-        td.SteadyFreeCarrierMonitor(size=(1, 1, 1), name="test7")
-        td.SteadyEnergyBandMonitor(size=(1, 1, 1), name="test8")
-        td.SteadyCapacitanceMonitor(size=(1, 1, 1), name="test9")
-        td.SteadyElectricFieldMonitor(size=(1, 1, 1), name="test10")
-        td.SteadyCurrentDensityMonitor(size=(1, 1, 1), name="test11")
-        td.VolumeMeshMonitor(size=(1, 1, 1), name="test12")
-
-
 def test_heat_charge_monitors_validation(monitors):
     """Checks for no name and negative size in monitors."""
     temp_mnt = monitors[0]

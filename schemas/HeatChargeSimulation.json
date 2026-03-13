@@ -8544,7 +8544,7 @@
           "type": "string"
         },
         "unstructured": {
-          "default": false,
+          "default": true,
           "type": "boolean"
         }
       },
@@ -9088,7 +9088,7 @@
           "type": "string"
         },
         "unstructured": {
-          "default": false,
+          "default": true,
           "type": "boolean"
         }
       },

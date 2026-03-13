@@ -20,7 +20,7 @@ class HeatChargeMonitor(AbstractMonitor, ABC):
     """Abstract base class for heat-charge monitors."""
 
     unstructured: bool = Field(
-        False,
+        True,
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )

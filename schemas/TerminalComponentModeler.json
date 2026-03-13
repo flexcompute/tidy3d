@@ -804,7 +804,7 @@
         },
         "num_freqs": {
           "default": 1,
-          "maximum": 20,
+          "maximum": 50,
           "minimum": 1,
           "type": "integer"
         },
@@ -2190,6 +2190,80 @@
       },
       "required": [
         "num_points"
+      ],
+      "type": "object"
+    },
+    "CircuitImpedanceModel": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/LumpedCircuitComponent"
+          },
+          "type": "array"
+        },
+        "fit_show_progress": {
+          "default": false,
+          "type": "boolean"
+        },
+        "fit_tolerance": {
+          "default": 1e-05,
+          "type": "number"
+        },
+        "freq_range": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_num_poles": {
+          "default": 5,
+          "type": "integer"
+        },
+        "min_num_poles": {
+          "default": 1,
+          "type": "integer"
+        },
+        "n_freqs": {
+          "default": 10,
+          "minimum": 5,
+          "type": "integer"
+        },
+        "port_node_minus": {
+          "default": "0",
+          "type": "string"
+        },
+        "port_node_plus": {
+          "default": "1",
+          "type": "string"
+        },
+        "type": {
+          "const": "CircuitImpedanceModel",
+          "default": "CircuitImpedanceModel",
+          "type": "string"
+        }
+      },
+      "required": [
+        "components"
       ],
       "type": "object"
     },
@@ -8034,7 +8108,7 @@
         },
         "num_freqs": {
           "default": 1,
-          "maximum": 20,
+          "maximum": 50,
           "minimum": 1,
           "type": "integer"
         },
@@ -9423,6 +9497,7 @@
           "discriminator": {
             "mapping": {
               "AdmittanceNetwork": "#/$defs/AdmittanceNetwork",
+              "CircuitImpedanceModel": "#/$defs/CircuitImpedanceModel",
               "RLCNetwork": "#/$defs/RLCNetwork"
             },
             "propertyName": "type"
@@ -9430,6 +9505,9 @@
           "oneOf": [
             {
               "$ref": "#/$defs/AdmittanceNetwork"
+            },
+            {
+              "$ref": "#/$defs/CircuitImpedanceModel"
             },
             {
               "$ref": "#/$defs/RLCNetwork"
@@ -9847,6 +9925,51 @@
       },
       "required": [
         "monitors"
+      ],
+      "type": "object"
+    },
+    "LumpedCircuitComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "element_type": {
+          "enum": [
+            "C",
+            "L",
+            "R"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "type": "string"
+        },
+        "node_minus": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "node_plus": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "LumpedCircuitComponent",
+          "default": "LumpedCircuitComponent",
+          "type": "string"
+        },
+        "value": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "element_type",
+        "node_minus",
+        "node_plus",
+        "value"
       ],
       "type": "object"
     },
@@ -13536,11 +13659,8 @@
           "type": "object"
         },
         "broadband_method": {
+          "const": "chebyshev",
           "default": "chebyshev",
-          "enum": [
-            "chebyshev",
-            "pole_residue"
-          ],
           "type": "string"
         },
         "center": {
@@ -16246,11 +16366,8 @@
           "type": "object"
         },
         "broadband_method": {
+          "const": "chebyshev",
           "default": "chebyshev",
-          "enum": [
-            "chebyshev",
-            "pole_residue"
-          ],
           "type": "string"
         },
         "center": {
@@ -16299,7 +16416,7 @@
         },
         "num_freqs": {
           "default": 1,
-          "maximum": 50,
+          "maximum": 20,
           "minimum": 1,
           "type": "integer"
         },

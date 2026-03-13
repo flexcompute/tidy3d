@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field
 
 from tidy3d.components.tcad.monitors.abstract import HeatChargeMonitor
-from tidy3d.log import log
 
 
 class SteadyPotentialMonitor(HeatChargeMonitor):
@@ -21,20 +20,6 @@ class SteadyPotentialMonitor(HeatChargeMonitor):
     ... center=(0, 0.14, 0), size=(0.6, 0.3, 0), name="voltage_z0", unstructured=True,
     ... )
     """
-
-    @model_validator(mode="before")
-    @classmethod
-    def _warn_unstructured_default_change(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Warn users that the default value of 'unstructured' will change to True after the 2.11 release."""
-        # Only warn if 'unstructured' is not explicitly set (using default False)
-        if "unstructured" not in values:
-            log.warning(
-                "The default value of 'unstructured' for 'SteadyPotentialMonitor' will change "
-                "from 'False' to 'True' after the 2.11 release. To avoid this warning and ensure "
-                "consistent behavior, please explicitly set 'unstructured=True' or 'unstructured=False' "
-                "when creating the monitor."
-            )
-        return values
 
 
 class SteadyFreeCarrierMonitor(HeatChargeMonitor):
