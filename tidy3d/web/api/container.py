@@ -318,6 +318,7 @@ class Job(WebContainer):
         path: PathLike = DEFAULT_DATA_PATH,
         priority: Optional[int] = None,
         vgpu_allocation: Optional[int] = None,
+        ignore_memory_limit: Optional[bool] = None,
     ) -> WorkflowDataType:
         """Run :class:`Job` all the way through and return data.
 
@@ -332,6 +333,10 @@ class Job(WebContainer):
             Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
+        ignore_memory_limit : Optional[bool] = None
+            If ``True``, allows the simulation to run even when estimated vGPU memory
+            exceeds the allocation limit (up to 2x the limit). Only applies to
+            vGPU license users. Default ``None`` leaves the server behaviour unchanged.
 
         Returns
         -------
@@ -343,7 +348,11 @@ class Job(WebContainer):
         loaded_from_cache = self.load_if_cached
         if not loaded_from_cache:
             self.upload()
-            self.start(priority=priority, vgpu_allocation=vgpu_allocation)
+            self.start(
+                priority=priority,
+                vgpu_allocation=vgpu_allocation,
+                ignore_memory_limit=ignore_memory_limit,
+            )
             self.monitor()
         data = self.load(path=path)
 
@@ -430,6 +439,7 @@ class Job(WebContainer):
         self,
         priority: Optional[int] = None,
         vgpu_allocation: Optional[int] = None,
+        ignore_memory_limit: Optional[bool] = None,
     ) -> None:
         """Start running a :class:`Job`.
 
@@ -443,6 +453,10 @@ class Job(WebContainer):
             Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
+        ignore_memory_limit : Optional[bool] = None
+            If ``True``, allows the simulation to run even when estimated vGPU memory
+            exceeds the allocation limit (up to 2x the limit). Only applies to
+            vGPU license users. Default ``None`` leaves the server behaviour unchanged.
 
         Note
         ----
@@ -457,6 +471,7 @@ class Job(WebContainer):
                 pay_type=self.pay_type,
                 priority=priority,
                 vgpu_allocation=vgpu_allocation,
+                ignore_memory_limit=ignore_memory_limit,
             )
 
     def get_run_info(self) -> RunInfo:
@@ -914,6 +929,7 @@ class Batch(WebContainer):
         priority: Optional[int] = None,
         replace_existing: bool = False,
         vgpu_allocation: Optional[int] = None,
+        ignore_memory_limit: Optional[bool] = None,
     ) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
 
@@ -931,6 +947,10 @@ class Batch(WebContainer):
             Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
+        ignore_memory_limit : Optional[bool] = None
+            If ``True``, allows the simulation to run even when estimated vGPU memory
+            exceeds the allocation limit (up to 2x the limit). Only applies to
+            vGPU license users. Default ``None`` leaves the server behaviour unchanged.
 
         Returns
         ------
@@ -960,7 +980,11 @@ class Batch(WebContainer):
         if not all(loaded):
             self.upload()
             self.to_file(self._batch_path(path_dir=path_dir))
-            self.start(priority=priority, vgpu_allocation=vgpu_allocation)
+            self.start(
+                priority=priority,
+                vgpu_allocation=vgpu_allocation,
+                ignore_memory_limit=ignore_memory_limit,
+            )
             self.monitor(
                 path_dir=path_dir,
                 download_on_success=True,
@@ -1166,6 +1190,7 @@ class Batch(WebContainer):
         self,
         priority: Optional[int] = None,
         vgpu_allocation: Optional[int] = None,
+        ignore_memory_limit: Optional[bool] = None,
     ) -> None:
         """Start running all tasks in the :class:`Batch`.
 
@@ -1179,6 +1204,10 @@ class Batch(WebContainer):
             Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
+        ignore_memory_limit : Optional[bool] = None
+            If ``True``, allows the simulation to run even when estimated vGPU memory
+            exceeds the allocation limit (up to 2x the limit). Only applies to
+            vGPU license users. Default ``None`` leaves the server behaviour unchanged.
 
         Note
         ----
@@ -1195,6 +1224,7 @@ class Batch(WebContainer):
                     job.start,
                     priority=priority,
                     vgpu_allocation=vgpu_allocation,
+                    ignore_memory_limit=ignore_memory_limit,
                 )
                 start_futures[fut] = job
 

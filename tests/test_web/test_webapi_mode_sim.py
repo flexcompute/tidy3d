@@ -169,6 +169,7 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
                     "payType": PayType.AUTO,
                     "priority": None,
                     "vgpuAllocation": None,
+                    "ignoreMemoryLimit": None,
                 }
             )
         ],

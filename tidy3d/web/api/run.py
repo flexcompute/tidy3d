@@ -104,6 +104,7 @@ def run(
     max_workers: typing.Optional[int] = None,
     lazy: typing.Optional[bool] = None,
     vgpu_allocation: typing.Optional[int] = None,
+    ignore_memory_limit: typing.Optional[bool] = None,
 ) -> RunOutput:
     """
     Submit one or many simulations and return results in the same container shape.
@@ -175,6 +176,10 @@ def run(
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
         Only applies to vGPU license users. If not specified, the system
         automatically determines the optimal GPU count.
+    ignore_memory_limit : Optional[bool] = None
+        If ``True``, allows the simulation to run even when estimated vGPU memory
+        exceeds the allocation limit (up to 2x the limit). Only applies to
+        vGPU license users. Default ``None`` leaves the server behaviour unchanged.
 
     Returns
     -------
@@ -270,6 +275,7 @@ def run(
                 pay_type=pay_type,
                 priority=priority,
                 vgpu_allocation=vgpu_allocation,
+                ignore_memory_limit=ignore_memory_limit,
                 lazy=lazy if lazy is not None else False,
             )
         }
@@ -293,6 +299,7 @@ def run(
             pay_type=pay_type,
             priority=priority,
             vgpu_allocation=vgpu_allocation,
+            ignore_memory_limit=ignore_memory_limit,
             lazy=lazy if lazy is not None else True,
         )
 

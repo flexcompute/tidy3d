@@ -309,6 +309,7 @@ def run(
     priority: Optional[int] = None,
     lazy: bool = False,
     vgpu_allocation: Optional[int] = None,
+    ignore_memory_limit: Optional[bool] = None,
 ) -> WorkflowDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -353,6 +354,10 @@ def run(
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
         Only applies to vGPU license users. If not specified, the system
         automatically determines the optimal GPU count.
+    ignore_memory_limit : Optional[bool] = None
+        If ``True``, allows the simulation to run even when estimated vGPU memory
+        exceeds the allocation limit (up to 2x the limit). Only applies to
+        vGPU license users. Default ``None`` leaves the server behaviour unchanged.
 
     Returns
     -------
@@ -425,6 +430,7 @@ def run(
             pay_type=pay_type,
             priority=priority,
             vgpu_allocation=vgpu_allocation,
+            ignore_memory_limit=ignore_memory_limit,
         )
         monitor(task_id, verbose=verbose)
     else:
@@ -686,6 +692,7 @@ def start(
     pay_type: Union[PayType, str] = PayType.AUTO,
     priority: Optional[int] = None,
     vgpu_allocation: Optional[int] = None,
+    ignore_memory_limit: Optional[bool] = None,
 ) -> None:
     """Start running the simulation associated with task.
 
@@ -709,6 +716,10 @@ def start(
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
         Only applies to vGPU license users. If not specified, the system
         automatically determines the optimal GPU count.
+    ignore_memory_limit : Optional[bool] = None
+        If ``True``, allows the simulation to run even when estimated vGPU memory
+        exceeds the allocation limit (up to 2x the limit). Only applies to
+        vGPU license users. Default ``None`` leaves the server behaviour unchanged.
 
     Note
     ----
@@ -733,6 +744,7 @@ def start(
         pay_type=pay_type,
         priority=priority,
         vgpu_allocation=vgpu_allocation,
+        ignore_memory_limit=ignore_memory_limit,
     )
 
 

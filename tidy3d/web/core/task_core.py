@@ -594,6 +594,7 @@ class SimulationTask(WebTask):
         pay_type: Union[PayType, str] = PayType.AUTO,
         priority: Optional[int] = None,
         vgpu_allocation: Optional[int] = None,
+        ignore_memory_limit: Optional[bool] = None,
     ) -> None:
         """Kick off this task.
 
@@ -616,6 +617,10 @@ class SimulationTask(WebTask):
             Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
             Only applies to vGPU license users. If not specified, the system
             automatically determines the optimal GPU count.
+        ignore_memory_limit : Optional[bool] = None
+            If ``True``, allows the simulation to run even when estimated vGPU memory
+            exceeds the allocation limit (up to 2x the limit). Only applies to
+            vGPU license users. Default ``None`` leaves the server behaviour unchanged.
         """
         pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
 
@@ -634,6 +639,7 @@ class SimulationTask(WebTask):
                 "payType": pay_type.value,
                 "priority": priority,
                 "vgpuAllocation": vgpu_allocation,
+                "ignoreMemoryLimit": ignore_memory_limit,
             },
         )
 
@@ -921,6 +927,7 @@ class BatchTask(WebTask):
         pay_type: Union[PayType, str] = PayType.AUTO,
         priority: Optional[int] = None,
         vgpu_allocation: Optional[int] = None,
+        ignore_memory_limit: Optional[bool] = None,
     ) -> requests.Response:
         """Submits the batch for execution on the server.
 
@@ -934,6 +941,9 @@ class BatchTask(WebTask):
             Optional identifier for a specific worker group to run on.
         vgpu_allocation : Optional[int], default=None
             Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
+        ignore_memory_limit : Optional[bool], default=None
+            If ``True``, allows the simulation to run even when estimated vGPU memory
+            exceeds the allocation limit (up to 2x the limit).
 
         Returns
         -------
@@ -941,7 +951,7 @@ class BatchTask(WebTask):
             The server's response to the submit request.
         """
 
-        # TODO: add support for pay_type, priority, and vgpu_allocation arguments
+        # TODO: add support for pay_type, priority, vgpu_allocation, and ignore_memory_limit arguments
         if pay_type != PayType.AUTO:
             raise NotImplementedError(
                 "The 'pay_type' argument is not yet supported and will be ignored."
@@ -953,6 +963,10 @@ class BatchTask(WebTask):
         if vgpu_allocation is not None:
             raise NotImplementedError(
                 "The 'vgpu_allocation' argument is not yet supported and will be ignored."
+            )
+        if ignore_memory_limit is not None:
+            raise NotImplementedError(
+                "The 'ignore_memory_limit' argument is not yet supported and will be ignored."
             )
 
         if protocol_version is None:

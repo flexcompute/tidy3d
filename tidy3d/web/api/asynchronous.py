@@ -32,6 +32,7 @@ def run_async(
     priority: Optional[int] = None,
     lazy: bool = False,
     vgpu_allocation: Optional[int] = None,
+    ignore_memory_limit: Optional[bool] = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -72,6 +73,10 @@ def run_async(
         Number of virtual GPUs to allocate for the simulation (1, 2, 4, or 8).
         Only applies to vGPU license users. If not specified, the system
         automatically determines the optimal GPU count.
+    ignore_memory_limit : Optional[bool] = None
+        If ``True``, allows the simulation to run even when estimated vGPU memory
+        exceeds the allocation limit (up to 2x the limit). Only applies to
+        vGPU license users. Default ``None`` leaves the server behaviour unchanged.
 
     Returns
     ------
@@ -105,5 +110,10 @@ def run_async(
         **({"num_workers": num_workers} if num_workers is not None else {}),
     )
 
-    batch_data = batch.run(path_dir=path_dir, priority=priority, vgpu_allocation=vgpu_allocation)
+    batch_data = batch.run(
+        path_dir=path_dir,
+        priority=priority,
+        vgpu_allocation=vgpu_allocation,
+        ignore_memory_limit=ignore_memory_limit,
+    )
     return batch_data

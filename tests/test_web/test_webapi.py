@@ -282,7 +282,7 @@ def mock_get_info(monkeypatch, set_api_key):
 def mock_start(monkeypatch, set_api_key, mock_get_info):
     """Mocks webapi.start."""
 
-    def add_mock_response(priority=None, vgpu_allocation=None):
+    def add_mock_response(priority=None, vgpu_allocation=None, ignore_memory_limit=None):
         expected_body = {
             "solverVersion": None,
             "workerGroup": None,
@@ -291,6 +291,7 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
             "payType": PayType.AUTO,
             "priority": priority,
             "vgpuAllocation": vgpu_allocation,
+            "ignoreMemoryLimit": ignore_memory_limit,
         }
 
         responses.add(
@@ -307,7 +308,7 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
             status=200,
         )
 
-    # Add response for calls without priority or vgpu_allocation
+    # Add response for calls without priority, vgpu_allocation, or ignore_memory_limit
     add_mock_response(None)
 
     # Add responses for calls with specific priority values
@@ -317,6 +318,10 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
     # Add responses for calls with specific vgpu_allocation values
     for vgpu_alloc in [1, 2, 4, 8]:
         add_mock_response(vgpu_allocation=vgpu_alloc)
+
+    # Add responses for calls with ignore_memory_limit
+    add_mock_response(ignore_memory_limit=True)
+    add_mock_response(ignore_memory_limit=False)
 
 
 @pytest.fixture
@@ -488,6 +493,13 @@ def test_run_with_invalid_vgpu_allocation(mock_webapi, vgpu_allocation):
     sim = make_sim()
     with pytest.raises(ValueError, match="vgpu_allocation must be one of"):
         run(sim, TASK_NAME, folder_name=PROJECT_NAME, vgpu_allocation=vgpu_allocation)
+
+
+@responses.activate
+@pytest.mark.parametrize("ignore_memory_limit", [True, False, None])
+def test_start_with_ignore_memory_limit(mock_start, ignore_memory_limit):
+    """Test start with ignore_memory_limit values."""
+    start(TASK_ID, ignore_memory_limit=ignore_memory_limit)
 
 
 @responses.activate
@@ -1347,7 +1359,7 @@ def test_batch_start_surfaces_start_errors(monkeypatch):
             self.task_name = task_name
             self._should_fail = should_fail
 
-        def start(self, priority=None, vgpu_allocation=None):
+        def start(self, priority=None, vgpu_allocation=None, ignore_memory_limit=None):
             started.append((self.task_name, priority))
             if self._should_fail:
                 raise RuntimeError("start failed")
@@ -1547,7 +1559,7 @@ def test_batch_run_uses_legacy_upload_then_start(monkeypatch, tmp_path):
     def _track_upload(self):
         upload_calls["count"] += 1
 
-    def _track_start(self, priority=None, vgpu_allocation=None):
+    def _track_start(self, priority=None, vgpu_allocation=None, ignore_memory_limit=None):
         start_calls["count"] += 1
         start_calls["priority"] = priority
 
@@ -1587,7 +1599,7 @@ def test_batch_upload_and_start_use_fixed_worker_bound(monkeypatch):
         def upload(self):
             return None
 
-        def start(self, priority=None, vgpu_allocation=None):
+        def start(self, priority=None, vgpu_allocation=None, ignore_memory_limit=None):
             return None
 
     def _fake_prepare_uncached_jobs(self, **kwargs):

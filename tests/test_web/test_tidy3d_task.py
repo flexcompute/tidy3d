@@ -214,6 +214,7 @@ def test_submit(set_api_key):
                     "payType": PayType.AUTO,
                     "priority": None,
                     "vgpuAllocation": None,
+                    "ignoreMemoryLimit": None,
                 }
             )
         ],

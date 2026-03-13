@@ -40,12 +40,18 @@ def _run_tidy3d(
     path = Path(run_kwargs.get("path", DEFAULT_DATA_PATH))
     priority = run_kwargs.get("priority")
     vgpu_allocation = run_kwargs.get("vgpu_allocation")
+    ignore_memory_limit = run_kwargs.get("ignore_memory_limit")
     if task_name.endswith("_adjoint"):
         suffixes = "".join(path.suffixes)
         base_name = path.name
         base_without_suffix = base_name[: -len(suffixes)] if suffixes else base_name
         path = path.with_name(f"{base_without_suffix}_adjoint{suffixes}")
-    data = job.run(path, priority=priority, vgpu_allocation=vgpu_allocation)
+    data = job.run(
+        path,
+        priority=priority,
+        vgpu_allocation=vgpu_allocation,
+        ignore_memory_limit=ignore_memory_limit,
+    )
     return data, job.task_id
 
 
@@ -58,6 +64,7 @@ def _run_async_tidy3d(
     path_dir = run_kwargs.pop("path_dir", None)
     priority = run_kwargs.get("priority")
     vgpu_allocation = run_kwargs.get("vgpu_allocation")
+    ignore_memory_limit = run_kwargs.get("ignore_memory_limit")
     num_workers = run_kwargs.get("num_workers")
     batch = _build_batch(simulations=simulations, num_workers=num_workers, **batch_init_kwargs)
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d()'")
@@ -78,9 +85,18 @@ def _run_async_tidy3d(
             upload_sim_fields_keys(sim_fields_keys, task_id=task_id, verbose=verbose)
 
     if path_dir is not None:
-        batch_data = batch.run(path_dir, priority=priority, vgpu_allocation=vgpu_allocation)
+        batch_data = batch.run(
+            path_dir,
+            priority=priority,
+            vgpu_allocation=vgpu_allocation,
+            ignore_memory_limit=ignore_memory_limit,
+        )
     else:
-        batch_data = batch.run(priority=priority, vgpu_allocation=vgpu_allocation)
+        batch_data = batch.run(
+            priority=priority,
+            vgpu_allocation=vgpu_allocation,
+            ignore_memory_limit=ignore_memory_limit,
+        )
 
     task_ids = {key: job.task_id for key, job in batch.jobs.items()}
     return batch_data, task_ids
@@ -100,7 +116,10 @@ def _run_async_tidy3d_bwd(
 
     priority = run_kwargs.get("priority")
     vgpu_allocation = run_kwargs.get("vgpu_allocation")
-    batch.start(priority=priority, vgpu_allocation=vgpu_allocation)
+    ignore_memory_limit = run_kwargs.get("ignore_memory_limit")
+    batch.start(
+        priority=priority, vgpu_allocation=vgpu_allocation, ignore_memory_limit=ignore_memory_limit
+    )
     batch.monitor()
 
     vjp_traced_fields_dict = {}
