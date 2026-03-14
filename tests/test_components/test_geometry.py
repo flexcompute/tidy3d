@@ -33,6 +33,7 @@ from tidy3d.components.geometry.utils import (
     SnappingSpec,
     flatten_groups,
     flatten_shapely_geometries,
+    merging_geometries_on_plane,
     snap_box_to_grid,
     traverse_geometries,
 )
@@ -2227,6 +2228,44 @@ def test_flatten_shapely_geometries():
     # Test 13: Edge case - single empty geometry
     result = flatten_shapely_geometries(empty_polygon)
     assert len(result) == 0
+
+
+def test_merging_geometries_on_plane_overlapping_lines():
+    """Test merging_geometries_on_plane with overlapping zero-area (LineString) geometries."""
+    # Two thin (zero-thickness in y) boxes that overlap along x.
+    # Box A: x in [-0.75, 0.25], Box B: x in [-0.25, 0.75]  =>  overlap in [-0.25, 0.25]
+    geo_a = td.Box(center=(-0.25, 1, 0), size=(1, 0, 2))
+    geo_b = td.Box(center=(0.25, 1, 0), size=(1, 0, 2))
+
+    # XY cross-section plane at z=0
+    plane = td.Box(center=(0, 1, 0), size=(4, 4, 0))
+
+    # Same property => shapes should be merged into a single LineString
+    prop = "PEC"
+    results = merging_geometries_on_plane(
+        geometries=[geo_a, geo_b],
+        plane=plane,
+        property_list=[prop, prop],
+        interior_disjoint_geometries=True,
+    )
+    assert len(results) == 1
+    result_prop, result_shape = results[0]
+    assert result_prop == prop
+    assert result_shape.geom_type == "LineString"
+    minx, _, maxx, _ = result_shape.bounds
+    assert minx == pytest.approx(-0.75)
+    assert maxx == pytest.approx(0.75)
+
+    # Different properties => two separate results, each unmodified
+    results = merging_geometries_on_plane(
+        geometries=[geo_a, geo_b],
+        plane=plane,
+        property_list=["PEC", "copper"],
+        interior_disjoint_geometries=True,
+    )
+    assert len(results) == 2
+    props_returned = {r[0] for r in results}
+    assert props_returned == {"PEC", "copper"}
 
 
 # ======================= GeometryArray Tests =======================

@@ -20,6 +20,7 @@ from tidy3d.components.geometry.utils import (
     merging_geometries_on_plane,
     snap_box_to_grid,
 )
+from tidy3d.components.grid.corner_finder import N_SHAPELY_QUAD_SEGS, SHAPELY_CLEANUP
 from tidy3d.components.medium import LossyMetalMedium
 from tidy3d.components.validators import assert_plane
 from tidy3d.exceptions import SetupError
@@ -89,12 +90,40 @@ class ModePlaneAnalyzer(Box):
 
         return (tuple(min_b_2d_list), max_b)
 
+    @staticmethod
+    def _is_conductor(med: Medium) -> bool:
+        return med.is_pec or isinstance(med, LossyMetalMedium)
+
+    @staticmethod
+    def apply_interior_disjoint_geometries(structure_priority_mode: str) -> bool:
+        """Whether conductors on the mode plane will not be overridden by other materials.
+
+        When ``structure_priority_mode`` is ``"conductor"``, conductor structures
+        have the highest priority, so geometries of different properties are
+        guaranteed to be interior disjoint on the plane. This allows a faster
+        merging path that skips overlap removal.
+
+        Parameters
+        ----------
+        structure_priority_mode : str
+            The structure priority mode setting (e.g. ``"conductor"`` or ``"equal"``).
+
+        Returns
+        -------
+        bool
+            ``True`` when ``structure_priority_mode`` is ``"conductor"``.
+        """
+        return structure_priority_mode == "conductor"
+
     def _get_isolated_conductors_as_shapely(
         self,
         plane: Box,
         structures: list[Structure],
+        interior_disjoint_geometries: bool = True,
     ) -> list[Shapely]:
-        """Find and merge all conductor structures that intersect the given plane.
+        """Find and merge all conductor structures that intersect the given plane. The geometries
+        are ordered by their center coordinates from left to right, and bottom to top if their horizontal
+        axis is identical.
 
         Parameters
         ----------
@@ -102,6 +131,9 @@ class ModePlaneAnalyzer(Box):
             The plane to check for conductor intersections
         structures : list[Structure]
             List of all simulation structures to analyze
+        interior_disjoint_geometries: bool = True
+            If ``True``, conductors on the plane will not be overridden by other materials,
+            allowing a faster merging path that skips overlap removal.
 
         Returns
         -------
@@ -110,17 +142,20 @@ class ModePlaneAnalyzer(Box):
             that intersect with the given plane
         """
 
-        def is_conductor(med: Medium) -> bool:
-            return med.is_pec or isinstance(med, LossyMetalMedium)
-
         geometry_list = [structure.geometry for structure in structures]
-        # For metal, we don't distinguish between LossyMetal and PEC,
-        # so they'll be merged to PEC. Other materials are considered as dielectric.
-        prop_list = [is_conductor(structure.medium) for structure in structures]
+        prop_list = [self._is_conductor(structure.medium) for structure in structures]
         # merge geometries
-        geos = merging_geometries_on_plane(geometry_list, plane, prop_list)
+        geos = merging_geometries_on_plane(
+            geometry_list,
+            plane,
+            prop_list,
+            interior_disjoint_geometries=interior_disjoint_geometries,
+            cleanup=SHAPELY_CLEANUP,
+            quad_segs=N_SHAPELY_QUAD_SEGS,
+        )
         conductor_geos = [item[1] for item in geos if item[0]]
         shapely_list = flatten_shapely_geometries(conductor_geos, keep_types=(Polygon, LineString))
+        shapely_list = sorted(shapely_list, key=lambda x: (x.centroid.x, x.centroid.y))
         return shapely_list
 
     def _filter_conductors_touching_sim_bounds(
@@ -178,9 +213,10 @@ class ModePlaneAnalyzer(Box):
         grid: Grid,
         symmetry: tuple[Symmetry, Symmetry, Symmetry],
         sim_box: Box,
+        interior_disjoint_geometries: bool = True,
     ) -> tuple[list[Box], list[Shapely]]:
         """Returns bounding boxes that encompass each isolated conductor
-        in the mode plane.
+        in the mode plane, as well as the list of conductor shapely geometries.
 
         This method identifies isolated conductor geometries in the given plane.
         The paths are snapped to the simulation grid
@@ -196,6 +232,9 @@ class ModePlaneAnalyzer(Box):
             Symmetry conditions for the simulation in (x, y, z) directions.
         sim_box : Box
             Simulation domain box used for boundary conditions.
+        interior_disjoint_geometries : bool = True
+            If ``True``, conductors on the plane will not be overridden by other materials,
+            allowing a faster merging path that skips overlap removal.
 
         Returns
         -------
@@ -216,7 +255,9 @@ class ModePlaneAnalyzer(Box):
 
         intersection_plane = Box.from_bounds(min_b_3d, max_b_3d)
         isolated_conductor_shapely = self._get_isolated_conductors_as_shapely(
-            intersection_plane, structures
+            intersection_plane,
+            structures,
+            interior_disjoint_geometries=interior_disjoint_geometries,
         )
 
         filtered_conductor_shapely = self._filter_conductors_touching_sim_bounds(
@@ -265,7 +306,7 @@ class ModePlaneAnalyzer(Box):
                     "Failed to automatically generate path specification because a generated path "
                     "specification extends outside the mode solving plane bounds. This issue can be fixed "
                     "by enlarging the mode solving plane and ensuring that there is a buffer of at "
-                    "least 2 grid cells between the mode solving plane bounds and the nearest conductors."
+                    "least 2 grid cells between the mode solving plane bounds and the nearest conductors. "
                     "Alternatively, enforce a smaller grid around the conductors in the mode plane, "
                     "which may resolve the issue."
                 )

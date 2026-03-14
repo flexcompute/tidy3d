@@ -49,6 +49,7 @@ For RF and microwave applications, use the **TerminalComponentModeler** (availab
    tidy3d.plugins.smatrix.LumpedPort
    tidy3d.plugins.smatrix.CoaxialLumpedPort
    tidy3d.rf.WavePort
+   tidy3d.rf.TerminalWavePort
    tidy3d.rf.MicrowaveSMatrixData
    tidy3d.rf.TerminalPortDataArray
    tidy3d.rf.PortDataArray

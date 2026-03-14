@@ -8204,9 +8204,17 @@
           "default": null
         },
         "num_modes": {
-          "default": 1,
-          "exclusiveMinimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "const": "auto",
+              "type": "string"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            }
+          ],
+          "default": 1
         },
         "num_pml": {
           "default": [
@@ -8287,6 +8295,213 @@
       },
       "type": "object"
     },
+    "MicrowaveTerminalModeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "angle_phi": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "angle_rotation": {
+          "default": false,
+          "type": "boolean"
+        },
+        "angle_theta": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "attrs": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "bend_axis": {
+          "anyOf": [
+            {
+              "enum": [
+                0,
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "bend_radius": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "default": null
+        },
+        "filter_pol": {
+          "anyOf": [
+            {
+              "enum": [
+                "te",
+                "tm"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "group_index_step": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "default": false
+        },
+        "impedance_specs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/CustomImpedanceSpec"
+          },
+          "type": "object"
+        },
+        "interp_spec": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModeInterpSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "num_modes": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "num_pml": {
+          "default": [
+            0,
+            0
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "precision": {
+          "default": "double",
+          "enum": [
+            "auto",
+            "double",
+            "single"
+          ],
+          "type": "string"
+        },
+        "qtem_polarization_threshold": {
+          "default": 0.95,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "type": "number"
+        },
+        "sort_spec": {
+          "$ref": "#/$defs/ModeSortSpec"
+        },
+        "target_neff": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tem_polarization_threshold": {
+          "default": 0.995,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "type": "number"
+        },
+        "terminals_mapping": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "maxItems": 2,
+                    "minItems": 2,
+                    "prefixItems": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ],
+                    "type": "array"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "track_freq": {
+          "anyOf": [
+            {
+              "enum": [
+                "central",
+                "highest",
+                "lowest"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "MicrowaveTerminalModeSpec",
+          "default": "MicrowaveTerminalModeSpec",
+          "type": "string"
+        }
+      },
+      "required": [
+        "impedance_specs",
+        "num_modes"
+      ],
+      "type": "object"
+    },
     "ModeABCBoundary": {
       "additionalProperties": false,
       "properties": {
@@ -8351,6 +8566,7 @@
           "discriminator": {
             "mapping": {
               "MicrowaveModeSpec": "#/$defs/MicrowaveModeSpec",
+              "MicrowaveTerminalModeSpec": "#/$defs/MicrowaveTerminalModeSpec",
               "ModeSpec": "#/$defs/ModeSpec"
             },
             "propertyName": "type"
@@ -8358,6 +8574,9 @@
           "oneOf": [
             {
               "$ref": "#/$defs/MicrowaveModeSpec"
+            },
+            {
+              "$ref": "#/$defs/MicrowaveTerminalModeSpec"
             },
             {
               "$ref": "#/$defs/ModeSpec"

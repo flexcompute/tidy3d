@@ -27,7 +27,7 @@ The :class:`~tidy3d.rf.TerminalComponentModeler` is the core simulation object f
 The key parts of a :class:`~tidy3d.rf.TerminalComponentModeler` are:
 
 * The :class:`~tidy3d.Simulation` field defines the underlying Tidy3D `Simulation object <../simulation.html>`_. This base :class:`~tidy3d.Simulation` object contains information about the simulation domain such as structures, boundary conditions, grid specifications, and monitors. Note that sources should not be included in the base simulation, but rather in the ``ports`` field instead.
-* The ``ports`` field defines the list of source excitations. These are commonly of type :class:`~tidy3d.rf.LumpedPort` or :class:`~tidy3d.rf.WavePort`. The number of ports determines the number of batch jobs in the :class:`~tidy3d.rf.TerminalComponentModeler` and the dimensionality of the S-parameter matrix. **Note:** Port names cannot contain the '@' symbol (reserved for internal indexing).
+* The ``ports`` field defines the list of source excitations. These are commonly of type :class:`~tidy3d.rf.LumpedPort`, :class:`~tidy3d.rf.WavePort`, or :class:`~tidy3d.rf.TerminalWavePort`. The number of ports determines the number of batch jobs in the :class:`~tidy3d.rf.TerminalComponentModeler` and the dimensionality of the S-parameter matrix. **Note:** Port names cannot contain the '@' symbol (reserved for internal indexing).
 * The ``freqs`` field defines the list of frequency points for the simulation.
 
 More information and explanation for additional fields can be found in the documentation page for the :class:`~tidy3d.rf.TerminalComponentModeler`.

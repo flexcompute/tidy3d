@@ -47,6 +47,7 @@ Datasets and Data Arrays
    :template: module.rst
 
    tidy3d.components.microwave.data.dataset.TransmissionLineDataset
+   tidy3d.components.microwave.data.dataset.TransmissionLineTerminalDataset
 
 **Data Arrays**
 
@@ -54,15 +55,26 @@ Datasets and Data Arrays
    :toctree: ../_autosummary/
    :template: module.rst
 
+   tidy3d.components.data.data_array.ModeDataArray
+   tidy3d.components.data.data_array.TerminalDataArray
+   tidy3d.components.data.data_array.FreqTerminalDataArray
+   tidy3d.components.data.data_array.FreqTerminalModeDataArray
+   tidy3d.components.data.data_array.FreqTerminalTerminalDataArray
    tidy3d.components.data.data_array.VoltageTimeDataArray
    tidy3d.components.data.data_array.VoltageFreqDataArray
    tidy3d.components.data.data_array.VoltageFreqModeDataArray
+   tidy3d.components.data.data_array.VoltageFreqTerminalModeDataArray
    tidy3d.components.data.data_array.CurrentTimeDataArray
    tidy3d.components.data.data_array.CurrentFreqDataArray
    tidy3d.components.data.data_array.CurrentFreqModeDataArray
+   tidy3d.components.data.data_array.CurrentFreqTerminalDataArray
+   tidy3d.components.data.data_array.CurrentFreqTerminalModeDataArray
+   tidy3d.components.data.data_array.ImpedanceModeDataArray
+   tidy3d.components.data.data_array.ImpedanceTerminalDataArray
    tidy3d.components.data.data_array.ImpedanceTimeDataArray
    tidy3d.components.data.data_array.ImpedanceFreqDataArray
    tidy3d.components.data.data_array.ImpedanceFreqModeDataArray
+   tidy3d.components.data.data_array.ImpedanceFreqTerminalTerminalDataArray
    tidy3d.components.microwave.data.data_array.PropagationConstantArray
    tidy3d.components.microwave.data.data_array.PhaseConstantArray
    tidy3d.components.microwave.data.data_array.AttenuationConstantArray

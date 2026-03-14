@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import Field, PositiveInt
 
@@ -75,18 +75,22 @@ class AbstractLumpedPort(AbstractTerminalPort):
 
     @abstractmethod
     def to_voltage_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
     ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
 
     @abstractmethod
     def to_current_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
     ) -> FieldMonitor:
         """Field monitor to compute port current."""
 
     def to_monitors(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
+        self,
+        freqs: FreqArray,
+        snap_center: Optional[float] = None,
+        grid: Optional[Grid] = None,
+        **kwargs: Any,
     ) -> list[FieldMonitor]:
         """Field monitors to compute port voltage and current."""
         return [

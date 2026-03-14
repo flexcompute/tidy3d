@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
-from pydantic import Field
+from pydantic import Field, TypeAdapter
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqDataArray
@@ -27,22 +27,29 @@ from tidy3d.plugins.smatrix.utils import (
 )
 
 if TYPE_CHECKING:
-    from typing import Union
-
     from tidy3d.components.data.monitor_data import MonitorData
     from tidy3d.components.data.sim_data import SimulationData
     from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
     from tidy3d.plugins.smatrix.data.data_array import PortNameDataArray
     from tidy3d.plugins.smatrix.types import NetworkIndex
 
+# Accepted types for the renormalized_reference_impedance field.
+# - complex: uniform impedance applied to all ports (diagonal matrix)
+# - PortDataArray: per-port impedance with dims (f, port) → diagonal matrix
+# - TerminalPortDataArray: full impedance matrix with dims (f, port_out, port_in)
+RenormalizedReferenceImpedance = Union[complex, TerminalPortDataArray, PortDataArray]
+_ref_impedance_adapter = TypeAdapter(RenormalizedReferenceImpedance)
+
 
 class MicrowaveSMatrixData(MicrowaveBaseModel):
     """Stores the computed S-matrix and reference impedances for the terminal ports."""
 
-    port_reference_impedances: Optional[PortDataArray] = Field(
+    port_reference_impedances: Optional[TerminalPortDataArray] = Field(
         None,
         title="Port Reference Impedances",
-        description="Reference impedance for each port used in the S-parameter calculation. This is optional and may not be present if not specified or computed.",
+        description="Reference impedance matrix for each port used in the S-parameter calculation. "
+        "Has dimensions (f, port_out, port_in) to support coupled impedances from TerminalWavePort. "
+        "For WavePort and LumpedPort, the impedance matrix is diagonal.",
     )
 
     data: TerminalPortDataArray = Field(
@@ -106,6 +113,97 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         description="The original :class:`.TerminalComponentModeler` object that defines the simulation setup "
         "and from which this data was generated.",
     )
+
+    renormalized_reference_impedance: Optional[RenormalizedReferenceImpedance] = Field(
+        None,
+        title="Renormalized Reference Impedance",
+        description="When set, overrides port_reference_impedances for all S-matrix computations. "
+        "Accepts: complex (uniform), PortDataArray (per-port diagonal), "
+        "or TerminalPortDataArray (full matrix).",
+    )
+
+    def renormalize(
+        self, reference_impedance: RenormalizedReferenceImpedance
+    ) -> TerminalComponentModelerData:
+        """Return a new instance whose S-matrix is renormalized to a different reference impedance.
+
+        The returned object recomputes wave amplitudes from the cached voltage/current
+        data using the new reference impedance, so all downstream methods
+        (:meth:`smatrix`, :meth:`s_to_z`, :meth:`compute_port_wave_amplitude_matrices`, etc.)
+        automatically reflect the new impedance.
+
+        Parameters
+        ----------
+        reference_impedance : RenormalizedReferenceImpedance
+            The new reference impedance. Accepts:
+
+            - ``complex`` — uniform impedance applied to all ports (e.g. ``50``)
+            - :class:`.PortDataArray` — per-port impedance with dims ``(f, port)``
+            - :class:`.TerminalPortDataArray` — full impedance matrix ``(f, port_out, port_in)``
+
+        Returns
+        -------
+        :class:`.TerminalComponentModelerData`
+            A copy of this object with the new reference impedance applied.
+
+        Examples
+        --------
+        >>> s_50 = modeler_data.renormalize(50).smatrix()  # doctest: +SKIP
+        """
+        _ref_impedance_adapter.validate_python(reference_impedance)
+        return self.updated_copy(
+            renormalized_reference_impedance=reference_impedance,
+            deep=False,
+            validate=False,
+        )
+
+    def _build_reference_impedance_matrix(
+        self, value: RenormalizedReferenceImpedance
+    ) -> TerminalPortDataArray:
+        """Convert any accepted impedance input to a full ``TerminalPortDataArray``.
+
+        Parameters
+        ----------
+        value : RenormalizedReferenceImpedance
+            The reference impedance value to convert.
+
+        Returns
+        -------
+        :class:`.TerminalPortDataArray`
+            Impedance matrix with dimensions ``(f, port_out, port_in)``.
+        """
+        network_indices = list(self.modeler.matrix_indices_monitor)
+        num_ports = len(network_indices)
+        freqs = np.array(self.modeler.freqs)
+        num_freqs = len(freqs)
+
+        coords = {
+            "f": freqs,
+            "port_out": network_indices,
+            "port_in": network_indices,
+        }
+
+        if isinstance(value, TerminalPortDataArray):
+            return value
+
+        if isinstance(value, PortDataArray):
+            # Per-port diagonal: PortDataArray has dims (f, port)
+            values = np.zeros((num_freqs, num_ports, num_ports), dtype=complex)
+            for i, port_name in enumerate(network_indices):
+                values[:, i, i] = value.sel(port=port_name).values
+            return TerminalPortDataArray(values, coords=coords)
+
+        if isinstance(value, (int, float, complex)):
+            # Uniform scalar → diagonal matrix
+            values = np.zeros((num_freqs, num_ports, num_ports), dtype=complex)
+            for i in range(num_ports):
+                values[:, i, i] = complex(value)
+            return TerminalPortDataArray(values, coords=coords)
+
+        raise TypeError(
+            f"Unsupported type for renormalized_reference_impedance: {type(value).__name__}. "
+            "Expected complex, PortDataArray, TerminalPortDataArray, or 'Z0'."
+        )
 
     def smatrix(
         self,
@@ -215,7 +313,9 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
             else:
                 # Collect corresponding mode_data
                 mode_data = mode_map[port._mode_monitor_name]
-                for mode_index in port._mode_indices:
+                for mode_index in port._mode_indices(
+                    mode_spec=self.modeler._resolved_mode_specs.get(port.name)
+                ):
                     network_index = self.modeler.network_index(port, mode_index)
                     idx = smatrix.data.indexes["port_in"].get_loc(network_index)
                     shifts_vec[idx] = port_shifts.sel(port=shift_name).values
@@ -280,8 +380,8 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         :class:`.MonitorData`
             Normalized monitor data scaled to the desired port amplitude.
         """
-        port, mode_index = self.modeler.network_dict[port_index]
-        sim_data_port = self.data[self.modeler.get_task_name(port, mode_index)]
+        task_name = self.modeler.task_name_from_index(port_index)
+        sim_data_port = self.data[task_name]
         monitor_data = sim_data_port[monitor_name]
         if not isinstance(a_port, FreqDataArray):
             freqs = list(monitor_data.monitor.freqs)
@@ -337,19 +437,24 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         return antenna_metrics_data
 
     @cached_property
-    def port_reference_impedances(self) -> PortDataArray:
-        """Calculates the reference impedance for each port across all frequencies.
+    def port_reference_impedances(self) -> TerminalPortDataArray:
+        """Calculates the reference impedance matrix for each port across all frequencies.
 
         This function determines the characteristic impedance for every port defined
-        in the modeler. It handles two types of ports differently: for a
-        :class:`.WavePort`, the impedance is frequency-dependent and computed from
-        modal properties, while for other types like :class:`.LumpedPort`, the
-        impedance is a user-defined constant value.
+        in the modeler. It returns a matrix with dimensions (f, port_out, port_in)
+        to support coupled impedances from :class:`.TerminalWavePort`. For
+        :class:`.WavePort` and :class:`.LumpedPort`, the impedance matrix is diagonal.
+
+        When :attr:`renormalized_reference_impedance` is set, returns the
+        user-specified impedance instead of the simulation-derived one.
 
         Returns:
-            A data array containing the complex impedance for each port at each
-            frequency.
+            A :class:`.TerminalPortDataArray` containing the complex impedance matrix
+            with dimensions (f, port_out, port_in) for each frequency.
         """
+        if self.renormalized_reference_impedance is not None:
+            return self._build_reference_impedance_matrix(self.renormalized_reference_impedance)
+
         from tidy3d.plugins.smatrix.analysis.terminal import port_reference_impedances
 
         return port_reference_impedances(self)
@@ -357,7 +462,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
     def compute_wave_amplitudes_at_each_port(
         self,
         sim_data: SimulationData,
-        port_reference_impedances: Optional[PortDataArray] = None,
+        port_reference_impedances: Optional[TerminalPortDataArray] = None,
         s_param_def: SParamDef = "pseudo",
     ) -> tuple[PortDataArray, PortDataArray]:
         """Compute the incident and reflected amplitudes at each port.
@@ -367,8 +472,9 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         ----------
         sim_data : :class:`.SimulationData`
             Results from the simulation.
-        port_reference_impedances : :class:`.PortDataArray`, optional
-            Reference impedance at each port. If not provided, it is computed from the cached
+        port_reference_impedances : :class:`.TerminalPortDataArray`, optional
+            Reference impedance matrix with dimensions (f, port_out, port_in).
+            If not provided, it is computed from the cached
             property :meth:`.port_reference_impedances`. Defaults to ``None``.
         s_param_def : SParamDef
             Wave definition: "pseudo", "power", or "symmetric_pseudo".
@@ -397,7 +503,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
     def compute_power_wave_amplitudes_at_each_port(
         self,
         sim_data: SimulationData,
-        port_reference_impedances: Optional[PortDataArray] = None,
+        port_reference_impedances: Optional[TerminalPortDataArray] = None,
     ) -> tuple[PortDataArray, PortDataArray]:
         """Compute the incident and reflected power wave amplitudes at each port.
         The computed amplitudes have not been normalized.
@@ -406,8 +512,9 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         ----------
         sim_data : :class:`.SimulationData`
             Results from the simulation.
-        port_reference_impedances : :class:`.PortDataArray`, optional
-            Reference impedance at each port. If not provided, it is computed from the cached
+        port_reference_impedances : :class:`.TerminalPortDataArray`, optional
+            Reference impedance matrix with dimensions (f, port_out, port_in).
+            If not provided, it is computed from the cached
             property :meth:`.port_reference_impedances`. Defaults to ``None``.
 
         Returns
@@ -421,28 +528,17 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
 
     def s_to_z(
         self,
-        reference: Union[complex, PortDataArray],
         assume_ideal_excitation: Optional[bool] = None,
         s_param_def: SParamDef = "pseudo",
     ) -> TerminalPortDataArray:
-        """Converts the S-matrix to the Z-matrix using a specified reference impedance.
+        """Converts the S-matrix to the Z-matrix using the port reference impedances.
 
         This method first computes the S-matrix of the device and then transforms it into the
-        corresponding impedance matrix (Z-matrix). The conversion can be performed using either a
-        single, uniform reference impedance for all ports or a more general set of per-port,
-        frequency-dependent reference impedances.
-
-        This method :meth:`.TerminalComponentModelerData.s_to_z` is called on a
-        :class:`.TerminalComponentModelerData` object, which contains the S-matrix and other
-        simulation data internally.
+        corresponding impedance matrix (Z-matrix), using the reference impedances from
+        :meth:`port_reference_impedances`.
 
         Parameters
         ----------
-        reference : Union[complex, :class:`.PortDataArray`]
-            The reference impedance(s) to use for the conversion. If a single complex value is
-            provided, it is assumed to be the reference impedance for all ports. If a
-            :class:`.PortDataArray` is given, it should contain the specific reference
-            impedance for each port.
         assume_ideal_excitation: If ``True``, assumes that exciting one port
             does not produce incident waves at other ports. This simplifies the
             S-matrix calculation and is required if not all ports are excited. If not
@@ -459,7 +555,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
 
         Examples
         --------
-        >>> z_matrix = component_modeler_data.s_to_z(reference=50) # doctest: +SKIP
+        >>> z_matrix = component_modeler_data.s_to_z() # doctest: +SKIP
         >>> z_11 = z_matrix.sel(port_out="port_1@0", port_in="port_1@0") # doctest: +SKIP
 
         See Also
@@ -469,7 +565,11 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         s_matrix = self.smatrix(
             assume_ideal_excitation=assume_ideal_excitation, s_param_def=s_param_def
         )
-        return s_to_z(s_matrix=s_matrix.data, reference=reference, s_param_def=s_param_def)
+        return s_to_z(
+            s_matrix=s_matrix.data,
+            reference=self.port_reference_impedances,
+            s_param_def=s_param_def,
+        )
 
     @cached_property
     def port_voltage_current_matrices(self) -> tuple[TerminalPortDataArray, TerminalPortDataArray]:
@@ -507,8 +607,7 @@ class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseMo
         port_current_matrix = port_voltage_matrix.copy(deep=True)
 
         for source_index in self.modeler.matrix_indices_run_sim:
-            port, mode_index = self.modeler.network_dict[source_index]
-            task_name = self.modeler.get_task_name(port, mode_index)
+            task_name = self.modeler.task_name_from_index(source_index)
             sim_data = self.data[task_name]
             port_voltages, port_currents = _compute_port_voltages_currents(self.modeler, sim_data)
             indexer = {"port_in": source_index}

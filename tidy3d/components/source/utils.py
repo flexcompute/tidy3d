@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Union
 
+from tidy3d.components.microwave.source import MicrowaveTerminalSource
+
 from .current import CustomCurrentSource, PointDipole, UniformCurrentSource
 from .field import (
     TFSF,
@@ -25,4 +27,5 @@ SourceType = Union[
     CustomFieldSource,
     CustomCurrentSource,
     TFSF,
+    MicrowaveTerminalSource,
 ]

@@ -58,10 +58,26 @@ def _patch_terminal_smatrix(monkeypatch, modeler) -> None:
         "port_array_inv",
         lambda matrix: np.eye(len(modeler.matrix_indices_monitor)),
     )
+
+    def _mock_compute_F(Z_numpy, s_param_def, compute_Finv=False):
+        num_freqs, num_ports, _ = Z_numpy.shape
+        Z_diag = np.diagonal(Z_numpy, axis1=1, axis2=2)
+        f_diag = 1.0 / (2.0 * np.sqrt(np.abs(Z_diag) + 1e-4))
+        F = np.zeros_like(Z_numpy)
+        for i in range(num_ports):
+            F[:, i, i] = f_diag[:, i]
+        if compute_Finv:
+            finv_diag = 2.0 * np.sqrt(np.abs(Z_diag) + 1e-4)
+            Finv = np.zeros_like(Z_numpy)
+            for i in range(num_ports):
+                Finv[:, i, i] = finv_diag[:, i]
+            return F, Finv
+        return F
+
     monkeypatch.setattr(
         smatrix_utils,
         "compute_F",
-        lambda Z_numpy, s_param_def: 1.0 / (2.0 * np.sqrt(np.abs(Z_numpy) + 1e-4)),
+        _mock_compute_F,
     )
     monkeypatch.setattr(
         terminal_analysis,

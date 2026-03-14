@@ -20,6 +20,7 @@ from pydantic import (
 )
 
 from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
+from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
 from tidy3d.exceptions import (
@@ -103,11 +104,11 @@ from .source.base import Source
 from .source.current import CustomCurrentSource
 from .source.field import (
     TFSF,
+    AbstractModeSource,
     AstigmaticGaussianBeam,
     CustomFieldSource,
     FixedAngleSpec,
     GaussianBeam,
-    ModeSource,
     PlanarSource,
     PlaneWave,
 )
@@ -154,6 +155,7 @@ if TYPE_CHECKING:
     from .grid.grid import Coords1D
     from .medium import MediumType
     from .monitor import Monitor
+    from .source.field import ModeSource
     from .structure import MeshOverrideStructure
     from .types import (
         ArrayFloat1D,
@@ -2268,7 +2270,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         self._validate_finalized()
         log.end_capture(self)
 
-    def _make_pec_frame(self, obj: Union[ModeSource, InternalAbsorber]) -> Structure:
+    def _make_pec_frame(self, obj: Union[AbstractModeSource, InternalAbsorber]) -> Structure:
         """Make a pec frame around a mode source or an internal absorber. For mode sources,
         the frame is added around the injection plane. For internal absorbers, a backing pec
         plate is also added on the non-absorbing side.
@@ -2278,7 +2280,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         (box, axis, direction) = self._pec_frame_box(obj)
 
         surfaces = Box.surfaces(box.size, box.center)
-        if isinstance(obj, ModeSource):
+        if isinstance(obj, AbstractModeSource):
             del surfaces[2 * axis : 2 * axis + 2]
         else:
             if direction == "-":
@@ -2296,14 +2298,14 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         return structure
 
     def _pec_frame_box(
-        self, obj: Union[ModeSource, InternalAbsorber], expand: bool = False
+        self, obj: Union[AbstractModeSource, InternalAbsorber], expand: bool = False
     ) -> tuple[Box, int, str]:
         """Return pec bounding box, frame axis and object's direction"""
 
         span_inds = np.array(self.grid.discretize_inds(obj, relax_precision=True))
         coords = self.grid.boundaries.to_list
         direction = obj.direction
-        if isinstance(obj, ModeSource):
+        if isinstance(obj, AbstractModeSource):
             axis = obj.injection_axis
             length = obj.frame.length
             if direction == "+":
@@ -2338,7 +2340,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         pec_frames = [
             self._make_pec_frame(src)
             for src in self.sources
-            if isinstance(src, ModeSource) and isinstance(src.frame, PECFrame)
+            if isinstance(src, AbstractModeSource) and isinstance(src.frame, PECFrame)
         ]
 
         pec_frames = pec_frames + [
@@ -4510,7 +4512,7 @@ class Simulation(AbstractYeeGridSimulation):
                     ) from e
 
         for isrc, source in enumerate(self.sources):
-            if isinstance(source, ModeSource):
+            if isinstance(source, AbstractModeSource):
                 try:
                     validate_mode_object(mode_obj=source, msg_prefix=f"'sources[{isrc}]'")
                 except Exception as e:
@@ -4931,7 +4933,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         with log as consolidated_logger:
             for src_ind, source in enumerate(self.sources):
-                if isinstance(source, ModeSource):
+                if isinstance(source, AbstractModeSource):
                     # Make a monitor so we can call ``discretize_monitor``
                     monitor = FieldMonitor(
                         center=source.center,
@@ -4972,7 +4974,7 @@ class Simulation(AbstractYeeGridSimulation):
                     )
 
         for source in self.sources:
-            if isinstance(source, ModeSource):
+            if isinstance(source, AbstractModeSource):
                 msg_header = f"Mode source '{source.name}' "
                 check_num_cells(source, source.injection_axis, msg_header)
 
@@ -5046,6 +5048,9 @@ class Simulation(AbstractYeeGridSimulation):
                 symmetry=self.symmetry,
                 simulation_geometry=self.simulation_geometry,
                 label=f" for monitor '{monitor.name}'",
+                interior_disjoint_geometries=ModePlaneAnalyzer.apply_interior_disjoint_geometries(
+                    self.structure_priority_mode
+                ),
             )
 
     @cached_property
@@ -5743,7 +5748,10 @@ class Simulation(AbstractYeeGridSimulation):
         mediums = self.scene.mediums
         contain_pec_structures = (
             any(medium.is_pec for medium in mediums)
-            or any(isinstance(src, ModeSource) and src.frame is not None for src in self.sources)
+            or any(
+                isinstance(src, AbstractModeSource) and src.frame is not None
+                for src in self.sources
+            )
             or len(self.internal_absorbers) > 0
         )
         contain_sibc_structures = any(isinstance(medium, LossyMetalMedium) for medium in mediums)

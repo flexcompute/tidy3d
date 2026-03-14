@@ -565,7 +565,59 @@ class AngledFieldSource(DirectionalSource, ABC):
         return pol_vector
 
 
-class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
+class AbstractModeSource(DirectionalSource, PlanarSource, BroadbandSource):
+    """Abstract base class for mode-based sources.
+
+    Provides common functionality for sources that inject electromagnetic modes,
+    including angle-dependent propagation direction and optional PEC frames.
+    """
+
+    mode_spec: ModeSpecType = Field(
+        default_factory=ModeSpec,
+        title="Mode Specification",
+        description="Parameters to feed to mode solver which determine modes measured by monitor.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    frame: Optional[PECFrame] = Field(
+        None,
+        title="Source Frame",
+        description="Add a thin frame around the source during the FDTD run to improve "
+        "the injection quality. The frame is positioned along the primal grid lines "
+        "so that it aligns with the boundaries of the mode solver used to obtain the source profile.",
+    )
+
+    @cached_property
+    def angle_theta(self) -> float:
+        """Polar angle of propagation."""
+        return self.mode_spec.angle_theta
+
+    @cached_property
+    def angle_phi(self) -> float:
+        """Azimuth angle of propagation."""
+        return self.mode_spec.angle_phi
+
+    @cached_property
+    def _dir_vector(self) -> tuple[float, float, float]:
+        """Source direction normal vector in cartesian coordinates."""
+        radius = 1.0 if self.direction == "+" else -1.0
+        dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
+        dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
+        dz = radius * np.cos(self.angle_theta)
+        return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
+
+    @cached_property
+    def _bend_axis(self) -> Optional[Axis]:
+        """Bend axis for curved sources."""
+        if self.mode_spec.bend_radius is None:
+            return None
+        in_plane = [0, 0]
+        in_plane[self.mode_spec.bend_axis] = 1
+        direction = self.unpop_axis(0, in_plane, axis=self.injection_axis)
+        return direction.index(1)
+
+
+class ModeSource(AbstractModeSource):
     """Injects current source to excite modal profile on finite extent plane.
 
     Notes
@@ -623,13 +675,6 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
-    mode_spec: ModeSpecType = Field(
-        default_factory=ModeSpec,
-        title="Mode Specification",
-        description="Parameters to feed to mode solver which determine modes measured by monitor.",
-        discriminator=TYPE_TAG_STR,
-    )
-
     mode_index: NonNegativeInt = Field(
         0,
         title="Mode Index",
@@ -638,42 +683,6 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         "If larger than ``mode_spec.num_modes``, "
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
-
-    frame: Optional[PECFrame] = Field(
-        None,
-        title="Source Frame",
-        description="Add a thin frame around the source during the FDTD run to improve "
-        "the injection quality. The frame is positioned along the primal grid lines "
-        "so that it aligns with the boundaries of the mode solver used to obtain the source profile.",
-    )
-
-    @cached_property
-    def angle_theta(self) -> float:
-        """Polar angle of propagation."""
-        return self.mode_spec.angle_theta
-
-    @cached_property
-    def angle_phi(self) -> float:
-        """Azimuth angle of propagation."""
-        return self.mode_spec.angle_phi
-
-    @cached_property
-    def _dir_vector(self) -> tuple[float, float, float]:
-        """Source direction normal vector in cartesian coordinates."""
-        radius = 1.0 if self.direction == "+" else -1.0
-        dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
-        dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
-        dz = radius * np.cos(self.angle_theta)
-        return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
-
-    @cached_property
-    def _bend_axis(self) -> Optional[Axis]:
-        if self.mode_spec.bend_radius is None:
-            return None
-        in_plane = [0, 0]
-        in_plane[self.mode_spec.bend_axis] = 1
-        direction = self.unpop_axis(0, in_plane, axis=self.injection_axis)
-        return direction.index(1)
 
 
 """ Angled Field Sources one can use. """

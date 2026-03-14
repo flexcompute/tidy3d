@@ -87,6 +87,9 @@ from tidy3d.components.microwave.path_integrals.specs.voltage import (
     Custom2DVoltageIntegralSpec,
 )
 
+# Microwave sources
+from tidy3d.components.microwave.source import MicrowaveTerminalSource
+
 # Baseband source times
 from tidy3d.components.microwave.time import (
     BasebandCustomSourceTime,
@@ -136,7 +139,7 @@ from tidy3d.plugins.smatrix.data.terminal import (
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
-from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.plugins.smatrix.ports.wave import TerminalWavePort, WavePort
 
 # Backwards compatibility
 CurrentIntegralTypes = CurrentIntegralType
@@ -205,6 +208,7 @@ __all__ = [
     "MicrowaveModeSolverMonitor",
     "MicrowaveModeSpec",
     "MicrowaveSMatrixData",
+    "MicrowaveTerminalSource",
     "ModelerLowFrequencySmoothingSpec",
     "PECFrame",
     "PortDataArray",
@@ -219,6 +223,7 @@ __all__ = [
     "TerminalComponentModeler",
     "TerminalComponentModelerData",
     "TerminalPortDataArray",
+    "TerminalWavePort",
     "VoltageIntegralTypes",
     "WavePort",
     "models",

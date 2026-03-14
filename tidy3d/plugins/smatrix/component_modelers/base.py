@@ -24,7 +24,7 @@ from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.ports.modal import Port
 from tidy3d.plugins.smatrix.ports.types import LumpedPortType, TerminalPortType
-from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.plugins.smatrix.ports.wave import TerminalWavePort, WavePort
 from tidy3d.plugins.smatrix.types import Element, MatrixIndex, NetworkElement, NetworkIndex
 
 if TYPE_CHECKING:
@@ -151,6 +151,25 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
             )
         return element_mappings
 
+    _freqs_not_empty = validate_freqs_not_empty()
+    _freqs_lower_bound = validate_freqs_min()
+    _freqs_unique = validate_freqs_unique()
+
+    @model_validator(mode="after")
+    def _freqs_in_custom_source_time(self) -> Self:
+        """Make sure freqs is in the range of the custom source time."""
+        val = self.custom_source_time
+        if val is None:
+            return self
+        freq_range = val._frequency_range_sigma_cached
+        freqs = self.freqs
+
+        if freq_range[0] > min(freqs) or max(freqs) > freq_range[1]:
+            log.warning(
+                "Custom source time does not cover all 'freqs'.",
+            )
+        return self
+
     @model_validator(mode="after")
     def _validate_run_only(self) -> Self:
         """Validate that run_only entries are unique and exist in matrix_indices_monitor."""
@@ -180,27 +199,10 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
         return self
 
-    _freqs_not_empty = validate_freqs_not_empty()
-    _freqs_lower_bound = validate_freqs_min()
-    _freqs_unique = validate_freqs_unique()
-
-    @model_validator(mode="after")
-    def _freqs_in_custom_source_time(self) -> Self:
-        """Make sure freqs is in the range of the custom source time."""
-        val = self.custom_source_time
-        if val is None:
-            return self
-        freq_range = val._frequency_range_sigma_cached
-        freqs = self.freqs
-
-        if freq_range[0] > min(freqs) or max(freqs) > freq_range[1]:
-            log.warning(
-                "Custom source time does not cover all 'freqs'.",
-            )
-        return self
-
     @staticmethod
-    def get_task_name(port: PortType, mode_index: Optional[int] = None) -> str:
+    def get_task_name(
+        port: PortType, mode_index: Optional[int] = None, terminal_label: Optional[str] = None
+    ) -> str:
         """Generates a standardized task name from a port object.
 
         This method creates a unique string identifier for a simulation task based on
@@ -214,7 +216,10 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
             If provided, this index is appended
             to the port name (e.g., 'port_1@1'). Defaults to `None`, in which case the first
             mode is chosen by default.
-
+        terminal_label : Optional[str], optional
+            If provided, this label is appended
+            to the port name (e.g., 'port_1@terminal_1'). Defaults to `None`, in which case an error is raised
+            if the port is a :class:`.TerminalWavePort`.
         Returns
         -------
         str
@@ -237,7 +242,12 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
             # WavePorts default to first mode index
             if mode_index is not None:
                 return f"{port.name}@{mode_index}"
-            return f"{port.name}@{port._mode_indices[0]}"
+            return f"{port.name}@{port._mode_indices()[0]}"
+        elif isinstance(port, TerminalWavePort):
+            # TerminalWavePorts has no default
+            if terminal_label is None:
+                raise ValueError("'terminal_label' must be specified for a terminal port.")
+            return f"{port.name}@{terminal_label}"
         else:
             # Modal ports default to 0
             if mode_index is not None:
@@ -251,9 +261,8 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
             raise Tidy3dKeyError(f'Port "{port_name}" not found.')
         return ports[0]
 
-    @staticmethod
     @abstractmethod
-    def _construct_matrix_indices_monitor(ports: tuple) -> tuple[IndexType, ...]:
+    def _construct_matrix_indices_monitor(self, ports: tuple) -> tuple[IndexType, ...]:
         """Construct matrix indices for monitoring from ports.
 
         This helper method is used by both the matrix_indices_monitor property

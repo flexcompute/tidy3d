@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from tidy3d.components.data.sim_data import SimulationData
     from tidy3d.components.grid.grid import Grid, YeeGrid
     from tidy3d.components.lumped_element import LumpedResistor
-    from tidy3d.components.source.time import GaussianPulse
+    from tidy3d.components.source.time import SourceTimeType
     from tidy3d.components.structure import Structure
     from tidy3d.components.types import FreqArray
 
@@ -116,7 +116,11 @@ class LumpedPort(AbstractLumpedPort, Box):
         return 3 - self.injection_axis - self.voltage_axis
 
     def to_source(
-        self, source_time: GaussianPulse, snap_center: Optional[float] = None, grid: Grid = None
+        self,
+        source_time: SourceTimeType,
+        snap_center: Optional[float] = None,
+        grid: Optional[Grid] = None,
+        **kwargs: Any,
     ) -> UniformCurrentSource:
         """Create a current source from the lumped port."""
         if grid:
@@ -166,7 +170,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         )
 
     def to_voltage_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
     ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
         if grid:
@@ -194,7 +198,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         )
 
     def to_current_monitor(
-        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Optional[Grid] = None
     ) -> FieldMonitor:
         """Field monitor to compute port current."""
         if grid:

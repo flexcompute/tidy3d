@@ -8,6 +8,7 @@ Wave Port
    :template: module.rst
 
    tidy3d.rf.WavePort
+   tidy3d.rf.TerminalWavePort
 
 The :class:`~tidy3d.rf.WavePort` represents a modal source port for RF and microwave simulations. The port mode is first calculated in the 2D mode solver with automatic characteristic impedance calculation, then injected into the 3D simulation. The :class:`~tidy3d.rf.WavePort` is also automatically terminated with a modal absorbing boundary :class:`~tidy3d.ModeABCBoundary` that perfectly absorbs the outgoing mode. Any non-matching modes are subject to PEC reflection.
 
@@ -128,5 +129,20 @@ Alternatively, use the port's ``get_port_impedance()`` method:
    + `Differential stripline benchmark <../../notebooks/DifferentialStripline.html>`_
    + `Coplanar waveguide RF photonics <../../notebooks/CPWRFPhotonics1.html>`_
    + `Through silicon via <../../notebooks/ThroughSiliconVia.html>`_
+
+**Terminal Wave Port**
+
+The :class:`~tidy3d.rf.TerminalWavePort` is a terminal-driven wave port that supports
+single-ended and differential terminal excitations.
+
+.. code-block:: python
+
+   my_terminal_wave_port = TerminalWavePort(
+       center=(0, 0, 0),
+       size=(4, 4, 0),
+       name='My Terminal Wave Port',
+       direction='+',
+       differential_pairs=(("T0", "T1"),),
+   )
 
 ~~~~

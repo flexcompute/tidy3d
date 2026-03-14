@@ -27,7 +27,7 @@ The :class:`~tidy3d.rf.LumpedPort` must be planar (exactly one zero-size dimensi
 
 .. note::
 
-   Lumped ports and elements are fundamentally approximations and thus should only be used when the port/element size is much smaller than the wavelength of interest (typically ``lambda/10``). For more accurate results, especially when the port is adjacent to an intentional waveguide or transmission line, consider using the :class:`~tidy3d.rf.WavePort` excitation instead.
+   Lumped ports and elements are fundamentally approximations and thus should only be used when the port/element size is much smaller than the wavelength of interest (typically ``lambda/10``). For more accurate results, especially when the port is adjacent to an intentional waveguide or transmission line, consider using the :class:`~tidy3d.rf.WavePort` or :class:`~tidy3d.rf.TerminalWavePort` excitation instead.
 
 The ``CoaxialLumpedPort`` represents an analytical coaxial field source.
 

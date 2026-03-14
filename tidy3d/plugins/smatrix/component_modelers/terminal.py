@@ -15,12 +15,14 @@ from tidy3d.components.frequency_extrapolation import (
     LowFrequencySmoothingSpec,
 )
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.geometry.bound_ops import bounds_union
+from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
 from tidy3d.components.geometry.utils import _shift_object
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.lumped_element import CircuitImpedanceModel, LinearLumpedElement
 from tidy3d.components.microwave.base import MicrowaveBaseModel
+from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
+from tidy3d.components.microwave.path_integrals.specs.impedance import AutoImpedanceSpec
 from tidy3d.components.monitor import DirectivityMonitor, ModeMonitor
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Complex, Coordinate
@@ -33,16 +35,32 @@ from tidy3d.plugins.smatrix.component_modelers.base import (
     FWIDTH_FRAC,
     AbstractComponentModeler,
 )
+from tidy3d.plugins.smatrix.component_modelers.viz import (
+    TERMINAL_BOX_COLOR,
+    plot_params_diff_pair_arrow,
+    plot_params_diff_pair_box,
+    plot_params_diff_pair_label,
+    plot_params_padding_shade,
+    plot_params_terminal_arrow,
+    plot_params_terminal_label,
+)
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
-from tidy3d.plugins.smatrix.ports.types import TerminalPortType
-from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.plugins.smatrix.ports.types import TerminalPortType, WavePortType
+from tidy3d.plugins.smatrix.ports.wave import (
+    DEFAULT_DIFFERENTIAL_PAIR_LABEL_PREFIX,
+    AbstractWavePort,
+    TerminalWavePort,
+    WavePort,
+)
 from tidy3d.plugins.smatrix.types import NetworkElement, NetworkIndex, SParamDef
 
 if TYPE_CHECKING:
     from tidy3d.compat import Self
+    from tidy3d.components.microwave.mode_spec import MicrowaveModeSpecType
+    from tidy3d.components.mode.mode_solver import ModeSolver
     from tidy3d.components.simulation import Simulation
-    from tidy3d.components.types import Ax
-    from tidy3d.plugins.smatrix.data.data_array import PortDataArray
+    from tidy3d.components.types import Ax, Shapely
+    from tidy3d.plugins.smatrix.data.data_array import TerminalPortDataArray
     from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
     from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 
@@ -50,6 +68,99 @@ AUTO_RADIATION_MONITOR_NAME = "radiation"
 AUTO_RADIATION_MONITOR_BUFFER = 2
 AUTO_RADIATION_MONITOR_NUM_POINTS_THETA = 100
 AUTO_RADIATION_MONITOR_NUM_POINTS_PHI = 200
+TERMINAL_BOX_PADDING_FRACTION = 0.1
+
+
+def _pack_label_centers_1d(
+    anchor_centers_px: np.ndarray,
+    widths_px: np.ndarray,
+    x_min_px: float,
+    x_max_px: float,
+    pad_px: float,
+) -> np.ndarray:
+    """Pack 1D label centers along x to avoid overlap, while staying within bounds.
+
+    This helper operates purely in display coordinates (pixels) and is intended for
+    deterministic, automated label placement.
+
+    Parameters
+    ----------
+    anchor_centers_px : np.ndarray
+        Desired label centers along x (pixels).
+    widths_px : np.ndarray
+        Label widths in pixels.
+    x_min_px : float
+        Minimum allowed x for label *left* edge (pixels).
+    x_max_px : float
+        Maximum allowed x for label *right* edge (pixels).
+    pad_px : float
+        Minimum gap between adjacent labels (pixels).
+
+    Returns
+    -------
+    np.ndarray
+        Packed label centers (pixels), same shape as ``anchor_centers_px``.
+    """
+    if anchor_centers_px.size == 0:
+        return anchor_centers_px
+
+    centers = np.asarray(anchor_centers_px, dtype=float).copy()
+    widths = np.asarray(widths_px, dtype=float)
+    order = np.argsort(centers)
+
+    # Forward greedy packing.
+    prev_right = None
+    for idx in order:
+        half = widths[idx] / 2
+        left = centers[idx] - half
+        if prev_right is None:
+            if left < x_min_px:
+                centers[idx] += x_min_px - left
+        else:
+            min_left = prev_right + pad_px
+            if left < min_left:
+                centers[idx] += min_left - left
+        prev_right = centers[idx] + half
+
+    # If we overflow the right bound, shift left and run a backward pass.
+    last = order[-1]
+    overflow = (centers[last] + widths[last] / 2) - x_max_px
+    if overflow > 0:
+        centers[order] -= overflow
+
+        next_left = None
+        for idx in order[::-1]:
+            half = widths[idx] / 2
+            right = centers[idx] + half
+            if next_left is None:
+                if right > x_max_px:
+                    centers[idx] -= right - x_max_px
+            else:
+                max_right = next_left - pad_px
+                if right > max_right:
+                    centers[idx] -= right - max_right
+            next_left = centers[idx] - half
+
+        # Ensure the first label doesn't underflow the left bound; if it does,
+        # shift right and do one final forward stabilization pass.
+        first = order[0]
+        underflow = x_min_px - (centers[first] - widths[first] / 2)
+        if underflow > 0:
+            centers[order] += underflow
+            prev_right = None
+            for idx in order:
+                half = widths[idx] / 2
+                left = centers[idx] - half
+                if prev_right is None:
+                    if left < x_min_px:
+                        centers[idx] += x_min_px - left
+                else:
+                    min_left = prev_right + pad_px
+                    if left < min_left:
+                        centers[idx] += min_left - left
+                prev_right = centers[idx] + half
+
+    return centers
 
 
 def _inject_fit_freqs_into_lumped_elements(
@@ -314,11 +425,14 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     def _sim_with_sources(self) -> Simulation:
         """Instance of :class:`.Simulation` with all sources and absorbers added for each port, for plotting."""
 
-        sources = [port.to_source(self._source_time) for port in self.ports]
-        absorbers = [
-            port.to_absorber()
+        sources = [
+            port.to_source(self._source_time, mode_spec=self._resolved_mode_specs.get(port.name))
             for port in self.ports
-            if isinstance(port, WavePort) and port.absorber
+        ]
+        absorbers = [
+            port.to_absorber(mode_spec=self._resolved_mode_specs.get(port.name))
+            for port in self.ports
+            if isinstance(port, AbstractWavePort) and port.absorber
         ]
         return self.simulation.updated_copy(
             sources=sources, internal_absorbers=absorbers, validate=False
@@ -361,6 +475,41 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     @equal_aspect
     @add_ax_if_none
+    def plot_sim_grid(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        **kwargs: Any,
+    ) -> Ax:
+        """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
+
+        This is a convenience method to visualize the simulation grid setup for
+        troubleshooting.
+
+        Parameters
+        ----------
+        x : float, optional
+            x-coordinate for the cross-section.
+        y : float, optional
+            y-coordinate for the cross-section.
+        z : float, optional
+            z-coordinate for the cross-section.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on.
+        **kwargs
+            Keyword arguments passed to :meth:`.Simulation.plot_grid`.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The axes with the plot.
+        """
+        return self._sim_with_sources.plot_grid(x=x, y=y, z=z, ax=ax, **kwargs)
+
+    @equal_aspect
+    @add_ax_if_none
     def plot_sim_eps(
         self,
         x: Optional[float] = None,
@@ -395,9 +544,544 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
         return self._sim_with_sources.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
+    @equal_aspect
+    @add_ax_if_none
+    def plot_port(
+        self,
+        port: Union[str, TerminalPortType],
+        ax: Ax = None,
+        label_font_size: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Ax:
+        """Plot a :class:`.Simulation` on the port plane.
+
+        This is a convenience method to visualize the port setup.
+
+        Parameters
+        ----------
+        port : Union[str, TerminalPortType]
+            The name or port object to plot.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on.
+        label_font_size : float, optional
+            Font size for labels. If ``None``, uses the default font size.
+        **kwargs
+            Keyword arguments passed to :meth:`.Simulation.plot`.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The axes with the plot.
+        """
+        if isinstance(port, TerminalPortType):
+            if port not in self.ports:
+                raise ValueError(f"Port {port} not found in the modeler.")
+        elif isinstance(port, str):
+            port = self.get_port_by_name(port)
+        else:
+            raise ValueError(
+                f"Invalid port type: {type(port)}. Must be a string or a TerminalPortType object."
+            )
+
+        injection_axis = port.injection_axis
+        plot_kwargs = {"ax": ax, **kwargs}
+        plot_kwargs.setdefault("monitor_alpha", 0)
+        plot_kwargs.setdefault("source_alpha", 0)
+        plot_kwargs["xyz"[injection_axis]] = port.center[injection_axis]
+        ax = self._sim_with_sources.plot(**plot_kwargs)
+
+        # Clip port bounds to simulation bounds so the view doesn't exceed the domain
+        clipped = bounds_intersection(port.bounds, self._sim_with_sources.bounds)
+        _, (xmin, ymin) = Box.pop_axis(clipped[0], axis=injection_axis)
+        _, (xmax, ymax) = Box.pop_axis(clipped[1], axis=injection_axis)
+
+        # Add padding with shaded regions and set axis limits
+        self._add_port_padding_shading(ax, xmin, xmax, ymin, ymax)
+
+        # Plot bounding boxes and labels for TerminalWavePorts
+        if isinstance(port, TerminalWavePort):
+            ax = self._plot_terminal_wave_port(ax, port, label_font_size)
+
+        return ax
+
+    def mode_solver_for_port(self, port_name: str) -> ModeSolver:
+        """Get the mode solver object for a given port.
+
+        Parameters
+        ----------
+        port_name : str
+            Name of the port to get the mode solver for.
+
+        Returns
+        -------
+        ModeSolver
+            The mode solver for the given port.
+        """
+        port = self.get_port_by_name(port_name)
+        if not isinstance(port, WavePortType):
+            raise ValueError("Mode solver is only supported for TerminalWavePort and WavePort.")
+        return port.to_mode_solver(
+            self.base_sim, self.freqs, mode_spec=self._resolved_mode_specs.get(port_name)
+        )
+
+    def _add_port_padding_shading(
+        self, ax: Ax, xmin: float, xmax: float, ymin: float, ymax: float
+    ) -> None:
+        """Add padding with shaded regions around the port bounds and set axis limits.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on.
+        xmin : float
+            Minimum x-coordinate of the port.
+        xmax : float
+            Maximum x-coordinate of the port.
+        ymin : float
+            Minimum y-coordinate of the port.
+        ymax : float
+            Maximum y-coordinate of the port.
+        """
+        from matplotlib.patches import Rectangle
+
+        # Calculate padding based on port size
+        port_width = xmax - xmin
+        port_height = ymax - ymin
+        padding = TERMINAL_BOX_PADDING_FRACTION * max(port_width, port_height)
+
+        # Padded bounds (outer region)
+        xmin_padded = xmin - padding
+        xmax_padded = xmax + padding
+        ymin_padded = ymin - padding
+        ymax_padded = ymax + padding
+
+        # Add shaded rectangles for padding regions (top, bottom, left, right)
+        # Bottom padding region
+        bottom_rect = Rectangle(
+            (xmin_padded, ymin_padded),
+            xmax_padded - xmin_padded,
+            padding,
+            **plot_params_padding_shade,
+        )
+        ax.add_patch(bottom_rect)
+
+        # Top padding region
+        top_rect = Rectangle(
+            (xmin_padded, ymax),
+            xmax_padded - xmin_padded,
+            padding,
+            **plot_params_padding_shade,
+        )
+        ax.add_patch(top_rect)
+
+        # Left padding region
+        left_rect = Rectangle(
+            (xmin_padded, ymin),
+            padding,
+            port_height,
+            **plot_params_padding_shade,
+        )
+        ax.add_patch(left_rect)
+
+        # Right padding region
+        right_rect = Rectangle(
+            (xmax, ymin),
+            padding,
+            port_height,
+            **plot_params_padding_shade,
+        )
+        ax.add_patch(right_rect)
+
+        # Set the expanded limits
+        ax.set_xlim(xmin_padded, xmax_padded)
+        ax.set_ylim(ymin_padded, ymax_padded)
+
+    def _add_packed_label_lane(
+        self,
+        ax: Ax,
+        lane_y: float,
+        items: list[dict[str, float | str]],
+        label_params: dict[str, Any],
+        arrow_params: dict[str, Any],
+    ) -> None:
+        """Add a packed label lane with leader lines for the provided items.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on.
+        lane_y : float
+            Y-coordinate for the label lane.
+        items : list[dict[str, float | str]]
+            List of items with label info (label, x_anchor, y_anchor, x_min, x_max).
+        label_params : dict[str, Any]
+            Parameters for label styling.
+        arrow_params : dict[str, Any]
+            Parameters for arrow styling.
+        """
+        if not items:
+            return
+
+        fig = ax.figure
+
+        # Create temporary texts (single draw) to measure rendered extents.
+        temp_texts = [ax.text(0.0, 0.0, str(it["label"]), **label_params) for it in items]
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+
+        widths_px = np.array([t.get_window_extent(renderer=renderer).width for t in temp_texts])
+        for t in temp_texts:
+            t.remove()
+
+        # Axis bounds in display coordinates.
+        ax_bbox = ax.get_window_extent(renderer=renderer)
+        pad_px = max(4.0, 0.25 * float(label_params.get("fontsize", 12)))
+        x_min_px = ax_bbox.x0 + pad_px
+        x_max_px = ax_bbox.x1 - pad_px
+
+        # Desired anchor centers in display x.
+        anchors_x = np.array([float(it["x_anchor"]) for it in items])
+        lane_y_disp = ax.transData.transform((0.0, lane_y))[1]
+        anchors_disp = ax.transData.transform(
+            np.column_stack([anchors_x, np.full_like(anchors_x, lane_y)])
+        )
+        anchor_centers_px = anchors_disp[:, 0]
+
+        packed_centers_px = _pack_label_centers_1d(
+            anchor_centers_px=anchor_centers_px,
+            widths_px=widths_px,
+            x_min_px=x_min_px,
+            x_max_px=x_max_px,
+            pad_px=pad_px,
+        )
+
+        # Convert packed centers back to data x at y=lane_y.
+        packed_points_data = ax.transData.inverted().transform(
+            np.column_stack([packed_centers_px, np.full_like(packed_centers_px, lane_y_disp)])
+        )
+        packed_x_data = packed_points_data[:, 0]
+
+        # Use the lane y (data) to create a display-scale marker size.
+        marker_ms = max(3.0, 0.35 * float(label_params.get("fontsize", 12)))
+
+        for it, x_text in zip(items, packed_x_data):
+            # Connect to a point on the box edge that is closest to the label x.
+            # This makes the association clearer when adjacent boxes have similar centers.
+            x_min_box = float(it.get("x_min", it["x_anchor"]))
+            x_max_box = float(it.get("x_max", it["x_anchor"]))
+            x_conn = float(np.clip(x_text, x_min_box, x_max_box))
+            y_anchor = float(it["y_anchor"])
+
+            # Small marker at the connection point improves readability without heavy clutter.
+            ax.plot(
+                [x_conn],
+                [y_anchor],
+                marker="o",
+                markersize=marker_ms,
+                color=arrow_params.get("color", "k"),
+                alpha=arrow_params.get("alpha", 1.0),
+                zorder=float(label_params.get("zorder", 11)) + 0.1,
+                markeredgewidth=0.0,
+            )
+
+            ax.annotate(
+                str(it["label"]),
+                xy=(x_conn, y_anchor),
+                xytext=(float(x_text), float(lane_y)),
+                arrowprops=arrow_params,
+                annotation_clip=False,
+                **label_params,
+            )
+
+    def _plot_and_collect_terminal_info(
+        self,
+        ax: Ax,
+        port: TerminalWavePort,
+        impedance_specs: dict,
+        injection_axis: int,
+    ) -> tuple[list[dict[str, float | str]], list[float]]:
+        """Plot terminal paths and collect info for labeling.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on.
+        port : TerminalWavePort
+            The terminal wave port.
+        impedance_specs : dict
+            Impedance specifications for each terminal.
+        injection_axis : int
+            Injection axis (0, 1, or 2 for x, y, z).
+
+        Returns
+        -------
+        tuple[list[dict[str, float | str]], list[float]]
+            Terminal items for labeling and list of max y-coordinates.
+        """
+        from tidy3d.components.microwave.path_integrals.specs.impedance import (
+            CustomImpedanceSpec,
+        )
+
+        plot_coord = {0: "x", 1: "y", 2: "z"}[injection_axis]
+        plot_kwargs = {plot_coord: port.center[injection_axis], "ax": ax}
+
+        terminal_items: list[dict[str, float | str]] = []
+        terminal_box_ymax: list[float] = []
+
+        for terminal_label, impedance_spec in impedance_specs.items():
+            if isinstance(impedance_spec, CustomImpedanceSpec):
+                # Determine which spec to use (current takes priority)
+                path_spec = None
+                if impedance_spec.current_spec is not None:
+                    path_spec = impedance_spec.current_spec
+                    path_spec.plot(**plot_kwargs, color=TERMINAL_BOX_COLOR, plot_arrow=False)
+                elif impedance_spec.voltage_spec is not None:
+                    path_spec = impedance_spec.voltage_spec
+                    path_spec.plot(**plot_kwargs, color=TERMINAL_BOX_COLOR, plot_markers=False)
+
+                # Get bounding box from the path spec for labeling
+                if path_spec is not None:
+                    # Get bounds and convert to 2D coordinates based on injection axis
+                    bounds_3d = path_spec.bounds
+                    _, (xmin, ymin) = Box.pop_axis(bounds_3d[0], axis=injection_axis)
+                    _, (xmax, ymax) = Box.pop_axis(bounds_3d[1], axis=injection_axis)
+
+                    # Apply padding for visualization
+                    padding = TERMINAL_BOX_PADDING_FRACTION * max(xmax - xmin, ymax - ymin)
+                    box_xmin = xmin - padding
+                    box_xmax = xmax + padding
+                    box_ymax = ymax + padding
+
+                    terminal_box_ymax.append(box_ymax)
+
+                    box_center_x = (box_xmin + box_xmax) / 2
+                    terminal_items.append(
+                        {
+                            "label": str(terminal_label),
+                            "x_anchor": float(box_center_x),
+                            "y_anchor": float(box_ymax),
+                            "x_min": float(box_xmin),
+                            "x_max": float(box_xmax),
+                        }
+                    )
+
+        return terminal_items, terminal_box_ymax
+
+    def _plot_and_collect_diff_pair_info(
+        self,
+        ax: Ax,
+        port: TerminalWavePort,
+        impedance_specs: dict,
+        injection_axis: int,
+    ) -> tuple[list[dict[str, float | str]], list[float]]:
+        """Plot differential pair boxes and collect info for labeling.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on.
+        port : TerminalWavePort
+            The terminal wave port.
+        impedance_specs : dict
+            Impedance specifications for each terminal.
+        injection_axis : int
+            Injection axis (0, 1, or 2 for x, y, z).
+
+        Returns
+        -------
+        tuple[list[dict[str, float | str]], list[float]]
+            Differential pair items for labeling and list of min y-coordinates.
+        """
+        import matplotlib.patches as patches
+
+        diff_items: list[dict[str, float | str]] = []
+        diff_box_ymin: list[float] = []
+
+        if not port.differential_pairs:
+            return diff_items, diff_box_ymin
+
+        for pair_idx, (idx1, idx2) in enumerate(port.differential_pairs):
+            # Get impedance specs for both terminals in the pair
+            if idx1 in impedance_specs and idx2 in impedance_specs:
+                spec1 = impedance_specs[idx1]
+                spec2 = impedance_specs[idx2]
+
+                # Get path specs (current takes priority)
+                path_spec1 = (
+                    spec1.current_spec if spec1.current_spec is not None else spec1.voltage_spec
+                )
+                path_spec2 = (
+                    spec2.current_spec if spec2.current_spec is not None else spec2.voltage_spec
+                )
+
+                if path_spec1 is not None and path_spec2 is not None:
+                    # Get bounds for both specs and compute combined bounding box
+                    bounds1_3d = path_spec1.bounds
+                    bounds2_3d = path_spec2.bounds
+
+                    _, (xmin1, ymin1) = Box.pop_axis(bounds1_3d[0], axis=injection_axis)
+                    _, (xmax1, ymax1) = Box.pop_axis(bounds1_3d[1], axis=injection_axis)
+                    _, (xmin2, ymin2) = Box.pop_axis(bounds2_3d[0], axis=injection_axis)
+                    _, (xmax2, ymax2) = Box.pop_axis(bounds2_3d[1], axis=injection_axis)
+
+                    # Combined bounds
+                    xmin = min(xmin1, xmin2)
+                    xmax = max(xmax1, xmax2)
+                    ymin = min(ymin1, ymin2)
+                    ymax = max(ymax1, ymax2)
+
+                    # Apply padding
+                    padding = TERMINAL_BOX_PADDING_FRACTION * max(xmax - xmin, ymax - ymin)
+                    box_xmin = xmin - padding
+                    box_xmax = xmax + padding
+                    box_ymin = ymin - padding
+                    box_ymax = ymax + padding
+
+                    diff_box_ymin.append(box_ymin)
+
+                    # Create rectangle for differential pair with blue dashed border
+                    rect = patches.Rectangle(
+                        (box_xmin, box_ymin),
+                        box_xmax - box_xmin,
+                        box_ymax - box_ymin,
+                        **plot_params_diff_pair_box,
+                    )
+                    ax.add_patch(rect)
+
+                    box_center_x = (box_xmin + box_xmax) / 2
+                    diff_items.append(
+                        {
+                            "label": f"{DEFAULT_DIFFERENTIAL_PAIR_LABEL_PREFIX}{pair_idx}: ({idx1}⁺, {idx2}⁻)",
+                            "x_anchor": float(box_center_x),
+                            "y_anchor": float(box_ymin),
+                            "x_min": float(box_xmin),
+                            "x_max": float(box_xmax),
+                        }
+                    )
+
+        return diff_items, diff_box_ymin
+
+    def _place_labels_with_lane(
+        self,
+        ax: Ax,
+        items: list[dict[str, float | str]],
+        box_y_coords: list[float],
+        label_params: dict[str, Any],
+        arrow_params: dict[str, Any],
+        placement: str = "top",
+    ) -> None:
+        """Place labels on a lane above or below the items.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on.
+        items : list[dict[str, float | str]]
+            List of items with label info.
+        box_y_coords : list[float]
+            Y-coordinates to use for lane placement.
+        label_params : dict[str, Any]
+            Parameters for label styling.
+        arrow_params : dict[str, Any]
+            Parameters for arrow styling.
+        placement : str
+            Either "top" or "bottom" for label placement.
+        """
+        if not box_y_coords:
+            return
+
+        ylim0, ylim1 = ax.get_ylim()
+        yrange = float(ylim1 - ylim0) if ylim1 != ylim0 else 1.0
+        lane_margin = 0.08 * yrange
+
+        if placement == "top":
+            lane_y = max(box_y_coords) + lane_margin
+            if lane_y > ylim1:
+                ax.set_ylim(ylim0, lane_y + lane_margin)
+        else:  # bottom
+            lane_y = min(box_y_coords) - lane_margin
+            if lane_y < ylim0:
+                ax.set_ylim(lane_y - lane_margin, ylim1)
+
+        self._add_packed_label_lane(
+            ax=ax,
+            lane_y=lane_y,
+            items=items,
+            label_params=label_params,
+            arrow_params=arrow_params,
+        )
+
+    def _plot_terminal_wave_port(
+        self, ax: Ax, port: TerminalWavePort, label_font_size: Optional[float] = None
+    ) -> Ax:
+        """Plot bounding boxes and labels for TerminalWavePort terminals and differential pairs.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on.
+        port : TerminalWavePort
+            The terminal wave port to plot.
+        label_font_size : float, optional
+            Font size for labels. If ``None``, uses the default font size.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The axes with the plot.
+        """
+        mode_spec = self._resolved_mode_specs[port.name]
+        impedance_specs = mode_spec.impedance_specs
+        injection_axis = port.injection_axis
+
+        # Plot individual terminal paths and collect info for labeling
+        terminal_items, terminal_box_ymax = self._plot_and_collect_terminal_info(
+            ax, port, impedance_specs, injection_axis
+        )
+
+        # Place terminal labels on top lane
+        label_params = plot_params_terminal_label.copy()
+        if label_font_size is not None:
+            label_params["fontsize"] = label_font_size
+
+        self._place_labels_with_lane(
+            ax=ax,
+            items=terminal_items,
+            box_y_coords=terminal_box_ymax,
+            label_params=label_params,
+            arrow_params=plot_params_terminal_arrow,
+            placement="top",
+        )
+
+        # Plot differential pair boxes and collect info for labeling
+        diff_items, diff_box_ymin = self._plot_and_collect_diff_pair_info(
+            ax, port, impedance_specs, injection_axis
+        )
+
+        # Place differential pair labels on bottom lane
+        diff_label_params = plot_params_diff_pair_label.copy()
+        if label_font_size is not None:
+            diff_label_params["fontsize"] = label_font_size
+
+        self._place_labels_with_lane(
+            ax=ax,
+            items=diff_items,
+            box_y_coords=diff_box_ymin,
+            label_params=diff_label_params,
+            arrow_params=plot_params_diff_pair_arrow,
+            placement="bottom",
+        )
+
+        return ax
+
     @staticmethod
-    def network_index(port: TerminalPortType, mode_index: Optional[int] = None) -> NetworkIndex:
-        """Converts the port, and a ``mode_index`` when the port is a :class:`.WavePort`, to a unique string specifier.
+    def network_index(
+        port: TerminalPortType,
+        mode_index: Optional[int] = None,
+        terminal_label: Optional[str] = None,
+    ) -> NetworkIndex:
+        """Converts the port, and a ``mode_index`` when the port is a :class:`.WavePort`,
+        or a ``terminal_label`` when the port is a :class:`.TerminalWavePort`, to a unique string specifier.
 
         Parameters
         ----------
@@ -406,30 +1090,40 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         mode_index : Optional[int]
             Selects a single mode from those supported by the ``port``, which is only used when
             the ``port`` is a :class:`.WavePort`
-
+        terminal_label : Optional[str]
+            Selects a single terminal from those supported by the ``port``, which is only used when
+            the ``port`` is a :class:`.TerminalWavePort`
         Returns
         -------
         NetworkIndex
             A unique string that is used to identify the row/column of the scattering matrix.
         """
-        return TerminalComponentModeler.get_task_name(port=port, mode_index=mode_index)
+        return TerminalComponentModeler.get_task_name(
+            port=port, mode_index=mode_index, terminal_label=terminal_label
+        )
 
     @cached_property
-    def network_dict(self) -> dict[NetworkIndex, tuple[TerminalPortType, int]]:
-        """Dictionary associating each unique ``NetworkIndex`` to a port and mode index."""
+    def network_dict(self) -> dict[NetworkIndex, tuple[TerminalPortType, int | str]]:
+        """Dictionary associating each unique ``NetworkIndex`` to a port and mode/terminal index."""
         network_dict = {}
         for port in self.ports:
             if isinstance(port, WavePort):
-                for mode_index in port._mode_indices:
-                    key = self.network_index(port, mode_index)
+                for mode_index in port._mode_indices(
+                    mode_spec=self._resolved_mode_specs.get(port.name)
+                ):
+                    key = self.network_index(port, mode_index=mode_index)
                     network_dict[key] = (port, mode_index)
+            elif isinstance(port, TerminalWavePort):
+                for terminal_label in self._resolved_mode_specs[port.name]._terminal_indices:
+                    key = self.network_index(port, terminal_label=terminal_label)
+                    network_dict[key] = (port, terminal_label)
             else:
                 key = self.network_index(port, None)
                 network_dict[key] = (port, None)
         return network_dict
 
-    @staticmethod
     def _construct_matrix_indices_monitor(
+        self,
         ports: tuple[TerminalPortType, ...],
     ) -> tuple[NetworkIndex, ...]:
         """Construct matrix indices for monitoring from terminal ports.
@@ -437,7 +1131,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         Parameters
         ----------
         ports : tuple[TerminalPortType, ...]
-            Tuple of terminal port objects (LumpedPort, CoaxialLumpedPort, or WavePort).
+            Tuple of terminal port objects (LumpedPort, CoaxialLumpedPort, WavePort, or TerminalWavePort).
 
         Returns
         -------
@@ -447,10 +1141,15 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         matrix_indices = []
         for port in ports:
             if isinstance(port, WavePort):
-                for mode_index in port._mode_indices:
-                    matrix_indices.append(TerminalComponentModeler.network_index(port, mode_index))
+                for mode_index in port._mode_indices(
+                    mode_spec=self._resolved_mode_specs.get(port.name)
+                ):
+                    matrix_indices.append(self.network_index(port, mode_index=mode_index))
+            elif isinstance(port, TerminalWavePort):
+                for terminal_label in self._resolved_mode_specs[port.name]._terminal_indices:
+                    matrix_indices.append(self.network_index(port, terminal_label=terminal_label))
             else:
-                matrix_indices.append(TerminalComponentModeler.network_index(port))
+                matrix_indices.append(self.network_index(port))
         return tuple(matrix_indices)
 
     @cached_property
@@ -487,10 +1186,12 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         return SimulationMap(keys=tuple(sim_dict.keys()), values=tuple(sim_dict.values()))
 
     @cached_property
-    def _base_sim_no_radiation_monitors(self) -> Simulation:
-        """The intermediate base simulation with all grid refinement options, structure priority mode,
-        port loads (if present), and monitors added,
-        which is only missing the source excitations and radiation monitors.
+    def _base_sim_with_grid_and_lumped_elements(self) -> Simulation:
+        """Intermediate simulation with correct grid but without monitors/absorbers.
+
+        This simulation has the updated grid_spec, lumped elements, and mesh overrides,
+        but does not include monitors or absorbers (which require resolved mode_spec).
+        It's used to get the correct grid for terminal detection.
         """
         # internal mesh override and snapping points are automatically generated from lumped elements.
         lumped_resistors = [port.to_load() for port in self._lumped_ports]
@@ -509,11 +1210,50 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         if self.structure_priority_mode is not None:
             update_dict["structure_priority_mode"] = self.structure_priority_mode
         # Make an initial simulation with new grid_spec to determine where LumpedPorts are snapped
-        sim_wo_source = self.simulation.updated_copy(
+        sim_intermediate = self.simulation.updated_copy(
             **update_dict,
             validate=False,
             deep=False,
         )
+
+        # Snap lumped port centers
+        snap_centers = {}
+        for port in self._lumped_ports:
+            port_center_on_axis = port.center[port.injection_axis]
+            new_port_center = snap_coordinate_to_grid(
+                sim_intermediate.grid, port_center_on_axis, port.injection_axis
+            )
+            snap_centers[port.name] = new_port_center
+
+        # Add lumped elements with snapped centers
+        new_lumped_elements = list(self.simulation.lumped_elements) + [
+            port.to_load(snap_center=snap_centers[port.name]) for port in self._lumped_ports
+        ]
+
+        # Add mesh overrides for any wave ports present
+        mesh_overrides = list(sim_intermediate.grid_spec.override_structures)
+        for wave_port in self._wave_ports + self._terminal_wave_ports:
+            if wave_port.num_grid_cells is not None:
+                mesh_overrides.extend(wave_port.to_mesh_overrides())
+        new_grid_spec = sim_intermediate.grid_spec.updated_copy(override_structures=mesh_overrides)
+
+        # Update simulation (no monitors, no absorbers yet)
+        return sim_intermediate.updated_copy(
+            lumped_elements=new_lumped_elements,
+            grid_spec=new_grid_spec,
+            validate=False,
+            deep=False,
+        )
+
+    @cached_property
+    def _base_sim_no_radiation_monitors(self) -> Simulation:
+        """The intermediate base simulation with all grid refinement options, port loads (if present), and monitors added,
+        which is only missing the source excitations and radiation monitors.
+        """
+        # Start from the mode_spec-free simulation
+        sim_wo_source = self._base_sim_with_grid_and_lumped_elements
+
+        # Recompute snap_centers using the grid from _base_sim_with_grid_and_lumped_elements
         snap_centers = {}
         for port in self._lumped_ports:
             port_center_on_axis = port.center[port.injection_axis]
@@ -522,12 +1262,15 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             )
             snap_centers[port.name] = new_port_center
 
-        # Create monitors and snap to the center positions
+        # Create monitors (NOW with resolved mode_spec available)
         field_monitors = [
             mon
             for port in self.ports
             for mon in port.to_monitors(
-                self.freqs, snap_center=snap_centers.get(port.name), grid=sim_wo_source.grid
+                self.freqs,
+                snap_center=snap_centers.get(port.name),
+                grid=sim_wo_source.grid,
+                mode_spec=self._resolved_mode_specs.get(port.name),
             )
         ]
 
@@ -540,15 +1283,9 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         # to structures uses this range without adding run_freqs to Simulation schema.
         new_lumped_elements = _inject_fit_freqs_into_lumped_elements(base_lumped, self.freqs)
 
-        # Add mesh overrides for any wave ports present
-        mesh_overrides = list(sim_wo_source.grid_spec.override_structures)
-        for wave_port in self._wave_ports:
-            if wave_port.num_grid_cells is not None:
-                mesh_overrides.extend(wave_port.to_mesh_overrides())
-        new_grid_spec = sim_wo_source.grid_spec.updated_copy(override_structures=mesh_overrides)
-
+        # Create absorbers (NOW with resolved mode_spec available)
         new_absorbers = list(sim_wo_source.internal_absorbers)
-        for wave_port in self._wave_ports:
+        for wave_port in self._wave_ports + self._terminal_wave_ports:
             if wave_port.absorber:
                 # absorbers are shifted together with sources
                 mode_src_pos = wave_port.center[
@@ -559,13 +1296,13 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                     freq_spec=BroadbandModeABCSpec(
                         frequency_range=(np.min(self.freqs), np.max(self.freqs))
                     ),
+                    mode_spec=self._resolved_mode_specs[wave_port.name],
                 )
                 new_absorbers.append(port_absorber)
 
         update_dict = {
             "monitors": new_mnts,
             "lumped_elements": new_lumped_elements,
-            "grid_spec": new_grid_spec,
             "internal_absorbers": new_absorbers,
         }
 
@@ -803,14 +1540,25 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     def _add_source_to_sim(self, source_index: NetworkIndex) -> tuple[str, Simulation]:
         """Adds the source corresponding to the ``source_index`` to the base simulation."""
-        port, mode_index = self.network_dict[source_index]
-        if isinstance(port, WavePort):
+        port, selection_index = self.network_dict[source_index]
+        index_kwargs = {}
+        if isinstance(port, (WavePort, TerminalWavePort)):
             # Source is placed just before the field monitor of the port
             mode_src_pos = port.center[port.injection_axis] + self._shift_value_signed(port)
+            resolved_spec = self._resolved_mode_specs[port.name]
+            # use terminal_label if TerminalWavePort, otherwise use mode_index
+            if isinstance(port, TerminalWavePort):
+                index_kwargs["terminal_label"] = selection_index
+            else:
+                index_kwargs["mode_index"] = selection_index
             port_source = port.to_source(
-                self._source_time, snap_center=mode_src_pos, mode_index=mode_index
+                self._source_time,
+                snap_center=mode_src_pos,
+                mode_spec=resolved_spec,
+                **index_kwargs,
             )
         else:
+            # Lumped ports
             port_center_on_axis = port.center[port.injection_axis]
             new_port_center = snap_coordinate_to_grid(
                 self.base_sim.grid, port_center_on_axis, port.injection_axis
@@ -818,7 +1566,8 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             port_source = port.to_source(
                 self._source_time, snap_center=new_port_center, grid=self.base_sim.grid
             )
-        task_name = self.get_task_name(port=port, mode_index=mode_index)
+
+        task_name = self.get_task_name(port=port, **index_kwargs)
 
         return (
             task_name,
@@ -909,6 +1658,120 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def _validate_symmetry_with_terminal_wave_ports(self) -> Self:
+        """Warn when simulation symmetry is used with TerminalWavePorts that rely on
+        automatic floating-conductor detection (``AutoImpedanceSpec``).
+
+        The automatic detector restricts the mode plane to the symmetry half-space and
+        then reflects the detected conductors. This can produce incorrect terminal
+        definitions when conductors straddle or are affected by the symmetry plane.
+        Manual ``terminal_specs`` with ``CustomImpedanceSpec`` bypass detection entirely
+        and are unaffected.
+        """
+        if not any(self.simulation.symmetry):
+            return self
+
+        auto_ports = [
+            port
+            for port in self._terminal_wave_ports
+            if isinstance(port.terminal_specs, AutoImpedanceSpec)
+        ]
+        if auto_ports:
+            port_names = ", ".join(f"'{p.name}'" for p in auto_ports)
+            log.warning(
+                f"Simulation symmetry {self.simulation.symmetry} is active but "
+                f"TerminalWavePort(s) {port_names} use automatic terminal detection "
+                f"('AutoImpedanceSpec'). Automatic floating-conductor detection is not yet "
+                f"symmetry-aware and may produce incorrect terminal definitions. "
+                f"Please provide explicit 'terminal_specs' with 'CustomImpedanceSpec' for "
+                f"these ports. Symmetry-aware automatic detection will be supported in a "
+                f"future release."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_wave_ports(self) -> Self:
+        """Validate wave port settings after all fields are initialized."""
+        self._validate_wave_port_mode_selections()
+        self._validate_wave_port_mode_index()
+        self._warn_multimode_absorption()
+        return self
+
+    def _validate_wave_port_mode_selections(self) -> None:
+        """Validate that mode_selection indices are within range for WavePort instances.
+
+        This validation only happens for ports where mode_spec.num_modes was originally 'auto'.
+        """
+        for port in self._wave_ports:
+            mode_selection = port.mode_selection
+            if mode_selection is None:
+                continue
+
+            # Only validate if the original mode_spec.num_modes was 'auto'
+            # (if it was not 'auto', validation already happened in WavePort)
+            if port.mode_spec.num_modes != "auto":
+                continue
+
+            # Get the resolved mode spec for this port
+            resolved_mode_spec = self._resolved_mode_specs.get(port.name)
+            num_modes = resolved_mode_spec.num_modes
+
+            # Check that indices are within range of num_modes
+            invalid_indices = [idx for idx in mode_selection if idx >= num_modes]
+            if invalid_indices:
+                raise ValidationError(
+                    f"'mode_spec.mode_selection' contains indices {invalid_indices} that are >= "
+                    f"'mode_spec.num_modes' ({num_modes}) for port '{port.name}'. Valid range is 0 to {num_modes - 1}."
+                )
+
+    def _validate_wave_port_mode_index(self) -> None:
+        """Validate that mode_index is within range for WavePort instances.
+
+        This validation only happens for ports where mode_spec.num_modes was originally 'auto'.
+        """
+        for port in self._wave_ports:
+            mode_index = port.mode_index
+            if mode_index is None:
+                continue
+
+            # Only validate if the original mode_spec.num_modes was 'auto'
+            # (if it was not 'auto', validation already happened in WavePort)
+            if port.mode_spec.num_modes != "auto":
+                continue
+
+            num_modes = self._resolved_mode_specs[port.name].num_modes
+            if mode_index >= num_modes:
+                raise ValidationError(
+                    f"'mode_index' is >= "
+                    f"'mode_spec.num_modes' ({num_modes}) for port '{port.name}'. Valid range is 0 to {num_modes - 1}."
+                )
+
+    def _warn_multimode_absorption(self) -> None:
+        """Warn when absorber is enabled with multiple modes.
+
+        This validation happens after mode_spec is fully resolved with integer num_modes.
+        """
+        for port in self._wave_ports + self._terminal_wave_ports:
+            # Check if absorber is enabled (True or a boundary spec object)
+            if not port.absorber:
+                continue
+
+            # for waveport where num_modes is integer, it's already validated in WavePort.
+            if isinstance(port, WavePort) and port.mode_spec.num_modes != "auto":
+                continue
+
+            # Get the resolved mode spec for this port
+            resolved_mode_spec = self._resolved_mode_specs.get(port.name)
+
+            num_modes = resolved_mode_spec.num_modes
+            if num_modes > 1:
+                log.warning(
+                    f"Port '{port.name}': Absorber is enabled with {num_modes} modes. "
+                    "Absorption is not properly implemented for multimode cases yet and will be "
+                    "added in a future release. For now, please extend the transmission line into the PML region."
+                )
+
     @staticmethod
     def _check_grid_size_at_ports(
         simulation: Simulation, ports: list[Union[LumpedPort, CoaxialLumpedPort]]
@@ -948,8 +1811,54 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         """A list of all wave ports in the :class:`.TerminalComponentModeler`"""
         return [port for port in self.ports if isinstance(port, WavePort)]
 
+    @cached_property
+    def _terminal_wave_ports(self) -> list[TerminalWavePort]:
+        """A list of all terminal wave ports in the :class:`.TerminalComponentModeler`"""
+        return [port for port in self.ports if isinstance(port, TerminalWavePort)]
+
+    @cached_property
+    def _floating_isolated_conductors_at_waveport(
+        self,
+    ) -> dict[str, dict[str, tuple[Shapely, Box]]]:
+        """A dictionary mapping port names to isolated floating conductors at wave ports.
+        Queries both WavePort and TerminalWavePort.
+
+        Each conductor (terminal) is identified by its label and maps to a tuple of (shape, bounding_box).
+        """
+        conductors_dict = {}
+        sim = self._base_sim_with_grid_and_lumped_elements
+        interior_disjoint_geometries = ModePlaneAnalyzer.apply_interior_disjoint_geometries(
+            self.structure_priority_mode
+        )
+        for port in self._terminal_wave_ports + self._wave_ports:
+            conductors_dict[port.name] = port._get_isolated_floating_conductors(
+                sim.volumetric_structures,
+                sim.grid,
+                sim.symmetry,
+                sim.simulation_geometry,
+                interior_disjoint_geometries=interior_disjoint_geometries,
+            )
+        return conductors_dict
+
+    @cached_property
+    def _resolved_mode_specs(self) -> dict[str, MicrowaveModeSpecType]:
+        """Returns a dict mapping port names to their mode specs."""
+        mode_specs = {}
+
+        for port in self._wave_ports + self._terminal_wave_ports:
+            mode_spec = port._mode_spec
+            # handled unresolved mode spec here.
+            if mode_spec is None:
+                # Get number of conductors
+                conductors = self._floating_isolated_conductors_at_waveport[port.name]
+                mode_spec = port._mode_spec_from_isolated_floating_conductors(conductors)
+
+            mode_specs[port.name] = mode_spec
+
+        return mode_specs
+
     @staticmethod
-    def _set_port_data_array_attributes(data_array: PortDataArray) -> PortDataArray:
+    def _set_port_data_array_attributes(data_array: TerminalPortDataArray) -> TerminalPortDataArray:
         """Helper to set additional metadata for ``PortDataArray``."""
         data_array.name = "Z0"
         return data_array.assign_attrs(units=OHM, long_name="characteristic impedance")
@@ -979,8 +1888,13 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
     def task_name_from_index(self, source_index: NetworkIndex) -> str:
         """Compute task name for a given network index without constructing simulations."""
-        port, mode_index = self.network_dict[source_index]
-        return self.get_task_name(port=port, mode_index=mode_index)
+        port, selection_index = self.network_dict[source_index]
+        if isinstance(port, TerminalWavePort):
+            return self.get_task_name(port=port, terminal_label=selection_index)
+        elif isinstance(port, WavePort):
+            return self.get_task_name(port=port, mode_index=selection_index)
+        else:
+            return self.get_task_name(port=port)
 
     def _extrude_port_structures(self, sim: Simulation) -> Simulation:
         """

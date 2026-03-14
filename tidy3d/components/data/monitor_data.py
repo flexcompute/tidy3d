@@ -1351,6 +1351,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         conjugate: bool = True,
         use_colocated_fields: bool = False,
         bidirectional: bool = True,
+        truncate_to_monitor_bounds: bool = False,
     ) -> FreqDataArray | MixedModeDataArray:
         r"""Outer dot product (pairwise modal overlap matrix) with another :class:`.FieldData`
         object.
@@ -1388,6 +1389,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             If ``True`` (default), computes the symmetric bidirectional overlap:
             ``1/4 * integral(E1* x H2 + H1* x E2) dS``.
             If ``False``, computes just: ``1/2 * integral(E1* x H2) dS``.
+        truncate_to_monitor_bounds : bool = False
+            Only used in the non-colocated integration path (when ``colocate=False``).
+            If ``True``, clamp integration area to monitor bounds, consistent with
+            ``complex_flux``. If ``False`` (default), use grid-enclosing bounds.
 
         Returns
         -------
@@ -1430,7 +1435,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             dS_numpy = (d_area, d_area)
         else:
             dS_EuHv, dS_EvHu, _, _ = self._diff_area_at_yee_positions(
-                truncate_to_monitor_bounds=False
+                truncate_to_monitor_bounds=truncate_to_monitor_bounds
             )
             dS_numpy = (dS_EuHv.to_numpy(), dS_EvHu.to_numpy())
 

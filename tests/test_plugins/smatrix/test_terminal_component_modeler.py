@@ -13,7 +13,17 @@ import tidy3d.plugins.smatrix.data.terminal
 import tidy3d.plugins.smatrix.utils
 from tidy3d import SimulationDataMap
 from tidy3d.components.boundary import BroadbandModeABCSpec
-from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.data.data_array import (
+    CurrentFreqModeDataArray,
+    FreqDataArray,
+    ImpedanceFreqModeDataArray,
+    ModeAmpsDataArray,
+    ModeIndexDataArray,
+    VoltageFreqModeDataArray,
+)
+from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+from tidy3d.components.microwave.data.monitor_data import MicrowaveModeData
+from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.smatrix import (
     CoaxialLumpedPort,
@@ -27,10 +37,12 @@ from tidy3d.plugins.smatrix import (
 from tidy3d.plugins.smatrix.component_modelers.terminal import AUTO_RADIATION_MONITOR_NAME
 from tidy3d.plugins.smatrix.data.data_array import PortNameDataArray
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
-from tidy3d.plugins.smatrix.utils import s_to_z, validate_square_matrix
+from tidy3d.plugins.smatrix.utils import compute_F, s_to_z, validate_square_matrix
 
-from ...utils import AssertLogLevel, run_emulated
+from ...utils import AssertLogLevel, AssertLogStr, run_emulated
 from .terminal_component_modeler_def import (
+    Rinner,
+    Router,
     make_basic_filter_terminals,
     make_coaxial_component_modeler,
     make_component_modeler,
@@ -56,10 +68,26 @@ def run_component_modeler(
         "port_array_inv",
         lambda matrix: np.eye(len(modeler.matrix_indices_monitor)),
     )
+
+    def _mock_compute_F(Z_numpy, s_param_def, compute_Finv=False):
+        num_freqs, num_ports, _ = Z_numpy.shape
+        Z_diag = np.diagonal(Z_numpy, axis1=1, axis2=2)
+        f_diag = 1.0 / (2.0 * np.sqrt(np.abs(Z_diag) + 1e-4))
+        F = np.zeros_like(Z_numpy)
+        for i in range(num_ports):
+            F[:, i, i] = f_diag[:, i]
+        if compute_Finv:
+            finv_diag = 2.0 * np.sqrt(np.abs(Z_diag) + 1e-4)
+            Finv = np.zeros_like(Z_numpy)
+            for i in range(num_ports):
+                Finv[:, i, i] = finv_diag[:, i]
+            return F, Finv
+        return F
+
     monkeypatch.setattr(
         td.plugins.smatrix.utils,
         "compute_F",
-        lambda Z_numpy, s_param_def: 1.0 / (2.0 * np.sqrt(np.abs(Z_numpy) + 1e-4)),
+        _mock_compute_F,
     )
     monkeypatch.setattr(
         td.plugins.smatrix.analysis.terminal,
@@ -457,14 +485,16 @@ def test_s_to_z_component_modeler():
     assert np.isclose(z_matrix_at_f[1, 0], Z21)
     assert np.isclose(z_matrix_at_f[1, 1], Z22)
 
-    # test version with different port reference impedances
-    values = np.full((len(freqs), len(port_names)), Z0)
-    coords = {
-        "f": np.array(freqs),
-        "port": port_names,
-    }
-    z_port_matrix = PortDataArray(data=values, coords=coords)
-    z_matrix = s_to_z(s_matrix, reference=z_port_matrix)
+    # test version with per-port reference impedances (diagonal matrix)
+    z_ref_values = np.array(
+        [Z0 * np.eye(len(port_names)) for _ in freqs],
+        dtype=complex,
+    )
+    z_ref = TerminalPortDataArray(
+        data=z_ref_values,
+        coords={"f": np.array(freqs), "port_out": port_names, "port_in": port_names},
+    )
+    z_matrix = s_to_z(s_matrix, reference=z_ref)
     z_matrix_at_f = z_matrix.sel(f=1e8)
     assert np.isclose(z_matrix_at_f[0, 0], Z11)
     assert np.isclose(z_matrix_at_f[0, 1], Z12)
@@ -510,7 +540,14 @@ def test_complex_reference_s_to_z_component_modeler():
     assert np.all(np.isclose(z_tidy3d.values, Z))
 
     # Test complex reference impedance calculations
-    z0_tidy3d = PortDataArray(data=z0, coords={"f": freqs, "port": ports})
+    # Convert per-port z0 (shape f, port) to diagonal TerminalPortDataArray (shape f, port, port)
+    num_freqs, num_ports = z0.shape
+    z0_diag = np.zeros((num_freqs, num_ports, num_ports), dtype=complex)
+    idx = np.arange(num_ports)
+    z0_diag[:, idx, idx] = z0
+    z0_tidy3d = TerminalPortDataArray(
+        data=z0_diag, coords={"f": freqs, "port_out": ports, "port_in": ports}
+    )
     smatrix.values = skrf_S_power.s
     z_tidy3d = s_to_z(smatrix, reference=z0_tidy3d, s_param_def="power")
     assert np.all(np.isclose(z_tidy3d.values, Z))
@@ -561,7 +598,22 @@ def test_data_s_to_z(monkeypatch):
     )
 
     z0 = 50.0
-    z_matrix = modeler_data.s_to_z(reference=z0)
+    # Build a diagonal reference impedance matrix (z0 * I) per frequency
+    z_ref_values = np.array(
+        [z0 * np.eye(len(port_names)) for _ in freqs],
+        dtype=complex,
+    )
+    z_ref = TerminalPortDataArray(
+        data=z_ref_values,
+        coords={"f": freqs, "port_out": port_names, "port_in": port_names},
+    )
+    monkeypatch.setattr(
+        TerminalComponentModelerData,
+        "port_reference_impedances",
+        property(lambda self: z_ref),
+    )
+
+    z_matrix = modeler_data.s_to_z()
 
     delta_s = (1 - s11) * (1 - s22) - s12 * s21
     z11 = z0 * ((1 + s11) * (1 - s22) + s12 * s21) / delta_s
@@ -1471,7 +1523,7 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     )
     port0_idx = modeler.network_index(modeler.ports[0])
     port1_idx = modeler.network_index(modeler.ports[1])
-    modeler_run1 = modeler.updated_copy(run_only=(port0_idx,))
+    modeler_run1 = modeler.updated_copy(run_only=(port1_idx,))
 
     # Make sure the smatrix and impedance calculations work for reduced simulations
     modeler_data = run_component_modeler(monkeypatch, modeler_run1)
@@ -1480,17 +1532,28 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
         validate_square_matrix(s_matrix.data, "test_method")
     _ = modeler_data.port_reference_impedances
 
+    # Verify the correct diagonal element (self-coupling a[j,j]) is used for normalization.
+    # With run_only=(port1_idx,), port1 is at row index 1 in monitor_indices.
+    # The bug would use a[port0, port1] (row 0) instead of a[port1, port1] (row 1).
+    a_matrix, b_matrix = modeler_data.port_pseudo_wave_matrices
+    monitor_indices = list(modeler_run1.matrix_indices_monitor)
+    port1_row = monitor_indices.index(port1_idx)
+    a_self = a_matrix.values[:, port1_row, 0]
+    expected_col = b_matrix.values[:, :, 0] / a_self[:, np.newaxis]
+    actual_col = s_matrix.data.sel(port_in=port1_idx).values
+    np.testing.assert_allclose(actual_col, expected_col)
+
     assert len(modeler_run1.sim_dict) == 1
     S11 = (port0_idx, port0_idx)
     S21 = (port1_idx, port0_idx)
     S12 = (port0_idx, port1_idx)
     S22 = (port1_idx, port1_idx)
-    element_mappings = ((S11, S22, 1 + 0j),)
+    element_mappings = ((S22, S11, 1 + 0j),)
     modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
     assert len(modeler_with_mappings.sim_dict) == 2
 
-    # Column 1 is mapped to column 2, resulting in one simulation
-    element_mappings = ((S11, S22, 1 + 0j), (S21, S12, 1 + 0j))
+    # Column 0 is mapped from column 1, resulting in one simulation
+    element_mappings = ((S22, S11, 1 + 0j), (S12, S21, 1 + 0j))
     modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
     tcm_data = run_component_modeler(monkeypatch, modeler_with_mappings)
     s_matrix = tcm_data.smatrix().data
@@ -1499,7 +1562,7 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     assert len(modeler_with_mappings.sim_dict) == 1
 
     # Mapping is incomplete, so two simulations are run
-    element_mappings = ((S11, S22, 1 + 0j), (S12, S21, 1 + 0j))
+    element_mappings = ((S22, S11, 1 + 0j), (S21, S12, 1 + 0j))
     modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
     assert len(modeler_with_mappings.sim_dict) == 2
 
@@ -1597,9 +1660,12 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
         return voltage, current
 
     # Mock port reference impedances to return frequency-dependent per-port Zref
+    # Build a diagonal 3D impedance matrix (f, port_out, port_in)
     def mock_port_impedances(modeler_data):
-        coords = {"f": np.array(freqs), "port": port_names}
-        return PortDataArray(Zref, coords=coords)
+        num_ports = len(port_names)
+        Zref_3d = Zref[:, :, None] * np.eye(num_ports)
+        coords = {"f": np.array(freqs), "port_out": port_names, "port_in": port_names}
+        return TerminalPortDataArray(Zref_3d, coords=coords)
 
     # Apply monkeypatches in all import locations
     monkeypatch.setattr(
@@ -2290,7 +2356,7 @@ def test_wave_port_mode_index_validation():
         direction="+",
         mode_index=0,
     )
-    assert port._mode_indices == (0,)
+    assert port._mode_indices() == (0,)
 
     # Invalid: index greater than number of modes
     with pytest.raises(ValidationError):
@@ -2312,7 +2378,7 @@ def test_wave_port_mode_index_validation():
         direction="+",
         mode_selection=[0, 2],
     )
-    assert port._mode_indices == (0, 2)
+    assert port._mode_indices() == (0, 2)
 
     # Valid: None (use all modes)
     port = WavePort(
@@ -2323,7 +2389,7 @@ def test_wave_port_mode_index_validation():
         direction="+",
         mode_selection=None,
     )
-    assert port._mode_indices == (0, 1, 2)
+    assert port._mode_indices() == (0, 1, 2)
 
     # Invalid: negative index
     with pytest.raises(ValidationError, match="non-negative"):
@@ -2359,6 +2425,45 @@ def test_wave_port_mode_index_validation():
         )
 
 
+def test_wave_port_multimode_absorption_warning():
+    """Test that WavePort warns when absorber is enabled with multiple modes."""
+    # Create mode_spec with 3 modes
+    mode_spec = td.MicrowaveModeSpec(num_modes=3)
+
+    # Test 1: Single mode with absorber=True - should NOT warn
+    with AssertLogStr("WARNING", excludes_str="multimode"):
+        port = WavePort(
+            center=(0, 0, -10),
+            size=(0, 2, 2),
+            name="port_single_mode",
+            mode_spec=td.MicrowaveModeSpec(num_modes=1),
+            direction="+",
+            absorber=True,
+        )
+
+    # Test 2: Multiple modes with absorber=True - SHOULD warn
+    with AssertLogStr("WARNING", contains_str="multimode"):
+        port = WavePort(
+            center=(0, 0, -10),
+            size=(0, 2, 2),
+            name="port_multimode",
+            mode_spec=mode_spec,
+            direction="+",
+            absorber=True,
+        )
+
+    # Test 3: Multiple modes with absorber=False - should NOT warn
+    with AssertLogStr("WARNING", excludes_str="multimode"):
+        port = WavePort(
+            center=(0, 0, -10),
+            size=(0, 2, 2),
+            name="port_no_absorber",
+            mode_spec=mode_spec,
+            direction="+",
+            absorber=False,
+        )
+
+
 def test_wave_port_mode_index_with_modeler():
     """Test that WavePort.mode_index works correctly with TerminalComponentModeler."""
     z_grid = td.UniformGrid(dl=1 * 1e3)
@@ -2380,7 +2485,7 @@ def test_wave_port_mode_index_with_modeler():
     )
 
     # Verify the port has only the selected modes
-    assert port._mode_indices == (0, 2)
+    assert port._mode_indices() == (0, 2)
 
     # Create a simple simulation to test with
     sim = td.Simulation(
@@ -2505,3 +2610,463 @@ def test_structure_priority_mode_override():
 
     # Check that base_sim uses the overridden priority mode
     assert modeler.base_sim.structure_priority_mode == "equal"
+
+
+# ---------------------------------------------------------------------------
+# Renormalization tests
+# ---------------------------------------------------------------------------
+
+
+def _make_renormalize_fixture(monkeypatch):
+    """Set up a 2-port modeler with monkeypatched V/I from an analytical transmission line.
+
+    Monkeypatches ``port_voltage_current_matrices`` and ``port_reference_impedances``
+    directly on the class so that the fixture survives ``updated_copy`` (which deep-copies
+    data and invalidates object-id-based mocks).
+
+    Returns ``(modeler_data, Zref, Z0, gamma, length, freqs, port_names)`` so that
+    callers can compute the expected S-matrix for any reference impedance.
+    """
+    modeler = make_component_modeler(planar_pec=False)
+    freqs = np.array([1e9, 5e9, 10e9])
+    modeler = modeler.updated_copy(freqs=freqs)
+
+    # Lossy microstrip parameters (engineering convention exp(jwt))
+    length = 0.02
+    gamma = np.array(
+        [
+            35.845260386378 + 52.964956959149j,
+            48.283102945750 + 208.91753284900j,
+            50.594134809653 + 397.12168963974j,
+        ]
+    )
+    Z0 = np.array(
+        [
+            12.843105732941 + 15.394208173652j,
+            28.567192048123 + 9.1023847562915j,
+            31.209457618234 + 3.8475102934671j,
+        ]
+    )
+    Z01 = np.array(
+        [
+            18.725191534567 + 12.672421364213j,
+            34.038884625562 + 7.8654410284980j,
+            35.725175635077 + 4.5490999181327j,
+        ]
+    )
+    Z02 = np.array(
+        [
+            24.156839210485 + 10.234195827361j,
+            41.892301567293 + 6.7812039451120j,
+            29.451276384019 + 5.1298475620183j,
+        ]
+    )
+    Zref = np.column_stack((Z01, Z02))
+    S_pseudo = calc_transmission_line_S_matrix_pseudo(Z0, Zref[:, 0], Zref[:, 1], gamma, length)
+    Zref3 = Zref[:, :, np.newaxis]
+
+    A = np.tile(np.eye(2), (len(freqs), 1, 1))
+    B = S_pseudo @ A
+    Vscale = np.abs(Zref3) / np.sqrt(np.real(Zref3))
+    Iscale = Vscale / Zref3
+    voltages = Vscale * (A + B)  # (f, port_out, port_in)
+    currents = Iscale * (A - B)  # (f, port_out, port_in)
+
+    port_names = [port.name for port in modeler.ports]
+
+    # Build actual SimulationDataMap (contents don't matter — V/I are mocked)
+    sim_data_list = []
+    port_name_list = []
+    for port_in in modeler.ports:
+        task_name = modeler.get_task_name(port_in)
+        sim_data_list.append(run_emulated(simulation=modeler.simulation))
+        port_name_list.append(task_name)
+
+    index_data = SimulationDataMap(keys=tuple(port_name_list), values=tuple(sim_data_list))
+    modeler_data = TerminalComponentModelerData(modeler=modeler, data=index_data)
+
+    # Pre-build the V/I matrices as TerminalPortDataArray
+    vi_coords = {"f": np.array(freqs), "port_out": port_names, "port_in": port_names}
+    voltage_matrix = TerminalPortDataArray(voltages, coords=vi_coords)
+    current_matrix = TerminalPortDataArray(currents, coords=vi_coords)
+
+    # Build the native Zref as TerminalPortDataArray
+    num_ports = len(port_names)
+    Zref_3d = Zref[:, :, None] * np.eye(num_ports)
+    z_ref_native = TerminalPortDataArray(
+        Zref_3d, coords={"f": np.array(freqs), "port_out": port_names, "port_in": port_names}
+    )
+
+    # Monkeypatch port_voltage_current_matrices as a regular property on the class.
+    # This survives updated_copy because the property is on the class, not the instance.
+    monkeypatch.setattr(
+        TerminalComponentModelerData,
+        "port_voltage_current_matrices",
+        property(lambda self: (voltage_matrix, current_matrix)),
+    )
+
+    # Monkeypatch the module-level port_reference_impedances function used when
+    # renormalized_reference_impedance is None or "Z0".
+    monkeypatch.setattr(
+        tidy3d.plugins.smatrix.analysis.terminal,
+        "port_reference_impedances",
+        lambda modeler_data_arg: z_ref_native,
+    )
+
+    return modeler_data, Zref, Z0, gamma, length, freqs, port_names
+
+
+def test_renormalize_identity(monkeypatch):
+    """Renormalizing to the same reference impedance gives the same S-matrix."""
+    modeler_data, Zref, *_ = _make_renormalize_fixture(monkeypatch)
+    freqs, port_names = _[3], _[4]
+
+    s_orig = modeler_data.smatrix().data.values
+    z_ref_orig = modeler_data.port_reference_impedances
+
+    s_renorm = modeler_data.renormalize(z_ref_orig).smatrix().data.values
+    assert np.allclose(s_orig, s_renorm, rtol=1e-12, atol=1e-14), (
+        f"Identity renormalization changed S-matrix.\n"
+        f"Max diff: {np.max(np.abs(s_orig - s_renorm)):.2e}"
+    )
+
+
+def test_renormalize_z_matrix_invariance(monkeypatch):
+    """Z-matrix should be the same regardless of reference impedance renormalization."""
+    modeler_data, Zref, Z0, gamma, length, freqs, port_names = _make_renormalize_fixture(
+        monkeypatch
+    )
+
+    z_orig = modeler_data.s_to_z().values
+    z_renorm = modeler_data.renormalize(50).s_to_z().values
+
+    assert np.allclose(z_orig, z_renorm, rtol=1e-10, atol=1e-12), (
+        f"Z-matrix changed after renormalization.\n"
+        f"Max diff: {np.max(np.abs(z_orig - z_renorm)):.2e}"
+    )
+
+
+def test_renormalize_scalar(monkeypatch):
+    """Renormalize with a scalar impedance produces different S-matrix."""
+    modeler_data, *_ = _make_renormalize_fixture(monkeypatch)
+
+    s_orig = modeler_data.smatrix().data.values
+    s_50 = modeler_data.renormalize(50).smatrix().data.values
+
+    # S-matrix should change since original Zref is not 50
+    assert not np.allclose(s_orig, s_50, atol=1e-6), "Renormalization to 50 did not change S-matrix"
+
+    # Verify it computed the expected S for Z_ref=50
+    Zref, Z0, gamma, length, freqs, port_names = _[0], _[1], _[2], _[3], _[4], _[5]
+    S_expected = calc_transmission_line_S_matrix_pseudo(Z0, 50, 50, gamma, length)
+    assert np.allclose(s_50, S_expected, rtol=1e-10, atol=1e-12), (
+        f"Renormalized S-matrix does not match analytical expectation.\n"
+        f"Max diff: {np.max(np.abs(s_50 - S_expected)):.2e}"
+    )
+
+
+def test_renormalize_port_data_array(monkeypatch):
+    """Renormalize with a per-port PortDataArray impedance."""
+    modeler_data, Zref, Z0, gamma, length, freqs, port_names = _make_renormalize_fixture(
+        monkeypatch
+    )
+
+    # Use 50 ohm for port 1, 75 ohm for port 2
+    per_port_z = PortDataArray(
+        np.array([[50, 75]] * len(freqs), dtype=complex),
+        coords={"f": freqs, "port": port_names},
+    )
+    s_renorm = modeler_data.renormalize(per_port_z).smatrix().data.values
+
+    S_expected = calc_transmission_line_S_matrix_pseudo(Z0, 50, 75, gamma, length)
+    assert np.allclose(s_renorm, S_expected, rtol=1e-10, atol=1e-12), (
+        f"Per-port renormalized S-matrix does not match analytical expectation.\n"
+        f"Max diff: {np.max(np.abs(s_renorm - S_expected)):.2e}"
+    )
+
+
+def test_renormalize_terminal_port_data_array(monkeypatch):
+    """Renormalize with a full TerminalPortDataArray impedance matrix."""
+    modeler_data, Zref, Z0, gamma, length, freqs, port_names = _make_renormalize_fixture(
+        monkeypatch
+    )
+
+    # Build a diagonal TerminalPortDataArray with 50 ohm
+    num_ports = len(port_names)
+    z_values = np.zeros((len(freqs), num_ports, num_ports), dtype=complex)
+    for i in range(num_ports):
+        z_values[:, i, i] = 50
+    z_ref_full = TerminalPortDataArray(
+        z_values, coords={"f": freqs, "port_out": port_names, "port_in": port_names}
+    )
+
+    s_renorm = modeler_data.renormalize(z_ref_full).smatrix().data.values
+    S_expected = calc_transmission_line_S_matrix_pseudo(Z0, 50, 50, gamma, length)
+    assert np.allclose(s_renorm, S_expected, rtol=1e-10, atol=1e-12)
+
+
+def test_renormalize_chaining_s_to_z(monkeypatch):
+    """renormalize(50).s_to_z() works and equals original s_to_z()."""
+    modeler_data, *_ = _make_renormalize_fixture(monkeypatch)
+
+    z_orig = modeler_data.s_to_z().values
+    z_50 = modeler_data.renormalize(50).s_to_z().values
+
+    assert np.allclose(z_orig, z_50, rtol=1e-10, atol=1e-12)
+
+
+def test_renormalize_invalid_type(monkeypatch):
+    """Passing an unsupported type raises ValidationError from Pydantic."""
+    modeler_data, *_ = _make_renormalize_fixture(monkeypatch)
+
+    with pytest.raises(ValidationError):
+        modeler_data.renormalize("invalid_string")
+
+
+def test_renormalize_none_is_default(monkeypatch):
+    """When renormalized_reference_impedance is None (default), behavior is unchanged."""
+    modeler_data, *_ = _make_renormalize_fixture(monkeypatch)
+
+    assert modeler_data.renormalized_reference_impedance is None
+    # Should be able to call smatrix normally
+    s = modeler_data.smatrix()
+    assert s.data.values.shape[1] == 2
+
+
+def test_wave_port_mode_spec_resolution():
+    """Unit test WavePort._mode_spec for three resolution branches."""
+    # Shared geometry for WavePort construction
+    center = (0, 0, 0)
+    size = (2 * Router, 2 * Router, 0)
+
+    # Build a voltage spec that lies within the port bounds
+    mean_radius = (Router + Rinner) / 2
+    voltage_spec = td.AxisAlignedVoltageIntegralSpec(
+        center=(mean_radius, 0, 0),
+        size=(Router - Rinner, 0, 0),
+        extrapolate_to_endpoints=True,
+        snap_path_to_grid=True,
+        sign="+",
+    )
+    custom_impedance = td.CustomImpedanceSpec(voltage_spec=voltage_spec)
+
+    # Case 1: explicit integer num_modes — returns mode_spec as-is
+    spec_explicit = td.MicrowaveModeSpec(
+        num_modes=1,
+        impedance_specs=(custom_impedance,),
+    )
+    port_explicit = WavePort(
+        center=center, size=size, direction="+", name="explicit", mode_spec=spec_explicit
+    )
+    resolved = port_explicit._mode_spec
+    assert resolved is not None
+    assert resolved.num_modes == 1
+
+    # Case 2: num_modes="auto" with a tuple of impedance_specs — infer from length
+    spec_auto_tuple = td.MicrowaveModeSpec(
+        num_modes="auto",
+        impedance_specs=(custom_impedance, custom_impedance),
+    )
+    port_auto_tuple = WavePort(
+        center=center, size=size, direction="+", name="auto_tuple", mode_spec=spec_auto_tuple
+    )
+    resolved_tuple = port_auto_tuple._mode_spec
+    assert resolved_tuple is not None
+    assert resolved_tuple.num_modes == 2
+
+    # Case 3: num_modes="auto" with AutoImpedanceSpec — cannot resolve, returns None
+    spec_auto_default = td.MicrowaveModeSpec(num_modes="auto")
+    port_auto_default = WavePort(
+        center=center, size=size, direction="+", name="auto_default", mode_spec=spec_auto_default
+    )
+    assert port_auto_default._mode_spec is None
+
+
+def test_wave_port_auto_num_modes_modeler():
+    """Integration test: auto num_modes detection for WavePort via TerminalComponentModeler."""
+    # Build a single-strip stripline: one signal trace between two ground planes.
+    # PEC boundary on y ensures ground planes touching y-boundary are filtered out,
+    # leaving only the signal strip as a floating conductor.
+    mil = 25.4
+    w = 3.2 * mil  # signal strip width
+    t = 0.7 * mil  # conductor thickness
+    h = 10.7 * mil  # substrate thickness
+    L = 4000 * mil  # line length
+    len_inf = 1e6
+    f_max = 70e9
+
+    med_sub = td.Medium(permittivity=4.4)
+    med_metal = td.PEC
+
+    str_sub = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(len_inf, h, L)), medium=med_sub)
+    str_signal = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(w, t, L)), medium=med_metal)
+    str_gnd_top = td.Structure(
+        geometry=td.Box(center=(0, h / 2 + t / 2, 0), size=(len_inf, t, L)),
+        medium=med_metal,
+    )
+    str_gnd_bot = td.Structure(
+        geometry=td.Box(center=(0, -h / 2 - t / 2, 0), size=(len_inf, t, L)),
+        medium=med_metal,
+    )
+
+    lr_spec = td.LayerRefinementSpec.from_structures(
+        structures=[str_signal],
+        axis=1,
+        min_steps_along_axis=10,
+        refinement_inside_sim_only=False,
+        bounds_snapping="bounds",
+        corner_refinement=td.GridRefinement(dl=t / 10, num_cells=2),
+    )
+    lr_spec_top = lr_spec.updated_copy(center=(0, h / 2 + t / 2, 0), size=(len_inf, t, L))
+    lr_spec_bot = lr_spec.updated_copy(center=(0, -h / 2 - t / 2, 0), size=(len_inf, t, L))
+
+    grid_spec = td.GridSpec.auto(
+        wavelength=td.C_0 / f_max,
+        min_steps_per_wvl=30,
+        layer_refinement_specs=[lr_spec, lr_spec_top, lr_spec_bot],
+    )
+
+    sim = td.Simulation(
+        size=(50 * mil, h + 2 * t, 1.05 * L),
+        center=(0, 0, 0),
+        grid_spec=grid_spec,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(), y=td.Boundary.pec(), z=td.Boundary.pml()
+        ),
+        structures=[str_sub, str_signal, str_gnd_top, str_gnd_bot],
+        monitors=[],
+        run_time=2e-9,
+        shutoff=1e-7,
+    )
+
+    port = WavePort(
+        center=(0, 0, -L / 2),
+        size=(len_inf, len_inf, 0),
+        direction="+",
+        name="wave_auto",
+        mode_spec=td.MicrowaveModeSpec(num_modes="auto"),
+    )
+
+    freqs = np.array([1e9, 10e9])
+    modeler = TerminalComponentModeler(simulation=sim, ports=[port], freqs=freqs)
+
+    # Modeler should identify 1 wave port
+    assert len(modeler._wave_ports) == 1
+
+    # Should detect 1 floating isolated conductor (signal strip;
+    # ground planes filtered because they touch the PEC boundary on y)
+    conductors = modeler._floating_isolated_conductors_at_waveport["wave_auto"]
+    assert len(conductors) == 1
+
+    # Resolved mode spec should have num_modes == 1
+    resolved = modeler._resolved_mode_specs["wave_auto"]
+    assert isinstance(resolved, td.MicrowaveModeSpec)
+    assert resolved.num_modes == 1
+
+    # mode_solver_for_port should return a ModeSolver
+    ms = modeler.mode_solver_for_port("wave_auto")
+    assert isinstance(ms, ModeSolver)
+
+
+def test_compute_F_full_matrix():
+    """Test compute_F with a non-diagonal (coupled) impedance matrix."""
+    # 2-port coupled impedance: non-diagonal → exercises _compute_F_full
+    Z = np.array([[[50 + 5j, 3 + 1j], [3 + 1j, 75 + 8j]]])  # shape (1, 2, 2)
+
+    for s_def in ("power", "pseudo", "symmetric_pseudo"):
+        F = compute_F(Z, s_def, compute_Finv=False)
+        assert F.shape == (1, 2, 2)
+        assert np.all(np.isfinite(F))
+
+        F, Finv = compute_F(Z, s_def, compute_Finv=True)
+        assert F.shape == Finv.shape == (1, 2, 2)
+        # F @ Finv ≈ I (within numerical tolerance)
+        product = F[0] @ Finv[0]
+        assert np.allclose(product, np.eye(2), atol=1e-10)
+
+
+def test_wave_port_validate_resolved_mode_spec_errors():
+    """Test _validate_resolved_mode_spec error paths for WavePort."""
+    # num_modes='auto' passed explicitly → SetupError
+    auto_mode_spec = td.MicrowaveModeSpec(num_modes="auto")
+    port = WavePort(
+        center=(0, 0, -10),
+        size=(2, 2, 0),
+        direction="+",
+        name="wp_auto",
+        mode_spec=auto_mode_spec,
+    )
+    with pytest.raises(SetupError, match="num_modes='auto'"):
+        port._validate_resolved_mode_spec(auto_mode_spec)
+
+    # _mode_spec is None and no explicit mode_spec → SetupError
+    # This happens when mode_spec.num_modes='auto' and impedance_specs is also 'auto'
+    assert port._mode_spec is None
+    with pytest.raises(SetupError, match="cannot be resolved"):
+        port._validate_resolved_mode_spec()
+
+
+def test_wave_port_get_port_impedance():
+    """Test get_port_impedance returns correct impedance for each mode."""
+    mode_spec = td.MicrowaveModeSpec(
+        num_modes=2,
+        impedance_specs=(
+            td.CustomImpedanceSpec(
+                voltage_spec=td.AxisAlignedVoltageIntegralSpec(
+                    center=(0, 0, -10),
+                    size=(1, 0, 0),
+                    extrapolate_to_endpoints=True,
+                    sign="+",
+                )
+            ),
+            td.CustomImpedanceSpec(
+                voltage_spec=td.AxisAlignedVoltageIntegralSpec(
+                    center=(0.5, 0, -10),
+                    size=(0.5, 0, 0),
+                    extrapolate_to_endpoints=True,
+                    sign="+",
+                )
+            ),
+        ),
+    )
+    port = WavePort(
+        center=(0, 0, -10),
+        size=(2, 2, 0),
+        direction="+",
+        name="wp_impedance",
+        mode_spec=mode_spec,
+    )
+
+    freqs = [10e9]
+    mode_indices = [0, 1]
+    index_coords = {"f": freqs, "mode_index": mode_indices}
+
+    # Build TransmissionLineDataset with Z0=[50, 75]
+    z0_data = ImpedanceFreqModeDataArray(np.array([[50.0, 75.0]]), coords=index_coords)
+    v_data = VoltageFreqModeDataArray((1 + 0j) * np.ones((1, 2)), coords=index_coords)
+    c_data = CurrentFreqModeDataArray((0.02 + 0j) * np.ones((1, 2)), coords=index_coords)
+    tl_data = TransmissionLineDataset(Z0=z0_data, voltage_coeffs=v_data, current_coeffs=c_data)
+
+    # Build MicrowaveModeData
+    n_complex = ModeIndexDataArray((1.5 + 0.01j) * np.ones((1, 2)), coords=index_coords)
+    amp_coords = {"direction": ["+", "-"], "f": freqs, "mode_index": mode_indices}
+    amps = ModeAmpsDataArray((1 + 0.5j) * np.ones((2, 1, 2)), coords=amp_coords)
+    monitor = td.MicrowaveModeMonitor(
+        center=port.center,
+        size=port.size,
+        freqs=freqs,
+        mode_spec=mode_spec,
+        name=port._mode_monitor_name,
+    )
+    mode_data = MicrowaveModeData(
+        monitor=monitor,
+        amps=amps,
+        n_complex=n_complex,
+        transmission_line_data=tl_data,
+    )
+
+    z_mode0 = port.get_port_impedance(mode_data, mode_index=0)
+    assert np.isclose(z_mode0.values.item(), 50.0)
+
+    z_mode1 = port.get_port_impedance(mode_data, mode_index=1)
+    assert np.isclose(z_mode1.values.item(), 75.0)

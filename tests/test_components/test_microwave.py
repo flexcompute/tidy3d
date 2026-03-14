@@ -26,11 +26,13 @@ from tidy3d.components.microwave.formulas.circuit_parameters import (
 from tidy3d.components.microwave.path_integrals.factory import (
     make_current_integral,
     make_path_integrals,
+    make_path_integrals_for_terminal,
     make_voltage_integral,
 )
 from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import (
     ModePlaneAnalyzer,
 )
+from tidy3d.components.microwave.source import MicrowaveTerminalSource
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.constants import EPSILON_0
 from tidy3d.exceptions import DataError, SetupError, ValidationError
@@ -1149,6 +1151,132 @@ def test_path_integral_factory_mixed_specs():
     assert current_integrals[1] is not None  # Second mode has current spec
 
 
+def test_make_path_integrals_for_terminal_basic():
+    """Test make_path_integrals_for_terminal with a single terminal having both V+I specs."""
+    from tidy3d.components.microwave.mode_spec import MicrowaveTerminalModeSpec
+
+    v_spec = td.AxisAlignedVoltageIntegralSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
+    i_spec = td.AxisAlignedCurrentIntegralSpec(center=(1, 2, 3), size=(0, 1, 1), sign="-")
+    impedance_spec = td.CustomImpedanceSpec(voltage_spec=v_spec, current_spec=i_spec)
+
+    terminal_spec = MicrowaveTerminalModeSpec(
+        num_modes=1,
+        impedance_specs={"T0": impedance_spec},
+    )
+
+    result = make_path_integrals_for_terminal(terminal_spec)
+    assert len(result) == 1
+    assert "T0" in result
+    v_integral, i_integral = result["T0"]
+    assert v_integral is not None
+    assert i_integral is not None
+
+
+def test_make_path_integrals_for_terminal_multi():
+    """Test make_path_integrals_for_terminal with two terminals, both having V+I specs."""
+    from tidy3d.components.microwave.mode_spec import MicrowaveTerminalModeSpec
+
+    v_spec1 = td.AxisAlignedVoltageIntegralSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
+    i_spec1 = td.AxisAlignedCurrentIntegralSpec(center=(1, 2, 3), size=(0, 1, 1), sign="-")
+    v_spec2 = td.AxisAlignedVoltageIntegralSpec(center=(2, 2, 3), size=(0, 0, 1), sign="+")
+    i_spec2 = td.AxisAlignedCurrentIntegralSpec(center=(2, 2, 3), size=(0, 1, 1), sign="+")
+
+    impedance_spec1 = td.CustomImpedanceSpec(voltage_spec=v_spec1, current_spec=i_spec1)
+    impedance_spec2 = td.CustomImpedanceSpec(voltage_spec=v_spec2, current_spec=i_spec2)
+
+    terminal_spec = MicrowaveTerminalModeSpec(
+        num_modes=2,
+        impedance_specs={"T0": impedance_spec1, "T1": impedance_spec2},
+    )
+
+    result = make_path_integrals_for_terminal(terminal_spec)
+    assert len(result) == 2
+    for label in ("T0", "T1"):
+        assert label in result
+        v_integral, i_integral = result[label]
+        assert v_integral is not None
+        assert i_integral is not None
+
+
+def test_make_path_integrals_for_terminal_voltage_only():
+    """Test make_path_integrals_for_terminal with voltage-only (PV) terminals."""
+    from tidy3d.components.microwave.mode_spec import MicrowaveTerminalModeSpec
+
+    v_spec1 = td.AxisAlignedVoltageIntegralSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
+    v_spec2 = td.AxisAlignedVoltageIntegralSpec(center=(2, 2, 3), size=(0, 0, 1), sign="+")
+
+    impedance_spec1 = td.CustomImpedanceSpec(voltage_spec=v_spec1, current_spec=None)
+    impedance_spec2 = td.CustomImpedanceSpec(voltage_spec=v_spec2, current_spec=None)
+
+    terminal_spec = MicrowaveTerminalModeSpec(
+        num_modes=2,
+        impedance_specs={"T0": impedance_spec1, "T1": impedance_spec2},
+    )
+
+    result = make_path_integrals_for_terminal(terminal_spec)
+    assert len(result) == 2
+    for label in ("T0", "T1"):
+        v_integral, i_integral = result[label]
+        assert v_integral is not None
+        assert i_integral is None
+
+
+def test_make_path_integrals_for_terminal_construction_errors(monkeypatch):
+    """Test that make_path_integrals_for_terminal raises SetupError with terminal label on failure."""
+    from tidy3d.components.microwave.mode_spec import MicrowaveTerminalModeSpec
+
+    v_spec = td.AxisAlignedVoltageIntegralSpec(center=(1, 2, 3), size=(0, 0, 1), sign="-")
+    impedance_spec = td.CustomImpedanceSpec(voltage_spec=v_spec, current_spec=None)
+
+    terminal_spec = MicrowaveTerminalModeSpec(
+        num_modes=1,
+        impedance_specs={"MyTerminal": impedance_spec},
+    )
+
+    def mock_make_voltage_integral(path_spec):
+        raise RuntimeError("Intentional construction failure")
+
+    monkeypatch.setattr(
+        "tidy3d.components.microwave.path_integrals.factory.make_voltage_integral",
+        mock_make_voltage_integral,
+    )
+
+    with pytest.raises(SetupError, match="MyTerminal"):
+        make_path_integrals_for_terminal(terminal_spec)
+
+
+def test_make_path_integrals_for_terminal_custom_2d_specs():
+    """Test make_path_integrals_for_terminal with Custom2D voltage and current specs."""
+    from tidy3d.components.microwave.mode_spec import MicrowaveTerminalModeSpec
+    from tidy3d.components.microwave.path_integrals.integrals.current import (
+        Custom2DCurrentIntegral,
+    )
+    from tidy3d.components.microwave.path_integrals.integrals.voltage import (
+        Custom2DVoltageIntegral,
+    )
+
+    v_spec = td.Custom2DVoltageIntegralSpec(axis=2, position=0.5, vertices=[(0, 0), (0, 1)])
+    i_spec = td.Custom2DCurrentIntegralSpec(
+        axis=2, position=0.5, vertices=[(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]
+    )
+    impedance_spec = td.CustomImpedanceSpec(voltage_spec=v_spec, current_spec=i_spec)
+
+    terminal_spec = MicrowaveTerminalModeSpec(
+        num_modes=1,
+        impedance_specs={"T0": impedance_spec},
+    )
+
+    result = make_path_integrals_for_terminal(terminal_spec)
+    assert len(result) == 1
+    v_integral, i_integral = result["T0"]
+    assert isinstance(v_integral, Custom2DVoltageIntegral)
+    assert isinstance(i_integral, Custom2DCurrentIntegral)
+    assert v_integral.axis == 2
+    assert v_integral.position == 0.5
+    assert i_integral.axis == 2
+    assert i_integral.position == 0.5
+
+
 def test_mode_spec_with_microwave_mode_spec():
     """Test that the number of impedance specs is validated against the number of modes in MicrowaveModeSpec."""
 
@@ -1162,6 +1290,88 @@ def test_mode_spec_with_microwave_mode_spec():
     # Should fail when impedance_specs doesn't match num_modes
     with pytest.raises(pd.ValidationError):
         td.MicrowaveModeSpec(num_modes=2, impedance_specs=impedance_specs)
+
+
+def test_mode_spec_preserved_in_mode_solver_data_roundtrip():
+    """Test that MicrowaveModeSpec fields survive the ModeSolverData -> MicrowaveModeSolverData conversion.
+
+    The mode solver internally creates a ModeSolverData (whose monitor field is typed as
+    ModeSolverMonitor) then converts it to MicrowaveModeSolverData. Pydantic v2 serializes
+    nested models based on the declared field type, so model_dump() on ModeSolverData drops
+    subclass-specific fields like impedance_specs. This test verifies the fix preserves them.
+    """
+    from tidy3d.components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
+    from tidy3d.components.microwave.data.monitor_data import MicrowaveModeSolverData
+
+    custom_spec = td.CustomImpedanceSpec(
+        current_spec=td.AxisAlignedCurrentIntegralSpec(center=(0, 0, 0), size=(2, 1, 0), sign="+")
+    )
+
+    # -- MicrowaveModeSpec --
+    mw_spec = td.MicrowaveModeSpec(num_modes=1, impedance_specs=custom_spec)
+    mw_mon = td.MicrowaveModeSolverMonitor(
+        center=(0, 0, 0), size=(2, 0, 6), freqs=[2e14], mode_spec=mw_spec, name="test"
+    )
+
+    x, y, z = [-1, 1, 3], [-2, 0], [-3, -1, 1, 3, 5]
+    grid = td.Grid(boundaries=td.Coords(x=x, y=y, z=z))
+    field_coords = {"x": x[:-1], "y": y[:-1], "z": z[:-1], "f": [2e14], "mode_index": np.arange(1)}
+    field = ScalarModeFieldDataArray(
+        (1 + 1j) * np.random.random((2, 1, 4, 1, 1)), coords=field_coords
+    )
+    n_complex = ModeIndexDataArray(
+        (1 + 1j) * np.random.random((1, 1)), coords={"f": [2e14], "mode_index": np.arange(1)}
+    )
+
+    data = td.ModeSolverData(
+        monitor=mw_mon,
+        Ex=field,
+        Ey=field,
+        Ez=field,
+        Hx=field,
+        Hy=field,
+        Hz=field,
+        n_complex=n_complex,
+        grid_expanded=grid,
+    )
+
+    # This is the conversion pattern used in ModeSolver.data_raw
+    converted = MicrowaveModeSolverData(
+        **data.model_dump(exclude={"type", "monitor"}), monitor=data.monitor
+    )
+    assert isinstance(converted.monitor.mode_spec.impedance_specs, td.CustomImpedanceSpec)
+
+    # -- MicrowaveTerminalModeSpec --
+    from tidy3d.components.microwave.mode_spec import MicrowaveTerminalModeSpec
+
+    terminal_spec = MicrowaveTerminalModeSpec(
+        num_modes=1,
+        impedance_specs={"T0": custom_spec},
+    )
+    terminal_mon = td.MicrowaveModeSolverMonitor(
+        center=(0, 0, 0), size=(2, 0, 6), freqs=[2e14], mode_spec=terminal_spec, name="test"
+    )
+
+    data_terminal = td.ModeSolverData(
+        monitor=terminal_mon,
+        Ex=field,
+        Ey=field,
+        Ez=field,
+        Hx=field,
+        Hy=field,
+        Hz=field,
+        n_complex=n_complex,
+        grid_expanded=grid,
+    )
+
+    converted_terminal = MicrowaveModeSolverData(
+        **data_terminal.model_dump(exclude={"type", "monitor"}), monitor=data_terminal.monitor
+    )
+    assert isinstance(converted_terminal.monitor.mode_spec, MicrowaveTerminalModeSpec)
+    assert "T0" in converted_terminal.monitor.mode_spec.impedance_specs
+    assert isinstance(
+        converted_terminal.monitor.mode_spec.impedance_specs["T0"], td.CustomImpedanceSpec
+    )
 
 
 @pytest.mark.parametrize("colocate", [False, True])
@@ -1222,6 +1432,10 @@ def test_mode_solver_with_microwave_mode_spec(colocate):
     )
     mms = mms.updated_copy(mode_spec=microwave_spec_custom)
     mms_data: td.MicrowaveModeSolverData = mms.data
+
+    # Verify that CustomImpedanceSpec survives the ModeSolverData -> MicrowaveModeSolverData roundtrip
+    stored_specs = mms_data.monitor.mode_spec.impedance_specs
+    assert isinstance(stored_specs[0], td.CustomImpedanceSpec)
 
     # _, ax = plt.subplots(1, 1, tight_layout=True, figsize=(15, 15))
     # mms_data.field_components["Ez"].isel(mode_index=0, f=0).real.plot(ax=ax)
@@ -1420,6 +1634,169 @@ def test_mode_solver_with_microwave_group_index():
     assert np.allclose(tl_freqs_current, original_freqs), (
         f"current_coeffs frequencies {tl_freqs_current} should match original {original_freqs}"
     )
+
+
+def test_group_index_post_process_with_terminal_data():
+    """Test that _group_index_post_process correctly filters terminal data frequencies."""
+    from tidy3d.components.data.data_array import (
+        CurrentFreqTerminalModeDataArray,
+        FreqModeDataArray,
+        ImpedanceFreqTerminalTerminalDataArray,
+        ModeIndexDataArray,
+        ScalarModeFieldDataArray,
+        VoltageFreqTerminalModeDataArray,
+    )
+    from tidy3d.components.microwave.data.dataset import TransmissionLineTerminalDataset
+
+    # Setup: 2 original frequencies, each expanded to a triplet (back, center, forward)
+    # giving 6 total frequencies
+    step = 0.005
+    original_freqs = [1e9, 5e9]
+    triplet_freqs = []
+    for freq in original_freqs:
+        triplet_freqs.extend([freq * (1 - step), freq, freq * (1 + step)])
+    triplet_freqs = np.array(triplet_freqs)
+
+    x = [-1, 1, 3]
+    y = [-2, 0]
+    z = [-3, -1, 1, 3, 5]
+    mode_index = np.arange(2)
+    n_f = len(triplet_freqs)
+    n_m = len(mode_index)
+
+    grid = td.Grid(boundaries=td.Coords(x=x, y=y, z=z))
+    field_coords = {
+        "x": x[:-1],
+        "y": y[:-1],
+        "z": z[:-1],
+        "f": triplet_freqs,
+        "mode_index": mode_index,
+    }
+    index_coords = {"f": triplet_freqs, "mode_index": mode_index}
+
+    # Create field and index data
+    field_values = np.ones((2, 1, 4, n_f, n_m), dtype=complex)
+    field = ScalarModeFieldDataArray(field_values, coords=field_coords)
+
+    index_values = np.ones((n_f, n_m), dtype=complex) * (1.5 + 0.01j)
+    for f_idx in range(n_f):
+        for m_idx in range(n_m):
+            index_values[f_idx, m_idx] = 1.5 + (triplet_freqs[f_idx] / 1e9) * 0.01 + m_idx * 0.1
+    index_data = ModeIndexDataArray(index_values, coords=index_coords)
+
+    # Create terminal data with frequency-dependent values
+    terminal_labels = ["t0", "t1"]
+    n_t = len(terminal_labels)
+
+    terminal_z0_coords = {
+        "f": triplet_freqs,
+        "terminal_label_out": terminal_labels,
+        "terminal_label_in": terminal_labels,
+    }
+    terminal_coords = {
+        "f": triplet_freqs,
+        "terminal_label": terminal_labels,
+        "mode_index": mode_index,
+    }
+
+    terminal_z0_values = np.zeros((n_f, n_t, n_t))
+    terminal_voltage_values = np.zeros((n_f, n_t, n_m), dtype=complex)
+    terminal_current_values = np.zeros((n_f, n_t, n_m), dtype=complex)
+
+    for f_idx in range(n_f):
+        for t_idx in range(n_t):
+            terminal_z0_values[f_idx, t_idx, t_idx] = 50 + triplet_freqs[f_idx] / 1e8 + t_idx * 10
+            for m_idx in range(n_m):
+                terminal_voltage_values[f_idx, t_idx, m_idx] = (
+                    triplet_freqs[f_idx] / 1e9 + t_idx + m_idx
+                ) * (2 + 1j)
+                terminal_current_values[f_idx, t_idx, m_idx] = (
+                    triplet_freqs[f_idx] / 1e9 + t_idx + m_idx
+                ) * (0.1 + 0.05j)
+
+    terminal_z0_data = ImpedanceFreqTerminalTerminalDataArray(
+        terminal_z0_values, coords=terminal_z0_coords
+    )
+    terminal_voltage_data = VoltageFreqTerminalModeDataArray(
+        terminal_voltage_values, coords=terminal_coords
+    )
+    terminal_current_data = CurrentFreqTerminalModeDataArray(
+        terminal_current_values, coords=terminal_coords
+    )
+
+    tl_terminal_data = TransmissionLineTerminalDataset(
+        Z0=terminal_z0_data,
+        voltage_transform=terminal_voltage_data,
+        current_transform=terminal_current_data,
+    )
+
+    # Create monitor with triplet frequencies
+    monitor = td.MicrowaveModeSolverMonitor(
+        center=(0, 0, 0),
+        size=(2, 0, 6),
+        freqs=triplet_freqs,
+        mode_spec=td.MicrowaveModeSpec(num_modes=n_m, impedance_specs=td.AutoImpedanceSpec()),
+        name="microwave_mode_solver",
+    )
+
+    # Grid correction factors need to be DataArrays with freq dimension for isel to work
+    grid_correction = FreqModeDataArray(np.ones((n_f, n_m)), coords=index_coords)
+
+    data = td.MicrowaveModeSolverData(
+        monitor=monitor,
+        Ex=field,
+        Ey=field,
+        Ez=field,
+        Hx=field,
+        Hy=field,
+        Hz=field,
+        n_complex=index_data,
+        grid_expanded=grid,
+        grid_primal_correction=grid_correction,
+        grid_dual_correction=grid_correction,
+        transmission_line_terminal_data=tl_terminal_data,
+    )
+
+    # Apply group index post-processing
+    result = data._group_index_post_process(step)
+
+    # Verify terminal data frequencies are filtered to center frequencies only
+    assert result.transmission_line_terminal_data is not None, (
+        "transmission_line_terminal_data should be preserved"
+    )
+
+    result_z0_freqs = result.transmission_line_terminal_data.Z0.coords["f"].values
+    result_v_freqs = result.transmission_line_terminal_data.voltage_transform.coords["f"].values
+    result_c_freqs = result.transmission_line_terminal_data.current_transform.coords["f"].values
+
+    assert len(result_z0_freqs) == len(original_freqs), (
+        f"Z0 should have {len(original_freqs)} frequencies, got {len(result_z0_freqs)}"
+    )
+    assert len(result_v_freqs) == len(original_freqs), (
+        f"voltage_transform should have {len(original_freqs)} frequencies, got {len(result_v_freqs)}"
+    )
+    assert len(result_c_freqs) == len(original_freqs), (
+        f"current_transform should have {len(original_freqs)} frequencies, got {len(result_c_freqs)}"
+    )
+
+    assert np.allclose(result_z0_freqs, original_freqs)
+    assert np.allclose(result_v_freqs, original_freqs)
+    assert np.allclose(result_c_freqs, original_freqs)
+
+    # Verify values match the center-frequency slices (indices 1, 4 from the triplet)
+    center_inds = [1, 4]
+    assert np.allclose(
+        result.transmission_line_terminal_data.Z0.values,
+        terminal_z0_values[center_inds],
+    ), "Z0 values should match center-frequency slices"
+    assert np.allclose(
+        result.transmission_line_terminal_data.voltage_transform.values,
+        terminal_voltage_values[center_inds],
+    ), "voltage_transform values should match center-frequency slices"
+    assert np.allclose(
+        result.transmission_line_terminal_data.current_transform.values,
+        terminal_current_values[center_inds],
+    ), "current_transform values should match center-frequency slices"
 
 
 @pytest.mark.parametrize("axis", [0, 1, 2])
@@ -1992,6 +2369,36 @@ def test_impedance_calculator_compute_impedance_with_return_extras():
     assert current_c is not None
 
 
+def test_compute_voltage_current_none_semantics():
+    """Test that compute_voltage_current returns None for undefined integrals."""
+
+    voltage_integral = td.AxisAlignedVoltageIntegral(
+        center=(0, 0, 0), size=(0, 0.5, 0), sign="+", extrapolate_to_endpoints=True
+    )
+    current_integral = td.AxisAlignedCurrentIntegral(center=(0, 0, 0), size=(0.5, 0.5, 0), sign="+")
+    field_data = SIM_Z_DATA["field"]
+
+    # Both integrals defined: neither result is None
+    calc_both = td.ImpedanceCalculator(
+        voltage_integral=voltage_integral, current_integral=current_integral
+    )
+    voltage, current = calc_both.compute_voltage_current(field_data)
+    assert voltage is not None
+    assert current is not None
+
+    # Voltage-only: current is None
+    calc_v = td.ImpedanceCalculator(voltage_integral=voltage_integral)
+    voltage, current = calc_v.compute_voltage_current(field_data)
+    assert voltage is not None
+    assert current is None
+
+    # Current-only: voltage is None
+    calc_i = td.ImpedanceCalculator(current_integral=current_integral)
+    voltage, current = calc_i.compute_voltage_current(field_data)
+    assert voltage is None
+    assert current is not None
+
+
 def test_composite_current_integral_freq_mode_data():
     """Test CompositeCurrentIntegral works correctly with FreqModeDataArray."""
 
@@ -2052,15 +2459,22 @@ def test_impedance_calculator_mode_direction_handling():
 
 
 def test_microwave_mode_data_reordering_with_transmission_line_data():
-    """Test that transmission_line_data is correctly reordered when modes are reordered."""
+    """Test that transmission_line_data and transmission_line_terminal_data are correctly
+    reordered when modes are reordered."""
     from tidy3d.components.data.data_array import (
         CurrentFreqModeDataArray,
+        CurrentFreqTerminalModeDataArray,
         ImpedanceFreqModeDataArray,
+        ImpedanceFreqTerminalTerminalDataArray,
         ModeIndexDataArray,
         ScalarModeFieldDataArray,
         VoltageFreqModeDataArray,
+        VoltageFreqTerminalModeDataArray,
     )
-    from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+    from tidy3d.components.microwave.data.dataset import (
+        TransmissionLineDataset,
+        TransmissionLineTerminalDataset,
+    )
 
     # Setup coordinates
     x = [-1, 1, 3]
@@ -2106,6 +2520,49 @@ def test_microwave_mode_data_reordering_with_transmission_line_data():
         Z0=impedance_data, voltage_coeffs=voltage_data, current_coeffs=current_data
     )
 
+    # Create transmission line terminal data with distinct values for each terminal/mode
+    terminal_labels = ["t0", "t1", "t2"]
+    terminal_z0_coords = {
+        "f": f,
+        "terminal_label_out": terminal_labels,
+        "terminal_label_in": terminal_labels,
+    }
+    terminal_coords = {"f": f, "terminal_label": terminal_labels, "mode_index": mode_index}
+
+    n_t = len(terminal_labels)
+    n_m = len(mode_index)
+    n_f = len(f)
+
+    terminal_z0_values = np.zeros((n_f, n_t, n_t))
+    terminal_voltage_values = np.zeros((n_f, n_t, n_m), dtype=complex)
+    terminal_current_values = np.zeros((n_f, n_t, n_m), dtype=complex)
+
+    for t_idx in range(n_t):
+        terminal_z0_values[:, t_idx, t_idx] = 75 * (t_idx + 1)
+        for m_idx in range(n_m):
+            terminal_voltage_values[:, t_idx, m_idx] = (m_idx + 1) * (3 + 1.5j) + t_idx * (
+                0.5 + 0.25j
+            )
+            terminal_current_values[:, t_idx, m_idx] = (m_idx + 1) * (0.3 + 0.15j) + t_idx * (
+                0.05 + 0.025j
+            )
+
+    terminal_z0_data = ImpedanceFreqTerminalTerminalDataArray(
+        terminal_z0_values, coords=terminal_z0_coords
+    )
+    terminal_voltage_data = VoltageFreqTerminalModeDataArray(
+        terminal_voltage_values, coords=terminal_coords
+    )
+    terminal_current_data = CurrentFreqTerminalModeDataArray(
+        terminal_current_values, coords=terminal_coords
+    )
+
+    tl_terminal_data = TransmissionLineTerminalDataset(
+        Z0=terminal_z0_data,
+        voltage_transform=terminal_voltage_data,
+        current_transform=terminal_current_data,
+    )
+
     # Create monitor
     monitor = td.MicrowaveModeSolverMonitor(
         center=(0, 0, 0),
@@ -2127,6 +2584,7 @@ def test_microwave_mode_data_reordering_with_transmission_line_data():
         n_complex=index_data,
         grid_expanded=grid,
         transmission_line_data=tl_data,
+        transmission_line_terminal_data=tl_terminal_data,
     )
 
     # Define a reordering: reverse the mode order for each frequency
@@ -2198,17 +2656,75 @@ def test_microwave_mode_data_reordering_with_transmission_line_data():
         "n_complex not reordered correctly"
     )
 
+    # Verify that transmission_line_terminal_data is also reordered correctly
+    assert reordered_data.transmission_line_terminal_data is not None, (
+        "transmission_line_terminal_data should not be None"
+    )
+
+    # Z0 has no mode_index dimension (it's terminal_label_out x terminal_label_in),
+    # so it should be unchanged by mode reordering
+    assert np.allclose(
+        reordered_data.transmission_line_terminal_data.Z0.values,
+        tl_terminal_data.Z0.values,
+    ), "transmission_line_terminal_data.Z0 should be unchanged (no mode_index dim)"
+
+    # voltage_transform has mode_index dim: check reordering
+    # Original mode 2 (value = 3*(3+1.5j) + t_idx*(0.5+0.25j)) should now be at index 0
+    for t_idx in range(n_t):
+        original_mode_2_voltage = 3 * (3 + 1.5j) + t_idx * (0.5 + 0.25j)
+        assert np.allclose(
+            reordered_data.transmission_line_terminal_data.voltage_transform.isel(
+                mode_index=0, terminal_label=t_idx
+            ).values,
+            original_mode_2_voltage,
+        ), f"voltage_transform not reordered correctly for terminal {t_idx}"
+
+        # Original mode 0 (value = 1*(3+1.5j) + t_idx*(0.5+0.25j)) should now be at index 2
+        original_mode_0_voltage = 1 * (3 + 1.5j) + t_idx * (0.5 + 0.25j)
+        assert np.allclose(
+            reordered_data.transmission_line_terminal_data.voltage_transform.isel(
+                mode_index=2, terminal_label=t_idx
+            ).values,
+            original_mode_0_voltage,
+        ), f"voltage_transform not reordered correctly for terminal {t_idx}"
+
+    # current_transform has mode_index dim: check reordering
+    # Original mode 2 (value = 3*(0.3+0.15j) + t_idx*(0.05+0.025j)) should now be at index 0
+    for t_idx in range(n_t):
+        original_mode_2_current = 3 * (0.3 + 0.15j) + t_idx * (0.05 + 0.025j)
+        assert np.allclose(
+            reordered_data.transmission_line_terminal_data.current_transform.isel(
+                mode_index=0, terminal_label=t_idx
+            ).values,
+            original_mode_2_current,
+        ), f"current_transform not reordered correctly for terminal {t_idx}"
+
+        # Original mode 0 (value = 1*(0.3+0.15j) + t_idx*(0.05+0.025j)) should now be at index 2
+        original_mode_0_current = 1 * (0.3 + 0.15j) + t_idx * (0.05 + 0.025j)
+        assert np.allclose(
+            reordered_data.transmission_line_terminal_data.current_transform.isel(
+                mode_index=2, terminal_label=t_idx
+            ).values,
+            original_mode_0_current,
+        ), f"current_transform not reordered correctly for terminal {t_idx}"
+
 
 def test_microwave_mode_data_interpolation():
     """Test that MicrowaveModeSolverData interpolation correctly handles transmission_line_data."""
     from tidy3d.components.data.data_array import (
         CurrentFreqModeDataArray,
+        CurrentFreqTerminalModeDataArray,
         ImpedanceFreqModeDataArray,
+        ImpedanceFreqTerminalTerminalDataArray,
         ModeIndexDataArray,
         ScalarModeFieldDataArray,
         VoltageFreqModeDataArray,
+        VoltageFreqTerminalModeDataArray,
     )
-    from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+    from tidy3d.components.microwave.data.dataset import (
+        TransmissionLineDataset,
+        TransmissionLineTerminalDataset,
+    )
 
     # Setup coordinates with sparse frequencies
     x = [-1, 1, 3]
@@ -2262,6 +2778,55 @@ def test_microwave_mode_data_interpolation():
         Z0=impedance_data, voltage_coeffs=voltage_data, current_coeffs=current_data
     )
 
+    # Create transmission line terminal data with frequency dependence
+    terminal_labels = [f"t{i}" for i in range(len(mode_index))]
+    terminal_coords = {
+        "f": f_sparse,
+        "terminal_label": terminal_labels,
+        "mode_index": mode_index,
+    }
+    terminal_z0_coords = {
+        "f": f_sparse,
+        "terminal_label_out": terminal_labels,
+        "terminal_label_in": terminal_labels,
+    }
+
+    n_t = len(terminal_labels)
+    n_m = len(mode_index)
+    n_f = len(f_sparse)
+
+    terminal_z0_values = np.zeros((n_f, n_t, n_t))
+    terminal_voltage_values = np.zeros((n_f, n_t, n_m), dtype=complex)
+    terminal_current_values = np.zeros((n_f, n_t, n_m), dtype=complex)
+
+    for f_idx, freq in enumerate(f_sparse):
+        for t_idx in range(n_t):
+            # Diagonal Z0 matrix varying with frequency
+            terminal_z0_values[f_idx, t_idx, t_idx] = 50 + (freq / 1e14) * 5 + t_idx * 10
+            for m_idx in range(n_m):
+                terminal_voltage_values[f_idx, t_idx, m_idx] = ((freq / 1e14) + t_idx + m_idx) * (
+                    2 + 1j
+                )
+                terminal_current_values[f_idx, t_idx, m_idx] = ((freq / 1e14) + t_idx + m_idx) * (
+                    0.1 + 0.05j
+                )
+
+    terminal_z0_data = ImpedanceFreqTerminalTerminalDataArray(
+        terminal_z0_values, coords=terminal_z0_coords
+    )
+    terminal_voltage_data = VoltageFreqTerminalModeDataArray(
+        terminal_voltage_values, coords=terminal_coords
+    )
+    terminal_current_data = CurrentFreqTerminalModeDataArray(
+        terminal_current_values, coords=terminal_coords
+    )
+
+    tl_terminal_data = TransmissionLineTerminalDataset(
+        Z0=terminal_z0_data,
+        voltage_transform=terminal_voltage_data,
+        current_transform=terminal_current_data,
+    )
+
     # Create monitor
     monitor = td.MicrowaveModeSolverMonitor(
         center=(0, 0, 0),
@@ -2283,6 +2848,7 @@ def test_microwave_mode_data_interpolation():
         n_complex=index_data,
         grid_expanded=grid,
         transmission_line_data=tl_data,
+        transmission_line_terminal_data=tl_terminal_data,
     )
 
     # Interpolate to denser frequency grid
@@ -2382,6 +2948,83 @@ def test_microwave_mode_data_interpolation():
     expected_Z0_end_mode1 = 50 + 2 * 10 + 1 * 20
     assert np.allclose(Z0_at_end_mode1, expected_Z0_end_mode1, rtol=1e-6), (
         f"Z0 at endpoint should match original: expected {expected_Z0_end_mode1}, got {Z0_at_end_mode1}"
+    )
+
+    # Verify that transmission_line_terminal_data is also interpolated
+    assert data_interp_linear.transmission_line_terminal_data is not None, (
+        "transmission_line_terminal_data should be interpolated"
+    )
+    assert len(data_interp_linear.transmission_line_terminal_data.Z0.coords["f"]) == len(f_dense), (
+        "terminal Z0 should be interpolated to new frequencies"
+    )
+    assert len(
+        data_interp_linear.transmission_line_terminal_data.voltage_transform.coords["f"]
+    ) == len(f_dense), "terminal voltage_transform should be interpolated to new frequencies"
+    assert len(
+        data_interp_linear.transmission_line_terminal_data.current_transform.coords["f"]
+    ) == len(f_dense), "terminal current_transform should be interpolated to new frequencies"
+
+    # Check terminal Z0 interpolation accuracy at midpoint
+    # At f=1.5e14, terminal 0: Z0[0,0] = 50 + 1.5*5 + 0*10 = 57.5
+    terminal_Z0_mid = (
+        data_interp_linear.transmission_line_terminal_data.Z0.sel(f=f_mid, method="nearest")
+        .sel(terminal_label_out="t0", terminal_label_in="t0")
+        .values
+    )
+    expected_terminal_Z0 = 50 + 1.5 * 5 + 0 * 10
+    assert np.allclose(terminal_Z0_mid, expected_terminal_Z0, rtol=0.01), (
+        f"Terminal Z0 interpolation: expected {expected_terminal_Z0}, got {terminal_Z0_mid}"
+    )
+
+    # Check terminal voltage_transform interpolation accuracy at midpoint
+    # At f=1.5e14, terminal 0, mode 0: (1.5 + 0 + 0) * (2+1j) = 1.5*(2+1j)
+    terminal_v_mid = (
+        data_interp_linear.transmission_line_terminal_data.voltage_transform.sel(
+            f=f_mid, method="nearest"
+        )
+        .sel(terminal_label="t0", mode_index=0)
+        .values
+    )
+    expected_terminal_v = 1.5 * (2 + 1j)
+    assert np.allclose(terminal_v_mid, expected_terminal_v, rtol=0.01), (
+        f"Terminal voltage_transform interpolation: expected {expected_terminal_v}, got {terminal_v_mid}"
+    )
+
+    # Check terminal current_transform interpolation accuracy at midpoint
+    # At f=1.5e14, terminal 0, mode 0: (1.5 + 0 + 0) * (0.1+0.05j) = 1.5*(0.1+0.05j)
+    terminal_i_mid = (
+        data_interp_linear.transmission_line_terminal_data.current_transform.sel(
+            f=f_mid, method="nearest"
+        )
+        .sel(terminal_label="t0", mode_index=0)
+        .values
+    )
+    expected_terminal_i = 1.5 * (0.1 + 0.05j)
+    assert np.allclose(terminal_i_mid, expected_terminal_i, rtol=0.01), (
+        f"Terminal current_transform interpolation: expected {expected_terminal_i}, got {terminal_i_mid}"
+    )
+
+    # Test at endpoints to ensure terminal data matches original values
+    # At f=1e14, terminal 1: Z0[1,1] = 50 + 1*5 + 1*10 = 65
+    terminal_Z0_start = (
+        data_interp_linear.transmission_line_terminal_data.Z0.sel(f=1e14, method="nearest")
+        .sel(terminal_label_out="t1", terminal_label_in="t1")
+        .values
+    )
+    expected_terminal_Z0_start = 50 + 1 * 5 + 1 * 10
+    assert np.allclose(terminal_Z0_start, expected_terminal_Z0_start, rtol=1e-6), (
+        f"Terminal Z0 at endpoint: expected {expected_terminal_Z0_start}, got {terminal_Z0_start}"
+    )
+
+    # At f=2e14, terminal 1: Z0[1,1] = 50 + 2*5 + 1*10 = 70
+    terminal_Z0_end = (
+        data_interp_linear.transmission_line_terminal_data.Z0.sel(f=2e14, method="nearest")
+        .sel(terminal_label_out="t1", terminal_label_in="t1")
+        .values
+    )
+    expected_terminal_Z0_end = 50 + 2 * 5 + 1 * 10
+    assert np.allclose(terminal_Z0_end, expected_terminal_Z0_end, rtol=1e-6), (
+        f"Terminal Z0 at endpoint: expected {expected_terminal_Z0_end}, got {terminal_Z0_end}"
     )
 
 
@@ -2613,3 +3256,166 @@ def test_baseband_source_plot():
     _, ax = plt.subplots()
     cst.plot(times, ax=ax)
     plt.close()
+
+
+def test_transmission_line_Z0_matrix():
+    """Test that TransmissionLineDataset.Z0_matrix correctly converts diagonal Z0 to full matrix."""
+    from tidy3d.components.data.data_array import (
+        CurrentFreqModeDataArray,
+        ImpedanceFreqModeDataArray,
+        VoltageFreqModeDataArray,
+    )
+    from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+
+    # Create test data with 2 frequencies and 3 modes
+    freqs = [1e14, 2e14]
+    mode_indices = [0, 1, 2]
+
+    # Create Z0 with unique values for each (freq, mode) pair
+    Z0_values = np.array(
+        [
+            [50.0, 75.0, 100.0],  # freq 0: mode 0 = 50, mode 1 = 75, mode 2 = 100
+            [60.0, 80.0, 110.0],  # freq 1: mode 0 = 60, mode 1 = 80, mode 2 = 110
+        ]
+    )
+    Z0_data = ImpedanceFreqModeDataArray(Z0_values, coords={"f": freqs, "mode_index": mode_indices})
+
+    # Create dummy voltage and current data
+    voltage_data = VoltageFreqModeDataArray(
+        np.ones((2, 3), dtype=complex), coords={"f": freqs, "mode_index": mode_indices}
+    )
+    current_data = CurrentFreqModeDataArray(
+        np.ones((2, 3), dtype=complex), coords={"f": freqs, "mode_index": mode_indices}
+    )
+
+    # Create TransmissionLineDataset
+    tl_data = TransmissionLineDataset(
+        Z0=Z0_data, voltage_coeffs=voltage_data, current_coeffs=current_data
+    )
+
+    # Get the Z0_matrix
+    Z0_matrix = tl_data.Z0_matrix
+
+    # Test 1: Check shape
+    assert Z0_matrix.shape == (2, 3, 3), (
+        f"Z0_matrix shape should be (2, 3, 3), got {Z0_matrix.shape}"
+    )
+
+    # Test 2: Check dimensions
+    assert set(Z0_matrix.dims) == {"f", "mode_index_out", "mode_index_in"}, (
+        f"Z0_matrix dimensions should be (f, mode_index_out, mode_index_in), got {Z0_matrix.dims}"
+    )
+
+    # Test 3: Check coordinates
+    assert np.allclose(Z0_matrix.coords["f"].values, freqs), (
+        "Z0_matrix frequency coordinates don't match"
+    )
+    assert np.allclose(Z0_matrix.coords["mode_index_out"].values, mode_indices), (
+        "Z0_matrix mode_index_out coordinates don't match"
+    )
+    assert np.allclose(Z0_matrix.coords["mode_index_in"].values, mode_indices), (
+        "Z0_matrix mode_index_in coordinates don't match"
+    )
+
+    # Test 4: Check diagonal elements match original Z0
+    for f_idx, f in enumerate(freqs):
+        for m_idx, m in enumerate(mode_indices):
+            diagonal_value = Z0_matrix.sel(
+                f=f, mode_index_out=m, mode_index_in=m, method="nearest"
+            ).values
+            expected_value = Z0_values[f_idx, m_idx]
+            assert np.isclose(diagonal_value, expected_value), (
+                f"Diagonal element at f={f}, mode={m} should be {expected_value}, got {diagonal_value}"
+            )
+
+    # Test 5: Check off-diagonal elements are zero
+    for _f_idx, f in enumerate(freqs):
+        for i, m_out in enumerate(mode_indices):
+            for j, m_in in enumerate(mode_indices):
+                if i != j:  # Off-diagonal
+                    off_diag_value = Z0_matrix.sel(
+                        f=f, mode_index_out=m_out, mode_index_in=m_in, method="nearest"
+                    ).values
+                    assert np.isclose(off_diag_value, 0.0), (
+                        f"Off-diagonal element at f={f}, mode_out={m_out}, mode_in={m_in} "
+                        f"should be 0, got {off_diag_value}"
+                    )
+
+
+def test_microwave_terminal_source_creation():
+    """Test direct construction of MicrowaveTerminalSource."""
+    from tidy3d.components.microwave.mode_spec import MicrowaveTerminalModeSpec
+
+    current_spec = td.AxisAlignedCurrentIntegralSpec(center=(0, 0, 0), size=(2, 1, 0), sign="+")
+    impedance_spec = td.CustomImpedanceSpec(current_spec=current_spec)
+    terminal_spec = MicrowaveTerminalModeSpec(
+        num_modes=1, impedance_specs={"port1": impedance_spec}
+    )
+    source = MicrowaveTerminalSource(
+        size=(10, 10, 0),
+        source_time=td.GaussianPulse(freq0=10e9, fwidth=1e9),
+        mode_spec=terminal_spec,
+        terminal_label="port1",
+        direction="+",
+    )
+    assert source.terminal_label == "port1"
+    assert isinstance(source.mode_spec, MicrowaveTerminalModeSpec)
+
+
+def test_terminal_mode_spec_validation():
+    """Test MicrowaveTerminalModeSpec validation error branches."""
+    from tidy3d.components.microwave.mode_spec import MicrowaveTerminalModeSpec
+
+    v_spec = td.AxisAlignedVoltageIntegralSpec(center=(0, 0, 0), size=(1, 0, 0), sign="+")
+    spec_vi = td.CustomImpedanceSpec(voltage_spec=v_spec)
+    # current_spec only → impedance_definition == "PI"
+    spec_pi = td.CustomImpedanceSpec(
+        current_spec=td.AxisAlignedCurrentIntegralSpec(center=(0, 0, 0), size=(1, 1, 0), sign="+"),
+    )
+
+    # num_modes mismatch (line 297)
+    with pytest.raises(pd.ValidationError):
+        MicrowaveTerminalModeSpec(num_modes=2, impedance_specs={"T0": spec_vi})
+
+    # Inconsistent impedance definitions across terminals (line 293)
+    with pytest.raises(pd.ValidationError):
+        MicrowaveTerminalModeSpec(num_modes=2, impedance_specs={"T0": spec_vi, "T1": spec_pi})
+
+    # terminals_mapping length mismatch (line 307)
+    with pytest.raises(pd.ValidationError):
+        MicrowaveTerminalModeSpec(
+            num_modes=2,
+            impedance_specs={"T0": spec_vi, "T1": spec_vi},
+            terminals_mapping={"Out0": "T0"},
+        )
+
+    # Terminal label in mapping not found in impedance specs (line 320)
+    with pytest.raises(pd.ValidationError):
+        MicrowaveTerminalModeSpec(
+            num_modes=2,
+            impedance_specs={"T0": spec_vi, "T1": spec_vi},
+            terminals_mapping={"Out0": "T0", "Out1": "MISSING"},
+        )
+
+    # impedance_definition property (line 329)
+    spec = MicrowaveTerminalModeSpec(num_modes=1, impedance_specs={"T0": spec_vi})
+    assert spec.impedance_definition == "PV"
+
+
+def test_microwave_terminal_source_invalid_label():
+    """Test that invalid terminal_label raises ValidationError."""
+    from tidy3d.components.microwave.mode_spec import MicrowaveTerminalModeSpec
+
+    current_spec = td.AxisAlignedCurrentIntegralSpec(center=(0, 0, 0), size=(2, 1, 0), sign="+")
+    impedance_spec = td.CustomImpedanceSpec(current_spec=current_spec)
+    terminal_spec = MicrowaveTerminalModeSpec(
+        num_modes=1, impedance_specs={"port1": impedance_spec}
+    )
+    with pytest.raises(pd.ValidationError):
+        MicrowaveTerminalSource(
+            size=(10, 10, 0),
+            source_time=td.GaussianPulse(freq0=10e9, fwidth=1e9),
+            mode_spec=terminal_spec,
+            terminal_label="nonexistent",
+            direction="+",
+        )

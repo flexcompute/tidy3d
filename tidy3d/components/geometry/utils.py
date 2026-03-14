@@ -16,6 +16,7 @@ from shapely.geometry import (
 from shapely.geometry.base import (
     BaseMultipartGeometry,
 )
+from shapely.ops import linemerge
 
 from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.base import Tidy3dBaseModel
@@ -147,12 +148,32 @@ def merging_geometries_on_plane(
         shapes_by_prop = defaultdict(list)
         for prop, shape, _ in shapes:
             shapes_by_prop[prop].append(shape)
-        # union shapes of same property
+        # union shapes of same property, handling zero-area geometries (LineStrings, Points)
+        # separately since .buffer(0) collapses them to empty
+        _zero_area_types = ("LineString", "MultiLineString", "Point", "MultiPoint")
         results = []
-        for prop, shapes in shapes_by_prop.items():
-            unionized = shapely.union_all(shapes).buffer(0).normalize()
-            if not unionized.is_empty:
-                results.append((prop, unionized))
+        for prop, prop_shapes in shapes_by_prop.items():
+            polys = [s for s in prop_shapes if s.geom_type not in _zero_area_types]
+            zero_area = [s for s in prop_shapes if s.geom_type in _zero_area_types]
+            merged_parts = []
+            if polys:
+                unionized = shapely.union_all(polys).buffer(0).normalize()
+                if not unionized.is_empty:
+                    merged_parts.append(unionized)
+            if zero_area:
+                merged = shapely.union_all(zero_area)
+                unionized = (
+                    linemerge(merged).normalize()
+                    if merged.geom_type == "MultiLineString"
+                    else merged.normalize()
+                )
+                if not unionized.is_empty:
+                    merged_parts.append(unionized)
+            if len(merged_parts) == 1:
+                results.append((prop, merged_parts[0]))
+            elif len(merged_parts) > 1:
+                combined = shapely.GeometryCollection(merged_parts).normalize()
+                results.append((prop, combined))
         return results
 
     background_shapes = []
