@@ -3924,6 +3924,9 @@ class AbstractFieldProjectionData(MonitorData):
 
         # package into dataset
         keys = ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")
+        # Stack traced tuples before concatenation to avoid creating object arrays.
+        e_data = np.stack(e_data, axis=0)
+        h_data = np.stack(h_data, axis=0)
         field_components = np.concatenate((e_data, h_data), axis=0)
         return self.make_dataset(keys=keys, vals=field_components)
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import tracemalloc
 
+import autograd as ag
+import autograd.numpy as anp
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -86,6 +88,33 @@ GRID_CORRECTION = FreqModeDataArray(
     1 + 0.01 * np.random.rand(*N_COMPLEX.shape), coords=N_COMPLEX.coords
 )
 """ Make the montor data """
+
+
+def make_field_projection_cartesian_data(values, freq=td.C_0):
+    """Create simple projected Cartesian monitor data for local tests."""
+    monitor = td.FieldProjectionCartesianMonitor(
+        center=(0, 0, 0),
+        size=(1, 1, 1),
+        freqs=[freq],
+        name="projection_monitor",
+        x=[-0.5, 0.5],
+        y=[-0.25, 0.25],
+        proj_axis=2,
+        proj_distance=1.0,
+    )
+    coords = {"x": [-0.5, 0.5], "y": [-0.25, 0.25], "z": [1.0], "f": [freq]}
+    field = td.FieldProjectionCartesianDataArray(values, coords=coords)
+    projected_fields = td.FieldProjectionCartesianData(
+        monitor=monitor,
+        projection_surfaces=monitor.projection_surfaces,
+        Er=field,
+        Etheta=field,
+        Ephi=field,
+        Hr=field,
+        Htheta=field,
+        Hphi=field,
+    )
+    return projected_fields
 
 
 def make_field_data(symmetry: bool = True):
@@ -726,6 +755,30 @@ def test_diffraction_data():
     _ = data.power
     _ = data.fields_spherical
     _ = data.fields_cartesian
+
+
+def test_traced_projected_fields_work_as_custom_source(tmp_path):
+    """Traced projected Cartesian fields should stay numeric through custom-source coercion."""
+    out_path = tmp_path / "traced_projected_fields.hdf5"
+
+    def objective(x):
+        values = anp.ones((2, 2, 1, 1), dtype=complex) * x[0]
+        projected_fields = make_field_projection_cartesian_data(values)
+        source = td.CustomFieldSource(
+            center=(0, 0, 0),
+            size=(1, 1, 0),
+            source_time=td.GaussianPulse(freq0=td.C_0, fwidth=td.C_0 / 20),
+            field_dataset=projected_fields.fields_cartesian,
+        )
+
+        for field_data in source.field_dataset.field_components.values():
+            assert field_data.values.dtype != np.dtype("O")
+
+        source.field_dataset.Ex.to_hdf5(fname=out_path, group_path="/fields/Ex")
+        return anp.real(source.field_dataset.Ex.data).sum()
+
+    grad = ag.grad(objective)(anp.array([1.0]))
+    assert np.all(np.isfinite(grad))
 
 
 def test_colocate():
