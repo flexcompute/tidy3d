@@ -64,7 +64,12 @@ from tidy3d.components.validators import (
     required_if_symmetry_present,
 )
 from tidy3d.constants import C_0, EPSILON_0, ETA_0, MICROMETER, UnitScaling, fp_eps
-from tidy3d.exceptions import DataError, SetupError, Tidy3dNotImplementedError, ValidationError
+from tidy3d.exceptions import (
+    DataError,
+    SetupError,
+    Tidy3dNotImplementedError,
+    ValidationError,
+)
 from tidy3d.log import log
 
 from .data_array import (
@@ -2370,12 +2375,55 @@ class FieldOverlapData(AbstractOverlapData):
         title="Monitor", description="Monitor associated with the data."
     )
 
-    def _make_adjoint_sources(
-        self, dataset_names: list[str], fwidth: float
-    ) -> list[Union[CustomCurrentSource, PointDipole]]:
-        """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
+    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
+        """Get all adjoint sources for ``FieldOverlapData``."""
+        adjoint_sources = []
 
-        raise NotImplementedError("Could not formulate adjoint source for overlap monitor output.")
+        for name in dataset_names:
+            if name == "amps":
+                adjoint_sources += self._make_adjoint_sources_amps(fwidth=fwidth)
+            else:
+                raise NotImplementedError(
+                    f"Unsupported adjoint field '{name}' for 'FieldOverlapData' "
+                    f"on monitor '{self.monitor.name}'. Only 'amps' is supported."
+                )
+
+        return adjoint_sources
+
+    def _make_adjoint_sources_amps(self, fwidth: float) -> list[Source]:
+        """Generate adjoint sources for ``FieldOverlapData.amps``."""
+        coords = self.amps.coords
+        adjoint_sources = []
+
+        for freq in coords["f"]:
+            for direction in coords["direction"]:
+                for mode_index in coords["mode_index"]:
+                    amp_single = self.amps.sel(f=freq, direction=direction, mode_index=mode_index)
+
+                    amp_complex = self.get_amplitude(amp_single)
+                    if (abs(amp_complex) == 0.0) or np.isnan(amp_complex):
+                        continue
+
+                    adjoint_sources.append(self._adjoint_source_amp(amp=amp_single, fwidth=fwidth))
+
+        return adjoint_sources
+
+    def _adjoint_source_amp(self, amp: DataArray, fwidth: float) -> Source:
+        """Generate an adjoint Gaussian-like source for a single overlap amplitude."""
+        coords = amp.coords
+        freq0 = coords["f"]
+        direction = coords["direction"]
+
+        amp_complex = self.get_amplitude(amp)
+        from tidy3d.components.autograd.source_factory import gaussian_source_from_monitor
+
+        return gaussian_source_from_monitor(
+            monitor=self.monitor,
+            freq=float(freq0),
+            direction=direction,
+            coefficient=amp_complex,
+            fwidth=fwidth,
+        )
 
 
 class ModeData(ModeSolverDataset, AbstractOverlapData):

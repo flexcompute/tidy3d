@@ -7,7 +7,7 @@ import pathlib
 import re
 from abc import ABC
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Union, get_args
 
 import h5py
 import numpy as np
@@ -21,7 +21,7 @@ from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.source.utils import SourceType
+from tidy3d.components.source.utils import GaussianBeamType, SourceType
 from tidy3d.components.structure import Structure
 from tidy3d.components.types.base import discriminated_union
 from tidy3d.components.types.monitor_data import MonitorDataType, MonitorDataTypes
@@ -59,6 +59,9 @@ NUM_ADJOINT_FWIDTH_TO_ZERO = 3
 # for broadband adjoint source, the minimum number of FWIDTH to reach the lowest frequency
 # that is covered by the broadband pulse
 NUM_ADJOINT_FWIDTH_TO_FMIN = 0.5
+# If grouped Gaussian-like source center frequencies span more than this fraction of the
+# grouped center frequency, use a small multi-frequency source approximation.
+GAUSSIAN_WIDE_BANDWIDTH_THRESHOLD = 0.2
 
 
 class AdjointSourceInfo(Tidy3dBaseModel):
@@ -1345,6 +1348,18 @@ class SimulationData(AbstractYeeGridSimulationData):
         src_broadband = adj_srcs[0].updated_copy(
             source_time=src_time_base.updated_copy(freq0=adj_src_f0, fwidth=adj_src_fwidth)
         )
+
+        # For grouped Gaussian-like sources, use a small multi-frequency approximation only
+        # when the grouped source centers span more than the configured fractional threshold
+        # of the broadband center frequency.
+        if isinstance(src_broadband, get_args(GaussianBeamType)):
+            num_freqs = 1
+            if len(adj_srcs) > 1:
+                src_freqs = np.array([src.source_time._freq0 for src in adj_srcs], dtype=float)
+                freq_span = float(np.max(src_freqs) - np.min(src_freqs))
+                if freq_span > GAUSSIAN_WIDE_BANDWIDTH_THRESHOLD * float(adj_src_f0):
+                    num_freqs = 3
+            src_broadband = src_broadband.updated_copy(num_freqs=num_freqs)
 
         return src_broadband
 

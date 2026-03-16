@@ -5,7 +5,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from tidy3d.components.data.data_array import DataArray
-from tidy3d.components.source.field import ModeSource, PlaneWave
+from tidy3d.components.monitor import AstigmaticGaussianOverlapMonitor, GaussianOverlapMonitor
+from tidy3d.components.source.field import (
+    AstigmaticGaussianBeam,
+    GaussianBeam,
+    ModeSource,
+    PlaneWave,
+)
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.constants import C_0, ETA_0
 
@@ -14,6 +20,7 @@ if TYPE_CHECKING:
 
     from tidy3d.components.data.monitor_data import DiffractionData
     from tidy3d.components.monitor import DiffractionMonitor, ModeMonitor
+    from tidy3d.components.source.utils import GaussianBeamType
 
 
 def flip_direction(direction: Union[str, DataArray]) -> str:
@@ -50,6 +57,60 @@ def mode_source_from_monitor(
         center=monitor.center,
         direction=flip_direction(direction),
         mode_index=mode_index,
+    )
+
+
+def gaussian_source_from_monitor(
+    monitor: Union[GaussianOverlapMonitor, AstigmaticGaussianOverlapMonitor],
+    freq: float,
+    direction: Union[str, DataArray],
+    coefficient: complex,
+    fwidth: float,
+) -> GaussianBeamType:
+    """Build a Gaussian-like adjoint source from overlap monitor metadata and coefficient."""
+    k0 = 2 * np.pi * freq / C_0
+    grad_const = k0 / 4 / ETA_0
+    src_amp = 1j * grad_const * coefficient
+
+    source_time = GaussianPulse(
+        amplitude=abs(src_amp),
+        phase=np.angle(src_amp),
+        freq0=freq,
+        fwidth=fwidth,
+    )
+    direction_flipped = flip_direction(direction)
+
+    if isinstance(monitor, GaussianOverlapMonitor):
+        return GaussianBeam(
+            center=monitor.center,
+            size=monitor.size,
+            source_time=source_time,
+            direction=direction_flipped,
+            angle_theta=monitor.angle_theta,
+            angle_phi=monitor.angle_phi,
+            pol_angle=monitor.pol_angle,
+            waist_radius=monitor.waist_radius,
+            waist_distance=monitor.waist_distance,
+            num_freqs=1,
+        )
+
+    if isinstance(monitor, AstigmaticGaussianOverlapMonitor):
+        return AstigmaticGaussianBeam(
+            center=monitor.center,
+            size=monitor.size,
+            source_time=source_time,
+            direction=direction_flipped,
+            angle_theta=monitor.angle_theta,
+            angle_phi=monitor.angle_phi,
+            pol_angle=monitor.pol_angle,
+            waist_sizes=monitor.waist_sizes,
+            waist_distances=monitor.waist_distances,
+            num_freqs=1,
+        )
+
+    raise TypeError(
+        "Expected GaussianOverlapMonitor or AstigmaticGaussianOverlapMonitor, "
+        f"got '{type(monitor).__name__}'."
     )
 
 

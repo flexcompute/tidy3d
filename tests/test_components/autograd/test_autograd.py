@@ -2507,6 +2507,83 @@ def test_autograd_multi_source_normalize_index(use_emulated_run):
     assert anp.all(anp.isfinite(grad))
 
 
+def test_gaussian_broadband_source_num_freqs_selection():
+    """Gaussian broadband grouping uses threshold constant for num_freqs selection."""
+
+    f0 = FREQ0
+    base_sim = td.Simulation(
+        size=(1.0, 1.0, 1.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[
+            td.PointDipole(
+                center=(0.0, 0.0, 0.0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(freq0=f0, fwidth=0.1 * f0),
+            )
+        ],
+        monitors=[],
+    )
+    sim_data = td.SimulationData(simulation=base_sim, data=())
+    bandwidth_threshold = td.components.data.sim_data.GAUSSIAN_WIDE_BANDWIDTH_THRESHOLD
+    narrow_delta = 0.45 * bandwidth_threshold
+    wide_delta = 0.55 * bandwidth_threshold
+
+    def make_gaussian_source(freq: float) -> td.GaussianBeam:
+        return td.GaussianBeam(
+            center=(0.0, 0.0, 0.0),
+            size=(1.0, 1.0, 0.0),
+            source_time=td.GaussianPulse(freq0=freq, fwidth=0.05 * f0),
+            direction="+",
+            waist_radius=0.5,
+            pol_angle=np.pi / 2,
+        )
+
+    def make_astig_source(freq: float) -> td.AstigmaticGaussianBeam:
+        return td.AstigmaticGaussianBeam(
+            center=(0.0, 0.0, 0.0),
+            size=(1.0, 1.0, 0.0),
+            source_time=td.GaussianPulse(freq0=freq, fwidth=0.05 * f0),
+            direction="+",
+            waist_sizes=(0.5, 0.4),
+            waist_distances=(0.0, 0.1),
+            pol_angle=np.pi / 2,
+        )
+
+    # Single-frequency case -> keep num_freqs=1.
+    src_single = sim_data._make_broadband_source([make_gaussian_source(f0)])
+    assert isinstance(src_single, td.GaussianBeam)
+    assert src_single.num_freqs == 1
+
+    # Grouped span <= threshold of center frequency -> keep num_freqs=1.
+    src_narrow = sim_data._make_broadband_source(
+        [
+            make_gaussian_source((1 - narrow_delta) * f0),
+            make_gaussian_source((1 + narrow_delta) * f0),
+        ]
+    )
+    assert isinstance(src_narrow, td.GaussianBeam)
+    assert src_narrow.num_freqs == 1
+
+    # Grouped span > threshold of center frequency -> set num_freqs=3.
+    src_wide = sim_data._make_broadband_source(
+        [make_gaussian_source((1 - wide_delta) * f0), make_gaussian_source((1 + wide_delta) * f0)]
+    )
+    assert isinstance(src_wide, td.GaussianBeam)
+    assert src_wide.num_freqs == 3
+
+    # Astigmatic GaussianBeam follows the same rule.
+    src_astig_single = sim_data._make_broadband_source([make_astig_source(f0)])
+    assert isinstance(src_astig_single, td.AstigmaticGaussianBeam)
+    assert src_astig_single.num_freqs == 1
+
+    src_astig_wide = sim_data._make_broadband_source(
+        [make_astig_source((1 - wide_delta) * f0), make_astig_source((1 + wide_delta) * f0)]
+    )
+    assert isinstance(src_astig_wide, td.AstigmaticGaussianBeam)
+    assert src_astig_wide.num_freqs == 3
+
+
 @pytest.mark.parametrize("colocate", [True, False])
 @pytest.mark.parametrize("objtype", ["flux", "intensity"])
 def test_interp_objectives(use_emulated_run, colocate, objtype):
@@ -3653,6 +3730,132 @@ def test_multi_frequency_equivalence(use_emulated_run, structure_key):
     assert not np.any(np.isclose(grad_multi, 0))
 
 
+@pytest.mark.parametrize(
+    "monitor_cls", (td.GaussianOverlapMonitor, td.AstigmaticGaussianOverlapMonitor)
+)
+def test_gaussian_overlap_gradient_pipeline(use_emulated_run, monitor_cls):
+    """Test autograd pipeline with Gaussian overlap amplitudes in objective."""
+
+    fwd_params = params0 + 1.0
+    freq1 = FREQ0 * 1.6
+
+    def make_monitor():
+        kwargs = {
+            "size": (2, 2, 0),
+            "center": (0, 0, LZ / 2 - WVL),
+            "freqs": [FREQ0, freq1],
+            "name": "gaussian_overlap",
+            "pol_angle": np.pi / 2,
+        }
+        if monitor_cls is td.GaussianOverlapMonitor:
+            return monitor_cls(waist_radius=0.8, waist_distance=0.2, **kwargs)
+        return monitor_cls(waist_sizes=(0.8, 0.6), waist_distances=(0.2, -0.1), **kwargs)
+
+    def objective(params):
+        structure_traced = make_structures(params)["custom_med"]
+        sim = SIM_BASE.updated_copy(
+            structures=(structure_traced,),
+            monitors=(*SIM_BASE.monitors, make_monitor()),
+        )
+        sim_data = run(sim, task_name="gaussian_overlap_grad")
+        amps = sim_data["gaussian_overlap"].amps.sel(direction="+")
+        return anp.sum(anp.abs(amps.values) ** 2)
+
+    grad = ag.grad(objective)(fwd_params)
+
+    assert np.all(np.isfinite(grad))
+    assert not np.all(np.isclose(grad, 0.0))
+
+
+def test_gaussian_overlap_frequency_selection_pipeline(use_emulated_run):
+    """Test selecting one frequency and one direction from Gaussian overlap amplitudes."""
+
+    fwd_params = params0 + 1.0
+    freq1 = FREQ0 * 1.6
+
+    monitor = td.GaussianOverlapMonitor(
+        size=(2, 2, 0),
+        center=(0, 0, LZ / 2 - WVL),
+        freqs=[FREQ0, freq1],
+        name="gaussian_overlap",
+        pol_angle=np.pi / 2,
+        waist_radius=0.8,
+        waist_distance=0.2,
+    )
+
+    def objective(params):
+        structure_traced = make_structures(params)["custom_med"]
+        sim = SIM_BASE.updated_copy(
+            structures=(structure_traced,),
+            monitors=(*SIM_BASE.monitors, monitor),
+        )
+        sim_data = run(sim, task_name="gaussian_overlap_freq")
+        amps = sim_data["gaussian_overlap"].amps.sel(direction="+", f=FREQ0, mode_index=0)
+        return anp.sum(anp.abs(amps.values) ** 2)
+
+    grad = ag.grad(objective)(fwd_params)
+
+    assert np.all(np.isfinite(grad))
+    assert not np.all(np.isclose(grad, 0.0))
+
+
+def test_gaussian_overlap_multifreq_grouped_to_one_adjoint_source(use_emulated_run, monkeypatch):
+    """Single Gaussian overlap monitor with multi-f objective should produce one grouped adjoint source."""
+
+    fwd_params = params0 + 1.0
+    freqs = [FREQ0 * 0.9, FREQ0, FREQ0 * 1.1, FREQ0 * 1.2]
+
+    monitor = td.GaussianOverlapMonitor(
+        size=(2, 2, 0),
+        center=(0, 0, LZ / 2 - WVL),
+        freqs=freqs,
+        name="gaussian_overlap",
+        pol_angle=np.pi / 2,
+        waist_radius=0.8,
+        waist_distance=0.2,
+    )
+
+    setup_adj_orig = autograd_module.setup_adj
+    process_adj_orig = td.SimulationData._process_adjoint_sources
+    captured = {"num_sims_adj": None, "num_sources_first_sim": None}
+    captured_infos = []
+
+    def process_adj_capture(self, adj_srcs):
+        infos = process_adj_orig(self, adj_srcs)
+        captured_infos.extend(infos)
+        return infos
+
+    def setup_adj_capture(*args, **kwargs):
+        sims_adj = setup_adj_orig(*args, **kwargs)
+        captured["num_sims_adj"] = len(sims_adj)
+        captured["num_sources_first_sim"] = len(sims_adj[0].sources) if sims_adj else 0
+        return sims_adj
+
+    monkeypatch.setattr(autograd_module, "setup_adj", setup_adj_capture)
+    monkeypatch.setattr(td.SimulationData, "_process_adjoint_sources", process_adj_capture)
+
+    def objective(params):
+        structure_traced = make_structures(params)["custom_med"]
+        sim = SIM_BASE.updated_copy(
+            structures=(structure_traced,),
+            monitors=(*SIM_BASE.monitors, monitor),
+        )
+        sim_data = run(sim, task_name="gaussian_overlap_grouping")
+        amps = sim_data["gaussian_overlap"].amps.sel(direction="+")
+        return anp.sum(anp.abs(amps.values) ** 2)
+
+    grad = ag.grad(objective)(fwd_params)
+
+    assert np.all(np.isfinite(grad))
+    assert captured["num_sims_adj"] == 1
+    assert captured["num_sources_first_sim"] == 1
+    assert captured_infos
+    grouped_info = captured_infos[0]
+    grouped_freqs = np.array(grouped_info.post_norm.coords["f"].values, dtype=float)
+    assert np.allclose(np.sort(grouped_freqs), np.sort(freqs))
+    assert grouped_info.sources[0].num_freqs == 3
+
+
 def test_error_flux(use_emulated_run):
     """Make sure proper error raised if differentiating w.r.t. FluxData."""
 
@@ -3672,6 +3875,26 @@ def test_error_flux(use_emulated_run):
         NotImplementedError, match="Could not formulate adjoint source for 'FluxMonitor' output"
     ):
         g = ag.grad(objective)(params0)
+
+
+def test_error_gaussian_overlap_unsupported_dataset_name_raises_not_implemented():
+    """Ensure unsupported FieldOverlapData dataset names raise NotImplementedError."""
+
+    monitor = td.GaussianOverlapMonitor(
+        center=(0, 0, 0),
+        size=(1, 1, 0),
+        freqs=[FREQ0],
+        store_fields_direction="+",
+        name="gauss_overlap",
+    )
+    amps = td.ModeAmpsDataArray(
+        np.zeros((2, 1, 1), dtype=complex),
+        coords={"direction": ["+", "-"], "f": [FREQ0], "mode_index": [0]},
+    )
+    overlap_data = td.FieldOverlapData(monitor=monitor, amps=amps)
+
+    with pytest.raises(NotImplementedError, match="Unsupported adjoint field 'Ex'"):
+        overlap_data._make_adjoint_sources(dataset_names=["Ex"], fwidth=FWIDTH)
 
 
 def test_extraneous_field(use_emulated_run):

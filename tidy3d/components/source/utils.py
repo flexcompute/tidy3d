@@ -16,6 +16,9 @@ from .field import (
     PlaneWave,
 )
 
+# Gaussian-like beam sources.
+GaussianBeamType = Union[GaussianBeam, AstigmaticGaussianBeam]
+
 # sources allowed in Simulation.sources
 SourceType = Union[
     UniformCurrentSource,

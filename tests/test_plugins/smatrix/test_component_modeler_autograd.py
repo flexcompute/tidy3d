@@ -10,6 +10,10 @@ from tidy3d.plugins.smatrix.analysis import terminal as terminal_analysis
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.data.data_array import TerminalPortDataArray
+from tidy3d.plugins.smatrix.ports.modal import (
+    AstigmaticGaussianPort as ModalAstigmaticGaussianPort,
+)
+from tidy3d.plugins.smatrix.ports.modal import GaussianPort as ModalGaussianPort
 from tidy3d.plugins.smatrix.ports.modal import Port as ModalPort
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort as RectLumpedPort
 from tidy3d.web import run
@@ -76,6 +80,25 @@ def _run_emulated_minimal(simulation: td.Simulation, path=None, **kwargs) -> td.
             n_complex = td.ModeIndexDataArray(n_vals, coords={"f": f, "mode_index": mode_index})
 
             data_items.append(td.ModeData(monitor=mnt, amps=amps, n_complex=n_complex))
+
+        elif isinstance(mnt, (td.GaussianOverlapMonitor, td.AstigmaticGaussianOverlapMonitor)):
+            f = list(mnt.freqs)
+            directions = np.array(["+", "-"])
+            mode_index = np.array([0])  # singleton mode axis for Gaussian overlap data
+            amps_vals = (1 + 0.1j) * rng.random((len(directions), len(f), len(mode_index)))
+            amps = td.ModeAmpsDataArray(
+                amps_vals,
+                coords={"direction": directions, "f": f, "mode_index": mode_index},
+            )
+            data_items.append(
+                td.FieldOverlapData(
+                    monitor=mnt,
+                    amps=amps,
+                    symmetry=(0, 0, 0),
+                    symmetry_center=simulation.center,
+                    grid_expanded=simulation.discretize_monitor(mnt),
+                )
+            )
 
         elif isinstance(mnt, td.FieldMonitor):
             xyz, grid = _coords_for_monitor(simulation, mnt)
@@ -186,6 +209,31 @@ def build_modal_modeler(scale: float) -> ModalComponentModeler:
     return ModalComponentModeler(simulation=sim, ports=(p1, p2), freqs=freqs)
 
 
+def build_modal_modeler_gaussian(scale: float) -> ModalComponentModeler:
+    sim = _build_base_sim(scale)
+
+    port_size = (2.0, 2.0, 0.0)
+    p1 = ModalGaussianPort(
+        center=(0.0, 0.0, -1.5),
+        size=port_size,
+        direction="+",
+        waist_radius=0.8,
+        waist_distance=0.1,
+        name="gp1",
+    )
+    p2 = ModalAstigmaticGaussianPort(
+        center=(0.0, 0.0, 1.5),
+        size=port_size,
+        direction="-",
+        waist_sizes=(0.8, 0.6),
+        waist_distances=(0.1, -0.05),
+        name="gp2",
+    )
+
+    freqs = [2.0e14]
+    return ModalComponentModeler(simulation=sim, ports=(p1, p2), freqs=freqs)
+
+
 def build_terminal_modeler(scale: float) -> TerminalComponentModeler:
     sim = _build_base_sim(scale)
 
@@ -276,6 +324,27 @@ def test_component_modeler_autograd_tracing_modeler_run(patch_web_autograd_emula
             verbose=False,
             local_gradient=True,
         )
+        return anp.real(anp.sum(s.data))
+
+    g = ag.grad(objective)(1.0)
+    assert np.isfinite(g)
+    assert not np.isclose(g, 0.0)
+
+
+def test_component_modeler_autograd_tracing_gaussian_ports(patch_web_autograd_emulator, tmp_path):
+    td.config.logging.level = "ERROR"
+    td.config.logging.suppression = True
+
+    def objective(scale: float) -> float:
+        modeler = build_modal_modeler_gaussian(scale)
+        modeler_data = run(
+            modeler,
+            task_name="cm_modal_gaussian_autograd",
+            path=str(tmp_path / "cm_gaussian_data.hdf5"),
+            verbose=False,
+            local_gradient=True,
+        )
+        s = modeler_data.smatrix()
         return anp.real(anp.sum(s.data))
 
     g = ag.grad(objective)(1.0)
