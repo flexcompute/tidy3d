@@ -75,50 +75,34 @@ To get started, our documentation has a lot of [examples](https://docs.flexcompu
 
 ## FlexAgent MCP
 
-FlexAgent adds an AI-assisted layer on top of Tidy3D via the Model Context Protocol (MCP); read more about [AI-assisted simulation in Tidy3D](https://hs.flexcompute.com/news/ai-assisted-simulation-in-tidy3d-ushering-in-a-new-era-of-photonic-design). Install the `tidy3d-mcp` server when you want that experience inside an MCP client without the Tidy3D extension for [Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=ms-python.python) and [Cursor](https://open-vsx.org/extension/Flexcompute/tidy3d).
+FlexAgent adds an AI-assisted layer on top of Tidy3D via the Model Context Protocol (MCP); read more about [AI-assisted simulation in Tidy3D](https://hs.flexcompute.com/news/ai-assisted-simulation-in-tidy3d-ushering-in-a-new-era-of-photonic-design). Install `tidy3d-mcp` directly when you want that experience outside the Tidy3D extensions for [Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=Flexcompute.tidy3d) and [Cursor](https://open-vsx.org/extension/Flexcompute/tidy3d). This repo also ships native plugin packaging for Claude Code and Gemini CLI.
 
 These commands assume [uv](https://docs.astral.sh/uv/getting-started/installation/) is installed on your machine.
 
-**Register the server with your MCP client** - use the block below that matches your CLI.
-
-<details>
-<summary>Codex CLI / IDE</summary>
+**Codex CLI / IDE**
 
 ```bash
-codex mcp add tidy3d -- uvx tidy3d-mcp --api-key "YOUR_TIDY3D_API_KEY"
+codex mcp add tidy3d -- uvx tidy3d-mcp
 ```
 
-</details>
+**Claude Code**
 
-<details>
-<summary>Claude CLI / Desktop / Code</summary>
+Add the Tidy3D marketplace, then install the plugin:
 
 ```bash
-claude mcp add tidy3d -- uvx tidy3d-mcp --api-key "YOUR_TIDY3D_API_KEY"
+claude plugin marketplace add https://github.com/flexcompute/tidy3d
+claude plugin install tidy3d@tidy3d
 ```
 
-</details>
+**Gemini CLI**
 
-<details>
-<summary>Gemini CLI</summary>
+Install the extension from this repo:
 
-Create or edit `.gemini/settings.json` (project) or `~/.gemini/settings.json` (global):
-
-```json
-{
-  "mcpServers": {
-    "tidy3d": {
-      "command": "uvx",
-      "args": ["tidy3d-mcp", "--api-key", "YOUR_TIDY3D_API_KEY"]
-    }
-  }
-}
+```bash
+gemini extensions install https://github.com/flexcompute/tidy3d
 ```
 
-</details>
-
-<details>
-<summary>Cursor CLI / IDE</summary>
+**Cursor CLI / IDE**
 
 Cursor reuses the same schema across the editor and `cursor-agent`. Configure `.cursor/mcp.json` (per-project) or `~/.cursor/mcp.json` (global) and then run `cursor-agent mcp list` to verify:
 
@@ -127,13 +111,11 @@ Cursor reuses the same schema across the editor and `cursor-agent`. Configure `.
   "mcpServers": {
     "tidy3d": {
       "command": "uvx",
-      "args": ["tidy3d-mcp", "--api-key", "YOUR_TIDY3D_API_KEY"]
+      "args": ["tidy3d-mcp"]
     }
   }
 }
 ```
-
-</details>
 
 
 ## Related Source Repositories

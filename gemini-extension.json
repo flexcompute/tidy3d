@@ -1,0 +1,12 @@
+{
+  "name": "tidy3d",
+  "version": "0.1.0",
+  "description": "Tidy3D simulation tools for Gemini CLI via tidy3d-mcp.",
+  "mcpServers": {
+    "tidy3d": {
+      "command": "uvx",
+      "args": ["tidy3d-mcp"],
+      "cwd": "${extensionPath}"
+    }
+  }
+}
