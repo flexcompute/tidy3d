@@ -3,7 +3,7 @@ name = "tidy3d"
 version = "2.11.0.dev2"
 description = "A fast FDTD solver"
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10,<3.15"
 license = { text = "LGPLv2+" }
 authors = [{ name = "Tyler Hughes", email = "tyler@flexcompute.com" }]
 classifiers = [
@@ -12,6 +12,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Operating System :: OS Independent",
 ]
 dependencies = [
@@ -19,7 +20,8 @@ dependencies = [
   "xarray>=2023.08,<2026.0.0",
   "importlib-metadata>=6.0.0,<9.0.0",
   "h5netcdf==1.0.2",
-  "h5py>=3.0.0,<3.15",
+  "h5py>=3.0.0,<3.15; python_version < '3.14'",
+  "h5py>=3.16.0,<3.17; python_version >= '3.14'",
   "rich>=13.0,<14.0",
   "numpy>=2.2.6,<2.5.0",
   "matplotlib>=3.10.0,<4.0.0",
@@ -100,8 +102,8 @@ dev = [
   "towncrier>=25.8.0,<26.0.0",
   "trimesh>=4.6,<5.0.0",
   "scikit-rf>=1.9.0,<2.0.0",
-  "vtk>=9.2.6,<10.0.0",
-  "pyvista>=0.45,<0.47.0",
+  "vtk>=9.6.0,<10.0.0",
+  "pyvista>=0.45,<0.48.0",
   "trame>=3.0.0,<4.0.0",
   "trame-vtk>=2.0.0,<3.0.0",
   "trame-vuetify>=2.0.0,<3.0.0",
@@ -162,10 +164,10 @@ trimesh = [
   "networkx>=2.6.3,<3.0.0",
   "rtree==1.2.0",
 ]
-vtk = ["vtk>=9.2.6,<10.0.0"]
+vtk = ["vtk>=9.6.0,<10.0.0"]
 pyvista = [
-  "pyvista>=0.45,<0.47.0",
-  "vtk>=9.2.6,<10.0.0",
+  "pyvista>=0.45,<0.48.0",
+  "vtk>=9.6.0,<10.0.0",
   "trame>=3.0.0,<4.0.0",
   "trame-vtk>=2.0.0,<3.0.0",
   "trame-vuetify>=2.0.0,<3.0.0",
@@ -175,7 +177,7 @@ heatcharge = [
   "trimesh>=4.6,<5.0.0",
   "networkx>=2.6.3,<3.0.0",
   "rtree==1.2.0",
-  "vtk>=9.2.6,<10.0.0",
+  "vtk>=9.6.0,<10.0.0",
 ]
 pytorch = [
   "torch>=2.2.0,<3.0.0; sys_platform == 'darwin'",
