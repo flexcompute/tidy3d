@@ -12,7 +12,8 @@ string keys to ``np.ndarray`` / scalar values (pytree-style).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Literal, Optional, Union, get_args
 
 import numpy as np
 from pydantic import Field, PositiveFloat
@@ -22,15 +23,23 @@ from tidy3d.components.base import Tidy3dBaseModel
 from .differential_operators import value_and_grad
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from typing import TypeAlias
 
-Params = Union[np.ndarray, dict[str, np.ndarray]]
+ParamLeaf: TypeAlias = Union[np.ndarray, float]
+Params = Union[ParamLeaf, dict[str, ParamLeaf]]
 Bounds = Union[
     tuple[Optional[float], Optional[float]], dict[str, tuple[Optional[float], Optional[float]]]
 ]
+ObjectiveValue: TypeAlias = Union[float, np.ndarray]
+ObjectiveFn: TypeAlias = Callable[[Params], ObjectiveValue]
+OptimizeDirection: TypeAlias = Literal["min", "max"]
+OPTIMIZE_DIRECTIONS = list(get_args(OptimizeDirection))
+AdamState: TypeAlias = dict[str, Union[Params, int]]
+OptimizeHistory: TypeAlias = dict[str, list[float]]
+OptimizeCallback: TypeAlias = Callable[[Params, Params, AdamState, int, ObjectiveValue], None]
 
 
-def _tree_map(fn: Callable, *trees: Params) -> Params:
+def _tree_map(fn: Callable[..., ParamLeaf], *trees: Params) -> Params:
     """Apply ``fn`` element-wise across one or more matching pytrees (dicts or arrays)."""
     first = trees[0]
     if isinstance(first, dict):
@@ -38,7 +47,7 @@ def _tree_map(fn: Callable, *trees: Params) -> Params:
     return fn(*trees)
 
 
-def _tree_reduce(fn: Callable, tree: Params, initializer: float = 0.0) -> float:
+def _tree_reduce(fn: Callable[[ParamLeaf], float], tree: Params, initializer: float = 0.0) -> float:
     """Reduce all leaves of a pytree to a single scalar."""
     if isinstance(tree, dict):
         return sum((_tree_reduce(fn, v, initializer) for v in tree.values()), initializer)
@@ -99,7 +108,7 @@ class Adam(Tidy3dBaseModel):
         description="Small constant for numerical stability.",
     )
 
-    def init(self, params: Params) -> dict:
+    def init(self, params: Params) -> AdamState:
         """Create the initial optimizer state.
 
         Parameters
@@ -119,7 +128,9 @@ class Adam(Tidy3dBaseModel):
             "t": 0,
         }
 
-    def update(self, grads: Params, state: dict, params: Optional[Params] = None) -> tuple:
+    def update(
+        self, grads: Params, state: AdamState, params: Optional[Params] = None
+    ) -> tuple[Params, AdamState]:
         """Compute parameter updates from gradients (optax-compatible).
 
         Parameters
@@ -231,14 +242,15 @@ def _clip_params(params: Params, bounds: Bounds) -> Params:
 
 
 def optimize(
-    objective_fn: Callable,
+    objective_fn: ObjectiveFn,
     params0: Params,
     optimizer: Adam,
     num_steps: int,
     *,
     bounds: Optional[Bounds] = None,
-    callback: Optional[Callable] = None,
-) -> tuple:
+    callback: Optional[OptimizeCallback] = None,
+    direction: OptimizeDirection = "min",
+) -> tuple[Params, AdamState, OptimizeHistory]:
     """Run a full gradient-descent optimization loop (convenience wrapper).
 
     This is a thin convenience wrapper around the optax-style stepping API provided by this
@@ -252,10 +264,14 @@ def optimize(
 
     Parameters
     ----------
-    objective_fn : Callable
-        Scalar objective function to minimize. Must be compatible with autograd differentiation.
-    params0 : np.ndarray or dict
-        Initial parameter values (array or dict of arrays).
+    objective_fn : Callable[[Params], Union[float, np.ndarray]]
+        Scalar-valued objective function evaluated on the current parameters.
+        It must accept the same parameter structure as ``params0`` and return a
+        differentiable scalar (Python ``float`` or scalar ``np.ndarray``) that
+        ``autograd.value_and_grad`` can handle.
+    params0 : np.ndarray, float, or dict
+        Initial parameter values as a single array, a scalar, or a dict of
+        arrays/scalars.
     optimizer : Adam
         Optimizer instance that provides ``.init()`` and ``.update()`` methods.
     num_steps : int
@@ -265,17 +281,25 @@ def optimize(
         For array params: a ``(lo, hi)`` tuple where ``None`` disables a side.
         For dict params: a ``dict`` mapping parameter keys to ``(lo, hi)`` tuples.
         Keys absent from the dict are left unclipped.
-    callback : Optional[Callable]
+    callback : Optional[Callable[[Params, Params, AdamState, int, Union[float, np.ndarray]], None]]
         If provided, called each step **before** the parameter update as
         ``callback(params, grad, state, step_index, objective_val)``.
-        All arguments reflect the pre-update state of the current iterate.
-        The final (post-loop) params are available in the return value.
+        All arguments reflect the pre-update state of the current iterate, and
+        ``grad`` / ``objective_val`` are the raw outputs of ``objective_fn``
+        before any min/max direction handling. The final (post-loop) params are
+        available in the return value.
+    direction : {"min", "max"} = "min"
+        Optimization direction. ``"min"`` performs gradient descent on
+        ``objective_fn``. ``"max"`` performs gradient ascent by negating the
+        gradient passed to the optimizer while still recording the raw objective
+        values in ``history["objective_fn_val"]``.
 
     Returns
     -------
     tuple
         ``(params, state, history)`` where ``history`` is a dict with keys
-        ``"objective_fn_val"`` and ``"grad_norm"``, each a list of per-step values.
+        ``"objective_fn_val"`` and ``"grad_norm"``, each a list of per-step
+        values of the raw objective and raw gradient norm, respectively.
     """
     for attr in ("init", "update"):
         if not callable(getattr(optimizer, attr, None)):
@@ -284,6 +308,9 @@ def optimize(
                 f"Got {type(optimizer).__name__}. "
                 f"Use 'from tidy3d.plugins.autograd import adam; adam(learning_rate=...)' to create one."
             )
+
+    if direction not in OPTIMIZE_DIRECTIONS:
+        raise ValueError(f"'direction' must be one of {OPTIMIZE_DIRECTIONS}. Got {direction!r}.")
 
     val_and_grad_fn = value_and_grad(objective_fn)
     state = optimizer.init(params0)
@@ -300,7 +327,8 @@ def optimize(
         if callback is not None:
             callback(params, grad, state, step_index, val)
 
-        updates, state = optimizer.update(grad, state, params)
+        step_grad = grad if direction == "min" else _tree_map(np.negative, grad)
+        updates, state = optimizer.update(step_grad, state, params)
         params = apply_updates(params, updates)
 
         if bounds is not None:

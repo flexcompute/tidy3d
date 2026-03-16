@@ -162,6 +162,24 @@ class TestOptimize:
 
         assert history["objective_fn_val"][-1] < history["objective_fn_val"][0]
 
+    def test_objective_increases_when_maximizing(self):
+        """Objective should generally increase when direction='max'."""
+
+        target = np.array([2.0, -3.0])
+
+        def concave_quadratic(x):
+            return -np.sum((x - target) ** 2)
+
+        params0 = np.array([0.0, 0.0])
+        opt = adam(learning_rate=0.1)
+
+        params, _, history = optimize(
+            concave_quadratic, params0, opt, num_steps=50, direction="max"
+        )
+
+        assert history["objective_fn_val"][-1] > history["objective_fn_val"][0]
+        assert np.linalg.norm(params - target) < np.linalg.norm(params0 - target)
+
     def test_callback_called_each_step(self):
         """Callback should be called once per step with correct arguments."""
         call_log = []
@@ -289,3 +307,16 @@ class TestOptimize:
         for v in history["grad_norm"]:
             assert isinstance(v, float)
             assert v >= 0
+
+    def test_invalid_direction(self):
+        def quadratic(x):
+            return np.sum(x**2)
+
+        with pytest.raises(ValueError, match="'direction' must be one of"):
+            optimize(
+                quadratic,
+                np.array([1.0]),
+                adam(learning_rate=0.01),
+                num_steps=3,
+                direction="sideways",
+            )
