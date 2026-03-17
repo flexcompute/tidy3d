@@ -17,6 +17,9 @@ from .base_terminal import AbstractTerminalPort
 if TYPE_CHECKING:
     from tidy3d.components.grid.grid import Grid, YeeGrid
     from tidy3d.components.lumped_element import LumpedElementType
+    from tidy3d.components.microwave.path_integrals.integrals.voltage import (
+        AxisAlignedVoltageIntegral,
+    )
     from tidy3d.components.monitor import FieldMonitor
     from tidy3d.components.types import Coordinate, FreqArray
 
@@ -97,6 +100,10 @@ class AbstractLumpedPort(AbstractTerminalPort):
             self.to_voltage_monitor(freqs, snap_center, grid),
             self.to_current_monitor(freqs, snap_center, grid),
         ]
+
+    @abstractmethod
+    def _make_plot_voltage_integral(self) -> AxisAlignedVoltageIntegral:
+        """Create a voltage path integral for plotting (no grid needed)."""
 
     @abstractmethod
     def _check_grid_size(self, yee_grid: YeeGrid) -> None:

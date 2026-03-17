@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from tidy3d.components.lumped_element import LumpedResistor
     from tidy3d.components.source.time import SourceTimeType
     from tidy3d.components.structure import Structure
-    from tidy3d.components.types import FreqArray
+    from tidy3d.components.types import Coordinate, FreqArray, Size
 
 
 class LumpedPort(AbstractLumpedPort, Box):
@@ -231,17 +231,31 @@ class LumpedPort(AbstractLumpedPort, Box):
             colocate=False,
         )
 
-    def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
-        """Helper to compute voltage across the port."""
-        voltage_box = self._to_voltage_box(sim_data.simulation.grid)
-        field_data = sim_data[self._voltage_monitor_name]
-        voltage_integral = AxisAlignedVoltageIntegral(
-            center=voltage_box.center,
-            size=voltage_box.size,
+    def _make_voltage_integral(self, center: Coordinate, size: Size) -> AxisAlignedVoltageIntegral:
+        """Create a voltage path integral for this port geometry."""
+        return AxisAlignedVoltageIntegral(
+            center=center,
+            size=size,
             extrapolate_to_endpoints=True,
             snap_path_to_grid=True,
             sign="+",
         )
+
+    def _make_current_integral(self, center: Coordinate, size: Size) -> AxisAlignedCurrentIntegral:
+        """Create a current contour integral for this port geometry."""
+        return AxisAlignedCurrentIntegral(
+            center=center,
+            size=size,
+            sign="+",
+            extrapolate_to_endpoints=True,
+            snap_contour_to_grid=True,
+        )
+
+    def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
+        """Helper to compute voltage across the port."""
+        voltage_box = self._to_voltage_box(sim_data.simulation.grid)
+        field_data = sim_data[self._voltage_monitor_name]
+        voltage_integral = self._make_voltage_integral(voltage_box.center, voltage_box.size)
         voltage = voltage_integral.compute_voltage(field_data)
         # Return data array of voltage with coordinates of frequency
         return voltage
@@ -260,15 +274,7 @@ class LumpedPort(AbstractLumpedPort, Box):
 
         field_data = sim_data[self._current_monitor_name]
         current_box = self._to_current_box(sim_data.simulation.grid)
-
-        # H field is continuous at integral bounds, so extrapolation is turned off
-        I_integral = AxisAlignedCurrentIntegral(
-            center=current_box.center,
-            size=current_box.size,
-            sign="+",
-            extrapolate_to_endpoints=True,
-            snap_contour_to_grid=True,
-        )
+        I_integral = self._make_current_integral(current_box.center, current_box.size)
         return I_integral.compute_current(field_data)
 
     def _check_grid_size(self, yee_grid: YeeGrid) -> None:
@@ -319,6 +325,12 @@ class LumpedPort(AbstractLumpedPort, Box):
         snap_spec = SnappingSpec(location=snap_location, behavior=snap_behavior)
         current_box = snap_box_to_grid(grid, current_box, snap_spec)
         return current_box
+
+    def _make_plot_voltage_integral(self) -> AxisAlignedVoltageIntegral:
+        """Create a voltage path integral for plotting (no grid needed)."""
+        size = [0, 0, 0]
+        size[self.voltage_axis] = self.size[self.voltage_axis]
+        return self._make_voltage_integral(self.center, size)
 
     @classmethod
     def from_structures(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional, Union
 
+import matplotlib.patches as mpl_patches
 import numpy as np
 from pydantic import Field, NonNegativeInt, field_validator, model_validator
 
@@ -22,12 +23,15 @@ from tidy3d.components.index import SimulationMap
 from tidy3d.components.lumped_element import CircuitImpedanceModel, LinearLumpedElement
 from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
-from tidy3d.components.microwave.path_integrals.specs.impedance import AutoImpedanceSpec
+from tidy3d.components.microwave.path_integrals.specs.impedance import (
+    AutoImpedanceSpec,
+    CustomImpedanceSpec,
+)
 from tidy3d.components.monitor import DirectivityMonitor, ModeMonitor
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Complex, Coordinate
 from tidy3d.components.types.base import PriorityMode, discriminated_union
-from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_lumped_element
 from tidy3d.constants import C_0, MICROMETER, OHM, fp_eps, inf
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 from tidy3d.log import log
@@ -42,6 +46,7 @@ from tidy3d.plugins.smatrix.component_modelers.viz import (
     plot_params_diff_pair_label,
     plot_params_padding_shade,
     plot_params_terminal_arrow,
+    plot_params_terminal_box,
     plot_params_terminal_label,
 )
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
@@ -584,23 +589,27 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             )
 
         injection_axis = port.injection_axis
+
+        # All ports show the simulation cross-section
         plot_kwargs = {"ax": ax, **kwargs}
         plot_kwargs.setdefault("monitor_alpha", 0)
         plot_kwargs.setdefault("source_alpha", 0)
         plot_kwargs["xyz"[injection_axis]] = port.center[injection_axis]
         ax = self._sim_with_sources.plot(**plot_kwargs)
 
-        # Clip port bounds to simulation bounds so the view doesn't exceed the domain
-        clipped = bounds_intersection(port.bounds, self._sim_with_sources.bounds)
-        _, (xmin, ymin) = Box.pop_axis(clipped[0], axis=injection_axis)
-        _, (xmax, ymax) = Box.pop_axis(clipped[1], axis=injection_axis)
+        if isinstance(port, AbstractLumpedPort):
+            ax = self._plot_lumped_port(ax, port)
+        else:
+            # Wave ports share bounds clipping + padding shading
+            clipped = bounds_intersection(port.bounds, self._sim_with_sources.bounds)
+            _, (xmin, ymin) = Box.pop_axis(clipped[0], axis=injection_axis)
+            _, (xmax, ymax) = Box.pop_axis(clipped[1], axis=injection_axis)
+            self._add_port_padding_shading(ax, xmin, xmax, ymin, ymax)
 
-        # Add padding with shaded regions and set axis limits
-        self._add_port_padding_shading(ax, xmin, xmax, ymin, ymax)
-
-        # Plot bounding boxes and labels for TerminalWavePorts
-        if isinstance(port, TerminalWavePort):
-            ax = self._plot_terminal_wave_port(ax, port, label_font_size)
+            if isinstance(port, TerminalWavePort):
+                ax = self._plot_terminal_wave_port(ax, port, label_font_size)
+            elif isinstance(port, WavePort):
+                ax = self._plot_wave_port(ax, port, label_font_size)
 
         return ax
 
@@ -642,7 +651,6 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         ymax : float
             Maximum y-coordinate of the port.
         """
-        from matplotlib.patches import Rectangle
 
         # Calculate padding based on port size
         port_width = xmax - xmin
@@ -657,7 +665,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
 
         # Add shaded rectangles for padding regions (top, bottom, left, right)
         # Bottom padding region
-        bottom_rect = Rectangle(
+        bottom_rect = mpl_patches.Rectangle(
             (xmin_padded, ymin_padded),
             xmax_padded - xmin_padded,
             padding,
@@ -666,7 +674,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         ax.add_patch(bottom_rect)
 
         # Top padding region
-        top_rect = Rectangle(
+        top_rect = mpl_patches.Rectangle(
             (xmin_padded, ymax),
             xmax_padded - xmin_padded,
             padding,
@@ -675,7 +683,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         ax.add_patch(top_rect)
 
         # Left padding region
-        left_rect = Rectangle(
+        left_rect = mpl_patches.Rectangle(
             (xmin_padded, ymin),
             padding,
             port_height,
@@ -684,7 +692,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         ax.add_patch(left_rect)
 
         # Right padding region
-        right_rect = Rectangle(
+        right_rect = mpl_patches.Rectangle(
             (xmax, ymin),
             padding,
             port_height,
@@ -818,10 +826,6 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         tuple[list[dict[str, float | str]], list[float]]
             Terminal items for labeling and list of max y-coordinates.
         """
-        from tidy3d.components.microwave.path_integrals.specs.impedance import (
-            CustomImpedanceSpec,
-        )
-
         plot_coord = {0: "x", 1: "y", 2: "z"}[injection_axis]
         plot_kwargs = {plot_coord: port.center[injection_axis], "ax": ax}
 
@@ -892,8 +896,6 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
         tuple[list[dict[str, float | str]], list[float]]
             Differential pair items for labeling and list of min y-coordinates.
         """
-        import matplotlib.patches as patches
-
         diff_items: list[dict[str, float | str]] = []
         diff_box_ymin: list[float] = []
 
@@ -940,7 +942,7 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
                     diff_box_ymin.append(box_ymin)
 
                     # Create rectangle for differential pair with blue dashed border
-                    rect = patches.Rectangle(
+                    rect = mpl_patches.Rectangle(
                         (box_xmin, box_ymin),
                         box_xmax - box_xmin,
                         box_ymax - box_ymin,
@@ -1072,6 +1074,206 @@ class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
             placement="bottom",
         )
 
+        return ax
+
+    def _plot_auto_impedance_conductors(
+        self, ax: Ax, port: WavePort, specs_dict: dict, injection_axis: int
+    ) -> None:
+        """Draw dashed rectangles around detected conductors for ``AutoImpedanceSpec`` modes.
+
+        When any mode in ``specs_dict`` uses ``AutoImpedanceSpec``, all isolated floating
+        conductors detected at the port are highlighted with padded dashed rectangles.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on.
+        port : WavePort
+            The wave port whose conductors to draw.
+        specs_dict : dict
+            Impedance specifications keyed by mode label (e.g. ``{"M0": spec, ...}``).
+        injection_axis : int
+            Injection axis (0, 1, or 2 for x, y, z).
+        """
+        has_auto = any(isinstance(s, AutoImpedanceSpec) for s in specs_dict.values())
+        if not has_auto:
+            return
+
+        conductors = self._floating_isolated_conductors_at_waveport[port.name]
+
+        for _, (_, box) in conductors.items():
+            _, (xmin, ymin) = Box.pop_axis(box.bounds[0], axis=injection_axis)
+            _, (xmax, ymax) = Box.pop_axis(box.bounds[1], axis=injection_axis)
+            padding = TERMINAL_BOX_PADDING_FRACTION * max(xmax - xmin, ymax - ymin)
+            rect = mpl_patches.Rectangle(
+                (xmin - padding, ymin - padding),
+                (xmax - xmin) + 2 * padding,
+                (ymax - ymin) + 2 * padding,
+                **plot_params_terminal_box,
+            )
+            ax.add_patch(rect)
+
+    def _plot_and_collect_custom_impedance_info(
+        self,
+        ax: Ax,
+        port: WavePort,
+        specs_dict: dict,
+        injection_axis: int,
+    ) -> tuple[list[dict[str, float | str]], list[float]]:
+        """Plot custom impedance path integrals and collect info for labeling.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on.
+        port : WavePort
+            The wave port.
+        specs_dict : dict
+            Impedance specifications keyed by mode label (e.g. ``{"M0": spec, ...}``).
+        injection_axis : int
+            Injection axis (0, 1, or 2 for x, y, z).
+
+        Returns
+        -------
+        tuple[list[dict[str, float | str]], list[float]]
+            Mode items for labeling and list of max y-coordinates.
+        """
+        custom_specs = {
+            label: spec
+            for label, spec in specs_dict.items()
+            if isinstance(spec, CustomImpedanceSpec)
+        }
+
+        mode_items: list[dict[str, float | str]] = []
+        mode_box_ymax: list[float] = []
+
+        if not custom_specs:
+            return mode_items, mode_box_ymax
+
+        plot_coord = {0: "x", 1: "y", 2: "z"}[injection_axis]
+        plot_kwargs = {plot_coord: port.center[injection_axis], "ax": ax}
+
+        for mode_label, spec in custom_specs.items():
+            path_spec = None
+            if spec.voltage_spec is not None:
+                spec.voltage_spec.plot(**plot_kwargs)
+                path_spec = spec.voltage_spec
+            if spec.current_spec is not None:
+                spec.current_spec.plot(**plot_kwargs)
+                path_spec = spec.current_spec
+
+            if path_spec is not None:
+                bounds_3d = path_spec.bounds
+                _, (xmin, ymin) = Box.pop_axis(bounds_3d[0], axis=injection_axis)
+                _, (xmax, ymax) = Box.pop_axis(bounds_3d[1], axis=injection_axis)
+                mode_box_ymax.append(ymax)
+                mode_items.append(
+                    {
+                        "label": mode_label,
+                        "x_anchor": float((xmin + xmax) / 2),
+                        "y_anchor": float(ymax),
+                        "x_min": float(xmin),
+                        "x_max": float(xmax),
+                    }
+                )
+
+        return mode_items, mode_box_ymax
+
+    def _plot_wave_port(
+        self, ax: Ax, port: WavePort, label_font_size: Optional[float] = None
+    ) -> Ax:
+        """Plot impedance spec overlays for a WavePort.
+
+        For ``AutoImpedanceSpec``, draws orange dashed rectangles around detected conductors.
+        For ``CustomImpedanceSpec``, plots current/voltage path specs with mode index labels.
+        Mixed specs are handled by showing both.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on.
+        port : WavePort
+            The wave port to plot.
+        label_font_size : float, optional
+            Font size for labels. If ``None``, uses the default font size.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The axes with the plot.
+        """
+        mode_spec = self._resolved_mode_specs[port.name]
+        impedance_specs = mode_spec.impedance_specs
+        injection_axis = port.injection_axis
+
+        # Normalize to dict {label: spec}
+        if isinstance(impedance_specs, (list, tuple)):
+            specs_dict = {f"M{i}": spec for i, spec in enumerate(impedance_specs)}
+        else:
+            specs_dict = {"M0": impedance_specs}
+
+        # Plot conductor boxes for auto impedance specs
+        self._plot_auto_impedance_conductors(ax, port, specs_dict, injection_axis)
+
+        # Plot custom impedance paths and collect info for labeling
+        mode_items, mode_box_ymax = self._plot_and_collect_custom_impedance_info(
+            ax, port, specs_dict, injection_axis
+        )
+
+        # Place mode labels on top lane
+        label_params = plot_params_terminal_label.copy()
+        if label_font_size is not None:
+            label_params["fontsize"] = label_font_size
+
+        self._place_labels_with_lane(
+            ax=ax,
+            items=mode_items,
+            box_y_coords=mode_box_ymax,
+            label_params=label_params,
+            arrow_params=plot_params_terminal_arrow,
+            placement="top",
+        )
+
+        return ax
+
+    def _plot_lumped_port(self, ax: Ax, port: AbstractLumpedPort) -> Ax:
+        """Plot a lumped port: tight padded view + lumped element + voltage path.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axes to plot on.
+        port : AbstractLumpedPort
+            The lumped port to plot.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The axes with the plot.
+        """
+        injection_axis = port.injection_axis
+
+        # Compute view bounds from load geometry, clipped to simulation domain
+        load = port.to_load()
+        geometry = load.to_geometry(grid=None)
+        clipped = bounds_intersection(geometry.bounds, self._sim_with_sources.bounds)
+        _, (xmin, ymin) = Box.pop_axis(clipped[0], axis=injection_axis)
+        _, (xmax, ymax) = Box.pop_axis(clipped[1], axis=injection_axis)
+        padding = max(xmax - xmin, ymax - ymin)
+        ax.set_xlim(xmin - padding, xmax + padding)
+        ax.set_ylim(ymin - padding, ymax + padding)
+
+        # Overlay lumped element + voltage path
+        plot_coord = {0: "x", 1: "y", 2: "z"}[injection_axis]
+        plot_kwargs = {plot_coord: port.center[injection_axis], "ax": ax}
+
+        # Save/restore axis limits since geometry.plot() resets them
+        xlim, ylim = ax.get_xlim(), ax.get_ylim()
+        geometry.plot(**plot_kwargs, **plot_params_lumped_element.to_kwargs())
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+
+        port._make_plot_voltage_integral().plot(**plot_kwargs)
         return ax
 
     @staticmethod

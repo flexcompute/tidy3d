@@ -283,6 +283,24 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             colocate=False,
         )
 
+    def _make_voltage_integral(self, center: Coordinate) -> AxisAlignedVoltageIntegral:
+        """Create a voltage path integral for the given port center."""
+        return AxisAlignedVoltageIntegral(
+            center=self._voltage_path_center(center),
+            size=self._voltage_path_size,
+            extrapolate_to_endpoints=True,
+            snap_path_to_grid=True,
+            sign="+",
+        )
+
+    def _make_current_integral(
+        self, center: Coordinate, radius: float, num_points: int
+    ) -> Custom2DCurrentIntegral:
+        """Create a circular current contour integral."""
+        return Custom2DCurrentIntegral.from_circular_path(
+            center, radius, num_points, self.injection_axis, False
+        )
+
     def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
         """Helper to compute voltage across the port.
 
@@ -291,14 +309,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         """
         exact_port_center = self.snapped_center(sim_data.simulation.grid)
         field_data = sim_data[self._voltage_monitor_name]
-
-        voltage_integral = AxisAlignedVoltageIntegral(
-            center=self._voltage_path_center(exact_port_center),
-            size=self._voltage_path_size,
-            extrapolate_to_endpoints=True,
-            snap_path_to_grid=True,
-            sign="+",
-        )
+        voltage_integral = self._make_voltage_integral(exact_port_center)
         voltage = voltage_integral.compute_voltage(field_data)
         # Return data array of voltage with coordinates of frequency
         return voltage
@@ -342,9 +353,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         # Setup the path integral and integrate the H field
         path_center = list(exact_port_center)
         path_center[self.injection_axis] = path_pos
-        path_integral = Custom2DCurrentIntegral.from_circular_path(
-            path_center, radius, num_path_coords, self.injection_axis, False
-        )
+        path_integral = self._make_current_integral(path_center, radius, num_path_coords)
         current = path_integral.compute_current(field_data)
 
         # We need the current flowing transverse through the port, which is the opposite of
@@ -389,6 +398,10 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         axis_size = (self.outer_diameter - self.inner_diameter) / 2
         size = Geometry.unpop_axis(axis_size, (0, 0), self._voltage_axis)
         return size
+
+    def _make_plot_voltage_integral(self) -> AxisAlignedVoltageIntegral:
+        """Create a voltage path integral for plotting (no grid needed)."""
+        return self._make_voltage_integral(self.center)
 
     def _check_grid_size(self, yee_grid: YeeGrid) -> None:
         """Raises :class:``SetupError`` if the grid is too coarse at port locations"""
