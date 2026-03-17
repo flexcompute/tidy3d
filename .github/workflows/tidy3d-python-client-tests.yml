@@ -497,7 +497,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup node
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: lts/*
 
@@ -898,7 +898,7 @@ jobs:
 
     - name: upload-testmon-cache-candidate
       if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: testmon-cache-candidate-local-${{ runner.os }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
         path: ${{ runner.temp }}/testmon-cache-candidate-local-py${{ matrix.python-version }}
@@ -1087,7 +1087,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: configure-aws-credentials
-      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7  # v6.0.0
       with:
         aws-access-key-id: ${{ secrets.AWS_CODEARTIFACT_ACCESS_KEY }}
         aws-secret-access-key: ${{ secrets.AWS_CODEARTIFACT_ACCESS_SECRET }}
@@ -1206,7 +1206,7 @@ jobs:
 
     - name: upload-testmon-cache-candidate
       if: success() && github.event_name == 'merge_group' && hashFiles('.testmondata') != ''
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}-${{ github.run_id }}-${{ github.run_attempt }}
         path: ${{ runner.temp }}/testmon-cache-candidate-remote-${{ matrix.platform }}-py${{ matrix.python-version }}
