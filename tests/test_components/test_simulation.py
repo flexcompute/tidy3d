@@ -1690,6 +1690,45 @@ def test_diffraction_monitor_fixed_angle_source_setup():
     assert sim._is_fixed_angle
 
 
+def test_diffraction_monitor_fixed_angle_no_spurious_warning():
+    """FixedAngleSpec + Periodic boundaries + DiffractionMonitor should not warn about Bloch vec."""
+
+    freq0 = td.C_0
+    fwidth = freq0 / 5
+
+    source = td.PlaneWave(
+        angle_phi=np.pi / 6,
+        angle_theta=np.pi / 5,
+        angular_spec=td.FixedAngleSpec(),
+        direction="+",
+        center=(-0.4, 0, 0),
+        size=(0, td.inf, td.inf),
+        pol_angle=np.pi / 4,
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
+    )
+    monitor = td.DiffractionMonitor(
+        center=(0, 0, 0),
+        size=(0, td.inf, td.inf),
+        freqs=[freq0],
+        name="monitor_diffraction",
+        normal_dir="+",
+    )
+
+    with AssertLogStr("WARNING", excludes_str="incorrectly set"):
+        td.Simulation(
+            size=(2.0, 2.0, 2.0),
+            sources=(source,),
+            monitors=(monitor,),
+            run_time=10 / fwidth,
+            grid_spec=td.GridSpec.auto(min_steps_per_wvl=10),
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.absorber(),
+                y=td.Boundary.periodic(),
+                z=td.Boundary.periodic(),
+            ),
+        )
+
+
 @pytest.mark.parametrize(
     "box_size,log_level",
     [

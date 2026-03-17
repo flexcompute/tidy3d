@@ -3293,6 +3293,9 @@ class Simulation(AbstractYeeGridSimulation):
             if not isinstance(source, PlaneWave):
                 continue
 
+            if isinstance(source.angular_spec, FixedAngleSpec):
+                continue
+
             _, tan_dirs = self.pop_axis([0, 1, 2], axis=source.injection_axis)
             medium_set = Scene.intersecting_media(source, structures)
             medium = medium_set.pop() if medium_set else sim_medium
