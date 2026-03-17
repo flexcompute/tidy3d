@@ -556,6 +556,29 @@ def test_batch_load_sim_data_skips_task_lookup(monkeypatch, tmp_path):
     assert batch_data.load_sim_data("task_1") == "stub_data"
 
 
+def test_batch_data_items_dict_loads_all_tasks(monkeypatch):
+    task_names = ("task_a", "task_b", "task_c")
+    batch_data = BatchData(
+        task_paths={task_name: f"{task_name}.hdf5" for task_name in task_names},
+        task_ids={task_name: f"id_{task_name}" for task_name in task_names},
+        cached_tasks=dict.fromkeys(task_names, False),
+        is_downloaded=True,
+    )
+
+    loaded_task_names = []
+
+    def _fake_load(self, task_name):
+        loaded_task_names.append(task_name)
+        return f"loaded_{task_name}"
+
+    monkeypatch.setattr(BatchData, "load_sim_data", _fake_load)
+
+    loaded_data = dict(batch_data.items())
+
+    assert loaded_data == {task_name: f"loaded_{task_name}" for task_name in task_names}
+    assert loaded_task_names == list(task_names)
+
+
 @responses.activate
 def test_delete(set_api_key, mock_get_info):
     responses.add(
@@ -806,6 +829,28 @@ def test_batch(mock_webapi, mock_job_status, mock_load, tmp_path, task_name):
     b2.run(path_dir=str(tmp_path))
     _ = b2.get_info()
     assert b2.real_cost() == FLEX_UNIT * len(sims)
+
+
+def test_batch_from_file_lazy_sets_batch_lazy(tmp_path):
+    batch = Batch(simulations={TASK_NAME: make_sim()}, folder_name=PROJECT_NAME)
+    batch_path = tmp_path / "batch.hdf5"
+    batch.to_file(batch_path)
+
+    eager_batch = Batch.from_file(batch_path)
+    assert eager_batch.lazy is False
+
+    callback_lazy_values = []
+
+    def _on_load(loaded_batch):
+        callback_lazy_values.append(loaded_batch.lazy)
+
+    lazy_batch = Batch.from_file(batch_path, lazy=True, on_load=_on_load)
+    assert type(lazy_batch).__name__.endswith("Proxy")
+    assert "_lazy_fname" in lazy_batch.__dict__
+
+    assert lazy_batch.lazy is True
+    assert type(lazy_batch) is Batch
+    assert callback_lazy_values == [True]
 
 
 def test_batch_accepts_string_simulation_keys():

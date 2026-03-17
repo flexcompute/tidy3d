@@ -50,6 +50,7 @@ from tidy3d.web.core.types import PayType
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from os import PathLike
+    from typing import Callable
 
     from rich.progress import TaskID
 
@@ -632,6 +633,8 @@ class BatchData(Tidy3dBaseModel, Mapping):
         :class:`BatchData`. The data within this :class:`BatchData` object can either be indexed
         directly ``batch_results[task_name]`` or can be looped through ``batch_results.items()`` to
         get the :class:`~tidy3d.SimulationData` for each task.
+        Converting with ``dict(batch_results.items())`` eagerly touches all tasks and can load all
+        results.
 
     See Also
     --------
@@ -1062,6 +1065,45 @@ class Batch(WebContainer):
                 jobs[key] = job.updated_copy(task_id_cached=task_id)
             self = self.updated_copy(jobs_cached=jobs)
         super(Batch, self).to_file(fname=fname)  # noqa: UP008
+
+    @classmethod
+    def from_file(
+        cls,
+        fname: PathLike,
+        group_path: Optional[str] = None,
+        lazy: bool = False,
+        on_load: Optional[Callable[[Any], None]] = None,
+        **parse_obj_kwargs: Any,
+    ) -> Batch:
+        """Load a :class:`Batch` from file.
+
+        Notes
+        -----
+        For :class:`Batch`, ``lazy=True`` also configures per-task data loading behavior used by
+        :meth:`Batch.load`.
+        """
+        if not lazy:
+            return super().from_file(
+                fname=fname,
+                group_path=group_path,
+                lazy=lazy,
+                on_load=on_load,
+                **parse_obj_kwargs,
+            )
+
+        def _set_batch_lazy_and_run_callback(loaded_obj: Any) -> None:
+            # Batch models are frozen; set laziness via object.__setattr__ on materialization.
+            object.__setattr__(loaded_obj, "lazy", True)
+            if on_load is not None:
+                on_load(loaded_obj)
+
+        return super().from_file(
+            fname=fname,
+            group_path=group_path,
+            lazy=lazy,
+            on_load=_set_batch_lazy_and_run_callback,
+            **parse_obj_kwargs,
+        )
 
     @property
     def num_jobs(self) -> int:
