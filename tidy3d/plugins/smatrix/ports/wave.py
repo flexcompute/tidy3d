@@ -926,7 +926,7 @@ class TerminalWavePort(AbstractWavePort):
         """
         terminal_labels = list(conductors)
         impedance_specs = {
-            label: CustomImpedanceSpec.from_bounding_box(box)
+            label: CustomImpedanceSpec.from_bounding_box(box, current_sign=self.direction)
             for label, (_, box) in conductors.items()
         }
         terminals_mapping = self._get_terminals_mapping(terminal_labels)
